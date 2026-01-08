@@ -44,12 +44,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.StoryAlbum.storyAlbum(flags: _1!, albumId: _2!, title: _3!, iconPhoto: _4, iconVideo: _5)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.StoryAlbum.storyAlbum(flags: _1!, albumId: _2!, title: _3!, iconPhoto: _4, iconVideo: _5)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -94,11 +94,12 @@ public extension Api {
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.StoryFwdHeader.storyFwdHeader(flags: _1!, from: _2, fromName: _3, storyId: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.StoryFwdHeader.storyFwdHeader(flags: _1!, from: _2, fromName: _3, storyId: _4)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -236,28 +237,23 @@ public extension Api {
             let _c12 = (Int(_1!) & Int(1 << 3) == 0) || _12 != nil
             let _c13 = (Int(_1!) & Int(1 << 15) == 0) || _13 != nil
             let _c14 = (Int(_1!) & Int(1 << 19) == 0) || _14 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            if !_c10 { return nil }
-            if !_c11 { return nil }
-            if !_c12 { return nil }
-            if !_c13 { return nil }
-            if !_c14 { return nil }
-            return Api.StoryItem.storyItem(flags: _1!, id: _2!, date: _3!, fromId: _4, fwdFrom: _5, expireDate: _6!, caption: _7, entities: _8, media: _9!, mediaAreas: _10, privacy: _11, views: _12, sentReaction: _13, albums: _14)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 {
+                return Api.StoryItem.storyItem(flags: _1!, id: _2!, date: _3!, fromId: _4, fwdFrom: _5, expireDate: _6!, caption: _7, entities: _8, media: _9!, mediaAreas: _10, privacy: _11, views: _12, sentReaction: _13, albums: _14)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_storyItemDeleted(_ reader: BufferReader) -> StoryItem? {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.StoryItem.storyItemDeleted(id: _1!)
+            if _c1 {
+                return Api.StoryItem.storyItemDeleted(id: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_storyItemSkipped(_ reader: BufferReader) -> StoryItem? {
             var _1: Int32?
@@ -272,11 +268,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.StoryItem.storyItemSkipped(flags: _1!, id: _2!, date: _3!, expireDate: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.StoryItem.storyItemSkipped(flags: _1!, id: _2!, date: _3!, expireDate: _4!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -338,10 +335,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.StoryReaction.storyReaction(peerId: _1!, date: _2!, reaction: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.StoryReaction.storyReaction(peerId: _1!, date: _2!, reaction: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_storyReactionPublicForward(_ reader: BufferReader) -> StoryReaction? {
             var _1: Api.Message?
@@ -349,8 +348,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.Message
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.StoryReaction.storyReactionPublicForward(message: _1!)
+            if _c1 {
+                return Api.StoryReaction.storyReactionPublicForward(message: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_storyReactionPublicRepost(_ reader: BufferReader) -> StoryReaction? {
             var _1: Api.Peer?
@@ -363,9 +366,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.StoryReaction.storyReactionPublicRepost(peerId: _1!, story: _2!)
+            if _c1 && _c2 {
+                return Api.StoryReaction.storyReactionPublicRepost(peerId: _1!, story: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -431,11 +437,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.StoryView.storyView(flags: _1!, userId: _2!, date: _3!, reaction: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.StoryView.storyView(flags: _1!, userId: _2!, date: _3!, reaction: _4)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_storyViewPublicForward(_ reader: BufferReader) -> StoryView? {
             var _1: Int32?
@@ -446,9 +453,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.StoryView.storyViewPublicForward(flags: _1!, message: _2!)
+            if _c1 && _c2 {
+                return Api.StoryView.storyViewPublicForward(flags: _1!, message: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_storyViewPublicRepost(_ reader: BufferReader) -> StoryView? {
             var _1: Int32?
@@ -464,10 +474,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.StoryView.storyViewPublicRepost(flags: _1!, peerId: _2!, story: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.StoryView.storyViewPublicRepost(flags: _1!, peerId: _2!, story: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -530,13 +542,12 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 4) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.StoryViews.storyViews(flags: _1!, viewsCount: _2!, forwardsCount: _3, reactions: _4, reactionsCount: _5, recentViewers: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.StoryViews.storyViews(flags: _1!, viewsCount: _2!, forwardsCount: _3, reactions: _4, reactionsCount: _5, recentViewers: _6)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -577,10 +588,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 3) == 0) || _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.SuggestedPost.suggestedPost(flags: _1!, price: _2, scheduleDate: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.SuggestedPost.suggestedPost(flags: _1!, price: _2, scheduleDate: _3)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -621,9 +634,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.TextWithEntities.textWithEntities(text: _1!, entities: _2!)
+            if _c1 && _c2 {
+                return Api.TextWithEntities.textWithEntities(text: _1!, entities: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -694,16 +710,12 @@ public extension Api {
             let _c7 = (Int(_1!) & Int(1 << 3) == 0) || _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 6) == 0) || _8 != nil
             let _c9 = (Int(_1!) & Int(1 << 4) == 0) || _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.Theme.theme(flags: _1!, id: _2!, accessHash: _3!, slug: _4!, title: _5!, document: _6, settings: _7, emoticon: _8, installsCount: _9)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.Theme.theme(flags: _1!, id: _2!, accessHash: _3!, slug: _4!, title: _5!, document: _6, settings: _7, emoticon: _8, installsCount: _9)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -764,13 +776,12 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.ThemeSettings.themeSettings(flags: _1!, baseTheme: _2!, accentColor: _3!, outboxAccentColor: _4, messageColors: _5, wallpaper: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.ThemeSettings.themeSettings(flags: _1!, baseTheme: _2!, accentColor: _3!, outboxAccentColor: _4, messageColors: _5, wallpaper: _6)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -809,10 +820,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Timezone.timezone(id: _1!, name: _2!, utcOffset: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Timezone.timezone(id: _1!, name: _2!, utcOffset: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -853,10 +866,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.TodoCompletion.todoCompletion(id: _1!, completedBy: _2!, date: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.TodoCompletion.todoCompletion(id: _1!, completedBy: _2!, date: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -893,9 +908,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.TodoItem.todoItem(id: _1!, title: _2!)
+            if _c1 && _c2 {
+                return Api.TodoItem.todoItem(id: _1!, title: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -942,10 +960,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.TodoList.todoList(flags: _1!, title: _2!, list: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.TodoList.todoList(flags: _1!, title: _2!, list: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -982,9 +1002,12 @@ public extension Api {
             _2 = reader.readDouble()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.TopPeer.topPeer(peer: _1!, rating: _2!)
+            if _c1 && _c2 {
+                return Api.TopPeer.topPeer(peer: _1!, rating: _2!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -1155,10 +1178,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.TopPeerCategoryPeers.topPeerCategoryPeers(category: _1!, count: _2!, peers: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.TopPeerCategoryPeers.topPeerCategoryPeers(category: _1!, count: _2!, peers: _3!)
+            }
+            else {
+                return nil
+            }
         }
     
     }
@@ -2962,9 +2987,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateBotBusinessConnect(connection: _1!, qts: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateBotBusinessConnect(connection: _1!, qts: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotCallbackQuery(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -2993,15 +3021,12 @@ public extension Api {
             let _c6 = _6 != nil
             let _c7 = (Int(_1!) & Int(1 << 0) == 0) || _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 1) == 0) || _8 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            return Api.Update.updateBotCallbackQuery(flags: _1!, queryId: _2!, userId: _3!, peer: _4!, msgId: _5!, chatInstance: _6!, data: _7, gameShortName: _8)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.Update.updateBotCallbackQuery(flags: _1!, queryId: _2!, userId: _3!, peer: _4!, msgId: _5!, chatInstance: _6!, data: _7, gameShortName: _8)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotChatBoost(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -3017,10 +3042,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateBotChatBoost(peer: _1!, boost: _2!, qts: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateBotChatBoost(peer: _1!, boost: _2!, qts: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotChatInviteRequester(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -3045,13 +3072,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.Update.updateBotChatInviteRequester(peer: _1!, date: _2!, userId: _3!, about: _4!, invite: _5!, qts: _6!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Update.updateBotChatInviteRequester(peer: _1!, date: _2!, userId: _3!, about: _4!, invite: _5!, qts: _6!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotCommands(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -3067,10 +3093,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateBotCommands(peer: _1!, botId: _2!, commands: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateBotCommands(peer: _1!, botId: _2!, commands: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotDeleteBusinessMessage(_ reader: BufferReader) -> Update? {
             var _1: String?
@@ -3089,11 +3117,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateBotDeleteBusinessMessage(connectionId: _1!, peer: _2!, messages: _3!, qts: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateBotDeleteBusinessMessage(connectionId: _1!, peer: _2!, messages: _3!, qts: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotEditBusinessMessage(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3115,12 +3144,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateBotEditBusinessMessage(flags: _1!, connectionId: _2!, message: _3!, replyToMessage: _4, qts: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateBotEditBusinessMessage(flags: _1!, connectionId: _2!, message: _3!, replyToMessage: _4, qts: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotInlineQuery(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3148,14 +3177,12 @@ public extension Api {
             let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.Update.updateBotInlineQuery(flags: _1!, queryId: _2!, userId: _3!, query: _4!, geo: _5, peerType: _6, offset: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.Update.updateBotInlineQuery(flags: _1!, queryId: _2!, userId: _3!, query: _4!, geo: _5, peerType: _6, offset: _7!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotInlineSend(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3180,13 +3207,12 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.Update.updateBotInlineSend(flags: _1!, userId: _2!, query: _3!, geo: _4, id: _5!, msgId: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Update.updateBotInlineSend(flags: _1!, userId: _2!, query: _3!, geo: _4, id: _5!, msgId: _6)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotMenuButton(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3197,9 +3223,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateBotMenuButton(botId: _1!, button: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateBotMenuButton(botId: _1!, button: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotMessageReaction(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -3231,14 +3260,12 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.Update.updateBotMessageReaction(peer: _1!, msgId: _2!, date: _3!, actor: _4!, oldReactions: _5!, newReactions: _6!, qts: _7!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.Update.updateBotMessageReaction(peer: _1!, msgId: _2!, date: _3!, actor: _4!, oldReactions: _5!, newReactions: _6!, qts: _7!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotMessageReactions(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -3260,12 +3287,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateBotMessageReactions(peer: _1!, msgId: _2!, date: _3!, reactions: _4!, qts: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateBotMessageReactions(peer: _1!, msgId: _2!, date: _3!, reactions: _4!, qts: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotNewBusinessMessage(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3287,12 +3314,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateBotNewBusinessMessage(flags: _1!, connectionId: _2!, message: _3!, replyToMessage: _4, qts: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateBotNewBusinessMessage(flags: _1!, connectionId: _2!, message: _3!, replyToMessage: _4, qts: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotPrecheckoutQuery(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3321,15 +3348,12 @@ public extension Api {
             let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
             let _c7 = _7 != nil
             let _c8 = _8 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            return Api.Update.updateBotPrecheckoutQuery(flags: _1!, queryId: _2!, userId: _3!, payload: _4!, info: _5, shippingOptionId: _6, currency: _7!, totalAmount: _8!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.Update.updateBotPrecheckoutQuery(flags: _1!, queryId: _2!, userId: _3!, payload: _4!, info: _5, shippingOptionId: _6, currency: _7!, totalAmount: _8!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotPurchasedPaidMedia(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3341,10 +3365,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateBotPurchasedPaidMedia(userId: _1!, payload: _2!, qts: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateBotPurchasedPaidMedia(userId: _1!, payload: _2!, qts: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotShippingQuery(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3361,11 +3387,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateBotShippingQuery(queryId: _1!, userId: _2!, payload: _3!, shippingAddress: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateBotShippingQuery(queryId: _1!, userId: _2!, payload: _3!, shippingAddress: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotStopped(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3382,11 +3409,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateBotStopped(userId: _1!, date: _2!, stopped: _3!, qts: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateBotStopped(userId: _1!, date: _2!, stopped: _3!, qts: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotWebhookJSON(_ reader: BufferReader) -> Update? {
             var _1: Api.DataJSON?
@@ -3394,8 +3422,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.DataJSON
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateBotWebhookJSON(data: _1!)
+            if _c1 {
+                return Api.Update.updateBotWebhookJSON(data: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBotWebhookJSONQuery(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3409,10 +3441,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateBotWebhookJSONQuery(queryId: _1!, data: _2!, timeout: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateBotWebhookJSONQuery(queryId: _1!, data: _2!, timeout: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateBusinessBotCallbackQuery(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3443,22 +3477,23 @@ public extension Api {
             let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
             let _c7 = _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 0) == 0) || _8 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            return Api.Update.updateBusinessBotCallbackQuery(flags: _1!, queryId: _2!, userId: _3!, connectionId: _4!, message: _5!, replyToMessage: _6, chatInstance: _7!, data: _8)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.Update.updateBusinessBotCallbackQuery(flags: _1!, queryId: _2!, userId: _3!, connectionId: _4!, message: _5!, replyToMessage: _6, chatInstance: _7!, data: _8)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannel(_ reader: BufferReader) -> Update? {
             var _1: Int64?
             _1 = reader.readInt64()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateChannel(channelId: _1!)
+            if _c1 {
+                return Api.Update.updateChannel(channelId: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelAvailableMessages(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3467,9 +3502,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateChannelAvailableMessages(channelId: _1!, availableMinId: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateChannelAvailableMessages(channelId: _1!, availableMinId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelMessageForwards(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3481,10 +3519,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateChannelMessageForwards(channelId: _1!, id: _2!, forwards: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateChannelMessageForwards(channelId: _1!, id: _2!, forwards: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelMessageViews(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3496,10 +3536,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateChannelMessageViews(channelId: _1!, id: _2!, views: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateChannelMessageViews(channelId: _1!, id: _2!, views: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelParticipant(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3535,16 +3577,12 @@ public extension Api {
             let _c7 = (Int(_1!) & Int(1 << 1) == 0) || _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 2) == 0) || _8 != nil
             let _c9 = _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.Update.updateChannelParticipant(flags: _1!, channelId: _2!, date: _3!, actorId: _4!, userId: _5!, prevParticipant: _6, newParticipant: _7, invite: _8, qts: _9!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.Update.updateChannelParticipant(flags: _1!, channelId: _2!, date: _3!, actorId: _4!, userId: _5!, prevParticipant: _6, newParticipant: _7, invite: _8, qts: _9!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelReadMessagesContents(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3566,12 +3604,12 @@ public extension Api {
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateChannelReadMessagesContents(flags: _1!, channelId: _2!, topMsgId: _3, savedPeerId: _4, messages: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateChannelReadMessagesContents(flags: _1!, channelId: _2!, topMsgId: _3, savedPeerId: _4, messages: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelTooLong(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3583,10 +3621,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateChannelTooLong(flags: _1!, channelId: _2!, pts: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateChannelTooLong(flags: _1!, channelId: _2!, pts: _3)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelUserTyping(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3608,12 +3648,12 @@ public extension Api {
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateChannelUserTyping(flags: _1!, channelId: _2!, topMsgId: _3, fromId: _4!, action: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateChannelUserTyping(flags: _1!, channelId: _2!, topMsgId: _3, fromId: _4!, action: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelViewForumAsMessages(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3624,9 +3664,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateChannelViewForumAsMessages(channelId: _1!, enabled: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateChannelViewForumAsMessages(channelId: _1!, enabled: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChannelWebPage(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3643,18 +3686,23 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateChannelWebPage(channelId: _1!, webpage: _2!, pts: _3!, ptsCount: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateChannelWebPage(channelId: _1!, webpage: _2!, pts: _3!, ptsCount: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChat(_ reader: BufferReader) -> Update? {
             var _1: Int64?
             _1 = reader.readInt64()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateChat(chatId: _1!)
+            if _c1 {
+                return Api.Update.updateChat(chatId: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChatDefaultBannedRights(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -3670,10 +3718,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateChatDefaultBannedRights(peer: _1!, defaultBannedRights: _2!, version: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateChatDefaultBannedRights(peer: _1!, defaultBannedRights: _2!, version: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChatParticipant(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3709,16 +3759,12 @@ public extension Api {
             let _c7 = (Int(_1!) & Int(1 << 1) == 0) || _7 != nil
             let _c8 = (Int(_1!) & Int(1 << 2) == 0) || _8 != nil
             let _c9 = _9 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            if !_c9 { return nil }
-            return Api.Update.updateChatParticipant(flags: _1!, chatId: _2!, date: _3!, actorId: _4!, userId: _5!, prevParticipant: _6, newParticipant: _7, invite: _8, qts: _9!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.Update.updateChatParticipant(flags: _1!, chatId: _2!, date: _3!, actorId: _4!, userId: _5!, prevParticipant: _6, newParticipant: _7, invite: _8, qts: _9!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChatParticipantAdd(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3736,12 +3782,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateChatParticipantAdd(chatId: _1!, userId: _2!, inviterId: _3!, date: _4!, version: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateChatParticipantAdd(chatId: _1!, userId: _2!, inviterId: _3!, date: _4!, version: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChatParticipantAdmin(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3758,11 +3804,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateChatParticipantAdmin(chatId: _1!, userId: _2!, isAdmin: _3!, version: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateChatParticipantAdmin(chatId: _1!, userId: _2!, isAdmin: _3!, version: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChatParticipantDelete(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3774,10 +3821,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateChatParticipantDelete(chatId: _1!, userId: _2!, version: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateChatParticipantDelete(chatId: _1!, userId: _2!, version: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChatParticipants(_ reader: BufferReader) -> Update? {
             var _1: Api.ChatParticipants?
@@ -3785,8 +3834,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.ChatParticipants
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateChatParticipants(participants: _1!)
+            if _c1 {
+                return Api.Update.updateChatParticipants(participants: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateChatUserTyping(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3802,10 +3855,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateChatUserTyping(chatId: _1!, fromId: _2!, action: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateChatUserTyping(chatId: _1!, fromId: _2!, action: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateConfig(_ reader: BufferReader) -> Update? {
             return Api.Update.updateConfig
@@ -3819,8 +3874,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.DcOption.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateDcOptions(dcOptions: _1!)
+            if _c1 {
+                return Api.Update.updateDcOptions(dcOptions: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDeleteChannelMessages(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -3837,11 +3896,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateDeleteChannelMessages(channelId: _1!, messages: _2!, pts: _3!, ptsCount: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateDeleteChannelMessages(channelId: _1!, messages: _2!, pts: _3!, ptsCount: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDeleteGroupCallMessages(_ reader: BufferReader) -> Update? {
             var _1: Api.InputGroupCall?
@@ -3854,9 +3914,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateDeleteGroupCallMessages(call: _1!, messages: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateDeleteGroupCallMessages(call: _1!, messages: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDeleteMessages(_ reader: BufferReader) -> Update? {
             var _1: [Int32]?
@@ -3870,17 +3933,23 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateDeleteMessages(messages: _1!, pts: _2!, ptsCount: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateDeleteMessages(messages: _1!, pts: _2!, ptsCount: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDeleteQuickReply(_ reader: BufferReader) -> Update? {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateDeleteQuickReply(shortcutId: _1!)
+            if _c1 {
+                return Api.Update.updateDeleteQuickReply(shortcutId: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDeleteQuickReplyMessages(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3891,9 +3960,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateDeleteQuickReplyMessages(shortcutId: _1!, messages: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateDeleteQuickReplyMessages(shortcutId: _1!, messages: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDeleteScheduledMessages(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3914,11 +3986,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateDeleteScheduledMessages(flags: _1!, peer: _2!, messages: _3!, sentMessages: _4)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateDeleteScheduledMessages(flags: _1!, peer: _2!, messages: _3!, sentMessages: _4)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDialogFilter(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3932,10 +4005,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateDialogFilter(flags: _1!, id: _2!, filter: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateDialogFilter(flags: _1!, id: _2!, filter: _3)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDialogFilterOrder(_ reader: BufferReader) -> Update? {
             var _1: [Int32]?
@@ -3943,8 +4018,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: -1471112230, elementType: Int32.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateDialogFilterOrder(order: _1!)
+            if _c1 {
+                return Api.Update.updateDialogFilterOrder(order: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDialogFilters(_ reader: BufferReader) -> Update? {
             return Api.Update.updateDialogFilters
@@ -3961,10 +4040,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 1) == 0) || _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateDialogPinned(flags: _1!, folderId: _2, peer: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateDialogPinned(flags: _1!, folderId: _2, peer: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDialogUnreadMark(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -3980,10 +4061,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateDialogUnreadMark(flags: _1!, peer: _2!, savedPeerId: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateDialogUnreadMark(flags: _1!, peer: _2!, savedPeerId: _3)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateDraftMessage(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4007,12 +4090,12 @@ public extension Api {
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateDraftMessage(flags: _1!, peer: _2!, topMsgId: _3, savedPeerId: _4, draft: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateDraftMessage(flags: _1!, peer: _2!, topMsgId: _3, savedPeerId: _4, draft: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateEditChannelMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.Message?
@@ -4026,10 +4109,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateEditChannelMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateEditChannelMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateEditMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.Message?
@@ -4043,10 +4128,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateEditMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateEditMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateEmojiGameInfo(_ reader: BufferReader) -> Update? {
             var _1: Api.messages.EmojiGameInfo?
@@ -4054,15 +4141,23 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.messages.EmojiGameInfo
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateEmojiGameInfo(info: _1!)
+            if _c1 {
+                return Api.Update.updateEmojiGameInfo(info: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateEncryptedChatTyping(_ reader: BufferReader) -> Update? {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateEncryptedChatTyping(chatId: _1!)
+            if _c1 {
+                return Api.Update.updateEncryptedChatTyping(chatId: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateEncryptedMessagesRead(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4074,10 +4169,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateEncryptedMessagesRead(chatId: _1!, maxDate: _2!, date: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateEncryptedMessagesRead(chatId: _1!, maxDate: _2!, date: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateEncryption(_ reader: BufferReader) -> Update? {
             var _1: Api.EncryptedChat?
@@ -4088,9 +4185,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateEncryption(chat: _1!, date: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateEncryption(chat: _1!, date: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateFavedStickers(_ reader: BufferReader) -> Update? {
             return Api.Update.updateFavedStickers
@@ -4107,10 +4207,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateFolderPeers(folderPeers: _1!, pts: _2!, ptsCount: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateFolderPeers(folderPeers: _1!, pts: _2!, ptsCount: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateGeoLiveViewed(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -4121,9 +4223,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateGeoLiveViewed(peer: _1!, msgId: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateGeoLiveViewed(peer: _1!, msgId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateGroupCall(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4139,10 +4244,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 1) == 0) || _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateGroupCall(flags: _1!, peer: _2, call: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateGroupCall(flags: _1!, peer: _2, call: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateGroupCallChainBlocks(_ reader: BufferReader) -> Update? {
             var _1: Api.InputGroupCall?
@@ -4161,11 +4268,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateGroupCallChainBlocks(call: _1!, subChainId: _2!, blocks: _3!, nextOffset: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateGroupCallChainBlocks(call: _1!, subChainId: _2!, blocks: _3!, nextOffset: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateGroupCallConnection(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4176,9 +4284,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateGroupCallConnection(flags: _1!, params: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateGroupCallConnection(flags: _1!, params: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateGroupCallEncryptedMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.InputGroupCall?
@@ -4194,10 +4305,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateGroupCallEncryptedMessage(call: _1!, fromId: _2!, encryptedMessage: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateGroupCallEncryptedMessage(call: _1!, fromId: _2!, encryptedMessage: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateGroupCallMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.InputGroupCall?
@@ -4210,9 +4323,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateGroupCallMessage(call: _1!, message: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateGroupCallMessage(call: _1!, message: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateGroupCallParticipants(_ reader: BufferReader) -> Update? {
             var _1: Api.InputGroupCall?
@@ -4228,10 +4344,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateGroupCallParticipants(call: _1!, participants: _2!, version: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateGroupCallParticipants(call: _1!, participants: _2!, version: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateInlineBotCallbackQuery(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4257,14 +4375,12 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
             let _c7 = (Int(_1!) & Int(1 << 1) == 0) || _7 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            return Api.Update.updateInlineBotCallbackQuery(flags: _1!, queryId: _2!, userId: _3!, msgId: _4!, chatInstance: _5!, data: _6, gameShortName: _7)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.Update.updateInlineBotCallbackQuery(flags: _1!, queryId: _2!, userId: _3!, msgId: _4!, chatInstance: _5!, data: _6, gameShortName: _7)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateLangPack(_ reader: BufferReader) -> Update? {
             var _1: Api.LangPackDifference?
@@ -4272,15 +4388,23 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.LangPackDifference
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateLangPack(difference: _1!)
+            if _c1 {
+                return Api.Update.updateLangPack(difference: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateLangPackTooLong(_ reader: BufferReader) -> Update? {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateLangPackTooLong(langCode: _1!)
+            if _c1 {
+                return Api.Update.updateLangPackTooLong(langCode: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateLoginToken(_ reader: BufferReader) -> Update? {
             return Api.Update.updateLoginToken
@@ -4299,10 +4423,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateMessageExtendedMedia(peer: _1!, msgId: _2!, extendedMedia: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateMessageExtendedMedia(peer: _1!, msgId: _2!, extendedMedia: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateMessageID(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4311,9 +4437,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateMessageID(id: _1!, randomId: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateMessageID(id: _1!, randomId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateMessagePoll(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4332,11 +4461,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateMessagePoll(flags: _1!, pollId: _2!, poll: _3, results: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateMessagePoll(flags: _1!, pollId: _2!, poll: _3, results: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateMessagePollVote(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -4355,11 +4485,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateMessagePollVote(pollId: _1!, peer: _2!, options: _3!, qts: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateMessagePollVote(pollId: _1!, peer: _2!, options: _3!, qts: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateMessageReactions(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4386,13 +4517,12 @@ public extension Api {
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
             let _c6 = _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.Update.updateMessageReactions(flags: _1!, peer: _2!, msgId: _3!, topMsgId: _4, savedPeerId: _5, reactions: _6!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Update.updateMessageReactions(flags: _1!, peer: _2!, msgId: _3!, topMsgId: _4, savedPeerId: _5, reactions: _6!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateMonoForumNoPaidException(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4406,10 +4536,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateMonoForumNoPaidException(flags: _1!, channelId: _2!, savedPeerId: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateMonoForumNoPaidException(flags: _1!, channelId: _2!, savedPeerId: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateMoveStickerSetToTop(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4418,9 +4550,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateMoveStickerSetToTop(flags: _1!, stickerset: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateMoveStickerSetToTop(flags: _1!, stickerset: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNewAuthorization(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4438,12 +4573,12 @@ public extension Api {
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateNewAuthorization(flags: _1!, hash: _2!, date: _3, device: _4, location: _5)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateNewAuthorization(flags: _1!, hash: _2!, date: _3, device: _4, location: _5)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNewChannelMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.Message?
@@ -4457,10 +4592,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateNewChannelMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateNewChannelMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNewEncryptedMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.EncryptedMessage?
@@ -4471,9 +4608,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateNewEncryptedMessage(message: _1!, qts: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateNewEncryptedMessage(message: _1!, qts: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNewMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.Message?
@@ -4487,10 +4627,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateNewMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateNewMessage(message: _1!, pts: _2!, ptsCount: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNewQuickReply(_ reader: BufferReader) -> Update? {
             var _1: Api.QuickReply?
@@ -4498,8 +4640,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.QuickReply
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateNewQuickReply(quickReply: _1!)
+            if _c1 {
+                return Api.Update.updateNewQuickReply(quickReply: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNewScheduledMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.Message?
@@ -4507,8 +4653,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.Message
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateNewScheduledMessage(message: _1!)
+            if _c1 {
+                return Api.Update.updateNewScheduledMessage(message: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNewStickerSet(_ reader: BufferReader) -> Update? {
             var _1: Api.messages.StickerSet?
@@ -4516,8 +4666,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.messages.StickerSet
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateNewStickerSet(stickerset: _1!)
+            if _c1 {
+                return Api.Update.updateNewStickerSet(stickerset: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNewStoryReaction(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4533,10 +4687,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateNewStoryReaction(storyId: _1!, peer: _2!, reaction: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateNewStoryReaction(storyId: _1!, peer: _2!, reaction: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateNotifySettings(_ reader: BufferReader) -> Update? {
             var _1: Api.NotifyPeer?
@@ -4549,9 +4705,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateNotifySettings(peer: _1!, notifySettings: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateNotifySettings(peer: _1!, notifySettings: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePaidReactionPrivacy(_ reader: BufferReader) -> Update? {
             var _1: Api.PaidReactionPrivacy?
@@ -4559,8 +4718,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.PaidReactionPrivacy
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updatePaidReactionPrivacy(private: _1!)
+            if _c1 {
+                return Api.Update.updatePaidReactionPrivacy(private: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePeerBlocked(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4571,9 +4734,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updatePeerBlocked(flags: _1!, peerId: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updatePeerBlocked(flags: _1!, peerId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePeerHistoryTTL(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4587,10 +4753,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updatePeerHistoryTTL(flags: _1!, peer: _2!, ttlPeriod: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updatePeerHistoryTTL(flags: _1!, peer: _2!, ttlPeriod: _3)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePeerLocated(_ reader: BufferReader) -> Update? {
             var _1: [Api.PeerLocated]?
@@ -4598,8 +4766,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.PeerLocated.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updatePeerLocated(peers: _1!)
+            if _c1 {
+                return Api.Update.updatePeerLocated(peers: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePeerSettings(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -4612,9 +4784,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updatePeerSettings(peer: _1!, settings: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updatePeerSettings(peer: _1!, settings: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePeerWallpaper(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4630,10 +4805,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updatePeerWallpaper(flags: _1!, peer: _2!, wallpaper: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updatePeerWallpaper(flags: _1!, peer: _2!, wallpaper: _3)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePendingJoinRequests(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -4649,10 +4826,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updatePendingJoinRequests(peer: _1!, requestsPending: _2!, recentRequesters: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updatePendingJoinRequests(peer: _1!, requestsPending: _2!, recentRequesters: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePhoneCall(_ reader: BufferReader) -> Update? {
             var _1: Api.PhoneCall?
@@ -4660,8 +4839,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.PhoneCall
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updatePhoneCall(phoneCall: _1!)
+            if _c1 {
+                return Api.Update.updatePhoneCall(phoneCall: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePhoneCallSignalingData(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -4670,9 +4853,12 @@ public extension Api {
             _2 = parseBytes(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updatePhoneCallSignalingData(phoneCallId: _1!, data: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updatePhoneCallSignalingData(phoneCallId: _1!, data: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePinnedChannelMessages(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4692,12 +4878,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updatePinnedChannelMessages(flags: _1!, channelId: _2!, messages: _3!, pts: _4!, ptsCount: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updatePinnedChannelMessages(flags: _1!, channelId: _2!, messages: _3!, pts: _4!, ptsCount: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePinnedDialogs(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4711,10 +4897,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 1) == 0) || _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updatePinnedDialogs(flags: _1!, folderId: _2, order: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updatePinnedDialogs(flags: _1!, folderId: _2, order: _3)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePinnedForumTopic(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4728,10 +4916,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updatePinnedForumTopic(flags: _1!, peer: _2!, topicId: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updatePinnedForumTopic(flags: _1!, peer: _2!, topicId: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePinnedForumTopics(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4747,10 +4937,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updatePinnedForumTopics(flags: _1!, peer: _2!, order: _3)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updatePinnedForumTopics(flags: _1!, peer: _2!, order: _3)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePinnedMessages(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4772,12 +4964,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updatePinnedMessages(flags: _1!, peer: _2!, messages: _3!, pts: _4!, ptsCount: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updatePinnedMessages(flags: _1!, peer: _2!, messages: _3!, pts: _4!, ptsCount: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePinnedSavedDialogs(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4788,9 +4980,12 @@ public extension Api {
             } }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updatePinnedSavedDialogs(flags: _1!, order: _2)
+            if _c1 && _c2 {
+                return Api.Update.updatePinnedSavedDialogs(flags: _1!, order: _2)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePrivacy(_ reader: BufferReader) -> Update? {
             var _1: Api.PrivacyKey?
@@ -4803,9 +4998,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updatePrivacy(key: _1!, rules: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updatePrivacy(key: _1!, rules: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updatePtsChanged(_ reader: BufferReader) -> Update? {
             return Api.Update.updatePtsChanged
@@ -4816,8 +5014,12 @@ public extension Api {
                 _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.QuickReply.self)
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateQuickReplies(quickReplies: _1!)
+            if _c1 {
+                return Api.Update.updateQuickReplies(quickReplies: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateQuickReplyMessage(_ reader: BufferReader) -> Update? {
             var _1: Api.Message?
@@ -4825,8 +5027,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.Message
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateQuickReplyMessage(message: _1!)
+            if _c1 {
+                return Api.Update.updateQuickReplyMessage(message: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadChannelDiscussionInbox(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4847,13 +5053,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
             let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.Update.updateReadChannelDiscussionInbox(flags: _1!, channelId: _2!, topMsgId: _3!, readMaxId: _4!, broadcastId: _5, broadcastPost: _6)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Update.updateReadChannelDiscussionInbox(flags: _1!, channelId: _2!, topMsgId: _3!, readMaxId: _4!, broadcastId: _5, broadcastPost: _6)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadChannelDiscussionOutbox(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -4865,10 +5070,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateReadChannelDiscussionOutbox(channelId: _1!, topMsgId: _2!, readMaxId: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateReadChannelDiscussionOutbox(channelId: _1!, topMsgId: _2!, readMaxId: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadChannelInbox(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4889,13 +5096,12 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.Update.updateReadChannelInbox(flags: _1!, folderId: _2, channelId: _3!, maxId: _4!, stillUnreadCount: _5!, pts: _6!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Update.updateReadChannelInbox(flags: _1!, folderId: _2, channelId: _3!, maxId: _4!, stillUnreadCount: _5!, pts: _6!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadChannelOutbox(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -4904,9 +5110,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateReadChannelOutbox(channelId: _1!, maxId: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateReadChannelOutbox(channelId: _1!, maxId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadFeaturedEmojiStickers(_ reader: BufferReader) -> Update? {
             return Api.Update.updateReadFeaturedEmojiStickers
@@ -4941,15 +5150,12 @@ public extension Api {
             let _c6 = _6 != nil
             let _c7 = _7 != nil
             let _c8 = _8 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            if !_c7 { return nil }
-            if !_c8 { return nil }
-            return Api.Update.updateReadHistoryInbox(flags: _1!, folderId: _2, peer: _3!, topMsgId: _4, maxId: _5!, stillUnreadCount: _6!, pts: _7!, ptsCount: _8!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.Update.updateReadHistoryInbox(flags: _1!, folderId: _2, peer: _3!, topMsgId: _4, maxId: _5!, stillUnreadCount: _6!, pts: _7!, ptsCount: _8!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadHistoryOutbox(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -4966,11 +5172,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateReadHistoryOutbox(peer: _1!, maxId: _2!, pts: _3!, ptsCount: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateReadHistoryOutbox(peer: _1!, maxId: _2!, pts: _3!, ptsCount: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadMessagesContents(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -4990,12 +5197,12 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateReadMessagesContents(flags: _1!, messages: _2!, pts: _3!, ptsCount: _4!, date: _5)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateReadMessagesContents(flags: _1!, messages: _2!, pts: _3!, ptsCount: _4!, date: _5)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadMonoForumInbox(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -5009,10 +5216,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateReadMonoForumInbox(channelId: _1!, savedPeerId: _2!, readMaxId: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateReadMonoForumInbox(channelId: _1!, savedPeerId: _2!, readMaxId: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadMonoForumOutbox(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -5026,10 +5235,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateReadMonoForumOutbox(channelId: _1!, savedPeerId: _2!, readMaxId: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateReadMonoForumOutbox(channelId: _1!, savedPeerId: _2!, readMaxId: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateReadStories(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -5040,9 +5251,12 @@ public extension Api {
             _2 = reader.readInt32()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateReadStories(peer: _1!, maxId: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateReadStories(peer: _1!, maxId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateRecentEmojiStatuses(_ reader: BufferReader) -> Update? {
             return Api.Update.updateRecentEmojiStatuses
@@ -5062,9 +5276,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateSavedDialogPinned(flags: _1!, peer: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateSavedDialogPinned(flags: _1!, peer: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateSavedGifs(_ reader: BufferReader) -> Update? {
             return Api.Update.updateSavedGifs
@@ -5081,8 +5298,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.auth.SentCode
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateSentPhoneCode(sentCode: _1!)
+            if _c1 {
+                return Api.Update.updateSentPhoneCode(sentCode: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateSentStoryReaction(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -5098,10 +5319,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateSentStoryReaction(peer: _1!, storyId: _2!, reaction: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateSentStoryReaction(peer: _1!, storyId: _2!, reaction: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateServiceNotification(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -5126,20 +5349,23 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            if !_c6 { return nil }
-            return Api.Update.updateServiceNotification(flags: _1!, inboxDate: _2, type: _3!, message: _4!, media: _5!, entities: _6!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.Update.updateServiceNotification(flags: _1!, inboxDate: _2, type: _3!, message: _4!, media: _5!, entities: _6!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateSmsJob(_ reader: BufferReader) -> Update? {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateSmsJob(jobId: _1!)
+            if _c1 {
+                return Api.Update.updateSmsJob(jobId: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStarGiftAuctionState(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -5150,9 +5376,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateStarGiftAuctionState(giftId: _1!, state: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateStarGiftAuctionState(giftId: _1!, state: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStarGiftAuctionUserState(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -5163,9 +5392,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateStarGiftAuctionUserState(giftId: _1!, userState: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateStarGiftAuctionUserState(giftId: _1!, userState: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStarsBalance(_ reader: BufferReader) -> Update? {
             var _1: Api.StarsAmount?
@@ -5173,8 +5405,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.StarsAmount
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateStarsBalance(balance: _1!)
+            if _c1 {
+                return Api.Update.updateStarsBalance(balance: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStarsRevenueStatus(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -5187,16 +5423,23 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateStarsRevenueStatus(peer: _1!, status: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateStarsRevenueStatus(peer: _1!, status: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStickerSets(_ reader: BufferReader) -> Update? {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateStickerSets(flags: _1!)
+            if _c1 {
+                return Api.Update.updateStickerSets(flags: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStickerSetsOrder(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -5207,9 +5450,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateStickerSetsOrder(flags: _1!, order: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateStickerSetsOrder(flags: _1!, order: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStoriesStealthMode(_ reader: BufferReader) -> Update? {
             var _1: Api.StoriesStealthMode?
@@ -5217,8 +5463,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.StoriesStealthMode
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateStoriesStealthMode(stealthMode: _1!)
+            if _c1 {
+                return Api.Update.updateStoriesStealthMode(stealthMode: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStory(_ reader: BufferReader) -> Update? {
             var _1: Api.Peer?
@@ -5231,9 +5481,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateStory(peer: _1!, story: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateStory(peer: _1!, story: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateStoryID(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -5242,9 +5495,12 @@ public extension Api {
             _2 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateStoryID(id: _1!, randomId: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateStoryID(id: _1!, randomId: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateTheme(_ reader: BufferReader) -> Update? {
             var _1: Api.Theme?
@@ -5252,8 +5508,12 @@ public extension Api {
                 _1 = Api.parse(reader, signature: signature) as? Api.Theme
             }
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateTheme(theme: _1!)
+            if _c1 {
+                return Api.Update.updateTheme(theme: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateTranscribedAudio(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -5273,19 +5533,23 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            if !_c5 { return nil }
-            return Api.Update.updateTranscribedAudio(flags: _1!, peer: _2!, msgId: _3!, transcriptionId: _4!, text: _5!)
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.Update.updateTranscribedAudio(flags: _1!, peer: _2!, msgId: _3!, transcriptionId: _4!, text: _5!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateUser(_ reader: BufferReader) -> Update? {
             var _1: Int64?
             _1 = reader.readInt64()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateUser(userId: _1!)
+            if _c1 {
+                return Api.Update.updateUser(userId: _1!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateUserEmojiStatus(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -5296,9 +5560,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateUserEmojiStatus(userId: _1!, emojiStatus: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateUserEmojiStatus(userId: _1!, emojiStatus: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateUserName(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -5315,11 +5582,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateUserName(userId: _1!, firstName: _2!, lastName: _3!, usernames: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateUserName(userId: _1!, firstName: _2!, lastName: _3!, usernames: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateUserPhone(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -5328,9 +5596,12 @@ public extension Api {
             _2 = parseString(reader)
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateUserPhone(userId: _1!, phone: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateUserPhone(userId: _1!, phone: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateUserStatus(_ reader: BufferReader) -> Update? {
             var _1: Int64?
@@ -5341,9 +5612,12 @@ public extension Api {
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            return Api.Update.updateUserStatus(userId: _1!, status: _2!)
+            if _c1 && _c2 {
+                return Api.Update.updateUserStatus(userId: _1!, status: _2!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateUserTyping(_ reader: BufferReader) -> Update? {
             var _1: Int32?
@@ -5360,11 +5634,12 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = _4 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            if !_c4 { return nil }
-            return Api.Update.updateUserTyping(flags: _1!, userId: _2!, topMsgId: _3, action: _4!)
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.Update.updateUserTyping(flags: _1!, userId: _2!, topMsgId: _3, action: _4!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateWebPage(_ reader: BufferReader) -> Update? {
             var _1: Api.WebPage?
@@ -5378,17 +5653,23 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if !_c1 { return nil }
-            if !_c2 { return nil }
-            if !_c3 { return nil }
-            return Api.Update.updateWebPage(webpage: _1!, pts: _2!, ptsCount: _3!)
+            if _c1 && _c2 && _c3 {
+                return Api.Update.updateWebPage(webpage: _1!, pts: _2!, ptsCount: _3!)
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_updateWebViewResultSent(_ reader: BufferReader) -> Update? {
             var _1: Int64?
             _1 = reader.readInt64()
             let _c1 = _1 != nil
-            if !_c1 { return nil }
-            return Api.Update.updateWebViewResultSent(queryId: _1!)
+            if _c1 {
+                return Api.Update.updateWebViewResultSent(queryId: _1!)
+            }
+            else {
+                return nil
+            }
         }
     
     }

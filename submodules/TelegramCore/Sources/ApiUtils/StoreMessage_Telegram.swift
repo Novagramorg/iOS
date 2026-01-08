@@ -271,6 +271,8 @@ func apiMessagePeerIds(_ message: Api.Message) -> [PeerId] {
                     if let otherParticipants {
                         result.append(contentsOf: otherParticipants.map(\.peerId))
                     }
+                case .messageActionStarGiftCraftFail:
+                    break
             }
         
             return result
