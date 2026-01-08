@@ -1262,7 +1262,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Sent(authorName, starsPrice)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
-            case let .starGiftUnique(gift, isUpgrade, _, _, _, _, _, isPrepaidUpgrade, peerId, senderId, _, resaleStars, _, _, _, assigned, fromOffer):
+            case let .starGiftUnique(gift, isUpgrade, _, _, _, _, _, isPrepaidUpgrade, peerId, senderId, _, resaleStars, _, _, _, assigned, fromOffer, _, _):
                 if case let .unique(gift) = gift {
                     if !forAdditionalServiceMessage && !"".isEmpty {
                         attributedString = NSAttributedString(string: "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))", font: titleFont, textColor: primaryTextColor)
@@ -1739,6 +1739,8 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGiftOffer_Rejected(peerName, giftTitle, priceString)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
+            case .starGiftCraftFail:
+                attributedString = nil
             case .unknown:
                 attributedString = nil
             }

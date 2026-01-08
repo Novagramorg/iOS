@@ -937,7 +937,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             encoder.encodeObject(gift, forKey: "gift")
             encoder.encodeCodable(amount, forKey: "amount")
             encoder.encodeBool(hasExpired, forKey: "hasExpired")
-        case let .starGiftCraftFail:
+        case .starGiftCraftFail:
             encoder.encodeInt32(58, forKey: "_rawValue")
         }
     }
