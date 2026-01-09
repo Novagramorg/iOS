@@ -796,7 +796,7 @@ final class BrowserWebContent: UIView, BrowserContent, WKNavigationDelegate, WKU
             }
         } else {
             if let url = navigationAction.request.url?.absoluteString {
-                if (navigationAction.targetFrame == nil || navigationAction.targetFrame?.isMainFrame == true) && (isTelegramMeLink(url) || isTelegraPhLink(url) || url.hasPrefix("tg://")) && !url.contains("/auth/push?") && !self._state.url.contains("/auth/push?") {
+                if (navigationAction.targetFrame == nil || navigationAction.targetFrame?.isMainFrame == true) && (isTelegramMeLink(url) || url.hasPrefix("tg://")) && !url.contains("/auth/push?") && !self._state.url.contains("/auth/push?") {
                     decisionHandler(.cancel, preferences)
                     self.minimize()
                     self.openAppUrl(url)
