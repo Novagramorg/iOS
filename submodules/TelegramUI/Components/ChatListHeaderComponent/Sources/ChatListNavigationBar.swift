@@ -392,19 +392,18 @@ public final class ChatListNavigationBar: Component {
                 }
             }
             
-            let edgeEffectHeight: CGFloat = currentLayout.size.height + 20.0
-            var edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))
+            var edgeEffectHeight: CGFloat = currentLayout.size.height + 14.0
             if component.search != nil {
                 if component.activeSearch != nil {
-                    edgeEffectFrame.origin.y -= 16.0
                 } else {
-                    edgeEffectFrame.origin.y -= embeddedSearchBarExpansionHeight
+                    edgeEffectHeight -= embeddedSearchBarExpansionHeight
                 }
             } else if component.activeSearch != nil {
-                edgeEffectFrame.origin.y -= 16.0
             }
+            edgeEffectHeight = max(0.0, edgeEffectHeight)
+            let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-            self.edgeEffectView.update(content: component.theme.list.plainBackgroundColor, blur: true, alpha: 0.55, rect: edgeEffectFrame, edge: .top, edgeSize: 40.0, transition: transition)
+            self.edgeEffectView.update(content: component.theme.list.plainBackgroundColor, blur: true, alpha: 0.85, rect: edgeEffectFrame, edge: .top, edgeSize: min(54.0, edgeEffectHeight), transition: transition)
             
             
             let headerTransition = transition

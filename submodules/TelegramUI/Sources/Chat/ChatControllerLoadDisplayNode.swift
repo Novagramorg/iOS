@@ -396,6 +396,7 @@ extension ChatControllerImpl {
             self.chatTitleView?.update(
                 context: self.context,
                 theme: self.presentationData.theme,
+                wallpaper: self.presentationInterfaceState.chatWallpaper,
                 strings: self.presentationData.strings,
                 dateTimeFormat: self.presentationData.dateTimeFormat,
                 nameDisplayOrder: self.presentationData.nameDisplayOrder,
@@ -3835,11 +3836,32 @@ extension ChatControllerImpl {
             }
             
             let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: chatLocation, subject: .pinnedMessages(id: pinnedMessage.message.id), botStart: nil, mode: .standard(.previewing), params: nil)
+            chatController.customNavigationController = strongSelf.navigationController as? NavigationController
+            var dismissPreviewing: ((Bool) -> (() -> Void))?
+            chatController.dismissPreviewing = { animateIn in
+                return dismissPreviewing?(animateIn) ?? {}
+            }
+            
             chatController.canReadHistory.set(false)
             
             strongSelf.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
             
             let contextController = ContextController(presentationData: strongSelf.presentationData, source: .controller(ChatContextControllerContentSourceImpl(controller: chatController, sourceNode: node, passthroughTouches: true)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+            dismissPreviewing = { [weak self, weak contextController] animateIn in
+                if let self, let contextController {
+                    if animateIn {
+                        contextController.statusBar.statusBarStyle = .Ignore
+                        contextController.animateDismissalIfNeeded()
+                        self.present(contextController, in: .window(.root))
+                        return {
+                            contextController.dismissNow()
+                        }
+                    } else {
+                        contextController.dismiss()
+                    }
+                }
+                return {}
+            }
             strongSelf.presentInGlobalOverlay(contextController)
         }, joinGroupCall: { [weak self] activeCall in
             guard let strongSelf = self, let peer = strongSelf.presentationInterfaceState.renderedPeer?.peer else {

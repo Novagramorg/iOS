@@ -19,14 +19,16 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
     private final class ContentData {
         let context: AccountContext
         let theme: PresentationTheme
+        let wallpaper: TelegramWallpaper
         let strings: PresentationStrings
         let dateTimeFormat: PresentationDateTimeFormat
         let nameDisplayOrder: PresentationPersonNameOrder
         let content: ChatTitleContent
         
-        init(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, content: ChatTitleContent) {
+        init(context: AccountContext, theme: PresentationTheme, wallpaper: TelegramWallpaper, strings: PresentationStrings, dateTimeFormat: PresentationDateTimeFormat, nameDisplayOrder: PresentationPersonNameOrder, content: ChatTitleContent) {
             self.context = context
             self.theme = theme
+            self.wallpaper = wallpaper
             self.strings = strings
             self.dateTimeFormat = dateTimeFormat
             self.nameDisplayOrder = nameDisplayOrder
@@ -72,6 +74,7 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
     public func update(
         context: AccountContext,
         theme: PresentationTheme,
+        wallpaper: TelegramWallpaper,
         strings: PresentationStrings,
         dateTimeFormat: PresentationDateTimeFormat,
         nameDisplayOrder: PresentationPersonNameOrder,
@@ -81,6 +84,7 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
         self.contentData = ContentData(
             context: context,
             theme: theme,
+            wallpaper: wallpaper,
             strings: strings,
             dateTimeFormat: dateTimeFormat,
             nameDisplayOrder: nameDisplayOrder,
@@ -111,6 +115,18 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
         let transition = ComponentTransition(transition)
         
         if let contentData = self.contentData {
+            let displayBackground: Bool
+            if let singleColor = contentData.wallpaper.singleColor {
+                let brightness = singleColor.brightness
+                if brightness <= 0.2 || brightness >= 0.8 {
+                    displayBackground = false
+                } else {
+                    displayBackground = true
+                }
+            } else {
+                displayBackground = true
+            }
+            
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(ChatTitleComponent(
@@ -119,7 +135,7 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
                     strings: contentData.strings,
                     dateTimeFormat: contentData.dateTimeFormat,
                     nameDisplayOrder: contentData.nameDisplayOrder,
-                    displayBackground: true,
+                    displayBackground: displayBackground,
                     content: contentData.content,
                     activities: self.activities,
                     networkState: self.networkState,

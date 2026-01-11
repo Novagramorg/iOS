@@ -1925,7 +1925,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
 
         updateExtraNavigationBarBackgroundHeight(0.0, 0.0, nil, transition)
         
-        var sidePanelTopInset: CGFloat = insets.top + 4.0
+        var sidePanelTopInset: CGFloat = insets.top - 4.0
         
         let contentBounds = CGRect(x: 0.0, y: 0.0, width: layout.size.width - wrappingInsets.left - wrappingInsets.right, height: layout.size.height - wrappingInsets.top - wrappingInsets.bottom)
         
@@ -2235,6 +2235,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
+        let edgeEffectAlpha: CGFloat
+        if case .image = self.chatPresentationInterfaceState.chatWallpaper {
+            edgeEffectAlpha = 0.7
+        } else {
+            edgeEffectAlpha = self.chatPresentationInterfaceState.chatWallpaper.singleColor != nil ? 0.85 : 0.75
+        }
+        
         var bottomBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
         if let current = self.bottomBackgroundEdgeEffectNode {
             bottomBackgroundEdgeEffectNode = current
@@ -2247,12 +2254,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         if let bottomBackgroundEdgeEffectNode {
             var blurFrame = inputBackgroundFrame
-            blurFrame.origin.y -= 18.0
+            blurFrame.origin.y -= 20.0
             blurFrame.size.height = max(100.0, layout.size.height - blurFrame.origin.y)
             transition.updateFrame(node: bottomBackgroundEdgeEffectNode, frame: blurFrame)
             bottomBackgroundEdgeEffectNode.update(
                 rect: blurFrame,
-                edge: WallpaperEdgeEffectEdge(edge: .bottom, size: 100.0),
+                edge: WallpaperEdgeEffectEdge(edge: .bottom, size: min(60.0, blurFrame.height)),
+                alpha: edgeEffectAlpha,
                 blur: false,
                 containerSize: wallpaperBounds.size,
                 transition: transition
@@ -2269,7 +2277,11 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         
-        var contentBottomInset: CGFloat = inputPanelsHeight + 11.0 + inputPanelsInset
+        var contentBottomInset: CGFloat = inputPanelsHeight + inputPanelsInset
+        if previewing {
+        } else {
+            contentBottomInset += 11.0
+        }
         
         if let scrollContainerNode = self.scrollContainerNode {
             transition.updateFrame(node: scrollContainerNode, frame: CGRect(origin: CGPoint(), size: layout.size))
@@ -2301,7 +2313,6 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         if let containerNode = self.containerNode {
-            contentBottomInset += 8.0
             let containerNodeFrame = CGRect(origin: CGPoint(x: wrappingInsets.left, y: wrappingInsets.top), size: CGSize(width: contentBounds.size.width, height: contentBounds.size.height - containerInsets.bottom - inputPanelsHeight - 8.0))
             transition.updateFrame(node: containerNode, frame: containerNodeFrame)
             
@@ -2450,13 +2461,14 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             }
         }
         if let topBackgroundEdgeEffectNode {
-            var blurFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: max(100.0, listInsets.bottom + 10.0)))
-            blurFrame.origin.y = listInsets.bottom + 10.0 - blurFrame.height
+            var blurFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: max(100.0, listInsets.bottom + 24.0)))
+            blurFrame.origin.y = listInsets.bottom + 24.0 - blurFrame.height
             transition.updateFrame(node: topBackgroundEdgeEffectNode, frame: blurFrame)
             topBackgroundEdgeEffectNode.update(
                 rect: blurFrame,
-                edge: WallpaperEdgeEffectEdge(edge: .top, size: 100.0),
-                blur: false,
+                edge: WallpaperEdgeEffectEdge(edge: .top, size: 70.0),
+                alpha: edgeEffectAlpha,
+                blur: true,
                 containerSize: wallpaperBounds.size,
                 transition: transition
             )
@@ -2518,6 +2530,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         transition.updateFrame(node: self.inputPanelBackgroundNode, frame: apparentInputBackgroundFrame, beginWithCurrentState: true)
         
         if let headerPanelsComponentView = self.headerPanelsView?.view, let headerPanelsSize {
+            sidePanelTopInset += 8.0
             let headerPanelsFrame = CGRect(origin: CGPoint(x: layout.safeInsets.left, y: sidePanelTopInset), size: headerPanelsSize)
             var headerPanelsTransition = ComponentTransition(transition)
             if headerPanelsComponentView.superview == nil {

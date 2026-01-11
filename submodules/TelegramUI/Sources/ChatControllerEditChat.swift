@@ -52,6 +52,7 @@ extension ChatControllerImpl {
                             self.chatTitleView?.update(
                                 context: self.context,
                                 theme: self.presentationData.theme,
+                                wallpaper: self.presentationInterfaceState.chatWallpaper,
                                 strings: self.presentationData.strings,
                                 dateTimeFormat: self.presentationData.dateTimeFormat,
                                 nameDisplayOrder: self.presentationData.nameDisplayOrder,
@@ -103,6 +104,7 @@ extension ChatControllerImpl {
                     self.chatTitleView?.update(
                         context: self.context,
                         theme: self.presentationData.theme,
+                        wallpaper: self.presentationInterfaceState.chatWallpaper,
                         strings: self.presentationData.strings,
                         dateTimeFormat: self.presentationData.dateTimeFormat,
                         nameDisplayOrder: self.presentationData.nameDisplayOrder,

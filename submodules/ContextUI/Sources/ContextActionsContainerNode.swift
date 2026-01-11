@@ -94,32 +94,12 @@ private final class InnerActionsContainerNode: ASDisplayNode {
                 itemNodes.append(.action(ContextActionNode(presentationData: presentationData, action: action, getController: getController, actionSelected: actionSelected, requestLayout: requestLayout, requestUpdateAction: { id, action in
                     requestUpdateAction?(id, action)
                 })))
-                if i != items.count - 1 {
-                    switch items[i + 1] {
-                    case .action, .custom:
-                        let separatorNode = ASDisplayNode()
-                        separatorNode.backgroundColor = presentationData.theme.contextMenu.itemSeparatorColor
-                        itemNodes.append(.itemSeparator(separatorNode))
-                    default:
-                        break
-                    }
-                }
             case let .custom(item, _):
                 let itemNode = item.node(presentationData: presentationData, getController: getController, actionSelected: actionSelected)
                 itemNodes.append(.custom(itemNode))
-                if i != items.count - 1 && itemNode.needsSeparator {
-                    switch items[i + 1] {
-                    case .action, .custom:
-                        let separatorNode = ASDisplayNode()
-                        separatorNode.backgroundColor = presentationData.theme.contextMenu.itemSeparatorColor
-                        itemNodes.append(.itemSeparator(separatorNode))
-                    default:
-                        break
-                    }
-                }
             case .separator:
                 let separatorNode = ASDisplayNode()
-                separatorNode.backgroundColor = presentationData.theme.contextMenu.sectionSeparatorColor
+                separatorNode.backgroundColor = presentationData.theme.contextMenu.itemSeparatorColor
                 itemNodes.append(.separator(separatorNode))
             }
         }
@@ -291,7 +271,7 @@ private final class InnerActionsContainerNode: ASDisplayNode {
                 transition.updateFrame(node: separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: verticalOffset), size: CGSize(width: maxWidth, height: UIScreenPixel)))
                 verticalOffset += UIScreenPixel
             case let .separator(separatorNode):
-                transition.updateFrame(node: separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: verticalOffset), size: CGSize(width: maxWidth, height: separatorHeight)))
+                transition.updateFrame(node: separatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: verticalOffset + floorToScreenPixels((separatorHeight - UIScreenPixel) * 0.5)), size: CGSize(width: maxWidth, height: UIScreenPixel)))
                 verticalOffset += separatorHeight
             }
         }
@@ -815,8 +795,8 @@ final class ContextActionsContainerNode: ASDisplayNode {
         
         super.init()
         
-        self.addSubnode(self.shadowNode)
-        self.additionalShadowNode.flatMap(self.addSubnode)
+        //self.addSubnode(self.shadowNode)
+        //self.additionalShadowNode.flatMap(self.addSubnode)
         self.additionalActionsNode.flatMap(self.scrollNode.addSubnode)
         self.scrollNode.addSubnode(self.actionsNode)
         self.addSubnode(self.scrollNode)
