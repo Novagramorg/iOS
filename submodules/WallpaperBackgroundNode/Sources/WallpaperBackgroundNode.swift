@@ -156,7 +156,7 @@ public struct WallpaperEdgeEffectEdge: Equatable {
 }
 
 public protocol WallpaperEdgeEffectNode: ASDisplayNode {
-    func update(rect: CGRect, edge: WallpaperEdgeEffectEdge, blur: Bool, containerSize: CGSize, transition: ContainedViewLayoutTransition)
+    func update(rect: CGRect, edge: WallpaperEdgeEffectEdge, alpha: CGFloat, blur: Bool, containerSize: CGSize, transition: ContainedViewLayoutTransition)
 }
 
 public protocol WallpaperBackgroundNode: ASDisplayNode {
@@ -1507,7 +1507,6 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
             
             if self.validPatternGeneratedImage != updatedGeneratedImage {
                 self.validPatternGeneratedImage = updatedGeneratedImage
-
                 if let cachedValidPatternImage = WallpaperBackgroundNodeImpl.cachedValidPatternImage, cachedValidPatternImage.generated == updatedGeneratedImage {
                     self.patternImageLayer.suspendCompositionUpdates = true
                     self.updatePatternPresentation()
