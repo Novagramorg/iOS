@@ -3254,7 +3254,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             })
         }
         
-        let contextController = ContextController(presentationData: self.presentationData.withUpdated(theme: defaultDarkColorPresentationTheme), source: .reference(HeaderContextReferenceContentSource(controller: controller, sourceNode: sourceNode, actionsOnTop: actionsOnTop)), items: items |> map { items in
+        let contextController = makeContextController(presentationData: self.presentationData.withUpdated(theme: defaultDarkColorPresentationTheme), source: .reference(HeaderContextReferenceContentSource(controller: controller, sourceNode: sourceNode, actionsOnTop: actionsOnTop)), items: items |> map { items in
             if !items.topItems.isEmpty {
                 return ContextController.Items(id: AnyHashable(0), content: .twoLists(items.items, items.topItems))
             } else {

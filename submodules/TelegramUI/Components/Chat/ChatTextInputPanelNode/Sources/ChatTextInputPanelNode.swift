@@ -4046,7 +4046,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
             
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let controller = PeekController(presentationData: presentationData, content: content, sourceView: {
+            let controller = makePeekController(presentationData: presentationData, content: content, sourceView: {
                 return (sourceView, sourceRect)
             })
             //strongSelf.peekController = controller

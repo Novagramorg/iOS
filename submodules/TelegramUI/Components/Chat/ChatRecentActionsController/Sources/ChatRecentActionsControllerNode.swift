@@ -1163,7 +1163,7 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
             return
         }
         
-        let contextController = ContextController(presentationData: self.presentationData, source: source, items: .single(ContextController.Items(content: .list(actions))), recognizer: recognizer, gesture: gesture)
+        let contextController = makeContextController(presentationData: self.presentationData, source: source, items: .single(ContextController.Items(content: .list(actions))), recognizer: recognizer, gesture: gesture)
         controller.window?.presentInGlobalOverlay(contextController)
     }
     

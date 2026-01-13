@@ -1927,7 +1927,7 @@ func chatListFilterPresetController(context: AccountContext, currentPreset initi
                     })
                 })))
                 
-                let contextController = ContextController(presentationData: presentationData, source: .extracted(InviteLinkContextExtractedContentSource(controller: controller, sourceNode: node, keepInPlace: false, blurBackground: true)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+                let contextController = makeContextController(presentationData: presentationData, source: .extracted(InviteLinkContextExtractedContentSource(controller: controller, sourceNode: node, keepInPlace: false, blurBackground: true)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
                 presentInGlobalOverlayImpl?(contextController)
             })
         },
@@ -1968,7 +1968,7 @@ func chatListFilterPresetController(context: AccountContext, currentPreset initi
                 })
             })))
             
-            let contextController = ContextController(presentationData: presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+            let contextController = makeContextController(presentationData: presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatController, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
             presentInGlobalOverlayImpl?(contextController)
         },
         updateTagColor: { color in

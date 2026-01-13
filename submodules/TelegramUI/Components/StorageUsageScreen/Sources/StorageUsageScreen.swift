@@ -2088,7 +2088,7 @@ final class StorageUsageScreenComponent: Component {
                             ))
                             let items = ContextController.Items(content: .list(itemList))
                             
-                            let controller = ContextController(
+                            let controller = makeContextController(
                                 presentationData: presentationData,
                                 source: .extracted(StorageUsageListContextExtractedContentSource(contentView: sourceView)), items: .single(items), recognizer: nil, gesture: gesture)
                             
@@ -2620,7 +2620,7 @@ final class StorageUsageScreenComponent: Component {
                 switch previewData {
                 case let .gallery(gallery):
                     gallery.setHintWillBePresentedInPreviewingContext(true)
-                    let contextController = ContextController(
+                    let contextController = makeContextController(
                         presentationData: presentationData,
                         source: .controller(StorageUsageListContextGalleryContentSourceImpl(
                             controller: gallery,
@@ -2723,7 +2723,7 @@ final class StorageUsageScreenComponent: Component {
             ))
             let items = ContextController.Items(content: .list(itemList))
             
-            let controller = ContextController(
+            let controller = makeContextController(
                 presentationData: presentationData,
                 source: .extracted(StorageUsageListContextExtractedContentSource(contentView: sourceView)), items: .single(items), recognizer: nil, gesture: gesture)
             
@@ -3280,7 +3280,7 @@ final class StorageUsageScreenComponent: Component {
                     let items: Signal<ContextController.Items, NoError> = .single(ContextController.Items(content: .list(subItems)))
                     let source: ContextContentSource = .reference(StorageUsageContextReferenceContentSource(sourceView: sourceLabelView))
                     
-                    let contextController = ContextController(
+                    let contextController = makeContextController(
                         presentationData: presentationData,
                         source: source,
                         items: items,

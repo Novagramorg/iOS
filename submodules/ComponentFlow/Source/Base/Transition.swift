@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Display
+import UIKitRuntimeUtils
 
 #if targetEnvironment(simulator)
 @_silgen_name("UIAnimationDragCoefficient") func UIAnimationDragCoefficient() -> Float
@@ -84,7 +85,7 @@ public extension ComponentTransition.Animation {
 }
 
 public extension ComponentTransition {
-    func animateView(allowUserInteraction: Bool = false, delay: Double = 0.0, _ f: @escaping () -> Void, completion: ((Bool) -> Void)? = nil) {
+    func animateView(allowUserInteraction: Bool = true, delay: Double = 0.0, _ f: @escaping () -> Void, completion: ((Bool) -> Void)? = nil) {
         switch self.animation {
         case .none:
             f()
@@ -94,9 +95,17 @@ public extension ComponentTransition {
             if allowUserInteraction {
                 options.insert(.allowUserInteraction)
             }
-            UIView.animate(withDuration: duration, delay: delay, options: options, animations: {
-                f()
-            }, completion: completion)
+            if case .spring = curve {
+                CALayer.push(CALayerSpringParametersOverride())
+                UIView.animate(withDuration: duration, delay: delay, usingSpringWithDamping: 500.0, initialSpringVelocity: 0.0, options: options, animations: {
+                    f()
+                }, completion: completion)
+                CALayer.popSpringParametersOverride()
+            } else {
+                UIView.animate(withDuration: duration, delay: delay, options: options, animations: {
+                    f()
+                }, completion: completion)
+            }
         }
     }
 }

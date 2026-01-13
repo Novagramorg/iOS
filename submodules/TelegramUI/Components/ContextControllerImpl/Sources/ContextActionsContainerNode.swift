@@ -10,6 +10,7 @@ import AppBundle
 import TextFormat
 import TextNodeWithEntities
 import SwiftSignalKit
+import ContextUI
 
 private final class ContextActionsSelectionGestureRecognizer: UIPanGestureRecognizer {
     var updateLocation: ((CGPoint, Bool) -> Void)?

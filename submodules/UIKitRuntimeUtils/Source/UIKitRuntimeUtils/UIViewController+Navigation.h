@@ -26,6 +26,17 @@ typedef NS_OPTIONS(NSUInteger, UIResponderDisableAutomaticKeyboardHandling) {
 
 @end
 
+@interface CALayerSpringParametersOverride : NSObject
+
+@end
+
+@interface CALayer (TelegramAddAnimation)
+
++ (void)pushSpringParametersOverride:(CALayerSpringParametersOverride * _Nonnull)springParametersOverride;
++ (void)popSpringParametersOverride;
+
+@end
+
 @interface UIView (Navigation)
 
 @property (nonatomic) bool disablesInteractiveTransitionGestureRecognizer;

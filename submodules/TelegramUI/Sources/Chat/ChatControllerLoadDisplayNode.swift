@@ -1412,7 +1412,7 @@ extension ChatControllerImpl {
             )))
             let items = ContextController.Items(content: .list(menuItems))
             
-            let controller = ContextController(presentationData: strongSelf.presentationData, source: .extracted(ChatMessageNavigationButtonContextExtractedContentSource(chatNode: strongSelf.chatDisplayNode, contentNode: strongSelf.chatDisplayNode.navigateButtons.mentionsButton.containerNode)), items: .single(items), recognizer: nil, gesture: gesture)
+            let controller = makeContextController(presentationData: strongSelf.presentationData, source: .extracted(ChatMessageNavigationButtonContextExtractedContentSource(chatNode: strongSelf.chatDisplayNode, contentNode: strongSelf.chatDisplayNode.navigateButtons.mentionsButton.containerNode)), items: .single(items), recognizer: nil, gesture: gesture)
             
             strongSelf.forEachController({ controller in
                 if let controller = controller as? TooltipScreen {
@@ -1580,7 +1580,7 @@ extension ChatControllerImpl {
             )))
             let items = ContextController.Items(content: .list(menuItems))
             
-            let controller = ContextController(presentationData: strongSelf.presentationData, source: .extracted(ChatMessageNavigationButtonContextExtractedContentSource(chatNode: strongSelf.chatDisplayNode, contentNode: strongSelf.chatDisplayNode.navigateButtons.reactionsButton.containerNode)), items: .single(items), recognizer: nil, gesture: gesture)
+            let controller = makeContextController(presentationData: strongSelf.presentationData, source: .extracted(ChatMessageNavigationButtonContextExtractedContentSource(chatNode: strongSelf.chatDisplayNode, contentNode: strongSelf.chatDisplayNode.navigateButtons.reactionsButton.containerNode)), items: .single(items), recognizer: nil, gesture: gesture)
             
             strongSelf.forEachController({ controller in
                 if let controller = controller as? TooltipScreen {
@@ -3846,7 +3846,7 @@ extension ChatControllerImpl {
             
             strongSelf.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
             
-            let contextController = ContextController(presentationData: strongSelf.presentationData, source: .controller(ChatContextControllerContentSourceImpl(controller: chatController, sourceNode: node, passthroughTouches: true)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+            let contextController = makeContextController(presentationData: strongSelf.presentationData, source: .controller(ChatContextControllerContentSourceImpl(controller: chatController, sourceNode: node, passthroughTouches: true)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
             dismissPreviewing = { [weak self, weak contextController] animateIn in
                 if let self, let contextController {
                     if animateIn {
@@ -3975,7 +3975,7 @@ extension ChatControllerImpl {
             
             strongSelf.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
             
-            let contextController = ContextController(presentationData: strongSelf.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0), contentInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0))), items: .single(ContextController.Items(content: .list(items))), gesture: gesture, workaroundUseLegacyImplementation: true)
+            let contextController = makeContextController(presentationData: strongSelf.presentationData, source: .reference(ChatControllerContextReferenceContentSource(controller: strongSelf, sourceView: node.view, insets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: bottomInset, right: 0.0), contentInsets: UIEdgeInsets(top: 0.0, left: 0.0, bottom: 0.0, right: 0.0))), items: .single(ContextController.Items(content: .list(items))), gesture: gesture, workaroundUseLegacyImplementation: true)
             contextController.dismissed = { [weak self] in
                 if let strongSelf = self {
                     strongSelf.updateChatPresentationInterfaceState(interactive: true, {

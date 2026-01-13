@@ -4,10 +4,11 @@ import AsyncDisplayKit
 import Display
 import SwiftSignalKit
 import TelegramPresentationData
+import ContextUI
 
 private let animationDurationFactor: Double = 1.0
 
-final class PeekControllerNode: ViewControllerTracingNode {
+final class PeekControllerNode: ViewControllerTracingNode, PeekControllerNodeProtocol {
     private let requestDismiss: () -> Void
     
     private let presentationData: PresentationData
@@ -79,7 +80,7 @@ final class PeekControllerNode: ViewControllerTracingNode {
         var activatedActionImpl: (() -> Void)?
         var requestLayoutImpl: ((ContainedViewLayoutTransition) -> Void)?
 
-        self.actionsStackNode = ContextControllerActionsStackNode(
+        self.actionsStackNode = ContextControllerActionsStackNodeImpl(
             context: nil,
             getController: { [weak controller] in
                 return controller
@@ -405,7 +406,7 @@ final class PeekControllerNode: ViewControllerTracingNode {
         }
     }
     
-    func activateMenu(immediately: Bool = false) {
+    func activateMenu(immediately: Bool) {
         if self.content.menuItems().isEmpty {
             if let fullScreenAccessoryNode = self.fullScreenAccessoryNode {
                 fullScreenAccessoryNode.alpha = 1.0

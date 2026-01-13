@@ -113,6 +113,70 @@ static bool notyfyingShiftState = false;
 
 @end
 
+@implementation CALayerSpringParametersOverride
+
+@end
+
+static NSMutableArray<CALayerSpringParametersOverride *> *currentSpringParametersOverrideStack() {
+    static NSMutableArray *array = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        array = [[NSMutableArray alloc] init];
+    });
+    return array;
+}
+
+@implementation CALayer (TelegramAddAnimation)
+
++ (void)pushSpringParametersOverride:(CALayerSpringParametersOverride * _Nonnull)springParametersOverride {
+    if (springParametersOverride) {
+        [currentSpringParametersOverrideStack() addObject:springParametersOverride];
+    }
+}
+
++ (void)popSpringParametersOverride {
+    if (currentSpringParametersOverrideStack().count != 0) {
+        [currentSpringParametersOverrideStack() removeLastObject];
+    }
+}
+
+- (void)_65087dc8_addAnimation:(CAAnimation *)anim forKey:(NSString *)key {
+    CAAnimation *updatedAnimation = anim;
+    if (currentSpringParametersOverrideStack().count != 0 && [anim isKindOfClass:[CASpringAnimation class]]) {
+        CALayerSpringParametersOverride *overrideData = [currentSpringParametersOverrideStack() lastObject];
+        if (overrideData) {
+            bool isNativeGlass = false;
+            if (@available(iOS 26.0, *)) {
+                isNativeGlass = true;
+            }
+            if (isNativeGlass && ABS(anim.duration - 0.3832) <= 0.0001) {
+            } else if (ABS(anim.duration - 0.5) <= 0.0001) {
+            } else {
+                CABasicAnimation *sourceAnimation = (CABasicAnimation *)anim;
+                
+                CABasicAnimation *animation = [CABasicAnimation animationWithKeyPath:sourceAnimation.keyPath];
+                animation.fromValue = sourceAnimation.fromValue;
+                animation.toValue = sourceAnimation.toValue;
+                animation.byValue = sourceAnimation.byValue;
+                animation.additive = sourceAnimation.additive;
+                animation.duration = sourceAnimation.duration;
+                animation.timingFunction = [[CAMediaTimingFunction alloc] initWithControlPoints:0.380 :0.700 :0.125 :1.000];
+                animation.removedOnCompletion = sourceAnimation.isRemovedOnCompletion;
+                animation.fillMode = sourceAnimation.fillMode;
+                animation.speed = sourceAnimation.speed;
+                animation.beginTime = sourceAnimation.beginTime;
+                animation.timeOffset = sourceAnimation.timeOffset;
+                animation.repeatCount = sourceAnimation.repeatCount;
+                animation.autoreverses = sourceAnimation.autoreverses;
+                updatedAnimation = animation;
+            }
+        }
+    }
+    [self _65087dc8_addAnimation:updatedAnimation forKey:key];
+}
+
+@end
+
 @implementation UIScrollView (FrameRateRangeOverride)
 
 - (void)fixScrollDisplayLink {
@@ -253,6 +317,8 @@ static void registerEffectViewOverrides(void) {
         } else if (@available(iOS 15.0, *)) {
             [RuntimeUtils swizzleInstanceMethodOfClass:[CADisplayLink class] currentSelector:@selector(setPreferredFrameRateRange:) newSelector:@selector(_65087dc8_setPreferredFrameRateRange:)];
         }
+        
+        [RuntimeUtils swizzleInstanceMethodOfClass:[CALayer class] currentSelector:@selector(addAnimation:forKey:) newSelector:@selector(_65087dc8_addAnimation:forKey:)];
         
         [RuntimeUtils swizzleInstanceMethodOfClass:[UIFocusSystem class] currentSelector:@selector(updateFocusIfNeeded) newSelector:@selector(_65087dc8_updateFocusIfNeeded)];
         

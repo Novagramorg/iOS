@@ -48,6 +48,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Gifts/GiftLoadingShimmerView",
         "//submodules/TelegramUI/Components/EdgeEffect",
         "//submodules/TelegramUI/Components/GlassBackgroundComponent",
+        "//submodules/TelegramUI/Components/ContextControllerImpl",
     ],
     visibility = [
         "//visibility:public",

@@ -2388,7 +2388,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             )
             
             self.titleView.isHighlighted = true
-            let contextController = ContextController(
+            let contextController = makeContextController(
                 presentationData: self.presentationData,
                 source: .reference(MediaPickerContextReferenceContentSource(controller: self, sourceView: self.titleView)),
                 items: .single(ContextController.Items(content: .custom(content))),
@@ -2923,7 +2923,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 self?.presentFilePicker()
             })))
             
-            let contextController = ContextController(presentationData: self.presentationData, source: .reference(MediaPickerContextReferenceContentSource(controller: self, sourceView: view)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+            let contextController = makeContextController(presentationData: self.presentationData, source: .reference(MediaPickerContextReferenceContentSource(controller: self, sourceView: view)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
             self.presentInGlobalOverlay(contextController)
             
             return
@@ -3084,7 +3084,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     return ContextController.Items(content: .list(items))
                 }
             
-                let contextController = ContextController(presentationData: self.presentationData, source: .reference(MediaPickerContextReferenceContentSource(controller: self, sourceView: view)), items: items, gesture: gesture)
+                let contextController = makeContextController(presentationData: self.presentationData, source: .reference(MediaPickerContextReferenceContentSource(controller: self, sourceView: view)), items: items, gesture: gesture)
                 self.presentInGlobalOverlay(contextController)
         }
     }

@@ -5406,7 +5406,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
             }
             
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }.withUpdated(theme: defaultDarkPresentationTheme)
-            let contextController = ContextController(presentationData: presentationData, source: .reference(ReferenceContentSource(sourceView: sourceView, contentArea: UIScreen.main.bounds, customPosition: CGPoint(x: 0.0, y: -3.0))), items: .single(ContextController.Items(content: .list(items))))
+            let contextController = makeContextController(presentationData: presentationData, source: .reference(ReferenceContentSource(sourceView: sourceView, contentArea: UIScreen.main.bounds, customPosition: CGPoint(x: 0.0, y: -3.0))), items: .single(ContextController.Items(content: .list(items))))
             self.controller?.present(contextController, in: .window(.root))
         }
         
@@ -7224,7 +7224,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
             self?.node.presentAudioPicker()
         })))
         
-        let contextController = ContextController(presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+        let contextController = makeContextController(presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
         self.present(contextController, in: .window(.root))
     }
     
@@ -7300,7 +7300,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
             )))
         }
     
-        let contextController = ContextController(presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+        let contextController = makeContextController(presentationData: presentationData, source: .reference(HeaderContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
         self.present(contextController, in: .window(.root))
     }
     
@@ -7916,7 +7916,7 @@ public final class MediaEditorScreenImpl: ViewController, MediaEditorScreen, UID
         portalView.view.layer.rasterizationScale = UIScreenScale
         self.node.previewContentContainerView.addPortal(view: portalView)
         
-        let stickerResultController = PeekController(
+        let stickerResultController = makePeekController(
             presentationData: presentationData,
             content: StickerPreviewPeekContent(
                 context: self.context,

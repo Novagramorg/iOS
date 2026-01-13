@@ -222,7 +222,7 @@ private final class InlineReactionSearchStickersNode: ASDisplayNode, ASScrollVie
             }, present: { [weak self] content, sourceView, sourceRect in
                 if let strongSelf = self {
                     let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
-                    let controller = PeekController(presentationData: presentationData, content: content, sourceView: {
+                    let controller = makePeekController(presentationData: presentationData, content: content, sourceView: {
                         return (sourceView, sourceRect)
                     })
                     controller.visibilityUpdated = { [weak self] visible in

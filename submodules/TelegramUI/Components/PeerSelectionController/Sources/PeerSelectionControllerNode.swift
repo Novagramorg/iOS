@@ -578,7 +578,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                 return items
             }
 
-            let contextController = ContextController(presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatController, sourceView: sourceNode, passthroughTouches: true)), items: items |> map { ContextController.Items(content: .list($0)) })
+            let contextController = makeContextController(presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatController, sourceView: sourceNode, passthroughTouches: true)), items: items |> map { ContextController.Items(content: .list($0)) })
             contextController.dismissedForCancel = { [weak chatController] in
                 if let selectedMessageIds = chatController?.selectedMessageIds {
                     var forwardMessageIds = strongSelf.presentationInterfaceState.interfaceState.forwardMessageIds ?? []

@@ -192,6 +192,8 @@ public protocol NavigationBar: ASDisplayNode {
     func updateLayout(size: CGSize, defaultHeight: CGFloat, additionalTopHeight: CGFloat, additionalContentHeight: CGFloat, additionalBackgroundHeight: CGFloat, additionalCutout: CGSize?, leftInset: CGFloat, rightInset: CGFloat, appearsHidden: Bool, isLandscape: Bool, transition: ContainedViewLayoutTransition)
     
     func updateEdgeEffectExtension(value: CGFloat, transition: ContainedViewLayoutTransition)
+    
+    func navigationButtonContextContainer(sourceView: UIView) -> ContextExtractableContainer?
 }
 
 public var defaultNavigationBarImpl: ((NavigationBarPresentationData) -> NavigationBar)?

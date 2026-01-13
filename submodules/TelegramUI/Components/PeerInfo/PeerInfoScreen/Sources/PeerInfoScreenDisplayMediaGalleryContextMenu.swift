@@ -102,7 +102,7 @@ extension PeerInfoScreenNode {
                     })))
                 }
                 
-                let contextController = ContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: source)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+                let contextController = makeContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: source)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
                 contextController.passthroughTouchEvent = { [weak self] sourceView, point in
                     guard let strongSelf = self else {
                         return .ignore
@@ -232,7 +232,7 @@ extension PeerInfoScreenNode {
                     })))
                 }
                 
-                let contextController = ContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: source)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+                let contextController = makeContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: source)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
                 contextController.passthroughTouchEvent = { [weak self] sourceView, point in
                     guard let strongSelf = self else {
                         return .ignore
@@ -408,7 +408,14 @@ extension PeerInfoScreenNode {
                     })))
                 }
                 
-                let contextController = ContextController(presentationData: strongSelf.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: source)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+                var sourceView: UIView = source.view
+                if sourceView.isDescendant(of: strongSelf.headerNode.navigationButtonContainer.rightButtonsBackground) {
+                    sourceView = strongSelf.headerNode.navigationButtonContainer.rightButtonsBackground
+                } else if sourceView.isDescendant(of: strongSelf.headerNode.navigationButtonContainer.leftButtonsBackground) {
+                    sourceView = strongSelf.headerNode.navigationButtonContainer.leftButtonsBackground
+                }
+                
+                let contextController = makeContextController(presentationData: strongSelf.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
                 contextController.passthroughTouchEvent = { sourceView, point in
                     guard let strongSelf = self else {
                         return .ignore

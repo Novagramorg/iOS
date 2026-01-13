@@ -18,76 +18,7 @@ import ComponentDisplayAdapters
 import GlassBackgroundComponent
 import LottieComponent
 import TextNodeWithEntities
-
-public protocol ContextControllerActionsStackItemNode: ASDisplayNode {
-    var wantsFullWidth: Bool { get }
-    
-    func update(
-        presentationData: PresentationData,
-        constrainedSize: CGSize,
-        standardMinWidth: CGFloat,
-        standardMaxWidth: CGFloat,
-        additionalBottomInset: CGFloat,
-        transition: ContainedViewLayoutTransition
-    ) -> (size: CGSize, apparentHeight: CGFloat)
-    
-    func highlightGestureMoved(location: CGPoint)
-    func highlightGestureFinished(performAction: Bool)
-    
-    func decreaseHighlightedIndex()
-    func increaseHighlightedIndex()
-}
-
-public struct ContextControllerReactionItems {
-    public var context: AccountContext
-    public var reactionItems: [ReactionContextItem]
-    public var selectedReactionItems: Set<MessageReaction.Reaction>
-    public var reactionsTitle: String?
-    public var reactionsLocked: Bool
-    public var animationCache: AnimationCache
-    public var alwaysAllowPremiumReactions: Bool
-    public var allPresetReactionsAreAvailable: Bool
-    public var getEmojiContent: ((AnimationCache, MultiAnimationRenderer) -> Signal<EmojiPagerContentComponent, NoError>)?
-    
-    public init(context: AccountContext, reactionItems: [ReactionContextItem], selectedReactionItems: Set<MessageReaction.Reaction>, reactionsTitle: String?, reactionsLocked: Bool, animationCache: AnimationCache, alwaysAllowPremiumReactions: Bool, allPresetReactionsAreAvailable: Bool, getEmojiContent: ((AnimationCache, MultiAnimationRenderer) -> Signal<EmojiPagerContentComponent, NoError>)?) {
-        self.context = context
-        self.reactionItems = reactionItems
-        self.selectedReactionItems = selectedReactionItems
-        self.reactionsTitle = reactionsTitle
-        self.reactionsLocked = reactionsLocked
-        self.animationCache = animationCache
-        self.alwaysAllowPremiumReactions = alwaysAllowPremiumReactions
-        self.allPresetReactionsAreAvailable = allPresetReactionsAreAvailable
-        self.getEmojiContent = getEmojiContent
-    }
-}
-
-public final class ContextControllerPreviewReaction {
-    public let context: AccountContext
-    public let file: TelegramMediaFile
-    
-    public init(context: AccountContext, file: TelegramMediaFile) {
-        self.context = context
-        self.file = file
-    }
-}
-
-public protocol ContextControllerActionsStackItem: AnyObject {
-    func node(
-        context: AccountContext?,
-        getController: @escaping () -> ContextControllerProtocol?,
-        requestDismiss: @escaping (ContextMenuActionResult) -> Void,
-        requestUpdate: @escaping (ContainedViewLayoutTransition) -> Void,
-        requestUpdateApparentHeight: @escaping (ContainedViewLayoutTransition) -> Void
-    ) -> ContextControllerActionsStackItemNode
-    
-    var id: AnyHashable? { get }
-    var tip: ContextController.Tip? { get }
-    var tipSignal: Signal<ContextController.Tip?, NoError>? { get }
-    var reactionItems: ContextControllerReactionItems? { get }
-    var previewReaction: ContextControllerPreviewReaction? { get }
-    var dismissed: (() -> Void)? { get }
-}
+import ContextUI
 
 public protocol ContextControllerActionsListItemNode: ASDisplayNode {
     func update(presentationData: PresentationData, constrainedSize: CGSize) -> (minSize: CGSize, apply: (_ size: CGSize, _ transition: ContainedViewLayoutTransition) -> Void)
@@ -1326,17 +1257,11 @@ private final class ItemSelectionRecognizer: UIGestureRecognizer {
     }
 }
 
-
-public final class ContextControllerActionsStackNode: ASDisplayNode {
-    public enum Presentation {
-        case modal
-        case inline
-        case additional
-    }
-    
+public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, ContextControllerActionsStackNode {
     final class NavigationContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         let backgroundContainer: GlassBackgroundContainerView
         let backgroundView: GlassBackgroundView
+        var sourceExtractableContainer: ContextExtractableContainer?
         let contentContainer: UIView
         
         var requestUpdate: ((ContainedViewLayoutTransition) -> Void)?
@@ -1417,6 +1342,55 @@ public final class ContextControllerActionsStackNode: ASDisplayNode {
             }
         }
         
+        func animateIn(fromExtractableContainer extractableContainer: ContextExtractableContainer) {
+            let transition: ComponentTransition = .spring(duration: 0.42)
+            
+            let normalSize = extractableContainer.extractableContentView.bounds.size
+            let normalCornerRadius: CGFloat = min(normalSize.width, normalSize.height) * 0.5
+            
+            self.sourceExtractableContainer = extractableContainer
+            self.backgroundView.isHidden = true
+            
+            self.backgroundContainer.contentView.addSubview(extractableContainer.extractableContentView)
+            for subview in extractableContainer.extractableContentView.subviews {
+                if let subview = subview as? GlassBackgroundView {
+                    //TODO:release
+                    subview.contentView.addSubview(self.contentContainer)
+                    break
+                }
+            }
+            
+            self.sourceExtractableContainer = nil
+            self.contentContainer.frame = CGRect(origin: CGPoint(), size: normalSize)
+            self.contentContainer.layer.cornerRadius = normalCornerRadius
+            
+            transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: self.backgroundContainer.bounds.size))
+            transition.setCornerRadius(layer: self.contentContainer.layer, cornerRadius: 30.0)
+            self.contentContainer.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
+            
+            extractableContainer.updateState(state: .extracted(size: normalSize, cornerRadius: normalCornerRadius, state: .animatedOut), transition: .immediate)
+            extractableContainer.updateState(state: .extracted(size: self.backgroundContainer.bounds.size, cornerRadius: 30.0, state: .animatedIn), transition: transition.containedViewLayoutTransition)
+        }
+        
+        func animateOut(toExtractableContainer extractableContainer: ContextExtractableContainer, transition: ContainedViewLayoutTransition) {
+            let transition = ComponentTransition(transition)
+            
+            let normalSize = extractableContainer.extractableContentView.bounds.size
+            let normalCornerRadius: CGFloat = min(normalSize.width, normalSize.height) * 0.5
+            
+            transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: normalSize))
+            transition.attachAnimation(view: self.contentContainer, id: "animateOut", completion: { [weak extractableContainer] _ in
+                guard let extractableContainer else {
+                    return
+                }
+                extractableContainer.addSubview(extractableContainer.extractableContentView)
+            })
+            transition.setCornerRadius(layer: self.contentContainer.layer, cornerRadius: normalCornerRadius)
+            transition.setAlpha(view: self.contentContainer, alpha: 0.0)
+            
+            extractableContainer.updateState(state: .normal, transition: transition.containedViewLayoutTransition)
+        }
+        
         func update(presentationData: PresentationData, presentation: Presentation, size: CGSize, transition: ContainedViewLayoutTransition) {
             let transition = ComponentTransition(transition)
             
@@ -1443,7 +1417,12 @@ public final class ContextControllerActionsStackNode: ASDisplayNode {
             }
             
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
-            self.backgroundView.update(size: size, cornerRadius: 30.0, isDark: presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: false, transition: transition)
+            self.backgroundView.update(size: size, cornerRadius: 30.0, isDark: presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+            
+            if let sourceExtractableContainer = self.sourceExtractableContainer {
+                transition.setFrame(view: sourceExtractableContainer.extractableContentView, frame: CGRect(origin: CGPoint(), size: size))
+                sourceExtractableContainer.updateState(state: .extracted(size: size, cornerRadius: 30.0, state: .animatedIn), transition: transition.containedViewLayoutTransition)
+            }
         }
     }
     
@@ -2079,5 +2058,13 @@ public final class ContextControllerActionsStackNode: ASDisplayNode {
                 tipNode.animateIn()
             }
         }
+    }
+    
+    func animateIn(fromExtractableContainer extractableContainer: ContextExtractableContainer) {
+        self.navigationContainer.animateIn(fromExtractableContainer: extractableContainer)
+    }
+    
+    func animateOut(toExtractableContainer extractableContainer: ContextExtractableContainer, transition: ContainedViewLayoutTransition) {
+        self.navigationContainer.animateOut(toExtractableContainer: extractableContainer, transition: transition)
     }
 }

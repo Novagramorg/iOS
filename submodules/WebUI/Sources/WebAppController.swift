@@ -3910,7 +3910,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
             return ContextController.Items(content: .list(items))
         }
         
-        let contextController = ContextController(presentationData: presentationData, source: .reference(WebAppContextReferenceContentSource(controller: self, sourceView: view)), items: items, gesture: gesture)
+        let contextController = makeContextController(presentationData: presentationData, source: .reference(WebAppContextReferenceContentSource(controller: self, sourceView: view)), items: items, gesture: gesture)
         self.presentInGlobalOverlay(contextController)
     }
     
