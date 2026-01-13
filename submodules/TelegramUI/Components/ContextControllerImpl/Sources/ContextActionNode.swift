@@ -5,19 +5,7 @@ import Display
 import TelegramPresentationData
 import SwiftSignalKit
 import Markdown
-
-public enum ContextActionSibling {
-    case none
-    case item
-    case separator
-}
-
-public protocol ContextActionNodeProtocol: ASDisplayNode {
-    func setIsHighlighted(_ value: Bool)
-    func performAction()
-    func actionNode(at point: CGPoint) -> ContextActionNodeProtocol
-    var isActionEnabled: Bool { get }
-}
+import ContextUI
 
 public final class ContextActionNode: ASDisplayNode, ContextActionNodeProtocol {
     private var presentationData: PresentationData

@@ -46,10 +46,10 @@ public final class ChatSideTopicsPanel: Component {
         case top
     }
     
-    public enum Kind {
+    public enum Kind: Equatable {
         case forum
         case monoforum
-        case botForum
+        case botForum(forumManagedByUser: Bool)
     }
     
     let context: AccountContext
@@ -1249,8 +1249,13 @@ public final class ChatSideTopicsPanel: Component {
                 )
                 
                 let titleText: String
-                if case .botForum = component.kind {
-                    titleText = component.strings.Chat_InlineTopicMenu_NewForumThreadTab
+                if case let .botForum(forumManagedByUser) = component.kind {
+                    if forumManagedByUser {
+                        titleText = component.strings.Chat_InlineTopicMenu_NewForumThreadTab
+                    } else {
+                        //TODO:localize
+                        titleText = "All"
+                    }
                 } else {
                     titleText = component.strings.Chat_InlineTopicMenu_AllTab
                 }
@@ -1386,8 +1391,13 @@ public final class ChatSideTopicsPanel: Component {
                 let rightInset: CGFloat = 12.0
                 
                 let titleText: String
-                if case .botForum = component.kind {
-                    titleText = component.strings.Chat_InlineTopicMenu_NewForumThreadTab
+                if case let .botForum(forumManagedByUser) = component.kind {
+                    if forumManagedByUser {
+                        titleText = component.strings.Chat_InlineTopicMenu_NewForumThreadTab
+                    } else {
+                        //TODO:localize
+                        titleText = "All"
+                    }
                 } else {
                     titleText = component.strings.Chat_InlineTopicMenu_AllTab
                 }
@@ -2099,7 +2109,7 @@ public final class ChatSideTopicsPanel: Component {
                                 })
                             })))
                             
-                            let contextController = ContextController(
+                            let contextController = makeContextController(
                                 presentationData: presentationData,
                                 source: .extracted(ItemExtractedContentSource(
                                     sourceNode: sourceNode,
@@ -2223,7 +2233,7 @@ public final class ChatSideTopicsPanel: Component {
                                 return
                             }
                             
-                            let contextController = ContextController(
+                            let contextController = makeContextController(
                                 presentationData: presentationData,
                                 source: .extracted(ItemExtractedContentSource(
                                     sourceNode: sourceNode,

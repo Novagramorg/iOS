@@ -8,6 +8,7 @@ import TelegramCore
 import AccountContext
 import TelegramPresentationData
 import ContextUI
+import ContextControllerImpl
 
 final class GiftAttributeListContextItem: ContextMenuCustomItem {
     let context: AccountContext

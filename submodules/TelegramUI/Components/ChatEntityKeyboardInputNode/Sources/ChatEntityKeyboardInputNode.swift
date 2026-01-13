@@ -2336,7 +2336,7 @@ public final class ChatEntityKeyboardInputNode: ChatInputNode {
                 })))
             }
             
-            let contextController = ContextController(presentationData: presentationData, source: .controller(ContextControllerContentSourceImpl(controller: gallery, sourceView: sourceView, sourceRect: sourceRect)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+            let contextController = makeContextController(presentationData: presentationData, source: .controller(ContextControllerContentSourceImpl(controller: gallery, sourceView: sourceView, sourceRect: sourceRect)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
             strongSelf.interaction?.presentGlobalOverlayController(contextController, nil)
         })
     }
@@ -3044,7 +3044,7 @@ public final class EmojiContentPeekBehaviorImpl: EmojiContentPeekBehavior {
                 if let forceTheme = strongSelf.forceTheme {
                     presentationData = presentationData.withUpdated(theme: forceTheme)
                 }
-                let controller = PeekController(presentationData: presentationData, content: content, sourceView: {
+                let controller = makePeekController(presentationData: presentationData, content: content, sourceView: {
                     return (sourceView, sourceRect)
                 })
                 controller.visibilityUpdated = { [weak self] visible in

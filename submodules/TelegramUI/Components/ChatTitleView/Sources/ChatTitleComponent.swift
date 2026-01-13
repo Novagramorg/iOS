@@ -115,17 +115,7 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
         let transition = ComponentTransition(transition)
         
         if let contentData = self.contentData {
-            let displayBackground: Bool
-            if let singleColor = contentData.wallpaper.singleColor {
-                let brightness = singleColor.brightness
-                if brightness <= 0.2 || brightness >= 0.8 {
-                    displayBackground = false
-                } else {
-                    displayBackground = true
-                }
-            } else {
-                displayBackground = true
-            }
+            let displayBackground: Bool = true
             
             let titleSize = self.title.update(
                 transition: transition,
@@ -1039,6 +1029,7 @@ public final class ChatTitleComponent: Component {
             if let minSubtitleWidth {
                 contentSize.width = max(contentSize.width, minSubtitleWidth)
             }
+            contentSize.width = max(min(150.0, availableSize.width - containerSideInset * 2.0), contentSize.width)
             contentSize.height += subtitleSize.height
             
             let containerSize = CGSize(width: contentSize.width + containerSideInset * 2.0, height: 44.0)

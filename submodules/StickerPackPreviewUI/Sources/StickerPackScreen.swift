@@ -638,7 +638,7 @@ private final class StickerPackContainer: ASDisplayNode {
             if let strongSelf = self {
                 strongSelf.hideMainPreviewIcon()
                 
-                let controller = PeekController(presentationData: strongSelf.presentationData, content: content, sourceView: {
+                let controller = makePeekController(presentationData: strongSelf.presentationData, content: content, sourceView: {
                     return (sourceView, sourceRect)
                 })
                 controller.visibilityUpdated = { [weak self] visible in
@@ -1228,7 +1228,7 @@ private final class StickerPackContainer: ASDisplayNode {
             })))
         }
         
-        let contextController = ContextController(presentationData: self.presentationData, source: .reference(StickerPackContextReferenceContentSource(controller: controller, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+        let contextController = makeContextController(presentationData: self.presentationData, source: .reference(StickerPackContextReferenceContentSource(controller: controller, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
         self.presentInGlobalOverlay(contextController, nil)
     }
     

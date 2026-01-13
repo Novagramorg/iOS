@@ -12,10 +12,11 @@ import PlainButtonComponent
 import MultilineTextComponent
 import ComponentDisplayAdapters
 import AccountContext
+import ContextUI
 
 final class ContextSourceContainer: ASDisplayNode {
     final class Source {
-        weak var controller: ContextController?
+        weak var controller: ContextControllerImpl?
         
         let id: AnyHashable
         let title: String
@@ -44,7 +45,7 @@ final class ContextSourceContainer: ASDisplayNode {
         private let actionsReady = Promise<Bool>()
         
         init(
-            controller: ContextController,
+            controller: ContextControllerImpl,
             id: AnyHashable,
             title: String,
             footer: String?,
@@ -359,7 +360,7 @@ final class ContextSourceContainer: ASDisplayNode {
         }
     }
     
-    private weak var controller: ContextController?
+    private weak var controller: ContextControllerImpl?
     
     private let backgroundNode: NavigationBackgroundNode
     
@@ -387,7 +388,7 @@ final class ContextSourceContainer: ASDisplayNode {
         return self.activeSource?.presentationNode.wantsDisplayBelowKeyboard() ?? false
     }
     
-    init(controller: ContextController, configuration: ContextController.Configuration, context: AccountContext?) {
+    init(controller: ContextControllerImpl, configuration: ContextController.Configuration, context: AccountContext?) {
         self.controller = controller
         
         self.backgroundNode = NavigationBackgroundNode(color: .clear, enableBlur: false)

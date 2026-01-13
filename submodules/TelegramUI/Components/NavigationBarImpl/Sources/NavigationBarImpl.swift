@@ -550,8 +550,8 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
 
     public let backgroundNode: NavigationBackgroundNode
     
-    private var leftButtonsBackgroundView: (background: GlassBackgroundView, container: UIView)?
-    private var rightButtonsBackgroundView: (background: GlassBackgroundView, container: UIView)?
+    private var leftButtonsBackgroundView: (background: GlassContextExtractableContainer, container: UIView)?
+    private var rightButtonsBackgroundView: (background: GlassContextExtractableContainer, container: UIView)?
     
     private let backButtonNodeImpl: NavigationButtonNodeImpl
     public var backButtonNode: NavigationButtonNode {
@@ -662,12 +662,12 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             
             backgroundContainer.contentView.addSubview(self.customOverBackgroundContentView)
             
-            let leftButtonsBackgroundView: (background: GlassBackgroundView, container: UIView) = (GlassBackgroundView(), UIView())
+            let leftButtonsBackgroundView: (background: GlassContextExtractableContainer, container: UIView) = (GlassContextExtractableContainer(), UIView())
             leftButtonsBackgroundView.background.contentView.addSubview(leftButtonsBackgroundView.container)
             self.leftButtonsBackgroundView = leftButtonsBackgroundView
             backgroundContainer.contentView.addSubview(leftButtonsBackgroundView.background)
             
-            let rightButtonsBackgroundView: (background: GlassBackgroundView, container: UIView) = (GlassBackgroundView(), UIView())
+            let rightButtonsBackgroundView: (background: GlassContextExtractableContainer, container: UIView) = (GlassContextExtractableContainer(), UIView())
             rightButtonsBackgroundView.background.contentView.addSubview(rightButtonsBackgroundView.container)
             self.rightButtonsBackgroundView = rightButtonsBackgroundView
             backgroundContainer.contentView.addSubview(rightButtonsBackgroundView.background)
@@ -1060,6 +1060,16 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         if let edgeEffectView = self.edgeEffectView {
             transition.updateTransform(layer: edgeEffectView.layer, transform: CATransform3DMakeTranslation(0.0, max(0.0, min(20.0, self.edgeEffectExtension)), 0.0))
         }
+    }
+    
+    public func navigationButtonContextContainer(sourceView: UIView) -> ContextExtractableContainer? {
+        if let leftButtonsBackgroundView = self.leftButtonsBackgroundView, sourceView.isDescendant(of: leftButtonsBackgroundView.background) {
+            return leftButtonsBackgroundView.background
+        }
+        if let rightButtonsBackgroundView = self.rightButtonsBackgroundView, sourceView.isDescendant(of: rightButtonsBackgroundView.background) {
+            return rightButtonsBackgroundView.background
+        }
+        return nil
     }
     
     public var intrinsicCanTransitionInline: Bool = true

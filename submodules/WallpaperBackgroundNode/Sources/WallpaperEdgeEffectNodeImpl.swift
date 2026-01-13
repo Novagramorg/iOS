@@ -158,7 +158,7 @@ final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEffectNode 
         transition.updateFrame(node: self.contentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: containerSize))
         
         if blur {
-            let blurHeight: CGFloat = max(edge.size, bounds.height - 10.0)
+            let blurHeight: CGFloat = max(edge.size, bounds.height - 20.0)
             let blurFrame = CGRect(origin: CGPoint(x: 0.0, y: edge.edge == .bottom ? (bounds.height - blurHeight) : 0.0), size: CGSize(width: bounds.width, height: blurHeight))
             let blurView: VariableBlurView
             if let current = self.blurView {

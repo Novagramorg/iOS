@@ -303,7 +303,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
                 controller.openDeleteMonoforumPeer(peerId: EnginePeer.Id(threadId))
             }
         )
-    } else if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.isForum, chatPresentationInterfaceState.search == nil {
+    } else if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, let botInfo = user.botInfo, botInfo.flags.contains(.hasForum), chatPresentationInterfaceState.search == nil {
         let topicListDisplayModeOnTheSide = chatPresentationInterfaceState.persistentData.topicListPanelLocation
         return ChatFloatingTopicsPanel(
             context: context,
@@ -311,7 +311,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
             strings: chatPresentationInterfaceState.strings,
             location: topicListDisplayModeOnTheSide ? .side : .top,
             peerId: peerId,
-            kind: .botForum,
+            kind: .botForum(forumManagedByUser: botInfo.flags.contains(.forumManagedByUser)),
             topicId: chatPresentationInterfaceState.chatLocation.threadId,
             controller: { [weak interfaceInteraction] in
                 return interfaceInteraction?.chatController()

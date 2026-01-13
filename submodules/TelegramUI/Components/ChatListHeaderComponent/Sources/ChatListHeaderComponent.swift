@@ -725,8 +725,8 @@ public final class ChatListHeaderComponent: Component {
 
         private let leftButtonsContainer: UIView
         private let rightButtonsContainer: UIView
-        private var leftButtonsBackgroundContainer: GlassBackgroundView?
-        private var rightButtonsBackgroundContainer: GlassBackgroundView?
+        private var leftButtonsBackgroundContainer: GlassContextExtractableContainer?
+        private var rightButtonsBackgroundContainer: GlassContextExtractableContainer?
         
         private let storyPeerListExternalState = StoryPeerListComponent.ExternalState()
         private var storyPeerList: ComponentView<Empty>?
@@ -772,6 +772,16 @@ public final class ChatListHeaderComponent: Component {
         
         public func storyPeerListView() -> StoryPeerListComponent.View? {
             return self.storyPeerList?.view as? StoryPeerListComponent.View
+        }
+        
+        public func navigationButtonContextContainer(sourceView: UIView) -> ContextExtractableContainer? {
+            if let leftButtonsBackgroundContainer = self.leftButtonsBackgroundContainer, sourceView.isDescendant(of: leftButtonsBackgroundContainer) {
+                return leftButtonsBackgroundContainer
+            }
+            if let rightButtonsBackgroundContainer = self.rightButtonsBackgroundContainer, sourceView.isDescendant(of: rightButtonsBackgroundContainer) {
+                return rightButtonsBackgroundContainer
+            }
+            return nil
         }
         
         override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -1094,13 +1104,13 @@ public final class ChatListHeaderComponent: Component {
             }
 
             if leftButtonsEffectiveWidth != 0.0 {
-                let leftButtonsBackgroundContainer: GlassBackgroundView
+                let leftButtonsBackgroundContainer: GlassContextExtractableContainer
                 var leftButtonsBackgroundContainerTransition = transition
                 if let current = self.leftButtonsBackgroundContainer {
                     leftButtonsBackgroundContainer = current
                 } else {
                     leftButtonsBackgroundContainerTransition = leftButtonsBackgroundContainerTransition.withAnimation(.none)
-                    leftButtonsBackgroundContainer = GlassBackgroundView()
+                    leftButtonsBackgroundContainer = GlassContextExtractableContainer()
                     self.leftButtonsBackgroundContainer = leftButtonsBackgroundContainer
                     self.addSubview(leftButtonsBackgroundContainer)
                     leftButtonsBackgroundContainer.contentView.addSubview(self.leftButtonsContainer)
@@ -1119,7 +1129,7 @@ public final class ChatListHeaderComponent: Component {
             }
 
             if rightButtonsEffectiveWidth != 0.0 {
-                let rightButtonsBackgroundContainer: GlassBackgroundView
+                let rightButtonsBackgroundContainer: GlassContextExtractableContainer
                 var rightButtonsBackgroundContainerTransition = transition
                 
                 let rightButtonsContainerFrame = CGRect(origin: CGPoint(x: availableSize.width - component.sideInset - max(44.0, rightButtonsEffectiveWidth), y: 0.0), size: CGSize(width: max(44.0, rightButtonsEffectiveWidth), height: 44.0))
@@ -1128,7 +1138,7 @@ public final class ChatListHeaderComponent: Component {
                     rightButtonsBackgroundContainer = current
                 } else {
                     rightButtonsBackgroundContainerTransition = rightButtonsBackgroundContainerTransition.withAnimation(.none)
-                    rightButtonsBackgroundContainer = GlassBackgroundView()
+                    rightButtonsBackgroundContainer = GlassContextExtractableContainer()
                     self.rightButtonsBackgroundContainer = rightButtonsBackgroundContainer
                     self.addSubview(rightButtonsBackgroundContainer)
                     rightButtonsBackgroundContainer.contentView.addSubview(self.rightButtonsContainer)

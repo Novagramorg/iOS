@@ -36,8 +36,8 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
     private var presentationData: PresentationData?
     
     private let backgroundContainer: GlassBackgroundContainerView
-    private let leftButtonsBackground: GlassBackgroundView
-    private let rightButtonsBackground: GlassBackgroundView
+    let leftButtonsBackground: GlassContextExtractableContainer
+    let rightButtonsBackground: GlassContextExtractableContainer
     private let leftButtonsContainer: UIView
     private let rightButtonsContainer: UIView
     
@@ -55,8 +55,8 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
     
     override init() {
         self.backgroundContainer = GlassBackgroundContainerView()
-        self.leftButtonsBackground = GlassBackgroundView()
-        self.rightButtonsBackground = GlassBackgroundView()
+        self.leftButtonsBackground = GlassContextExtractableContainer()
+        self.rightButtonsBackground = GlassContextExtractableContainer()
         
         self.leftButtonsContainer = UIView()
         self.leftButtonsContainer.clipsToBounds = true

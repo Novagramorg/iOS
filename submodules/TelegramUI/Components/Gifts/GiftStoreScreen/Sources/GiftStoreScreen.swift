@@ -511,7 +511,7 @@ final class GiftStoreScreenComponent: Component {
                 self.scrollToTop()
             })))
             
-            let contextController = ContextController(presentationData: presentationData, source: .reference(GiftStoreReferenceContentSource(controller: controller, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
+            let contextController = makeContextController(presentationData: presentationData, source: .reference(GiftStoreReferenceContentSource(controller: controller, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
             contextController.dismissed = { [weak self] in
                 guard let self else {
                     return
@@ -613,7 +613,7 @@ final class GiftStoreScreenComponent: Component {
                 }
             ), false))
             
-            let contextController = ContextController(
+            let contextController = makeContextController(
                 context: component.context,
                 presentationData: presentationData,
                 source: .reference(GiftStoreReferenceContentSource(controller: controller, sourceView: sourceView)),
@@ -721,7 +721,7 @@ final class GiftStoreScreenComponent: Component {
                 }
             ), false))
             
-            let contextController = ContextController(
+            let contextController = makeContextController(
                 context: component.context,
                 presentationData: presentationData,
                 source: .reference(GiftStoreReferenceContentSource(controller: controller, sourceView: sourceView)),
@@ -829,7 +829,7 @@ final class GiftStoreScreenComponent: Component {
                 }
             ), false))
             
-            let contextController = ContextController(
+            let contextController = makeContextController(
                 context: component.context,
                 presentationData: presentationData,
                 source: .reference(GiftStoreReferenceContentSource(controller: controller, sourceView: sourceView)),

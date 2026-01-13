@@ -566,7 +566,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
             })))
         }
         
-        let contextController = ContextController(
+        let contextController = makeContextController(
             presentationData: params.presentationData,
             source: .extracted(GiftsExtractedContentSource(sourceNode: sourceNode)),
             items: .single(ContextController.Items(content: .list(items))),
@@ -1423,7 +1423,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
         }
         
         let previewController = GiftContextPreviewController(context: self.context, gift: gift)
-        let contextController = ContextController(
+        let contextController = makeContextController(
             context: self.context,
             presentationData: currentParams.presentationData,
             source: .controller(ContextControllerContentSourceImpl(controller: previewController, sourceView: view)),

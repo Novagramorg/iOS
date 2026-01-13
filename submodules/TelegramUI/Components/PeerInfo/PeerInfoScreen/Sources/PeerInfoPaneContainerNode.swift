@@ -899,7 +899,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
             }
         })))
         
-        let contextController = ContextController(
+        let contextController = makeContextController(
             presentationData: params.presentationData,
             source: .reference(TabsReferenceContentSource(sourceView: sourceView)),
             items: .single(ContextController.Items(content: .list(items))),
