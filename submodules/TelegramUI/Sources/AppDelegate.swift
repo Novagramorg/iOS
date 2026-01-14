@@ -1,5 +1,5 @@
 import UIKit
-@preconcurrency import SwiftSignalKit
+import SwiftSignalKit
 import Display
 import TelegramCore
 import UserNotifications
@@ -41,7 +41,7 @@ import MediaEditor
 import TelegramUIDeclareEncodables
 import ContextMenuScreen
 import MetalEngine
-import RecaptchaEnterpriseSDK
+import RecaptchaEnterprise
 import NavigationBarImpl
 import ContextUI
 import ContextControllerImpl
