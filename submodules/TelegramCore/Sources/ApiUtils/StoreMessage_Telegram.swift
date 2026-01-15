@@ -1037,7 +1037,8 @@ extension StoreMessage {
             
                 if let factCheck {
                     switch factCheck {
-                    case let .factCheck(_, country, text, hash):
+                    case let .factCheck(factCheckData):
+                        let (_, country, text, hash) = (factCheckData.flags, factCheckData.country, factCheckData.text, factCheckData.hash)
                         let content: FactCheckMessageAttribute.Content
                         if let text, let country {
                             switch text {

@@ -1,6 +1,12 @@
 public extension Api {
     enum EmojiURL: TypeConstructorDescription {
-        case emojiURL(url: String)
+        public class Cons_emojiURL {
+            public var url: String
+            public init(url: String) {
+                self.url = url
+            }
+        }
+        case emojiURL(Cons_emojiURL)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,11 +35,77 @@ public extension Api {
 }
 public extension Api {
     enum EncryptedChat: TypeConstructorDescription {
-        case encryptedChat(id: Int32, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gAOrB: Buffer, keyFingerprint: Int64)
-        case encryptedChatDiscarded(flags: Int32, id: Int32)
-        case encryptedChatEmpty(id: Int32)
-        case encryptedChatRequested(flags: Int32, folderId: Int32?, id: Int32, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gA: Buffer)
-        case encryptedChatWaiting(id: Int32, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64)
+        public class Cons_encryptedChat {
+            public var id: Int32
+            public var accessHash: Int64
+            public var date: Int32
+            public var adminId: Int64
+            public var participantId: Int64
+            public var gAOrB: Buffer
+            public var keyFingerprint: Int64
+            public init(id: Int32, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gAOrB: Buffer, keyFingerprint: Int64) {
+                self.id = id
+                self.accessHash = accessHash
+                self.date = date
+                self.adminId = adminId
+                self.participantId = participantId
+                self.gAOrB = gAOrB
+                self.keyFingerprint = keyFingerprint
+            }
+        }
+        public class Cons_encryptedChatDiscarded {
+            public var flags: Int32
+            public var id: Int32
+            public init(flags: Int32, id: Int32) {
+                self.flags = flags
+                self.id = id
+            }
+        }
+        public class Cons_encryptedChatEmpty {
+            public var id: Int32
+            public init(id: Int32) {
+                self.id = id
+            }
+        }
+        public class Cons_encryptedChatRequested {
+            public var flags: Int32
+            public var folderId: Int32?
+            public var id: Int32
+            public var accessHash: Int64
+            public var date: Int32
+            public var adminId: Int64
+            public var participantId: Int64
+            public var gA: Buffer
+            public init(flags: Int32, folderId: Int32?, id: Int32, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gA: Buffer) {
+                self.flags = flags
+                self.folderId = folderId
+                self.id = id
+                self.accessHash = accessHash
+                self.date = date
+                self.adminId = adminId
+                self.participantId = participantId
+                self.gA = gA
+            }
+        }
+        public class Cons_encryptedChatWaiting {
+            public var id: Int32
+            public var accessHash: Int64
+            public var date: Int32
+            public var adminId: Int64
+            public var participantId: Int64
+            public init(id: Int32, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64) {
+                self.id = id
+                self.accessHash = accessHash
+                self.date = date
+                self.adminId = adminId
+                self.participantId = participantId
+            }
+        }
+        case encryptedChat(Cons_encryptedChat)
+        case encryptedChatDiscarded(Cons_encryptedChatDiscarded)
+        case encryptedChatEmpty(Cons_encryptedChatEmpty)
+        case encryptedChatRequested(Cons_encryptedChatRequested)
+        case encryptedChatWaiting(Cons_encryptedChatWaiting)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -90,7 +162,21 @@ public extension Api {
 }
 public extension Api {
     enum EncryptedFile: TypeConstructorDescription {
-        case encryptedFile(id: Int64, accessHash: Int64, size: Int64, dcId: Int32, keyFingerprint: Int32)
+        public class Cons_encryptedFile {
+            public var id: Int64
+            public var accessHash: Int64
+            public var size: Int64
+            public var dcId: Int32
+            public var keyFingerprint: Int32
+            public init(id: Int64, accessHash: Int64, size: Int64, dcId: Int32, keyFingerprint: Int32) {
+                self.id = id
+                self.accessHash = accessHash
+                self.size = size
+                self.dcId = dcId
+                self.keyFingerprint = keyFingerprint
+            }
+        }
+        case encryptedFile(Cons_encryptedFile)
         case encryptedFileEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -127,8 +213,34 @@ public extension Api {
 }
 public extension Api {
     enum EncryptedMessage: TypeConstructorDescription {
-        case encryptedMessage(randomId: Int64, chatId: Int32, date: Int32, bytes: Buffer, file: Api.EncryptedFile)
-        case encryptedMessageService(randomId: Int64, chatId: Int32, date: Int32, bytes: Buffer)
+        public class Cons_encryptedMessage {
+            public var randomId: Int64
+            public var chatId: Int32
+            public var date: Int32
+            public var bytes: Buffer
+            public var file: Api.EncryptedFile
+            public init(randomId: Int64, chatId: Int32, date: Int32, bytes: Buffer, file: Api.EncryptedFile) {
+                self.randomId = randomId
+                self.chatId = chatId
+                self.date = date
+                self.bytes = bytes
+                self.file = file
+            }
+        }
+        public class Cons_encryptedMessageService {
+            public var randomId: Int64
+            public var chatId: Int32
+            public var date: Int32
+            public var bytes: Buffer
+            public init(randomId: Int64, chatId: Int32, date: Int32, bytes: Buffer) {
+                self.randomId = randomId
+                self.chatId = chatId
+                self.date = date
+                self.bytes = bytes
+            }
+        }
+        case encryptedMessage(Cons_encryptedMessage)
+        case encryptedMessageService(Cons_encryptedMessageService)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -164,7 +276,35 @@ public extension Api {
 }
 public extension Api {
     enum ExportedChatInvite: TypeConstructorDescription {
-        case chatInviteExported(flags: Int32, link: String, adminId: Int64, date: Int32, startDate: Int32?, expireDate: Int32?, usageLimit: Int32?, usage: Int32?, requested: Int32?, subscriptionExpired: Int32?, title: String?, subscriptionPricing: Api.StarsSubscriptionPricing?)
+        public class Cons_chatInviteExported {
+            public var flags: Int32
+            public var link: String
+            public var adminId: Int64
+            public var date: Int32
+            public var startDate: Int32?
+            public var expireDate: Int32?
+            public var usageLimit: Int32?
+            public var usage: Int32?
+            public var requested: Int32?
+            public var subscriptionExpired: Int32?
+            public var title: String?
+            public var subscriptionPricing: Api.StarsSubscriptionPricing?
+            public init(flags: Int32, link: String, adminId: Int64, date: Int32, startDate: Int32?, expireDate: Int32?, usageLimit: Int32?, usage: Int32?, requested: Int32?, subscriptionExpired: Int32?, title: String?, subscriptionPricing: Api.StarsSubscriptionPricing?) {
+                self.flags = flags
+                self.link = link
+                self.adminId = adminId
+                self.date = date
+                self.startDate = startDate
+                self.expireDate = expireDate
+                self.usageLimit = usageLimit
+                self.usage = usage
+                self.requested = requested
+                self.subscriptionExpired = subscriptionExpired
+                self.title = title
+                self.subscriptionPricing = subscriptionPricing
+            }
+        }
+        case chatInviteExported(Cons_chatInviteExported)
         case chatInvitePublicJoinRequests
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -201,7 +341,19 @@ public extension Api {
 }
 public extension Api {
     enum ExportedChatlistInvite: TypeConstructorDescription {
-        case exportedChatlistInvite(flags: Int32, title: String, url: String, peers: [Api.Peer])
+        public class Cons_exportedChatlistInvite {
+            public var flags: Int32
+            public var title: String
+            public var url: String
+            public var peers: [Api.Peer]
+            public init(flags: Int32, title: String, url: String, peers: [Api.Peer]) {
+                self.flags = flags
+                self.title = title
+                self.url = url
+                self.peers = peers
+            }
+        }
+        case exportedChatlistInvite(Cons_exportedChatlistInvite)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -230,7 +382,15 @@ public extension Api {
 }
 public extension Api {
     enum ExportedContactToken: TypeConstructorDescription {
-        case exportedContactToken(url: String, expires: Int32)
+        public class Cons_exportedContactToken {
+            public var url: String
+            public var expires: Int32
+            public init(url: String, expires: Int32) {
+                self.url = url
+                self.expires = expires
+            }
+        }
+        case exportedContactToken(Cons_exportedContactToken)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -259,7 +419,15 @@ public extension Api {
 }
 public extension Api {
     enum ExportedMessageLink: TypeConstructorDescription {
-        case exportedMessageLink(link: String, html: String)
+        public class Cons_exportedMessageLink {
+            public var link: String
+            public var html: String
+            public init(link: String, html: String) {
+                self.link = link
+                self.html = html
+            }
+        }
+        case exportedMessageLink(Cons_exportedMessageLink)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -288,7 +456,13 @@ public extension Api {
 }
 public extension Api {
     enum ExportedStoryLink: TypeConstructorDescription {
-        case exportedStoryLink(link: String)
+        public class Cons_exportedStoryLink {
+            public var link: String
+            public init(link: String) {
+                self.link = link
+            }
+        }
+        case exportedStoryLink(Cons_exportedStoryLink)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -317,7 +491,19 @@ public extension Api {
 }
 public extension Api {
     enum FactCheck: TypeConstructorDescription {
-        case factCheck(flags: Int32, country: String?, text: Api.TextWithEntities?, hash: Int64)
+        public class Cons_factCheck {
+            public var flags: Int32
+            public var country: String?
+            public var text: Api.TextWithEntities?
+            public var hash: Int64
+            public init(flags: Int32, country: String?, text: Api.TextWithEntities?, hash: Int64) {
+                self.flags = flags
+                self.country = country
+                self.text = text
+                self.hash = hash
+            }
+        }
+        case factCheck(Cons_factCheck)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

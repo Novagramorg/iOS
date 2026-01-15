@@ -606,15 +606,20 @@ extension Api.Updates {
 extension Api.EncryptedChat {
     var peerId: PeerId {
         switch self {
-            case let .encryptedChat(id, _, _, _, _, _, _):
+            case let .encryptedChat(encryptedChatData):
+                let id = encryptedChatData.id
                 return PeerId(namespace: Namespaces.Peer.SecretChat, id: PeerId.Id._internalFromInt64Value(Int64(id)))
-            case let .encryptedChatDiscarded(_, id):
+            case let .encryptedChatDiscarded(encryptedChatDiscardedData):
+                let id = encryptedChatDiscardedData.id
                 return PeerId(namespace: Namespaces.Peer.SecretChat, id: PeerId.Id._internalFromInt64Value(Int64(id)))
-            case let .encryptedChatEmpty(id):
+            case let .encryptedChatEmpty(encryptedChatEmptyData):
+                let id = encryptedChatEmptyData.id
                 return PeerId(namespace: Namespaces.Peer.SecretChat, id: PeerId.Id._internalFromInt64Value(Int64(id)))
-            case let .encryptedChatRequested(_, _, id, _, _, _, _, _):
+            case let .encryptedChatRequested(encryptedChatRequestedData):
+                let id = encryptedChatRequestedData.id
                 return PeerId(namespace: Namespaces.Peer.SecretChat, id: PeerId.Id._internalFromInt64Value(Int64(id)))
-            case let .encryptedChatWaiting(id, _, _, _, _):
+            case let .encryptedChatWaiting(encryptedChatWaitingData):
+                let id = encryptedChatWaitingData.id
                 return PeerId(namespace: Namespaces.Peer.SecretChat, id: PeerId.Id._internalFromInt64Value(Int64(id)))
         }
     }
@@ -623,9 +628,11 @@ extension Api.EncryptedChat {
 extension Api.EncryptedMessage {
     var peerId: PeerId {
         switch self {
-            case let .encryptedMessage(_, chatId, _, _, _):
+            case let .encryptedMessage(encryptedMessageData):
+                let chatId = encryptedMessageData.chatId
                 return PeerId(namespace: Namespaces.Peer.SecretChat, id: PeerId.Id._internalFromInt64Value(Int64(chatId)))
-            case let .encryptedMessageService(_, chatId, _, _):
+            case let .encryptedMessageService(encryptedMessageServiceData):
+                let chatId = encryptedMessageServiceData.chatId
                 return PeerId(namespace: Namespaces.Peer.SecretChat, id: PeerId.Id._internalFromInt64Value(Int64(chatId)))
         }
     }

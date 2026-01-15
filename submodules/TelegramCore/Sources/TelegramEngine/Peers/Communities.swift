@@ -136,7 +136,8 @@ func _internal_exportChatFolder(account: Account, filterId: Int32, title: String
                     })
                     
                     switch invite {
-                    case let .exportedChatlistInvite(flags, title, url, peers):
+                    case let .exportedChatlistInvite(exportedChatlistInviteData):
+                        let (flags, title, url, peers) = (exportedChatlistInviteData.flags, exportedChatlistInviteData.title, exportedChatlistInviteData.url, exportedChatlistInviteData.peers)
                         return .single(ExportedChatFolderLink(
                             title: title,
                             link: url,
@@ -172,7 +173,8 @@ func _internal_getExportedChatFolderLinks(account: Account, id: Int32) -> Signal
                 var result: [ExportedChatFolderLink] = []
                 for invite in invites {
                     switch invite {
-                    case let .exportedChatlistInvite(flags, title, url, peers):
+                    case let .exportedChatlistInvite(exportedChatlistInviteData):
+                        let (flags, title, url, peers) = (exportedChatlistInviteData.flags, exportedChatlistInviteData.title, exportedChatlistInviteData.url, exportedChatlistInviteData.peers)
                         result.append(ExportedChatFolderLink(
                             title: title,
                             link: url,
@@ -212,7 +214,8 @@ func _internal_editChatFolderLink(account: Account, filterId: Int32, link: Expor
         }
         |> map { result in
             switch result {
-            case let .exportedChatlistInvite(flags, title, url, peers):
+            case let .exportedChatlistInvite(exportedChatlistInviteData):
+                let (flags, title, url, peers) = (exportedChatlistInviteData.flags, exportedChatlistInviteData.title, exportedChatlistInviteData.url, exportedChatlistInviteData.peers)
                 return ExportedChatFolderLink(
                     title: title,
                     link: url,

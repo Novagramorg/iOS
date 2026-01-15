@@ -100,7 +100,8 @@ public func standaloneUploadedImage(postbox: Postbox, network: Network, peerId: 
                     }
                     |> mapToSignal { result -> Signal<StandaloneUploadMediaEvent, StandaloneUploadMediaError> in
                         switch result {
-                            case let .encryptedFile(id, accessHash, size, dcId, _):
+                            case let .encryptedFile(encryptedFileData):
+                                let (id, accessHash, size, dcId) = (encryptedFileData.id, encryptedFileData.accessHash, encryptedFileData.size, encryptedFileData.dcId)
                                 return .single(.result(.media(.standalone(media: TelegramMediaImage(imageId: MediaId(namespace: Namespaces.Media.LocalImage, id: Int64.random(in: Int64.min ... Int64.max)), representations: [TelegramMediaImageRepresentation(dimensions: dimensions, resource: SecretFileMediaResource(fileId: id, accessHash: accessHash, containerSize: size, decryptedSize: Int64(data.count), datacenterId: Int(dcId), key: key), progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false)], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])))))
                             case .encryptedFileEmpty:
                                 return .fail(.generic)
@@ -193,7 +194,8 @@ public func standaloneUploadedFile(postbox: Postbox, network: Network, peerId: P
                                     |> mapError { _ -> StandaloneUploadMediaError in return .generic }
                                     |> mapToSignal { result -> Signal<StandaloneUploadMediaEvent, StandaloneUploadMediaError> in
                                         switch result {
-                                            case let .encryptedFile(id, accessHash, size, dcId, _):
+                                            case let .encryptedFile(encryptedFileData):
+                                                let (id, accessHash, size, dcId) = (encryptedFileData.id, encryptedFileData.accessHash, encryptedFileData.size, encryptedFileData.dcId)
                                                 let media = TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.LocalFile, id: Int64.random(in: Int64.min ... Int64.max)), partialReference: nil, resource: SecretFileMediaResource(fileId: id, accessHash: accessHash, containerSize: size, decryptedSize: size, datacenterId: Int(dcId), key: key), previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: mimeType, size: size, attributes: attributes, alternativeRepresentations: [])
 
                                                 return .single(.result(.media(.standalone(media: media))))
