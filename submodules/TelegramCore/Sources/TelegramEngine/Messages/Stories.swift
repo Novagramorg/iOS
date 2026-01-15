@@ -2588,7 +2588,8 @@ func _internal_exportStoryLink(account: Account, peerId: EnginePeer.Id, id: Int3
                 return nil
             }
             switch result {
-            case let .exportedStoryLink(link):
+            case let .exportedStoryLink(exportedStoryLinkData):
+                let link = exportedStoryLinkData.link
                 return link
             }
         }

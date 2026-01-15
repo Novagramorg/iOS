@@ -96,7 +96,8 @@ func _internal_getMessagesFactCheckByPeerId(account: Account, peerId: EnginePeer
                 for result in results {
                     let messageId = messageIds[index]
                     switch result {
-                    case let .factCheck(_, country, text, hash):
+                    case let .factCheck(factCheckData):
+                        let (_, country, text, hash) = (factCheckData.flags, factCheckData.country, factCheckData.text, factCheckData.hash)
                         let content: FactCheckMessageAttribute.Content
                         if let text, let country {
                             switch text {
