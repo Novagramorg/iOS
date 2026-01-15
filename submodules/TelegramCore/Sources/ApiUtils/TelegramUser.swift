@@ -35,10 +35,11 @@ extension TelegramPeerUsername {
 extension PeerVerification {
     init(apiBotVerification: Api.BotVerification) {
         switch apiBotVerification {
-        case let .botVerification(botId, iconFileId, description):
+        case let .botVerification(botVerificationData):
+            let (botId, icon, description) = (botVerificationData.botId, botVerificationData.icon, botVerificationData.description)
             self.init(
                 botId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId)),
-                iconFileId: iconFileId,
+                iconFileId: icon,
                 description: description
             )
         }

@@ -1521,7 +1521,8 @@ func _internal_uploadBotPreviewImpl(
                                 return .single(.completed(nil))
                             }
                             switch resultPreviewMedia {
-                            case let .botPreviewMedia(date, resultMedia):
+                            case let .botPreviewMedia(botPreviewMediaData):
+                                let (date, resultMedia) = (botPreviewMediaData.date, botPreviewMediaData.media)
                                 return postbox.transaction { transaction -> StoryUploadResult in
                                     var currentState: Stories.LocalState
                                     if let value = transaction.getLocalStoryState()?.get(Stories.LocalState.self) {

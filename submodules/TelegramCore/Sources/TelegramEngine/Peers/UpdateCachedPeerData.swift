@@ -499,7 +499,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                 var botInfos: [CachedPeerBotInfo] = []
                                 for botInfo in chatFullBotInfo ?? [] {
                                     switch botInfo {
-                                    case let .botInfo(_, userId, _, _, _, _, _, _, _, _):
+                                    case let .botInfo(botInfoData):
+                                        let (_, userId, _, _, _, _, _, _, _, _) = (botInfoData.flags, botInfoData.userId, botInfoData.description, botInfoData.descriptionPhoto, botInfoData.descriptionDocument, botInfoData.commands, botInfoData.menuButton, botInfoData.privacyPolicyUrl, botInfoData.appSettings, botInfoData.verifierSettings)
                                         if let userId = userId {
                                             let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
                                             let parsedBotInfo = BotInfo(apiBotInfo: botInfo)
@@ -707,7 +708,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             var botInfos: [CachedPeerBotInfo] = []
                                             for botInfo in apiBotInfos {
                                                 switch botInfo {
-                                                case let .botInfo(_, userId, _, _, _, _, _, _, _, _):
+                                                case let .botInfo(botInfoData):
+                                                    let (_, userId, _, _, _, _, _, _, _, _) = (botInfoData.flags, botInfoData.userId, botInfoData.description, botInfoData.descriptionPhoto, botInfoData.descriptionDocument, botInfoData.commands, botInfoData.menuButton, botInfoData.privacyPolicyUrl, botInfoData.appSettings, botInfoData.verifierSettings)
                                                     if let userId = userId {
                                                         let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
                                                         let parsedBotInfo = BotInfo(apiBotInfo: botInfo)
@@ -947,7 +949,8 @@ func _internal_requestBotAdminPreview(network: Network, peerId: PeerId, inputUse
             return CachedUserData.BotPreview(
                 items: media.compactMap { item -> CachedUserData.BotPreview.Item? in
                     switch item {
-                    case let .botPreviewMedia(date, media):
+                    case let .botPreviewMedia(botPreviewMediaData):
+                        let (date, media) = (botPreviewMediaData.date, botPreviewMediaData.media)
                         let value = textMediaAndExpirationTimerFromApiMedia(media, peerId)
                         if let media = value.media {
                             return CachedUserData.BotPreview.Item(media: media, timestamp: date)
@@ -975,7 +978,8 @@ func _internal_requestBotUserPreview(network: Network, peerId: PeerId, inputUser
         return CachedUserData.BotPreview(
             items: result.compactMap { item -> CachedUserData.BotPreview.Item? in
                 switch item {
-                case let .botPreviewMedia(date, media):
+                case let .botPreviewMedia(botPreviewMediaData):
+                    let (date, media) = (botPreviewMediaData.date, botPreviewMediaData.media)
                     let value = textMediaAndExpirationTimerFromApiMedia(media, peerId)
                     if let media = value.media {
                         return CachedUserData.BotPreview.Item(media: media, timestamp: date)

@@ -715,14 +715,16 @@ public final class TelegramBusinessIntro: Codable, Equatable {
 extension TelegramBusinessAwayMessage {
     convenience init(apiAwayMessage: Api.BusinessAwayMessage) {
         switch apiAwayMessage {
-        case let .businessAwayMessage(flags, shortcutId, schedule, recipients):
+        case let .businessAwayMessage(businessAwayMessageData):
+            let (flags, shortcutId, schedule, recipients) = (businessAwayMessageData.flags, businessAwayMessageData.shortcutId, businessAwayMessageData.schedule, businessAwayMessageData.recipients)
             let mappedSchedule: Schedule
             switch schedule {
             case .businessAwayMessageScheduleAlways:
                 mappedSchedule = .always
             case .businessAwayMessageScheduleOutsideWorkHours:
                 mappedSchedule = .outsideWorkingHours
-            case let .businessAwayMessageScheduleCustom(startDate, endDate):
+            case let .businessAwayMessageScheduleCustom(businessAwayMessageScheduleCustomData):
+                let (startDate, endDate) = (businessAwayMessageScheduleCustomData.startDate, businessAwayMessageScheduleCustomData.endDate)
                 mappedSchedule = .custom(beginTimestamp: startDate, endTimestamp: endDate)
             }
             
@@ -997,7 +999,7 @@ func _internal_updateBusinessAwayMessage(account: Account, awayMessage: Telegram
             case .outsideWorkingHours:
                 mappedSchedule = .businessAwayMessageScheduleOutsideWorkHours
             case let .custom(beginTimestamp, endTimestamp):
-                mappedSchedule = .businessAwayMessageScheduleCustom(startDate: beginTimestamp, endDate: endTimestamp)
+                mappedSchedule = .businessAwayMessageScheduleCustom(Api.BusinessAwayMessageSchedule.Cons_businessAwayMessageScheduleCustom(startDate: beginTimestamp, endDate: endTimestamp))
             }
             
             var flags: Int32 = 0
