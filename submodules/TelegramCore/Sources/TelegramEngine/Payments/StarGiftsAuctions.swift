@@ -242,7 +242,8 @@ public final class GiftAuctionContext {
 extension GiftAuctionContext.State.BidLevel {
     init(apiBidLevel: Api.AuctionBidLevel) {
         switch apiBidLevel {
-        case let .auctionBidLevel(pos, amount, date):
+        case let .auctionBidLevel(auctionBidLevelData):
+            let (pos, amount, date) = (auctionBidLevelData.pos, auctionBidLevelData.amount, auctionBidLevelData.date)
             self.position = pos
             self.amount = amount
             self.date = date

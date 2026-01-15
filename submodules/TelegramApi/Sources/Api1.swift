@@ -119,7 +119,15 @@ public extension Api {
 }
 public extension Api {
     enum AttachMenuBotIconColor: TypeConstructorDescription {
-        case attachMenuBotIconColor(name: String, color: Int32)
+        public class Cons_attachMenuBotIconColor {
+            public var name: String
+            public var color: Int32
+            public init(name: String, color: Int32) {
+                self.name = name
+                self.color = color
+            }
+        }
+        case attachMenuBotIconColor(Cons_attachMenuBotIconColor)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -148,7 +156,17 @@ public extension Api {
 }
 public extension Api {
     enum AttachMenuBots: TypeConstructorDescription {
-        case attachMenuBots(hash: Int64, bots: [Api.AttachMenuBot], users: [Api.User])
+        public class Cons_attachMenuBots {
+            public var hash: Int64
+            public var bots: [Api.AttachMenuBot]
+            public var users: [Api.User]
+            public init(hash: Int64, bots: [Api.AttachMenuBot], users: [Api.User]) {
+                self.hash = hash
+                self.bots = bots
+                self.users = users
+            }
+        }
+        case attachMenuBots(Cons_attachMenuBots)
         case attachMenuBotsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -185,7 +203,15 @@ public extension Api {
 }
 public extension Api {
     enum AttachMenuBotsBot: TypeConstructorDescription {
-        case attachMenuBotsBot(bot: Api.AttachMenuBot, users: [Api.User])
+        public class Cons_attachMenuBotsBot {
+            public var bot: Api.AttachMenuBot
+            public var users: [Api.User]
+            public init(bot: Api.AttachMenuBot, users: [Api.User]) {
+                self.bot = bot
+                self.users = users
+            }
+        }
+        case attachMenuBotsBot(Cons_attachMenuBotsBot)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -275,7 +301,17 @@ public extension Api {
 }
 public extension Api {
     enum AuctionBidLevel: TypeConstructorDescription {
-        case auctionBidLevel(pos: Int32, amount: Int64, date: Int32)
+        public class Cons_auctionBidLevel {
+            public var pos: Int32
+            public var amount: Int64
+            public var date: Int32
+            public init(pos: Int32, amount: Int64, date: Int32) {
+                self.pos = pos
+                self.amount = amount
+                self.date = date
+            }
+        }
+        case auctionBidLevel(Cons_auctionBidLevel)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -304,7 +340,37 @@ public extension Api {
 }
 public extension Api {
     enum Authorization: TypeConstructorDescription {
-        case authorization(flags: Int32, hash: Int64, deviceModel: String, platform: String, systemVersion: String, apiId: Int32, appName: String, appVersion: String, dateCreated: Int32, dateActive: Int32, ip: String, country: String, region: String)
+        public class Cons_authorization {
+            public var flags: Int32
+            public var hash: Int64
+            public var deviceModel: String
+            public var platform: String
+            public var systemVersion: String
+            public var apiId: Int32
+            public var appName: String
+            public var appVersion: String
+            public var dateCreated: Int32
+            public var dateActive: Int32
+            public var ip: String
+            public var country: String
+            public var region: String
+            public init(flags: Int32, hash: Int64, deviceModel: String, platform: String, systemVersion: String, apiId: Int32, appName: String, appVersion: String, dateCreated: Int32, dateActive: Int32, ip: String, country: String, region: String) {
+                self.flags = flags
+                self.hash = hash
+                self.deviceModel = deviceModel
+                self.platform = platform
+                self.systemVersion = systemVersion
+                self.apiId = apiId
+                self.appName = appName
+                self.appVersion = appVersion
+                self.dateCreated = dateCreated
+                self.dateActive = dateActive
+                self.ip = ip
+                self.country = country
+                self.region = region
+            }
+        }
+        case authorization(Cons_authorization)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -333,7 +399,25 @@ public extension Api {
 }
 public extension Api {
     enum AutoDownloadSettings: TypeConstructorDescription {
-        case autoDownloadSettings(flags: Int32, photoSizeMax: Int32, videoSizeMax: Int64, fileSizeMax: Int64, videoUploadMaxbitrate: Int32, smallQueueActiveOperationsMax: Int32, largeQueueActiveOperationsMax: Int32)
+        public class Cons_autoDownloadSettings {
+            public var flags: Int32
+            public var photoSizeMax: Int32
+            public var videoSizeMax: Int64
+            public var fileSizeMax: Int64
+            public var videoUploadMaxbitrate: Int32
+            public var smallQueueActiveOperationsMax: Int32
+            public var largeQueueActiveOperationsMax: Int32
+            public init(flags: Int32, photoSizeMax: Int32, videoSizeMax: Int64, fileSizeMax: Int64, videoUploadMaxbitrate: Int32, smallQueueActiveOperationsMax: Int32, largeQueueActiveOperationsMax: Int32) {
+                self.flags = flags
+                self.photoSizeMax = photoSizeMax
+                self.videoSizeMax = videoSizeMax
+                self.fileSizeMax = fileSizeMax
+                self.videoUploadMaxbitrate = videoUploadMaxbitrate
+                self.smallQueueActiveOperationsMax = smallQueueActiveOperationsMax
+                self.largeQueueActiveOperationsMax = largeQueueActiveOperationsMax
+            }
+        }
+        case autoDownloadSettings(Cons_autoDownloadSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -362,7 +446,15 @@ public extension Api {
 }
 public extension Api {
     enum AutoSaveException: TypeConstructorDescription {
-        case autoSaveException(peer: Api.Peer, settings: Api.AutoSaveSettings)
+        public class Cons_autoSaveException {
+            public var peer: Api.Peer
+            public var settings: Api.AutoSaveSettings
+            public init(peer: Api.Peer, settings: Api.AutoSaveSettings) {
+                self.peer = peer
+                self.settings = settings
+            }
+        }
+        case autoSaveException(Cons_autoSaveException)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -391,7 +483,15 @@ public extension Api {
 }
 public extension Api {
     enum AutoSaveSettings: TypeConstructorDescription {
-        case autoSaveSettings(flags: Int32, videoMaxSize: Int64?)
+        public class Cons_autoSaveSettings {
+            public var flags: Int32
+            public var videoMaxSize: Int64?
+            public init(flags: Int32, videoMaxSize: Int64?) {
+                self.flags = flags
+                self.videoMaxSize = videoMaxSize
+            }
+        }
+        case autoSaveSettings(Cons_autoSaveSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -420,7 +520,23 @@ public extension Api {
 }
 public extension Api {
     enum AvailableEffect: TypeConstructorDescription {
-        case availableEffect(flags: Int32, id: Int64, emoticon: String, staticIconId: Int64?, effectStickerId: Int64, effectAnimationId: Int64?)
+        public class Cons_availableEffect {
+            public var flags: Int32
+            public var id: Int64
+            public var emoticon: String
+            public var staticIconId: Int64?
+            public var effectStickerId: Int64
+            public var effectAnimationId: Int64?
+            public init(flags: Int32, id: Int64, emoticon: String, staticIconId: Int64?, effectStickerId: Int64, effectAnimationId: Int64?) {
+                self.flags = flags
+                self.id = id
+                self.emoticon = emoticon
+                self.staticIconId = staticIconId
+                self.effectStickerId = effectStickerId
+                self.effectAnimationId = effectAnimationId
+            }
+        }
+        case availableEffect(Cons_availableEffect)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
