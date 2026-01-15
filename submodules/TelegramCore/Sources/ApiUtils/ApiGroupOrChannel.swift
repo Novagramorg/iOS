@@ -31,7 +31,8 @@ func parseTelegramGroupOrChannel(chat: Api.Chat) -> Peer? {
         var migrationReference: TelegramGroupToChannelMigrationReference?
         if let migratedTo = migratedTo {
             switch migratedTo {
-            case let .inputChannel(channelId, accessHash):
+            case let .inputChannel(inputChannelData):
+                let (channelId, accessHash) = (inputChannelData.channelId, inputChannelData.accessHash)
                 migrationReference = TelegramGroupToChannelMigrationReference(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId)), accessHash: accessHash)
             case .inputChannelEmpty:
                 break

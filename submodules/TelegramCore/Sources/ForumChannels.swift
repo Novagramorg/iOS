@@ -489,7 +489,7 @@ func _internal_setForumChannelPinnedTopics(account: Account, id: EnginePeer.Id, 
         return account.postbox.transaction { transaction -> [Api.InputDialogPeer] in
             transaction.setPeerPinnedThreads(peerId: id, threadIds: threadIds)
             
-            return threadIds.compactMap { transaction.getPeer(PeerId($0)).flatMap(apiInputPeer).flatMap({ .inputDialogPeer(peer: $0) }) }
+            return threadIds.compactMap { transaction.getPeer(PeerId($0)).flatMap(apiInputPeer).flatMap({ .inputDialogPeer(.init(peer: $0)) }) }
         }
         |> castError(SetForumChannelTopicPinnedError.self)
         |> mapToSignal { inputPeers -> Signal<Never, SetForumChannelTopicPinnedError> in

@@ -865,7 +865,7 @@ extension TelegramBusinessLocation.Coordinates {
     }
     
     var apiInputGeoPoint: Api.InputGeoPoint {
-        return .inputGeoPoint(flags: 0, lat: self.latitude, long: self.longitude, accuracyRadius: nil)
+        return .inputGeoPoint(.init(flags: 0, lat: self.latitude, long: self.longitude, accuracyRadius: nil))
     }
 }
 
@@ -1929,7 +1929,7 @@ func _internal_createBusinessChatLink(account: Account, message: String, entitie
         flags |= 1 << 1
     }
     
-    return account.network.request(Api.functions.account.createBusinessChatLink(link: .inputBusinessChatLink(flags: flags, message: message, entities: apiEntities, title: title)))
+    return account.network.request(Api.functions.account.createBusinessChatLink(link: .inputBusinessChatLink(.init(flags: flags, message: message, entities: apiEntities, title: title))))
     |> mapError { error -> AddBusinessChatLinkError in
         if error.errorDescription == "CHATLINKS_TOO_MUCH" {
             return .tooManyLinks
@@ -1969,7 +1969,7 @@ func _internal_editBusinessChatLink(account: Account, url: String, message: Stri
         flags |= 1 << 1
     }
     
-    return account.network.request(Api.functions.account.editBusinessChatLink(slug: url, link: .inputBusinessChatLink(flags: flags, message: message, entities: apiEntities, title: title)))
+    return account.network.request(Api.functions.account.editBusinessChatLink(slug: url, link: .inputBusinessChatLink(.init(flags: flags, message: message, entities: apiEntities, title: title))))
     |> mapError { _ -> AddBusinessChatLinkError in
         return .generic
     }

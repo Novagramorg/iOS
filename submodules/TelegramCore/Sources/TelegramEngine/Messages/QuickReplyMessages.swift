@@ -757,15 +757,15 @@ extension TelegramBusinessIntro {
         if let stickerFile = self.stickerFile {
             if let fileResource = stickerFile.resource as? CloudDocumentMediaResource, let resource = stickerFile.resource as? TelegramCloudMediaResourceWithFileReference, let reference = resource.fileReference {
                 flags |= 1 << 0
-                sticker = .inputDocument(id: fileResource.fileId, accessHash: fileResource.accessHash, fileReference: Buffer(data: reference))
+                sticker = .inputDocument(.init(id: fileResource.fileId, accessHash: fileResource.accessHash, fileReference: Buffer(data: reference)))
             }
         }
-        return .inputBusinessIntro(
+        return .inputBusinessIntro(.init(
             flags: flags,
             title: self.title,
             description: self.text,
             sticker: sticker
-        )
+        ))
     }
 }
 
@@ -905,7 +905,7 @@ extension TelegramBusinessRecipients {
             flags |= 1 << 4
         }
         
-        return .inputBusinessRecipients(flags: flags, users: users)
+        return .inputBusinessRecipients(.init(flags: flags, users: users))
     }
     
     func apiInputBotValue(additionalPeers: [Peer], excludePeers: [Peer]) -> Api.InputBusinessBotRecipients {
@@ -942,7 +942,7 @@ extension TelegramBusinessRecipients {
             flags |= 1 << 6
         }
         
-        return .inputBusinessBotRecipients(flags: flags, users: users, excludeUsers: excludeUsers)
+        return .inputBusinessBotRecipients(.init(flags: flags, users: users, excludeUsers: excludeUsers))
     }
 }
 
@@ -956,11 +956,11 @@ func _internal_updateBusinessGreetingMessage(account: Account, greetingMessage: 
     |> mapToSignal { additionalPeers in
         var mappedMessage: Api.InputBusinessGreetingMessage?
         if let greetingMessage {
-            mappedMessage = .inputBusinessGreetingMessage(
+            mappedMessage = .inputBusinessGreetingMessage(.init(
                 shortcutId: greetingMessage.shortcutId,
                 recipients: greetingMessage.recipients.apiInputValue(additionalPeers: additionalPeers),
                 noActivityDays: Int32(clamping: greetingMessage.inactivityDays)
-            )
+            ))
         }
         
         var flags: Int32 = 0
@@ -1013,12 +1013,12 @@ func _internal_updateBusinessAwayMessage(account: Account, awayMessage: Telegram
                 flags |= 1 << 0
             }
             
-            mappedMessage = .inputBusinessAwayMessage(
+            mappedMessage = .inputBusinessAwayMessage(.init(
                 flags: flags,
                 shortcutId: awayMessage.shortcutId,
                 schedule: mappedSchedule,
                 recipients: awayMessage.recipients.apiInputValue(additionalPeers: additionalPeers)
-            )
+            ))
         }
         
         var flags: Int32 = 0
@@ -1177,7 +1177,7 @@ public func _internal_setAccountConnectedBot(account: Account, bot: TelegramAcco
         var flags: Int32 = 0
         var mappedRights: Api.BusinessBotRights?
         var mappedBot: Api.InputUser = .inputUserEmpty
-        var mappedRecipients: Api.InputBusinessBotRecipients = .inputBusinessBotRecipients(flags: 0, users: nil, excludeUsers: nil)
+        var mappedRecipients: Api.InputBusinessBotRecipients = .inputBusinessBotRecipients(.init(flags: 0, users: nil, excludeUsers: nil))
         
         if let bot, let inputBotUser = botUser.flatMap(apiInputUser) {
             mappedBot = inputBotUser

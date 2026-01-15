@@ -72,7 +72,7 @@ func _internal_exportChatFolder(account: Account, filterId: Int32, title: String
     }
     |> castError(ExportChatFolderError.self)
     |> mapToSignal { inputPeers -> Signal<ExportedChatFolderLink, ExportChatFolderError> in
-        return account.network.request(Api.functions.chatlists.exportChatlistInvite(chatlist: .inputChatlistDialogFilter(filterId: filterId), title: title, peers: inputPeers))
+        return account.network.request(Api.functions.chatlists.exportChatlistInvite(chatlist: .inputChatlistDialogFilter(.init(filterId: filterId)), title: title, peers: inputPeers))
         |> `catch` { error -> Signal<Api.chatlists.ExportedChatlistInvite, ExportChatFolderError> in
             if error.errorDescription == "INVITES_TOO_MUCH" || error.errorDescription == "CHATLISTS_TOO_MUCH" {
                 return account.postbox.transaction { transaction -> (AppConfiguration, Bool) in
@@ -155,7 +155,7 @@ func _internal_exportChatFolder(account: Account, filterId: Int32, title: String
 
 func _internal_getExportedChatFolderLinks(account: Account, id: Int32) -> Signal<[ExportedChatFolderLink]?, NoError> {
     let accountPeerId = account.peerId
-    return account.network.request(Api.functions.chatlists.getExportedInvites(chatlist: .inputChatlistDialogFilter(filterId: id)))
+    return account.network.request(Api.functions.chatlists.getExportedInvites(chatlist: .inputChatlistDialogFilter(.init(filterId: id))))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.chatlists.ExportedInvites?, NoError> in
         return .single(nil)
@@ -208,7 +208,7 @@ func _internal_editChatFolderLink(account: Account, filterId: Int32, link: Expor
             flags |= 1 << 2
             peers = peerIds.compactMap(transaction.getPeer).compactMap(apiInputPeer)
         }
-        return account.network.request(Api.functions.chatlists.editExportedInvite(flags: flags, chatlist: .inputChatlistDialogFilter(filterId: filterId), slug: link.slug, title: title, peers: peers))
+        return account.network.request(Api.functions.chatlists.editExportedInvite(flags: flags, chatlist: .inputChatlistDialogFilter(.init(filterId: filterId)), slug: link.slug, title: title, peers: peers))
         |> mapError { _ -> EditChatFolderLinkError in
             return .generic
         }
@@ -234,7 +234,7 @@ public enum RevokeChatFolderLinkError {
 }
 
 func _internal_deleteChatFolderLink(account: Account, filterId: Int32, link: ExportedChatFolderLink) -> Signal<Never, RevokeChatFolderLinkError> {
-    return account.network.request(Api.functions.chatlists.deleteExportedInvite(chatlist: .inputChatlistDialogFilter(filterId: filterId), slug: link.slug))
+    return account.network.request(Api.functions.chatlists.deleteExportedInvite(chatlist: .inputChatlistDialogFilter(.init(filterId: filterId)), slug: link.slug))
     |> mapError { error -> RevokeChatFolderLinkError in
         return .generic
     }
@@ -591,7 +591,7 @@ func _internal_pollChatFolderUpdatesOnce(account: Account, folderId: Int32) -> S
             firstTimeFolderUpdates.insert(key)
         }
             
-        return account.network.request(Api.functions.chatlists.getChatlistUpdates(chatlist: .inputChatlistDialogFilter(filterId: folderId)))
+        return account.network.request(Api.functions.chatlists.getChatlistUpdates(chatlist: .inputChatlistDialogFilter(.init(filterId: folderId))))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.chatlists.ChatlistUpdates?, NoError> in
             return .single(nil)
@@ -693,7 +693,7 @@ func _internal_joinAvailableChatsInFolder(account: Account, updates: ChatFolderU
     }
     |> castError(JoinChatFolderLinkError.self)
     |> mapToSignal { inputPeers -> Signal<Never, JoinChatFolderLinkError> in
-        return account.network.request(Api.functions.chatlists.joinChatlistUpdates(chatlist: .inputChatlistDialogFilter(filterId: updates.folderId), peers: inputPeers))
+        return account.network.request(Api.functions.chatlists.joinChatlistUpdates(chatlist: .inputChatlistDialogFilter(.init(filterId: updates.folderId)), peers: inputPeers))
         |> `catch` { error -> Signal<Api.Updates, JoinChatFolderLinkError> in
             if error.errorDescription == "DIALOG_FILTERS_TOO_MUCH" {
                 return account.postbox.transaction { transaction -> (AppConfiguration, Bool) in
@@ -748,7 +748,7 @@ func _internal_hideChatFolderUpdates(account: Account, folderId: Int32) -> Signa
         })
     }
     |> mapToSignal { _ -> Signal<Never, NoError> in
-        return account.network.request(Api.functions.chatlists.hideChatlistUpdates(chatlist: .inputChatlistDialogFilter(filterId: folderId)))
+        return account.network.request(Api.functions.chatlists.hideChatlistUpdates(chatlist: .inputChatlistDialogFilter(.init(filterId: folderId))))
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
         }
@@ -761,7 +761,7 @@ func _internal_leaveChatFolder(account: Account, folderId: Int32, removePeerIds:
         return removePeerIds.compactMap(transaction.getPeer).compactMap(apiInputPeer)
     }
     |> mapToSignal { inputPeers -> Signal<Never, NoError> in
-        return account.network.request(Api.functions.chatlists.leaveChatlist(chatlist: .inputChatlistDialogFilter(filterId: folderId), peers: inputPeers))
+        return account.network.request(Api.functions.chatlists.leaveChatlist(chatlist: .inputChatlistDialogFilter(.init(filterId: folderId)), peers: inputPeers))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.Updates?, NoError> in
             return .single(nil)
@@ -778,7 +778,7 @@ func _internal_leaveChatFolder(account: Account, folderId: Int32, removePeerIds:
 }
 
 func _internal_requestLeaveChatFolderSuggestions(account: Account, folderId: Int32) -> Signal<[EnginePeer.Id], NoError> {
-    return account.network.request(Api.functions.chatlists.getLeaveChatlistSuggestions(chatlist: .inputChatlistDialogFilter(filterId: folderId)))
+    return account.network.request(Api.functions.chatlists.getLeaveChatlistSuggestions(chatlist: .inputChatlistDialogFilter(.init(filterId: folderId))))
     |> map { result -> [EnginePeer.Id] in
         return result.map(\.peerId)
     }

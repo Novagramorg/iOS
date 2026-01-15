@@ -186,11 +186,11 @@ extension InternalGroupCallReference {
     var apiInputGroupCall: Api.InputGroupCall {
         switch self {
         case let .id(id, accessHash):
-            return .inputGroupCall(id: id, accessHash: accessHash)
+            return .inputGroupCall(.init(id: id, accessHash: accessHash))
         case let .link(slug):
-            return .inputGroupCallSlug(slug: slug)
+            return .inputGroupCallSlug(.init(slug: slug))
         case let .message(id):
-            return .inputGroupCallInviteMessage(msgId: id.id)
+            return .inputGroupCallInviteMessage(.init(msgId: id.id))
         }
     }
 }
@@ -200,9 +200,9 @@ func _internal_getCurrentGroupCall(account: Account, reference: InternalGroupCal
     let inputCall: Api.InputGroupCall
     switch reference {
     case let .id(id, accessHash):
-        inputCall = .inputGroupCall(id: id, accessHash: accessHash)
+        inputCall = .inputGroupCall(.init(id: id, accessHash: accessHash))
     case let .link(slug):
-        inputCall = .inputGroupCallSlug(slug: slug)
+        inputCall = .inputGroupCallSlug(.init(slug: slug))
     case let .message(id):
         if id.peerId.namespace != Namespaces.Peer.CloudUser {
             return .fail(.generic)
@@ -210,7 +210,7 @@ func _internal_getCurrentGroupCall(account: Account, reference: InternalGroupCal
         if id.namespace != Namespaces.Message.Cloud {
             return .fail(.generic)
         }
-        inputCall = .inputGroupCallInviteMessage(msgId: id.id)
+        inputCall = .inputGroupCallInviteMessage(.init(msgId: id.id))
     }
     return account.network.request(Api.functions.phone.getGroupCall(call: inputCall, limit: 4))
     |> mapError { _ -> GetCurrentGroupCallError in
@@ -256,9 +256,9 @@ func _internal_getCurrentGroupCallInfo(account: Account, reference: InternalGrou
     let inputCall: Api.InputGroupCall
     switch reference {
     case let .id(id, accessHash):
-        inputCall = .inputGroupCall(id: id, accessHash: accessHash)
+        inputCall = .inputGroupCall(.init(id: id, accessHash: accessHash))
     case let .link(slug):
-        inputCall = .inputGroupCallSlug(slug: slug)
+        inputCall = .inputGroupCallSlug(.init(slug: slug))
     case let .message(id):
         if id.peerId.namespace != Namespaces.Peer.CloudUser {
             return .single(nil)
@@ -266,7 +266,7 @@ func _internal_getCurrentGroupCallInfo(account: Account, reference: InternalGrou
         if id.namespace != Namespaces.Message.Cloud {
             return .single(nil)
         }
-        inputCall = .inputGroupCallInviteMessage(msgId: id.id)
+        inputCall = .inputGroupCallInviteMessage(.init(msgId: id.id))
     }
     return account.network.request(Api.functions.phone.getGroupCall(call: inputCall, limit: 4))
     |> map(Optional.init)
@@ -375,7 +375,7 @@ public enum StartScheduledGroupCallError {
 }
 
 func _internal_startScheduledGroupCall(account: Account, peerId: PeerId, callId: Int64, accessHash: Int64) -> Signal<GroupCallInfo, StartScheduledGroupCallError> {
-    return account.network.request(Api.functions.phone.startScheduledGroupCall(call: .inputGroupCall(id: callId, accessHash: accessHash)))
+    return account.network.request(Api.functions.phone.startScheduledGroupCall(call: .inputGroupCall(.init(id: callId, accessHash: accessHash))))
     |> mapError { error -> StartScheduledGroupCallError in
         return .generic
     }
@@ -1023,7 +1023,7 @@ func _internal_removeGroupCallBlockchainParticipants(account: Account, callId: I
     case .cleanup:
         flags |= 1 << 0
     }
-    return account.network.request(Api.functions.phone.deleteConferenceCallParticipants(flags: flags, call: .inputGroupCall(id: callId, accessHash: accessHash), ids: participantIds, block: Buffer(data: block)))
+    return account.network.request(Api.functions.phone.deleteConferenceCallParticipants(flags: flags, call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), ids: participantIds, block: Buffer(data: block)))
     |> map { updates -> RemoveGroupCallBlockchainParticipantsResult in
         account.stateManager.addUpdates(updates)
         return .success
@@ -1039,7 +1039,7 @@ public struct JoinGroupCallAsScreencastResult {
 }
 
 func _internal_joinGroupCallAsScreencast(account: Account, callId: Int64, accessHash: Int64, joinPayload: String) -> Signal<JoinGroupCallAsScreencastResult, JoinGroupCallError> {
-    return account.network.request(Api.functions.phone.joinGroupCallPresentation(call: .inputGroupCall(id: callId, accessHash: accessHash), params: .dataJSON(.init(data: joinPayload))))
+    return account.network.request(Api.functions.phone.joinGroupCallPresentation(call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), params: .dataJSON(.init(data: joinPayload))))
     |> mapError { _ -> JoinGroupCallError in
         return .generic
     }
@@ -1088,7 +1088,7 @@ public enum LeaveGroupCallAsScreencastError {
 }
 
 func _internal_leaveGroupCallAsScreencast(account: Account, callId: Int64, accessHash: Int64) -> Signal<Never, LeaveGroupCallAsScreencastError> {
-    return account.network.request(Api.functions.phone.leaveGroupCallPresentation(call: .inputGroupCall(id: callId, accessHash: accessHash)))
+    return account.network.request(Api.functions.phone.leaveGroupCallPresentation(call: .inputGroupCall(.init(id: callId, accessHash: accessHash))))
     |> mapError { _ -> LeaveGroupCallAsScreencastError in
         return .generic
     }
@@ -1104,7 +1104,7 @@ public enum LeaveGroupCallError {
 }
 
 func _internal_leaveGroupCall(account: Account, callId: Int64, accessHash: Int64, source: UInt32) -> Signal<Never, LeaveGroupCallError> {
-    return account.network.request(Api.functions.phone.leaveGroupCall(call: .inputGroupCall(id: callId, accessHash: accessHash), source: Int32(bitPattern: source)))
+    return account.network.request(Api.functions.phone.leaveGroupCall(call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), source: Int32(bitPattern: source)))
     |> mapError { _ -> LeaveGroupCallError in
         return .generic
     }
@@ -1120,7 +1120,7 @@ public enum StopGroupCallError {
 }
 
 func _internal_stopGroupCall(account: Account, peerId: PeerId?, callId: Int64, accessHash: Int64) -> Signal<Never, StopGroupCallError> {
-    return account.network.request(Api.functions.phone.discardGroupCall(call: .inputGroupCall(id: callId, accessHash: accessHash)))
+    return account.network.request(Api.functions.phone.discardGroupCall(call: .inputGroupCall(.init(id: callId, accessHash: accessHash))))
     |> mapError { _ -> StopGroupCallError in
         return .generic
     }
@@ -1164,7 +1164,7 @@ func _internal_stopGroupCall(account: Account, peerId: PeerId?, callId: Int64, a
 }
 
 func _internal_checkGroupCall(account: Account, callId: Int64, accessHash: Int64, ssrcs: [UInt32]) -> Signal<[UInt32], NoError> {
-    return account.network.request(Api.functions.phone.checkGroupCall(call: .inputGroupCall(id: callId, accessHash: accessHash), sources: ssrcs.map(Int32.init(bitPattern:))))
+    return account.network.request(Api.functions.phone.checkGroupCall(call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), sources: ssrcs.map(Int32.init(bitPattern:))))
     |> `catch` { _ -> Signal<[Int32], NoError> in
         return .single([])
     }
@@ -2495,7 +2495,8 @@ public final class GroupCallParticipantsContext {
                     switch update {
                     case let .updateGroupCallParticipants(call, participants, version):
                         switch call {
-                        case let .inputGroupCall(updateCallId, _):
+                        case let .inputGroupCall(inputGroupCallData):
+                            let updateCallId = inputGroupCallData.id
                             if updateCallId != id {
                                 continue loop
                             }
@@ -2507,9 +2508,9 @@ public final class GroupCallParticipantsContext {
                         break
                     }
                 }
-                
+
                 strongSelf.addUpdates(updates: stateUpdates)
-                
+
                 strongSelf.account.stateManager.addUpdates(updates)
             } else {
                 strongSelf.stateValue.overlayState.pendingMuteStateChanges.removeValue(forKey: peerId)
@@ -2583,7 +2584,8 @@ public final class GroupCallParticipantsContext {
                     switch update {
                     case let .updateGroupCallParticipants(call, participants, version):
                         switch call {
-                        case let .inputGroupCall(updateCallId, _):
+                        case let .inputGroupCall(inputGroupCallData):
+                            let updateCallId = inputGroupCallData.id
                             if updateCallId != id {
                                 continue loop
                             }
@@ -2808,7 +2810,7 @@ func _internal_inviteToGroupCall(account: Account, callId: Int64, accessHash: In
             return .fail(.generic)
         }
         
-        return account.network.request(Api.functions.phone.inviteToGroupCall(call: .inputGroupCall(id: callId, accessHash: accessHash), users: [apiUser]))
+        return account.network.request(Api.functions.phone.inviteToGroupCall(call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), users: [apiUser]))
         |> mapError { _ -> InviteToGroupCallError in
             return .generic
         }
@@ -2882,7 +2884,7 @@ public enum EditGroupCallTitleError {
 }
 
 func _internal_editGroupCallTitle(account: Account, callId: Int64, accessHash: Int64, title: String) -> Signal<Never, EditGroupCallTitleError> {
-    return account.network.request(Api.functions.phone.editGroupCallTitle(call: .inputGroupCall(id: callId, accessHash: accessHash), title: title)) |> mapError { _ -> EditGroupCallTitleError in
+    return account.network.request(Api.functions.phone.editGroupCallTitle(call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), title: title)) |> mapError { _ -> EditGroupCallTitleError in
         return .generic
     }
     |> mapToSignal { result -> Signal<Never, EditGroupCallTitleError> in
@@ -3058,7 +3060,7 @@ public final class AudioBroadcastDataSource {
 }
 
 func _internal_getAudioBroadcastDataSource(account: Account, callId: Int64, accessHash: Int64) -> Signal<AudioBroadcastDataSource?, NoError> {
-    return account.network.request(Api.functions.phone.getGroupCall(call: .inputGroupCall(id: callId, accessHash: accessHash), limit: 4))
+    return account.network.request(Api.functions.phone.getGroupCall(call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), limit: 4))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.phone.GroupCall?, NoError> in
         return .single(nil)
@@ -3109,7 +3111,7 @@ func _internal_getAudioBroadcastPart(dataSource: AudioBroadcastDataSource, callI
         return .single(GetAudioBroadcastPartResult(status: .notReady, responseTimestamp: Double(timestampIdMilliseconds) / 1000.0))
     }
     
-    return dataSource.download.requestWithAdditionalData(Api.functions.upload.getFile(flags: 0, location: .inputGroupCallStream(flags: 0, call: .inputGroupCall(id: callId, accessHash: accessHash), timeMs: timestampIdMilliseconds, scale: scale, videoChannel: nil, videoQuality: nil), offset: 0, limit: 128 * 1024), automaticFloodWait: false, failOnServerErrors: true)
+    return dataSource.download.requestWithAdditionalData(Api.functions.upload.getFile(flags: 0, location: .inputGroupCallStream(.init(flags: 0, call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), timeMs: timestampIdMilliseconds, scale: scale, videoChannel: nil, videoQuality: nil)), offset: 0, limit: 128 * 1024), automaticFloodWait: false, failOnServerErrors: true)
     |> map { result, responseTimestamp -> GetAudioBroadcastPartResult in
         switch result {
         case let .file(_, _, bytes):
@@ -3162,7 +3164,7 @@ func _internal_getVideoBroadcastPart(dataSource: AudioBroadcastDataSource, callI
         return .single(GetAudioBroadcastPartResult(status: .notReady, responseTimestamp: Double(timestampIdMilliseconds) / 1000.0))
     }
 
-    return dataSource.download.requestWithAdditionalData(Api.functions.upload.getFile(flags: 0, location: .inputGroupCallStream(flags: 1 << 0, call: .inputGroupCall(id: callId, accessHash: accessHash), timeMs: timestampIdMilliseconds, scale: scale, videoChannel: channelId, videoQuality: quality), offset: 0, limit: 512 * 1024), automaticFloodWait: false, failOnServerErrors: true)
+    return dataSource.download.requestWithAdditionalData(Api.functions.upload.getFile(flags: 0, location: .inputGroupCallStream(.init(flags: 1 << 0, call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), timeMs: timestampIdMilliseconds, scale: scale, videoChannel: channelId, videoQuality: quality)), offset: 0, limit: 512 * 1024), automaticFloodWait: false, failOnServerErrors: true)
     |> map { result, responseTimestamp -> GetAudioBroadcastPartResult in
         switch result {
         case let .file(_, _, bytes):
@@ -3339,7 +3341,7 @@ func _internal_createConferenceCall(postbox: Postbox, network: Network, accountP
                     
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                     
-                    let speakerInvite: Signal<EngineCreatedGroupCall, CreateConferenceCallError> = network.request(Api.functions.phone.exportGroupCallInvite(flags: 1 << 0, call: .inputGroupCall(id: info.id, accessHash: info.accessHash)))
+                    let speakerInvite: Signal<EngineCreatedGroupCall, CreateConferenceCallError> = network.request(Api.functions.phone.exportGroupCallInvite(flags: 1 << 0, call: .inputGroupCall(.init(id: info.id, accessHash: info.accessHash))))
                     |> map(Optional.init)
                     |> `catch` { _ -> Signal<Api.phone.ExportedGroupCallInvite?, NoError> in
                         return .single(nil)
@@ -3426,7 +3428,7 @@ func _internal_pollConferenceCallBlockchain(network: Network, reference: Interna
 }
 
 func _internal_sendConferenceCallBroadcast(account: Account, callId: Int64, accessHash: Int64, block: Data) -> Signal<Never, NoError> {
-    return account.network.request(Api.functions.phone.sendConferenceCallBroadcast(call: .inputGroupCall(id: callId, accessHash: accessHash), block: Buffer(data: block)))
+    return account.network.request(Api.functions.phone.sendConferenceCallBroadcast(call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), block: Buffer(data: block)))
     |> retry(retryOnError: { _ in
         return true
     }, delayIncrement: 0.1, maxDelay: 1.0, maxRetries: 5, onQueue: Queue.concurrentDefaultQueue())

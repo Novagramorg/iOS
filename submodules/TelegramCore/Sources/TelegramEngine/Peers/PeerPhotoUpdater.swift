@@ -58,7 +58,7 @@ public struct UploadedPeerPhotoData {
     }
     
     static func withResource(_ resource: MediaResource) -> UploadedPeerPhotoData {
-        return UploadedPeerPhotoData(resource: resource, content: .result(.inputFile(.inputFile(id: 0, parts: 0, name: "", md5Checksum: ""))), local: true)
+        return UploadedPeerPhotoData(resource: resource, content: .result(.inputFile(.inputFile(.init(id: 0, parts: 0, name: "", md5Checksum: "")))), local: true)
     }
 }
 
@@ -164,8 +164,8 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                                                 case let .progress(progress):
                                                     let mappedProgress = 0.2 + progress * 0.8
                                                     return .single((.progress(mappedProgress), photoResult.resource, videoResult.resource))
-                                                case let .inputFile(file):
-                                                    videoFile = file
+                                                case let .inputFile(videoInputFile):
+                                                    videoFile = videoInputFile
                                                     break
                                                 default:
                                                     return .fail(.generic)
@@ -339,9 +339,9 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                                                                         
                                     let request: Signal<Api.Updates, MTRpcError>
                                     if let peer = peer as? TelegramGroup {
-                                        request = network.request(Api.functions.messages.editChatPhoto(chatId: peer.id.id._internalGetInt64Value(), photo: .inputChatUploadedPhoto(flags: flags, file: file, video: videoFile, videoStartTs: videoStartTimestamp, videoEmojiMarkup: videoEmojiMarkup)))
+                                        request = network.request(Api.functions.messages.editChatPhoto(chatId: peer.id.id._internalGetInt64Value(), photo: .inputChatUploadedPhoto(.init(flags: flags, file: file, video: videoFile, videoStartTs: videoStartTimestamp, videoEmojiMarkup: videoEmojiMarkup))))
                                     } else if let peer = peer as? TelegramChannel, let inputChannel = apiInputChannel(peer) {
-                                        request = network.request(Api.functions.channels.editPhoto(channel: inputChannel, photo: .inputChatUploadedPhoto(flags: flags, file: file, video: videoFile, videoStartTs: videoStartTimestamp, videoEmojiMarkup: videoEmojiMarkup)))
+                                        request = network.request(Api.functions.channels.editPhoto(channel: inputChannel, photo: .inputChatUploadedPhoto(.init(flags: flags, file: file, video: videoFile, videoStartTs: videoStartTimestamp, videoEmojiMarkup: videoEmojiMarkup))))
                                     } else {
                                         assertionFailure()
                                         request = .complete()

@@ -38,7 +38,7 @@ extension PeerReference {
     
     var inputChannel: Api.InputChannel? {
         if case let .channel(id, accessHash) = self {
-            return .inputChannel(channelId: id, accessHash: accessHash)
+            return .inputChannel(.init(channelId: id, accessHash: accessHash))
         } else {
             return nil
         }
@@ -88,7 +88,7 @@ func apiInputPeerOrSelf(_ peer: Peer, accountPeerId: PeerId) -> Api.InputPeer? {
 
 func apiInputChannel(_ peer: Peer) -> Api.InputChannel? {
     if let channel = peer as? TelegramChannel, let accessHash = channel.accessHash {
-        return Api.InputChannel.inputChannel(channelId: channel.id.id._internalGetInt64Value(), accessHash: accessHash.value)
+        return Api.InputChannel.inputChannel(.init(channelId: channel.id.id._internalGetInt64Value(), accessHash: accessHash.value))
     } else {
         return nil
     }
@@ -104,7 +104,7 @@ func apiInputUser(_ peer: Peer) -> Api.InputUser? {
 
 func apiInputSecretChat(_ peer: Peer) -> Api.InputEncryptedChat? {
     if let chat = peer as? TelegramSecretChat {
-        return Api.InputEncryptedChat.inputEncryptedChat(chatId: Int32(peer.id.id._internalGetInt64Value()), accessHash: chat.accessHash)
+        return Api.InputEncryptedChat.inputEncryptedChat(.init(chatId: Int32(peer.id.id._internalGetInt64Value()), accessHash: chat.accessHash))
     } else {
         return nil
     }

@@ -182,11 +182,11 @@ extension ChatTheme {
     var apiChatTheme: Api.InputChatTheme {
         switch self {
         case let .emoticon(emoticon):
-            return .inputChatTheme(emoticon: emoticon)
+            return .inputChatTheme(.init(emoticon: emoticon))
         case let .gift(gift, _):
             switch gift {
             case let .unique(uniqueGift):
-                return .inputChatThemeUniqueGift(slug: uniqueGift.slug)
+                return .inputChatThemeUniqueGift(.init(slug: uniqueGift.slug))
             default:
                 fatalError()
             }

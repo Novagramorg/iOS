@@ -79,14 +79,16 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         return TelegramMediaAction(action: .geoProximityReached(from: fromId.peerId, to: toId.peerId, distance: distance))
     case let .messageActionGroupCall(_, call, duration):
         switch call {
-        case let .inputGroupCall(id, accessHash):
+        case let .inputGroupCall(inputGroupCallData):
+            let (id, accessHash) = (inputGroupCallData.id, inputGroupCallData.accessHash)
             return TelegramMediaAction(action: .groupPhoneCall(callId: id, accessHash: accessHash, scheduleDate: nil, duration: duration))
         case .inputGroupCallSlug, .inputGroupCallInviteMessage:
             return nil
         }
     case let .messageActionInviteToGroupCall(call, userIds):
         switch call {
-        case let .inputGroupCall(id, accessHash):
+        case let .inputGroupCall(inputGroupCallData):
+            let (id, accessHash) = (inputGroupCallData.id, inputGroupCallData.accessHash)
             return TelegramMediaAction(action: .inviteToGroupPhoneCall(callId: id, accessHash: accessHash, peerIds: userIds.map { userId in
                 PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
             }))
@@ -97,7 +99,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         return TelegramMediaAction(action: .messageAutoremoveTimeoutUpdated(period: period, autoSettingSource: autoSettingFrom.flatMap { PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value($0)) }))
     case let .messageActionGroupCallScheduled(call, scheduleDate):
         switch call {
-        case let .inputGroupCall(id, accessHash):
+        case let .inputGroupCall(inputGroupCallData):
+            let (id, accessHash) = (inputGroupCallData.id, inputGroupCallData.accessHash)
             return TelegramMediaAction(action: .groupPhoneCall(callId: id, accessHash: accessHash, scheduleDate: scheduleDate, duration: nil))
         case .inputGroupCallSlug, .inputGroupCallInviteMessage:
             return nil

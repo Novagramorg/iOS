@@ -677,7 +677,7 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                 case .inputPeerSelf:
                     missingUsers.append(.inputUserSelf)
                 case let .inputPeerChannel(channelId, accessHash):
-                    missingChannels.append(.inputChannel(channelId: channelId, accessHash: accessHash))
+                    missingChannels.append(.inputChannel(.init(channelId: channelId, accessHash: accessHash)))
                 case let .inputPeerChat(id):
                     missingGroups.append(id)
                 case .inputPeerEmpty:
@@ -783,7 +783,7 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
 }
 
 private func loadAndStorePeerChatInfos(accountPeerId: PeerId, postbox: Postbox, network: Network, peers: [Api.InputPeer]) -> Signal<Never, NoError> {
-    let signal = network.request(Api.functions.messages.getPeerDialogs(peers: peers.map(Api.InputDialogPeer.inputDialogPeer(peer:))))
+    let signal = network.request(Api.functions.messages.getPeerDialogs(peers: peers.map { .inputDialogPeer(.init(peer: $0)) }))
     |> map(Optional.init)
         
     return signal

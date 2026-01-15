@@ -762,7 +762,7 @@ final class AlbumCoverResource: TelegramMediaResource, MediaResourceWithWebFileR
         var flags: Int32 = 0
         var document: Api.InputDocument?
         if let file = self.file, let resource = file.media.resource as? CloudDocumentMediaResource {
-            document = .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data()))
+            document = .inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data())))
             flags |= 1 << 0
         }
         var requestTitle: String?

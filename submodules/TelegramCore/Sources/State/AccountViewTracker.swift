@@ -88,7 +88,7 @@ private func fetchWebpage(account: Account, messageId: MessageId, threadId: Int6
             } else {
                 switch inputPeer {
                     case let .inputPeerChannel(channelId, accessHash):
-                        messages = account.network.request(Api.functions.channels.getMessages(channel: Api.InputChannel.inputChannel(channelId: channelId, accessHash: accessHash), id: [Api.InputMessage.inputMessageID(id: messageId.id)]))
+                        messages = account.network.request(Api.functions.channels.getMessages(channel: Api.InputChannel.inputChannel(.init(channelId: channelId, accessHash: accessHash)), id: [Api.InputMessage.inputMessageID(id: messageId.id)]))
                     default:
                         messages = account.network.request(Api.functions.messages.getMessages(id: [Api.InputMessage.inputMessageID(id: messageId.id)]))
                 }
@@ -950,7 +950,7 @@ public final class AccountViewTracker {
                                     request = account.network.request(Api.functions.messages.readMessageContents(id: messageIds.map { $0.id }))
                                     |> map { _ in true }
                                 case let .inputPeerChannel(channelId, accessHash):
-                                    request = account.network.request(Api.functions.channels.readMessageContents(channel: .inputChannel(channelId: channelId, accessHash: accessHash), id: messageIds.map { $0.id }))
+                                    request = account.network.request(Api.functions.channels.readMessageContents(channel: .inputChannel(.init(channelId: channelId, accessHash: accessHash)), id: messageIds.map { $0.id }))
                                     |> map { _ in true }
                                 default:
                                     return .complete()

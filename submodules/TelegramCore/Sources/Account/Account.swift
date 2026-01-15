@@ -866,7 +866,7 @@ func verifyPassword(_ account: UnauthorizedAccount, password: String) -> Signal<
         let kdfResult = passwordKDF(encryptionProvider: account.network.encryptionProvider, password: password, derivation: currentPasswordDerivation, srpSessionData: srpSessionData)
         
         if let kdfResult = kdfResult {
-            return account.network.request(Api.functions.auth.checkPassword(password: .inputCheckPasswordSRP(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1))), automaticFloodWait: false)
+            return account.network.request(Api.functions.auth.checkPassword(password: .inputCheckPasswordSRP(.init(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1)))), automaticFloodWait: false)
         } else {
             return .fail(MTRpcError(errorCode: 400, errorDescription: "KDF_ERROR"))
         }
@@ -1525,7 +1525,7 @@ public class Account {
                     return .complete()
                 } else {
                     return network.request(Api.functions.help.saveAppLog(events: events.map { event -> Api.InputAppEvent in
-                        return .inputAppEvent(time: event.0, type: "", peer: 0, data: .jsonString(value: event.1))
+                        return .inputAppEvent(.init(time: event.0, type: "", peer: 0, data: .jsonString(value: event.1)))
                     }))
                     |> ignoreValues
                     |> `catch` { _ -> Signal<Never, NoError> in

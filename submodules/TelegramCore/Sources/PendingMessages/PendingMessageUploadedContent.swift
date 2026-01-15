@@ -181,7 +181,7 @@ func mediaContentToUpload(accountPeerId: PeerId, network: Network, postbox: Post
     }
     if let image = media as? TelegramMediaImage, let largest = largestImageRepresentation(image.representations) {
         if peerId.namespace == Namespaces.Peer.SecretChat, let resource = largest.resource as? SecretFileMediaResource {
-            return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .secretMedia(.inputEncryptedFile(id: resource.fileId, accessHash: resource.accessHash), resource.decryptedSize, resource.key), reuploadInfo: nil, cacheReferenceKey: nil)))
+            return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .secretMedia(.inputEncryptedFile(.init(id: resource.fileId, accessHash: resource.accessHash)), resource.decryptedSize, resource.key), reuploadInfo: nil, cacheReferenceKey: nil)))
         }
         if peerId.namespace != Namespaces.Peer.SecretChat, let reference = image.reference, case let .cloud(id, accessHash, maybeFileReference) = reference, let fileReference = maybeFileReference {
             return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(Api.InputMedia.inputMediaPhoto(flags: 0, id: Api.InputPhoto.inputPhoto(id: id, accessHash: accessHash, fileReference: Buffer(data: fileReference)), ttlSeconds: nil), text), reuploadInfo: nil, cacheReferenceKey: nil)))
@@ -244,7 +244,7 @@ func mediaContentToUpload(accountPeerId: PeerId, network: Network, postbox: Post
                                     flags |= 1 << 4
                                 }
                                 
-                                return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(Api.InputMedia.inputMediaDocument(flags: flags, id: Api.InputDocument.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: reference)), videoCover: nil, videoTimestamp: videoTimestamp, ttlSeconds: nil, query: nil), text), reuploadInfo: nil, cacheReferenceKey: nil)))
+                                return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(Api.InputMedia.inputMediaDocument(flags: flags, id: Api.InputDocument.inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: reference))), videoCover: nil, videoTimestamp: videoTimestamp, ttlSeconds: nil, query: nil), text), reuploadInfo: nil, cacheReferenceKey: nil)))
                             } else {
                                 return .fail(.generic)
                             }
@@ -265,7 +265,7 @@ func mediaContentToUpload(accountPeerId: PeerId, network: Network, postbox: Post
                     }
                 }
                 
-                return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(Api.InputMedia.inputMediaDocument(flags: flags, id: Api.InputDocument.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data())), videoCover: nil, videoTimestamp: videoTimestamp, ttlSeconds: nil, query: emojiSearchQuery), text), reuploadInfo: nil, cacheReferenceKey: nil)))
+                return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(Api.InputMedia.inputMediaDocument(flags: flags, id: Api.InputDocument.inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data()))), videoCover: nil, videoTimestamp: videoTimestamp, ttlSeconds: nil, query: emojiSearchQuery), text), reuploadInfo: nil, cacheReferenceKey: nil)))
             }
         } else {
             return uploadedMediaFileContent(network: network, postbox: postbox, auxiliaryMethods: auxiliaryMethods, transformOutgoingMessageMedia: transformOutgoingMessageMedia, messageMediaPreuploadManager: messageMediaPreuploadManager, forceReupload: forceReupload, isGrouped: isGrouped, isPaid: false, passFetchProgress: passFetchProgress, forceNoBigParts: forceNoBigParts, peerId: peerId, messageId: messageId, text: text, attributes: attributes, autoremoveMessageAttribute: autoremoveMessageAttribute, autoclearMessageAttribute: autoclearMessageAttribute, file: file)
@@ -287,11 +287,11 @@ func mediaContentToUpload(accountPeerId: PeerId, network: Network, postbox: Post
             geoFlags |= 1 << 0
         }
         if let liveBroadcastingTimeout = map.liveBroadcastingTimeout {
-            input = .inputMediaGeoLive(flags: flags, geoPoint: Api.InputGeoPoint.inputGeoPoint(flags: geoFlags, lat: map.latitude, long: map.longitude, accuracyRadius: map.accuracyRadius.flatMap({ Int32($0) })), heading: map.heading, period: liveBroadcastingTimeout, proximityNotificationRadius: map.liveProximityNotificationRadius.flatMap({ Int32($0) }))
+            input = .inputMediaGeoLive(flags: flags, geoPoint: Api.InputGeoPoint.inputGeoPoint(.init(flags: geoFlags, lat: map.latitude, long: map.longitude, accuracyRadius: map.accuracyRadius.flatMap({ Int32($0) }))), heading: map.heading, period: liveBroadcastingTimeout, proximityNotificationRadius: map.liveProximityNotificationRadius.flatMap({ Int32($0) }))
         } else if let venue = map.venue {
-            input = .inputMediaVenue(geoPoint: Api.InputGeoPoint.inputGeoPoint(flags: geoFlags, lat: map.latitude, long: map.longitude, accuracyRadius: map.accuracyRadius.flatMap({ Int32($0) })), title: venue.title, address: venue.address ?? "", provider: venue.provider ?? "", venueId: venue.id ?? "", venueType: venue.type ?? "")
+            input = .inputMediaVenue(geoPoint: Api.InputGeoPoint.inputGeoPoint(.init(flags: geoFlags, lat: map.latitude, long: map.longitude, accuracyRadius: map.accuracyRadius.flatMap({ Int32($0) }))), title: venue.title, address: venue.address ?? "", provider: venue.provider ?? "", venueId: venue.id ?? "", venueType: venue.type ?? "")
         } else {
-            input = .inputMediaGeoPoint(geoPoint: Api.InputGeoPoint.inputGeoPoint(flags: geoFlags, lat: map.latitude, long: map.longitude, accuracyRadius: map.accuracyRadius.flatMap({ Int32($0) })))
+            input = .inputMediaGeoPoint(geoPoint: Api.InputGeoPoint.inputGeoPoint(.init(flags: geoFlags, lat: map.latitude, long: map.longitude, accuracyRadius: map.accuracyRadius.flatMap({ Int32($0) }))))
         }
         return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(input, text), reuploadInfo: nil, cacheReferenceKey: nil)))
     } else if let poll = media as? TelegramMediaPoll {
@@ -657,7 +657,7 @@ if "".isEmpty {
                                     var stickersValue: [Api.InputDocument] = []
                                     for file in attribute.files {
                                         if let resource = file.resource as? CloudDocumentMediaResource, let fileReference = resource.fileReference {
-                                            stickersValue.append(Api.InputDocument.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: fileReference)))
+                                            stickersValue.append(Api.InputDocument.inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: fileReference))))
                                         }
                                     }
                                     if !stickersValue.isEmpty {
@@ -947,7 +947,7 @@ private func uploadedMediaFileContent(network: Network, postbox: Postbox, auxili
                         
                         return .single(.progress(PendingMessageUploadedContentProgress(progress: 1.0)))
                         |> then(
-                            .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(Api.InputMedia.inputMediaDocument(flags: flags, id: Api.InputDocument.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: fileReference)), videoCover: videoCoverPhoto, videoTimestamp: videoTimestamp, ttlSeconds: ttlSeconds, query: nil), text), reuploadInfo: nil, cacheReferenceKey: nil)))
+                            .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(Api.InputMedia.inputMediaDocument(flags: flags, id: Api.InputDocument.inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: fileReference))), videoCover: videoCoverPhoto, videoTimestamp: videoTimestamp, ttlSeconds: ttlSeconds, query: nil), text), reuploadInfo: nil, cacheReferenceKey: nil)))
                         )
                     }
                 }
@@ -1195,7 +1195,7 @@ private func uploadedMediaFileContent(network: Network, postbox: Postbox, auxili
                                 var stickersValue: [Api.InputDocument] = []
                                 for file in attribute.files {
                                     if let resource = file.resource as? CloudDocumentMediaResource, let fileReference = resource.fileReference {
-                                        stickersValue.append(Api.InputDocument.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: fileReference)))
+                                        stickersValue.append(Api.InputDocument.inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: fileReference))))
                                     }
                                 }
                                 if !stickersValue.isEmpty {
@@ -1248,7 +1248,7 @@ private func uploadedMediaFileContent(network: Network, postbox: Postbox, auxili
                                                     flags |= (1 << 4)
                                                 }
                                             
-                                                let result: PendingMessageUploadedContentResult = .content(PendingMessageUploadedContentAndReuploadInfo(content: .media(.inputMediaDocument(flags: flags, id: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: fileReference)), videoCover: videoCoverPhoto, videoTimestamp: videoTimestamp, ttlSeconds: ttlSeconds, query: nil), text), reuploadInfo: nil, cacheReferenceKey: nil))
+                                                let result: PendingMessageUploadedContentResult = .content(PendingMessageUploadedContentAndReuploadInfo(content: .media(.inputMediaDocument(flags: flags, id: .inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: fileReference))), videoCover: videoCoverPhoto, videoTimestamp: videoTimestamp, ttlSeconds: ttlSeconds, query: nil), text), reuploadInfo: nil, cacheReferenceKey: nil))
                                                 if let _ = ttlSeconds {
                                                     return .single(result)
                                                 } else {

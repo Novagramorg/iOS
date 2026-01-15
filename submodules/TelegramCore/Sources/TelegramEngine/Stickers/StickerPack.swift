@@ -85,7 +85,7 @@ func _internal_stickerPacksAttachedToMedia(account: Account, media: AnyMediaRefe
         inputMedia = .inputStickeredMediaPhoto(id: Api.InputPhoto.inputPhoto(id: imageId, accessHash: accessHash, fileReference: Buffer(data: fileReference ?? Data())))
         resourceReference = imageReference.resourceReference(representation.resource)
     } else if let fileReference = media.concrete(TelegramMediaFile.self), let resource = fileReference.media.resource as? CloudDocumentMediaResource {
-        inputMedia = .inputStickeredMediaDocument(id: Api.InputDocument.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data())))
+        inputMedia = .inputStickeredMediaDocument(id: Api.InputDocument.inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data()))))
         resourceReference = fileReference.resourceReference(fileReference.media.resource)
     } else {
         return .single([])
@@ -103,7 +103,7 @@ func _internal_stickerPacksAttachedToMedia(account: Account, media: AnyMediaRefe
                 if let imageReference = media.concrete(TelegramMediaImage.self), let reference = imageReference.media.reference, case let .cloud(imageId, accessHash, _) = reference, let _ = largestImageRepresentation(imageReference.media.representations) {
                     inputMedia = .inputStickeredMediaPhoto(id: Api.InputPhoto.inputPhoto(id: imageId, accessHash: accessHash, fileReference: Buffer(data: updatedReference)))
                 } else if let fileReference = media.concrete(TelegramMediaFile.self), let resource = fileReference.media.resource as? CloudDocumentMediaResource {
-                    inputMedia = .inputStickeredMediaDocument(id: Api.InputDocument.inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: updatedReference)))
+                    inputMedia = .inputStickeredMediaDocument(id: Api.InputDocument.inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: updatedReference))))
                 } else {
                     return .single([])
                 }

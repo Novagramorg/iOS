@@ -1648,7 +1648,7 @@ public extension TelegramEngine {
         }
         
         public func getCollectibleUsernameInfo(username: String) -> Signal<TelegramCollectibleItemInfo?, NoError> {
-            return self.account.network.request(Api.functions.fragment.getCollectibleInfo(collectible: .inputCollectibleUsername(username: username)))
+            return self.account.network.request(Api.functions.fragment.getCollectibleInfo(collectible: .inputCollectibleUsername(.init(username: username))))
             |> map(Optional.init)
             |> `catch` { _ -> Signal<Api.fragment.CollectibleInfo?, NoError> in
                 return .single(nil)
@@ -1673,7 +1673,7 @@ public extension TelegramEngine {
         }
         
         public func getCollectiblePhoneNumberInfo(phoneNumber: String) -> Signal<TelegramCollectibleItemInfo?, NoError> {
-            return self.account.network.request(Api.functions.fragment.getCollectibleInfo(collectible: .inputCollectiblePhone(phone: phoneNumber)))
+            return self.account.network.request(Api.functions.fragment.getCollectibleInfo(collectible: .inputCollectiblePhone(.init(phone: phoneNumber))))
             |> map(Optional.init)
             |> `catch` { _ -> Signal<Api.fragment.CollectibleInfo?, NoError> in
                 return .single(nil)

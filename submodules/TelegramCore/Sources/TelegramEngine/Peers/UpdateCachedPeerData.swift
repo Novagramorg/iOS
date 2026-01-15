@@ -559,7 +559,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                     var updatedActiveCall: CachedChannelData.ActiveCall?
                                     if let inputCall = chatFullCall {
                                         switch inputCall {
-                                        case let .inputGroupCall(id, accessHash):
+                                        case let .inputGroupCall(inputGroupCallData):
+                                            let (id, accessHash) = (inputGroupCallData.id, inputGroupCallData.accessHash)
                                             updatedActiveCall = CachedChannelData.ActiveCall(id: id, accessHash: accessHash, title: previous.activeCall?.title, scheduleTimestamp: previous.activeCall?.scheduleTimestamp, subscribedToScheduled: previous.activeCall?.subscribedToScheduled ?? false, isStream: previous.activeCall?.isStream)
                                         case .inputGroupCallSlug, .inputGroupCallInviteMessage:
                                             break
@@ -828,7 +829,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                 var updatedActiveCall: CachedChannelData.ActiveCall?
                                                 if let inputCall = inputCall {
                                                     switch inputCall {
-                                                    case let .inputGroupCall(id, accessHash):
+                                                    case let .inputGroupCall(inputGroupCallData):
+                                                        let (id, accessHash) = (inputGroupCallData.id, inputGroupCallData.accessHash)
                                                         updatedActiveCall = CachedChannelData.ActiveCall(id: id, accessHash: accessHash, title: previous.activeCall?.title, scheduleTimestamp: previous.activeCall?.scheduleTimestamp, subscribedToScheduled: previous.activeCall?.subscribedToScheduled ?? false, isStream: previous.activeCall?.isStream)
                                                     case .inputGroupCallSlug, .inputGroupCallInviteMessage:
                                                         break

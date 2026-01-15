@@ -386,7 +386,7 @@ private func synchronizeReadMessageReactions(transaction: Transaction, postbox: 
 private func synchronizeUnseenPersonalMentionsTag(postbox: Postbox, network: Network, entry: InvalidatedMessageHistoryTagsSummaryEntry) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Signal<Void, NoError> in
         if let peer = transaction.getPeer(entry.key.peerId), let inputPeer = apiInputPeer(peer) {
-            return network.request(Api.functions.messages.getPeerDialogs(peers: [.inputDialogPeer(peer: inputPeer)]))
+            return network.request(Api.functions.messages.getPeerDialogs(peers: [.inputDialogPeer(.init(peer: inputPeer))]))
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.messages.PeerDialogs?, NoError> in
                     return .single(nil)
@@ -429,7 +429,7 @@ private func synchronizeUnseenPersonalMentionsTag(postbox: Postbox, network: Net
 private func synchronizeUnseenReactionsTag(postbox: Postbox, network: Network, entry: InvalidatedMessageHistoryTagsSummaryEntry) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Signal<Void, NoError> in
         if let peer = transaction.getPeer(entry.key.peerId), let inputPeer = apiInputPeer(peer) {
-            return network.request(Api.functions.messages.getPeerDialogs(peers: [.inputDialogPeer(peer: inputPeer)]))
+            return network.request(Api.functions.messages.getPeerDialogs(peers: [.inputDialogPeer(.init(peer: inputPeer))]))
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.messages.PeerDialogs?, NoError> in
                     return .single(nil)

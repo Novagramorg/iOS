@@ -391,7 +391,19 @@ public extension Api {
 }
 public extension Api {
     enum InputAppEvent: TypeConstructorDescription {
-        case inputAppEvent(time: Double, type: String, peer: Int64, data: Api.JSONValue)
+        public class Cons_inputAppEvent {
+            public var time: Double
+            public var type: String
+            public var peer: Int64
+            public var data: Api.JSONValue
+            public init(time: Double, type: String, peer: Int64, data: Api.JSONValue) {
+                self.time = time
+                self.type = type
+                self.peer = peer
+                self.data = data
+            }
+        }
+        case inputAppEvent(Cons_inputAppEvent)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -420,8 +432,24 @@ public extension Api {
 }
 public extension Api {
     indirect enum InputBotApp: TypeConstructorDescription {
-        case inputBotAppID(id: Int64, accessHash: Int64)
-        case inputBotAppShortName(botId: Api.InputUser, shortName: String)
+        public class Cons_inputBotAppID {
+            public var id: Int64
+            public var accessHash: Int64
+            public init(id: Int64, accessHash: Int64) {
+                self.id = id
+                self.accessHash = accessHash
+            }
+        }
+        public class Cons_inputBotAppShortName {
+            public var botId: Api.InputUser
+            public var shortName: String
+            public init(botId: Api.InputUser, shortName: String) {
+                self.botId = botId
+                self.shortName = shortName
+            }
+        }
+        case inputBotAppID(Cons_inputBotAppID)
+        case inputBotAppShortName(Cons_inputBotAppShortName)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -457,14 +485,134 @@ public extension Api {
 }
 public extension Api {
     enum InputBotInlineMessage: TypeConstructorDescription {
-        case inputBotInlineMessageGame(flags: Int32, replyMarkup: Api.ReplyMarkup?)
-        case inputBotInlineMessageMediaAuto(flags: Int32, message: String, entities: [Api.MessageEntity]?, replyMarkup: Api.ReplyMarkup?)
-        case inputBotInlineMessageMediaContact(flags: Int32, phoneNumber: String, firstName: String, lastName: String, vcard: String, replyMarkup: Api.ReplyMarkup?)
-        case inputBotInlineMessageMediaGeo(flags: Int32, geoPoint: Api.InputGeoPoint, heading: Int32?, period: Int32?, proximityNotificationRadius: Int32?, replyMarkup: Api.ReplyMarkup?)
-        case inputBotInlineMessageMediaInvoice(flags: Int32, title: String, description: String, photo: Api.InputWebDocument?, invoice: Api.Invoice, payload: Buffer, provider: String, providerData: Api.DataJSON, replyMarkup: Api.ReplyMarkup?)
-        case inputBotInlineMessageMediaVenue(flags: Int32, geoPoint: Api.InputGeoPoint, title: String, address: String, provider: String, venueId: String, venueType: String, replyMarkup: Api.ReplyMarkup?)
-        case inputBotInlineMessageMediaWebPage(flags: Int32, message: String, entities: [Api.MessageEntity]?, url: String, replyMarkup: Api.ReplyMarkup?)
-        case inputBotInlineMessageText(flags: Int32, message: String, entities: [Api.MessageEntity]?, replyMarkup: Api.ReplyMarkup?)
+        public class Cons_inputBotInlineMessageGame {
+            public var flags: Int32
+            public var replyMarkup: Api.ReplyMarkup?
+            public init(flags: Int32, replyMarkup: Api.ReplyMarkup?) {
+                self.flags = flags
+                self.replyMarkup = replyMarkup
+            }
+        }
+        public class Cons_inputBotInlineMessageMediaAuto {
+            public var flags: Int32
+            public var message: String
+            public var entities: [Api.MessageEntity]?
+            public var replyMarkup: Api.ReplyMarkup?
+            public init(flags: Int32, message: String, entities: [Api.MessageEntity]?, replyMarkup: Api.ReplyMarkup?) {
+                self.flags = flags
+                self.message = message
+                self.entities = entities
+                self.replyMarkup = replyMarkup
+            }
+        }
+        public class Cons_inputBotInlineMessageMediaContact {
+            public var flags: Int32
+            public var phoneNumber: String
+            public var firstName: String
+            public var lastName: String
+            public var vcard: String
+            public var replyMarkup: Api.ReplyMarkup?
+            public init(flags: Int32, phoneNumber: String, firstName: String, lastName: String, vcard: String, replyMarkup: Api.ReplyMarkup?) {
+                self.flags = flags
+                self.phoneNumber = phoneNumber
+                self.firstName = firstName
+                self.lastName = lastName
+                self.vcard = vcard
+                self.replyMarkup = replyMarkup
+            }
+        }
+        public class Cons_inputBotInlineMessageMediaGeo {
+            public var flags: Int32
+            public var geoPoint: Api.InputGeoPoint
+            public var heading: Int32?
+            public var period: Int32?
+            public var proximityNotificationRadius: Int32?
+            public var replyMarkup: Api.ReplyMarkup?
+            public init(flags: Int32, geoPoint: Api.InputGeoPoint, heading: Int32?, period: Int32?, proximityNotificationRadius: Int32?, replyMarkup: Api.ReplyMarkup?) {
+                self.flags = flags
+                self.geoPoint = geoPoint
+                self.heading = heading
+                self.period = period
+                self.proximityNotificationRadius = proximityNotificationRadius
+                self.replyMarkup = replyMarkup
+            }
+        }
+        public class Cons_inputBotInlineMessageMediaInvoice {
+            public var flags: Int32
+            public var title: String
+            public var description: String
+            public var photo: Api.InputWebDocument?
+            public var invoice: Api.Invoice
+            public var payload: Buffer
+            public var provider: String
+            public var providerData: Api.DataJSON
+            public var replyMarkup: Api.ReplyMarkup?
+            public init(flags: Int32, title: String, description: String, photo: Api.InputWebDocument?, invoice: Api.Invoice, payload: Buffer, provider: String, providerData: Api.DataJSON, replyMarkup: Api.ReplyMarkup?) {
+                self.flags = flags
+                self.title = title
+                self.description = description
+                self.photo = photo
+                self.invoice = invoice
+                self.payload = payload
+                self.provider = provider
+                self.providerData = providerData
+                self.replyMarkup = replyMarkup
+            }
+        }
+        public class Cons_inputBotInlineMessageMediaVenue {
+            public var flags: Int32
+            public var geoPoint: Api.InputGeoPoint
+            public var title: String
+            public var address: String
+            public var provider: String
+            public var venueId: String
+            public var venueType: String
+            public var replyMarkup: Api.ReplyMarkup?
+            public init(flags: Int32, geoPoint: Api.InputGeoPoint, title: String, address: String, provider: String, venueId: String, venueType: String, replyMarkup: Api.ReplyMarkup?) {
+                self.flags = flags
+                self.geoPoint = geoPoint
+                self.title = title
+                self.address = address
+                self.provider = provider
+                self.venueId = venueId
+                self.venueType = venueType
+                self.replyMarkup = replyMarkup
+            }
+        }
+        public class Cons_inputBotInlineMessageMediaWebPage {
+            public var flags: Int32
+            public var message: String
+            public var entities: [Api.MessageEntity]?
+            public var url: String
+            public var replyMarkup: Api.ReplyMarkup?
+            public init(flags: Int32, message: String, entities: [Api.MessageEntity]?, url: String, replyMarkup: Api.ReplyMarkup?) {
+                self.flags = flags
+                self.message = message
+                self.entities = entities
+                self.url = url
+                self.replyMarkup = replyMarkup
+            }
+        }
+        public class Cons_inputBotInlineMessageText {
+            public var flags: Int32
+            public var message: String
+            public var entities: [Api.MessageEntity]?
+            public var replyMarkup: Api.ReplyMarkup?
+            public init(flags: Int32, message: String, entities: [Api.MessageEntity]?, replyMarkup: Api.ReplyMarkup?) {
+                self.flags = flags
+                self.message = message
+                self.entities = entities
+                self.replyMarkup = replyMarkup
+            }
+        }
+        case inputBotInlineMessageGame(Cons_inputBotInlineMessageGame)
+        case inputBotInlineMessageMediaAuto(Cons_inputBotInlineMessageMediaAuto)
+        case inputBotInlineMessageMediaContact(Cons_inputBotInlineMessageMediaContact)
+        case inputBotInlineMessageMediaGeo(Cons_inputBotInlineMessageMediaGeo)
+        case inputBotInlineMessageMediaInvoice(Cons_inputBotInlineMessageMediaInvoice)
+        case inputBotInlineMessageMediaVenue(Cons_inputBotInlineMessageMediaVenue)
+        case inputBotInlineMessageMediaWebPage(Cons_inputBotInlineMessageMediaWebPage)
+        case inputBotInlineMessageText(Cons_inputBotInlineMessageText)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -542,8 +690,30 @@ public extension Api {
 }
 public extension Api {
     enum InputBotInlineMessageID: TypeConstructorDescription {
-        case inputBotInlineMessageID(dcId: Int32, id: Int64, accessHash: Int64)
-        case inputBotInlineMessageID64(dcId: Int32, ownerId: Int64, id: Int32, accessHash: Int64)
+        public class Cons_inputBotInlineMessageID {
+            public var dcId: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public init(dcId: Int32, id: Int64, accessHash: Int64) {
+                self.dcId = dcId
+                self.id = id
+                self.accessHash = accessHash
+            }
+        }
+        public class Cons_inputBotInlineMessageID64 {
+            public var dcId: Int32
+            public var ownerId: Int64
+            public var id: Int32
+            public var accessHash: Int64
+            public init(dcId: Int32, ownerId: Int64, id: Int32, accessHash: Int64) {
+                self.dcId = dcId
+                self.ownerId = ownerId
+                self.id = id
+                self.accessHash = accessHash
+            }
+        }
+        case inputBotInlineMessageID(Cons_inputBotInlineMessageID)
+        case inputBotInlineMessageID64(Cons_inputBotInlineMessageID64)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -579,10 +749,72 @@ public extension Api {
 }
 public extension Api {
     enum InputBotInlineResult: TypeConstructorDescription {
-        case inputBotInlineResult(flags: Int32, id: String, type: String, title: String?, description: String?, url: String?, thumb: Api.InputWebDocument?, content: Api.InputWebDocument?, sendMessage: Api.InputBotInlineMessage)
-        case inputBotInlineResultDocument(flags: Int32, id: String, type: String, title: String?, description: String?, document: Api.InputDocument, sendMessage: Api.InputBotInlineMessage)
-        case inputBotInlineResultGame(id: String, shortName: String, sendMessage: Api.InputBotInlineMessage)
-        case inputBotInlineResultPhoto(id: String, type: String, photo: Api.InputPhoto, sendMessage: Api.InputBotInlineMessage)
+        public class Cons_inputBotInlineResult {
+            public var flags: Int32
+            public var id: String
+            public var type: String
+            public var title: String?
+            public var description: String?
+            public var url: String?
+            public var thumb: Api.InputWebDocument?
+            public var content: Api.InputWebDocument?
+            public var sendMessage: Api.InputBotInlineMessage
+            public init(flags: Int32, id: String, type: String, title: String?, description: String?, url: String?, thumb: Api.InputWebDocument?, content: Api.InputWebDocument?, sendMessage: Api.InputBotInlineMessage) {
+                self.flags = flags
+                self.id = id
+                self.type = type
+                self.title = title
+                self.description = description
+                self.url = url
+                self.thumb = thumb
+                self.content = content
+                self.sendMessage = sendMessage
+            }
+        }
+        public class Cons_inputBotInlineResultDocument {
+            public var flags: Int32
+            public var id: String
+            public var type: String
+            public var title: String?
+            public var description: String?
+            public var document: Api.InputDocument
+            public var sendMessage: Api.InputBotInlineMessage
+            public init(flags: Int32, id: String, type: String, title: String?, description: String?, document: Api.InputDocument, sendMessage: Api.InputBotInlineMessage) {
+                self.flags = flags
+                self.id = id
+                self.type = type
+                self.title = title
+                self.description = description
+                self.document = document
+                self.sendMessage = sendMessage
+            }
+        }
+        public class Cons_inputBotInlineResultGame {
+            public var id: String
+            public var shortName: String
+            public var sendMessage: Api.InputBotInlineMessage
+            public init(id: String, shortName: String, sendMessage: Api.InputBotInlineMessage) {
+                self.id = id
+                self.shortName = shortName
+                self.sendMessage = sendMessage
+            }
+        }
+        public class Cons_inputBotInlineResultPhoto {
+            public var id: String
+            public var type: String
+            public var photo: Api.InputPhoto
+            public var sendMessage: Api.InputBotInlineMessage
+            public init(id: String, type: String, photo: Api.InputPhoto, sendMessage: Api.InputBotInlineMessage) {
+                self.id = id
+                self.type = type
+                self.photo = photo
+                self.sendMessage = sendMessage
+            }
+        }
+        case inputBotInlineResult(Cons_inputBotInlineResult)
+        case inputBotInlineResultDocument(Cons_inputBotInlineResultDocument)
+        case inputBotInlineResultGame(Cons_inputBotInlineResultGame)
+        case inputBotInlineResultPhoto(Cons_inputBotInlineResultPhoto)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -632,7 +864,19 @@ public extension Api {
 }
 public extension Api {
     enum InputBusinessAwayMessage: TypeConstructorDescription {
-        case inputBusinessAwayMessage(flags: Int32, shortcutId: Int32, schedule: Api.BusinessAwayMessageSchedule, recipients: Api.InputBusinessRecipients)
+        public class Cons_inputBusinessAwayMessage {
+            public var flags: Int32
+            public var shortcutId: Int32
+            public var schedule: Api.BusinessAwayMessageSchedule
+            public var recipients: Api.InputBusinessRecipients
+            public init(flags: Int32, shortcutId: Int32, schedule: Api.BusinessAwayMessageSchedule, recipients: Api.InputBusinessRecipients) {
+                self.flags = flags
+                self.shortcutId = shortcutId
+                self.schedule = schedule
+                self.recipients = recipients
+            }
+        }
+        case inputBusinessAwayMessage(Cons_inputBusinessAwayMessage)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

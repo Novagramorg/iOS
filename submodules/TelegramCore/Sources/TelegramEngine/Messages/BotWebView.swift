@@ -320,12 +320,12 @@ func _internal_requestAppWebView(postbox: Postbox, network: Network, stateManage
         let app: Api.InputBotApp
         switch appReference {
         case let .id(id, accessHash):
-            app = .inputBotAppID(id: id, accessHash: accessHash)
+            app = .inputBotAppID(.init(id: id, accessHash: accessHash))
         case let .shortName(peerId, shortName):
             guard let bot = transaction.getPeer(peerId), let inputBot = apiInputUser(bot) else {
                 return .fail(.generic)
             }
-            app = .inputBotAppShortName(botId: inputBot, shortName: shortName)
+            app = .inputBotAppShortName(.init(botId: inputBot, shortName: shortName))
         }
 
         var flags: Int32 = 0
