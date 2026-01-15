@@ -20,7 +20,8 @@ func _internal_markAllChatsAsRead(postbox: Postbox, network: Network, stateManag
             var signals: [Signal<Void, NoError>] = []
             for peer in result {
                 switch peer {
-                    case let .dialogPeer(peer):
+                    case let .dialogPeer(dialogPeerData):
+                        let peer = dialogPeerData.peer
                         let peerId = peer.peerId
                         if peerId.namespace == Namespaces.Peer.CloudChannel {
                             if let inputChannel = transaction.getPeer(peerId).flatMap(apiInputChannel) {

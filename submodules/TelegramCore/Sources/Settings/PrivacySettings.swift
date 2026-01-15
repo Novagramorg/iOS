@@ -337,7 +337,8 @@ extension TelegramDisallowedGifts {
     init(apiDisallowedGifts: Api.DisallowedGiftsSettings?) {
         var disallowedGifts: TelegramDisallowedGifts = []
         switch apiDisallowedGifts {
-        case let .disallowedGiftsSettings(giftFlags):
+        case let .disallowedGiftsSettings(disallowedGiftsSettingsData):
+            let giftFlags = disallowedGiftsSettingsData.flags
             if (giftFlags & (1 << 0)) != 0 {
                 disallowedGifts.insert(.unlimited)
             }

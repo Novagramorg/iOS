@@ -1224,7 +1224,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 updatedState.readThread(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId)), threadId: savedPeerId.peerId.toInt64(), readMaxId: readMaxId, isIncoming: false, mainChannelMessage: nil)
             case let .updateDialogUnreadMark(flags, peer, savedPeerId):
                 switch peer {
-                case let .dialogPeer(peer):
+                case let .dialogPeer(dialogPeerData):
+                    let peer = dialogPeerData.peer
                     let peerId = peer.peerId
                     if let savedPeerId {
                         updatedState.updatePeerChatUnreadMark(peerId, threadId: savedPeerId.peerId.toInt64(), namespace: Namespaces.Message.Cloud, value: (flags & (1 << 0)) != 0)
@@ -1507,7 +1508,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 let groupId: PeerGroupId = folderId.flatMap(PeerGroupId.init(rawValue:)) ?? .root
                 let item: PinnedItemId
                 switch peer {
-                    case let .dialogPeer(peer):
+                    case let .dialogPeer(dialogPeerData):
+                        let peer = dialogPeerData.peer
                         item = .peer(peer.peerId)
                     case .dialogPeerFolder:
                         preconditionFailure()
@@ -1523,7 +1525,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     updatedState.addUpdatePinnedItemIds(groupId: groupId, operation: .reorder(order.map {
                         let item: PinnedItemId
                         switch $0 {
-                            case let .dialogPeer(peer):
+                            case let .dialogPeer(dialogPeerData):
+                                let peer = dialogPeerData.peer
                                 item = .peer(peer.peerId)
                             case .dialogPeerFolder:
                                 preconditionFailure()
@@ -1534,7 +1537,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     updatedState.addUpdatePinnedItemIds(groupId: groupId, operation: .sync)
                 }
             case let .updateSavedDialogPinned(flags, peer):
-                if case let .dialogPeer(peer) = peer {
+                if case let .dialogPeer(dialogPeerData) = peer {
+                    let peer = dialogPeerData.peer
                     if (flags & (1 << 0)) != 0 {
                         updatedState.addUpdatePinnedSavedItemIds(operation: .pin(.peer(peer.peerId)))
                     } else {
@@ -1545,7 +1549,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 if let order = order {
                     updatedState.addUpdatePinnedSavedItemIds(operation: .reorder(order.compactMap {
                         switch $0 {
-                        case let .dialogPeer(peer):
+                        case let .dialogPeer(dialogPeerData):
+                            let peer = dialogPeerData.peer
                             return .peer(peer.peerId)
                         case .dialogPeerFolder:
                             return nil
@@ -1602,7 +1607,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 switch draft {
                     case .draftMessageEmpty:
                         inputState = nil
-                    case let .draftMessage(_, replyToMsgHeader, message, entities, media, date, messageEffectId, suggestedPost):
+                    case let .draftMessage(draftMessageData):
+                        let (replyToMsgHeader, message, entities, media, date, messageEffectId, suggestedPost) = (draftMessageData.replyTo, draftMessageData.message, draftMessageData.entities, draftMessageData.media, draftMessageData.date, draftMessageData.effect, draftMessageData.suggestedPost)
                         let _ = media
                         var replySubject: EngineMessageReplySubject?
                         var parsedSuggestedPost: SynchronizeableChatInputState.SuggestedPost?
@@ -2859,7 +2865,8 @@ private func resolveMissingPeerChatInfos(accountPeerId: PeerId, network: Network
                     
                     for dialog in dialogs {
                         switch dialog {
-                            case let .dialog(_, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, notifySettings, pts, _, folderId, ttlPeriod):
+                            case let .dialog(dialogData):
+                                let (peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, notifySettings, pts, folderId, ttlPeriod) = (dialogData.peer, dialogData.topMessage, dialogData.readInboxMaxId, dialogData.readOutboxMaxId, dialogData.unreadCount, dialogData.unreadMentionsCount, dialogData.unreadReactionsCount, dialogData.notifySettings, dialogData.pts, dialogData.folderId, dialogData.ttlPeriod)
                                 let peerId = peer.peerId
                                 
                                 updatedState.setNeedsHoleFromPreviousState(peerId: peerId, namespace: Namespaces.Message.Cloud, validateChannelPts: pts)
@@ -3114,7 +3121,8 @@ func resetChannels(accountPeerId: PeerId, postbox: Postbox, network: Network, pe
                         let groupId: PeerGroupId
                         let apiTtlPeriod: Int32?
                         switch dialog {
-                            case let .dialog(flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, peerNotificationSettings, pts, _, folderId, ttlPeriod):
+                            case let .dialog(dialogData):
+                                let (flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, peerNotificationSettings, pts, folderId, ttlPeriod) = (dialogData.flags, dialogData.peer, dialogData.topMessage, dialogData.readInboxMaxId, dialogData.readOutboxMaxId, dialogData.unreadCount, dialogData.unreadMentionsCount, dialogData.unreadReactionsCount, dialogData.notifySettings, dialogData.pts, dialogData.folderId, dialogData.ttlPeriod)
                                 apiPeer = peer
                                 apiTopMessage = topMessage
                                 apiReadInboxMaxId = readInboxMaxId
@@ -3450,7 +3458,8 @@ private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Netwo
                 var parameters: (peer: Api.Peer, pts: Int32, topMessage: Int32, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, unreadMentionsCount: Int32, unreadReactionsCount: Int32, ttlPeriod: Int32?)?
                 
                 switch dialog {
-                case let .dialog(_, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, _, pts, _, _, ttlPeriod):
+                case let .dialog(dialogData):
+                    let (peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, pts, ttlPeriod) = (dialogData.peer, dialogData.topMessage, dialogData.readInboxMaxId, dialogData.readOutboxMaxId, dialogData.unreadCount, dialogData.unreadMentionsCount, dialogData.unreadReactionsCount, dialogData.pts, dialogData.ttlPeriod)
                     if let pts = pts {
                         parameters = (peer, pts, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, ttlPeriod)
                     }

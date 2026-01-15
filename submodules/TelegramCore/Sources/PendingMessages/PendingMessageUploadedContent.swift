@@ -727,9 +727,9 @@ func inputDocumentAttributesFromFileAttributes(_ fileAttributes: [TelegramMediaF
             case .Animated:
                 attributes.append(.documentAttributeAnimated)
             case let .FileName(fileName):
-                attributes.append(.documentAttributeFilename(fileName: fileName))
+                attributes.append(.documentAttributeFilename(.init(fileName: fileName)))
             case let .ImageSize(size):
-                attributes.append(.documentAttributeImageSize(w: Int32(size.width), h: Int32(size.height)))
+                attributes.append(.documentAttributeImageSize(.init(w: Int32(size.width), h: Int32(size.height))))
             case let .Sticker(displayText, packReference, maskCoords):
                 var stickerSet: Api.InputStickerSet = .inputStickerSetEmpty
                 var flags: Int32 = 0
@@ -748,7 +748,7 @@ func inputDocumentAttributesFromFileAttributes(_ fileAttributes: [TelegramMediaF
                     flags |= 1 << 0
                     inputMaskCoords = .maskCoords(n: maskCoords.n, x: maskCoords.x, y: maskCoords.y, zoom: maskCoords.zoom)
                 }
-                attributes.append(.documentAttributeSticker(flags: flags, alt: displayText, stickerset: stickerSet, maskCoords: inputMaskCoords))
+                attributes.append(.documentAttributeSticker(.init(flags: flags, alt: displayText, stickerset: stickerSet, maskCoords: inputMaskCoords)))
             case .HasLinkedStickers:
                 attributes.append(.documentAttributeHasStickers)
             case let .Video(duration, size, videoFlags, preloadSize, coverTime, videoCodec):
@@ -771,7 +771,7 @@ func inputDocumentAttributesFromFileAttributes(_ fileAttributes: [TelegramMediaF
                 if videoCodec != nil {
                     flags |= (1 << 5)
                 }
-                attributes.append(.documentAttributeVideo(flags: flags, duration: duration, w: Int32(size.width), h: Int32(size.height), preloadPrefixSize: preloadSize, videoStartTs: coverTime, videoCodec: videoCodec))
+                attributes.append(.documentAttributeVideo(.init(flags: flags, duration: duration, w: Int32(size.width), h: Int32(size.height), preloadPrefixSize: preloadSize, videoStartTs: coverTime, videoCodec: videoCodec)))
             case let .Audio(isVoice, duration, title, performer, waveform):
                 var flags: Int32 = 0
                 if isVoice {
@@ -788,7 +788,7 @@ func inputDocumentAttributesFromFileAttributes(_ fileAttributes: [TelegramMediaF
                     flags |= Int32(1 << 2)
                     waveformBuffer = Buffer(data: waveform)
                 }
-                attributes.append(.documentAttributeAudio(flags: flags, duration: Int32(duration), title: title, performer: performer, waveform: waveformBuffer))
+                attributes.append(.documentAttributeAudio(.init(flags: flags, duration: Int32(duration), title: title, performer: performer, waveform: waveformBuffer)))
             case .hintFileIsLarge:
                 break
             case .hintIsValidated:

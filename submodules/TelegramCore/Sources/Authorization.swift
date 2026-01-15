@@ -787,7 +787,7 @@ public func sendLoginEmailCode(account: UnauthorizedAccount, email: String) -> S
         if let state = transaction.getState() as? UnauthorizedAccountState {
             switch state.contents {
                 case let .confirmationCodeEntry(phoneNumber, _, phoneCodeHash, _, _, syncContacts, _, _):
-                    return account.network.request(Api.functions.account.sendVerifyEmailCode(purpose: .emailVerifyPurposeLoginSetup(phoneNumber: phoneNumber, phoneCodeHash: phoneCodeHash), email: email), automaticFloodWait: false)
+                    return account.network.request(Api.functions.account.sendVerifyEmailCode(purpose: .emailVerifyPurposeLoginSetup(.init(phoneNumber: phoneNumber, phoneCodeHash: phoneCodeHash)), email: email), automaticFloodWait: false)
                     |> `catch` { error -> Signal<Api.account.SentEmailCode, AuthorizationSendEmailCodeError> in
                         let errorDescription = error.errorDescription ?? ""
                         if errorDescription.hasPrefix("FLOOD_WAIT") {
@@ -832,11 +832,11 @@ public func verifyLoginEmailChange(account: Account, code: AuthorizationCode.Ema
     let verification: Api.EmailVerification
     switch code {
         case let .emailCode(code):
-            verification = .emailVerificationCode(code: code)
+            verification = .emailVerificationCode(.init(code: code))
         case let .appleToken(token):
-            verification = .emailVerificationApple(token: token)
+            verification = .emailVerificationApple(.init(token: token))
         case let .googleToken(token):
-            verification = .emailVerificationGoogle(token: token)
+            verification = .emailVerificationGoogle(.init(token: token))
     }
 
     return account.network.request(Api.functions.account.verifyEmail(purpose: .emailVerifyPurposeLoginChange, verification: verification), automaticFloodWait: false)
@@ -869,14 +869,14 @@ public func verifyLoginEmailSetup(account: UnauthorizedAccount, code: Authorizat
                     let verification: Api.EmailVerification
                     switch code {
                         case let .emailCode(code):
-                            verification = .emailVerificationCode(code: code)
+                            verification = .emailVerificationCode(.init(code: code))
                         case let .appleToken(token):
-                            verification = .emailVerificationApple(token: token)
+                            verification = .emailVerificationApple(.init(token: token))
                         case let .googleToken(token):
-                            verification = .emailVerificationGoogle(token: token)
+                            verification = .emailVerificationGoogle(.init(token: token))
                     }
 
-                    return account.network.request(Api.functions.account.verifyEmail(purpose: .emailVerifyPurposeLoginSetup(phoneNumber: phoneNumber, phoneCodeHash: phoneCodeHash), verification: verification), automaticFloodWait: false)
+                    return account.network.request(Api.functions.account.verifyEmail(purpose: .emailVerifyPurposeLoginSetup(.init(phoneNumber: phoneNumber, phoneCodeHash: phoneCodeHash)), verification: verification), automaticFloodWait: false)
                     |> `catch` { error -> Signal<Api.account.EmailVerified, AuthorizationEmailVerificationError> in
                         let errorDescription = error.errorDescription ?? ""
                         if errorDescription.hasPrefix("FLOOD_WAIT") {
@@ -1012,11 +1012,11 @@ public func authorizeWithCode(accountManager: AccountManager<TelegramAccountMana
                             flags = 1 << 1
                             switch verification {
                                 case let .emailCode(code):
-                                    emailVerification = .emailVerificationCode(code: code)
+                                    emailVerification = .emailVerificationCode(.init(code: code))
                                 case let .appleToken(token):
-                                    emailVerification = .emailVerificationApple(token: token)
+                                    emailVerification = .emailVerificationApple(.init(token: token))
                                 case let .googleToken(token):
-                                    emailVerification = .emailVerificationGoogle(token: token)
+                                    emailVerification = .emailVerificationGoogle(.init(token: token))
                             }
                     }
                  
@@ -1215,7 +1215,7 @@ public func authorizeWithPasskey(accountManager: AccountManager<TelegramAccountM
     if foreignDatacenter != nil {
         flags |= 1 << 0
     }
-    return account.network.request(Api.functions.auth.finishPasskeyLogin(flags: flags, credential: .inputPasskeyCredentialPublicKey(id: passkey.id, rawId: passkey.id, response: .inputPasskeyResponseLogin(clientData: .dataJSON(data: passkey.clientData), authenticatorData: Buffer(data: passkey.authenticatorData), signature: Buffer(data: passkey.signature), userHandle: passkey.userHandle)), fromDcId: (foreignDatacenter?.id).flatMap(Int32.init), fromAuthKeyId: foreignDatacenter?.authKeyId), automaticFloodWait: false)
+    return account.network.request(Api.functions.auth.finishPasskeyLogin(flags: flags, credential: .inputPasskeyCredentialPublicKey(id: passkey.id, rawId: passkey.id, response: .inputPasskeyResponseLogin(clientData: .dataJSON(.init(data: passkey.clientData)), authenticatorData: Buffer(data: passkey.authenticatorData), signature: Buffer(data: passkey.signature), userHandle: passkey.userHandle)), fromDcId: (foreignDatacenter?.id).flatMap(Int32.init), fromAuthKeyId: foreignDatacenter?.authKeyId), automaticFloodWait: false)
     |> map { authorization in
         return .authorization(authorization)
     }

@@ -108,17 +108,21 @@ func telegramMediaFileAttributesFromApiAttributes(_ attributes: [Api.DocumentAtt
     var result: [TelegramMediaFileAttribute] = []
     for attribute in attributes {
         switch attribute {
-            case let .documentAttributeFilename(fileName):
+            case let .documentAttributeFilename(documentAttributeFilenameData):
+                let fileName = documentAttributeFilenameData.fileName
                 result.append(.FileName(fileName: fileName))
-            case let .documentAttributeSticker(_, alt, stickerSet, maskCoords):
+            case let .documentAttributeSticker(documentAttributeStickerData):
+                let (alt, stickerSet, maskCoords) = (documentAttributeStickerData.alt, documentAttributeStickerData.stickerset, documentAttributeStickerData.maskCoords)
                 result.append(.Sticker(displayText: alt, packReference: StickerPackReference(apiInputSet: stickerSet), maskData: maskCoords.flatMap(StickerMaskCoords.init)))
             case .documentAttributeHasStickers:
                 result.append(.HasLinkedStickers)
-            case let .documentAttributeImageSize(w, h):
+            case let .documentAttributeImageSize(documentAttributeImageSizeData):
+                let (w, h) = (documentAttributeImageSizeData.w, documentAttributeImageSizeData.h)
                 result.append(.ImageSize(size: PixelDimensions(width: w, height: h)))
             case .documentAttributeAnimated:
                 result.append(.Animated)
-            case let .documentAttributeVideo(flags, duration, w, h, preloadSize, videoStart, videoCodec):
+            case let .documentAttributeVideo(documentAttributeVideoData):
+                let (flags, duration, w, h, preloadSize, videoStart, videoCodec) = (documentAttributeVideoData.flags, documentAttributeVideoData.duration, documentAttributeVideoData.w, documentAttributeVideoData.h, documentAttributeVideoData.preloadPrefixSize, documentAttributeVideoData.videoStartTs, documentAttributeVideoData.videoCodec)
                 var videoFlags = TelegramMediaVideoFlags()
                 if (flags & (1 << 0)) != 0 {
                     videoFlags.insert(.instantRoundVideo)
@@ -130,11 +134,13 @@ func telegramMediaFileAttributesFromApiAttributes(_ attributes: [Api.DocumentAtt
                     videoFlags.insert(.isSilent)
                 }
                 result.append(.Video(duration: Double(duration), size: PixelDimensions(width: w, height: h), flags: videoFlags, preloadSize: preloadSize, coverTime: videoStart, videoCodec: videoCodec))
-            case let .documentAttributeAudio(flags, duration, title, performer, waveform):
+            case let .documentAttributeAudio(documentAttributeAudioData):
+                let (flags, duration, title, performer, waveform) = (documentAttributeAudioData.flags, documentAttributeAudioData.duration, documentAttributeAudioData.title, documentAttributeAudioData.performer, documentAttributeAudioData.waveform)
                 let isVoice = (flags & (1 << 10)) != 0
                 let waveformBuffer: Data? = waveform?.makeData()
                 result.append(.Audio(isVoice: isVoice, duration: Int(duration), title: title, performer: performer, waveform: waveformBuffer))
-            case let .documentAttributeCustomEmoji(flags, alt, stickerSet):
+            case let .documentAttributeCustomEmoji(documentAttributeCustomEmojiData):
+                let (flags, alt, stickerSet) = (documentAttributeCustomEmojiData.flags, documentAttributeCustomEmojiData.alt, documentAttributeCustomEmojiData.stickerset)
                 let isFree = (flags & (1 << 0)) != 0
                 let isSingleColor = (flags & (1 << 1)) != 0
                 result.append(.CustomEmoji(isPremium: !isFree, isSingleColor: isSingleColor, alt: alt, packReference: StickerPackReference(apiInputSet: stickerSet)))
@@ -179,7 +185,8 @@ func telegramMediaFileThumbnailRepresentationsFromApiSizes(datacenterId: Int32, 
 
 func telegramMediaFileFromApiDocument(_ document: Api.Document, altDocuments: [Api.Document]?, videoCover: Api.Photo? = nil) -> TelegramMediaFile? {
     switch document {
-        case let .document(_, id, accessHash, fileReference, _, mimeType, size, thumbs, videoThumbs, dcId, attributes):
+        case let .document(documentData):
+            let (id, accessHash, fileReference, mimeType, size, thumbs, videoThumbs, dcId, attributes) = (documentData.id, documentData.accessHash, documentData.fileReference, documentData.mimeType, documentData.size, documentData.thumbs, documentData.videoThumbs, documentData.dcId, documentData.attributes)
             var parsedAttributes = telegramMediaFileAttributesFromApiAttributes(attributes)
             var isSticker = false
             var isAnimated = false

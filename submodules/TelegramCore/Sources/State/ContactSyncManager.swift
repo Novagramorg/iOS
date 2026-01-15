@@ -405,7 +405,8 @@ private func updateContactPresences(postbox: Postbox, network: Network, accountP
             var peerPresences: [PeerId: PeerPresence] = [:]
             for status in statuses {
                 switch status {
-                    case let .contactStatus(userId, status):
+                    case let .contactStatus(contactStatusData):
+                        let (userId, status) = (contactStatusData.userId, contactStatusData.status)
                         peerPresences[PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))] = TelegramUserPresence(apiStatus: status)
                 }
             }
