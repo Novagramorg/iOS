@@ -1,6 +1,20 @@
 public extension Api {
     enum ChatInviteImporter: TypeConstructorDescription {
-        case chatInviteImporter(flags: Int32, userId: Int64, date: Int32, about: String?, approvedBy: Int64?)
+        public class Cons_chatInviteImporter {
+            public var flags: Int32
+            public var userId: Int64
+            public var date: Int32
+            public var about: String?
+            public var approvedBy: Int64?
+            public init(flags: Int32, userId: Int64, date: Int32, about: String?, approvedBy: Int64?) {
+                self.flags = flags
+                self.userId = userId
+                self.date = date
+                self.about = about
+                self.approvedBy = approvedBy
+            }
+        }
+        case chatInviteImporter(Cons_chatInviteImporter)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,7 +43,13 @@ public extension Api {
 }
 public extension Api {
     enum ChatOnlines: TypeConstructorDescription {
-        case chatOnlines(onlines: Int32)
+        public class Cons_chatOnlines {
+            public var onlines: Int32
+            public init(onlines: Int32) {
+                self.onlines = onlines
+            }
+        }
+        case chatOnlines(Cons_chatOnlines)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -58,9 +78,35 @@ public extension Api {
 }
 public extension Api {
     enum ChatParticipant: TypeConstructorDescription {
-        case chatParticipant(userId: Int64, inviterId: Int64, date: Int32)
-        case chatParticipantAdmin(userId: Int64, inviterId: Int64, date: Int32)
-        case chatParticipantCreator(userId: Int64)
+        public class Cons_chatParticipant {
+            public var userId: Int64
+            public var inviterId: Int64
+            public var date: Int32
+            public init(userId: Int64, inviterId: Int64, date: Int32) {
+                self.userId = userId
+                self.inviterId = inviterId
+                self.date = date
+            }
+        }
+        public class Cons_chatParticipantAdmin {
+            public var userId: Int64
+            public var inviterId: Int64
+            public var date: Int32
+            public init(userId: Int64, inviterId: Int64, date: Int32) {
+                self.userId = userId
+                self.inviterId = inviterId
+                self.date = date
+            }
+        }
+        public class Cons_chatParticipantCreator {
+            public var userId: Int64
+            public init(userId: Int64) {
+                self.userId = userId
+            }
+        }
+        case chatParticipant(Cons_chatParticipant)
+        case chatParticipantAdmin(Cons_chatParticipantAdmin)
+        case chatParticipantCreator(Cons_chatParticipantCreator)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

@@ -587,7 +587,17 @@ public extension Api {
 }
 public extension Api {
     enum ChatAdminWithInvites: TypeConstructorDescription {
-        case chatAdminWithInvites(adminId: Int64, invitesCount: Int32, revokedInvitesCount: Int32)
+        public class Cons_chatAdminWithInvites {
+            public var adminId: Int64
+            public var invitesCount: Int32
+            public var revokedInvitesCount: Int32
+            public init(adminId: Int64, invitesCount: Int32, revokedInvitesCount: Int32) {
+                self.adminId = adminId
+                self.invitesCount = invitesCount
+                self.revokedInvitesCount = revokedInvitesCount
+            }
+        }
+        case chatAdminWithInvites(Cons_chatAdminWithInvites)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -616,7 +626,15 @@ public extension Api {
 }
 public extension Api {
     enum ChatBannedRights: TypeConstructorDescription {
-        case chatBannedRights(flags: Int32, untilDate: Int32)
+        public class Cons_chatBannedRights {
+            public var flags: Int32
+            public var untilDate: Int32
+            public init(flags: Int32, untilDate: Int32) {
+                self.flags = flags
+                self.untilDate = untilDate
+            }
+        }
+        case chatBannedRights(Cons_chatBannedRights)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -645,8 +663,146 @@ public extension Api {
 }
 public extension Api {
     enum ChatFull: TypeConstructorDescription {
-        case channelFull(flags: Int32, flags2: Int32, id: Int64, about: String, participantsCount: Int32?, adminsCount: Int32?, kickedCount: Int32?, bannedCount: Int32?, onlineCount: Int32?, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, chatPhoto: Api.Photo, notifySettings: Api.PeerNotifySettings, exportedInvite: Api.ExportedChatInvite?, botInfo: [Api.BotInfo], migratedFromChatId: Int64?, migratedFromMaxId: Int32?, pinnedMsgId: Int32?, stickerset: Api.StickerSet?, availableMinId: Int32?, folderId: Int32?, linkedChatId: Int64?, location: Api.ChannelLocation?, slowmodeSeconds: Int32?, slowmodeNextSendDate: Int32?, statsDc: Int32?, pts: Int32, call: Api.InputGroupCall?, ttlPeriod: Int32?, pendingSuggestions: [String]?, groupcallDefaultJoinAs: Api.Peer?, themeEmoticon: String?, requestsPending: Int32?, recentRequesters: [Int64]?, defaultSendAs: Api.Peer?, availableReactions: Api.ChatReactions?, reactionsLimit: Int32?, stories: Api.PeerStories?, wallpaper: Api.WallPaper?, boostsApplied: Int32?, boostsUnrestrict: Int32?, emojiset: Api.StickerSet?, botVerification: Api.BotVerification?, stargiftsCount: Int32?, sendPaidMessagesStars: Int64?, mainTab: Api.ProfileTab?)
-        case chatFull(flags: Int32, id: Int64, about: String, participants: Api.ChatParticipants, chatPhoto: Api.Photo?, notifySettings: Api.PeerNotifySettings, exportedInvite: Api.ExportedChatInvite?, botInfo: [Api.BotInfo]?, pinnedMsgId: Int32?, folderId: Int32?, call: Api.InputGroupCall?, ttlPeriod: Int32?, groupcallDefaultJoinAs: Api.Peer?, themeEmoticon: String?, requestsPending: Int32?, recentRequesters: [Int64]?, availableReactions: Api.ChatReactions?, reactionsLimit: Int32?)
+        public class Cons_channelFull {
+            public var flags: Int32
+            public var flags2: Int32
+            public var id: Int64
+            public var about: String
+            public var participantsCount: Int32?
+            public var adminsCount: Int32?
+            public var kickedCount: Int32?
+            public var bannedCount: Int32?
+            public var onlineCount: Int32?
+            public var readInboxMaxId: Int32
+            public var readOutboxMaxId: Int32
+            public var unreadCount: Int32
+            public var chatPhoto: Api.Photo
+            public var notifySettings: Api.PeerNotifySettings
+            public var exportedInvite: Api.ExportedChatInvite?
+            public var botInfo: [Api.BotInfo]
+            public var migratedFromChatId: Int64?
+            public var migratedFromMaxId: Int32?
+            public var pinnedMsgId: Int32?
+            public var stickerset: Api.StickerSet?
+            public var availableMinId: Int32?
+            public var folderId: Int32?
+            public var linkedChatId: Int64?
+            public var location: Api.ChannelLocation?
+            public var slowmodeSeconds: Int32?
+            public var slowmodeNextSendDate: Int32?
+            public var statsDc: Int32?
+            public var pts: Int32
+            public var call: Api.InputGroupCall?
+            public var ttlPeriod: Int32?
+            public var pendingSuggestions: [String]?
+            public var groupcallDefaultJoinAs: Api.Peer?
+            public var themeEmoticon: String?
+            public var requestsPending: Int32?
+            public var recentRequesters: [Int64]?
+            public var defaultSendAs: Api.Peer?
+            public var availableReactions: Api.ChatReactions?
+            public var reactionsLimit: Int32?
+            public var stories: Api.PeerStories?
+            public var wallpaper: Api.WallPaper?
+            public var boostsApplied: Int32?
+            public var boostsUnrestrict: Int32?
+            public var emojiset: Api.StickerSet?
+            public var botVerification: Api.BotVerification?
+            public var stargiftsCount: Int32?
+            public var sendPaidMessagesStars: Int64?
+            public var mainTab: Api.ProfileTab?
+            public init(flags: Int32, flags2: Int32, id: Int64, about: String, participantsCount: Int32?, adminsCount: Int32?, kickedCount: Int32?, bannedCount: Int32?, onlineCount: Int32?, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, chatPhoto: Api.Photo, notifySettings: Api.PeerNotifySettings, exportedInvite: Api.ExportedChatInvite?, botInfo: [Api.BotInfo], migratedFromChatId: Int64?, migratedFromMaxId: Int32?, pinnedMsgId: Int32?, stickerset: Api.StickerSet?, availableMinId: Int32?, folderId: Int32?, linkedChatId: Int64?, location: Api.ChannelLocation?, slowmodeSeconds: Int32?, slowmodeNextSendDate: Int32?, statsDc: Int32?, pts: Int32, call: Api.InputGroupCall?, ttlPeriod: Int32?, pendingSuggestions: [String]?, groupcallDefaultJoinAs: Api.Peer?, themeEmoticon: String?, requestsPending: Int32?, recentRequesters: [Int64]?, defaultSendAs: Api.Peer?, availableReactions: Api.ChatReactions?, reactionsLimit: Int32?, stories: Api.PeerStories?, wallpaper: Api.WallPaper?, boostsApplied: Int32?, boostsUnrestrict: Int32?, emojiset: Api.StickerSet?, botVerification: Api.BotVerification?, stargiftsCount: Int32?, sendPaidMessagesStars: Int64?, mainTab: Api.ProfileTab?) {
+                self.flags = flags
+                self.flags2 = flags2
+                self.id = id
+                self.about = about
+                self.participantsCount = participantsCount
+                self.adminsCount = adminsCount
+                self.kickedCount = kickedCount
+                self.bannedCount = bannedCount
+                self.onlineCount = onlineCount
+                self.readInboxMaxId = readInboxMaxId
+                self.readOutboxMaxId = readOutboxMaxId
+                self.unreadCount = unreadCount
+                self.chatPhoto = chatPhoto
+                self.notifySettings = notifySettings
+                self.exportedInvite = exportedInvite
+                self.botInfo = botInfo
+                self.migratedFromChatId = migratedFromChatId
+                self.migratedFromMaxId = migratedFromMaxId
+                self.pinnedMsgId = pinnedMsgId
+                self.stickerset = stickerset
+                self.availableMinId = availableMinId
+                self.folderId = folderId
+                self.linkedChatId = linkedChatId
+                self.location = location
+                self.slowmodeSeconds = slowmodeSeconds
+                self.slowmodeNextSendDate = slowmodeNextSendDate
+                self.statsDc = statsDc
+                self.pts = pts
+                self.call = call
+                self.ttlPeriod = ttlPeriod
+                self.pendingSuggestions = pendingSuggestions
+                self.groupcallDefaultJoinAs = groupcallDefaultJoinAs
+                self.themeEmoticon = themeEmoticon
+                self.requestsPending = requestsPending
+                self.recentRequesters = recentRequesters
+                self.defaultSendAs = defaultSendAs
+                self.availableReactions = availableReactions
+                self.reactionsLimit = reactionsLimit
+                self.stories = stories
+                self.wallpaper = wallpaper
+                self.boostsApplied = boostsApplied
+                self.boostsUnrestrict = boostsUnrestrict
+                self.emojiset = emojiset
+                self.botVerification = botVerification
+                self.stargiftsCount = stargiftsCount
+                self.sendPaidMessagesStars = sendPaidMessagesStars
+                self.mainTab = mainTab
+            }
+        }
+        public class Cons_chatFull {
+            public var flags: Int32
+            public var id: Int64
+            public var about: String
+            public var participants: Api.ChatParticipants
+            public var chatPhoto: Api.Photo?
+            public var notifySettings: Api.PeerNotifySettings
+            public var exportedInvite: Api.ExportedChatInvite?
+            public var botInfo: [Api.BotInfo]?
+            public var pinnedMsgId: Int32?
+            public var folderId: Int32?
+            public var call: Api.InputGroupCall?
+            public var ttlPeriod: Int32?
+            public var groupcallDefaultJoinAs: Api.Peer?
+            public var themeEmoticon: String?
+            public var requestsPending: Int32?
+            public var recentRequesters: [Int64]?
+            public var availableReactions: Api.ChatReactions?
+            public var reactionsLimit: Int32?
+            public init(flags: Int32, id: Int64, about: String, participants: Api.ChatParticipants, chatPhoto: Api.Photo?, notifySettings: Api.PeerNotifySettings, exportedInvite: Api.ExportedChatInvite?, botInfo: [Api.BotInfo]?, pinnedMsgId: Int32?, folderId: Int32?, call: Api.InputGroupCall?, ttlPeriod: Int32?, groupcallDefaultJoinAs: Api.Peer?, themeEmoticon: String?, requestsPending: Int32?, recentRequesters: [Int64]?, availableReactions: Api.ChatReactions?, reactionsLimit: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.about = about
+                self.participants = participants
+                self.chatPhoto = chatPhoto
+                self.notifySettings = notifySettings
+                self.exportedInvite = exportedInvite
+                self.botInfo = botInfo
+                self.pinnedMsgId = pinnedMsgId
+                self.folderId = folderId
+                self.call = call
+                self.ttlPeriod = ttlPeriod
+                self.groupcallDefaultJoinAs = groupcallDefaultJoinAs
+                self.themeEmoticon = themeEmoticon
+                self.requestsPending = requestsPending
+                self.recentRequesters = recentRequesters
+                self.availableReactions = availableReactions
+                self.reactionsLimit = reactionsLimit
+            }
+        }
+        case channelFull(Cons_channelFull)
+        case chatFull(Cons_chatFull)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -682,9 +838,47 @@ public extension Api {
 }
 public extension Api {
     indirect enum ChatInvite: TypeConstructorDescription {
-        case chatInvite(flags: Int32, title: String, about: String?, photo: Api.Photo, participantsCount: Int32, participants: [Api.User]?, color: Int32, subscriptionPricing: Api.StarsSubscriptionPricing?, subscriptionFormId: Int64?, botVerification: Api.BotVerification?)
-        case chatInviteAlready(chat: Api.Chat)
-        case chatInvitePeek(chat: Api.Chat, expires: Int32)
+        public class Cons_chatInvite {
+            public var flags: Int32
+            public var title: String
+            public var about: String?
+            public var photo: Api.Photo
+            public var participantsCount: Int32
+            public var participants: [Api.User]?
+            public var color: Int32
+            public var subscriptionPricing: Api.StarsSubscriptionPricing?
+            public var subscriptionFormId: Int64?
+            public var botVerification: Api.BotVerification?
+            public init(flags: Int32, title: String, about: String?, photo: Api.Photo, participantsCount: Int32, participants: [Api.User]?, color: Int32, subscriptionPricing: Api.StarsSubscriptionPricing?, subscriptionFormId: Int64?, botVerification: Api.BotVerification?) {
+                self.flags = flags
+                self.title = title
+                self.about = about
+                self.photo = photo
+                self.participantsCount = participantsCount
+                self.participants = participants
+                self.color = color
+                self.subscriptionPricing = subscriptionPricing
+                self.subscriptionFormId = subscriptionFormId
+                self.botVerification = botVerification
+            }
+        }
+        public class Cons_chatInviteAlready {
+            public var chat: Api.Chat
+            public init(chat: Api.Chat) {
+                self.chat = chat
+            }
+        }
+        public class Cons_chatInvitePeek {
+            public var chat: Api.Chat
+            public var expires: Int32
+            public init(chat: Api.Chat, expires: Int32) {
+                self.chat = chat
+                self.expires = expires
+            }
+        }
+        case chatInvite(Cons_chatInvite)
+        case chatInviteAlready(Cons_chatInviteAlready)
+        case chatInvitePeek(Cons_chatInvitePeek)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

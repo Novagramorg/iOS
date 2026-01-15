@@ -489,14 +489,16 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                         switch result {
                         case let .chatFull(fullChat, chats, users):
                             switch fullChat {
-                            case let .chatFull(_, _, _, _, _, notifySettings, _, _, _, _, _, _, _, _, _, _, _, _):
+                            case let .chatFull(chatFullData):
+                                let (notifySettings) = (chatFullData.notifySettings)
                                 transaction.updateCurrentPeerNotificationSettings([peerId: TelegramPeerNotificationSettings(apiSettings: notifySettings)])
                             case .channelFull:
                                 break
                             }
                             
                             switch fullChat {
-                            case let .chatFull(chatFullFlags, _, chatFullAbout, chatFullParticipants, chatFullChatPhoto, _, chatFullExportedInvite, chatFullBotInfo, chatFullPinnedMsgId, _, chatFullCall, chatTtlPeriod, chatFullGroupcallDefaultJoinAs, chatFullThemeEmoticon, chatFullRequestsPending, _, allowedReactions, reactionsLimit):
+                            case let .chatFull(chatFullData):
+                                let (chatFullFlags, chatFullAbout, chatFullParticipants, chatFullChatPhoto, chatFullExportedInvite, chatFullBotInfo, chatFullPinnedMsgId, chatFullCall, chatTtlPeriod, chatFullGroupcallDefaultJoinAs, chatFullThemeEmoticon, chatFullRequestsPending, allowedReactions, reactionsLimit) = (chatFullData.flags, chatFullData.about, chatFullData.participants, chatFullData.chatPhoto, chatFullData.exportedInvite, chatFullData.botInfo, chatFullData.pinnedMsgId, chatFullData.call, chatFullData.ttlPeriod, chatFullData.groupcallDefaultJoinAs, chatFullData.themeEmoticon, chatFullData.requestsPending, chatFullData.availableReactions, chatFullData.reactionsLimit)
                                 var botInfos: [CachedPeerBotInfo] = []
                                 for botInfo in chatFullBotInfo ?? [] {
                                     switch botInfo {
@@ -633,14 +635,16 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                             switch result {
                                 case let .chatFull(fullChat, chats, users):
                                     switch fullChat {
-                                    case let .channelFull(_, _, _, _, _, _, _, _, _, _, _, _, _, notifySettings, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                                    case let .channelFull(channelFullData):
+                                        let notifySettings = channelFullData.notifySettings
                                         transaction.updateCurrentPeerNotificationSettings([peerId: TelegramPeerNotificationSettings(apiSettings: notifySettings)])
                                     case .chatFull:
                                         break
                                     }
                                     
                                     switch fullChat {
-                                        case let .channelFull(flags, flags2, _, about, participantsCount, adminsCount, kickedCount, bannedCount, _, _, _, _, chatPhoto, _, apiExportedInvite, apiBotInfos, migratedFromChatId, migratedFromMaxId, pinnedMsgId, stickerSet, minAvailableMsgId, _, linkedChatId, location, slowmodeSeconds, slowmodeNextSendDate, statsDc, _, inputCall, ttl, pendingSuggestions, groupcallDefaultJoinAs, themeEmoticon, requestsPending, _, defaultSendAs, allowedReactions, reactionsLimit, _, wallpaper, appliedBoosts, boostsUnrestrict, emojiSet, verification, starGiftsCount, sendPaidMessageStars, mainTab):
+                                        case let .channelFull(channelFullData):
+                                            let (flags, flags2, about, participantsCount, adminsCount, kickedCount, bannedCount, chatPhoto, apiExportedInvite, apiBotInfos, migratedFromChatId, migratedFromMaxId, pinnedMsgId, stickerSet, minAvailableMsgId, linkedChatId, location, slowmodeSeconds, slowmodeNextSendDate, statsDc, inputCall, ttl, pendingSuggestions, groupcallDefaultJoinAs, themeEmoticon, requestsPending, defaultSendAs, allowedReactions, reactionsLimit, wallpaper, appliedBoosts, boostsUnrestrict, emojiSet, verification, starGiftsCount, sendPaidMessageStars, mainTab) = (channelFullData.flags, channelFullData.flags2, channelFullData.about, channelFullData.participantsCount, channelFullData.adminsCount, channelFullData.kickedCount, channelFullData.bannedCount, channelFullData.chatPhoto, channelFullData.exportedInvite, channelFullData.botInfo, channelFullData.migratedFromChatId, channelFullData.migratedFromMaxId, channelFullData.pinnedMsgId, channelFullData.stickerset, channelFullData.availableMinId, channelFullData.linkedChatId, channelFullData.location, channelFullData.slowmodeSeconds, channelFullData.slowmodeNextSendDate, channelFullData.statsDc, channelFullData.call, channelFullData.ttlPeriod, channelFullData.pendingSuggestions, channelFullData.groupcallDefaultJoinAs, channelFullData.themeEmoticon, channelFullData.requestsPending, channelFullData.defaultSendAs, channelFullData.availableReactions, channelFullData.reactionsLimit, channelFullData.wallpaper, channelFullData.boostsApplied, channelFullData.boostsUnrestrict, channelFullData.emojiset, channelFullData.botVerification, channelFullData.stargiftsCount, channelFullData.sendPaidMessagesStars, channelFullData.mainTab)
                                             var channelFlags = CachedChannelFlags()
                                             if (flags & (1 << 3)) != 0 {
                                                 channelFlags.insert(.canDisplayParticipants)
