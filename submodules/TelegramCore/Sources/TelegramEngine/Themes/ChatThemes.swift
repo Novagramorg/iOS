@@ -167,9 +167,11 @@ public enum ChatTheme: PostboxCoding, Codable, Equatable {
 extension ChatTheme {
     init?(apiChatTheme: Api.ChatTheme) {
         switch apiChatTheme {
-        case let .chatTheme(emoticon):
+        case let .chatTheme(chatThemeData):
+            let emoticon = chatThemeData.emoticon
             self = .emoticon(emoticon)
-        case let .chatThemeUniqueGift(gift, themeSettings):
+        case let .chatThemeUniqueGift(chatThemeUniqueGiftData):
+            let (gift, themeSettings) = (chatThemeUniqueGiftData.gift, chatThemeUniqueGiftData.themeSettings)
             guard let gift = StarGift(apiStarGift: gift) else {
                 return nil
             }

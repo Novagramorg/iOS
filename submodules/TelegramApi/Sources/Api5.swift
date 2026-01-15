@@ -149,8 +149,28 @@ public extension Api {
 }
 public extension Api {
     enum ChatParticipants: TypeConstructorDescription {
-        case chatParticipants(chatId: Int64, participants: [Api.ChatParticipant], version: Int32)
-        case chatParticipantsForbidden(flags: Int32, chatId: Int64, selfParticipant: Api.ChatParticipant?)
+        public class Cons_chatParticipants {
+            public var chatId: Int64
+            public var participants: [Api.ChatParticipant]
+            public var version: Int32
+            public init(chatId: Int64, participants: [Api.ChatParticipant], version: Int32) {
+                self.chatId = chatId
+                self.participants = participants
+                self.version = version
+            }
+        }
+        public class Cons_chatParticipantsForbidden {
+            public var flags: Int32
+            public var chatId: Int64
+            public var selfParticipant: Api.ChatParticipant?
+            public init(flags: Int32, chatId: Int64, selfParticipant: Api.ChatParticipant?) {
+                self.flags = flags
+                self.chatId = chatId
+                self.selfParticipant = selfParticipant
+            }
+        }
+        case chatParticipants(Cons_chatParticipants)
+        case chatParticipantsForbidden(Cons_chatParticipantsForbidden)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -186,7 +206,19 @@ public extension Api {
 }
 public extension Api {
     enum ChatPhoto: TypeConstructorDescription {
-        case chatPhoto(flags: Int32, photoId: Int64, strippedThumb: Buffer?, dcId: Int32)
+        public class Cons_chatPhoto {
+            public var flags: Int32
+            public var photoId: Int64
+            public var strippedThumb: Buffer?
+            public var dcId: Int32
+            public init(flags: Int32, photoId: Int64, strippedThumb: Buffer?, dcId: Int32) {
+                self.flags = flags
+                self.photoId = photoId
+                self.strippedThumb = strippedThumb
+                self.dcId = dcId
+            }
+        }
+        case chatPhoto(Cons_chatPhoto)
         case chatPhotoEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -223,9 +255,21 @@ public extension Api {
 }
 public extension Api {
     enum ChatReactions: TypeConstructorDescription {
-        case chatReactionsAll(flags: Int32)
+        public class Cons_chatReactionsAll {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
+        public class Cons_chatReactionsSome {
+            public var reactions: [Api.Reaction]
+            public init(reactions: [Api.Reaction]) {
+                self.reactions = reactions
+            }
+        }
+        case chatReactionsAll(Cons_chatReactionsAll)
         case chatReactionsNone
-        case chatReactionsSome(reactions: [Api.Reaction])
+        case chatReactionsSome(Cons_chatReactionsSome)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -268,8 +312,22 @@ public extension Api {
 }
 public extension Api {
     enum ChatTheme: TypeConstructorDescription {
-        case chatTheme(emoticon: String)
-        case chatThemeUniqueGift(gift: Api.StarGift, themeSettings: [Api.ThemeSettings])
+        public class Cons_chatTheme {
+            public var emoticon: String
+            public init(emoticon: String) {
+                self.emoticon = emoticon
+            }
+        }
+        public class Cons_chatThemeUniqueGift {
+            public var gift: Api.StarGift
+            public var themeSettings: [Api.ThemeSettings]
+            public init(gift: Api.StarGift, themeSettings: [Api.ThemeSettings]) {
+                self.gift = gift
+                self.themeSettings = themeSettings
+            }
+        }
+        case chatTheme(Cons_chatTheme)
+        case chatThemeUniqueGift(Cons_chatThemeUniqueGift)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -305,7 +363,19 @@ public extension Api {
 }
 public extension Api {
     enum CodeSettings: TypeConstructorDescription {
-        case codeSettings(flags: Int32, logoutTokens: [Buffer]?, token: String?, appSandbox: Api.Bool?)
+        public class Cons_codeSettings {
+            public var flags: Int32
+            public var logoutTokens: [Buffer]?
+            public var token: String?
+            public var appSandbox: Api.Bool?
+            public init(flags: Int32, logoutTokens: [Buffer]?, token: String?, appSandbox: Api.Bool?) {
+                self.flags = flags
+                self.logoutTokens = logoutTokens
+                self.token = token
+                self.appSandbox = appSandbox
+            }
+        }
+        case codeSettings(Cons_codeSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

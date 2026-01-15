@@ -1022,9 +1022,9 @@ func _internal_updatePeerReactionSettings(account: Account, peerId: PeerId, reac
         let mappedReactions: Api.ChatReactions
         switch reactionSettings.allowedReactions {
         case .all:
-            mappedReactions = .chatReactionsAll(flags: 0)
+            mappedReactions = .chatReactionsAll(.init(flags: 0))
         case let .limited(array):
-            mappedReactions = .chatReactionsSome(reactions: array.map(\.apiReaction))
+            mappedReactions = .chatReactionsSome(.init(reactions: array.map(\.apiReaction)))
         case .empty:
             mappedReactions = .chatReactionsNone
         }

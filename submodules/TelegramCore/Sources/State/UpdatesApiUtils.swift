@@ -303,9 +303,11 @@ extension Api.Update {
                 return [PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId)), PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))]
             case let .updateChatParticipants(participants):
                 switch participants {
-                    case let .chatParticipants(chatId, _, _):
+                    case let .chatParticipants(chatParticipantsData):
+                        let chatId = chatParticipantsData.chatId
                         return [PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))]
-                    case let .chatParticipantsForbidden(_, chatId, _):
+                    case let .chatParticipantsForbidden(chatParticipantsForbiddenData):
+                        let chatId = chatParticipantsForbiddenData.chatId
                         return [PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))]
                 }
             case let .updateDeleteChannelMessages(channelId, _, _, _):

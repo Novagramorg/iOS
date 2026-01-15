@@ -1267,9 +1267,11 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updateChatParticipants(participants):
                 let groupPeerId: PeerId
                 switch participants {
-                    case let .chatParticipants(chatId, _, _):
+                    case let .chatParticipants(chatParticipantsData):
+                        let chatId = chatParticipantsData.chatId
                         groupPeerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                    case let .chatParticipantsForbidden(_, chatId, _):
+                    case let .chatParticipantsForbidden(chatParticipantsForbiddenData):
+                        let chatId = chatParticipantsForbiddenData.chatId
                         groupPeerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
                 }
                 updatedState.updateCachedPeerData(groupPeerId, { current in

@@ -50,7 +50,7 @@ func _internal_requestChangeAccountPhoneNumberVerification(account: Account, api
         appSandbox = pushNotificationConfiguration.isSandbox ? .boolTrue : .boolFalse
     }
     
-    return account.network.request(Api.functions.account.sendChangePhoneCode(phoneNumber: phoneNumber, settings: .codeSettings(flags: flags, logoutTokens: nil, token: token, appSandbox: appSandbox)), automaticFloodWait: false)
+    return account.network.request(Api.functions.account.sendChangePhoneCode(phoneNumber: phoneNumber, settings: .codeSettings(.init(flags: flags, logoutTokens: nil, token: token, appSandbox: appSandbox))), automaticFloodWait: false)
         |> mapError { error -> RequestChangeAccountPhoneNumberVerificationError in
             if error.errorDescription.hasPrefix("FLOOD_WAIT") {
                 return .limitExceeded

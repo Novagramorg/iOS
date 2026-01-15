@@ -22,7 +22,8 @@ extension GroupParticipant {
 extension CachedGroupParticipants {
     convenience init?(apiParticipants: Api.ChatParticipants) {
         switch apiParticipants {
-            case let .chatParticipants(_, participants, version):
+            case let .chatParticipants(chatParticipantsData):
+                let (participants, version) = (chatParticipantsData.participants, chatParticipantsData.version)
                 self.init(participants: participants.map { GroupParticipant(apiParticipant: $0) }, version: version)
             case .chatParticipantsForbidden:
                 return nil

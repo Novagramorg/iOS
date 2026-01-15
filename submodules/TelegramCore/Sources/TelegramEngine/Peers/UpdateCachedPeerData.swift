@@ -570,7 +570,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                         switch allowedReactions {
                                         case .chatReactionsAll:
                                             mappedAllowedReactions = .all
-                                        case let .chatReactionsSome(reactions):
+                                        case let .chatReactionsSome(chatReactionsSomeData):
+                                            let reactions = chatReactionsSomeData.reactions
                                             mappedAllowedReactions = .limited(reactions.compactMap(MessageReaction.Reaction.init(apiReaction:)))
                                         case .chatReactionsNone:
                                             mappedAllowedReactions = .empty
@@ -838,7 +839,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                     switch allowedReactions {
                                                     case .chatReactionsAll:
                                                         mappedAllowedReactions = .all
-                                                    case let .chatReactionsSome(reactions):
+                                                    case let .chatReactionsSome(chatReactionsSomeData):
+                                                        let reactions = chatReactionsSomeData.reactions
                                                         mappedAllowedReactions = .limited(reactions.compactMap(MessageReaction.Reaction.init(apiReaction:)))
                                                     case .chatReactionsNone:
                                                         mappedAllowedReactions = .empty
