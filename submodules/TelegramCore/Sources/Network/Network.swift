@@ -903,7 +903,8 @@ public final class Network: NSObject, MTRequestMessageServiceDelegate {
                             let publicKeys = cdnConfigData.publicKeys
                             for key in publicKeys {
                                 switch key {
-                                case let .cdnPublicKey(dcId, publicKey):
+                                case let .cdnPublicKey(cdnPublicKeyData):
+                                    let (dcId, publicKey) = (cdnPublicKeyData.dcId, cdnPublicKeyData.publicKey)
                                     if id == Int(dcId) {
                                         let dict = NSMutableDictionary()
                                         dict["key"] = publicKey

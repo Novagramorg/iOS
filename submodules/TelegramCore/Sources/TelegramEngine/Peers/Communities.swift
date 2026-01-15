@@ -282,15 +282,16 @@ func _internal_checkChatFolderLink(account: Account, slug: String) -> Signal<Cha
                 var memberCounts: [PeerId: Int] = [:]
                 
                 for chat in chats {
-                    if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _) = chat {
+                    if case let .channel(channelData) = chat {
+                        let participantsCount = channelData.participantsCount
                         if let participantsCount = participantsCount {
                             memberCounts[chat.peerId] = Int(participantsCount)
                         }
                     }
                 }
-                
+
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                
+
                 var resultPeers: [EnginePeer] = []
                 var alreadyMemberPeerIds = Set<EnginePeer.Id>()
                 for peer in peers {
@@ -317,15 +318,16 @@ func _internal_checkChatFolderLink(account: Account, slug: String) -> Signal<Cha
                 var memberCounts: [PeerId: Int] = [:]
                 
                 for chat in chats {
-                    if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _) = chat {
+                    if case let .channel(channelData) = chat {
+                        let participantsCount = channelData.participantsCount
                         if let participantsCount = participantsCount {
                             memberCounts[chat.peerId] = Int(participantsCount)
                         }
                     }
                 }
-                
+
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                
+
                 let currentFilters = _internal_currentChatListFilters(transaction: transaction)
                 var currentFilterTitle: ChatFolderTitle?
                 if let index = currentFilters.firstIndex(where: { $0.id == filterId }) {
@@ -612,15 +614,16 @@ func _internal_pollChatFolderUpdatesOnce(account: Account, folderId: Int32) -> S
                     var memberCounts: [ChatListFiltersState.ChatListFilterUpdates.MemberCount] = []
                     
                     for chat in chats {
-                        if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _) = chat {
+                        if case let .channel(channelData) = chat {
+                            let participantsCount = channelData.participantsCount
                             if let participantsCount = participantsCount {
                                 memberCounts.append(ChatListFiltersState.ChatListFilterUpdates.MemberCount(id: chat.peerId, count: participantsCount))
                             }
                         }
                     }
-                    
+
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                    
+
                     let _ = updateChatListFiltersState(transaction: transaction, { state in
                         var state = state
                         

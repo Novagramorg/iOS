@@ -180,15 +180,20 @@ extension Api.Message {
 extension Api.Chat {
     var peerId: PeerId {
         switch self {
-            case let .chat(_, id, _, _, _, _, _, _, _, _):
+            case let .chat(chatData):
+                let id = chatData.id
                 return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(id))
-            case let .chatEmpty(id):
+            case let .chatEmpty(chatEmptyData):
+                let id = chatEmptyData.id
                 return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(id))
-            case let .chatForbidden(id, _):
+            case let .chatForbidden(chatForbiddenData):
+                let id = chatForbiddenData.id
                 return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(id))
-            case let .channel(_, _, id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+            case let .channel(channelData):
+                let id = channelData.id
                 return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id))
-            case let .channelForbidden(_, id, _, _, _):
+            case let .channelForbidden(channelForbiddenData):
+                let id = channelForbiddenData.id
                 return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id))
         }
     }

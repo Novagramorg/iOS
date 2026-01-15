@@ -81,7 +81,8 @@ func updatePeers(transaction: Transaction, accountPeerId: PeerId, peers: Accumul
     }
     for (_, chat) in peers.chats {
         switch chat {
-        case let .channel(flags, flags2, _, _, _, _, _, _, _, _, _, _, _, _, storiesMaxId, _, _, _, _, _, _, _, _):
+        case let .channel(channelData):
+            let (flags, flags2, storiesMaxId) = (channelData.flags, channelData.flags2, channelData.storiesMaxId)
             let isMin = (flags & (1 << 12)) != 0
             let storiesUnavailable = (flags2 & (1 << 3)) != 0
             
