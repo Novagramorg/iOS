@@ -826,26 +826,28 @@ public final class TelegramBusinessLocation: Equatable, Codable {
 extension TelegramBusinessHours.WorkingTimeInterval {
     init(apiInterval: Api.BusinessWeeklyOpen) {
         switch apiInterval {
-        case let .businessWeeklyOpen(startMinute, endMinute):
+        case let .businessWeeklyOpen(businessWeeklyOpenData):
+            let (startMinute, endMinute) = (businessWeeklyOpenData.startMinute, businessWeeklyOpenData.endMinute)
             self.init(startMinute: Int(startMinute), endMinute: Int(endMinute))
         }
     }
     
     var apiInterval: Api.BusinessWeeklyOpen {
-        return .businessWeeklyOpen(startMinute: Int32(clamping: self.startMinute), endMinute: Int32(clamping: self.endMinute))
+        return .businessWeeklyOpen(Api.BusinessWeeklyOpen.Cons_businessWeeklyOpen(startMinute: Int32(clamping: self.startMinute), endMinute: Int32(clamping: self.endMinute)))
     }
 }
 
 extension TelegramBusinessHours {
     convenience init(apiWorkingHours: Api.BusinessWorkHours) {
         switch apiWorkingHours {
-        case let .businessWorkHours(_, timezoneId, weeklyOpen):
+        case let .businessWorkHours(businessWorkHoursData):
+            let (_, timezoneId, weeklyOpen) = (businessWorkHoursData.flags, businessWorkHoursData.timezoneId, businessWorkHoursData.weeklyOpen)
             self.init(timezoneId: timezoneId, weeklyTimeIntervals: weeklyOpen.map(TelegramBusinessHours.WorkingTimeInterval.init(apiInterval:)))
         }
     }
     
     var apiBusinessHours: Api.BusinessWorkHours {
-        return .businessWorkHours(flags: 0, timezoneId: self.timezoneId, weeklyOpen: self.weeklyTimeIntervals.map(\.apiInterval))
+        return .businessWorkHours(Api.BusinessWorkHours.Cons_businessWorkHours(flags: 0, timezoneId: self.timezoneId, weeklyOpen: self.weeklyTimeIntervals.map(\.apiInterval)))
     }
 }
 
@@ -867,7 +869,8 @@ extension TelegramBusinessLocation.Coordinates {
 extension TelegramBusinessLocation {
     convenience init(apiLocation: Api.BusinessLocation) {
         switch apiLocation {
-        case let .businessLocation(_, geoPoint, address):
+        case let .businessLocation(businessLocationData):
+            let (_, geoPoint, address) = (businessLocationData.flags, businessLocationData.geoPoint, businessLocationData.address)
             self.init(address: address, coordinates: geoPoint.flatMap { Coordinates(apiGeoPoint: $0) })
         }
     }
@@ -932,7 +935,8 @@ public final class TelegramBusinessChatLinks: Codable, Equatable {
 extension TelegramBusinessChatLinks.Link {
     convenience init(apiLink: Api.BusinessChatLink) {
         switch apiLink {
-        case let .businessChatLink(_, link, message, entities, title, views):
+        case let .businessChatLink(businessChatLinkData):
+            let (_, link, message, entities, title, views) = (businessChatLinkData.flags, businessChatLinkData.link, businessChatLinkData.message, businessChatLinkData.entities, businessChatLinkData.title, businessChatLinkData.views)
             self.init(url: link, message: message, entities: messageTextEntitiesFromApiEntities(entities ?? []), title: title, viewCount: views)
         }
     }

@@ -760,7 +760,17 @@ public extension Api {
 }
 public extension Api {
     enum BusinessBotRecipients: TypeConstructorDescription {
-        case businessBotRecipients(flags: Int32, users: [Int64]?, excludeUsers: [Int64]?)
+        public class Cons_businessBotRecipients {
+            public var flags: Int32
+            public var users: [Int64]?
+            public var excludeUsers: [Int64]?
+            public init(flags: Int32, users: [Int64]?, excludeUsers: [Int64]?) {
+                self.flags = flags
+                self.users = users
+                self.excludeUsers = excludeUsers
+            }
+        }
+        case businessBotRecipients(Cons_businessBotRecipients)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -789,7 +799,13 @@ public extension Api {
 }
 public extension Api {
     enum BusinessBotRights: TypeConstructorDescription {
-        case businessBotRights(flags: Int32)
+        public class Cons_businessBotRights {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
+        case businessBotRights(Cons_businessBotRights)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -818,7 +834,23 @@ public extension Api {
 }
 public extension Api {
     enum BusinessChatLink: TypeConstructorDescription {
-        case businessChatLink(flags: Int32, link: String, message: String, entities: [Api.MessageEntity]?, title: String?, views: Int32)
+        public class Cons_businessChatLink {
+            public var flags: Int32
+            public var link: String
+            public var message: String
+            public var entities: [Api.MessageEntity]?
+            public var title: String?
+            public var views: Int32
+            public init(flags: Int32, link: String, message: String, entities: [Api.MessageEntity]?, title: String?, views: Int32) {
+                self.flags = flags
+                self.link = link
+                self.message = message
+                self.entities = entities
+                self.title = title
+                self.views = views
+            }
+        }
+        case businessChatLink(Cons_businessChatLink)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
