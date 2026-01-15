@@ -404,7 +404,97 @@ public extension Api {
 }
 public extension Api {
     enum Config: TypeConstructorDescription {
-        case config(flags: Int32, date: Int32, expires: Int32, testMode: Api.Bool, thisDc: Int32, dcOptions: [Api.DcOption], dcTxtDomainName: String, chatSizeMax: Int32, megagroupSizeMax: Int32, forwardedCountMax: Int32, onlineUpdatePeriodMs: Int32, offlineBlurTimeoutMs: Int32, offlineIdleTimeoutMs: Int32, onlineCloudTimeoutMs: Int32, notifyCloudDelayMs: Int32, notifyDefaultDelayMs: Int32, pushChatPeriodMs: Int32, pushChatLimit: Int32, editTimeLimit: Int32, revokeTimeLimit: Int32, revokePmTimeLimit: Int32, ratingEDecay: Int32, stickersRecentLimit: Int32, channelsReadMediaPeriod: Int32, tmpSessions: Int32?, callReceiveTimeoutMs: Int32, callRingTimeoutMs: Int32, callConnectTimeoutMs: Int32, callPacketTimeoutMs: Int32, meUrlPrefix: String, autoupdateUrlPrefix: String?, gifSearchUsername: String?, venueSearchUsername: String?, imgSearchUsername: String?, staticMapsProvider: String?, captionLengthMax: Int32, messageLengthMax: Int32, webfileDcId: Int32, suggestedLangCode: String?, langPackVersion: Int32?, baseLangPackVersion: Int32?, reactionsDefault: Api.Reaction?, autologinToken: String?)
+        public class Cons_config {
+            public var flags: Int32
+            public var date: Int32
+            public var expires: Int32
+            public var testMode: Api.Bool
+            public var thisDc: Int32
+            public var dcOptions: [Api.DcOption]
+            public var dcTxtDomainName: String
+            public var chatSizeMax: Int32
+            public var megagroupSizeMax: Int32
+            public var forwardedCountMax: Int32
+            public var onlineUpdatePeriodMs: Int32
+            public var offlineBlurTimeoutMs: Int32
+            public var offlineIdleTimeoutMs: Int32
+            public var onlineCloudTimeoutMs: Int32
+            public var notifyCloudDelayMs: Int32
+            public var notifyDefaultDelayMs: Int32
+            public var pushChatPeriodMs: Int32
+            public var pushChatLimit: Int32
+            public var editTimeLimit: Int32
+            public var revokeTimeLimit: Int32
+            public var revokePmTimeLimit: Int32
+            public var ratingEDecay: Int32
+            public var stickersRecentLimit: Int32
+            public var channelsReadMediaPeriod: Int32
+            public var tmpSessions: Int32?
+            public var callReceiveTimeoutMs: Int32
+            public var callRingTimeoutMs: Int32
+            public var callConnectTimeoutMs: Int32
+            public var callPacketTimeoutMs: Int32
+            public var meUrlPrefix: String
+            public var autoupdateUrlPrefix: String?
+            public var gifSearchUsername: String?
+            public var venueSearchUsername: String?
+            public var imgSearchUsername: String?
+            public var staticMapsProvider: String?
+            public var captionLengthMax: Int32
+            public var messageLengthMax: Int32
+            public var webfileDcId: Int32
+            public var suggestedLangCode: String?
+            public var langPackVersion: Int32?
+            public var baseLangPackVersion: Int32?
+            public var reactionsDefault: Api.Reaction?
+            public var autologinToken: String?
+            public init(flags: Int32, date: Int32, expires: Int32, testMode: Api.Bool, thisDc: Int32, dcOptions: [Api.DcOption], dcTxtDomainName: String, chatSizeMax: Int32, megagroupSizeMax: Int32, forwardedCountMax: Int32, onlineUpdatePeriodMs: Int32, offlineBlurTimeoutMs: Int32, offlineIdleTimeoutMs: Int32, onlineCloudTimeoutMs: Int32, notifyCloudDelayMs: Int32, notifyDefaultDelayMs: Int32, pushChatPeriodMs: Int32, pushChatLimit: Int32, editTimeLimit: Int32, revokeTimeLimit: Int32, revokePmTimeLimit: Int32, ratingEDecay: Int32, stickersRecentLimit: Int32, channelsReadMediaPeriod: Int32, tmpSessions: Int32?, callReceiveTimeoutMs: Int32, callRingTimeoutMs: Int32, callConnectTimeoutMs: Int32, callPacketTimeoutMs: Int32, meUrlPrefix: String, autoupdateUrlPrefix: String?, gifSearchUsername: String?, venueSearchUsername: String?, imgSearchUsername: String?, staticMapsProvider: String?, captionLengthMax: Int32, messageLengthMax: Int32, webfileDcId: Int32, suggestedLangCode: String?, langPackVersion: Int32?, baseLangPackVersion: Int32?, reactionsDefault: Api.Reaction?, autologinToken: String?) {
+                self.flags = flags
+                self.date = date
+                self.expires = expires
+                self.testMode = testMode
+                self.thisDc = thisDc
+                self.dcOptions = dcOptions
+                self.dcTxtDomainName = dcTxtDomainName
+                self.chatSizeMax = chatSizeMax
+                self.megagroupSizeMax = megagroupSizeMax
+                self.forwardedCountMax = forwardedCountMax
+                self.onlineUpdatePeriodMs = onlineUpdatePeriodMs
+                self.offlineBlurTimeoutMs = offlineBlurTimeoutMs
+                self.offlineIdleTimeoutMs = offlineIdleTimeoutMs
+                self.onlineCloudTimeoutMs = onlineCloudTimeoutMs
+                self.notifyCloudDelayMs = notifyCloudDelayMs
+                self.notifyDefaultDelayMs = notifyDefaultDelayMs
+                self.pushChatPeriodMs = pushChatPeriodMs
+                self.pushChatLimit = pushChatLimit
+                self.editTimeLimit = editTimeLimit
+                self.revokeTimeLimit = revokeTimeLimit
+                self.revokePmTimeLimit = revokePmTimeLimit
+                self.ratingEDecay = ratingEDecay
+                self.stickersRecentLimit = stickersRecentLimit
+                self.channelsReadMediaPeriod = channelsReadMediaPeriod
+                self.tmpSessions = tmpSessions
+                self.callReceiveTimeoutMs = callReceiveTimeoutMs
+                self.callRingTimeoutMs = callRingTimeoutMs
+                self.callConnectTimeoutMs = callConnectTimeoutMs
+                self.callPacketTimeoutMs = callPacketTimeoutMs
+                self.meUrlPrefix = meUrlPrefix
+                self.autoupdateUrlPrefix = autoupdateUrlPrefix
+                self.gifSearchUsername = gifSearchUsername
+                self.venueSearchUsername = venueSearchUsername
+                self.imgSearchUsername = imgSearchUsername
+                self.staticMapsProvider = staticMapsProvider
+                self.captionLengthMax = captionLengthMax
+                self.messageLengthMax = messageLengthMax
+                self.webfileDcId = webfileDcId
+                self.suggestedLangCode = suggestedLangCode
+                self.langPackVersion = langPackVersion
+                self.baseLangPackVersion = baseLangPackVersion
+                self.reactionsDefault = reactionsDefault
+                self.autologinToken = autologinToken
+            }
+        }
+        case config(Cons_config)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -433,7 +523,19 @@ public extension Api {
 }
 public extension Api {
     enum ConnectedBot: TypeConstructorDescription {
-        case connectedBot(flags: Int32, botId: Int64, recipients: Api.BusinessBotRecipients, rights: Api.BusinessBotRights)
+        public class Cons_connectedBot {
+            public var flags: Int32
+            public var botId: Int64
+            public var recipients: Api.BusinessBotRecipients
+            public var rights: Api.BusinessBotRights
+            public init(flags: Int32, botId: Int64, recipients: Api.BusinessBotRecipients, rights: Api.BusinessBotRights) {
+                self.flags = flags
+                self.botId = botId
+                self.recipients = recipients
+                self.rights = rights
+            }
+        }
+        case connectedBot(Cons_connectedBot)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -462,7 +564,27 @@ public extension Api {
 }
 public extension Api {
     enum ConnectedBotStarRef: TypeConstructorDescription {
-        case connectedBotStarRef(flags: Int32, url: String, date: Int32, botId: Int64, commissionPermille: Int32, durationMonths: Int32?, participants: Int64, revenue: Int64)
+        public class Cons_connectedBotStarRef {
+            public var flags: Int32
+            public var url: String
+            public var date: Int32
+            public var botId: Int64
+            public var commissionPermille: Int32
+            public var durationMonths: Int32?
+            public var participants: Int64
+            public var revenue: Int64
+            public init(flags: Int32, url: String, date: Int32, botId: Int64, commissionPermille: Int32, durationMonths: Int32?, participants: Int64, revenue: Int64) {
+                self.flags = flags
+                self.url = url
+                self.date = date
+                self.botId = botId
+                self.commissionPermille = commissionPermille
+                self.durationMonths = durationMonths
+                self.participants = participants
+                self.revenue = revenue
+            }
+        }
+        case connectedBotStarRef(Cons_connectedBotStarRef)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -491,7 +613,15 @@ public extension Api {
 }
 public extension Api {
     enum Contact: TypeConstructorDescription {
-        case contact(userId: Int64, mutual: Api.Bool)
+        public class Cons_contact {
+            public var userId: Int64
+            public var mutual: Api.Bool
+            public init(userId: Int64, mutual: Api.Bool) {
+                self.userId = userId
+                self.mutual = mutual
+            }
+        }
+        case contact(Cons_contact)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -520,7 +650,15 @@ public extension Api {
 }
 public extension Api {
     enum ContactBirthday: TypeConstructorDescription {
-        case contactBirthday(contactId: Int64, birthday: Api.Birthday)
+        public class Cons_contactBirthday {
+            public var contactId: Int64
+            public var birthday: Api.Birthday
+            public init(contactId: Int64, birthday: Api.Birthday) {
+                self.contactId = contactId
+                self.birthday = birthday
+            }
+        }
+        case contactBirthday(Cons_contactBirthday)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

@@ -1170,7 +1170,8 @@ fileprivate func  _internal_requestConnectedStarRefBots(account: Account, id: En
                     var items: [EngineConnectedStarRefBotsContext.Item] = []
                     for connectedBot in connectedBots {
                         switch connectedBot {
-                        case let .connectedBotStarRef(_, url, date, botId, commissionPermille, durationMonths, participants, revenue):
+                        case let .connectedBotStarRef(connectedBotStarRefData):
+                            let (url, date, botId, commissionPermille, durationMonths, participants, revenue) = (connectedBotStarRefData.url, connectedBotStarRefData.date, connectedBotStarRefData.botId, connectedBotStarRefData.commissionPermille, connectedBotStarRefData.durationMonths, connectedBotStarRefData.participants, connectedBotStarRefData.revenue)
                             guard let botPeer = transaction.getPeer(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId))) else {
                                 continue
                             }
@@ -1283,7 +1284,8 @@ func _internal_connectStarRefBot(account: Account, id: EnginePeer.Id, botId: Eng
                     
                     if let bot = connectedBots.first {
                         switch bot {
-                        case let .connectedBotStarRef(_, url, date, botId, commissionPermille, durationMonths, participants, revenue):
+                        case let .connectedBotStarRef(connectedBotStarRefData):
+                            let (url, date, botId, commissionPermille, durationMonths, participants, revenue) = (connectedBotStarRefData.url, connectedBotStarRefData.date, connectedBotStarRefData.botId, connectedBotStarRefData.commissionPermille, connectedBotStarRefData.durationMonths, connectedBotStarRefData.participants, connectedBotStarRefData.revenue)
                             guard let botPeer = transaction.getPeer(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId))) else {
                                 return nil
                             }
@@ -1374,7 +1376,8 @@ func _internal_getStarRefBotConnection(account: Account, id: EnginePeer.Id, targ
                     
                     if let bot = connectedBots.first {
                         switch bot {
-                        case let .connectedBotStarRef(flags, url, date, botId, commissionPermille, durationMonths, participants, revenue):
+                        case let .connectedBotStarRef(connectedBotStarRefData):
+                            let (flags, url, date, botId, commissionPermille, durationMonths, participants, revenue) = (connectedBotStarRefData.flags, connectedBotStarRefData.url, connectedBotStarRefData.date, connectedBotStarRefData.botId, connectedBotStarRefData.commissionPermille, connectedBotStarRefData.durationMonths, connectedBotStarRefData.participants, connectedBotStarRefData.revenue)
                             let isRevoked = (flags & (1 << 1)) != 0
                             if isRevoked {
                                return nil
