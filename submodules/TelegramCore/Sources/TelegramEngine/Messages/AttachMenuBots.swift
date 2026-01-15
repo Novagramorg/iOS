@@ -749,7 +749,8 @@ func _internal_getBotApp(account: Account, reference: BotAppReference) -> Signal
             switch result {
             case let .botApp(botAppFlags, app):
                 switch app {
-                case let .botApp(flags, id, accessHash, shortName, title, description, photo, document, hash):
+                case let .botApp(botAppData):
+                    let (flags, id, accessHash, shortName, title, description, photo, document, hash) = (botAppData.flags, botAppData.id, botAppData.accessHash, botAppData.shortName, botAppData.title, botAppData.description, botAppData.photo, botAppData.document, botAppData.hash)
                     let _ = flags
                     var appFlags = BotApp.Flags()
                     if (botAppFlags & (1 << 0)) != 0 {
@@ -775,7 +776,8 @@ func _internal_getBotApp(account: Account, reference: BotAppReference) -> Signal
 extension BotApp {
     convenience init?(apiBotApp: Api.BotApp) {
         switch apiBotApp {
-        case let .botApp(_, id, accessHash, shortName, title, description, photo, document, hash):
+        case let .botApp(botAppData):
+            let (id, accessHash, shortName, title, description, photo, document, hash) = (botAppData.id, botAppData.accessHash, botAppData.shortName, botAppData.title, botAppData.description, botAppData.photo, botAppData.document, botAppData.hash)
             self.init(id: id, accessHash: accessHash, shortName: shortName, title: title, description: description, photo: telegramMediaImageFromApiPhoto(photo), document: document.flatMap { telegramMediaFileFromApiDocument($0, altDocuments: []) }, hash: hash, flags: [])
         case .botAppNotModified:
             return nil

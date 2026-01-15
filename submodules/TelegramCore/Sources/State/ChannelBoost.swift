@@ -279,7 +279,8 @@ private final class ChannelBoostersContextImpl {
                             var resultBoosts: [ChannelBoostersContext.State.Boost] = []
                             for boost in boosts {
                                 switch boost {
-                                case let .boost(flags, id, userId, giveawayMessageId, date, expires, usedGiftSlug, multiplier, stars):
+                                case let .boost(boostData):
+                                    let (flags, id, userId, giveawayMessageId, date, expires, usedGiftSlug, multiplier, stars) = (boostData.flags, boostData.id, boostData.userId, boostData.giveawayMsgId, boostData.date, boostData.expires, boostData.usedGiftSlug, boostData.multiplier, boostData.stars)
                                     var boostFlags: ChannelBoostersContext.State.Boost.Flags = []
                                     var boostPeer: EnginePeer?
                                     if let userId = userId {

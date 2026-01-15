@@ -56,7 +56,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
             return TelegramMediaAction(action: .botDomainAccessGranted(domain: domain))
         } else {
             var appName: String?
-            if case let .botApp(_, _, _, _, appNameValue, _, _, _, _) = app {
+            if case let .botApp(botAppData) = app {
+                let appNameValue = botAppData.title
                 appName = appNameValue
             }
             var type: BotSendMessageAccessGrantedType?
