@@ -173,7 +173,8 @@ public final class AvailableMessageEffects: Equatable, Codable {
 private extension AvailableMessageEffects.MessageEffect {
     convenience init?(apiMessageEffect: Api.AvailableEffect, files: [Int64: TelegramMediaFile]) {
         switch apiMessageEffect {
-        case let .availableEffect(flags, id, emoticon, staticIconId, effectStickerId, effectAnimationId):
+        case let .availableEffect(availableEffectData):
+            let (flags, id, emoticon, staticIconId, effectStickerId, effectAnimationId) = (availableEffectData.flags, availableEffectData.id, availableEffectData.emoticon, availableEffectData.staticIconId, availableEffectData.effectStickerId, availableEffectData.effectAnimationId)
             guard let effectSticker = files[effectStickerId] else {
                 return nil
             }

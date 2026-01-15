@@ -298,7 +298,8 @@ func managedSynchronizeAttachMenuBots(accountPeerId: PeerId, postbox: Postbox, n
                 }
                 return postbox.transaction { transaction -> Void in
                     switch result {
-                        case let .attachMenuBots(hash, bots, users):
+                        case let .attachMenuBots(attachMenuBotsData):
+                            let (hash, bots, users) = (attachMenuBotsData.hash, attachMenuBotsData.bots, attachMenuBotsData.users)
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
 
                             var resultBots: [AttachMenuBots.Bot] = []
@@ -526,7 +527,8 @@ func _internal_getAttachMenuBot(accountPeerId: PeerId, postbox: Postbox, network
         |> mapToSignal { result -> Signal<AttachMenuBot, GetAttachMenuBotError> in
             return postbox.transaction { transaction -> Signal<AttachMenuBot, GetAttachMenuBotError> in
                 switch result {
-                    case let .attachMenuBotsBot(bot, users):
+                    case let .attachMenuBotsBot(attachMenuBotsBotData):
+                        let (bot, users) = (attachMenuBotsBotData.bot, attachMenuBotsBotData.users)
                         var peer: Peer?
                         for user in users {
                             let telegramUser = TelegramUser(user: user)
