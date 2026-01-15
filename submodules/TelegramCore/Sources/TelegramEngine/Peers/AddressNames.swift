@@ -561,7 +561,8 @@ func _internal_adminedPublicChannels(account: Account, scope: AdminedPublicChann
             case let .chats(apiChats):
                 chats = apiChats
                 for chat in apiChats {
-                    if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _) = chat {
+                    if case let .channel(channelData) = chat {
+                        let participantsCount = channelData.participantsCount
                         subscriberCounts[chat.peerId] = participantsCount.flatMap(Int.init)
                     }
                 }
@@ -637,7 +638,7 @@ func _internal_channelsForStories(account: Account) -> Signal<[Peer], NoError> {
                     if let peer = transaction.getPeer(chat.peerId) {
                         peers.append(peer)
                         
-                        if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _) = chat, let participantsCount = participantsCount {
+                        if case let .channel(channelData) = chat, let participantsCount = channelData.participantsCount {
                             transaction.updatePeerCachedData(peerIds: Set([peer.id]), update: { _, current in
                                 var current = current as? CachedChannelData ?? CachedChannelData()
                                 var participantsSummary = current.participantsSummary
@@ -699,7 +700,7 @@ func _internal_channelsForPublicReaction(account: Account, useLocalCache: Bool) 
                     if let peer = transaction.getPeer(chat.peerId) {
                         peers.append(peer)
                         
-                        if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _) = chat, let participantsCount = participantsCount {
+                        if case let .channel(channelData) = chat, let participantsCount = channelData.participantsCount {
                             transaction.updatePeerCachedData(peerIds: Set([peer.id]), update: { _, current in
                                 var current = current as? CachedChannelData ?? CachedChannelData()
                                 var participantsSummary = current.participantsSummary

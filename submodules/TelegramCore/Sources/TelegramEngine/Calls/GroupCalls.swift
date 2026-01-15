@@ -2909,11 +2909,13 @@ func _internal_groupCallDisplayAsAvailablePeers(accountPeerId: PeerId, network: 
                     for chat in chats {
                         if let groupOrChannel = parseTelegramGroupOrChannel(chat: chat) {
                             switch chat {
-                            case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _):
+                            case let .channel(channelData):
+                                let participantsCount = channelData.participantsCount
                                 if let participantsCount = participantsCount {
                                     subscribers[groupOrChannel.id] = participantsCount
                                 }
-                            case let .chat(_, _, _, _, participantsCount, _, _, _, _, _):
+                            case let .chat(chatData):
+                                let participantsCount = chatData.participantsCount
                                 subscribers[groupOrChannel.id] = participantsCount
                             default:
                                 break

@@ -144,11 +144,13 @@ func _internal_peerSendAsAvailablePeers(accountPeerId: PeerId, network: Network,
                     for chat in chats {
                         if let groupOrChannel = parsedPeers.get(chat.peerId) {
                             switch chat {
-                            case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _):
+                            case let .channel(channelData):
+                                let participantsCount = channelData.participantsCount
                                 if let participantsCount = participantsCount {
                                     subscribers[groupOrChannel.id] = participantsCount
                                 }
-                            case let .chat(_, _, _, _, participantsCount, _, _, _, _, _):
+                            case let .chat(chatData):
+                                let participantsCount = chatData.participantsCount
                                 subscribers[groupOrChannel.id] = participantsCount
                             default:
                                 break
@@ -300,11 +302,13 @@ func _internal_liveStorySendAsAvailablePeers(account: Account, peerId: PeerId) -
                     for chat in chats {
                         if let groupOrChannel = parsedPeers.get(chat.peerId) {
                             switch chat {
-                            case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _):
+                            case let .channel(channelData):
+                                let participantsCount = channelData.participantsCount
                                 if let participantsCount = participantsCount {
                                     subscribers[groupOrChannel.id] = participantsCount
                                 }
-                            case let .chat(_, _, _, _, participantsCount, _, _, _, _, _):
+                            case let .chat(chatData):
+                                let participantsCount = chatData.participantsCount
                                 subscribers[groupOrChannel.id] = participantsCount
                             default:
                                 break

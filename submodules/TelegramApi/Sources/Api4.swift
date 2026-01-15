@@ -1,6 +1,12 @@
 public extension Api {
     enum ChannelAdminLogEventsFilter: TypeConstructorDescription {
-        case channelAdminLogEventsFilter(flags: Int32)
+        public class Cons_channelAdminLogEventsFilter {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
+        case channelAdminLogEventsFilter(Cons_channelAdminLogEventsFilter)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,7 +35,15 @@ public extension Api {
 }
 public extension Api {
     enum ChannelLocation: TypeConstructorDescription {
-        case channelLocation(geoPoint: Api.GeoPoint, address: String)
+        public class Cons_channelLocation {
+            public var geoPoint: Api.GeoPoint
+            public var address: String
+            public init(geoPoint: Api.GeoPoint, address: String) {
+                self.geoPoint = geoPoint
+                self.address = address
+            }
+        }
+        case channelLocation(Cons_channelLocation)
         case channelLocationEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -66,7 +80,15 @@ public extension Api {
 }
 public extension Api {
     enum ChannelMessagesFilter: TypeConstructorDescription {
-        case channelMessagesFilter(flags: Int32, ranges: [Api.MessageRange])
+        public class Cons_channelMessagesFilter {
+            public var flags: Int32
+            public var ranges: [Api.MessageRange]
+            public init(flags: Int32, ranges: [Api.MessageRange]) {
+                self.flags = flags
+                self.ranges = ranges
+            }
+        }
+        case channelMessagesFilter(Cons_channelMessagesFilter)
         case channelMessagesFilterEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -103,12 +125,88 @@ public extension Api {
 }
 public extension Api {
     enum ChannelParticipant: TypeConstructorDescription {
-        case channelParticipant(flags: Int32, userId: Int64, date: Int32, subscriptionUntilDate: Int32?)
-        case channelParticipantAdmin(flags: Int32, userId: Int64, inviterId: Int64?, promotedBy: Int64, date: Int32, adminRights: Api.ChatAdminRights, rank: String?)
-        case channelParticipantBanned(flags: Int32, peer: Api.Peer, kickedBy: Int64, date: Int32, bannedRights: Api.ChatBannedRights)
-        case channelParticipantCreator(flags: Int32, userId: Int64, adminRights: Api.ChatAdminRights, rank: String?)
-        case channelParticipantLeft(peer: Api.Peer)
-        case channelParticipantSelf(flags: Int32, userId: Int64, inviterId: Int64, date: Int32, subscriptionUntilDate: Int32?)
+        public class Cons_channelParticipant {
+            public var flags: Int32
+            public var userId: Int64
+            public var date: Int32
+            public var subscriptionUntilDate: Int32?
+            public init(flags: Int32, userId: Int64, date: Int32, subscriptionUntilDate: Int32?) {
+                self.flags = flags
+                self.userId = userId
+                self.date = date
+                self.subscriptionUntilDate = subscriptionUntilDate
+            }
+        }
+        public class Cons_channelParticipantAdmin {
+            public var flags: Int32
+            public var userId: Int64
+            public var inviterId: Int64?
+            public var promotedBy: Int64
+            public var date: Int32
+            public var adminRights: Api.ChatAdminRights
+            public var rank: String?
+            public init(flags: Int32, userId: Int64, inviterId: Int64?, promotedBy: Int64, date: Int32, adminRights: Api.ChatAdminRights, rank: String?) {
+                self.flags = flags
+                self.userId = userId
+                self.inviterId = inviterId
+                self.promotedBy = promotedBy
+                self.date = date
+                self.adminRights = adminRights
+                self.rank = rank
+            }
+        }
+        public class Cons_channelParticipantBanned {
+            public var flags: Int32
+            public var peer: Api.Peer
+            public var kickedBy: Int64
+            public var date: Int32
+            public var bannedRights: Api.ChatBannedRights
+            public init(flags: Int32, peer: Api.Peer, kickedBy: Int64, date: Int32, bannedRights: Api.ChatBannedRights) {
+                self.flags = flags
+                self.peer = peer
+                self.kickedBy = kickedBy
+                self.date = date
+                self.bannedRights = bannedRights
+            }
+        }
+        public class Cons_channelParticipantCreator {
+            public var flags: Int32
+            public var userId: Int64
+            public var adminRights: Api.ChatAdminRights
+            public var rank: String?
+            public init(flags: Int32, userId: Int64, adminRights: Api.ChatAdminRights, rank: String?) {
+                self.flags = flags
+                self.userId = userId
+                self.adminRights = adminRights
+                self.rank = rank
+            }
+        }
+        public class Cons_channelParticipantLeft {
+            public var peer: Api.Peer
+            public init(peer: Api.Peer) {
+                self.peer = peer
+            }
+        }
+        public class Cons_channelParticipantSelf {
+            public var flags: Int32
+            public var userId: Int64
+            public var inviterId: Int64
+            public var date: Int32
+            public var subscriptionUntilDate: Int32?
+            public init(flags: Int32, userId: Int64, inviterId: Int64, date: Int32, subscriptionUntilDate: Int32?) {
+                self.flags = flags
+                self.userId = userId
+                self.inviterId = inviterId
+                self.date = date
+                self.subscriptionUntilDate = subscriptionUntilDate
+            }
+        }
+        case channelParticipant(Cons_channelParticipant)
+        case channelParticipantAdmin(Cons_channelParticipantAdmin)
+        case channelParticipantBanned(Cons_channelParticipantBanned)
+        case channelParticipantCreator(Cons_channelParticipantCreator)
+        case channelParticipantLeft(Cons_channelParticipantLeft)
+        case channelParticipantSelf(Cons_channelParticipantSelf)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -172,14 +270,48 @@ public extension Api {
 }
 public extension Api {
     enum ChannelParticipantsFilter: TypeConstructorDescription {
+        public class Cons_channelParticipantsBanned {
+            public var q: String
+            public init(q: String) {
+                self.q = q
+            }
+        }
+        public class Cons_channelParticipantsContacts {
+            public var q: String
+            public init(q: String) {
+                self.q = q
+            }
+        }
+        public class Cons_channelParticipantsKicked {
+            public var q: String
+            public init(q: String) {
+                self.q = q
+            }
+        }
+        public class Cons_channelParticipantsMentions {
+            public var flags: Int32
+            public var q: String?
+            public var topMsgId: Int32?
+            public init(flags: Int32, q: String?, topMsgId: Int32?) {
+                self.flags = flags
+                self.q = q
+                self.topMsgId = topMsgId
+            }
+        }
+        public class Cons_channelParticipantsSearch {
+            public var q: String
+            public init(q: String) {
+                self.q = q
+            }
+        }
         case channelParticipantsAdmins
-        case channelParticipantsBanned(q: String)
+        case channelParticipantsBanned(Cons_channelParticipantsBanned)
         case channelParticipantsBots
-        case channelParticipantsContacts(q: String)
-        case channelParticipantsKicked(q: String)
-        case channelParticipantsMentions(flags: Int32, q: String?, topMsgId: Int32?)
+        case channelParticipantsContacts(Cons_channelParticipantsContacts)
+        case channelParticipantsKicked(Cons_channelParticipantsKicked)
+        case channelParticipantsMentions(Cons_channelParticipantsMentions)
         case channelParticipantsRecent
-        case channelParticipantsSearch(q: String)
+        case channelParticipantsSearch(Cons_channelParticipantsSearch)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -257,11 +389,113 @@ public extension Api {
 }
 public extension Api {
     indirect enum Chat: TypeConstructorDescription {
-        case channel(flags: Int32, flags2: Int32, id: Int64, accessHash: Int64?, title: String, username: String?, photo: Api.ChatPhoto, date: Int32, restrictionReason: [Api.RestrictionReason]?, adminRights: Api.ChatAdminRights?, bannedRights: Api.ChatBannedRights?, defaultBannedRights: Api.ChatBannedRights?, participantsCount: Int32?, usernames: [Api.Username]?, storiesMaxId: Api.RecentStory?, color: Api.PeerColor?, profileColor: Api.PeerColor?, emojiStatus: Api.EmojiStatus?, level: Int32?, subscriptionUntilDate: Int32?, botVerificationIcon: Int64?, sendPaidMessagesStars: Int64?, linkedMonoforumId: Int64?)
-        case channelForbidden(flags: Int32, id: Int64, accessHash: Int64, title: String, untilDate: Int32?)
-        case chat(flags: Int32, id: Int64, title: String, photo: Api.ChatPhoto, participantsCount: Int32, date: Int32, version: Int32, migratedTo: Api.InputChannel?, adminRights: Api.ChatAdminRights?, defaultBannedRights: Api.ChatBannedRights?)
-        case chatEmpty(id: Int64)
-        case chatForbidden(id: Int64, title: String)
+        public class Cons_channel {
+            public var flags: Int32
+            public var flags2: Int32
+            public var id: Int64
+            public var accessHash: Int64?
+            public var title: String
+            public var username: String?
+            public var photo: Api.ChatPhoto
+            public var date: Int32
+            public var restrictionReason: [Api.RestrictionReason]?
+            public var adminRights: Api.ChatAdminRights?
+            public var bannedRights: Api.ChatBannedRights?
+            public var defaultBannedRights: Api.ChatBannedRights?
+            public var participantsCount: Int32?
+            public var usernames: [Api.Username]?
+            public var storiesMaxId: Api.RecentStory?
+            public var color: Api.PeerColor?
+            public var profileColor: Api.PeerColor?
+            public var emojiStatus: Api.EmojiStatus?
+            public var level: Int32?
+            public var subscriptionUntilDate: Int32?
+            public var botVerificationIcon: Int64?
+            public var sendPaidMessagesStars: Int64?
+            public var linkedMonoforumId: Int64?
+            public init(flags: Int32, flags2: Int32, id: Int64, accessHash: Int64?, title: String, username: String?, photo: Api.ChatPhoto, date: Int32, restrictionReason: [Api.RestrictionReason]?, adminRights: Api.ChatAdminRights?, bannedRights: Api.ChatBannedRights?, defaultBannedRights: Api.ChatBannedRights?, participantsCount: Int32?, usernames: [Api.Username]?, storiesMaxId: Api.RecentStory?, color: Api.PeerColor?, profileColor: Api.PeerColor?, emojiStatus: Api.EmojiStatus?, level: Int32?, subscriptionUntilDate: Int32?, botVerificationIcon: Int64?, sendPaidMessagesStars: Int64?, linkedMonoforumId: Int64?) {
+                self.flags = flags
+                self.flags2 = flags2
+                self.id = id
+                self.accessHash = accessHash
+                self.title = title
+                self.username = username
+                self.photo = photo
+                self.date = date
+                self.restrictionReason = restrictionReason
+                self.adminRights = adminRights
+                self.bannedRights = bannedRights
+                self.defaultBannedRights = defaultBannedRights
+                self.participantsCount = participantsCount
+                self.usernames = usernames
+                self.storiesMaxId = storiesMaxId
+                self.color = color
+                self.profileColor = profileColor
+                self.emojiStatus = emojiStatus
+                self.level = level
+                self.subscriptionUntilDate = subscriptionUntilDate
+                self.botVerificationIcon = botVerificationIcon
+                self.sendPaidMessagesStars = sendPaidMessagesStars
+                self.linkedMonoforumId = linkedMonoforumId
+            }
+        }
+        public class Cons_channelForbidden {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var title: String
+            public var untilDate: Int32?
+            public init(flags: Int32, id: Int64, accessHash: Int64, title: String, untilDate: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.title = title
+                self.untilDate = untilDate
+            }
+        }
+        public class Cons_chat {
+            public var flags: Int32
+            public var id: Int64
+            public var title: String
+            public var photo: Api.ChatPhoto
+            public var participantsCount: Int32
+            public var date: Int32
+            public var version: Int32
+            public var migratedTo: Api.InputChannel?
+            public var adminRights: Api.ChatAdminRights?
+            public var defaultBannedRights: Api.ChatBannedRights?
+            public init(flags: Int32, id: Int64, title: String, photo: Api.ChatPhoto, participantsCount: Int32, date: Int32, version: Int32, migratedTo: Api.InputChannel?, adminRights: Api.ChatAdminRights?, defaultBannedRights: Api.ChatBannedRights?) {
+                self.flags = flags
+                self.id = id
+                self.title = title
+                self.photo = photo
+                self.participantsCount = participantsCount
+                self.date = date
+                self.version = version
+                self.migratedTo = migratedTo
+                self.adminRights = adminRights
+                self.defaultBannedRights = defaultBannedRights
+            }
+        }
+        public class Cons_chatEmpty {
+            public var id: Int64
+            public init(id: Int64) {
+                self.id = id
+            }
+        }
+        public class Cons_chatForbidden {
+            public var id: Int64
+            public var title: String
+            public init(id: Int64, title: String) {
+                self.id = id
+                self.title = title
+            }
+        }
+        case channel(Cons_channel)
+        case channelForbidden(Cons_channelForbidden)
+        case chat(Cons_chat)
+        case chatEmpty(Cons_chatEmpty)
+        case chatForbidden(Cons_chatForbidden)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -318,7 +552,13 @@ public extension Api {
 }
 public extension Api {
     enum ChatAdminRights: TypeConstructorDescription {
-        case chatAdminRights(flags: Int32)
+        public class Cons_chatAdminRights {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
+        case chatAdminRights(Cons_chatAdminRights)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

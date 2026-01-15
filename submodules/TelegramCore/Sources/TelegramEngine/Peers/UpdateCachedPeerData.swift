@@ -381,7 +381,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             var subscriberCount: Int32?
                                             for chat in chats {
                                                 if chat.peerId == channelPeerId {
-                                                    if case let .channel(_, _, _, _, _, _, _, _, _, _, _, _, participantsCount, _, _, _, _, _, _, _, _, _, _) = chat {
+                                                    if case let .channel(channelData) = chat {
+                                                        let participantsCount = channelData.participantsCount
                                                         subscriberCount = participantsCount
                                                     }
                                                 }
@@ -775,7 +776,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                 switch participantResult {
                                                 case let .channelParticipant(participant, _, _):
                                                     switch participant {
-                                                    case let .channelParticipantSelf(flags, _, inviterId, invitedDate, _):
+                                                    case let .channelParticipantSelf(channelParticipantSelfData):
+                                                        let (flags, inviterId, invitedDate) = (channelParticipantSelfData.flags, channelParticipantSelfData.inviterId, channelParticipantSelfData.date)
                                                         invitedBy = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(inviterId))
                                                         if (flags & (1 << 0)) != 0 {
                                                             invitedOn = invitedDate
