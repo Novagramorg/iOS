@@ -266,7 +266,7 @@ private func synchronizePinnedChats(transaction: Transaction, postbox: Postbox, 
                         switch itemId {
                             case let .peer(peerId):
                                 if let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) {
-                                    inputDialogPeers.append(Api.InputDialogPeer.inputDialogPeer(peer: inputPeer))
+                                    inputDialogPeers.append(Api.InputDialogPeer.inputDialogPeer(.init(peer: inputPeer)))
                                 }
                         }
                     }

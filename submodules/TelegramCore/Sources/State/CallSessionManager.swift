@@ -66,7 +66,8 @@ public struct GroupCallReference: Codable, Equatable {
 extension GroupCallReference {
     init?(_ apiGroupCall: Api.InputGroupCall) {
         switch apiGroupCall {
-        case let .inputGroupCall(id, accessHash):
+        case let .inputGroupCall(inputGroupCallData):
+            let (id, accessHash) = (inputGroupCallData.id, inputGroupCallData.accessHash)
             self.init(id: id, accessHash: accessHash)
         case .inputGroupCallSlug, .inputGroupCallInviteMessage:
             return nil
@@ -74,7 +75,7 @@ extension GroupCallReference {
     }
     
     var apiInputGroupCall: Api.InputGroupCall {
-        return .inputGroupCall(id: self.id, accessHash: self.accessHash)
+        return .inputGroupCall(.init(id: self.id, accessHash: self.accessHash))
     }
 }
 

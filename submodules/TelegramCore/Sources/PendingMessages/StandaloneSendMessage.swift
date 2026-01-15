@@ -765,7 +765,8 @@ private func uploadedImage(account: Account, data: Data) -> Signal<UploadMediaEv
         |> mapError { _ -> StandaloneSendMessageError in return .generic }
         |> map { next -> UploadMediaEvent in
             switch next {
-                case let .inputFile(inputFile):
+                case let .inputFile(inputFileData):
+                    let inputFile = inputFileData
                     return .result(Api.InputMedia.inputMediaUploadedPhoto(flags: 0, file: inputFile, stickers: nil, ttlSeconds: nil))
                 case .inputSecretFile:
                         preconditionFailure()
@@ -780,7 +781,8 @@ private func uploadedFile(account: Account, data: Data, mimeType: String, attrib
         |> mapError { _ -> PendingMessageUploadError in return .generic }
         |> map { next -> UploadMediaEvent in
             switch next {
-                case let .inputFile(inputFile):
+                case let .inputFile(inputFileData):
+                    let inputFile = inputFileData
                     return .result(Api.InputMedia.inputMediaUploadedDocument(flags: 0, file: inputFile, thumb: nil, mimeType: mimeType, attributes: inputDocumentAttributesFromFileAttributes(attributes), stickers: nil, videoCover: nil, videoTimestamp: nil, ttlSeconds: nil))
                 case .inputSecretFile:
                     preconditionFailure()

@@ -56,7 +56,7 @@ func _internal_requestTwoStepVerifiationSettings(network: Network, password: Str
             return .fail(.generic)
         }
         
-        return network.request(Api.functions.account.getPasswordSettings(password: .inputCheckPasswordSRP(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1))), automaticFloodWait: false)
+        return network.request(Api.functions.account.getPasswordSettings(password: .inputCheckPasswordSRP(.init(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1)))), automaticFloodWait: false)
         |> mapError { error -> AuthorizationPasswordVerificationError in
             if error.errorDescription.hasPrefix("FLOOD_WAIT") {
                 return .limitExceeded
@@ -141,7 +141,7 @@ func _internal_updateTwoStepVerificationPassword(network: Network, currentPasswo
         let checkPassword: Api.InputCheckPasswordSRP
         if let currentPasswordDerivation = authData.currentPasswordDerivation, let srpSessionData = authData.srpSessionData {
             if let kdfResult = passwordKDF(encryptionProvider: network.encryptionProvider, password: currentPassword ?? "", derivation: currentPasswordDerivation, srpSessionData: srpSessionData) {
-                checkPassword = .inputCheckPasswordSRP(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1))
+                checkPassword = .inputCheckPasswordSRP(.init(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1)))
             } else {
                 return .fail(.generic)
             }
@@ -245,7 +245,7 @@ func updateTwoStepVerificationSecureSecret(network: Network, password: String, s
             return .fail(.generic)
         }
         
-        let checkPassword: Api.InputCheckPasswordSRP = .inputCheckPasswordSRP(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1))
+        let checkPassword: Api.InputCheckPasswordSRP = .inputCheckPasswordSRP(.init(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1)))
         
         guard let (encryptedSecret, secretDerivation, secretId) = encryptedSecureSecret(secretData: secret, password: password, inputDerivation: authData.nextSecurePasswordDerivation) else {
             return .fail(.generic)
@@ -273,7 +273,7 @@ func _internal_updateTwoStepVerificationEmail(network: Network, currentPassword:
             guard let kdfResult = passwordKDF(encryptionProvider: network.encryptionProvider, password: currentPassword, derivation: currentPasswordDerivation, srpSessionData: srpSessionData) else {
                 return .fail(.generic)
             }
-            checkPassword = .inputCheckPasswordSRP(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1))
+            checkPassword = .inputCheckPasswordSRP(.init(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1)))
         } else {
             checkPassword = .inputCheckPasswordEmpty
         }
@@ -370,7 +370,7 @@ func _internal_requestTemporaryTwoStepPasswordToken(account: Account, password: 
             return .fail(MTRpcError(errorCode: 400, errorDescription: "KDF_ERROR"))
         }
         
-        let checkPassword: Api.InputCheckPasswordSRP = .inputCheckPasswordSRP(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1))
+        let checkPassword: Api.InputCheckPasswordSRP = .inputCheckPasswordSRP(.init(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1)))
         
         return account.network.request(Api.functions.account.getTmpPassword(password: checkPassword, period: period), automaticFloodWait: false)
         |> map { result -> TemporaryTwoStepPasswordToken in

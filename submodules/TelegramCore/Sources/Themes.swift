@@ -251,8 +251,8 @@ private func uploadTheme(account: Account, resource: MediaResource, thumbnailDat
                         case let .inputFile(file):
                             var flags: Int32 = 0
                             var thumbnailFile: Api.InputFile?
-                            if let thumbnailResult = thumbnailResult?.content, case let .result(result) = thumbnailResult, case let .inputFile(file) = result {
-                                thumbnailFile = file
+                            if let thumbnailResult = thumbnailResult?.content, case let .result(result) = thumbnailResult, case let .inputFile(thumbFile) = result {
+                                thumbnailFile = thumbFile
                                 flags |= 1 << 0
                             }
                             return account.network.request(Api.functions.account.uploadTheme(flags: flags, file: file, thumb: thumbnailFile, fileName: fileName, mimeType: mimeType))
@@ -302,7 +302,7 @@ public func createTheme(account: Account, title: String, resource: MediaResource
             switch result {
                 case let .complete(file):
                     if let resource = file.resource as? CloudDocumentMediaResource {
-                        return account.network.request(Api.functions.account.createTheme(flags: flags, slug: "", title: title, document: .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)), settings: inputSettings))
+                        return account.network.request(Api.functions.account.createTheme(flags: flags, slug: "", title: title, document: .inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference))), settings: inputSettings))
                         |> mapError { error in
                             if error.errorDescription == "THEME_SLUG_INVALID" {
                                 return .slugInvalid
@@ -408,7 +408,7 @@ public func updateTheme(account: Account, accountManager: AccountManager<Telegra
             switch status {
                 case let .complete(file):
                     if let resource = file.resource as? CloudDocumentMediaResource {
-                        inputDocument = .inputDocument(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference))
+                        inputDocument = .inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference)))
                     } else {
                         return .fail(.generic)
                     }

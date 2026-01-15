@@ -158,7 +158,7 @@ public extension TelegramEngine {
         }
         
         public func requestStreamState(dataSource: AudioBroadcastDataSource, callId: Int64, accessHash: Int64) -> Signal<EngineCallStreamState?, NoError> {
-            return dataSource.download.request(Api.functions.phone.getGroupCallStreamChannels(call: .inputGroupCall(id: callId, accessHash: accessHash)))
+            return dataSource.download.request(Api.functions.phone.getGroupCallStreamChannels(call: .inputGroupCall(.init(id: callId, accessHash: accessHash))))
             |> mapToSignal { result -> Signal<EngineCallStreamState?, MTRpcError> in
                 switch result {
                 case let .groupCallStreamChannels(channels):

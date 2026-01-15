@@ -1681,7 +1681,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 updatedState.addCallSignalingData(callId: phoneCallId, data: data.makeData())
             case let .updateGroupCallParticipants(call, participants, version):
                 switch call {
-                case let .inputGroupCall(id, accessHash):
+                case let .inputGroupCall(inputGroupCallData):
+                    let (id, accessHash) = (inputGroupCallData.id, inputGroupCallData.accessHash)
                     updatedState.updateGroupCallParticipants(id: id, accessHash: accessHash, participants: participants, version: version)
                 case .inputGroupCallSlug, .inputGroupCallInviteMessage:
                     break
@@ -1689,11 +1690,13 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updateGroupCall(_, channelId, call):
                 updatedState.updateGroupCall(peerId: channelId?.peerId, call: call)
             case let .updateGroupCallChainBlocks(call, subChainId, blocks, nextOffset):
-                if case let .inputGroupCall(id, accessHash) = call {
+                if case let .inputGroupCall(inputGroupCallData) = call {
+                    let (id, accessHash) = (inputGroupCallData.id, inputGroupCallData.accessHash)
                     updatedState.updateGroupCallChainBlocks(id: id, accessHash: accessHash, subChainId: subChainId, blocks: blocks.map { $0.makeData() }, nextOffset: nextOffset)
                 }
             case let .updateGroupCallMessage(call, message):
-                if case let .inputGroupCall(id, _) = call {
+                if case let .inputGroupCall(inputGroupCallData) = call {
+                    let id = inputGroupCallData.id
                     switch message {
                     case let .groupCallMessage(groupCallMessageData):
                         let (flags, messageId, fromId, date, message, paidMessageStars) = (groupCallMessageData.flags, groupCallMessageData.id, groupCallMessageData.fromId, groupCallMessageData.date, groupCallMessageData.message, groupCallMessageData.paidMessageStars)
@@ -1701,7 +1704,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     }
                 }
             case let .updateGroupCallEncryptedMessage(call, fromId, encryptedMessage):
-                if case let .inputGroupCall(id, _) = call {
+                if case let .inputGroupCall(inputGroupCallData) = call {
+                    let id = inputGroupCallData.id
                     updatedState.updateGroupCallOpaqueMessage(id: id, authorId: fromId.peerId, data: encryptedMessage.makeData())
                 }
             case let .updatePeerHistoryTTL(_, peer, ttl):
@@ -2847,7 +2851,7 @@ private func resolveMissingPeerChatInfos(accountPeerId: PeerId, network: Network
         return .single((state, hadError))
     } else {
         Logger.shared.log("State", "will fetch chat info for \(missingPeers.count) peers")
-        let signal = network.request(Api.functions.messages.getPeerDialogs(peers: missingPeers.values.map(Api.InputDialogPeer.inputDialogPeer(peer:))))
+        let signal = network.request(Api.functions.messages.getPeerDialogs(peers: missingPeers.values.map { .inputDialogPeer(.init(peer: $0)) }))
         |> map(Optional.init)
         
         return signal
@@ -3079,7 +3083,7 @@ func resetChannels(accountPeerId: PeerId, postbox: Postbox, network: Network, pe
     var inputPeers: [Api.InputDialogPeer] = []
     for peer in peers {
         if let inputPeer = apiInputPeer(peer) {
-            inputPeers.append(.inputDialogPeer(peer: inputPeer))
+            inputPeers.append(.inputDialogPeer(.init(peer: inputPeer)))
         }
     }
     return network.request(Api.functions.messages.getPeerDialogs(peers: inputPeers))

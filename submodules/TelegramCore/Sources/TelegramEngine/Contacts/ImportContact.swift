@@ -13,7 +13,7 @@ func _internal_importContact(account: Account, firstName: String, lastName: Stri
         note = .textWithEntities(text: noteText, entities: apiEntitiesFromMessageTextEntities(noteEntities, associatedPeers: SimpleDictionary()))
     }
     
-    let input = Api.InputContact.inputPhoneContact(flags: 0, clientId: 1, phone: phoneNumber, firstName: firstName, lastName: lastName, note: note)
+    let input = Api.InputContact.inputPhoneContact(.init(flags: 0, clientId: 1, phone: phoneNumber, firstName: firstName, lastName: lastName, note: note))
     
     return account.network.request(Api.functions.contacts.importContacts(contacts: [input]))
     |> map(Optional.init)

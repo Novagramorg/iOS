@@ -286,7 +286,7 @@ public func dropSecureId(network: Network, currentPassword: String) -> Signal<Vo
         if let currentPasswordDerivation = authData.currentPasswordDerivation, let srpSessionData = authData.srpSessionData {
             let kdfResult = passwordKDF(encryptionProvider: network.encryptionProvider, password: currentPassword, derivation: currentPasswordDerivation, srpSessionData: srpSessionData)
             if let kdfResult = kdfResult {
-                checkPassword = .inputCheckPasswordSRP(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1))
+                checkPassword = .inputCheckPasswordSRP(.init(srpId: kdfResult.id, A: Buffer(data: kdfResult.A), M1: Buffer(data: kdfResult.M1)))
             } else {
                 return .fail(.generic)
             }

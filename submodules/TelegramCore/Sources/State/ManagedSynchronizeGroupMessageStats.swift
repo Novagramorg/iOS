@@ -79,7 +79,7 @@ private func synchronizeGroupMessageStats(postbox: Postbox, network: Network, gr
             return .complete()
         }
     
-        return network.request(Api.functions.messages.getPeerDialogs(peers: [.inputDialogPeerFolder(folderId: groupId.rawValue)]))
+        return network.request(Api.functions.messages.getPeerDialogs(peers: [.inputDialogPeerFolder(.init(folderId: groupId.rawValue))]))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.messages.PeerDialogs?, NoError> in
             return .single(nil)
