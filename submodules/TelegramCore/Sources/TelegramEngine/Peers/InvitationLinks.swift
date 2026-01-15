@@ -958,7 +958,8 @@ private final class PeerInvitationImportersContextImpl {
                                 let approvedBy: PeerId?
                                 let joinedViaFolderLink: Bool
                                 switch importer {
-                                    case let .chatInviteImporter(flags, userId, dateValue, aboutValue, approvedByValue):
+                                    case let .chatInviteImporter(chatInviteImporterData):
+                                        let (flags, userId, dateValue, aboutValue, approvedByValue) = (chatInviteImporterData.flags, chatInviteImporterData.userId, chatInviteImporterData.date, chatInviteImporterData.about, chatInviteImporterData.approvedBy)
                                         joinedViaFolderLink = (flags & (1 << 3)) != 0
                                         peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
                                         date = dateValue
@@ -1168,7 +1169,8 @@ func _internal_peerExportedInvitationsCreators(account: Account, peerId: PeerId)
                             
                             for admin in admins {
                                 switch admin {
-                                case let .chatAdminWithInvites(adminId, invitesCount, revokedInvitesCount):
+                                case let .chatAdminWithInvites(chatAdminWithInvitesData):
+                                    let (adminId, invitesCount, revokedInvitesCount) = (chatAdminWithInvitesData.adminId, chatAdminWithInvitesData.invitesCount, chatAdminWithInvitesData.revokedInvitesCount)
                                     let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(adminId))
                                     if let peer = parsedPeers.get(peerId), peerId != account.peerId {
                                         creators.append(ExportedInvitationCreator(peer: RenderedPeer(peer: peer), count: invitesCount, revokedCount: revokedInvitesCount))
