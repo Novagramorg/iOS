@@ -1,6 +1,32 @@
 public extension Api {
     enum GroupCallParticipant: TypeConstructorDescription {
-        case groupCallParticipant(flags: Int32, peer: Api.Peer, date: Int32, activeDate: Int32?, source: Int32, volume: Int32?, about: String?, raiseHandRating: Int64?, video: Api.GroupCallParticipantVideo?, presentation: Api.GroupCallParticipantVideo?, paidStarsTotal: Int64?)
+        public class Cons_groupCallParticipant {
+            public var flags: Int32
+            public var peer: Api.Peer
+            public var date: Int32
+            public var activeDate: Int32?
+            public var source: Int32
+            public var volume: Int32?
+            public var about: String?
+            public var raiseHandRating: Int64?
+            public var video: Api.GroupCallParticipantVideo?
+            public var presentation: Api.GroupCallParticipantVideo?
+            public var paidStarsTotal: Int64?
+            public init(flags: Int32, peer: Api.Peer, date: Int32, activeDate: Int32?, source: Int32, volume: Int32?, about: String?, raiseHandRating: Int64?, video: Api.GroupCallParticipantVideo?, presentation: Api.GroupCallParticipantVideo?, paidStarsTotal: Int64?) {
+                self.flags = flags
+                self.peer = peer
+                self.date = date
+                self.activeDate = activeDate
+                self.source = source
+                self.volume = volume
+                self.about = about
+                self.raiseHandRating = raiseHandRating
+                self.video = video
+                self.presentation = presentation
+                self.paidStarsTotal = paidStarsTotal
+            }
+        }
+        case groupCallParticipant(Cons_groupCallParticipant)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,7 +55,19 @@ public extension Api {
 }
 public extension Api {
     enum GroupCallParticipantVideo: TypeConstructorDescription {
-        case groupCallParticipantVideo(flags: Int32, endpoint: String, sourceGroups: [Api.GroupCallParticipantVideoSourceGroup], audioSource: Int32?)
+        public class Cons_groupCallParticipantVideo {
+            public var flags: Int32
+            public var endpoint: String
+            public var sourceGroups: [Api.GroupCallParticipantVideoSourceGroup]
+            public var audioSource: Int32?
+            public init(flags: Int32, endpoint: String, sourceGroups: [Api.GroupCallParticipantVideoSourceGroup], audioSource: Int32?) {
+                self.flags = flags
+                self.endpoint = endpoint
+                self.sourceGroups = sourceGroups
+                self.audioSource = audioSource
+            }
+        }
+        case groupCallParticipantVideo(Cons_groupCallParticipantVideo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -58,7 +96,15 @@ public extension Api {
 }
 public extension Api {
     enum GroupCallParticipantVideoSourceGroup: TypeConstructorDescription {
-        case groupCallParticipantVideoSourceGroup(semantics: String, sources: [Int32])
+        public class Cons_groupCallParticipantVideoSourceGroup {
+            public var semantics: String
+            public var sources: [Int32]
+            public init(semantics: String, sources: [Int32]) {
+                self.semantics = semantics
+                self.sources = sources
+            }
+        }
+        case groupCallParticipantVideoSourceGroup(Cons_groupCallParticipantVideoSourceGroup)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -87,7 +133,17 @@ public extension Api {
 }
 public extension Api {
     enum GroupCallStreamChannel: TypeConstructorDescription {
-        case groupCallStreamChannel(channel: Int32, scale: Int32, lastTimestampMs: Int64)
+        public class Cons_groupCallStreamChannel {
+            public var channel: Int32
+            public var scale: Int32
+            public var lastTimestampMs: Int64
+            public init(channel: Int32, scale: Int32, lastTimestampMs: Int64) {
+                self.channel = channel
+                self.scale = scale
+                self.lastTimestampMs = lastTimestampMs
+            }
+        }
+        case groupCallStreamChannel(Cons_groupCallStreamChannel)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -116,7 +172,17 @@ public extension Api {
 }
 public extension Api {
     enum HighScore: TypeConstructorDescription {
-        case highScore(pos: Int32, userId: Int64, score: Int32)
+        public class Cons_highScore {
+            public var pos: Int32
+            public var userId: Int64
+            public var score: Int32
+            public init(pos: Int32, userId: Int64, score: Int32) {
+                self.pos = pos
+                self.userId = userId
+                self.score = score
+            }
+        }
+        case highScore(Cons_highScore)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -145,7 +211,15 @@ public extension Api {
 }
 public extension Api {
     enum ImportedContact: TypeConstructorDescription {
-        case importedContact(userId: Int64, clientId: Int64)
+        public class Cons_importedContact {
+            public var userId: Int64
+            public var clientId: Int64
+            public init(userId: Int64, clientId: Int64) {
+                self.userId = userId
+                self.clientId = clientId
+            }
+        }
+        case importedContact(Cons_importedContact)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -174,7 +248,15 @@ public extension Api {
 }
 public extension Api {
     enum InlineBotSwitchPM: TypeConstructorDescription {
-        case inlineBotSwitchPM(text: String, startParam: String)
+        public class Cons_inlineBotSwitchPM {
+            public var text: String
+            public var startParam: String
+            public init(text: String, startParam: String) {
+                self.text = text
+                self.startParam = startParam
+            }
+        }
+        case inlineBotSwitchPM(Cons_inlineBotSwitchPM)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -203,7 +285,15 @@ public extension Api {
 }
 public extension Api {
     enum InlineBotWebView: TypeConstructorDescription {
-        case inlineBotWebView(text: String, url: String)
+        public class Cons_inlineBotWebView {
+            public var text: String
+            public var url: String
+            public init(text: String, url: String) {
+                self.text = text
+                self.url = url
+            }
+        }
+        case inlineBotWebView(Cons_inlineBotWebView)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

@@ -995,7 +995,8 @@ private final class FetchImpl {
                         var filledRange = RangeSet<Int64>()
                         for hashItem in result {
                             switch hashItem {
-                            case let .fileHash(offset, limit, hash):
+                            case let .fileHash(fileHashData):
+                                let (offset, limit, hash) = (fileHashData.offset, fileHashData.limit, fileHashData.hash)
                                 let rangeValue: Range<Int64> = offset ..< (offset + Int64(limit))
                                 filledRange.formUnion(RangeSet<Int64>(rangeValue))
                                 state.hashRanges[rangeValue.lowerBound] = HashRangeData(

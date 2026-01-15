@@ -856,7 +856,8 @@ extension TelegramBusinessHours {
 extension TelegramBusinessLocation.Coordinates {
     init?(apiGeoPoint: Api.GeoPoint) {
         switch apiGeoPoint {
-        case let .geoPoint(_, long, lat, _, _):
+        case let .geoPoint(geoPointData):
+            let (_, long, lat, _, _) = (geoPointData.flags, geoPointData.long, geoPointData.lat, geoPointData.accessHash, geoPointData.accuracyRadius)
             self.init(latitude: lat, longitude: long)
         case .geoPointEmpty:
             return nil

@@ -2154,7 +2154,8 @@ public final class SearchStoryListContext: StoryListContext {
                         
                         for story in stories {
                             switch story {
-                            case let .foundStory(peer, story):
+                            case let .foundStory(foundStoryData):
+                                let (peer, story) = (foundStoryData.peer, foundStoryData.story)
                                 if let storedItem = Stories.StoredItem(apiStoryItem: story, peerId: peer.peerId, transaction: transaction) {
                                     if case let .item(item) = storedItem, let media = item.media {
                                         let mappedItem = EngineStoryItem(

@@ -164,7 +164,8 @@ public extension TelegramEngine {
                 case let .groupCallStreamChannels(channels):
                     let state = EngineCallStreamState(channels: channels.map { channel -> EngineCallStreamState.Channel in
                         switch channel {
-                        case let .groupCallStreamChannel(channel, scale, lastTimestampMs):
+                        case let .groupCallStreamChannel(groupCallStreamChannelData):
+                            let (channel, scale, lastTimestampMs) = (groupCallStreamChannelData.channel, groupCallStreamChannelData.scale, groupCallStreamChannelData.lastTimestampMs)
                             return EngineCallStreamState.Channel(id: channel, scale: scale, latestTimestamp: lastTimestampMs)
                         }
                     })

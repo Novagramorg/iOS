@@ -122,7 +122,8 @@ private func peerIdsRequiringLocalChatStateFromUpdates(_ updates: [Api.Update]) 
             case let .updateFolderPeers(folderPeers, _, _):
                 for peer in folderPeers {
                     switch peer {
-                        case let .folderPeer(peer, _):
+                        case let .folderPeer(folderPeerData):
+                            let peer = folderPeerData.peer
                             peerIds.insert(peer.peerId)
                     }
                 }
@@ -1694,7 +1695,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updateGroupCallMessage(call, message):
                 if case let .inputGroupCall(id, _) = call {
                     switch message {
-                    case let .groupCallMessage(flags, messageId, fromId, date, message, paidMessageStars):
+                    case let .groupCallMessage(groupCallMessageData):
+                        let (flags, messageId, fromId, date, message, paidMessageStars) = (groupCallMessageData.flags, groupCallMessageData.id, groupCallMessageData.fromId, groupCallMessageData.date, groupCallMessageData.message, groupCallMessageData.paidMessageStars)
                         updatedState.updateGroupCallMessage(id: id, authorId: fromId.peerId, isFromAdmin: (flags & (1 << 1)) != 0, messageId: messageId, text: message, date: date, paidMessageStars: paidMessageStars)
                     }
                 }
@@ -1718,7 +1720,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updateFolderPeers(folderPeers, _, _):
                 for folderPeer in folderPeers {
                     switch folderPeer {
-                        case let .folderPeer(peer, folderId):
+                        case let .folderPeer(folderPeerData):
+                            let (peer, folderId) = (folderPeerData.peer, folderPeerData.folderId)
                             updatedState.updatePeerChatInclusion(peerId: peer.peerId, groupId: PeerGroupId(rawValue: folderId), changedGroup: true)
                     }
                 }
@@ -2141,10 +2144,11 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                 switch topic {
                                 case let .forum(topic):
                                     switch topic {
-                                    case let .forumTopic(flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                    case let .forumTopic(forumTopicData):
+                                        let (flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft) = (forumTopicData.flags, forumTopicData.id, forumTopicData.date, forumTopicData.peer, forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId, forumTopicData.topMessage, forumTopicData.readInboxMaxId, forumTopicData.readOutboxMaxId, forumTopicData.unreadCount, forumTopicData.unreadMentionsCount, forumTopicData.unreadReactionsCount, forumTopicData.fromId, forumTopicData.notifySettings, forumTopicData.draft)
                                         let _ = peer
                                         let _ = draft
-                                        
+
                                         state.operations.append(.ResetForumTopic(
                                             topicId: PeerAndBoundThreadId(peerId: peerId, threadId: Int64(id)),
                                             data: StoreMessageHistoryThreadData(
@@ -2306,10 +2310,11 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                     switch item {
                                     case let .forum(topic):
                                         switch topic {
-                                        case let .forumTopic(flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                        case let .forumTopic(forumTopicData):
+                                            let (flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft) = (forumTopicData.flags, forumTopicData.id, forumTopicData.date, forumTopicData.peer, forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId, forumTopicData.topMessage, forumTopicData.readInboxMaxId, forumTopicData.readOutboxMaxId, forumTopicData.unreadCount, forumTopicData.unreadMentionsCount, forumTopicData.unreadReactionsCount, forumTopicData.fromId, forumTopicData.notifySettings, forumTopicData.draft)
                                             let _ = peer
                                             let _ = draft
-                                            
+
                                             let data = MessageHistoryThreadData(
                                                 creationDate: date,
                                                 isOwnedByMe: (flags & (1 << 1)) != 0,
@@ -2473,10 +2478,11 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                 switch item {
                                 case let .forum(topic):
                                     switch topic {
-                                    case let .forumTopic(flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                                    case let .forumTopic(forumTopicData):
+                                        let (flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft) = (forumTopicData.flags, forumTopicData.id, forumTopicData.date, forumTopicData.peer, forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId, forumTopicData.topMessage, forumTopicData.readInboxMaxId, forumTopicData.readOutboxMaxId, forumTopicData.unreadCount, forumTopicData.unreadMentionsCount, forumTopicData.unreadReactionsCount, forumTopicData.fromId, forumTopicData.notifySettings, forumTopicData.draft)
                                         let _ = peer
                                         let _ = draft
-                                        
+
                                         fetchedChatList.threadInfos[PeerAndBoundThreadId(peerId: peerId, threadId: Int64(id))] = StoreMessageHistoryThreadData(
                                             data: MessageHistoryThreadData(
                                                 creationDate: date,
@@ -4934,7 +4940,8 @@ func replayFinalState(
                         }
                         
                         switch call {
-                        case let .groupCall(flags, _, _, participantsCount, title, _, recordStartDate, scheduleDate, _, _, _, _, sendPaidMessagesStars, _):
+                        case let .groupCall(groupCallData):
+                            let (flags, participantsCount, title, recordStartDate, scheduleDate, sendPaidMessagesStars) = (groupCallData.flags, groupCallData.participantsCount, groupCallData.title, groupCallData.recordStartDate, groupCallData.scheduleDate, groupCallData.sendPaidMessagesStars)
                             let isMin = (flags & (1 << 19)) != 0
                             let isMuted = (flags & (1 << 1)) != 0
                             let canChange = (flags & (1 << 2)) != 0
@@ -4951,7 +4958,8 @@ func replayFinalState(
                             break
                         }
                     }
-                case let .groupCallDiscarded(callId, _, _):
+                case let .groupCallDiscarded(groupCallDiscardedData):
+                    let callId = groupCallDiscardedData.id
                     updatedGroupCallParticipants.append((
                         callId,
                         .call(isTerminated: true, defaultParticipantsAreMuted: GroupCallParticipantsContext.State.DefaultParticipantsAreMuted(isMuted: false, canChange: false), messagesAreEnabled: GroupCallParticipantsContext.State.MessagesAreEnabled(isEnabled: false, canChange: false, sendPaidMessagesStars: nil), title: nil, recordingStartTimestamp: nil, scheduleTimestamp: nil, isVideoEnabled: false, participantCount: nil, isMin: false)

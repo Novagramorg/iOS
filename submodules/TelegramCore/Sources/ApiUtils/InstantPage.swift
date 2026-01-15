@@ -157,7 +157,8 @@ extension InstantPageBlock {
                 self = .relatedArticles(title: RichText(apiText: title), articles: articles.map({ InstantPageRelatedArticle(apiRelatedArticle: $0) }))
             case let .pageBlockMap(geo, zoom, w, h, caption):
                 switch geo {
-                    case let .geoPoint(_, long, lat, _, _):
+                    case let .geoPoint(geoPointData):
+                        let (long, lat) = (geoPointData.long, geoPointData.lat)
                         self = .map(latitude: lat, longitude: long, zoom: zoom, dimensions: PixelDimensions(width: w, height: h), caption: InstantPageCaption(apiCaption: caption))
                     default:
                         self = .unsupported

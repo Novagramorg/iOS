@@ -16,7 +16,8 @@ func _internal_updateGlobalPrivacySettings(account: Account) -> Signal<Never, No
             }
             let globalSettings: GlobalPrivacySettings
             switch result {
-            case let .globalPrivacySettings(flags, nonContactPeersPaidStars, disallowedStarGifts):
+            case let .globalPrivacySettings(globalPrivacySettingsData):
+                let (flags, nonContactPeersPaidStars, disallowedStarGifts) = (globalPrivacySettingsData.flags, globalPrivacySettingsData.noncontactPeersPaidStars, globalPrivacySettingsData.disallowedGifts)
                 let automaticallyArchiveAndMuteNonContacts = (flags & (1 << 0)) != 0
                 let keepArchivedUnmuted = (flags & (1 << 1)) != 0
                 let keepArchivedFolders = (flags & (1 << 2)) != 0
@@ -237,7 +238,8 @@ func _internal_requestAccountPrivacySettings(account: Account) -> Signal<Account
         
         let globalSettings: GlobalPrivacySettings
         switch globalPrivacySettings {
-        case let .globalPrivacySettings(flags, nonContactPeersPaidStars, disallowedStarGifts):
+        case let .globalPrivacySettings(globalPrivacySettingsData):
+            let (flags, nonContactPeersPaidStars, disallowedStarGifts) = (globalPrivacySettingsData.flags, globalPrivacySettingsData.noncontactPeersPaidStars, globalPrivacySettingsData.disallowedGifts)
             let automaticallyArchiveAndMuteNonContacts = (flags & (1 << 0)) != 0
             let keepArchivedUnmuted = (flags & (1 << 1)) != 0
             let keepArchivedFolders = (flags & (1 << 2)) != 0
@@ -407,7 +409,7 @@ func _internal_updateGlobalPrivacySettings(account: Account, settings: GlobalPri
     
     let disallowedStargifts: Api.DisallowedGiftsSettings = .disallowedGiftsSettings(.init(flags: giftFlags))
     return account.network.request(Api.functions.account.setGlobalPrivacySettings(
-        settings: .globalPrivacySettings(flags: flags, noncontactPeersPaidStars: noncontactPeersPaidStars, disallowedGifts: disallowedStargifts)
+        settings: .globalPrivacySettings(.init(flags: flags, noncontactPeersPaidStars: noncontactPeersPaidStars, disallowedGifts: disallowedStargifts))
     ))
     |> retryRequest
     |> ignoreValues

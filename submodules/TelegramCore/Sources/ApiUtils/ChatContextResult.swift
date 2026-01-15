@@ -618,7 +618,8 @@ extension ChatContextResult {
 extension ChatContextResultSwitchPeer {
     init(apiSwitchPeer: Api.InlineBotSwitchPM) {
         switch apiSwitchPeer {
-            case let .inlineBotSwitchPM(text, startParam):
+            case let .inlineBotSwitchPM(inlineBotSwitchPMData):
+                let (text, startParam) = (inlineBotSwitchPMData.text, inlineBotSwitchPMData.startParam)
                 self.init(text: text, startParam: startParam)
         }
     }
@@ -627,7 +628,8 @@ extension ChatContextResultSwitchPeer {
 extension ChatContextResultWebView {
     init(apiSwitchWebView: Api.InlineBotWebView) {
         switch apiSwitchWebView {
-            case let .inlineBotWebView(text, url):
+            case let .inlineBotWebView(inlineBotWebViewData):
+                let (text, url) = (inlineBotWebViewData.text, inlineBotWebViewData.url)
                 self.init(text: text, url: url)
         }
     }

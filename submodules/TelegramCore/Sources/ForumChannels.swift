@@ -994,7 +994,8 @@ func _internal_requestMessageHistoryThreads(accountPeerId: PeerId, postbox: Post
                         
                         for topic in topics {
                             switch topic {
-                            case let .forumTopic(flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft):
+                            case let .forumTopic(forumTopicData):
+                                let (flags, id, date, peer, title, iconColor, iconEmojiId, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, fromId, notifySettings, draft) = (forumTopicData.flags, forumTopicData.id, forumTopicData.date, forumTopicData.peer, forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId, forumTopicData.topMessage, forumTopicData.readInboxMaxId, forumTopicData.readOutboxMaxId, forumTopicData.unreadCount, forumTopicData.unreadMentionsCount, forumTopicData.unreadReactionsCount, forumTopicData.fromId, forumTopicData.notifySettings, forumTopicData.draft)
                                 let _ = draft
                                 let _ = peer
                                 
@@ -1202,7 +1203,8 @@ func _internal_forumChannelTopicNotificationExceptions(account: Account, id: Eng
                 case let .forumTopics(_, _, topics, _, _, _, _):
                     for topic in topics {
                         switch topic {
-                        case let .forumTopic(_, id, _, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
+                        case let .forumTopic(forumTopicData):
+                            let (id, title, iconColor, iconEmojiId) = (forumTopicData.id, forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId)
                             infoMapping[Int64(id)] = EngineMessageHistoryThread.Info(title: title, icon: iconEmojiId, iconColor: iconColor)
                         case .forumTopicDeleted:
                             break

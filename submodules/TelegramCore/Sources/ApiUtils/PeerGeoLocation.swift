@@ -8,7 +8,8 @@ extension PeerGeoLocation {
         switch apiLocation {
             case let .channelLocation(channelLocationData):
                 let (geopoint, address) = (channelLocationData.geoPoint, channelLocationData.address)
-                if case let .geoPoint(_, longitude, latitude, _, _) = geopoint {
+                if case let .geoPoint(geoPointData) = geopoint {
+                    let (longitude, latitude) = (geoPointData.long, geoPointData.lat)
                     self.init(latitude: latitude, longitude: longitude, address: address)
                 } else {
                     return nil
