@@ -6,7 +6,8 @@ import TelegramApi
 func imageRepresentationsForApiChatPhoto(_ photo: Api.ChatPhoto) -> [TelegramMediaImageRepresentation] {
     var representations: [TelegramMediaImageRepresentation] = []
     switch photo {
-        case let .chatPhoto(flags, photoId, strippedThumb, dcId):
+        case let .chatPhoto(chatPhotoData):
+            let (flags, photoId, strippedThumb, dcId) = (chatPhotoData.flags, chatPhotoData.photoId, chatPhotoData.strippedThumb, chatPhotoData.dcId)
             let hasVideo = (flags & (1 << 0)) != 0
             let smallResource: TelegramMediaResource
             let fullSizeResource: TelegramMediaResource
