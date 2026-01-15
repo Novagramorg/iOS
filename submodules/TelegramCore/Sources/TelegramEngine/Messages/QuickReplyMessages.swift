@@ -543,7 +543,8 @@ public final class TelegramBusinessGreetingMessage: Codable, Equatable {
 extension TelegramBusinessGreetingMessage {
     convenience init(apiGreetingMessage: Api.BusinessGreetingMessage) {
         switch apiGreetingMessage {
-        case let .businessGreetingMessage(shortcutId, recipients, noActivityDays):
+        case let .businessGreetingMessage(businessGreetingMessageData):
+            let (shortcutId, recipients, noActivityDays) = (businessGreetingMessageData.shortcutId, businessGreetingMessageData.recipients, businessGreetingMessageData.noActivityDays)
             self.init(
                 shortcutId: shortcutId,
                 recipients: TelegramBusinessRecipients(apiValue: recipients),
@@ -743,7 +744,9 @@ extension TelegramBusinessAwayMessage {
 extension TelegramBusinessIntro {
     convenience init(apiBusinessIntro: Api.BusinessIntro) {
         switch apiBusinessIntro {
-        case let .businessIntro(_, title, description, sticker):
+        case let .businessIntro(businessIntroData):
+            let (flags, title, description, sticker) = (businessIntroData.flags, businessIntroData.title, businessIntroData.description, businessIntroData.sticker)
+            let _ = flags
             self.init(title: title, text: description, stickerFile: sticker.flatMap { telegramMediaFileFromApiDocument($0, altDocuments: []) })
         }
     }
@@ -770,7 +773,8 @@ extension TelegramBusinessBotRights {
     init(apiValue: Api.BusinessBotRights) {
         var value: TelegramBusinessBotRights = []
         switch apiValue {
-        case let .businessBotRights(flags):
+        case let .businessBotRights(businessBotRightsData):
+            let flags = businessBotRightsData.flags
             if (flags & (1 << 0)) != 0 {
                 value.insert(.reply)
             }
@@ -822,7 +826,8 @@ extension TelegramBusinessBotRights {
 extension TelegramBusinessRecipients {
     convenience init(apiValue: Api.BusinessRecipients) {
         switch apiValue {
-        case let .businessRecipients(flags, users):
+        case let .businessRecipients(businessRecipientsData):
+            let (flags, users) = (businessRecipientsData.flags, businessRecipientsData.users)
             var categories: Categories = []
             if (flags & (1 << 0)) != 0 {
                 categories.insert(.existingChats)
@@ -848,7 +853,8 @@ extension TelegramBusinessRecipients {
     
     convenience init(apiValue: Api.BusinessBotRecipients) {
         switch apiValue {
-        case let .businessBotRecipients(flags, users, excludeUsers):
+        case let .businessBotRecipients(businessBotRecipientsData):
+            let (flags, users, excludeUsers) = (businessBotRecipientsData.flags, businessBotRecipientsData.users, businessBotRecipientsData.excludeUsers)
             var categories: Categories = []
             if (flags & (1 << 0)) != 0 {
                 categories.insert(.existingChats)
@@ -1221,7 +1227,7 @@ public func _internal_setAccountConnectedBot(account: Account, bot: TelegramAcco
             if bot.rights.contains(.manageStories) {
                 rightsFlags |= (1 << 13)
             }
-            mappedRights = .businessBotRights(flags: rightsFlags)
+            mappedRights = .businessBotRights(Api.BusinessBotRights.Cons_businessBotRights(flags: rightsFlags))
             mappedRecipients = bot.recipients.apiInputBotValue(additionalPeers: additionalPeers, excludePeers: excludePeers)
         } else {
             flags |= 1 << 1

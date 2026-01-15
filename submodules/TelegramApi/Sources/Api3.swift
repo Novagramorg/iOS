@@ -1,6 +1,16 @@
 public extension Api {
     enum BusinessGreetingMessage: TypeConstructorDescription {
-        case businessGreetingMessage(shortcutId: Int32, recipients: Api.BusinessRecipients, noActivityDays: Int32)
+        public class Cons_businessGreetingMessage {
+            public var shortcutId: Int32
+            public var recipients: Api.BusinessRecipients
+            public var noActivityDays: Int32
+            public init(shortcutId: Int32, recipients: Api.BusinessRecipients, noActivityDays: Int32) {
+                self.shortcutId = shortcutId
+                self.recipients = recipients
+                self.noActivityDays = noActivityDays
+            }
+        }
+        case businessGreetingMessage(Cons_businessGreetingMessage)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,7 +39,19 @@ public extension Api {
 }
 public extension Api {
     enum BusinessIntro: TypeConstructorDescription {
-        case businessIntro(flags: Int32, title: String, description: String, sticker: Api.Document?)
+        public class Cons_businessIntro {
+            public var flags: Int32
+            public var title: String
+            public var description: String
+            public var sticker: Api.Document?
+            public init(flags: Int32, title: String, description: String, sticker: Api.Document?) {
+                self.flags = flags
+                self.title = title
+                self.description = description
+                self.sticker = sticker
+            }
+        }
+        case businessIntro(Cons_businessIntro)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -58,7 +80,17 @@ public extension Api {
 }
 public extension Api {
     enum BusinessLocation: TypeConstructorDescription {
-        case businessLocation(flags: Int32, geoPoint: Api.GeoPoint?, address: String)
+        public class Cons_businessLocation {
+            public var flags: Int32
+            public var geoPoint: Api.GeoPoint?
+            public var address: String
+            public init(flags: Int32, geoPoint: Api.GeoPoint?, address: String) {
+                self.flags = flags
+                self.geoPoint = geoPoint
+                self.address = address
+            }
+        }
+        case businessLocation(Cons_businessLocation)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -87,7 +119,15 @@ public extension Api {
 }
 public extension Api {
     enum BusinessRecipients: TypeConstructorDescription {
-        case businessRecipients(flags: Int32, users: [Int64]?)
+        public class Cons_businessRecipients {
+            public var flags: Int32
+            public var users: [Int64]?
+            public init(flags: Int32, users: [Int64]?) {
+                self.flags = flags
+                self.users = users
+            }
+        }
+        case businessRecipients(Cons_businessRecipients)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -116,7 +156,15 @@ public extension Api {
 }
 public extension Api {
     enum BusinessWeeklyOpen: TypeConstructorDescription {
-        case businessWeeklyOpen(startMinute: Int32, endMinute: Int32)
+        public class Cons_businessWeeklyOpen {
+            public var startMinute: Int32
+            public var endMinute: Int32
+            public init(startMinute: Int32, endMinute: Int32) {
+                self.startMinute = startMinute
+                self.endMinute = endMinute
+            }
+        }
+        case businessWeeklyOpen(Cons_businessWeeklyOpen)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -145,7 +193,17 @@ public extension Api {
 }
 public extension Api {
     enum BusinessWorkHours: TypeConstructorDescription {
-        case businessWorkHours(flags: Int32, timezoneId: String, weeklyOpen: [Api.BusinessWeeklyOpen])
+        public class Cons_businessWorkHours {
+            public var flags: Int32
+            public var timezoneId: String
+            public var weeklyOpen: [Api.BusinessWeeklyOpen]
+            public init(flags: Int32, timezoneId: String, weeklyOpen: [Api.BusinessWeeklyOpen]) {
+                self.flags = flags
+                self.timezoneId = timezoneId
+                self.weeklyOpen = weeklyOpen
+            }
+        }
+        case businessWorkHours(Cons_businessWorkHours)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -174,7 +232,13 @@ public extension Api {
 }
 public extension Api {
     enum CdnConfig: TypeConstructorDescription {
-        case cdnConfig(publicKeys: [Api.CdnPublicKey])
+        public class Cons_cdnConfig {
+            public var publicKeys: [Api.CdnPublicKey]
+            public init(publicKeys: [Api.CdnPublicKey]) {
+                self.publicKeys = publicKeys
+            }
+        }
+        case cdnConfig(Cons_cdnConfig)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
