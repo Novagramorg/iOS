@@ -304,11 +304,13 @@ func managedSynchronizeAttachMenuBots(accountPeerId: PeerId, postbox: Postbox, n
                             var resultBots: [AttachMenuBots.Bot] = []
                             for bot in bots {
                                 switch bot {
-                                    case let .attachMenuBot(apiFlags, botId, name, apiPeerTypes, botIcons):
+                                    case let .attachMenuBot(attachMenuBotData):
+                                        let (apiFlags, botId, name, apiPeerTypes, botIcons) = (attachMenuBotData.flags, attachMenuBotData.botId, attachMenuBotData.shortName, attachMenuBotData.peerTypes, attachMenuBotData.icons)
                                         var icons: [AttachMenuBots.Bot.IconName: TelegramMediaFile] = [:]
                                         for icon in botIcons {
                                             switch icon {
-                                                case let .attachMenuBotIcon(_, name, icon, _):
+                                                case let .attachMenuBotIcon(attachMenuBotIconData):
+                                                    let (_, name, icon, _) = (attachMenuBotIconData.flags, attachMenuBotIconData.name, attachMenuBotIconData.icon, attachMenuBotIconData.colors)
                                                     if let iconName = AttachMenuBots.Bot.IconName(string: name), let icon = telegramMediaFileFromApiDocument(icon, altDocuments: []) {
                                                         icons[iconName] = icon
                                                     }
@@ -539,11 +541,13 @@ func _internal_getAttachMenuBot(accountPeerId: PeerId, postbox: Postbox, network
                         }
                     
                         switch bot {
-                            case let .attachMenuBot(apiFlags, _, name, apiPeerTypes, botIcons):
+                            case let .attachMenuBot(attachMenuBotData):
+                                let (apiFlags, _, name, apiPeerTypes, botIcons) = (attachMenuBotData.flags, attachMenuBotData.botId, attachMenuBotData.shortName, attachMenuBotData.peerTypes, attachMenuBotData.icons)
                                 var icons: [AttachMenuBots.Bot.IconName: TelegramMediaFile] = [:]
                                 for icon in botIcons {
                                     switch icon {
-                                        case let .attachMenuBotIcon(_, name, icon, _):
+                                        case let .attachMenuBotIcon(attachMenuBotIconData):
+                                            let (_, name, icon, _) = (attachMenuBotIconData.flags, attachMenuBotIconData.name, attachMenuBotIconData.icon, attachMenuBotIconData.colors)
                                             if let iconName = AttachMenuBots.Bot.IconName(string: name), let icon = telegramMediaFileFromApiDocument(icon, altDocuments: []) {
                                                 icons[iconName] = icon
                                             }

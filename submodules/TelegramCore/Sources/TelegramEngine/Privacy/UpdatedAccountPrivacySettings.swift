@@ -80,8 +80,8 @@ func _internal_requestAccountPrivacySettings(account: Account) -> Signal<Account
     |> mapToSignal { lastSeenPrivacy, groupPrivacy, voiceCallPrivacy, voiceCallP2P, profilePhotoPrivacy, forwardPrivacy, phoneNumberPrivacy, phoneDiscoveryPrivacy, voiceMessagesPrivacy, bioPrivacy, birthdayPrivacy, giftsAutoSavePrivacy, noPaidMessagesPrivacy, savedMusicPrivacy, autoremoveTimeout, globalPrivacySettings, messageAutoremoveTimeout -> Signal<AccountPrivacySettings, NoError> in
         let accountTimeoutSeconds: Int32
         switch autoremoveTimeout {
-            case let .accountDaysTTL(days):
-                accountTimeoutSeconds = days * 24 * 60 * 60
+        case let .accountDaysTTL(accountDaysTTL):
+            accountTimeoutSeconds = accountDaysTTL.days * 24 * 60 * 60
         }
         
         let messageAutoremoveSeconds: Int32?
@@ -412,7 +412,7 @@ func _internal_updateGlobalPrivacySettings(account: Account, settings: GlobalPri
 }
 
 func _internal_updateAccountRemovalTimeout(account: Account, timeout: Int32) -> Signal<Void, NoError> {
-    return account.network.request(Api.functions.account.setAccountTTL(ttl: .accountDaysTTL(days: timeout / (24 * 60 * 60))))
+    return account.network.request(Api.functions.account.setAccountTTL(ttl: .accountDaysTTL(Api.AccountDaysTTL.Cons_accountDaysTTL(days: timeout / (24 * 60 * 60)))))
         |> retryRequest
         |> mapToSignal { _ -> Signal<Void, NoError> in
             return .complete()
