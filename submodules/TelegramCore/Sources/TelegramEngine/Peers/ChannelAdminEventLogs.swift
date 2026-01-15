@@ -349,7 +349,8 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                     action = .changeUsernames(prev: prevValue, new: newValue)
                                 case let .channelAdminLogEventActionCreateTopic(channelAdminLogEventActionCreateTopicData):
                                     switch channelAdminLogEventActionCreateTopicData.topic {
-                                    case let .forumTopic(_, _, _, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
+                                    case let .forumTopic(forumTopicData):
+                                        let (title, iconColor, iconEmojiId) = (forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId)
                                         action = .createTopic(info: EngineMessageHistoryThread.Info(title: title, icon: iconEmojiId, iconColor: iconColor))
                                     case .forumTopicDeleted:
                                         action = .createTopic(info: EngineMessageHistoryThread.Info(title: "", icon: nil, iconColor: 0))
@@ -357,7 +358,8 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                 case let .channelAdminLogEventActionDeleteTopic(channelAdminLogEventActionDeleteTopicData):
                                     let topic = channelAdminLogEventActionDeleteTopicData.topic
                                     switch topic {
-                                    case let .forumTopic(_, _, _, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
+                                    case let .forumTopic(forumTopicData):
+                                        let (title, iconColor, iconEmojiId) = (forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId)
                                         action = .deleteTopic(info: EngineMessageHistoryThread.Info(title: title, icon: iconEmojiId, iconColor: iconColor))
                                     case .forumTopicDeleted:
                                         action = .deleteTopic(info: EngineMessageHistoryThread.Info(title: "", icon: nil, iconColor: 0))
@@ -366,7 +368,8 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                     let (prevTopic, newTopic) = (channelAdminLogEventActionEditTopicData.prevTopic, channelAdminLogEventActionEditTopicData.newTopic)
                                     let prevInfo: AdminLogEventAction.ForumTopicInfo
                                     switch prevTopic {
-                                    case let .forumTopic(flags, _, _, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
+                                    case let .forumTopic(forumTopicData):
+                                        let (flags, title, iconColor, iconEmojiId) = (forumTopicData.flags, forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId)
                                         prevInfo = AdminLogEventAction.ForumTopicInfo(info: EngineMessageHistoryThread.Info(title: title, icon: iconEmojiId, iconColor: iconColor), isClosed: (flags & (1 << 2)) != 0, isHidden: (flags & (1 << 6)) != 0)
                                     case .forumTopicDeleted:
                                         prevInfo = AdminLogEventAction.ForumTopicInfo(info: EngineMessageHistoryThread.Info(title: "", icon: nil, iconColor: 0), isClosed: false, isHidden: false)
@@ -374,7 +377,8 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
 
                                     let newInfo: AdminLogEventAction.ForumTopicInfo
                                     switch newTopic {
-                                    case let .forumTopic(flags, _, _, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
+                                    case let .forumTopic(forumTopicData):
+                                        let (flags, title, iconColor, iconEmojiId) = (forumTopicData.flags, forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId)
                                         newInfo = AdminLogEventAction.ForumTopicInfo(info: EngineMessageHistoryThread.Info(title: title, icon: iconEmojiId, iconColor: iconColor), isClosed: (flags & (1 << 2)) != 0, isHidden: (flags & (1 << 6)) != 0)
                                     case .forumTopicDeleted:
                                         newInfo = AdminLogEventAction.ForumTopicInfo(info: EngineMessageHistoryThread.Info(title: "", icon: nil, iconColor: 0), isClosed: false, isHidden: false)
@@ -385,7 +389,8 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                     let (prevTopic, newTopic) = (channelAdminLogEventActionPinTopicData.prevTopic, channelAdminLogEventActionPinTopicData.newTopic)
                                     let prevInfo: EngineMessageHistoryThread.Info?
                                     switch prevTopic {
-                                    case let .forumTopic(_, _, _, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
+                                    case let .forumTopic(forumTopicData):
+                                        let (title, iconColor, iconEmojiId) = (forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId)
                                         prevInfo = EngineMessageHistoryThread.Info(title: title, icon: iconEmojiId, iconColor: iconColor)
                                     case .forumTopicDeleted:
                                         prevInfo = EngineMessageHistoryThread.Info(title: "", icon: nil, iconColor: 0)
@@ -395,7 +400,8 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
 
                                     let newInfo: EngineMessageHistoryThread.Info?
                                     switch newTopic {
-                                    case let .forumTopic(_, _, _, _, title, iconColor, iconEmojiId, _, _, _, _, _, _, _, _, _):
+                                    case let .forumTopic(forumTopicData):
+                                        let (title, iconColor, iconEmojiId) = (forumTopicData.title, forumTopicData.iconColor, forumTopicData.iconEmojiId)
                                         newInfo = EngineMessageHistoryThread.Info(title: title, icon: iconEmojiId, iconColor: iconColor)
                                     case .forumTopicDeleted:
                                         newInfo = EngineMessageHistoryThread.Info(title: "", icon: nil, iconColor: 0)

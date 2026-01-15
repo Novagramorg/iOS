@@ -346,7 +346,8 @@ private func pushDeviceContactData(accountPeerId: PeerId, postbox: Postbox, netw
                             
                                 for item in imported {
                                     switch item {
-                                    case let .importedContact(userId, clientId):
+                                    case let .importedContact(importedContactData):
+                                        let (userId, clientId) = (importedContactData.userId, importedContactData.clientId)
                                         let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
                                         addedContactPeerIds.insert(peerId)
                                         peerIdByClientId[clientId] = peerId

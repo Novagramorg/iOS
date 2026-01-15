@@ -532,7 +532,17 @@ public extension Api {
 }
 public extension Api {
     enum FileHash: TypeConstructorDescription {
-        case fileHash(offset: Int64, limit: Int32, hash: Buffer)
+        public class Cons_fileHash {
+            public var offset: Int64
+            public var limit: Int32
+            public var hash: Buffer
+            public init(offset: Int64, limit: Int32, hash: Buffer) {
+                self.offset = offset
+                self.limit = limit
+                self.hash = hash
+            }
+        }
+        case fileHash(Cons_fileHash)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -561,7 +571,19 @@ public extension Api {
 }
 public extension Api {
     enum Folder: TypeConstructorDescription {
-        case folder(flags: Int32, id: Int32, title: String, photo: Api.ChatPhoto?)
+        public class Cons_folder {
+            public var flags: Int32
+            public var id: Int32
+            public var title: String
+            public var photo: Api.ChatPhoto?
+            public init(flags: Int32, id: Int32, title: String, photo: Api.ChatPhoto?) {
+                self.flags = flags
+                self.id = id
+                self.title = title
+                self.photo = photo
+            }
+        }
+        case folder(Cons_folder)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -590,7 +612,15 @@ public extension Api {
 }
 public extension Api {
     enum FolderPeer: TypeConstructorDescription {
-        case folderPeer(peer: Api.Peer, folderId: Int32)
+        public class Cons_folderPeer {
+            public var peer: Api.Peer
+            public var folderId: Int32
+            public init(peer: Api.Peer, folderId: Int32) {
+                self.peer = peer
+                self.folderId = folderId
+            }
+        }
+        case folderPeer(Cons_folderPeer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -619,8 +649,50 @@ public extension Api {
 }
 public extension Api {
     indirect enum ForumTopic: TypeConstructorDescription {
-        case forumTopic(flags: Int32, id: Int32, date: Int32, peer: Api.Peer, title: String, iconColor: Int32, iconEmojiId: Int64?, topMessage: Int32, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, unreadMentionsCount: Int32, unreadReactionsCount: Int32, fromId: Api.Peer, notifySettings: Api.PeerNotifySettings, draft: Api.DraftMessage?)
-        case forumTopicDeleted(id: Int32)
+        public class Cons_forumTopic {
+            public var flags: Int32
+            public var id: Int32
+            public var date: Int32
+            public var peer: Api.Peer
+            public var title: String
+            public var iconColor: Int32
+            public var iconEmojiId: Int64?
+            public var topMessage: Int32
+            public var readInboxMaxId: Int32
+            public var readOutboxMaxId: Int32
+            public var unreadCount: Int32
+            public var unreadMentionsCount: Int32
+            public var unreadReactionsCount: Int32
+            public var fromId: Api.Peer
+            public var notifySettings: Api.PeerNotifySettings
+            public var draft: Api.DraftMessage?
+            public init(flags: Int32, id: Int32, date: Int32, peer: Api.Peer, title: String, iconColor: Int32, iconEmojiId: Int64?, topMessage: Int32, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, unreadMentionsCount: Int32, unreadReactionsCount: Int32, fromId: Api.Peer, notifySettings: Api.PeerNotifySettings, draft: Api.DraftMessage?) {
+                self.flags = flags
+                self.id = id
+                self.date = date
+                self.peer = peer
+                self.title = title
+                self.iconColor = iconColor
+                self.iconEmojiId = iconEmojiId
+                self.topMessage = topMessage
+                self.readInboxMaxId = readInboxMaxId
+                self.readOutboxMaxId = readOutboxMaxId
+                self.unreadCount = unreadCount
+                self.unreadMentionsCount = unreadMentionsCount
+                self.unreadReactionsCount = unreadReactionsCount
+                self.fromId = fromId
+                self.notifySettings = notifySettings
+                self.draft = draft
+            }
+        }
+        public class Cons_forumTopicDeleted {
+            public var id: Int32
+            public init(id: Int32) {
+                self.id = id
+            }
+        }
+        case forumTopic(Cons_forumTopic)
+        case forumTopicDeleted(Cons_forumTopicDeleted)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -656,7 +728,15 @@ public extension Api {
 }
 public extension Api {
     indirect enum FoundStory: TypeConstructorDescription {
-        case foundStory(peer: Api.Peer, story: Api.StoryItem)
+        public class Cons_foundStory {
+            public var peer: Api.Peer
+            public var story: Api.StoryItem
+            public init(peer: Api.Peer, story: Api.StoryItem) {
+                self.peer = peer
+                self.story = story
+            }
+        }
+        case foundStory(Cons_foundStory)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -685,7 +765,27 @@ public extension Api {
 }
 public extension Api {
     enum Game: TypeConstructorDescription {
-        case game(flags: Int32, id: Int64, accessHash: Int64, shortName: String, title: String, description: String, photo: Api.Photo, document: Api.Document?)
+        public class Cons_game {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var shortName: String
+            public var title: String
+            public var description: String
+            public var photo: Api.Photo
+            public var document: Api.Document?
+            public init(flags: Int32, id: Int64, accessHash: Int64, shortName: String, title: String, description: String, photo: Api.Photo, document: Api.Document?) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.shortName = shortName
+                self.title = title
+                self.description = description
+                self.photo = photo
+                self.document = document
+            }
+        }
+        case game(Cons_game)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -714,7 +814,21 @@ public extension Api {
 }
 public extension Api {
     enum GeoPoint: TypeConstructorDescription {
-        case geoPoint(flags: Int32, long: Double, lat: Double, accessHash: Int64, accuracyRadius: Int32?)
+        public class Cons_geoPoint {
+            public var flags: Int32
+            public var long: Double
+            public var lat: Double
+            public var accessHash: Int64
+            public var accuracyRadius: Int32?
+            public init(flags: Int32, long: Double, lat: Double, accessHash: Int64, accuracyRadius: Int32?) {
+                self.flags = flags
+                self.long = long
+                self.lat = lat
+                self.accessHash = accessHash
+                self.accuracyRadius = accuracyRadius
+            }
+        }
+        case geoPoint(Cons_geoPoint)
         case geoPointEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -751,7 +865,21 @@ public extension Api {
 }
 public extension Api {
     enum GeoPointAddress: TypeConstructorDescription {
-        case geoPointAddress(flags: Int32, countryIso2: String, state: String?, city: String?, street: String?)
+        public class Cons_geoPointAddress {
+            public var flags: Int32
+            public var countryIso2: String
+            public var state: String?
+            public var city: String?
+            public var street: String?
+            public init(flags: Int32, countryIso2: String, state: String?, city: String?, street: String?) {
+                self.flags = flags
+                self.countryIso2 = countryIso2
+                self.state = state
+                self.city = city
+                self.street = street
+            }
+        }
+        case geoPointAddress(Cons_geoPointAddress)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -780,7 +908,17 @@ public extension Api {
 }
 public extension Api {
     enum GlobalPrivacySettings: TypeConstructorDescription {
-        case globalPrivacySettings(flags: Int32, noncontactPeersPaidStars: Int64?, disallowedGifts: Api.DisallowedGiftsSettings?)
+        public class Cons_globalPrivacySettings {
+            public var flags: Int32
+            public var noncontactPeersPaidStars: Int64?
+            public var disallowedGifts: Api.DisallowedGiftsSettings?
+            public init(flags: Int32, noncontactPeersPaidStars: Int64?, disallowedGifts: Api.DisallowedGiftsSettings?) {
+                self.flags = flags
+                self.noncontactPeersPaidStars = noncontactPeersPaidStars
+                self.disallowedGifts = disallowedGifts
+            }
+        }
+        case globalPrivacySettings(Cons_globalPrivacySettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -809,8 +947,50 @@ public extension Api {
 }
 public extension Api {
     enum GroupCall: TypeConstructorDescription {
-        case groupCall(flags: Int32, id: Int64, accessHash: Int64, participantsCount: Int32, title: String?, streamDcId: Int32?, recordStartDate: Int32?, scheduleDate: Int32?, unmutedVideoCount: Int32?, unmutedVideoLimit: Int32, version: Int32, inviteLink: String?, sendPaidMessagesStars: Int64?, defaultSendAs: Api.Peer?)
-        case groupCallDiscarded(id: Int64, accessHash: Int64, duration: Int32)
+        public class Cons_groupCall {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var participantsCount: Int32
+            public var title: String?
+            public var streamDcId: Int32?
+            public var recordStartDate: Int32?
+            public var scheduleDate: Int32?
+            public var unmutedVideoCount: Int32?
+            public var unmutedVideoLimit: Int32
+            public var version: Int32
+            public var inviteLink: String?
+            public var sendPaidMessagesStars: Int64?
+            public var defaultSendAs: Api.Peer?
+            public init(flags: Int32, id: Int64, accessHash: Int64, participantsCount: Int32, title: String?, streamDcId: Int32?, recordStartDate: Int32?, scheduleDate: Int32?, unmutedVideoCount: Int32?, unmutedVideoLimit: Int32, version: Int32, inviteLink: String?, sendPaidMessagesStars: Int64?, defaultSendAs: Api.Peer?) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.participantsCount = participantsCount
+                self.title = title
+                self.streamDcId = streamDcId
+                self.recordStartDate = recordStartDate
+                self.scheduleDate = scheduleDate
+                self.unmutedVideoCount = unmutedVideoCount
+                self.unmutedVideoLimit = unmutedVideoLimit
+                self.version = version
+                self.inviteLink = inviteLink
+                self.sendPaidMessagesStars = sendPaidMessagesStars
+                self.defaultSendAs = defaultSendAs
+            }
+        }
+        public class Cons_groupCallDiscarded {
+            public var id: Int64
+            public var accessHash: Int64
+            public var duration: Int32
+            public init(id: Int64, accessHash: Int64, duration: Int32) {
+                self.id = id
+                self.accessHash = accessHash
+                self.duration = duration
+            }
+        }
+        case groupCall(Cons_groupCall)
+        case groupCallDiscarded(Cons_groupCallDiscarded)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -846,7 +1026,17 @@ public extension Api {
 }
 public extension Api {
     enum GroupCallDonor: TypeConstructorDescription {
-        case groupCallDonor(flags: Int32, peerId: Api.Peer?, stars: Int64)
+        public class Cons_groupCallDonor {
+            public var flags: Int32
+            public var peerId: Api.Peer?
+            public var stars: Int64
+            public init(flags: Int32, peerId: Api.Peer?, stars: Int64) {
+                self.flags = flags
+                self.peerId = peerId
+                self.stars = stars
+            }
+        }
+        case groupCallDonor(Cons_groupCallDonor)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -875,7 +1065,23 @@ public extension Api {
 }
 public extension Api {
     enum GroupCallMessage: TypeConstructorDescription {
-        case groupCallMessage(flags: Int32, id: Int32, fromId: Api.Peer, date: Int32, message: Api.TextWithEntities, paidMessageStars: Int64?)
+        public class Cons_groupCallMessage {
+            public var flags: Int32
+            public var id: Int32
+            public var fromId: Api.Peer
+            public var date: Int32
+            public var message: Api.TextWithEntities
+            public var paidMessageStars: Int64?
+            public init(flags: Int32, id: Int32, fromId: Api.Peer, date: Int32, message: Api.TextWithEntities, paidMessageStars: Int64?) {
+                self.flags = flags
+                self.id = id
+                self.fromId = fromId
+                self.date = date
+                self.message = message
+                self.paidMessageStars = paidMessageStars
+            }
+        }
+        case groupCallMessage(Cons_groupCallMessage)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

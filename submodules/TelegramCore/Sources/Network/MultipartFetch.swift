@@ -197,7 +197,8 @@ private final class MultipartCdnHashSource {
                 var parsedPartHashes: [Int64: Data] = [:]
                 for part in partHashes {
                     switch part {
-                        case let .fileHash(offset, limit, bytes):
+                        case let .fileHash(fileHashData):
+                            let (offset, limit, bytes) = (fileHashData.offset, fileHashData.limit, fileHashData.hash)
                             assert(limit == 128 * 1024)
                             parsedPartHashes[offset] = bytes.makeData()
                     }
@@ -371,7 +372,8 @@ private enum MultipartFetchSource {
                                             var parsedPartHashes: [Int64: Data] = [:]
                                             for part in partHashes {
                                                 switch part {
-                                                    case let .fileHash(offset, limit, bytes):
+                                                    case let .fileHash(fileHashData):
+                                                        let (offset, limit, bytes) = (fileHashData.offset, fileHashData.limit, fileHashData.hash)
                                                         assert(limit == 128 * 1024)
                                                         parsedPartHashes[offset] = bytes.makeData()
                                                 }

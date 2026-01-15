@@ -146,7 +146,8 @@ public struct GroupCallSummary: Equatable {
 extension GroupCallInfo {
     init?(_ call: Api.GroupCall) {
         switch call {
-        case let .groupCall(flags, id, accessHash, participantsCount, title, streamDcId, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, defaultSendAs):
+        case let .groupCall(groupCallData):
+            let (flags, id, accessHash, participantsCount, title, streamDcId, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, defaultSendAs) = (groupCallData.flags, groupCallData.id, groupCallData.accessHash, groupCallData.participantsCount, groupCallData.title, groupCallData.streamDcId, groupCallData.recordStartDate, groupCallData.scheduleDate, groupCallData.unmutedVideoCount, groupCallData.unmutedVideoLimit, groupCallData.version, groupCallData.inviteLink, groupCallData.sendPaidMessagesStars, groupCallData.defaultSendAs)
             self.init(
                 id: id,
                 accessHash: accessHash,
@@ -279,7 +280,8 @@ func _internal_getCurrentGroupCallInfo(account: Account, reference: InternalGrou
         switch result {
         case let .groupCall(call, participants, _, chats, users):
             return account.postbox.transaction { transaction -> (participants: [PeerId], duration: Int32?)? in
-                if case let .groupCallDiscarded(_, _, duration) = call {
+                if case let .groupCallDiscarded(groupCallDiscardedData) = call {
+                    let (_, _, duration) = (groupCallDiscardedData.id, groupCallDiscardedData.accessHash, groupCallDiscardedData.duration)
                     return ([], duration)
                 }
                 
@@ -783,7 +785,8 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             maybeParsedCall = GroupCallInfo(call)
                             
                             switch call {
-                            case let .groupCall(flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, defaultSendAs):
+                            case let .groupCall(groupCallData):
+                                let (flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, defaultSendAs) = (groupCallData.flags, groupCallData.id, groupCallData.accessHash, groupCallData.participantsCount, groupCallData.title, groupCallData.streamDcId, groupCallData.recordStartDate, groupCallData.scheduleDate, groupCallData.unmutedVideoCount, groupCallData.unmutedVideoLimit, groupCallData.version, groupCallData.inviteLink, groupCallData.sendPaidMessagesStars, groupCallData.defaultSendAs)
                                 let isMin = (flags & (1 << 19)) != 0
                                 let isMuted = (flags & (1 << 1)) != 0
                                 let canChange = (flags & (1 << 2)) != 0
@@ -863,7 +866,8 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             case let .updateGroupCallParticipants(_, participants, _):
                                 loop: for participant in participants {
                                     switch participant {
-                                    case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal):
+                                    case let .groupCallParticipant(groupCallParticipantData):
+                                        let (flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal) = (groupCallParticipantData.flags, groupCallParticipantData.peer, groupCallParticipantData.date, groupCallParticipantData.activeDate, groupCallParticipantData.source, groupCallParticipantData.volume, groupCallParticipantData.about, groupCallParticipantData.raiseHandRating, groupCallParticipantData.video, groupCallParticipantData.presentation, groupCallParticipantData.paidStarsTotal)
                                         let peerId: PeerId = apiPeerId.peerId
                                         let ssrc = UInt32(bitPattern: source)
                                         guard let peer = transaction.getPeer(peerId) else {
@@ -2724,7 +2728,8 @@ public final class GroupCallParticipantsContext {
 extension GroupCallParticipantsContext.Update.StateUpdate.ParticipantUpdate {
     init(_ apiParticipant: Api.GroupCallParticipant) {
         switch apiParticipant {
-        case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal):
+        case let .groupCallParticipant(groupCallParticipantData):
+            let (flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal) = (groupCallParticipantData.flags, groupCallParticipantData.peer, groupCallParticipantData.date, groupCallParticipantData.activeDate, groupCallParticipantData.source, groupCallParticipantData.volume, groupCallParticipantData.about, groupCallParticipantData.raiseHandRating, groupCallParticipantData.video, groupCallParticipantData.presentation, groupCallParticipantData.paidStarsTotal)
             let peerId: PeerId = apiPeerId.peerId
             let ssrc = UInt32(bitPattern: source)
             let muted = (flags & (1 << 0)) != 0
@@ -3200,7 +3205,8 @@ func _internal_getVideoBroadcastPart(dataSource: AudioBroadcastDataSource, callI
 extension GroupCallParticipantsContext.Participant {
      init?(_ apiParticipant: Api.GroupCallParticipant, transaction: Transaction) {
         switch apiParticipant {
-            case let .groupCallParticipant(flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal):
+            case let .groupCallParticipant(groupCallParticipantData):
+                let (flags, apiPeerId, date, activeDate, source, volume, about, raiseHandRating, video, presentation, paidStarsTotal) = (groupCallParticipantData.flags, groupCallParticipantData.peer, groupCallParticipantData.date, groupCallParticipantData.activeDate, groupCallParticipantData.source, groupCallParticipantData.volume, groupCallParticipantData.about, groupCallParticipantData.raiseHandRating, groupCallParticipantData.video, groupCallParticipantData.presentation, groupCallParticipantData.paidStarsTotal)
                 let peerId: PeerId = apiPeerId.peerId
                 let ssrc = UInt32(bitPattern: source)
                 guard let peer = transaction.getPeer(peerId) else {
@@ -3215,7 +3221,7 @@ extension GroupCallParticipantsContext.Participant {
                 } else if mutedByYou {
                     muteState = GroupCallParticipantsContext.Participant.MuteState(canUnmute: false, mutedByYou: mutedByYou)
                 }
-                 
+
                 var videoDescription = video.flatMap(GroupCallParticipantsContext.Participant.VideoDescription.init)
                 var presentationDescription = presentation.flatMap(GroupCallParticipantsContext.Participant.VideoDescription.init)
                 if muteState?.canUnmute == false {
@@ -3248,11 +3254,13 @@ extension GroupCallParticipantsContext.Participant {
 private extension GroupCallParticipantsContext.Participant.VideoDescription {
     init(_ apiVideo: Api.GroupCallParticipantVideo) {
         switch apiVideo {
-        case let .groupCallParticipantVideo(flags, endpoint, sourceGroups, audioSource):
+        case let .groupCallParticipantVideo(groupCallParticipantVideoData):
+            let (flags, endpoint, sourceGroups, audioSource) = (groupCallParticipantVideoData.flags, groupCallParticipantVideoData.endpoint, groupCallParticipantVideoData.sourceGroups, groupCallParticipantVideoData.audioSource)
             var parsedSsrcGroups: [SsrcGroup] = []
             for group in sourceGroups {
                 switch group {
-                case let .groupCallParticipantVideoSourceGroup(semantics, sources):
+                case let .groupCallParticipantVideoSourceGroup(groupCallParticipantVideoSourceGroupData):
+                    let (semantics, sources) = (groupCallParticipantVideoSourceGroupData.semantics, groupCallParticipantVideoSourceGroupData.sources)
                     parsedSsrcGroups.append(SsrcGroup(semantics: semantics, ssrcs: sources.map(UInt32.init(bitPattern:))))
                 }
             }
@@ -4106,7 +4114,8 @@ public final class GroupCallMessagesContext {
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(chats: chats, users: users))
                         for topDonor in topDonors {
                             switch topDonor {
-                            case let .groupCallDonor(_, peerId, _):
+                            case let .groupCallDonor(groupCallDonorData):
+                                let (_, peerId, _) = (groupCallDonorData.flags, groupCallDonorData.peerId, groupCallDonorData.stars)
                                 if let peerId {
                                     if peers[peerId.peerId] == nil, let peer = transaction.getPeer(peerId.peerId) {
                                         peers[peer.id] = peer
@@ -4128,7 +4137,8 @@ public final class GroupCallMessagesContext {
                         var state = self.state
                         state.topStars = topDonors.map { topDonor in
                             switch topDonor {
-                            case let .groupCallDonor(flags, peerId, stars):
+                            case let .groupCallDonor(groupCallDonorData):
+                                let (flags, peerId, stars) = (groupCallDonorData.flags, groupCallDonorData.peerId, groupCallDonorData.stars)
                                 return TopStarsItem(
                                     peerId: peerId?.peerId,
                                     amount: stars,
