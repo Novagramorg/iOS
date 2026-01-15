@@ -16,7 +16,8 @@ extension BotMenuButton {
 extension BotAppSettings {
     init(apiBotAppSettings: Api.BotAppSettings) {
         switch apiBotAppSettings {
-        case let .botAppSettings(_, placeholder, backgroundColor, backgroundDarkColor, headerColor, headerDarkColor):
+        case let .botAppSettings(botAppSettingsData):
+            let (_, placeholder, backgroundColor, backgroundDarkColor, headerColor, headerDarkColor) = (botAppSettingsData.flags, botAppSettingsData.placeholderPath, botAppSettingsData.backgroundColor, botAppSettingsData.backgroundDarkColor, botAppSettingsData.headerColor, botAppSettingsData.headerDarkColor)
             self.init(
                 placeholderData: placeholder.flatMap { $0.makeData() },
                 backgroundColor: backgroundColor,
@@ -52,7 +53,8 @@ extension BotInfo {
                 if let apiCommands = apiCommands {
                     commands = apiCommands.map { command in
                         switch command {
-                            case let .botCommand(command, description):
+                            case let .botCommand(botCommandData):
+                                let (command, description) = (botCommandData.command, botCommandData.description)
                                 return BotCommand(text: command, description: description)
                         }
                     }

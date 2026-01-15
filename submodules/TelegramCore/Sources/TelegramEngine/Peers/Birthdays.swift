@@ -59,7 +59,8 @@ public final class TelegramBirthday: Codable, Equatable {
 extension TelegramBirthday {
     convenience init(apiBirthday: Api.Birthday) {
         switch apiBirthday {
-        case let .birthday(_, day, month, year):
+        case let .birthday(birthdayData):
+            let (_, day, month, year) = (birthdayData.flags, birthdayData.day, birthdayData.month, birthdayData.year)
             self.init(
                 day: day,
                 month: month,
@@ -73,7 +74,7 @@ extension TelegramBirthday {
         if let _ = self.year {
             flags |= (1 << 0)
         }
-        return .birthday(flags: flags, day: self.day, month: self.month, year: self.year)
+        return .birthday(Api.Birthday.Cons_birthday(flags: flags, day: self.day, month: self.month, year: self.year))
     }
 }
 

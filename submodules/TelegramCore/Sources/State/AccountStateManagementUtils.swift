@@ -1774,7 +1774,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 let botPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId))
                 let commands: [BotCommand] = apiCommands.map { command in
                     switch command {
-                    case let .botCommand(command, description):
+                    case let .botCommand(botCommandData):
+                        let (command, description) = (botCommandData.command, botCommandData.description)
                         return BotCommand(text: command, description: description)
                     }
                 }

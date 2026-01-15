@@ -1,6 +1,22 @@
 public extension Api {
     enum BotBusinessConnection: TypeConstructorDescription {
-        case botBusinessConnection(flags: Int32, connectionId: String, userId: Int64, dcId: Int32, date: Int32, rights: Api.BusinessBotRights?)
+        public class Cons_botBusinessConnection {
+            public var flags: Int32
+            public var connectionId: String
+            public var userId: Int64
+            public var dcId: Int32
+            public var date: Int32
+            public var rights: Api.BusinessBotRights?
+            public init(flags: Int32, connectionId: String, userId: Int64, dcId: Int32, date: Int32, rights: Api.BusinessBotRights?) {
+                self.flags = flags
+                self.connectionId = connectionId
+                self.userId = userId
+                self.dcId = dcId
+                self.date = date
+                self.rights = rights
+            }
+        }
+        case botBusinessConnection(Cons_botBusinessConnection)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,7 +45,15 @@ public extension Api {
 }
 public extension Api {
     enum BotCommand: TypeConstructorDescription {
-        case botCommand(command: String, description: String)
+        public class Cons_botCommand {
+            public var command: String
+            public var description: String
+            public init(command: String, description: String) {
+                self.command = command
+                self.description = description
+            }
+        }
+        case botCommand(Cons_botCommand)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

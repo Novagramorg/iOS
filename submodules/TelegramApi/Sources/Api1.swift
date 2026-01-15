@@ -565,7 +565,31 @@ public extension Api {
 }
 public extension Api {
     enum AvailableReaction: TypeConstructorDescription {
-        case availableReaction(flags: Int32, reaction: String, title: String, staticIcon: Api.Document, appearAnimation: Api.Document, selectAnimation: Api.Document, activateAnimation: Api.Document, effectAnimation: Api.Document, aroundAnimation: Api.Document?, centerIcon: Api.Document?)
+        public class Cons_availableReaction {
+            public var flags: Int32
+            public var reaction: String
+            public var title: String
+            public var staticIcon: Api.Document
+            public var appearAnimation: Api.Document
+            public var selectAnimation: Api.Document
+            public var activateAnimation: Api.Document
+            public var effectAnimation: Api.Document
+            public var aroundAnimation: Api.Document?
+            public var centerIcon: Api.Document?
+            public init(flags: Int32, reaction: String, title: String, staticIcon: Api.Document, appearAnimation: Api.Document, selectAnimation: Api.Document, activateAnimation: Api.Document, effectAnimation: Api.Document, aroundAnimation: Api.Document?, centerIcon: Api.Document?) {
+                self.flags = flags
+                self.reaction = reaction
+                self.title = title
+                self.staticIcon = staticIcon
+                self.appearAnimation = appearAnimation
+                self.selectAnimation = selectAnimation
+                self.activateAnimation = activateAnimation
+                self.effectAnimation = effectAnimation
+                self.aroundAnimation = aroundAnimation
+                self.centerIcon = centerIcon
+            }
+        }
+        case availableReaction(Cons_availableReaction)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -594,7 +618,15 @@ public extension Api {
 }
 public extension Api {
     enum BankCardOpenUrl: TypeConstructorDescription {
-        case bankCardOpenUrl(url: String, name: String)
+        public class Cons_bankCardOpenUrl {
+            public var url: String
+            public var name: String
+            public init(url: String, name: String) {
+                self.url = url
+                self.name = name
+            }
+        }
+        case bankCardOpenUrl(Cons_bankCardOpenUrl)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -684,7 +716,19 @@ public extension Api {
 }
 public extension Api {
     enum Birthday: TypeConstructorDescription {
-        case birthday(flags: Int32, day: Int32, month: Int32, year: Int32?)
+        public class Cons_birthday {
+            public var flags: Int32
+            public var day: Int32
+            public var month: Int32
+            public var year: Int32?
+            public init(flags: Int32, day: Int32, month: Int32, year: Int32?) {
+                self.flags = flags
+                self.day = day
+                self.month = month
+                self.year = year
+            }
+        }
+        case birthday(Cons_birthday)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -750,7 +794,29 @@ public extension Api {
 }
 public extension Api {
     enum Boost: TypeConstructorDescription {
-        case boost(flags: Int32, id: String, userId: Int64?, giveawayMsgId: Int32?, date: Int32, expires: Int32, usedGiftSlug: String?, multiplier: Int32?, stars: Int64?)
+        public class Cons_boost {
+            public var flags: Int32
+            public var id: String
+            public var userId: Int64?
+            public var giveawayMsgId: Int32?
+            public var date: Int32
+            public var expires: Int32
+            public var usedGiftSlug: String?
+            public var multiplier: Int32?
+            public var stars: Int64?
+            public init(flags: Int32, id: String, userId: Int64?, giveawayMsgId: Int32?, date: Int32, expires: Int32, usedGiftSlug: String?, multiplier: Int32?, stars: Int64?) {
+                self.flags = flags
+                self.id = id
+                self.userId = userId
+                self.giveawayMsgId = giveawayMsgId
+                self.date = date
+                self.expires = expires
+                self.usedGiftSlug = usedGiftSlug
+                self.multiplier = multiplier
+                self.stars = stars
+            }
+        }
+        case boost(Cons_boost)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -779,7 +845,29 @@ public extension Api {
 }
 public extension Api {
     enum BotApp: TypeConstructorDescription {
-        case botApp(flags: Int32, id: Int64, accessHash: Int64, shortName: String, title: String, description: String, photo: Api.Photo, document: Api.Document?, hash: Int64)
+        public class Cons_botApp {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var shortName: String
+            public var title: String
+            public var description: String
+            public var photo: Api.Photo
+            public var document: Api.Document?
+            public var hash: Int64
+            public init(flags: Int32, id: Int64, accessHash: Int64, shortName: String, title: String, description: String, photo: Api.Photo, document: Api.Document?, hash: Int64) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.shortName = shortName
+                self.title = title
+                self.description = description
+                self.photo = photo
+                self.document = document
+                self.hash = hash
+            }
+        }
+        case botApp(Cons_botApp)
         case botAppNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -816,7 +904,23 @@ public extension Api {
 }
 public extension Api {
     enum BotAppSettings: TypeConstructorDescription {
-        case botAppSettings(flags: Int32, placeholderPath: Buffer?, backgroundColor: Int32?, backgroundDarkColor: Int32?, headerColor: Int32?, headerDarkColor: Int32?)
+        public class Cons_botAppSettings {
+            public var flags: Int32
+            public var placeholderPath: Buffer?
+            public var backgroundColor: Int32?
+            public var backgroundDarkColor: Int32?
+            public var headerColor: Int32?
+            public var headerDarkColor: Int32?
+            public init(flags: Int32, placeholderPath: Buffer?, backgroundColor: Int32?, backgroundDarkColor: Int32?, headerColor: Int32?, headerDarkColor: Int32?) {
+                self.flags = flags
+                self.placeholderPath = placeholderPath
+                self.backgroundColor = backgroundColor
+                self.backgroundDarkColor = backgroundDarkColor
+                self.headerColor = headerColor
+                self.headerDarkColor = headerDarkColor
+            }
+        }
+        case botAppSettings(Cons_botAppSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
