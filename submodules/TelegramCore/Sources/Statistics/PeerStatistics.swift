@@ -1115,23 +1115,28 @@ extension StatsGraph {
     init(apiStatsGraph: Api.StatsGraph) {
         switch apiStatsGraph {
             case let .statsGraph(_, json, zoomToken):
-                if case let .dataJSON(string) = json, let data = string.data(using: .utf8) {
-                    do {
-                        let decodedData = try JSONSerialization.jsonObject(with: data, options: [])
-                        guard let item = decodedData as? [String: Any] else {
-                            self = .Failed(error: "")
-                            return
-                        }
-                        if let columns = item["columns"] as? [[Any]] {
-                            if columns.isEmpty {
-                                self = .Empty
-                            } else {
-                                self = .Loaded(token: zoomToken, data: string)
+                if case let .dataJSON(dataJSONData) = json {
+                    let string = dataJSONData.data
+                    if let data = string.data(using: .utf8) {
+                        do {
+                            let decodedData = try JSONSerialization.jsonObject(with: data, options: [])
+                            guard let item = decodedData as? [String: Any] else {
+                                self = .Failed(error: "")
+                                return
                             }
-                        } else {
-                            self = .Empty
+                            if let columns = item["columns"] as? [[Any]] {
+                                if columns.isEmpty {
+                                    self = .Empty
+                                } else {
+                                    self = .Loaded(token: zoomToken, data: string)
+                                }
+                            } else {
+                                self = .Empty
+                            }
+                        } catch {
+                            self = .Failed(error: "")
                         }
-                    } catch {
+                    } else {
                         self = .Failed(error: "")
                     }
                 } else {

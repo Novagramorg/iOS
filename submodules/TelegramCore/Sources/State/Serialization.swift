@@ -251,7 +251,8 @@ public class Serialization: NSObject, MTSerialization {
                         var addressDict: [NSNumber: [Any]] = [:]
                         for option in dcOptions {
                             switch option {
-                                case let .dcOption(flags, id, ipAddress, port, secret):
+                                case let .dcOption(dcOptionData):
+                                    let (flags, id, ipAddress, port, secret) = (dcOptionData.flags, dcOptionData.id, dcOptionData.ipAddress, dcOptionData.port, dcOptionData.secret)
                                     if addressDict[id as NSNumber] == nil {
                                         addressDict[id as NSNumber] = []
                                     }

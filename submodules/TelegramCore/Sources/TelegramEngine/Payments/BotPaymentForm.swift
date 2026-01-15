@@ -513,7 +513,7 @@ func _internal_fetchBotPaymentForm(accountPeerId: PeerId, postbox: Postbox, netw
         var flags: Int32 = 0
         var serializedThemeParams: Api.DataJSON?
         if let themeParams = themeParams, let data = try? JSONSerialization.data(withJSONObject: themeParams, options: []), let dataString = String(data: data, encoding: .utf8) {
-            serializedThemeParams = Api.DataJSON.dataJSON(data: dataString)
+            serializedThemeParams = Api.DataJSON.dataJSON(.init(data: dataString))
         }
         if serializedThemeParams != nil {
             flags |= 1 << 0
@@ -550,7 +550,8 @@ func _internal_fetchBotPaymentForm(accountPeerId: PeerId, postbox: Postbox, netw
                     var parsedNativeProvider: BotPaymentNativeProvider?
                     if let nativeProvider = nativeProvider, let nativeParams = nativeParams {
                         switch nativeParams {
-                            case let .dataJSON(data):
+                            case let .dataJSON(dataJSONData):
+                            let data = dataJSONData.data
                             parsedNativeProvider = BotPaymentNativeProvider(name: nativeProvider, params: data)
                         }
                     }
@@ -721,11 +722,11 @@ func _internal_sendBotPaymentForm(account: Account, formId: Int64, source: BotPa
                 if saveOnServer {
                     credentialsFlags |= (1 << 0)
                 }
-                apiCredentials = .inputPaymentCredentials(flags: credentialsFlags, data: .dataJSON(data: data))
+                apiCredentials = .inputPaymentCredentials(flags: credentialsFlags, data: .dataJSON(.init(data: data)))
             case let .saved(id, tempPassword):
                 apiCredentials = .inputPaymentCredentialsSaved(id: id, tmpPassword: Buffer(data: tempPassword))
             case let .applePay(data):
-                apiCredentials = .inputPaymentCredentialsApplePay(paymentData: .dataJSON(data: data))
+                apiCredentials = .inputPaymentCredentialsApplePay(paymentData: .dataJSON(.init(data: data)))
         }
         var flags: Int32 = 0
         if validatedInfoId != nil {

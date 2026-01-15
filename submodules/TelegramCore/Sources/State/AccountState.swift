@@ -9,7 +9,8 @@ extension UnauthorizedAccountTermsOfService {
             case let .termsOfService(_, id, text, entities, minAgeConfirm):
                 let idData: String
                 switch id {
-                    case let .dataJSON(data):
+                    case let .dataJSON(dataJSONData):
+                        let data = dataJSONData.data
                         idData = data
                 }
                 self.init(id: idData, text: text, entities: messageTextEntitiesFromApiEntities(entities), ageConfirmation: minAgeConfirm)

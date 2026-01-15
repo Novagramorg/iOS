@@ -86,7 +86,8 @@ func _internal_requestAccountPrivacySettings(account: Account) -> Signal<Account
         
         let messageAutoremoveSeconds: Int32?
         switch messageAutoremoveTimeout {
-        case let .defaultHistoryTTL(period):
+        case let .defaultHistoryTTL(defaultHistoryTTLData):
+            let period = defaultHistoryTTLData.period
             if period != 0 {
                 messageAutoremoveSeconds = period
             } else {
@@ -404,7 +405,7 @@ func _internal_updateGlobalPrivacySettings(account: Account, settings: GlobalPri
     }
     flags |= 1 << 6
     
-    let disallowedStargifts: Api.DisallowedGiftsSettings = .disallowedGiftsSettings(flags: giftFlags)
+    let disallowedStargifts: Api.DisallowedGiftsSettings = .disallowedGiftsSettings(.init(flags: giftFlags))
     return account.network.request(Api.functions.account.setGlobalPrivacySettings(
         settings: .globalPrivacySettings(flags: flags, noncontactPeersPaidStars: noncontactPeersPaidStars, disallowedGifts: disallowedStargifts)
     ))

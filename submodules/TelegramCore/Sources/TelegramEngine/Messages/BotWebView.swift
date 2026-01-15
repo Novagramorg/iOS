@@ -19,7 +19,7 @@ public enum RequestSimpleWebViewSource : Equatable {
 func _internal_requestSimpleWebView(postbox: Postbox, network: Network, botId: PeerId, url: String?, source: RequestSimpleWebViewSource, themeParams: [String: Any]?) -> Signal<RequestWebViewResult, RequestWebViewError> {
     var serializedThemeParams: Api.DataJSON?
     if let themeParams = themeParams, let data = try? JSONSerialization.data(withJSONObject: themeParams, options: []), let dataString = String(data: data, encoding: .utf8) {
-        serializedThemeParams = .dataJSON(data: dataString)
+        serializedThemeParams = .dataJSON(.init(data: dataString))
     }
     return postbox.transaction { transaction -> Signal<RequestWebViewResult, RequestWebViewError> in
         guard let bot = transaction.getPeer(botId), let inputUser = apiInputUser(bot) else {
@@ -70,7 +70,7 @@ func _internal_requestSimpleWebView(postbox: Postbox, network: Network, botId: P
 func _internal_requestMainWebView(postbox: Postbox, network: Network, peerId: PeerId, botId: PeerId, source: RequestSimpleWebViewSource, themeParams: [String: Any]?) -> Signal<RequestWebViewResult, RequestWebViewError> {
     var serializedThemeParams: Api.DataJSON?
     if let themeParams = themeParams, let data = try? JSONSerialization.data(withJSONObject: themeParams, options: []), let dataString = String(data: data, encoding: .utf8) {
-        serializedThemeParams = .dataJSON(data: dataString)
+        serializedThemeParams = .dataJSON(.init(data: dataString))
     }
     return postbox.transaction { transaction -> Signal<RequestWebViewResult, RequestWebViewError> in
         guard let bot = transaction.getPeer(botId), let inputUser = apiInputUser(bot) else {
@@ -204,7 +204,7 @@ private func keepWebViewSignal(network: Network, stateManager: AccountStateManag
 func _internal_requestWebView(postbox: Postbox, network: Network, stateManager: AccountStateManager, peerId: PeerId, botId: PeerId, url: String?, payload: String?, themeParams: [String: Any]?, fromMenu: Bool, replyToMessageId: MessageId?, threadId: Int64?) -> Signal<RequestWebViewResult, RequestWebViewError> {
     var serializedThemeParams: Api.DataJSON?
     if let themeParams = themeParams, let data = try? JSONSerialization.data(withJSONObject: themeParams, options: []), let dataString = String(data: data, encoding: .utf8) {
-        serializedThemeParams = .dataJSON(data: dataString)
+        serializedThemeParams = .dataJSON(.init(data: dataString))
     }
     
     return postbox.transaction { transaction -> Signal<RequestWebViewResult, RequestWebViewError> in
@@ -309,7 +309,7 @@ func _internal_sendWebViewData(postbox: Postbox, network: Network, stateManager:
 func _internal_requestAppWebView(postbox: Postbox, network: Network, stateManager: AccountStateManager, peerId: PeerId, appReference: BotAppReference, payload: String?, themeParams: [String: Any]?, compact: Bool, fullscreen: Bool, allowWrite: Bool) -> Signal<RequestWebViewResult, RequestWebViewError> {
     var serializedThemeParams: Api.DataJSON?
     if let themeParams = themeParams, let data = try? JSONSerialization.data(withJSONObject: themeParams, options: []), let dataString = String(data: data, encoding: .utf8) {
-        serializedThemeParams = .dataJSON(data: dataString)
+        serializedThemeParams = .dataJSON(.init(data: dataString))
     }
     
     return postbox.transaction { transaction -> Signal<RequestWebViewResult, RequestWebViewError> in
@@ -415,7 +415,7 @@ public enum InvokeBotCustomMethodError {
 }
 
 func _internal_invokeBotCustomMethod(postbox: Postbox, network: Network, botId: PeerId, method: String, params: String) -> Signal<String, InvokeBotCustomMethodError> {
-    let params = Api.DataJSON.dataJSON(data: params)
+    let params = Api.DataJSON.dataJSON(.init(data: params))
     return postbox.transaction { transaction -> Signal<String, InvokeBotCustomMethodError> in
         guard let bot = transaction.getPeer(botId), let inputUser = apiInputUser(bot) else {
             return .fail(.generic)
@@ -425,7 +425,8 @@ func _internal_invokeBotCustomMethod(postbox: Postbox, network: Network, botId: 
             return .generic
         }
         |> map { result -> String in
-            if case let .dataJSON(data) = result {
+            if case let .dataJSON(dataJSONData) = result {
+                let data = dataJSONData.data
                 return data
             } else {
                 return ""

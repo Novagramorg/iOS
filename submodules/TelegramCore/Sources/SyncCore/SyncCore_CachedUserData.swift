@@ -559,9 +559,11 @@ public struct PeerEmojiStatus: Equatable, Codable {
 extension PeerEmojiStatus {
     init?(apiStatus: Api.EmojiStatus) {
         switch apiStatus {
-        case let .emojiStatus(_, documentId, until):
+        case let .emojiStatus(emojiStatusData):
+            let (documentId, until) = (emojiStatusData.documentId, emojiStatusData.until)
             self.init(content: .emoji(fileId: documentId), expirationDate: until)
-        case let .emojiStatusCollectible(_, collectibleId, documentId, title, slug, patternDocumentId, centerColor, edgeColor, patternColor, textColor, until):
+        case let .emojiStatusCollectible(emojiStatusCollectibleData):
+            let (collectibleId, documentId, title, slug, patternDocumentId, centerColor, edgeColor, patternColor, textColor, until) = (emojiStatusCollectibleData.collectibleId, emojiStatusCollectibleData.documentId, emojiStatusCollectibleData.title, emojiStatusCollectibleData.slug, emojiStatusCollectibleData.patternDocumentId, emojiStatusCollectibleData.centerColor, emojiStatusCollectibleData.edgeColor, emojiStatusCollectibleData.patternColor, emojiStatusCollectibleData.textColor, emojiStatusCollectibleData.until)
             self.init(content: .starGift(id: collectibleId, fileId: documentId, title: title, slug: slug, patternFileId: patternDocumentId, innerColor: centerColor, outerColor: edgeColor, patternColor: patternColor, textColor: textColor), expirationDate: until)
         case .emojiStatusEmpty, .inputEmojiStatusCollectible:
             return nil

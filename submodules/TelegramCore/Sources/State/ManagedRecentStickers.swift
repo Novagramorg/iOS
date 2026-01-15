@@ -395,7 +395,8 @@ func managedProfilePhotoEmoji(postbox: Postbox, network: Network) -> Signal<Void
             switch result {
             case .emojiListNotModified:
                 return .single(nil)
-            case let .emojiList(_, documentIds):
+            case let .emojiList(emojiListData):
+                let documentIds = emojiListData.documentId
                 return _internal_resolveInlineStickers(postbox: postbox, network: network, fileIds: documentIds)
                 |> map { files -> [OrderedItemListEntry] in
                     var items: [OrderedItemListEntry] = []
@@ -426,7 +427,8 @@ func managedGroupPhotoEmoji(postbox: Postbox, network: Network) -> Signal<Void, 
             switch result {
             case .emojiListNotModified:
                 return .single(nil)
-            case let .emojiList(_, documentIds):
+            case let .emojiList(emojiListData):
+                let documentIds = emojiListData.documentId
                 return _internal_resolveInlineStickers(postbox: postbox, network: network, fileIds: documentIds)
                 |> map { files -> [OrderedItemListEntry] in
                     var items: [OrderedItemListEntry] = []
@@ -457,7 +459,8 @@ func managedBackgroundIconEmoji(postbox: Postbox, network: Network) -> Signal<Vo
             switch result {
             case .emojiListNotModified:
                 return .single(nil)
-            case let .emojiList(_, documentIds):
+            case let .emojiList(emojiListData):
+                let documentIds = emojiListData.documentId
                 return _internal_resolveInlineStickers(postbox: postbox, network: network, fileIds: documentIds)
                 |> map { files -> [OrderedItemListEntry] in
                     var items: [OrderedItemListEntry] = []
@@ -488,7 +491,8 @@ func managedDisabledChannelStatusIconEmoji(postbox: Postbox, network: Network) -
             switch result {
             case .emojiListNotModified:
                 return .single(nil)
-            case let .emojiList(_, documentIds):
+            case let .emojiList(emojiListData):
+                let documentIds = emojiListData.documentId
                 return _internal_resolveInlineStickers(postbox: postbox, network: network, fileIds: documentIds)
                 |> map { files -> [OrderedItemListEntry] in
                     var items: [OrderedItemListEntry] = []

@@ -25,7 +25,8 @@ extension TermsOfServiceUpdate {
             case let .termsOfService(_, id, text, entities, minAgeConfirm):
                 let idData: String
                 switch id {
-                case let .dataJSON(data):
+                case let .dataJSON(dataJSONData):
+                    let data = dataJSONData.data
                     idData = data
                 }
                 self.init(id: idData, text: text, entities: messageTextEntitiesFromApiEntities(entities), ageConfirmation: minAgeConfirm)
@@ -34,7 +35,7 @@ extension TermsOfServiceUpdate {
 }
 
 func _internal_acceptTermsOfService(account: Account, id: String) -> Signal<Void, NoError> {
-    return account.network.request(Api.functions.help.acceptTermsOfService(id: .dataJSON(data: id)))
+    return account.network.request(Api.functions.help.acceptTermsOfService(id: .dataJSON(.init(data: id))))
     |> `catch` { _ -> Signal<Api.Bool, NoError> in
         return .complete()
     }

@@ -995,7 +995,8 @@ func _internal_searchEmoji(account: Account, query: String?, emoticon: [String],
                 switch result {
                 case .emojiListNotModified:
                     return .single(nil)
-                case let .emojiList(hash, documentIds):
+                case let .emojiList(emojiListData):
+                    let (hash, documentIds) = (emojiListData.hash, emojiListData.documentId)
                     return TelegramEngine(account: account).stickers.resolveInlineStickers(fileIds: documentIds)
                     |> map { fileMap -> (files: [TelegramMediaFile], hash: Int64)? in
                         var files: [TelegramMediaFile] = []

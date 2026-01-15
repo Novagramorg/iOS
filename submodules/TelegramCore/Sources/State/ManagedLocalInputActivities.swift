@@ -132,7 +132,7 @@ private func actionFromActivity(_ activity: PeerInputActivity?) -> Api.SendMessa
             case .choosingSticker:
                 return .sendMessageChooseStickerAction
             case let .interactingWithEmoji(emoticon, messageId, interaction):
-                return .sendMessageEmojiInteraction(emoticon: emoticon, msgId: messageId.id, interaction: interaction?.apiDataJson ?? .dataJSON(data: ""))
+                return .sendMessageEmojiInteraction(emoticon: emoticon, msgId: messageId.id, interaction: interaction?.apiDataJson ?? .dataJSON(.init(data: "")))
             case let .seeingEmojiInteraction(emoticon):
                 return .sendMessageEmojiInteractionSeen(emoticon: emoticon)
         }

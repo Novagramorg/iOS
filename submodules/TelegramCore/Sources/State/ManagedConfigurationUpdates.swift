@@ -19,7 +19,8 @@ func managedConfigurationUpdates(accountManager: AccountManager<TelegramAccountM
                     var addressList: [Int: [MTDatacenterAddress]] = [:]
                     for option in dcOptions {
                         switch option {
-                            case let .dcOption(flags, id, ipAddress, port, secret):
+                            case let .dcOption(dcOptionData):
+                                let (flags, id, ipAddress, port, secret) = (dcOptionData.flags, dcOptionData.id, dcOptionData.ipAddress, dcOptionData.port, dcOptionData.secret)
                                 let preferForMedia = (flags & (1 << 1)) != 0
                                 if addressList[Int(id)] == nil {
                                     addressList[Int(id)] = []
@@ -78,7 +79,8 @@ func managedConfigurationUpdates(accountManager: AccountManager<TelegramAccountM
                 
                     let messageAutoremoveSeconds: Int32?
                     switch defaultHistoryTtl {
-                    case let .defaultHistoryTTL(period):
+                    case let .defaultHistoryTTL(defaultHistoryTTLData):
+                        let period = defaultHistoryTTLData.period
                         if period != 0 {
                             messageAutoremoveSeconds = period
                         } else {

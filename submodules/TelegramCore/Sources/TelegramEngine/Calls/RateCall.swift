@@ -23,7 +23,7 @@ func _internal_saveCallDebugLog(network: Network, callId: CallId, log: String) -
     if log.count > 1024 * 16 {
         return .complete()
     }
-    return network.request(Api.functions.phone.saveCallDebug(peer: Api.InputPhoneCall.inputPhoneCall(id: callId.id, accessHash: callId.accessHash), debug: .dataJSON(data: log)))
+    return network.request(Api.functions.phone.saveCallDebug(peer: Api.InputPhoneCall.inputPhoneCall(id: callId.id, accessHash: callId.accessHash), debug: .dataJSON(.init(data: log))))
     |> `catch` { _ -> Signal<Api.Bool, NoError> in
         return .single(.boolTrue)
     }

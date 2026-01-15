@@ -29,7 +29,8 @@ public func secureIdConfiguration(postbox: Postbox, network: Network) -> Signal<
                     }
                 case let .passportConfig(hash, countriesLangs):
                     switch countriesLangs {
-                        case let .dataJSON(data):
+                        case let .dataJSON(dataJSONData):
+                            let data = dataJSONData.data
                             let value = SecureIdConfiguration(jsonString: data)
                             parsed = CachedSecureIdConfiguration(value: value, hash: hash)
                     }

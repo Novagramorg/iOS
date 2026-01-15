@@ -341,7 +341,8 @@ extension ChatListFilter {
         switch apiFilter {
         case .dialogFilterDefault:
             self = .allChats
-        case let .dialogFilter(flags, id, title, emoticon, color, pinnedPeers, includePeers, excludePeers):
+        case let .dialogFilter(dialogFilterData):
+            let (flags, id, title, emoticon, color, pinnedPeers, includePeers, excludePeers) = (dialogFilterData.flags, dialogFilterData.id, dialogFilterData.title, dialogFilterData.emoticon, dialogFilterData.color, dialogFilterData.pinnedPeers, dialogFilterData.includePeers, dialogFilterData.excludePeers)
             let titleText: String
             let titleEntities: [MessageTextEntity]
             switch title {
@@ -399,7 +400,8 @@ extension ChatListFilter {
                     color: color.flatMap(PeerNameColor.init(rawValue:))
                 )
             )
-        case let .dialogFilterChatlist(flags, id, title, emoticon, color, pinnedPeers, includePeers):
+        case let .dialogFilterChatlist(dialogFilterChatlistData):
+            let (flags, id, title, emoticon, color, pinnedPeers, includePeers) = (dialogFilterChatlistData.flags, dialogFilterChatlistData.id, dialogFilterChatlistData.title, dialogFilterChatlistData.emoticon, dialogFilterChatlistData.color, dialogFilterChatlistData.pinnedPeers, dialogFilterChatlistData.includePeers)
             let titleText: String
             let titleEntities: [MessageTextEntity]
             switch title {
@@ -466,14 +468,14 @@ extension ChatListFilter {
                 if !title.enableAnimations {
                     flags |= 1 << 28
                 }
-                return .dialogFilterChatlist(flags: flags, id: id, title: .textWithEntities(text: title.text, entities: apiEntitiesFromMessageTextEntities(title.entities, associatedPeers: SimpleDictionary())), emoticon: emoticon, color: data.color?.rawValue, pinnedPeers: data.includePeers.pinnedPeers.compactMap { peerId -> Api.InputPeer? in
+                return .dialogFilterChatlist(.init(flags: flags, id: id, title: .textWithEntities(text: title.text, entities: apiEntitiesFromMessageTextEntities(title.entities, associatedPeers: SimpleDictionary())), emoticon: emoticon, color: data.color?.rawValue, pinnedPeers: data.includePeers.pinnedPeers.compactMap { peerId -> Api.InputPeer? in
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
                 }, includePeers: data.includePeers.peers.compactMap { peerId -> Api.InputPeer? in
                     if data.includePeers.pinnedPeers.contains(peerId) {
                         return nil
                     }
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
-                })
+                }))
             } else {
                 var flags: Int32 = 0
                 if data.excludeMuted {
@@ -495,7 +497,7 @@ extension ChatListFilter {
                 if !title.enableAnimations {
                     flags |= 1 << 28
                 }
-                return .dialogFilter(flags: flags, id: id, title: .textWithEntities(text: title.text, entities: apiEntitiesFromMessageTextEntities(title.entities, associatedPeers: SimpleDictionary())), emoticon: emoticon, color: data.color?.rawValue, pinnedPeers: data.includePeers.pinnedPeers.compactMap { peerId -> Api.InputPeer? in
+                return .dialogFilter(.init(flags: flags, id: id, title: .textWithEntities(text: title.text, entities: apiEntitiesFromMessageTextEntities(title.entities, associatedPeers: SimpleDictionary())), emoticon: emoticon, color: data.color?.rawValue, pinnedPeers: data.includePeers.pinnedPeers.compactMap { peerId -> Api.InputPeer? in
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
                 }, includePeers: data.includePeers.peers.compactMap { peerId -> Api.InputPeer? in
                     if data.includePeers.pinnedPeers.contains(peerId) {
@@ -504,7 +506,7 @@ extension ChatListFilter {
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
                 }, excludePeers: data.excludePeers.compactMap { peerId -> Api.InputPeer? in
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
-                })
+                }))
             }
         }
     }
@@ -574,7 +576,8 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                     switch apiFilter {
                     case .dialogFilterDefault:
                         break
-                    case let .dialogFilter(_, _, _, _, _, pinnedPeers, includePeers, excludePeers):
+                    case let .dialogFilter(dialogFilterData):
+                        let (pinnedPeers, includePeers, excludePeers) = (dialogFilterData.pinnedPeers, dialogFilterData.includePeers, dialogFilterData.excludePeers)
                         for peer in pinnedPeers + includePeers + excludePeers {
                             var peerId: PeerId?
                             switch peer {
@@ -614,7 +617,8 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                                 }
                             }
                         }
-                    case let .dialogFilterChatlist(_, _, _, _, _, pinnedPeers, includePeers):
+                    case let .dialogFilterChatlist(dialogFilterChatlistData):
+                        let (pinnedPeers, includePeers) = (dialogFilterChatlistData.pinnedPeers, dialogFilterChatlistData.includePeers)
                         for peer in pinnedPeers + includePeers {
                             var peerId: PeerId?
                             switch peer {
@@ -806,7 +810,8 @@ private func loadAndStorePeerChatInfos(accountPeerId: PeerId, postbox: Postbox, 
                 
                 for dialog in dialogs {
                     switch dialog {
-                    case let .dialog(_, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, notifySettings, pts, _, folderId, ttlPeriod):
+                    case let .dialog(dialogData):
+                        let (peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, notifySettings, pts, folderId, ttlPeriod) = (dialogData.peer, dialogData.topMessage, dialogData.readInboxMaxId, dialogData.readOutboxMaxId, dialogData.unreadCount, dialogData.unreadMentionsCount, dialogData.unreadReactionsCount, dialogData.notifySettings, dialogData.pts, dialogData.folderId, dialogData.ttlPeriod)
                         let peerId = peer.peerId
                         
                         if topMessage != 0 {
@@ -1269,7 +1274,8 @@ func _internal_updateChatListFeaturedFilters(postbox: Postbox, network: Network)
                 var state = entry?.get(ChatListFiltersFeaturedState.self) ?? ChatListFiltersFeaturedState(filters: [], isSeen: false)
                 state.filters = result.compactMap { item -> ChatListFeaturedFilter? in
                     switch item {
-                    case let .dialogFilterSuggested(filter, description):
+                    case let .dialogFilterSuggested(dialogFilterSuggestedData):
+                        let (filter, description) = (dialogFilterSuggestedData.filter, dialogFilterSuggestedData.description)
                         let parsedFilter = ChatListFilter(apiFilter: filter)
                         if case let .filter(_, title, _, data) = parsedFilter {
                             return ChatListFeaturedFilter(title: title, description: description, data: data)

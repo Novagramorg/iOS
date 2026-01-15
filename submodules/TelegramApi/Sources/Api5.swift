@@ -687,7 +687,15 @@ public extension Api {
 }
 public extension Api {
     enum ContactStatus: TypeConstructorDescription {
-        case contactStatus(userId: Int64, status: Api.UserStatus)
+        public class Cons_contactStatus {
+            public var userId: Int64
+            public var status: Api.UserStatus
+            public init(userId: Int64, status: Api.UserStatus) {
+                self.userId = userId
+                self.status = status
+            }
+        }
+        case contactStatus(Cons_contactStatus)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -716,7 +724,13 @@ public extension Api {
 }
 public extension Api {
     enum DataJSON: TypeConstructorDescription {
-        case dataJSON(data: String)
+        public class Cons_dataJSON {
+            public var data: String
+            public init(data: String) {
+                self.data = data
+            }
+        }
+        case dataJSON(Cons_dataJSON)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -745,7 +759,21 @@ public extension Api {
 }
 public extension Api {
     enum DcOption: TypeConstructorDescription {
-        case dcOption(flags: Int32, id: Int32, ipAddress: String, port: Int32, secret: Buffer?)
+        public class Cons_dcOption {
+            public var flags: Int32
+            public var id: Int32
+            public var ipAddress: String
+            public var port: Int32
+            public var secret: Buffer?
+            public init(flags: Int32, id: Int32, ipAddress: String, port: Int32, secret: Buffer?) {
+                self.flags = flags
+                self.id = id
+                self.ipAddress = ipAddress
+                self.port = port
+                self.secret = secret
+            }
+        }
+        case dcOption(Cons_dcOption)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -774,7 +802,13 @@ public extension Api {
 }
 public extension Api {
     enum DefaultHistoryTTL: TypeConstructorDescription {
-        case defaultHistoryTTL(period: Int32)
+        public class Cons_defaultHistoryTTL {
+            public var period: Int32
+            public init(period: Int32) {
+                self.period = period
+            }
+        }
+        case defaultHistoryTTL(Cons_defaultHistoryTTL)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -803,8 +837,58 @@ public extension Api {
 }
 public extension Api {
     indirect enum Dialog: TypeConstructorDescription {
-        case dialog(flags: Int32, peer: Api.Peer, topMessage: Int32, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, unreadMentionsCount: Int32, unreadReactionsCount: Int32, notifySettings: Api.PeerNotifySettings, pts: Int32?, draft: Api.DraftMessage?, folderId: Int32?, ttlPeriod: Int32?)
-        case dialogFolder(flags: Int32, folder: Api.Folder, peer: Api.Peer, topMessage: Int32, unreadMutedPeersCount: Int32, unreadUnmutedPeersCount: Int32, unreadMutedMessagesCount: Int32, unreadUnmutedMessagesCount: Int32)
+        public class Cons_dialog {
+            public var flags: Int32
+            public var peer: Api.Peer
+            public var topMessage: Int32
+            public var readInboxMaxId: Int32
+            public var readOutboxMaxId: Int32
+            public var unreadCount: Int32
+            public var unreadMentionsCount: Int32
+            public var unreadReactionsCount: Int32
+            public var notifySettings: Api.PeerNotifySettings
+            public var pts: Int32?
+            public var draft: Api.DraftMessage?
+            public var folderId: Int32?
+            public var ttlPeriod: Int32?
+            public init(flags: Int32, peer: Api.Peer, topMessage: Int32, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, unreadMentionsCount: Int32, unreadReactionsCount: Int32, notifySettings: Api.PeerNotifySettings, pts: Int32?, draft: Api.DraftMessage?, folderId: Int32?, ttlPeriod: Int32?) {
+                self.flags = flags
+                self.peer = peer
+                self.topMessage = topMessage
+                self.readInboxMaxId = readInboxMaxId
+                self.readOutboxMaxId = readOutboxMaxId
+                self.unreadCount = unreadCount
+                self.unreadMentionsCount = unreadMentionsCount
+                self.unreadReactionsCount = unreadReactionsCount
+                self.notifySettings = notifySettings
+                self.pts = pts
+                self.draft = draft
+                self.folderId = folderId
+                self.ttlPeriod = ttlPeriod
+            }
+        }
+        public class Cons_dialogFolder {
+            public var flags: Int32
+            public var folder: Api.Folder
+            public var peer: Api.Peer
+            public var topMessage: Int32
+            public var unreadMutedPeersCount: Int32
+            public var unreadUnmutedPeersCount: Int32
+            public var unreadMutedMessagesCount: Int32
+            public var unreadUnmutedMessagesCount: Int32
+            public init(flags: Int32, folder: Api.Folder, peer: Api.Peer, topMessage: Int32, unreadMutedPeersCount: Int32, unreadUnmutedPeersCount: Int32, unreadMutedMessagesCount: Int32, unreadUnmutedMessagesCount: Int32) {
+                self.flags = flags
+                self.folder = folder
+                self.peer = peer
+                self.topMessage = topMessage
+                self.unreadMutedPeersCount = unreadMutedPeersCount
+                self.unreadUnmutedPeersCount = unreadUnmutedPeersCount
+                self.unreadMutedMessagesCount = unreadMutedMessagesCount
+                self.unreadUnmutedMessagesCount = unreadUnmutedMessagesCount
+            }
+        }
+        case dialog(Cons_dialog)
+        case dialogFolder(Cons_dialogFolder)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -840,8 +924,46 @@ public extension Api {
 }
 public extension Api {
     enum DialogFilter: TypeConstructorDescription {
-        case dialogFilter(flags: Int32, id: Int32, title: Api.TextWithEntities, emoticon: String?, color: Int32?, pinnedPeers: [Api.InputPeer], includePeers: [Api.InputPeer], excludePeers: [Api.InputPeer])
-        case dialogFilterChatlist(flags: Int32, id: Int32, title: Api.TextWithEntities, emoticon: String?, color: Int32?, pinnedPeers: [Api.InputPeer], includePeers: [Api.InputPeer])
+        public class Cons_dialogFilter {
+            public var flags: Int32
+            public var id: Int32
+            public var title: Api.TextWithEntities
+            public var emoticon: String?
+            public var color: Int32?
+            public var pinnedPeers: [Api.InputPeer]
+            public var includePeers: [Api.InputPeer]
+            public var excludePeers: [Api.InputPeer]
+            public init(flags: Int32, id: Int32, title: Api.TextWithEntities, emoticon: String?, color: Int32?, pinnedPeers: [Api.InputPeer], includePeers: [Api.InputPeer], excludePeers: [Api.InputPeer]) {
+                self.flags = flags
+                self.id = id
+                self.title = title
+                self.emoticon = emoticon
+                self.color = color
+                self.pinnedPeers = pinnedPeers
+                self.includePeers = includePeers
+                self.excludePeers = excludePeers
+            }
+        }
+        public class Cons_dialogFilterChatlist {
+            public var flags: Int32
+            public var id: Int32
+            public var title: Api.TextWithEntities
+            public var emoticon: String?
+            public var color: Int32?
+            public var pinnedPeers: [Api.InputPeer]
+            public var includePeers: [Api.InputPeer]
+            public init(flags: Int32, id: Int32, title: Api.TextWithEntities, emoticon: String?, color: Int32?, pinnedPeers: [Api.InputPeer], includePeers: [Api.InputPeer]) {
+                self.flags = flags
+                self.id = id
+                self.title = title
+                self.emoticon = emoticon
+                self.color = color
+                self.pinnedPeers = pinnedPeers
+                self.includePeers = includePeers
+            }
+        }
+        case dialogFilter(Cons_dialogFilter)
+        case dialogFilterChatlist(Cons_dialogFilterChatlist)
         case dialogFilterDefault
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -885,7 +1007,15 @@ public extension Api {
 }
 public extension Api {
     enum DialogFilterSuggested: TypeConstructorDescription {
-        case dialogFilterSuggested(filter: Api.DialogFilter, description: String)
+        public class Cons_dialogFilterSuggested {
+            public var filter: Api.DialogFilter
+            public var description: String
+            public init(filter: Api.DialogFilter, description: String) {
+                self.filter = filter
+                self.description = description
+            }
+        }
+        case dialogFilterSuggested(Cons_dialogFilterSuggested)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -914,8 +1044,20 @@ public extension Api {
 }
 public extension Api {
     enum DialogPeer: TypeConstructorDescription {
-        case dialogPeer(peer: Api.Peer)
-        case dialogPeerFolder(folderId: Int32)
+        public class Cons_dialogPeer {
+            public var peer: Api.Peer
+            public init(peer: Api.Peer) {
+                self.peer = peer
+            }
+        }
+        public class Cons_dialogPeerFolder {
+            public var folderId: Int32
+            public init(folderId: Int32) {
+                self.folderId = folderId
+            }
+        }
+        case dialogPeer(Cons_dialogPeer)
+        case dialogPeerFolder(Cons_dialogPeerFolder)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

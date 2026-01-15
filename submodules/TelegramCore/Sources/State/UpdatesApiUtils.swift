@@ -24,7 +24,8 @@ private func collectPreCachedResources(for photo: Api.Photo) -> [(MediaResource,
 
 private func collectPreCachedResources(for document: Api.Document) -> [(MediaResource, Data)]? {
     switch document {
-        case let .document(_, id, accessHash, fileReference, _, _, _, thumbs, _, dcId, _):
+        case let .document(documentData):
+            let (id, accessHash, fileReference, thumbs, dcId) = (documentData.id, documentData.accessHash, documentData.fileReference, documentData.thumbs, documentData.dcId)
             if let thumbs = thumbs {
                 for thumb in thumbs {
                     switch thumb {
@@ -226,8 +227,8 @@ extension Api.Peer {
 extension Api.Dialog {
     var peerId: PeerId? {
         switch self {
-            case let .dialog(_, peer, _, _, _, _, _, _, _, _, _, _, _):
-                return peer.peerId
+            case let .dialog(dialogData):
+                return dialogData.peer.peerId
             case .dialogFolder:
                 return nil
         }

@@ -141,7 +141,7 @@ public extension TelegramEngine {
                         inputMedia = .inputMediaUploadedPhoto(flags: 0, file: inputFile, stickers: nil, ttlSeconds: nil)
                     case .file, .video, .sticker, .voice:
                         var attributes: [Api.DocumentAttribute] = []
-                        attributes.append(.documentAttributeFilename(fileName: fileName))
+                        attributes.append(.documentAttributeFilename(.init(fileName: fileName)))
                         var resolvedMimeType = mimeType
                         switch type {
                         case .video:

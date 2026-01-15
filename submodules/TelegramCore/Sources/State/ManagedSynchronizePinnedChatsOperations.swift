@@ -160,7 +160,8 @@ private func synchronizePinnedChats(transaction: Transaction, postbox: Postbox, 
                 let apiTtlPeriod: Int32?
                 let apiNotificationSettings: Api.PeerNotifySettings
                 switch dialog {
-                case let .dialog(flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, _, _, peerNotificationSettings, pts, _, _, ttlPeriod):
+                case let .dialog(dialogData):
+                    let (flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, peerNotificationSettings, pts, ttlPeriod) = (dialogData.flags, dialogData.peer, dialogData.topMessage, dialogData.readInboxMaxId, dialogData.readOutboxMaxId, dialogData.unreadCount, dialogData.notifySettings, dialogData.pts, dialogData.ttlPeriod)
                     apiPeer = peer
                     apiTopMessage = topMessage
                     apiReadInboxMaxId = readInboxMaxId

@@ -692,7 +692,7 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                 flags |= (1 << 3)
             }
             
-            let joinRequest = account.network.request(Api.functions.phone.joinGroupCall(flags: flags, call: reference.apiInputGroupCall, joinAs: inputJoinAs, inviteHash: inviteHash, publicKey: e2eData?.publicKey.value, block: (e2eData?.block).flatMap({ Buffer.init(data: $0) }), params: .dataJSON(data: joinPayload)))
+            let joinRequest = account.network.request(Api.functions.phone.joinGroupCall(flags: flags, call: reference.apiInputGroupCall, joinAs: inputJoinAs, inviteHash: inviteHash, publicKey: e2eData?.publicKey.value, block: (e2eData?.block).flatMap({ Buffer.init(data: $0) }), params: .dataJSON(.init(data: joinPayload))))
             |> `catch` { error -> Signal<Api.Updates, InternalJoinError> in
                 if error.errorDescription == "GROUPCALL_ANONYMOUS_FORBIDDEN" {
                     return .fail(.error(.anonymousNotAllowed))
@@ -805,7 +805,8 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             }
                         case let .updateGroupCallConnection(_, params):
                             switch params {
-                            case let .dataJSON(data):
+                            case let .dataJSON(dataJSONData):
+                                let data = dataJSONData.data
                                 maybeParsedClientParams = data
                             }
                         default:
@@ -1034,7 +1035,7 @@ public struct JoinGroupCallAsScreencastResult {
 }
 
 func _internal_joinGroupCallAsScreencast(account: Account, callId: Int64, accessHash: Int64, joinPayload: String) -> Signal<JoinGroupCallAsScreencastResult, JoinGroupCallError> {
-    return account.network.request(Api.functions.phone.joinGroupCallPresentation(call: .inputGroupCall(id: callId, accessHash: accessHash), params: .dataJSON(data: joinPayload)))
+    return account.network.request(Api.functions.phone.joinGroupCallPresentation(call: .inputGroupCall(id: callId, accessHash: accessHash), params: .dataJSON(.init(data: joinPayload))))
     |> mapError { _ -> JoinGroupCallError in
         return .generic
     }
@@ -1046,7 +1047,8 @@ func _internal_joinGroupCallAsScreencast(account: Account, callId: Int64, access
             switch update {
             case let .updateGroupCallConnection(_, params):
                 switch params {
-                case let .dataJSON(data):
+                case let .dataJSON(dataJSONData):
+                    let data = dataJSONData.data
                     maybeParsedClientParams = data
                 }
             default:

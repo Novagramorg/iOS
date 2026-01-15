@@ -1206,13 +1206,14 @@ private final class CallSessionManagerContext {
                                                 switch customParameters {
                                                 case .none:
                                                     break
-                                                case let .dataJSON(data):
+                                                case let .dataJSON(dataJSONData):
+                                                    let data = dataJSONData.data
                                                     customParametersValue = data
                                                 }
-                                                
+
                                                 let isVideoPossible = self.videoVersions().contains(where: { versions.contains($0) })
                                                 context.isVideoPossible = isVideoPossible
-                                                
+
                                                 context.state = .active(id: id, accessHash: accessHash, beginTimestamp: startDate, key: key, keyId: calculatedKeyId, keyVisualHash: keyVisualHash, connections: parseConnectionSet(primary: connections.first!, alternative: Array(connections[1...])), maxLayer: maxLayer, version: versions[0], customParameters: customParametersValue, allowsP2P: allowsP2P, supportsConferenceCalls: supportsConferenceCalls)
                                                 self.contextUpdated(internalId: internalId)
                                             } else {
@@ -1233,13 +1234,14 @@ private final class CallSessionManagerContext {
                                         switch customParameters {
                                         case .none:
                                             break
-                                        case let .dataJSON(data):
+                                        case let .dataJSON(dataJSONData):
+                                            let data = dataJSONData.data
                                             customParametersValue = data
                                         }
-                                        
+
                                         let isVideoPossible = self.videoVersions().contains(where: { versions.contains($0) })
                                         context.isVideoPossible = isVideoPossible
-                                        
+
                                         context.state = .active(id: id, accessHash: accessHash, beginTimestamp: startDate, key: key, keyId: keyId, keyVisualHash: keyVisualHash, connections: parseConnectionSet(primary: connections.first!, alternative: Array(connections[1...])), maxLayer: maxLayer, version: versions[0], customParameters: customParametersValue, allowsP2P: allowsP2P, supportsConferenceCalls: supportsConferenceCalls)
                                         self.contextUpdated(internalId: internalId)
                                     } else {
@@ -1624,10 +1626,11 @@ private func acceptCallSession(accountPeerId: PeerId, postbox: Postbox, network:
                                             switch customParameters {
                                             case .none:
                                                 break
-                                            case let .dataJSON(data):
+                                            case let .dataJSON(dataJSONData):
+                                                let data = dataJSONData.data
                                                 customParametersValue = data
                                             }
-                                            
+
                                             return .success(.call(config: config, gA: gAOrB.makeData(), timestamp: startDate, connections: parseConnectionSet(primary: connections.first!, alternative: Array(connections[1...])), maxLayer: maxLayer, version: versions[0], customParameters: customParametersValue, allowsP2P: (flags & (1 << 5)) != 0, supportsConferenceCalls: (flags & (1 << 8)) != 0))
                                         } else {
                                             return .failed

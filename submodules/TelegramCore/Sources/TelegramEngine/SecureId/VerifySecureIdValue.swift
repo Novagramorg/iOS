@@ -97,7 +97,7 @@ public enum SecureIdCommitEmailVerificationError {
 }
 
 public func secureIdCommitEmailVerification(postbox: Postbox, network: Network, context: SecureIdAccessContext, payload: SecureIdPrepareEmailVerificationPayload, code: String) -> Signal<SecureIdValueWithContext, SecureIdCommitEmailVerificationError> {
-    return network.request(Api.functions.account.verifyEmail(purpose: .emailVerifyPurposePassport, verification: .emailVerificationCode(code: code)), automaticFloodWait: false)
+    return network.request(Api.functions.account.verifyEmail(purpose: .emailVerifyPurposePassport, verification: .emailVerificationCode(.init(code: code))), automaticFloodWait: false)
     |> mapError { error -> SecureIdCommitEmailVerificationError in
         if error.errorDescription.hasPrefix("FLOOD_WAIT") {
             return .flood

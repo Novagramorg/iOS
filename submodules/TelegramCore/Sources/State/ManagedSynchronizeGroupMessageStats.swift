@@ -91,7 +91,8 @@ private func synchronizeGroupMessageStats(postbox: Postbox, network: Network, gr
                     case let .peerDialogs(dialogs, _, _, _, _):
                         for dialog in dialogs {
                             switch dialog {
-                                case let .dialogFolder(_, _, _, _, unreadMutedPeersCount, _, unreadMutedMessagesCount, _):
+                                case let .dialogFolder(dialogFolderData):
+                                    let (unreadMutedPeersCount, unreadMutedMessagesCount) = (dialogFolderData.unreadMutedPeersCount, dialogFolderData.unreadMutedMessagesCount)
                                     transaction.resetPeerGroupSummary(groupId: groupId, namespace: namespace, summary: PeerGroupUnreadCountersSummary(all: PeerGroupUnreadCounters(messageCount: unreadMutedMessagesCount, chatCount: unreadMutedPeersCount)))
                                 case .dialog:
                                     assertionFailure()
