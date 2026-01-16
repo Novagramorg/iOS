@@ -1249,8 +1249,8 @@ public final class ReactionListContextMenuContent: ContextControllerItemsContent
             let constrainedSize = CGSize(width: min(self.displayReadTimestamps ? 280.0 : 260.0, constrainedWidth), height: maxHeight)
             
             var topContentHeight: CGFloat = 0.0
-            topContentHeight += 6.0
             if let backButtonNode = self.backButtonNode {
+                topContentHeight += 6.0
                 let backButtonFrame = CGRect(origin: CGPoint(x: 0.0, y: topContentHeight), size: CGSize(width: constrainedSize.width, height: 44.0))
                 backButtonNode.update(size: backButtonFrame.size, presentationData: self.presentationData, isLast: self.tabListNode == nil)
                 transition.updateFrame(node: backButtonNode, frame: backButtonFrame)

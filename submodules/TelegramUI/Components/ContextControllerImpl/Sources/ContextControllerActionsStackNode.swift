@@ -627,7 +627,7 @@ private final class ContextControllerActionsListSeparatorItemNode: ASDisplayNode
     }
     
     func update(presentationData: PresentationData, constrainedSize: CGSize) -> (minSize: CGSize, apply: (_ size: CGSize, _ transition: ContainedViewLayoutTransition) -> Void) {
-        return (minSize: CGSize(width: 0.0, height: 10.0), apply: { size, transition in
+        return (minSize: CGSize(width: 0.0, height: 20.0), apply: { size, transition in
             let sideInset: CGFloat = 18.0
             self.separatorView.tintColor = presentationData.theme.contextMenu.itemSeparatorColor
             transition.updateFrame(view: self.separatorView, frame: CGRect(origin: CGPoint(x: sideInset, y: floorToScreenPixels((size.height - 1.0) * 0.5)), size: CGSize(width: max(0.0, size.width - sideInset * 2.0), height: 1.0)))
@@ -756,6 +756,7 @@ public final class ContextControllerActionsListStackItem: ContextControllerActio
         private var tip: ContextController.Tip?
         private var tipDisposable: Disposable?
         private var tipNode: InnerTextSelectionTipContainerNode?
+        private var tipSeparatorNode: ContextControllerActionsListSeparatorItemNode?
         
         private var hapticFeedback: HapticFeedback?
         
@@ -977,7 +978,7 @@ public final class ContextControllerActionsListStackItem: ContextControllerActio
                 }
             }
             
-            if let tip = self.tip, !"".isEmpty {
+            if let tip = self.tip {
                 let tipNode: InnerTextSelectionTipContainerNode
                 var tipTransition = transition
                 if let current = self.tipNode {
@@ -987,15 +988,44 @@ public final class ContextControllerActionsListStackItem: ContextControllerActio
                     tipNode = InnerTextSelectionTipContainerNode(presentationData: presentationData, tip: tip, isInline: true)
                     self.addSubnode(tipNode)
                     self.tipNode = tipNode
+                    let getController = self.getController
+                    tipNode.requestDismiss = { completion in
+                        getController()?.dismiss(completion: completion)
+                    }
                 }
+                
+                let tipSeparatorNode: ContextControllerActionsListSeparatorItemNode
+                if let current = self.tipSeparatorNode {
+                    tipSeparatorNode = current
+                } else {
+                    tipSeparatorNode = ContextControllerActionsListSeparatorItemNode()
+                    self.addSubnode(tipSeparatorNode)
+                    self.tipSeparatorNode = tipSeparatorNode
+                }
+                
+                let (tipSeparatorMinSize, tipSeparatorApply) = tipSeparatorNode.update(presentationData: presentationData, constrainedSize: CGSize(width: combinedSize.width, height: 10.0))
+                let tipSeparatorSize = CGSize(width: combinedSize.width, height: tipSeparatorMinSize.height)
+                tipSeparatorApply(tipSeparatorSize, tipTransition)
+                let tipSeparatorFrame = CGRect(origin: nextItemOrigin, size: tipSeparatorSize)
+                tipTransition.updateFrame(node: tipSeparatorNode, frame: tipSeparatorFrame)
+                nextItemOrigin.y += tipSeparatorSize.height
+                combinedSize.height += tipSeparatorSize.height
+                
                 let tipSize = tipNode.updateLayout(widthClass: .compact, presentation: .inline, width: combinedSize.width, transition: tipTransition)
                 let tipFrame = CGRect(origin: nextItemOrigin, size: tipSize)
+                tipNode.setActualSize(size: tipFrame.size, transition: tipTransition)
                 tipTransition.updateFrame(node: tipNode, frame: tipFrame)
                 nextItemOrigin.y += tipSize.height
                 combinedSize.height += tipSize.height
-            } else if let tipNode = self.tipNode {
-                tipNode.removeFromSupernode()
-                self.tipNode = nil
+            } else {
+                if let tipSeparatorNode = self.tipSeparatorNode {
+                    tipSeparatorNode.removeFromSupernode()
+                    self.tipSeparatorNode = nil
+                }
+                if let tipNode = self.tipNode {
+                    tipNode.removeFromSupernode()
+                    self.tipNode = nil
+                }
             }
             
             if let highlightedItemFrame {
@@ -1034,6 +1064,11 @@ public final class ContextControllerActionsListStackItem: ContextControllerActio
                         return false
                     }
                     break
+                }
+            }
+            if let tipNode = self.tipNode {
+                if tipNode.frame.contains(location) {
+                    return false
                 }
             }
             return true
@@ -1625,6 +1660,10 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
         }
         
         func updateTip(presentationData: PresentationData, presentation: ContextControllerActionsStackNode.Presentation, width: CGFloat, transition: ContainedViewLayoutTransition) -> (node: InnerTextSelectionTipContainerNode, height: CGFloat)? {
+            if self.item is ContextControllerActionsListStackItem {
+                return nil
+            }
+            
             if let tip = self.tip {
                 var updatedTransition = transition
                 if let tipNode = self.tipNode, tipNode.tip == tip {
@@ -2096,9 +2135,9 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
             })
             if let tipNode = itemContainer.tipNode {
                 let tipFrame = CGRect(origin: CGPoint(x: navigationContainerFrame.minX, y: navigationContainerFrame.maxY + tipSpacing), size: tipNode.frame.size)
-                transition.updateFrame(node: tipNode, frame: tipFrame, beginWithCurrentState: true)
+                ComponentTransition(transition).setFrame(view: tipNode.view, frame: tipFrame)
                 
-                ComponentTransition(transition).setAlpha(view: tipNode.view, alpha: 0.0, completion: { [weak tipNode] _ in
+                ComponentTransition(transition).setAlpha(view: tipNode.view, alpha: 0.01, completion: { [weak tipNode] _ in
                     tipNode?.removeFromSupernode()
                 })
             }
