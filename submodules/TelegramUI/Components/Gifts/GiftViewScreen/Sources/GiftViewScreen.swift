@@ -4115,17 +4115,17 @@ private final class GiftViewSheetContent: CombinedComponent {
                             var otherValuesAndPercentages: [(value: String, percentage: Float)] = []
                             
                             switch attribute {
-                            case let .model(name, _, rarity):
+                            case let .model(name, _, rarity, _):
                                 id = "model"
                                 title = strings.Gift_Unique_Model
                                 value = NSAttributedString(string: name, font: tableFont, textColor: tableTextColor)
-                                percentage = Float(rarity) * 0.1
+                                percentage = Float(rarity.permilleValue) * 0.1
                                 tag = state.modelButtonTag
                                 
                                 if state.justUpgraded, let sampleAttributes = state.upgradePreview?.attributes {
                                     for sampleAttribute in sampleAttributes {
-                                        if case let .model(name, _, rarity) = sampleAttribute {
-                                            otherValuesAndPercentages.append((name, Float(rarity) * 0.1))
+                                        if case let .model(name, _, rarity, _) = sampleAttribute {
+                                            otherValuesAndPercentages.append((name, Float(rarity.permilleValue) * 0.1))
                                         }
                                     }
                                 }
@@ -4133,13 +4133,13 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 id = "backdrop"
                                 title = strings.Gift_Unique_Backdrop
                                 value = NSAttributedString(string: name, font: tableFont, textColor: tableTextColor)
-                                percentage = Float(rarity) * 0.1
+                                percentage = Float(rarity.permilleValue) * 0.1
                                 tag = state.backdropButtonTag
                                 
                                 if state.justUpgraded, let sampleAttributes = state.upgradePreview?.attributes {
                                     for sampleAttribute in sampleAttributes {
                                         if case let .backdrop(name, _, _, _, _, _, rarity) = sampleAttribute {
-                                            otherValuesAndPercentages.append((name, Float(rarity) * 0.1))
+                                            otherValuesAndPercentages.append((name, Float(rarity.permilleValue) * 0.1))
                                         }
                                     }
                                 }
@@ -4147,13 +4147,13 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 id = "pattern"
                                 title = strings.Gift_Unique_Symbol
                                 value = NSAttributedString(string: name, font: tableFont, textColor: tableTextColor)
-                                percentage = Float(rarity) * 0.1
+                                percentage = Float(rarity.permilleValue) * 0.1
                                 tag = state.symbolButtonTag
                                 
                                 if state.justUpgraded, let sampleAttributes = state.upgradePreview?.attributes {
                                     for sampleAttribute in sampleAttributes {
                                         if case let .pattern(name, _, rarity) = sampleAttribute {
-                                            otherValuesAndPercentages.append((name, Float(rarity) * 0.1))
+                                            otherValuesAndPercentages.append((name, Float(rarity.permilleValue) * 0.1))
                                         }
                                     }
                                 }
