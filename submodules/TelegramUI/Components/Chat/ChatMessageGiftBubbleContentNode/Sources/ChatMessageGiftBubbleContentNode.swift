@@ -732,7 +732,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 
                                 for attribute in uniqueGift.attributes {
                                     switch attribute {
-                                    case let .model(name, file, _):
+                                    case let .model(name, file, _, _):
                                         modelValue = name
                                         animationFile = file
                                     case let .backdrop(name, _, innerColor, outerColor, patternColor, _, _):

@@ -214,7 +214,7 @@ private final class GiftValueSheetContent: CombinedComponent {
                 giftIconSubject = .starGift(gift: gift, price: "")
             case let .unique(gift):
                 for attribute in gift.attributes {
-                    if case let .model(_, file, _) = attribute {
+                    if case let .model(_, file, _, _) = attribute {
                         animationFile = file
                     }
                 }

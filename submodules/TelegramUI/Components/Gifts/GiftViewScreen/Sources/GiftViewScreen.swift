@@ -243,7 +243,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 
                                 for attribute in upgradePreview.attributes {
                                     switch attribute {
-                                    case let .model(_, file, _):
+                                    case let .model(_, file, _, _):
                                         self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                                     case let .pattern(_, file, _):
                                         self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
@@ -270,7 +270,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             
                             for attribute in upgradePreview.attributes {
                                 switch attribute {
-                                case let .model(_, file, _):
+                                case let .model(_, file, _, _):
                                     self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                                 case let .pattern(_, file, _):
                                     self.upgradePreviewDisposable.add(freeMediaFileResourceInteractiveFetched(account: self.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
@@ -501,7 +501,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 animationFile = gift.file
             case let .unique(gift):
                 for attribute in gift.attributes {
-                    if case let .model(_, file, _) = attribute {
+                    if case let .model(_, file, _, _) = attribute {
                         animationFile = file
                         break
                     }
@@ -1804,7 +1804,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             
                             var animationFile: TelegramMediaFile?
                             for attribute in uniqueGift.attributes {
-                                if case let .model(_, file, _) = attribute {
+                                if case let .model(_, file, _, _) = attribute {
                                     animationFile = file
                                     break
                                 }
@@ -3673,7 +3673,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     if state.pendingWear {
                                         var fileId: Int64?
                                         for attribute in uniqueGift.attributes {
-                                            if case let .model(_, file, _) = attribute {
+                                            if case let .model(_, file, _, _) = attribute {
                                                 fileId = file.fileId.id
                                             }
                                             if case let .backdrop(_, _, innerColor, _, _, _, _) = attribute {
