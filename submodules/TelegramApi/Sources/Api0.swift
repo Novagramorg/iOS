@@ -986,14 +986,19 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[825922887] = { return Api.StarGift.parse_starGift($0) }
     dict[1453155529] = { return Api.StarGift.parse_starGiftUnique($0) }
     dict[-753154979] = { return Api.StarGiftActiveAuctionState.parse_starGiftActiveAuctionState($0) }
-    dict[-650279524] = { return Api.StarGiftAttribute.parse_starGiftAttributeBackdrop($0) }
-    dict[970559507] = { return Api.StarGiftAttribute.parse_starGiftAttributeModel($0) }
+    dict[-1624963868] = { return Api.StarGiftAttribute.parse_starGiftAttributeBackdrop($0) }
+    dict[1448235490] = { return Api.StarGiftAttribute.parse_starGiftAttributeModel($0) }
     dict[-524291476] = { return Api.StarGiftAttribute.parse_starGiftAttributeOriginalDetails($0) }
-    dict[330104601] = { return Api.StarGiftAttribute.parse_starGiftAttributePattern($0) }
+    dict[1315997162] = { return Api.StarGiftAttribute.parse_starGiftAttributePattern($0) }
     dict[783398488] = { return Api.StarGiftAttributeCounter.parse_starGiftAttributeCounter($0) }
     dict[520210263] = { return Api.StarGiftAttributeId.parse_starGiftAttributeIdBackdrop($0) }
     dict[1219145276] = { return Api.StarGiftAttributeId.parse_starGiftAttributeIdModel($0) }
     dict[1242965043] = { return Api.StarGiftAttributeId.parse_starGiftAttributeIdPattern($0) }
+    dict[910391095] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarity($0) }
+    dict[2029777832] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarityEpic($0) }
+    dict[-822614104] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarityLegendary($0) }
+    dict[-130595691] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarityMythic($0) }
+    dict[-259174037] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarityRare($0) }
     dict[1118831432] = { return Api.StarGiftAuctionAcquiredGift.parse_starGiftAuctionAcquiredGift($0) }
     dict[984483112] = { return Api.StarGiftAuctionRound.parse_starGiftAuctionRound($0) }
     dict[178266597] = { return Api.StarGiftAuctionRound.parse_starGiftAuctionRoundExtendable($0) }
@@ -2251,6 +2256,8 @@ public extension Api {
             case let _1 as Api.StarGiftAttributeCounter:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StarGiftAttributeId:
+                _1.serialize(buffer, boxed)
+            case let _1 as Api.StarGiftAttributeRarity:
                 _1.serialize(buffer, boxed)
             case let _1 as Api.StarGiftAuctionAcquiredGift:
                 _1.serialize(buffer, boxed)

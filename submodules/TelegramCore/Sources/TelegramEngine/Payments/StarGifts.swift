@@ -3397,17 +3397,62 @@ extension ProfileGiftsContext.State.StarGift {
 extension StarGift.UniqueGift.Attribute {
     init?(apiAttribute: Api.StarGiftAttribute) {
         switch apiAttribute {
-        case let .starGiftAttributeModel(name, document, rarityPermille):
+        case let .starGiftAttributeModel(flags, name, document, rarity):
+            let _ = flags
             guard let file = telegramMediaFileFromApiDocument(document, altDocuments: nil) else {
                 return nil
             }
+            
+            var rarityPermille: Int32 = 0
+            switch rarity {
+            case let .starGiftAttributeRarity(permille):
+                rarityPermille = permille
+            case .starGiftAttributeRarityEpic:
+                break
+            case .starGiftAttributeRarityLegendary:
+                break
+            case .starGiftAttributeRarityMythic:
+                break
+            case .starGiftAttributeRarityRare:
+                break
+            }
+            
             self = .model(name: name, file: file, rarity: rarityPermille)
-        case let .starGiftAttributePattern(name, document, rarityPermille):
+        case let .starGiftAttributePattern(name, document, rarity):
             guard let file = telegramMediaFileFromApiDocument(document, altDocuments: nil) else {
                 return nil
             }
+            
+            var rarityPermille: Int32 = 0
+            switch rarity {
+            case let .starGiftAttributeRarity(permille):
+                rarityPermille = permille
+            case .starGiftAttributeRarityEpic:
+                break
+            case .starGiftAttributeRarityLegendary:
+                break
+            case .starGiftAttributeRarityMythic:
+                break
+            case .starGiftAttributeRarityRare:
+                break
+            }
+            
             self = .pattern(name: name, file: file, rarity: rarityPermille)
         case let .starGiftAttributeBackdrop(name, id, centerColor, edgeColor, patternColor, textColor, rarityPermille):
+            var rarityPermille: Int32 = 0
+            switch rarity {
+            case let .starGiftAttributeRarity(permille):
+                rarityPermille = permille
+            case .starGiftAttributeRarityEpic:
+                break
+            case .starGiftAttributeRarityLegendary:
+                break
+            case .starGiftAttributeRarityMythic:
+                break
+            case .starGiftAttributeRarityRare:
+                break
+            }
+            
             self = .backdrop(name: name, id: id, innerColor: centerColor, outerColor: edgeColor, patternColor: patternColor, textColor: textColor, rarity: rarityPermille)
         case let .starGiftAttributeOriginalDetails(_, sender, recipient, date, message):
             var text: String?
