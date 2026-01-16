@@ -1215,7 +1215,7 @@ public func authorizeWithPasskey(accountManager: AccountManager<TelegramAccountM
     if foreignDatacenter != nil {
         flags |= 1 << 0
     }
-    return account.network.request(Api.functions.auth.finishPasskeyLogin(flags: flags, credential: .inputPasskeyCredentialPublicKey(id: passkey.id, rawId: passkey.id, response: .inputPasskeyResponseLogin(clientData: .dataJSON(.init(data: passkey.clientData)), authenticatorData: Buffer(data: passkey.authenticatorData), signature: Buffer(data: passkey.signature), userHandle: passkey.userHandle)), fromDcId: (foreignDatacenter?.id).flatMap(Int32.init), fromAuthKeyId: foreignDatacenter?.authKeyId), automaticFloodWait: false)
+    return account.network.request(Api.functions.auth.finishPasskeyLogin(flags: flags, credential: .inputPasskeyCredentialPublicKey(.init(id: passkey.id, rawId: passkey.id, response: .inputPasskeyResponseLogin(.init(clientData: .dataJSON(.init(data: passkey.clientData)), authenticatorData: Buffer(data: passkey.authenticatorData), signature: Buffer(data: passkey.signature), userHandle: passkey.userHandle)))), fromDcId: (foreignDatacenter?.id).flatMap(Int32.init), fromAuthKeyId: foreignDatacenter?.authKeyId), automaticFloodWait: false)
     |> map { authorization in
         return .authorization(authorization)
     }

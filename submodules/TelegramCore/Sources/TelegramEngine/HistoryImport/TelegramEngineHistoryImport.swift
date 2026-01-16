@@ -138,7 +138,7 @@ public extension TelegramEngine {
                 case let .inputFile(inputFile):
                     switch type {
                     case .photo:
-                        inputMedia = .inputMediaUploadedPhoto(flags: 0, file: inputFile, stickers: nil, ttlSeconds: nil)
+                        inputMedia = .inputMediaUploadedPhoto(.init(flags: 0, file: inputFile, stickers: nil, ttlSeconds: nil))
                     case .file, .video, .sticker, .voice:
                         var attributes: [Api.DocumentAttribute] = []
                         attributes.append(.documentAttributeFilename(.init(fileName: fileName)))
@@ -153,7 +153,7 @@ public extension TelegramEngine {
                         default:
                             break
                         }
-                        inputMedia = .inputMediaUploadedDocument(flags: 0, file: inputFile, thumb: nil, mimeType: resolvedMimeType, attributes: attributes, stickers: nil, videoCover: nil, videoTimestamp: nil, ttlSeconds: nil)
+                        inputMedia = .inputMediaUploadedDocument(.init(flags: 0, file: inputFile, thumb: nil, mimeType: resolvedMimeType, attributes: attributes, stickers: nil, videoCover: nil, videoTimestamp: nil, ttlSeconds: nil))
                     }
                 case let .progress(value):
                     return .single(value)
