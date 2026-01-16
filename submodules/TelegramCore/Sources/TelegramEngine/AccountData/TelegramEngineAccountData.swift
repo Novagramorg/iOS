@@ -90,7 +90,7 @@ public extension TelegramEngine {
             var textColor: Int32?
             for attribute in starGift.attributes {
                 switch attribute {
-                case let .model(_, fileValue, _):
+                case let .model(_, fileValue, _, _):
                     file = fileValue
                 case let .pattern(_, patternFileValue, _):
                     patternFile = patternFileValue

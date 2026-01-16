@@ -133,9 +133,9 @@ final class GiftStoreScreenComponent: Component {
             
             self.scrollView.delegate = self
             self.addSubview(self.scrollView)
-            self.addSubview(self.loadingView)
             
             self.addSubview(self.edgeEffectView)
+            self.addSubview(self.loadingView)
             
             self.scrollView.layer.addSublayer(self.topOverscrollLayer)
         }
@@ -415,7 +415,7 @@ final class GiftStoreScreenComponent: Component {
                     if view.superview == nil {
                         view.alpha = 0.0
                         fadeTransition.setAlpha(view: view, alpha: 1.0)
-                        self.insertSubview(view, belowSubview: self.loadingView)
+                        self.insertSubview(view, aboveSubview: self.scrollView)
                         view.playOnce()
                     }
                     view.bounds = CGRect(origin: .zero, size: emptyResultsAnimationFrame.size)
@@ -425,7 +425,7 @@ final class GiftStoreScreenComponent: Component {
                     if view.superview == nil {
                         view.alpha = 0.0
                         fadeTransition.setAlpha(view: view, alpha: 1.0)
-                        self.insertSubview(view, belowSubview: self.loadingView)
+                        self.insertSubview(view, aboveSubview: self.scrollView)
                     }
                     view.bounds = CGRect(origin: .zero, size: emptyResultsTitleFrame.size)
                     ComponentTransition.immediate.setPosition(view: view, position: emptyResultsTitleFrame.center)
@@ -538,7 +538,7 @@ final class GiftStoreScreenComponent: Component {
                     return false
                 }
             }.sorted(by: { lhs, rhs in
-                if case let .model(_, lhsFile, _) = lhs, case let .model(_, rhsFile, _) = rhs, let lhsCount = self.state?.starGiftsState?.attributeCount[.model(lhsFile.fileId.id)], let rhsCount = self.state?.starGiftsState?.attributeCount[.model(rhsFile.fileId.id)] {
+                if case let .model(_, lhsFile, _, _) = lhs, case let .model(_, rhsFile, _, _) = rhs, let lhsCount = self.state?.starGiftsState?.attributeCount[.model(lhsFile.fileId.id)], let rhsCount = self.state?.starGiftsState?.attributeCount[.model(rhsFile.fileId.id)] {
                     return lhsCount > rhsCount
                 } else {
                     return false
@@ -1203,7 +1203,7 @@ final class GiftStoreScreenComponent: Component {
             } else {
                 loadingTransition.setAlpha(view: self.loadingView, alpha: 0.0)
             }
-            transition.setFrame(view: self.loadingView, frame: CGRect(origin: CGPoint(x: 0.0, y: environment.navigationHeight), size: availableSize))
+            transition.setFrame(view: self.loadingView, frame: CGRect(origin: CGPoint(x: 0.0, y: environment.navigationHeight + 10.0), size: availableSize))
                 
             return availableSize
         }

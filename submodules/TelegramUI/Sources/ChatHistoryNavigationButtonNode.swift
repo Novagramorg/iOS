@@ -70,6 +70,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
         }
         
         self.badgeBackgroundView = GlassBackgroundView()
+        self.badgeBackgroundView.isUserInteractionEnabled = false
         self.badgeBackgroundView.alpha = 0.0
         
         self.badgeTextNode = ImmediateAnimatedCountLabelNode()

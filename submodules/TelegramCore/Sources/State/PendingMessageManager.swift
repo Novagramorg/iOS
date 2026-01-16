@@ -2042,7 +2042,7 @@ public final class PendingMessageManager {
     }
     
     private func applySentMessage(postbox: Postbox, stateManager: AccountStateManager, message: Message, content: PendingMessageUploadedContentAndReuploadInfo, result: Api.Updates) -> Signal<Void, NoError> {
-        if let channel = message.peers[message.id.peerId] as? TelegramChannel, channel.isMonoForum {
+        if let _ = message.peers[message.id.peerId] as? TelegramChannel {
             for attribute in message.attributes {
                 if let attribute = attribute as? PaidStarsMessageAttribute {
                     stateManager.starsContext?.add(balance: StarsAmount(value: -attribute.stars.value, nanos: (attribute.stars.value == 0 && attribute.stars.nanos != 0 ? -1 : 1) * attribute.stars.nanos))

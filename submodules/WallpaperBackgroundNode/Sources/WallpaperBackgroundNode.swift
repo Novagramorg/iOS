@@ -1569,7 +1569,7 @@ public final class WallpaperBackgroundNodeImpl: ASDisplayNode, WallpaperBackgrou
         if let validPatternImage = self.validPatternImage, !validPatternImage.rects.isEmpty, let starGift = validPatternImage.starGift {
             if case let .unique(uniqueGift) = starGift {
                 for attribute in uniqueGift.attributes {
-                    if case let .model(_, file, _) = attribute {
+                    if case let .model(_, file, _, _) = attribute {
                         modelFile = file
                     }
                 }
