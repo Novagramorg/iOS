@@ -73,6 +73,6 @@ extension TelegramThemeSettings {
             flags |= 1 << 1
         }
         
-        return .inputThemeSettings(flags: flags, baseTheme: self.baseTheme.apiBaseTheme, accentColor: Int32(bitPattern: self.accentColor), outboxAccentColor: self.outgoingAccentColor.flatMap { Int32(bitPattern: $0) }, messageColors: self.messageColors.isEmpty ? nil : self.messageColors.map(Int32.init(bitPattern:)), wallpaper: inputWallpaper, wallpaperSettings: inputWallpaperSettings)
+        return .inputThemeSettings(.init(flags: flags, baseTheme: self.baseTheme.apiBaseTheme, accentColor: Int32(bitPattern: self.accentColor), outboxAccentColor: self.outgoingAccentColor.flatMap { Int32(bitPattern: $0) }, messageColors: self.messageColors.isEmpty ? nil : self.messageColors.map(Int32.init(bitPattern:)), wallpaper: inputWallpaper, wallpaperSettings: inputWallpaperSettings))
     }
 }

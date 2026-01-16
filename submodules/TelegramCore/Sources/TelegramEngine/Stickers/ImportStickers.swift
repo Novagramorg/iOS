@@ -243,7 +243,7 @@ func _internal_createStickerSet(account: Account, title: String, shortName: Stri
                         flags |= (1 << 1)
                     }
                     
-                    inputStickers.append(.inputStickerSetItem(flags: flags, document: .inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data()))), emoji: sticker.emojis.joined(), maskCoords: nil, keywords: sticker.keywords))
+                    inputStickers.append(.inputStickerSetItem(.init(flags: flags, document: .inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data()))), emoji: sticker.emojis.joined(), maskCoords: nil, keywords: sticker.keywords)))
                 }
                 var thumbnailDocument: Api.InputDocument?
                 if thumbnail != nil, let resource = resources.last {

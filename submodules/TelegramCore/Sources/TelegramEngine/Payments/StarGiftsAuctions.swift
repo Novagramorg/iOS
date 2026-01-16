@@ -11,9 +11,9 @@ public enum StarGiftAuctionReference: Equatable {
     var apiAuction: Api.InputStarGiftAuction {
         switch self {
         case let .giftId(giftId):
-            return .init(inputStarGiftAuction: .init(giftId: giftId))
+            return .inputStarGiftAuction(.init(giftId: giftId))
         case let .slug(slug):
-            return .init(inputStarGiftAuctionSlug: .init(slug: slug))
+            return .inputStarGiftAuctionSlug(.init(slug: slug))
         }
     }
 }

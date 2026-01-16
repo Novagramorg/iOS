@@ -93,7 +93,7 @@ public enum GetThemeError {
 }
 
 public func getTheme(account: Account, slug: String) -> Signal<TelegramTheme, GetThemeError> {
-    return account.network.request(Api.functions.account.getTheme(format: telegramThemeFormat, theme: .inputThemeSlug(slug: slug)))
+    return account.network.request(Api.functions.account.getTheme(format: telegramThemeFormat, theme: .inputThemeSlug(.init(slug: slug))))
     |> mapError { error -> GetThemeError in
         if error.errorDescription == "THEME_FORMAT_INVALID" {
             return .unsupported
@@ -114,7 +114,7 @@ public enum ThemeUpdatedResult {
 }
 
 private func checkThemeUpdated(network: Network, theme: TelegramTheme) -> Signal<ThemeUpdatedResult, GetThemeError> {
-    return network.request(Api.functions.account.getTheme(format: telegramThemeFormat, theme: .inputTheme(id: theme.id, accessHash: theme.accessHash)))
+    return network.request(Api.functions.account.getTheme(format: telegramThemeFormat, theme: .inputTheme(.init(id: theme.id, accessHash: theme.accessHash))))
     |> mapError { _ -> GetThemeError in return .generic }
     |> map { theme -> ThemeUpdatedResult in
         return .updated(TelegramTheme(apiTheme: theme))
@@ -139,7 +139,7 @@ private func saveUnsaveTheme(account: Account, accountManager: AccountManager<Te
         }
         transaction.replaceOrderedItemListItems(collectionId: Namespaces.OrderedItemList.CloudThemes, items: updatedEntries)
         
-        return account.network.request(Api.functions.account.saveTheme(theme: Api.InputTheme.inputTheme(id: theme.id, accessHash: theme.accessHash), unsave: unsave ? Api.Bool.boolTrue : Api.Bool.boolFalse))
+        return account.network.request(Api.functions.account.saveTheme(theme: Api.InputTheme.inputTheme(.init(id: theme.id, accessHash: theme.accessHash)), unsave: unsave ? Api.Bool.boolTrue : Api.Bool.boolFalse))
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .complete()
         }
@@ -161,7 +161,7 @@ private func installTheme(account: Account, theme: TelegramTheme?, baseTheme: Te
     
     let inputTheme: Api.InputTheme?
     if let theme = theme {
-        inputTheme = .inputTheme(id: theme.id, accessHash: theme.accessHash)
+        inputTheme = .inputTheme(.init(id: theme.id, accessHash: theme.accessHash))
         flags |= 1 << 1
     } else {
         inputTheme = nil
@@ -419,7 +419,7 @@ public func updateTheme(account: Account, accountManager: AccountManager<Telegra
             inputDocument = nil
         }
         
-        return account.network.request(Api.functions.account.updateTheme(flags: flags, format: telegramThemeFormat, theme: .inputTheme(id: theme.id, accessHash: theme.accessHash), slug: slug, title: title, document: inputDocument, settings: inputSettings))
+        return account.network.request(Api.functions.account.updateTheme(flags: flags, format: telegramThemeFormat, theme: .inputTheme(.init(id: theme.id, accessHash: theme.accessHash)), slug: slug, title: title, document: inputDocument, settings: inputSettings))
         |> mapError { error in
             if error.errorDescription == "THEME_SLUG_INVALID" {
                 return .slugInvalid
