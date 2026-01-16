@@ -515,7 +515,7 @@ public final class GiftItemComponent: Component {
                 animationOffset = 16.0
                 for attribute in gift.attributes {
                     switch attribute {
-                    case let .model(_, file, _):
+                    case let .model(_, file, _, _):
                         animationFile = file
                         if !self.fetchedFiles.contains(file.fileId.id) {
                             self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
@@ -606,7 +606,7 @@ public final class GiftItemComponent: Component {
                 }
                 for attribute in attributes {
                     switch attribute {
-                    case let .model(_, file, _):
+                    case let .model(_, file, _, _):
                         animationFile = file
                         if !self.fetchedFiles.contains(file.fileId.id) {
                             self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
