@@ -2242,14 +2242,17 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             edgeEffectAlpha = self.chatPresentationInterfaceState.chatWallpaper.singleColor != nil ? 0.85 : 0.75
         }
         
+        
         var bottomBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
-        if let current = self.bottomBackgroundEdgeEffectNode {
-            bottomBackgroundEdgeEffectNode = current
-        } else {
-            if let value = self.backgroundNode.makeEdgeEffectNode() {
-                bottomBackgroundEdgeEffectNode = value
-                self.bottomBackgroundEdgeEffectNode = value
-                self.historyNodeContainer.view.superview?.insertSubview(value.view, aboveSubview: self.historyNodeContainer.view)
+        if self.historyNode.rotated {
+            if let current = self.bottomBackgroundEdgeEffectNode {
+                bottomBackgroundEdgeEffectNode = current
+            } else {
+                if let value = self.backgroundNode.makeEdgeEffectNode() {
+                    bottomBackgroundEdgeEffectNode = value
+                    self.bottomBackgroundEdgeEffectNode = value
+                    self.historyNodeContainer.view.superview?.insertSubview(value.view, aboveSubview: self.historyNodeContainer.view)
+                }
             }
         }
         if let bottomBackgroundEdgeEffectNode {
@@ -2451,13 +2454,15 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         })
         
         var topBackgroundEdgeEffectNode: WallpaperEdgeEffectNode?
-        if let current = self.topBackgroundEdgeEffectNode {
-            topBackgroundEdgeEffectNode = current
-        } else {
-            if let value = self.backgroundNode.makeEdgeEffectNode() {
-                topBackgroundEdgeEffectNode = value
-                self.topBackgroundEdgeEffectNode = value
-                self.historyNodeContainer.view.superview?.insertSubview(value.view, aboveSubview: self.historyNodeContainer.view)
+        if self.historyNode.rotated {
+            if let current = self.topBackgroundEdgeEffectNode {
+                topBackgroundEdgeEffectNode = current
+            } else {
+                if let value = self.backgroundNode.makeEdgeEffectNode() {
+                    topBackgroundEdgeEffectNode = value
+                    self.topBackgroundEdgeEffectNode = value
+                    self.historyNodeContainer.view.superview?.insertSubview(value.view, aboveSubview: self.historyNodeContainer.view)
+                }
             }
         }
         if let topBackgroundEdgeEffectNode {

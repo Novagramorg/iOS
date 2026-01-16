@@ -11,6 +11,9 @@ import TextFormat
 import TextNodeWithEntities
 import SwiftSignalKit
 import ContextUI
+import GlassBackgroundComponent
+import ComponentFlow
+import ComponentDisplayAdapters
 
 private final class ContextActionsSelectionGestureRecognizer: UIPanGestureRecognizer {
     var updateLocation: ((CGPoint, Bool) -> Void)?
@@ -325,10 +328,7 @@ private final class InnerActionsContainerNode: ASDisplayNode {
 
 final class InnerTextSelectionTipContainerNode: ASDisplayNode {
     private let presentationData: PresentationData
-    let shadowNode: ASImageNode
-    private let backgroundNode: ASDisplayNode
-    private var effectView: UIVisualEffectView?
-    private let highlightBackgroundNode: ASDisplayNode
+    private var background: (container: GlassBackgroundContainerView, background: GlassBackgroundView)?
     private let buttonNode: HighlightTrackingButtonNode
     private let textNode: TextNodeWithEntities
     private var textSelectionNode: TextSelectionNode?
@@ -347,22 +347,15 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
     private var action: (() -> Void)?
     var requestDismiss: (@escaping () -> Void) -> Void = { _ in }
     
-    init(presentationData: PresentationData, tip: ContextController.Tip) {
+    init(presentationData: PresentationData, tip: ContextController.Tip, isInline: Bool) {
         self.tip = tip
         self.presentationData = presentationData
         
-        self.shadowNode = ASImageNode()
-        self.shadowNode.displaysAsynchronously = false
-        self.shadowNode.displayWithoutProcessing = true
-        self.shadowNode.image = UIImage(bundleImageName: "Components/Context Menu/Shadow")?.stretchableImage(withLeftCapWidth: 60, topCapHeight: 60)
-        self.shadowNode.contentMode = .scaleToFill
-        self.shadowNode.isHidden = true
-        
-        self.backgroundNode = ASDisplayNode()
-        
-        self.highlightBackgroundNode = ASDisplayNode()
-        self.highlightBackgroundNode.isAccessibilityElement = false
-        self.highlightBackgroundNode.alpha = 0.0
+        if !isInline {
+            self.background = (GlassBackgroundContainerView(), GlassBackgroundView())
+        } else {
+            self.background = nil
+        }
         
         self.buttonNode = HighlightTrackingButtonNode()
         
@@ -448,13 +441,6 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         
         super.init()
         
-        self.backgroundNode.backgroundColor = presentationData.theme.contextMenu.backgroundColor
-        self.backgroundNode.clipsToBounds = true
-        self.backgroundNode.cornerRadius = 14.0
-        
-        self.highlightBackgroundNode.clipsToBounds = true
-        self.highlightBackgroundNode.cornerRadius = 14.0
-        
         let textSelectionNode = TextSelectionNode(theme: TextSelectionTheme(selection: presentationData.theme.contextMenu.primaryColor.withAlphaComponent(0.15), knob: presentationData.theme.contextMenu.primaryColor, knobDiameter: 8.0, isDark: presentationData.theme.overallDarkAppearance), strings: presentationData.strings, textNode: self.textNode.textNode, updateIsActive: { _ in
         }, present: { _, _ in
         }, rootNode: { [weak self] in
@@ -463,17 +449,24 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         })
         self.textSelectionNode = textSelectionNode
         
-        self.addSubnode(self.backgroundNode)
-        self.addSubnode(self.highlightBackgroundNode)
-        self.addSubnode(self.textNode.textNode)
-        self.addSubnode(self.iconNode)
-        self.addSubnode(self.placeholderNode)
+        let parentView: UIView
+        if let background = self.background {
+            self.view.addSubview(background.container)
+            background.container.contentView.addSubview(background.background)
+            parentView = background.background.contentView
+        } else {
+            parentView = self.view
+        }
         
-        self.textSelectionNode.flatMap(self.addSubnode)
+        parentView.addSubview(self.textNode.textNode.view)
+        parentView.addSubview(self.iconNode.view)
+        parentView.addSubview(self.placeholderNode.view)
         
-        self.addSubnode(textSelectionNode.highlightAreaNode)
+        self.textSelectionNode.flatMap { parentView.addSubview($0.view) }
         
-        self.addSubnode(self.buttonNode)
+        parentView.addSubview(textSelectionNode.highlightAreaNode.view)
+        
+        parentView.addSubview(self.buttonNode.view)
         
         self.buttonNode.highligthedChanged = { [weak self] highlighted in
             guard let strongSelf = self else {
@@ -512,7 +505,11 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         ]
         
         for node in nodes {
-            other.addSubnode(node)
+            if let background = other.background {
+                background.background.contentView.addSubview(node.view)
+            } else {
+                other.view.addSubview(node.view)
+            }
             node.layer.animateAlpha(from: node.alpha, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak node] _ in
                 node?.removeFromSupernode()
             })
@@ -531,44 +528,13 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
     }
     
     func updateLayout(widthClass: ContainerViewLayoutSizeClass, presentation: ContextControllerActionsStackNode.Presentation, width: CGFloat, transition: ContainedViewLayoutTransition) -> CGSize {
-        var needsBlur = false
-        if case .regular = widthClass {
-            needsBlur = true
-        } else if case .inline = presentation {
-            needsBlur = true
-        }
-        
-        if !needsBlur {
-            if let effectView = self.effectView {
-                self.effectView = nil
-                effectView.removeFromSuperview()
-            }
-        } else {
-            if self.effectView == nil {
-                let effectView: UIVisualEffectView
-                if #available(iOS 13.0, *) {
-                    if self.presentationData.theme.overallDarkAppearance {
-                        effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterialDark))
-                    } else {
-                        effectView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterialLight))
-                    }
-                } else {
-                    effectView = UIVisualEffectView(effect: UIBlurEffect(style: .light))
-                }
-                effectView.clipsToBounds = true
-                effectView.layer.cornerRadius = self.backgroundNode.cornerRadius
-                self.effectView = effectView
-                self.view.insertSubview(effectView, at: 0)
-            }
-        }
-        
-        let verticalInset: CGFloat = 10.0
-        let horizontalInset: CGFloat = 16.0
+        let verticalInset: CGFloat = 16.0
+        let horizontalInset: CGFloat = 18.0
         let standardIconWidth: CGFloat = 32.0
-        let iconSideInset: CGFloat = 12.0
+        let iconSideInset: CGFloat = 20.0
         
-        let textFont = Font.regular(floor(presentationData.listsFontSize.baseDisplaySize * 14.0 / 17.0))
-        let boldTextFont = Font.bold(floor(presentationData.listsFontSize.baseDisplaySize * 14.0 / 17.0))
+        let textFont = Font.regular(floor(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0))
+        let boldTextFont = Font.bold(floor(presentationData.listsFontSize.baseDisplaySize * 13.0 / 17.0))
         let textColor = self.presentationData.theme.contextMenu.primaryColor
         let linkColor = self.presentationData.theme.overallDarkAppearance ? UIColor(rgb: 0x64d2ff) : self.presentationData.theme.contextMenu.badgeFillColor
         
@@ -626,7 +592,7 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         transition.updateFrame(node: self.placeholderNode, frame: CGRect(origin: CGPoint(x: horizontalInset, y: floorToScreenPixels((size.height - lineHeight) / 2.0)), size: CGSize(width: width - horizontalInset * 2.0, height: lineHeight)))
         transition.updateAlpha(node: self.placeholderNode, alpha: textFrame.height.isZero ? 1.0 : 0.0)
         
-        let iconFrame = CGRect(origin: CGPoint(x: size.width - standardIconWidth - iconSideInset + floor((standardIconWidth - iconSize.width) / 2.0), y: floor((size.height - iconSize.height) / 2.0)), size: iconSize)
+        let iconFrame = CGRect(origin: CGPoint(x: iconSideInset + floor((standardIconWidth - iconSize.width) / 2.0), y: floor((size.height - iconSize.height) / 2.0)), size: iconSize)
         transition.updateFrame(node: self.iconNode, frame: iconFrame)
         
         if let textSelectionNode = self.textSelectionNode {
@@ -634,30 +600,24 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
             textSelectionNode.highlightAreaNode.frame = textFrame
         }
         
-        switch presentation {
-        case .modal:
-            self.shadowNode.isHidden = true
-        case .inline, .additional:
-            self.shadowNode.isHidden = false
-        }
-        
-        if let effectView = self.effectView {
-            transition.updateFrame(view: effectView, frame: CGRect(origin: CGPoint(), size: size))
-        }
-        
-        self.highlightBackgroundNode.backgroundColor = presentationData.theme.contextMenu.itemHighlightedBackgroundColor
-        
         return size
     }
     
     func setActualSize(size: CGSize, transition: ContainedViewLayoutTransition) {
-        transition.updateFrame(node: self.backgroundNode, frame: CGRect(origin: CGPoint(), size: size))
-        self.highlightBackgroundNode.frame = CGRect(origin: CGPoint(), size: size)
+        let transition = ComponentTransition(transition)
+        
+        if let background = self.background {
+            background.container.update(size: size, isDark: self.presentationData.theme.overallDarkAppearance, transition: transition)
+            transition.setFrame(view: background.container, frame: CGRect(origin: CGPoint(), size: size))
+            
+            background.background.update(size: size, cornerRadius: min(30.0, size.height * 0.5), isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), transition: transition)
+            transition.setFrame(view: background.background, frame: CGRect(origin: CGPoint(), size: size))
+        }
+        
         self.buttonNode.frame = CGRect(origin: CGPoint(), size: size)
     }
     
     func updateTheme(presentationData: PresentationData) {
-        self.backgroundColor = presentationData.theme.contextMenu.backgroundColor
     }
     
     func animateIn() {
@@ -673,17 +633,6 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
     }
     
     func updateHighlight(animated: Bool) {
-        if self.isButtonHighlighted || self.isHighlighted {
-            self.highlightBackgroundNode.alpha = 1.0
-        } else {
-            if animated {
-                let previousAlpha = self.highlightBackgroundNode.alpha
-                self.highlightBackgroundNode.alpha = 0.0
-                self.highlightBackgroundNode.layer.animateAlpha(from: previousAlpha, to: 0.0, duration: 0.2)
-            } else {
-                self.highlightBackgroundNode.alpha = 0.0
-            }
-        }
     }
     
     private var isButtonHighlighted = false
@@ -796,8 +745,6 @@ final class ContextActionsContainerNode: ASDisplayNode {
         
         super.init()
         
-        //self.addSubnode(self.shadowNode)
-        //self.additionalShadowNode.flatMap(self.addSubnode)
         self.additionalActionsNode.flatMap(self.scrollNode.addSubnode)
         self.scrollNode.addSubnode(self.actionsNode)
         self.addSubnode(self.scrollNode)
@@ -857,7 +804,7 @@ final class ContextActionsContainerNode: ASDisplayNode {
                     textSelectionTipNode.removeFromSupernode()
                 }
                 
-                let textSelectionTipNode = InnerTextSelectionTipContainerNode(presentationData: self.presentationData, tip: tip)
+                let textSelectionTipNode = InnerTextSelectionTipContainerNode(presentationData: self.presentationData, tip: tip, isInline: false)
                 let getController = self.getController
                 textSelectionTipNode.requestDismiss = { completion in
                     getController()?.dismiss(completion: completion)

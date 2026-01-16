@@ -222,7 +222,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 if let backgroundContainer = self.backgroundContainer {
                     backgroundContainer.contentView.addSubview(titleView)
                 } else {
-                    self.buttonsContainerNode.view.addSubview(titleView)
+                    self.buttonsContainerNode.view.insertSubview(titleView, at: 0)
                 }
             }
             
@@ -814,10 +814,13 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 edgeEffectView.isHidden = true
             } else {
                 edgeEffectView.isHidden = false
-                let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: -20.0), size: CGSize(width: size.width, height: size.height + additionalBackgroundHeight + 20.0 + 20.0))
+                
+                let edgeEffectHeight: CGFloat = size.height + additionalBackgroundHeight + 24.0
+                
+                let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: -20.0), size: CGSize(width: size.width, height: 20.0 + edgeEffectHeight))
                 transition.updatePosition(layer: edgeEffectView.layer, position: edgeEffectFrame.center)
                 transition.updateBounds(layer: edgeEffectView.layer, bounds: CGRect(origin: CGPoint(), size: edgeEffectFrame.size))
-                edgeEffectView.update(content: self.presentationData.theme.edgeEffectColor ?? .white, blur: true, rect: CGRect(origin: CGPoint(), size: edgeEffectFrame.size), edge: .top, edgeSize: 50.0, transition: ComponentTransition(transition))
+                edgeEffectView.update(content: self.presentationData.theme.edgeEffectColor ?? .white, blur: true, rect: CGRect(origin: CGPoint(), size: edgeEffectFrame.size), edge: .top, edgeSize: min(64.0, edgeEffectHeight), transition: ComponentTransition(transition))
             }
         }
         

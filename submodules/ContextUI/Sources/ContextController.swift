@@ -129,6 +129,7 @@ public final class ContextMenuActionItem {
     public let textColor: ContextMenuActionItemTextColor
     public let textFont: ContextMenuActionItemFont
     public let textLayout: ContextMenuActionItemTextLayout
+    public let customTextInsets: UIEdgeInsets?
     public let parseMarkdown: Bool
     public let badge: ContextMenuActionBadge?
     public let icon: (PresentationTheme) -> UIImage?
@@ -150,6 +151,7 @@ public final class ContextMenuActionItem {
         enableEntityAnimations: Bool = true,
         textColor: ContextMenuActionItemTextColor = .primary,
         textLayout: ContextMenuActionItemTextLayout = .twoLinesMax,
+        customTextInsets: UIEdgeInsets? = nil,
         textFont: ContextMenuActionItemFont = .regular,
         parseMarkdown: Bool = false,
         badge: ContextMenuActionBadge? = nil,
@@ -172,6 +174,7 @@ public final class ContextMenuActionItem {
             enableEntityAnimations: enableEntityAnimations,
             textColor: textColor,
             textLayout: textLayout,
+            customTextInsets: customTextInsets,
             textFont: textFont,
             parseMarkdown: parseMarkdown,
             badge: badge,
@@ -204,6 +207,7 @@ public final class ContextMenuActionItem {
         enableEntityAnimations: Bool = true,
         textColor: ContextMenuActionItemTextColor = .primary,
         textLayout: ContextMenuActionItemTextLayout = .twoLinesMax,
+        customTextInsets: UIEdgeInsets? = nil,
         textFont: ContextMenuActionItemFont = .regular,
         parseMarkdown: Bool = false,
         badge: ContextMenuActionBadge? = nil,
@@ -226,6 +230,7 @@ public final class ContextMenuActionItem {
         self.textColor = textColor
         self.textFont = textFont
         self.textLayout = textLayout
+        self.customTextInsets = customTextInsets
         self.parseMarkdown = parseMarkdown
         self.badge = badge
         self.icon = icon
@@ -250,10 +255,15 @@ public protocol ContextMenuCustomNode: ASDisplayNode {
     func performAction()
     
     var needsSeparator: Bool { get }
+    var needsPadding: Bool { get }
 }
 
 public extension ContextMenuCustomNode {
     var needsSeparator: Bool {
+        return true
+    }
+    
+    var needsPadding: Bool {
         return true
     }
 }
@@ -798,6 +808,7 @@ public protocol ContextControllerActionsStackItemNode: ASDisplayNode {
         transition: ContainedViewLayoutTransition
     ) -> (size: CGSize, apparentHeight: CGFloat)
     
+    func highlightGestureShouldBegin(location: CGPoint) -> Bool
     func highlightGestureMoved(location: CGPoint)
     func highlightGestureFinished(performAction: Bool)
     

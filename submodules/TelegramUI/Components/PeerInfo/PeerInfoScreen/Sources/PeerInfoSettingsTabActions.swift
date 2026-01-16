@@ -113,7 +113,6 @@ private final class AccountPeerContextItemNode: ASDisplayNode, ContextMenuCustom
     private let getController: () -> ContextControllerProtocol?
     private let actionSelected: (ContextMenuActionResult) -> Void
     
-    private let highlightedBackgroundNode: ASDisplayNode
     private let buttonNode: HighlightTrackingButtonNode
     private let textNode: ImmediateTextNode
     private let avatarNode: AvatarNode
@@ -126,11 +125,6 @@ private final class AccountPeerContextItemNode: ASDisplayNode, ContextMenuCustom
         self.actionSelected = actionSelected
         
         let textFont = Font.regular(presentationData.listsFontSize.baseDisplaySize * 17.0 / 17.0)
-        
-        self.highlightedBackgroundNode = ASDisplayNode()
-        self.highlightedBackgroundNode.isAccessibilityElement = false
-        self.highlightedBackgroundNode.backgroundColor = presentationData.theme.contextMenu.itemHighlightedBackgroundColor
-        self.highlightedBackgroundNode.alpha = 0.0
         
         self.textNode = ImmediateTextNode()
         self.textNode.isAccessibilityElement = false
@@ -150,29 +144,17 @@ private final class AccountPeerContextItemNode: ASDisplayNode, ContextMenuCustom
         
         super.init()
         
-        self.addSubnode(self.highlightedBackgroundNode)
         self.addSubnode(self.textNode)
         self.addSubnode(self.avatarNode)
         self.addSubnode(self.buttonNode)
         
-        self.buttonNode.highligthedChanged = { [weak self] highligted in
-            guard let strongSelf = self else {
-                return
-            }
-            if highligted {
-                strongSelf.highlightedBackgroundNode.alpha = 1.0
-            } else {
-                strongSelf.highlightedBackgroundNode.alpha = 0.0
-                strongSelf.highlightedBackgroundNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3)
-            }
-        }
         self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
     }
 
     func updateLayout(constrainedWidth: CGFloat, constrainedHeight: CGFloat) -> (CGSize, (CGSize, ContainedViewLayoutTransition) -> Void) {
-        let sideInset: CGFloat = 16.0
-        let iconSideInset: CGFloat = 12.0
-        let verticalInset: CGFloat = 12.0
+        let sideInset: CGFloat = 18.0
+        let iconSideInset: CGFloat = 20.0
+        let verticalInset: CGFloat = 11.0
         
         let iconSize = CGSize(width: 28.0, height: 28.0)
         
@@ -192,7 +174,7 @@ private final class AccountPeerContextItemNode: ASDisplayNode, ContextMenuCustom
         
         return (CGSize(width: textSize.width + sideInset + rightTextInset, height: verticalInset * 2.0 + textSize.height), { size, transition in
             let verticalOrigin = floor((size.height - textSize.height) / 2.0)
-            let textFrame = CGRect(origin: CGPoint(x: sideInset, y: verticalOrigin), size: textSize)
+            let textFrame = CGRect(origin: CGPoint(x: iconSideInset + 40.0, y: verticalOrigin), size: textSize)
             transition.updateFrameAdditive(node: self.textNode, frame: textFrame)
             
             var iconContent: EmojiStatusComponent.Content?
@@ -229,16 +211,13 @@ private final class AccountPeerContextItemNode: ASDisplayNode, ContextMenuCustom
                 }
             }
             
-            transition.updateFrame(node: self.avatarNode, frame: CGRect(origin: CGPoint(x: size.width - standardIconWidth - iconSideInset + floor((standardIconWidth - iconSize.width) / 2.0), y: floor((size.height - iconSize.height) / 2.0)), size: iconSize))
+            transition.updateFrame(node: self.avatarNode, frame: CGRect(origin: CGPoint(x: iconSideInset + floor((standardIconWidth - iconSize.width) / 2.0), y: floor((size.height - iconSize.height) / 2.0)), size: iconSize))
             
-            transition.updateFrame(node: self.highlightedBackgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height)))
             transition.updateFrame(node: self.buttonNode, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: size.width, height: size.height)))
         })
     }
     
     func updateTheme(presentationData: PresentationData) {
-        self.highlightedBackgroundNode.backgroundColor = presentationData.theme.contextMenu.itemHighlightedBackgroundColor
-        
         if let attributedText = self.textNode.attributedText {
             let updatedAttributedText = NSMutableAttributedString(attributedString: attributedText)
             updatedAttributedText.addAttribute(.foregroundColor, value: presentationData.theme.contextMenu.primaryColor.cgColor, range: NSRange(location: 0, length: updatedAttributedText.length))
@@ -255,11 +234,6 @@ private final class AccountPeerContextItemNode: ASDisplayNode, ContextMenuCustom
     }
     
     func setIsHighlighted(_ value: Bool) {
-        if value {
-            self.highlightedBackgroundNode.alpha = 1.0
-        } else {
-            self.highlightedBackgroundNode.alpha = 0.0
-        }
     }
     
     func updateIsHighlighted(isHighlighted: Bool) {
