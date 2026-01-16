@@ -725,9 +725,9 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             if let genericGift {
                 var attributes: [StarGift.UniqueGift.Attribute] = []
                 if state.previewModelIndex == -1 {
-                    attributes.append(.model(name: "", file: genericGift.file, rarity: 0))
+                    attributes.append(.model(name: "", file: genericGift.file, rarity: .rare, crafted: false))
                     if let background = genericGift.background {
-                        attributes.append(.backdrop(name: "", id: 0, innerColor: background.centerColor, outerColor: background.edgeColor, patternColor: 0, textColor: 0, rarity: 0))
+                        attributes.append(.backdrop(name: "", id: 0, innerColor: background.centerColor, outerColor: background.edgeColor, patternColor: 0, textColor: 0, rarity: .rare))
                     }
                 } else if !state.previewModels.isEmpty {
                     attributes.append(state.previewModels[state.previewModelIndex])

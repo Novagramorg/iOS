@@ -762,9 +762,9 @@ final class UserAppearanceScreenComponent: Component {
                                 slug: slug,
                                 owner: .peerId(component.context.account.peerId),
                                 attributes: [
-                                    .model(name: "", file: file, rarity: 0),
-                                    .pattern(name: "", file: patternFile, rarity: 0),
-                                    .backdrop(name: "", id: 0, innerColor: innerColor, outerColor: outerColor, patternColor: patternColor, textColor: textColor, rarity: 0)
+                                    .model(name: "", file: file, rarity: .rare, crafted: false),
+                                    .pattern(name: "", file: patternFile, rarity: .rare),
+                                    .backdrop(name: "", id: 0, innerColor: innerColor, outerColor: outerColor, patternColor: patternColor, textColor: textColor, rarity: .rare)
                                 ],
                                 availability: StarGift.UniqueGift.Availability(issued: 0, total: 0),
                                 giftAddress: nil,

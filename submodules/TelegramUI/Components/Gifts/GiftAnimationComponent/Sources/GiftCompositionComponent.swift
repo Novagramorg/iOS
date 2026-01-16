@@ -912,7 +912,7 @@ public final class GiftCompositionComponent: Component {
                 } else if !nowAnimating && wasAnimating {
                     var tail = Array(models.shuffled().prefix(6))
                     if let mainModelFile {
-                        tail.append(.model(name: "", file: mainModelFile, rarity: 0))
+                        tail.append(.model(name: "", file: mainModelFile, rarity: .rare, crafted: false))
                     }
                     self.beginDecelerationWithQueue(
                         tail: tail,
