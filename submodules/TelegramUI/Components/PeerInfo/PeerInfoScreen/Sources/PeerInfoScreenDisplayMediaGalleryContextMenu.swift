@@ -360,7 +360,7 @@ extension PeerInfoScreenNode {
                     
                     items.append(.action(ContextMenuActionItem(text: strings.SharedMedia_ShowPhotos, icon: { theme in
                         if !showPhotos {
-                            return nil
+                            return UIImage()
                         }
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak pane] _, a in
@@ -384,7 +384,7 @@ extension PeerInfoScreenNode {
                     })))
                     items.append(.action(ContextMenuActionItem(text: strings.SharedMedia_ShowVideos, icon: { theme in
                         if !showVideos {
-                            return nil
+                            return UIImage()
                         }
                         return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak pane] _, a in

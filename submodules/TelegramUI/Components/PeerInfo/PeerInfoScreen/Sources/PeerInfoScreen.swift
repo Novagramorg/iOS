@@ -228,6 +228,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     let edgeEffectView: EdgeEffectView
     
     let headerNode: PeerInfoHeaderNode
+    var underHeaderContentsAlpha: CGFloat = 1.0
     var regularSections: [AnyHashable: PeerInfoScreenItemSectionContainerNode] = [:]
     var editingSections: [AnyHashable: PeerInfoScreenItemSectionContainerNode] = [:]
     let paneContainerNode: PeerInfoPaneContainerNode
@@ -2059,6 +2060,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             guard let self else {
                 return
             }
+            self.underHeaderContentsAlpha = alpha
             if !self.state.isEditing {
                 for (_, section) in self.regularSections {
                     transition.updateAlpha(node: section, alpha: alpha)
@@ -5293,7 +5295,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 
                 if wasAdded && transition.isAnimated && (self.isSettings || self.isMyProfile) && !self.state.isEditing {
                     sectionNode.alpha = 0.0
-                    transition.updateAlpha(node: sectionNode, alpha: 1.0, delay: 0.1)
+                    transition.updateAlpha(node: sectionNode, alpha: self.underHeaderContentsAlpha, delay: 0.1)
                 }
                              
                 let sectionWidth = layout.size.width - insets.left - insets.right
@@ -5312,7 +5314,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                 
                 if wasAdded && transition.isAnimated && (self.isSettings || self.isMyProfile) && !self.state.isEditing {
                 } else {
-                    transition.updateAlpha(node: sectionNode, alpha: self.state.isEditing ? 0.0 : 1.0)
+                    transition.updateAlpha(node: sectionNode, alpha: self.state.isEditing ? 0.0 : self.underHeaderContentsAlpha)
                 }
                 if !sectionHeight.isZero && !self.state.isEditing {
                     contentHeight += sectionHeight
