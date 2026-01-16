@@ -322,7 +322,7 @@ func _internal_updatePeerStarGiftStatus(account: Account, peerId: PeerId, starGi
     var textColor: Int32?
     for attribute in starGift.attributes {
         switch attribute {
-        case let .model(_, fileValue, _):
+        case let .model(_, fileValue, _, _):
             file = fileValue
         case let .pattern(_, patternFileValue, _):
             patternFile = patternFileValue

@@ -538,7 +538,7 @@ final class GiftStoreScreenComponent: Component {
                     return false
                 }
             }.sorted(by: { lhs, rhs in
-                if case let .model(_, lhsFile, _) = lhs, case let .model(_, rhsFile, _) = rhs, let lhsCount = self.state?.starGiftsState?.attributeCount[.model(lhsFile.fileId.id)], let rhsCount = self.state?.starGiftsState?.attributeCount[.model(rhsFile.fileId.id)] {
+                if case let .model(_, lhsFile, _, _) = lhs, case let .model(_, rhsFile, _, _) = rhs, let lhsCount = self.state?.starGiftsState?.attributeCount[.model(lhsFile.fileId.id)], let rhsCount = self.state?.starGiftsState?.attributeCount[.model(rhsFile.fileId.id)] {
                     return lhsCount > rhsCount
                 } else {
                     return false

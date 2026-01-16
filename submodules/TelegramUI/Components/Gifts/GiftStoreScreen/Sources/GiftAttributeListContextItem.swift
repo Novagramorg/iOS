@@ -51,7 +51,7 @@ private func actionForAttribute(attribute: StarGift.UniqueGift.Attribute, presen
     let searchComponents = searchQuery.lowercased().components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         
     switch attribute {
-    case let .model(name, file, _), let .pattern(name, file, _):
+    case let .model(name, file, _, _), let .pattern(name, file, _):
         let attributeId: ResaleGiftsContext.Attribute
         if case .model = attribute {
             attributeId = .model(file.fileId.id)
@@ -321,7 +321,7 @@ private final class GiftAttributeListContextItemNode: ASDisplayNode, ContextMenu
     
     private func getAttributeId(from attribute: StarGift.UniqueGift.Attribute) -> AnyHashable {
         switch attribute {
-        case let .model(_, file, _):
+        case let .model(_, file, _, _):
             return AnyHashable("model_\(file.fileId.id)")
         case let .pattern(_, file, _):
             return AnyHashable("pattern_\(file.fileId.id)")
@@ -583,7 +583,7 @@ private func filteredAttributes(attributes: [StarGift.UniqueGift.Attribute], que
     for attribute in attributes {
         let string: String
         switch attribute {
-        case let .model(name, _, _):
+        case let .model(name, _, _, _):
             string = name
         case let .pattern(name, _, _):
             string = name

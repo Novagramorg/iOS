@@ -443,18 +443,37 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 case text
                 case entities
                 case rarity
+                case rarityType
+                case crafted
             }
-            
+
             public enum AttributeType {
                 case model
                 case pattern
                 case backdrop
                 case originalInfo
             }
-            
-            case model(name: String, file: TelegramMediaFile, rarity: Int32)
-            case pattern(name: String, file: TelegramMediaFile, rarity: Int32)
-            case backdrop(name: String, id: Int32, innerColor: Int32, outerColor: Int32, patternColor: Int32, textColor: Int32, rarity: Int32)
+
+            public enum Rarity: Equatable, Codable {
+                case permille(Int32)
+                case rare
+                case epic
+                case legendary
+                case mythic
+
+                public var permilleValue: Int32 {
+                    switch self {
+                    case let .permille(value):
+                        return value
+                    case .rare, .epic, .legendary, .mythic:
+                        return 0
+                    }
+                }
+            }
+
+            case model(name: String, file: TelegramMediaFile, rarity: Rarity, crafted: Bool)
+            case pattern(name: String, file: TelegramMediaFile, rarity: Rarity)
+            case backdrop(name: String, id: Int32, innerColor: Int32, outerColor: Int32, patternColor: Int32, textColor: Int32, rarity: Rarity)
             case originalInfo(senderPeerId: EnginePeer.Id?, recipientPeerId: EnginePeer.Id, date: Int32, text: String?, entities: [MessageTextEntity]?)
             
             public var attributeType: AttributeType {
@@ -472,20 +491,38 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             
             public init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
-                
+
+                func decodeRarity() throws -> Rarity {
+                    let rarityType = try container.decodeIfPresent(Int32.self, forKey: .rarityType) ?? 0
+                    switch rarityType {
+                    case 1:
+                        return .rare
+                    case 2:
+                        return .epic
+                    case 3:
+                        return .legendary
+                    case 4:
+                        return .mythic
+                    default:
+                        let permille = try container.decodeIfPresent(Int32.self, forKey: .rarity) ?? 0
+                        return .permille(permille)
+                    }
+                }
+
                 let type = try container.decode(Int32.self, forKey: .type)
                 switch type {
                 case 0:
                     self = .model(
                         name: try container.decode(String.self, forKey: .name),
                         file: try container.decode(TelegramMediaFile.self, forKey: .file),
-                        rarity: try container.decode(Int32.self, forKey: .rarity)
+                        rarity: try decodeRarity(),
+                        crafted: try container.decodeIfPresent(Bool.self, forKey: .crafted) ?? false
                     )
                 case 1:
                     self = .pattern(
                         name: try container.decode(String.self, forKey: .name),
                         file: try container.decode(TelegramMediaFile.self, forKey: .file),
-                        rarity: try container.decode(Int32.self, forKey: .rarity)
+                        rarity: try decodeRarity()
                     )
                 case 2:
                     self = .backdrop(
@@ -495,7 +532,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         outerColor: try container.decode(Int32.self, forKey: .outerColor),
                         patternColor: try container.decode(Int32.self, forKey: .patternColor),
                         textColor: try container.decode(Int32.self, forKey: .textColor),
-                        rarity: try container.decode(Int32.self, forKey: .rarity)
+                        rarity: try decodeRarity()
                     )
                 case 3:
                     self = .originalInfo(
@@ -511,20 +548,38 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             }
             
             public init(decoder: PostboxDecoder) {
+                func decodeRarity() -> Rarity {
+                    let rarityType = decoder.decodeInt32ForKey(CodingKeys.rarityType.rawValue, orElse: 0)
+                    switch rarityType {
+                    case 1:
+                        return .rare
+                    case 2:
+                        return .epic
+                    case 3:
+                        return .legendary
+                    case 4:
+                        return .mythic
+                    default:
+                        let permille = decoder.decodeInt32ForKey(CodingKeys.rarity.rawValue, orElse: 0)
+                        return .permille(permille)
+                    }
+                }
+
                 let type = decoder.decodeInt32ForKey(CodingKeys.type.rawValue, orElse: 0)
-                
+
                 switch type {
                 case 0:
                     self = .model(
                         name: decoder.decodeStringForKey(CodingKeys.name.rawValue, orElse: ""),
                         file: decoder.decodeObjectForKey(CodingKeys.file.rawValue) as! TelegramMediaFile,
-                        rarity: decoder.decodeInt32ForKey(CodingKeys.rarity.rawValue, orElse: 0)
+                        rarity: decodeRarity(),
+                        crafted: decoder.decodeBoolForKey(CodingKeys.crafted.rawValue, orElse: false)
                     )
                 case 1:
                     self = .pattern(
                         name: decoder.decodeStringForKey(CodingKeys.name.rawValue, orElse: ""),
                         file: decoder.decodeObjectForKey(CodingKeys.file.rawValue) as! TelegramMediaFile,
-                        rarity: decoder.decodeInt32ForKey(CodingKeys.rarity.rawValue, orElse: 0)
+                        rarity: decodeRarity()
                     )
                 case 2:
                     self = .backdrop(
@@ -534,7 +589,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         outerColor: decoder.decodeInt32ForKey(CodingKeys.outerColor.rawValue, orElse: 0),
                         patternColor: decoder.decodeInt32ForKey(CodingKeys.patternColor.rawValue, orElse: 0),
                         textColor: decoder.decodeInt32ForKey(CodingKeys.textColor.rawValue, orElse: 0),
-                        rarity: decoder.decodeInt32ForKey(CodingKeys.rarity.rawValue, orElse: 0)
+                        rarity: decodeRarity()
                     )
                 case 3:
                     self = .originalInfo(
@@ -551,18 +606,35 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         
             public func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
-                
+
+                func encodeRarity(_ rarity: Rarity) throws {
+                    switch rarity {
+                    case let .permille(value):
+                        try container.encode(Int32(0), forKey: .rarityType)
+                        try container.encode(value, forKey: .rarity)
+                    case .rare:
+                        try container.encode(Int32(1), forKey: .rarityType)
+                    case .epic:
+                        try container.encode(Int32(2), forKey: .rarityType)
+                    case .legendary:
+                        try container.encode(Int32(3), forKey: .rarityType)
+                    case .mythic:
+                        try container.encode(Int32(4), forKey: .rarityType)
+                    }
+                }
+
                 switch self {
-                case let .model(name, file, rarity):
+                case let .model(name, file, rarity, crafted):
                     try container.encode(Int32(0), forKey: .type)
                     try container.encode(name, forKey: .name)
                     try container.encode(file, forKey: .file)
-                    try container.encode(rarity, forKey: .rarity)
+                    try encodeRarity(rarity)
+                    try container.encode(crafted, forKey: .crafted)
                 case let .pattern(name, file, rarity):
                     try container.encode(Int32(1), forKey: .type)
                     try container.encode(name, forKey: .name)
                     try container.encode(file, forKey: .file)
-                    try container.encode(rarity, forKey: .rarity)
+                    try encodeRarity(rarity)
                 case let .backdrop(name, id, innerColor, outerColor, patternColor, textColor, rarity):
                     try container.encode(Int32(2), forKey: .type)
                     try container.encode(name, forKey: .name)
@@ -571,7 +643,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                     try container.encode(outerColor, forKey: .outerColor)
                     try container.encode(patternColor, forKey: .patternColor)
                     try container.encode(textColor, forKey: .textColor)
-                    try container.encode(rarity, forKey: .rarity)
+                    try encodeRarity(rarity)
                 case let .originalInfo(senderPeerId, recipientPeerId, date, text, entities):
                     try container.encode(Int32(3), forKey: .type)
                     try container.encodeIfPresent(senderPeerId?.toInt64(), forKey: .sendPeerId)
@@ -583,17 +655,34 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             }
             
             public func encode(_ encoder: PostboxEncoder) {
+                func encodeRarity(_ rarity: Rarity) {
+                    switch rarity {
+                    case let .permille(value):
+                        encoder.encodeInt32(0, forKey: CodingKeys.rarityType.rawValue)
+                        encoder.encodeInt32(value, forKey: CodingKeys.rarity.rawValue)
+                    case .rare:
+                        encoder.encodeInt32(1, forKey: CodingKeys.rarityType.rawValue)
+                    case .epic:
+                        encoder.encodeInt32(2, forKey: CodingKeys.rarityType.rawValue)
+                    case .legendary:
+                        encoder.encodeInt32(3, forKey: CodingKeys.rarityType.rawValue)
+                    case .mythic:
+                        encoder.encodeInt32(4, forKey: CodingKeys.rarityType.rawValue)
+                    }
+                }
+
                 switch self {
-                case let .model(name, file, rarity):
+                case let .model(name, file, rarity, crafted):
                     encoder.encodeInt32(0, forKey: CodingKeys.type.rawValue)
                     encoder.encodeString(name, forKey: CodingKeys.name.rawValue)
                     encoder.encodeObject(file, forKey: CodingKeys.file.rawValue)
-                    encoder.encodeInt32(rarity, forKey: CodingKeys.rarity.rawValue)
+                    encodeRarity(rarity)
+                    encoder.encodeBool(crafted, forKey: CodingKeys.crafted.rawValue)
                 case let .pattern(name, file, rarity):
                     encoder.encodeInt32(1, forKey: CodingKeys.type.rawValue)
                     encoder.encodeString(name, forKey: CodingKeys.name.rawValue)
                     encoder.encodeObject(file, forKey: CodingKeys.file.rawValue)
-                    encoder.encodeInt32(rarity, forKey: CodingKeys.rarity.rawValue)
+                    encodeRarity(rarity)
                 case let .backdrop(name, id, innerColor, outerColor, patternColor, textColor, rarity):
                     encoder.encodeInt32(2, forKey: CodingKeys.type.rawValue)
                     encoder.encodeString(name, forKey: CodingKeys.name.rawValue)
@@ -602,7 +691,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                     encoder.encodeInt32(outerColor, forKey: CodingKeys.outerColor.rawValue)
                     encoder.encodeInt32(patternColor, forKey: CodingKeys.patternColor.rawValue)
                     encoder.encodeInt32(textColor, forKey: CodingKeys.textColor.rawValue)
-                    encoder.encodeInt32(rarity, forKey: CodingKeys.rarity.rawValue)
+                    encodeRarity(rarity)
                 case let .originalInfo(senderPeerId, recipientPeerId, date, text, entities):
                     encoder.encodeInt32(3, forKey: CodingKeys.type.rawValue)
                     if let senderPeerId {
@@ -3396,64 +3485,35 @@ extension ProfileGiftsContext.State.StarGift {
 
 extension StarGift.UniqueGift.Attribute {
     init?(apiAttribute: Api.StarGiftAttribute) {
+        func parseRarity(_ apiRarity: Api.StarGiftAttributeRarity) -> Rarity {
+            switch apiRarity {
+            case let .starGiftAttributeRarity(permille):
+                return .permille(permille)
+            case .starGiftAttributeRarityRare:
+                return .rare
+            case .starGiftAttributeRarityEpic:
+                return .epic
+            case .starGiftAttributeRarityLegendary:
+                return .legendary
+            case .starGiftAttributeRarityMythic:
+                return .mythic
+            }
+        }
+
         switch apiAttribute {
         case let .starGiftAttributeModel(flags, name, document, rarity):
-            let _ = flags
             guard let file = telegramMediaFileFromApiDocument(document, altDocuments: nil) else {
                 return nil
             }
-            
-            var rarityPermille: Int32 = 0
-            switch rarity {
-            case let .starGiftAttributeRarity(permille):
-                rarityPermille = permille
-            case .starGiftAttributeRarityEpic:
-                break
-            case .starGiftAttributeRarityLegendary:
-                break
-            case .starGiftAttributeRarityMythic:
-                break
-            case .starGiftAttributeRarityRare:
-                break
-            }
-            
-            self = .model(name: name, file: file, rarity: rarityPermille)
+            let crafted = (flags & (1 << 0)) != 0
+            self = .model(name: name, file: file, rarity: parseRarity(rarity), crafted: crafted)
         case let .starGiftAttributePattern(name, document, rarity):
             guard let file = telegramMediaFileFromApiDocument(document, altDocuments: nil) else {
                 return nil
             }
-            
-            var rarityPermille: Int32 = 0
-            switch rarity {
-            case let .starGiftAttributeRarity(permille):
-                rarityPermille = permille
-            case .starGiftAttributeRarityEpic:
-                break
-            case .starGiftAttributeRarityLegendary:
-                break
-            case .starGiftAttributeRarityMythic:
-                break
-            case .starGiftAttributeRarityRare:
-                break
-            }
-            
-            self = .pattern(name: name, file: file, rarity: rarityPermille)
-        case let .starGiftAttributeBackdrop(name, id, centerColor, edgeColor, patternColor, textColor, rarityPermille):
-            var rarityPermille: Int32 = 0
-            switch rarity {
-            case let .starGiftAttributeRarity(permille):
-                rarityPermille = permille
-            case .starGiftAttributeRarityEpic:
-                break
-            case .starGiftAttributeRarityLegendary:
-                break
-            case .starGiftAttributeRarityMythic:
-                break
-            case .starGiftAttributeRarityRare:
-                break
-            }
-            
-            self = .backdrop(name: name, id: id, innerColor: centerColor, outerColor: edgeColor, patternColor: patternColor, textColor: textColor, rarity: rarityPermille)
+            self = .pattern(name: name, file: file, rarity: parseRarity(rarity))
+        case let .starGiftAttributeBackdrop(name, id, centerColor, edgeColor, patternColor, textColor, rarity):
+            self = .backdrop(name: name, id: id, innerColor: centerColor, outerColor: edgeColor, patternColor: patternColor, textColor: textColor, rarity: parseRarity(rarity))
         case let .starGiftAttributeOriginalDetails(_, sender, recipient, date, message):
             var text: String?
             var entities: [MessageTextEntity]?
@@ -3754,7 +3814,7 @@ func _internal_updateStarGiftResalePrice(account: Account, reference: StarGiftRe
 public extension StarGift.UniqueGift {
     var itemFile: TelegramMediaFile? {
         for attribute in self.attributes {
-            if case let .model(_, file, _) = attribute {
+            if case let .model(_, file, _, _) = attribute {
                 return file
             }
         }

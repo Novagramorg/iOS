@@ -1054,7 +1054,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             case let .unique(uniqueGift):
                                 giftTitle = uniqueGift.title + " #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: currentParams.presentationData.dateTimeFormat))"
                                 for attribute in uniqueGift.attributes {
-                                    if case let .model(_, file, _) = attribute {
+                                    if case let .model(_, file, _, _) = attribute {
                                         giftFile = file
                                     }
                                 }
@@ -1289,7 +1289,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                             animationFile = gift.file
                         case let .unique(gift):
                             for attribute in gift.attributes {
-                                if case let .model(_, file, _) = attribute {
+                                if case let .model(_, file, _, _) = attribute {
                                     animationFile = file
                                     break
                                 }
@@ -1393,7 +1393,7 @@ public final class PeerInfoGiftsPaneNode: ASDisplayNode, PeerInfoPaneNode, UIScr
                 case let .unique(uniqueGift):
                     giftTitle = uniqueGift.title + " #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: currentParams.presentationData.dateTimeFormat))"
                     for attribute in uniqueGift.attributes {
-                        if case let .model(_, file, _) = attribute {
+                        if case let .model(_, file, _, _) = attribute {
                             giftFile = file
                         }
                     }

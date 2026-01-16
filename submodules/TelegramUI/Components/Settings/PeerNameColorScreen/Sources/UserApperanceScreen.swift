@@ -1442,7 +1442,7 @@ final class UserAppearanceScreenComponent: Component {
                                         var textColor: Int32?
                                         for attribute in gift.attributes {
                                             switch attribute {
-                                            case let .model(_, file, _):
+                                            case let .model(_, file, _, _):
                                                 fileId = file.fileId.id
                                                 self.cachedIconFiles[file.fileId.id] = file
                                             case let .pattern(_, file, _):
