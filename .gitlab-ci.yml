@@ -32,7 +32,7 @@ internal:
   environment:
     name: internal
   artifacts:
-    when: always
+    when: never
     paths:
       - build/artifacts
     expire_in: 1 week
