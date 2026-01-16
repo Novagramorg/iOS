@@ -329,7 +329,6 @@ private final class InnerActionsContainerNode: ASDisplayNode {
 final class InnerTextSelectionTipContainerNode: ASDisplayNode {
     private let presentationData: PresentationData
     private var background: (container: GlassBackgroundContainerView, background: GlassBackgroundView)?
-    private let buttonNode: HighlightTrackingButtonNode
     private let textNode: TextNodeWithEntities
     private var textSelectionNode: TextSelectionNode?
     private let iconNode: ASImageNode
@@ -356,8 +355,6 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         } else {
             self.background = nil
         }
-        
-        self.buttonNode = HighlightTrackingButtonNode()
         
         self.textNode = TextNodeWithEntities()
         self.textNode.textNode.displaysAsynchronously = false
@@ -466,17 +463,7 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         
         parentView.addSubview(textSelectionNode.highlightAreaNode.view)
         
-        parentView.addSubview(self.buttonNode.view)
-        
-        self.buttonNode.highligthedChanged = { [weak self] highlighted in
-            guard let strongSelf = self else {
-                return
-            }
-            strongSelf.isButtonHighlighted = highlighted
-            strongSelf.updateHighlight(animated: false)
-        }
-        
-        self.buttonNode.addTarget(self, action: #selector(self.pressed), forControlEvents: .touchUpInside)
+        parentView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
         
         let shimmeringForegroundColor: UIColor
         if presentationData.theme.overallDarkAppearance {
@@ -491,10 +478,12 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         self.isUserInteractionEnabled = isUserInteractionEnabled
     }
     
-    @objc func pressed() {
-        self.requestDismiss({
-            self.action?()
-        })
+    @objc func onTapGesture(_ recognizer: UITapGestureRecognizer) {
+        if case .ended = recognizer.state {
+            self.requestDismiss({
+                self.action?()
+            })
+        }
     }
     
     func animateTransitionInside(other: InnerTextSelectionTipContainerNode) {
@@ -528,7 +517,8 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
     }
     
     func updateLayout(widthClass: ContainerViewLayoutSizeClass, presentation: ContextControllerActionsStackNode.Presentation, width: CGFloat, transition: ContainedViewLayoutTransition) -> CGSize {
-        let verticalInset: CGFloat = 16.0
+        let topInset: CGFloat = self.background != nil ? 16.0 : 9.0
+        let bottomInset: CGFloat = self.background != nil ? 16.0 : 9.0
         let horizontalInset: CGFloat = 18.0
         let standardIconWidth: CGFloat = 32.0
         let iconSideInset: CGFloat = 20.0
@@ -567,10 +557,10 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         }
         
         let makeTextLayout = TextNodeWithEntities.asyncLayout(self.textNode)
-        let (textLayout, textApply) = makeTextLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, minimumNumberOfLines: 0, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width - horizontalInset * 2.0 - textRightInset, height: .greatestFiniteMagnitude), alignment: .left, lineSpacing: 0.0, cutout: nil, insets: UIEdgeInsets(), lineColor: nil, textShadowColor: nil, textStroke: nil))
+        let (textLayout, textApply) = makeTextLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, minimumNumberOfLines: 0, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width - horizontalInset * 2.0 - textRightInset, height: .greatestFiniteMagnitude), alignment: .left, lineSpacing: 0.12, cutout: nil, insets: UIEdgeInsets(), lineColor: nil, textShadowColor: nil, textStroke: nil))
         let _ = textApply(self.arguments?.withUpdatedPlaceholderColor(shimmeringForegroundColor))
         
-        let textFrame = CGRect(origin: CGPoint(x: horizontalInset, y: verticalInset), size: textLayout.size)
+        let textFrame = CGRect(origin: CGPoint(x: horizontalInset, y: topInset), size: textLayout.size)
         transition.updateFrame(node: self.textNode.textNode, frame: textFrame)
         if textFrame.size.height.isZero {
             self.textNode.textNode.alpha = 0.0
@@ -586,7 +576,7 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
             contentHeight = 32.0
         }
         
-        let size = CGSize(width: width, height: contentHeight + verticalInset * 2.0)
+        let size = CGSize(width: width, height: contentHeight + topInset + bottomInset)
         
         let lineHeight: CGFloat = 8.0
         transition.updateFrame(node: self.placeholderNode, frame: CGRect(origin: CGPoint(x: horizontalInset, y: floorToScreenPixels((size.height - lineHeight) / 2.0)), size: CGSize(width: width - horizontalInset * 2.0, height: lineHeight)))
@@ -613,8 +603,6 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
             background.background.update(size: size, cornerRadius: min(30.0, size.height * 0.5), isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), transition: transition)
             transition.setFrame(view: background.background, frame: CGRect(origin: CGPoint(), size: size))
         }
-        
-        self.buttonNode.frame = CGRect(origin: CGPoint(), size: size)
     }
     
     func updateTheme(presentationData: PresentationData) {
@@ -665,7 +653,9 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         if self.isHighlighted {
             self.setHighlighted(false)
             if performAction {
-                self.pressed()
+                self.requestDismiss({
+                    self.action?()
+                })
             }
         }
     }
