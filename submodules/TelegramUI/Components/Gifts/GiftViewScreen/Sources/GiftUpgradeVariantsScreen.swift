@@ -432,7 +432,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                             rarity = rarityValue
                             modelAttribute = attribute
                             
-                            if case let .model(_, selectedFile, _) = self.selectedModel {
+                            if case let .model(_, selectedFile, _, _) = self.selectedModel {
                                 isSelected = file.fileId == selectedFile.fileId
                             } else {
                                 isSelected = false

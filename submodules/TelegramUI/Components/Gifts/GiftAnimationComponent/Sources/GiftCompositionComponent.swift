@@ -219,7 +219,7 @@ public final class GiftCompositionComponent: Component {
             _ attribute: StarGift.UniqueGift.Attribute,
             animDuration: Double
         ) {
-            guard let geom = self.spinGeom, case let .model(_, file, _) = attribute else {
+            guard let geom = self.spinGeom, case let .model(_, file, _, _) = attribute else {
                 return
             }
 
@@ -340,7 +340,7 @@ public final class GiftCompositionComponent: Component {
             self.decelItemHosts.removeAll()
             
             for (i, attribute) in tail.reversed().enumerated() {
-                guard case let .model(_, file, _) = attribute else { continue }
+                guard case let .model(_, file, _, _) = attribute else { continue }
 
                 let node = DefaultAnimatedStickerNodeImpl()
                 node.isUserInteractionEnabled = false
@@ -648,7 +648,7 @@ public final class GiftCompositionComponent: Component {
 
                 for attribute in gift.attributes {
                     switch attribute {
-                    case let .model(_, file, _):
+                    case let .model(_, file, _, _):
                         animationFile = file
                         if !self.fetchedFiles.contains(file.fileId.id) {
                             self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
@@ -705,7 +705,7 @@ public final class GiftCompositionComponent: Component {
                     self.previewBackdrops = backdrops
                 }
                 
-                for case let .model(_, file, _) in self.previewModels where !self.fetchedFiles.contains(file.fileId.id) {
+                for case let .model(_, file, _, _) in self.previewModels where !self.fetchedFiles.contains(file.fileId.id) {
                     self.disposables.add(freeMediaFileResourceInteractiveFetched(account: component.context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                     self.fetchedFiles.insert(file.fileId.id)
                 }
@@ -722,7 +722,7 @@ public final class GiftCompositionComponent: Component {
                     if self.previewBackdropIndex < 0 {
                         self.previewBackdropIndex = 0
                     }
-                    if case let .model(_, file, _) = self.previewModels[Int(self.previewModelIndex)] {
+                    if case let .model(_, file, _, _) = self.previewModels[Int(self.previewModelIndex)] {
                         animationFile = file
                         component.externalState?.previewModel = self.previewModels[Int(self.previewModelIndex)]
                     }
@@ -851,12 +851,12 @@ public final class GiftCompositionComponent: Component {
             if let (previewAttributes, mainGift) = uniqueSpinContext {
                 var mainModelFile: TelegramMediaFile?
                 for attribute in mainGift.attributes {
-                    if case let .model(_, file, _) = attribute { mainModelFile = file; break }
+                    if case let .model(_, file, _, _) = attribute { mainModelFile = file; break }
                 }
 
                 var models: [StarGift.UniqueGift.Attribute] = []
                 for attribute in previewAttributes {
-                    if case let .model(_, file, _) = attribute,
+                    if case let .model(_, file, _, _) = attribute,
                        file.fileId.id != mainModelFile?.fileId.id {
                         models.append(attribute)
                     }
@@ -866,7 +866,7 @@ public final class GiftCompositionComponent: Component {
                     return availableSize
                 }
 
-                for case let .model(_, file, _) in models where !self.fetchedFiles.contains(file.fileId.id) {
+                for case let .model(_, file, _, _) in models where !self.fetchedFiles.contains(file.fileId.id) {
                     self.disposables.add(freeMediaFileResourceInteractiveFetched(
                         account: component.context.account,
                         userLocation: .other,
