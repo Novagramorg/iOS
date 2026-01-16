@@ -1621,7 +1621,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                         }
                         if let replyToMsgHeader {
                             switch replyToMsgHeader {
-                            case let .inputReplyToMessage(_, replyToMsgId, topMsgId, replyToPeerId, quoteText, quoteEntities, quoteOffset, monoforumPeerId, todoItemId):
+                            case let .inputReplyToMessage(inputReplyToMessageData):
+                                let (replyToMsgId, topMsgId, replyToPeerId, quoteText, quoteEntities, quoteOffset, monoforumPeerId, todoItemId) = (inputReplyToMessageData.replyToMsgId, inputReplyToMessageData.topMsgId, inputReplyToMessageData.replyToPeerId, inputReplyToMessageData.quoteText, inputReplyToMessageData.quoteEntities, inputReplyToMessageData.quoteOffset, inputReplyToMessageData.monoforumPeerId, inputReplyToMessageData.todoItemId)
                                 let _ = topMsgId
                                 let _ = monoforumPeerId
                                 
@@ -1637,19 +1638,24 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                                 
                                 var parsedReplyToPeerId: PeerId?
                                 switch replyToPeerId {
-                                case let .inputPeerChannel(channelId, _):
+                                case let .inputPeerChannel(inputPeerChannelData):
+                                    let channelId = inputPeerChannelData.channelId
                                     parsedReplyToPeerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
-                                case let .inputPeerChannelFromMessage(_, _, channelId):
+                                case let .inputPeerChannelFromMessage(inputPeerChannelFromMessageData):
+                                    let channelId = inputPeerChannelFromMessageData.channelId
                                     parsedReplyToPeerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
-                                case let .inputPeerChat(chatId):
+                                case let .inputPeerChat(inputPeerChatData):
+                                    let chatId = inputPeerChatData.chatId
                                     parsedReplyToPeerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
                                 case .inputPeerEmpty:
                                     break
                                 case .inputPeerSelf:
                                     parsedReplyToPeerId = accountPeerId
-                                case let .inputPeerUser(userId, _):
+                                case let .inputPeerUser(inputPeerUserData):
+                                    let userId = inputPeerUserData.userId
                                     parsedReplyToPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                                case let .inputPeerUserFromMessage(_, _, userId):
+                                case let .inputPeerUserFromMessage(inputPeerUserFromMessageData):
+                                    let userId = inputPeerUserFromMessageData.userId
                                     parsedReplyToPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
                                 case .none:
                                     break
@@ -1896,19 +1902,24 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 case let .paidReactionPrivacyPeer(peer):
                     let peerId: PeerId
                     switch peer {
-                    case let .inputPeerChannel(channelId, _):
+                    case let .inputPeerChannel(inputPeerChannelData):
+                        let channelId = inputPeerChannelData.channelId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
-                    case let .inputPeerChannelFromMessage(_, _, channelId):
+                    case let .inputPeerChannelFromMessage(inputPeerChannelFromMessageData):
+                        let channelId = inputPeerChannelFromMessageData.channelId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
-                    case let .inputPeerChat(chatId):
+                    case let .inputPeerChat(inputPeerChatData):
+                        let chatId = inputPeerChatData.chatId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
                     case .inputPeerEmpty:
                         peerId = accountPeerId
                     case .inputPeerSelf:
                         peerId = accountPeerId
-                    case let .inputPeerUser(userId, _):
+                    case let .inputPeerUser(inputPeerUserData):
+                        let userId = inputPeerUserData.userId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                    case let .inputPeerUserFromMessage(_, _, userId):
+                    case let .inputPeerUserFromMessage(inputPeerUserFromMessageData):
+                        let userId = inputPeerUserFromMessageData.userId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
                     }
                     mappedPrivacy = .peer(peerId)
@@ -2733,10 +2744,10 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
             if let peer = state.peers[peerId] {
                 var signal: Signal<Api.messages.Messages, MTRpcError>?
                 if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup {
-                    signal = network.request(Api.functions.messages.getMessages(id: messageIds.targetIdsBySourceId.values.map({ Api.InputMessage.inputMessageReplyTo(id: $0.id) })))
+                    signal = network.request(Api.functions.messages.getMessages(id: messageIds.targetIdsBySourceId.values.map({ Api.InputMessage.inputMessageReplyTo(.init(id: $0.id)) })))
                 } else if peerId.namespace == Namespaces.Peer.CloudChannel {
                     if let inputChannel = apiInputChannel(peer) {
-                        signal = network.request(Api.functions.channels.getMessages(channel: inputChannel, id: messageIds.targetIdsBySourceId.values.map({ Api.InputMessage.inputMessageReplyTo(id: $0.id) })))
+                        signal = network.request(Api.functions.channels.getMessages(channel: inputChannel, id: messageIds.targetIdsBySourceId.values.map({ Api.InputMessage.inputMessageReplyTo(.init(id: $0.id)) })))
                     }
                 }
                 if let signal = signal {
@@ -2766,10 +2777,10 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
             if let peer = state.peers[peerId] {
                 var signal: Signal<Api.messages.Messages, MTRpcError>?
                 if peerId.namespace == Namespaces.Peer.CloudUser || peerId.namespace == Namespaces.Peer.CloudGroup {
-                    signal = network.request(Api.functions.messages.getMessages(id: messageIds.map({ Api.InputMessage.inputMessageID(id: $0.id) })))
+                    signal = network.request(Api.functions.messages.getMessages(id: messageIds.map({ Api.InputMessage.inputMessageID(.init(id: $0.id)) })))
                 } else if peerId.namespace == Namespaces.Peer.CloudChannel {
                     if let inputChannel = apiInputChannel(peer) {
-                        signal = network.request(Api.functions.channels.getMessages(channel: inputChannel, id: messageIds.map({ Api.InputMessage.inputMessageID(id: $0.id) })))
+                        signal = network.request(Api.functions.channels.getMessages(channel: inputChannel, id: messageIds.map({ Api.InputMessage.inputMessageID(.init(id: $0.id)) })))
                     }
                 }
                 if let signal = signal {

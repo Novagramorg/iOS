@@ -573,7 +573,7 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
 func _internal_updatePeerPhotoExisting(network: Network, reference: TelegramMediaImageReference) -> Signal<TelegramMediaImage?, NoError> {
     switch reference {
     case let .cloud(imageId, accessHash, fileReference):
-        return network.request(Api.functions.photos.updateProfilePhoto(flags: 0, bot: nil, id: .inputPhoto(id: imageId, accessHash: accessHash, fileReference: Buffer(data: fileReference))))
+        return network.request(Api.functions.photos.updateProfilePhoto(flags: 0, bot: nil, id: .inputPhoto(.init(id: imageId, accessHash: accessHash, fileReference: Buffer(data: fileReference)))))
         |> `catch` { _ -> Signal<Api.photos.Photo, NoError> in
             return .complete()
         }
@@ -592,7 +592,7 @@ func _internal_removeAccountPhoto(account: Account, reference: TelegramMediaImag
         switch reference {
         case let .cloud(imageId, accessHash, fileReference):
             if let fileReference = fileReference {
-                return account.network.request(Api.functions.photos.deletePhotos(id: [.inputPhoto(id: imageId, accessHash: accessHash, fileReference: Buffer(data: fileReference))]))
+                return account.network.request(Api.functions.photos.deletePhotos(id: [.inputPhoto(.init(id: imageId, accessHash: accessHash, fileReference: Buffer(data: fileReference)))]))
                 |> `catch` { _ -> Signal<[Int64], NoError> in
                     return .single([])
                 }

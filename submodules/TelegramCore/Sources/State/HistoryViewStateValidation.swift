@@ -802,7 +802,7 @@ private func validateBatch(postbox: Postbox, network: Network, transaction: Tran
                         case let .channel(peerId, _):
                             actuallyRemovedMessagesSignal = postbox.transaction { transaction -> Signal<Set<MessageId>, NoError> in
                                 if let inputChannel = transaction.getPeer(peerId).flatMap(apiInputChannel) {
-                                    return network.request(Api.functions.channels.getMessages(channel: inputChannel, id: maybeRemovedMessageIds.map({ Api.InputMessage.inputMessageID(id: $0.id) })))
+                                    return network.request(Api.functions.channels.getMessages(channel: inputChannel, id: maybeRemovedMessageIds.map({ Api.InputMessage.inputMessageID(.init(id: $0.id)) })))
                                     |> map { result -> Set<MessageId> in
                                         let apiMessages: [Api.Message]
                                         switch result {
@@ -1051,7 +1051,7 @@ private func validateReplyThreadBatch(postbox: Postbox, network: Network, transa
             } else {
                 actuallyRemovedMessagesSignal = postbox.transaction { transaction -> Signal<Set<MessageId>, NoError> in
                     if let inputChannel = transaction.getPeer(peerId).flatMap(apiInputChannel) {
-                        return network.request(Api.functions.channels.getMessages(channel: inputChannel, id: maybeRemovedMessageIds.map({ Api.InputMessage.inputMessageID(id: $0.id) })))
+                        return network.request(Api.functions.channels.getMessages(channel: inputChannel, id: maybeRemovedMessageIds.map({ Api.InputMessage.inputMessageID(.init(id: $0.id)) })))
                         |> map { result -> Set<MessageId> in
                             let apiMessages: [Api.Message]
                             switch result {

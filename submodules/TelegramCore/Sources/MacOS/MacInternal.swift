@@ -93,7 +93,7 @@ public func downloadAppUpdate(account: Account, source: String, messageId: Int32
         }
         |> mapToSignal { peer in
             if let peer = peer, let inputChannel = apiInputChannel(peer) {
-                return account.network.request(Api.functions.channels.getMessages(channel: inputChannel, id: [Api.InputMessage.inputMessageID(id: messageId)]))
+                return account.network.request(Api.functions.channels.getMessages(channel: inputChannel, id: [Api.InputMessage.inputMessageID(.init(id: messageId))]))
                     |> retryRequest
                     |> castError(InternalUpdaterError.self)
                     |> mapToSignal { messages in

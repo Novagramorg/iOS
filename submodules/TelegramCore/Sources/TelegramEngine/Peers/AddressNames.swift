@@ -177,7 +177,7 @@ func _internal_updateAddressName(account: Account, domain: AddressNameDomain, na
                 return .fail(.generic)
             case let .theme(theme):
                 let flags: Int32 = 1 << 0
-                return account.network.request(Api.functions.account.updateTheme(flags: flags, format: telegramThemeFormat, theme: .inputTheme(id: theme.id, accessHash: theme.accessHash), slug: nil, title: nil, document: nil, settings: nil))
+                return account.network.request(Api.functions.account.updateTheme(flags: flags, format: telegramThemeFormat, theme: .inputTheme(.init(id: theme.id, accessHash: theme.accessHash)), slug: nil, title: nil, document: nil, settings: nil))
                 |> mapError { _ -> UpdateAddressNameError in
                     return .generic
                 }

@@ -407,21 +407,147 @@ public extension Api {
 }
 public extension Api {
     indirect enum InputInvoice: TypeConstructorDescription {
-        case inputInvoiceBusinessBotTransferStars(bot: Api.InputUser, stars: Int64)
-        case inputInvoiceChatInviteSubscription(hash: String)
-        case inputInvoiceMessage(peer: Api.InputPeer, msgId: Int32)
-        case inputInvoicePremiumAuthCode(purpose: Api.InputStorePaymentPurpose)
-        case inputInvoicePremiumGiftCode(purpose: Api.InputStorePaymentPurpose, option: Api.PremiumGiftCodeOption)
-        case inputInvoicePremiumGiftStars(flags: Int32, userId: Api.InputUser, months: Int32, message: Api.TextWithEntities?)
-        case inputInvoiceSlug(slug: String)
-        case inputInvoiceStarGift(flags: Int32, peer: Api.InputPeer, giftId: Int64, message: Api.TextWithEntities?)
-        case inputInvoiceStarGiftAuctionBid(flags: Int32, peer: Api.InputPeer?, giftId: Int64, bidAmount: Int64, message: Api.TextWithEntities?)
-        case inputInvoiceStarGiftDropOriginalDetails(stargift: Api.InputSavedStarGift)
-        case inputInvoiceStarGiftPrepaidUpgrade(peer: Api.InputPeer, hash: String)
-        case inputInvoiceStarGiftResale(flags: Int32, slug: String, toId: Api.InputPeer)
-        case inputInvoiceStarGiftTransfer(stargift: Api.InputSavedStarGift, toId: Api.InputPeer)
-        case inputInvoiceStarGiftUpgrade(flags: Int32, stargift: Api.InputSavedStarGift)
-        case inputInvoiceStars(purpose: Api.InputStorePaymentPurpose)
+        public class Cons_inputInvoiceBusinessBotTransferStars {
+            public var bot: Api.InputUser
+            public var stars: Int64
+            public init(bot: Api.InputUser, stars: Int64) {
+                self.bot = bot
+                self.stars = stars
+            }
+        }
+        public class Cons_inputInvoiceChatInviteSubscription {
+            public var hash: String
+            public init(hash: String) {
+                self.hash = hash
+            }
+        }
+        public class Cons_inputInvoiceMessage {
+            public var peer: Api.InputPeer
+            public var msgId: Int32
+            public init(peer: Api.InputPeer, msgId: Int32) {
+                self.peer = peer
+                self.msgId = msgId
+            }
+        }
+        public class Cons_inputInvoicePremiumAuthCode {
+            public var purpose: Api.InputStorePaymentPurpose
+            public init(purpose: Api.InputStorePaymentPurpose) {
+                self.purpose = purpose
+            }
+        }
+        public class Cons_inputInvoicePremiumGiftCode {
+            public var purpose: Api.InputStorePaymentPurpose
+            public var option: Api.PremiumGiftCodeOption
+            public init(purpose: Api.InputStorePaymentPurpose, option: Api.PremiumGiftCodeOption) {
+                self.purpose = purpose
+                self.option = option
+            }
+        }
+        public class Cons_inputInvoicePremiumGiftStars {
+            public var flags: Int32
+            public var userId: Api.InputUser
+            public var months: Int32
+            public var message: Api.TextWithEntities?
+            public init(flags: Int32, userId: Api.InputUser, months: Int32, message: Api.TextWithEntities?) {
+                self.flags = flags
+                self.userId = userId
+                self.months = months
+                self.message = message
+            }
+        }
+        public class Cons_inputInvoiceSlug {
+            public var slug: String
+            public init(slug: String) {
+                self.slug = slug
+            }
+        }
+        public class Cons_inputInvoiceStarGift {
+            public var flags: Int32
+            public var peer: Api.InputPeer
+            public var giftId: Int64
+            public var message: Api.TextWithEntities?
+            public init(flags: Int32, peer: Api.InputPeer, giftId: Int64, message: Api.TextWithEntities?) {
+                self.flags = flags
+                self.peer = peer
+                self.giftId = giftId
+                self.message = message
+            }
+        }
+        public class Cons_inputInvoiceStarGiftAuctionBid {
+            public var flags: Int32
+            public var peer: Api.InputPeer?
+            public var giftId: Int64
+            public var bidAmount: Int64
+            public var message: Api.TextWithEntities?
+            public init(flags: Int32, peer: Api.InputPeer?, giftId: Int64, bidAmount: Int64, message: Api.TextWithEntities?) {
+                self.flags = flags
+                self.peer = peer
+                self.giftId = giftId
+                self.bidAmount = bidAmount
+                self.message = message
+            }
+        }
+        public class Cons_inputInvoiceStarGiftDropOriginalDetails {
+            public var stargift: Api.InputSavedStarGift
+            public init(stargift: Api.InputSavedStarGift) {
+                self.stargift = stargift
+            }
+        }
+        public class Cons_inputInvoiceStarGiftPrepaidUpgrade {
+            public var peer: Api.InputPeer
+            public var hash: String
+            public init(peer: Api.InputPeer, hash: String) {
+                self.peer = peer
+                self.hash = hash
+            }
+        }
+        public class Cons_inputInvoiceStarGiftResale {
+            public var flags: Int32
+            public var slug: String
+            public var toId: Api.InputPeer
+            public init(flags: Int32, slug: String, toId: Api.InputPeer) {
+                self.flags = flags
+                self.slug = slug
+                self.toId = toId
+            }
+        }
+        public class Cons_inputInvoiceStarGiftTransfer {
+            public var stargift: Api.InputSavedStarGift
+            public var toId: Api.InputPeer
+            public init(stargift: Api.InputSavedStarGift, toId: Api.InputPeer) {
+                self.stargift = stargift
+                self.toId = toId
+            }
+        }
+        public class Cons_inputInvoiceStarGiftUpgrade {
+            public var flags: Int32
+            public var stargift: Api.InputSavedStarGift
+            public init(flags: Int32, stargift: Api.InputSavedStarGift) {
+                self.flags = flags
+                self.stargift = stargift
+            }
+        }
+        public class Cons_inputInvoiceStars {
+            public var purpose: Api.InputStorePaymentPurpose
+            public init(purpose: Api.InputStorePaymentPurpose) {
+                self.purpose = purpose
+            }
+        }
+        case inputInvoiceBusinessBotTransferStars(Cons_inputInvoiceBusinessBotTransferStars)
+        case inputInvoiceChatInviteSubscription(Cons_inputInvoiceChatInviteSubscription)
+        case inputInvoiceMessage(Cons_inputInvoiceMessage)
+        case inputInvoicePremiumAuthCode(Cons_inputInvoicePremiumAuthCode)
+        case inputInvoicePremiumGiftCode(Cons_inputInvoicePremiumGiftCode)
+        case inputInvoicePremiumGiftStars(Cons_inputInvoicePremiumGiftStars)
+        case inputInvoiceSlug(Cons_inputInvoiceSlug)
+        case inputInvoiceStarGift(Cons_inputInvoiceStarGift)
+        case inputInvoiceStarGiftAuctionBid(Cons_inputInvoiceStarGiftAuctionBid)
+        case inputInvoiceStarGiftDropOriginalDetails(Cons_inputInvoiceStarGiftDropOriginalDetails)
+        case inputInvoiceStarGiftPrepaidUpgrade(Cons_inputInvoiceStarGiftPrepaidUpgrade)
+        case inputInvoiceStarGiftResale(Cons_inputInvoiceStarGiftResale)
+        case inputInvoiceStarGiftTransfer(Cons_inputInvoiceStarGiftTransfer)
+        case inputInvoiceStarGiftUpgrade(Cons_inputInvoiceStarGiftUpgrade)
+        case inputInvoiceStars(Cons_inputInvoiceStars)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

@@ -1,9 +1,37 @@
 public extension Api {
     enum InputPaymentCredentials: TypeConstructorDescription {
-        case inputPaymentCredentials(flags: Int32, data: Api.DataJSON)
-        case inputPaymentCredentialsApplePay(paymentData: Api.DataJSON)
-        case inputPaymentCredentialsGooglePay(paymentToken: Api.DataJSON)
-        case inputPaymentCredentialsSaved(id: String, tmpPassword: Buffer)
+        public class Cons_inputPaymentCredentials {
+            public var flags: Int32
+            public var data: Api.DataJSON
+            public init(flags: Int32, data: Api.DataJSON) {
+                self.flags = flags
+                self.data = data
+            }
+        }
+        public class Cons_inputPaymentCredentialsApplePay {
+            public var paymentData: Api.DataJSON
+            public init(paymentData: Api.DataJSON) {
+                self.paymentData = paymentData
+            }
+        }
+        public class Cons_inputPaymentCredentialsGooglePay {
+            public var paymentToken: Api.DataJSON
+            public init(paymentToken: Api.DataJSON) {
+                self.paymentToken = paymentToken
+            }
+        }
+        public class Cons_inputPaymentCredentialsSaved {
+            public var id: String
+            public var tmpPassword: Buffer
+            public init(id: String, tmpPassword: Buffer) {
+                self.id = id
+                self.tmpPassword = tmpPassword
+            }
+        }
+        case inputPaymentCredentials(Cons_inputPaymentCredentials)
+        case inputPaymentCredentialsApplePay(Cons_inputPaymentCredentialsApplePay)
+        case inputPaymentCredentialsGooglePay(Cons_inputPaymentCredentialsGooglePay)
+        case inputPaymentCredentialsSaved(Cons_inputPaymentCredentialsSaved)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -53,13 +81,55 @@ public extension Api {
 }
 public extension Api {
     indirect enum InputPeer: TypeConstructorDescription {
-        case inputPeerChannel(channelId: Int64, accessHash: Int64)
-        case inputPeerChannelFromMessage(peer: Api.InputPeer, msgId: Int32, channelId: Int64)
-        case inputPeerChat(chatId: Int64)
+        public class Cons_inputPeerChannel {
+            public var channelId: Int64
+            public var accessHash: Int64
+            public init(channelId: Int64, accessHash: Int64) {
+                self.channelId = channelId
+                self.accessHash = accessHash
+            }
+        }
+        public class Cons_inputPeerChannelFromMessage {
+            public var peer: Api.InputPeer
+            public var msgId: Int32
+            public var channelId: Int64
+            public init(peer: Api.InputPeer, msgId: Int32, channelId: Int64) {
+                self.peer = peer
+                self.msgId = msgId
+                self.channelId = channelId
+            }
+        }
+        public class Cons_inputPeerChat {
+            public var chatId: Int64
+            public init(chatId: Int64) {
+                self.chatId = chatId
+            }
+        }
+        public class Cons_inputPeerUser {
+            public var userId: Int64
+            public var accessHash: Int64
+            public init(userId: Int64, accessHash: Int64) {
+                self.userId = userId
+                self.accessHash = accessHash
+            }
+        }
+        public class Cons_inputPeerUserFromMessage {
+            public var peer: Api.InputPeer
+            public var msgId: Int32
+            public var userId: Int64
+            public init(peer: Api.InputPeer, msgId: Int32, userId: Int64) {
+                self.peer = peer
+                self.msgId = msgId
+                self.userId = userId
+            }
+        }
+        case inputPeerChannel(Cons_inputPeerChannel)
+        case inputPeerChannelFromMessage(Cons_inputPeerChannelFromMessage)
+        case inputPeerChat(Cons_inputPeerChat)
         case inputPeerEmpty
         case inputPeerSelf
-        case inputPeerUser(userId: Int64, accessHash: Int64)
-        case inputPeerUserFromMessage(peer: Api.InputPeer, msgId: Int32, userId: Int64)
+        case inputPeerUser(Cons_inputPeerUser)
+        case inputPeerUserFromMessage(Cons_inputPeerUserFromMessage)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -130,7 +200,27 @@ public extension Api {
 }
 public extension Api {
     enum InputPeerNotifySettings: TypeConstructorDescription {
-        case inputPeerNotifySettings(flags: Int32, showPreviews: Api.Bool?, silent: Api.Bool?, muteUntil: Int32?, sound: Api.NotificationSound?, storiesMuted: Api.Bool?, storiesHideSender: Api.Bool?, storiesSound: Api.NotificationSound?)
+        public class Cons_inputPeerNotifySettings {
+            public var flags: Int32
+            public var showPreviews: Api.Bool?
+            public var silent: Api.Bool?
+            public var muteUntil: Int32?
+            public var sound: Api.NotificationSound?
+            public var storiesMuted: Api.Bool?
+            public var storiesHideSender: Api.Bool?
+            public var storiesSound: Api.NotificationSound?
+            public init(flags: Int32, showPreviews: Api.Bool?, silent: Api.Bool?, muteUntil: Int32?, sound: Api.NotificationSound?, storiesMuted: Api.Bool?, storiesHideSender: Api.Bool?, storiesSound: Api.NotificationSound?) {
+                self.flags = flags
+                self.showPreviews = showPreviews
+                self.silent = silent
+                self.muteUntil = muteUntil
+                self.sound = sound
+                self.storiesMuted = storiesMuted
+                self.storiesHideSender = storiesHideSender
+                self.storiesSound = storiesSound
+            }
+        }
+        case inputPeerNotifySettings(Cons_inputPeerNotifySettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -159,7 +249,15 @@ public extension Api {
 }
 public extension Api {
     enum InputPhoneCall: TypeConstructorDescription {
-        case inputPhoneCall(id: Int64, accessHash: Int64)
+        public class Cons_inputPhoneCall {
+            public var id: Int64
+            public var accessHash: Int64
+            public init(id: Int64, accessHash: Int64) {
+                self.id = id
+                self.accessHash = accessHash
+            }
+        }
+        case inputPhoneCall(Cons_inputPhoneCall)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -188,7 +286,17 @@ public extension Api {
 }
 public extension Api {
     enum InputPhoto: TypeConstructorDescription {
-        case inputPhoto(id: Int64, accessHash: Int64, fileReference: Buffer)
+        public class Cons_inputPhoto {
+            public var id: Int64
+            public var accessHash: Int64
+            public var fileReference: Buffer
+            public init(id: Int64, accessHash: Int64, fileReference: Buffer) {
+                self.id = id
+                self.accessHash = accessHash
+                self.fileReference = fileReference
+            }
+        }
+        case inputPhoto(Cons_inputPhoto)
         case inputPhotoEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -358,18 +466,42 @@ public extension Api {
 }
 public extension Api {
     enum InputPrivacyRule: TypeConstructorDescription {
+        public class Cons_inputPrivacyValueAllowChatParticipants {
+            public var chats: [Int64]
+            public init(chats: [Int64]) {
+                self.chats = chats
+            }
+        }
+        public class Cons_inputPrivacyValueAllowUsers {
+            public var users: [Api.InputUser]
+            public init(users: [Api.InputUser]) {
+                self.users = users
+            }
+        }
+        public class Cons_inputPrivacyValueDisallowChatParticipants {
+            public var chats: [Int64]
+            public init(chats: [Int64]) {
+                self.chats = chats
+            }
+        }
+        public class Cons_inputPrivacyValueDisallowUsers {
+            public var users: [Api.InputUser]
+            public init(users: [Api.InputUser]) {
+                self.users = users
+            }
+        }
         case inputPrivacyValueAllowAll
         case inputPrivacyValueAllowBots
-        case inputPrivacyValueAllowChatParticipants(chats: [Int64])
+        case inputPrivacyValueAllowChatParticipants(Cons_inputPrivacyValueAllowChatParticipants)
         case inputPrivacyValueAllowCloseFriends
         case inputPrivacyValueAllowContacts
         case inputPrivacyValueAllowPremium
-        case inputPrivacyValueAllowUsers(users: [Api.InputUser])
+        case inputPrivacyValueAllowUsers(Cons_inputPrivacyValueAllowUsers)
         case inputPrivacyValueDisallowAll
         case inputPrivacyValueDisallowBots
-        case inputPrivacyValueDisallowChatParticipants(chats: [Int64])
+        case inputPrivacyValueDisallowChatParticipants(Cons_inputPrivacyValueDisallowChatParticipants)
         case inputPrivacyValueDisallowContacts
-        case inputPrivacyValueDisallowUsers(users: [Api.InputUser])
+        case inputPrivacyValueDisallowUsers(Cons_inputPrivacyValueDisallowUsers)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

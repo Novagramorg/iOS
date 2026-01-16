@@ -143,7 +143,7 @@ private enum SynchronizeInstalledStickerPacksError {
 }
 
 private func fetchStickerPack(network: Network, info: StickerPackCollectionInfo) -> Signal<(StickerPackCollectionInfo, [ItemCollectionItem]), NoError> {
-    return network.request(Api.functions.messages.getStickerSet(stickerset: .inputStickerSetID(id: info.id.id, accessHash: info.accessHash), hash: 0))
+    return network.request(Api.functions.messages.getStickerSet(stickerset: .inputStickerSetID(.init(id: info.id.id, accessHash: info.accessHash)), hash: 0))
     |> map { result -> (StickerPackCollectionInfo, [ItemCollectionItem]) in
         var items: [ItemCollectionItem] = []
         var updatedInfo = info
@@ -228,7 +228,7 @@ private func resolveStickerPacks(network: Network, remoteInfos: [ItemCollectionI
 private func installRemoteStickerPacks(network: Network, infos: [StickerPackCollectionInfo]) -> Signal<Set<ItemCollectionId>, NoError> {
     var signals: [Signal<Set<ItemCollectionId>, NoError>] = []
     for info in infos {
-        let install = network.request(Api.functions.messages.installStickerSet(stickerset: .inputStickerSetID(id: info.id.id, accessHash: info.accessHash), archived: .boolFalse))
+        let install = network.request(Api.functions.messages.installStickerSet(stickerset: .inputStickerSetID(.init(id: info.id.id, accessHash: info.accessHash)), archived: .boolFalse))
             |> map { result -> Set<ItemCollectionId> in
                 switch result {
                     case .stickerSetInstallResultSuccess:
@@ -268,7 +268,7 @@ private func installRemoteStickerPacks(network: Network, infos: [StickerPackColl
 private func removeRemoteStickerPacks(network: Network, infos: [StickerPackCollectionInfo]) -> Signal<Void, NoError> {
     if infos.count > 0 {
         if infos.count > 1 {
-            return network.request(Api.functions.messages.toggleStickerSets(flags: 1 << 0, stickersets: infos.map { .inputStickerSetID(id: $0.id.id, accessHash: $0.accessHash) }))
+            return network.request(Api.functions.messages.toggleStickerSets(flags: 1 << 0, stickersets: infos.map { .inputStickerSetID(.init(id: $0.id.id, accessHash: $0.accessHash)) }))
             |> mapToSignal { _ -> Signal<Void, MTRpcError> in
                 return .single(Void())
             }
@@ -276,7 +276,7 @@ private func removeRemoteStickerPacks(network: Network, infos: [StickerPackColle
                 return .single(Void())
             }
         } else if let info = infos.first {
-            return network.request(Api.functions.messages.uninstallStickerSet(stickerset: .inputStickerSetID(id: info.id.id, accessHash: info.accessHash)))
+            return network.request(Api.functions.messages.uninstallStickerSet(stickerset: .inputStickerSetID(.init(id: info.id.id, accessHash: info.accessHash))))
             |> mapToSignal { _ -> Signal<Void, MTRpcError> in
                 return .single(Void())
             }
@@ -291,7 +291,7 @@ private func removeRemoteStickerPacks(network: Network, infos: [StickerPackColle
 private func archiveRemoteStickerPacks(network: Network, infos: [StickerPackCollectionInfo]) -> Signal<Void, NoError> {
     if infos.count > 0 {
         if infos.count > 1 {
-            return network.request(Api.functions.messages.toggleStickerSets(flags: 1 << 1, stickersets: infos.map { .inputStickerSetID(id: $0.id.id, accessHash: $0.accessHash) }))
+            return network.request(Api.functions.messages.toggleStickerSets(flags: 1 << 1, stickersets: infos.map { .inputStickerSetID(.init(id: $0.id.id, accessHash: $0.accessHash)) }))
             |> mapToSignal { _ -> Signal<Void, MTRpcError> in
                 return .single(Void())
             }
@@ -299,7 +299,7 @@ private func archiveRemoteStickerPacks(network: Network, infos: [StickerPackColl
                 return .single(Void())
             }
         } else if let info = infos.first {
-            return network.request(Api.functions.messages.installStickerSet(stickerset: .inputStickerSetID(id: info.id.id, accessHash: info.accessHash), archived: .boolTrue))
+            return network.request(Api.functions.messages.installStickerSet(stickerset: .inputStickerSetID(.init(id: info.id.id, accessHash: info.accessHash)), archived: .boolTrue))
             |> mapToSignal { _ -> Signal<Void, MTRpcError> in
                 return .single(Void())
             }

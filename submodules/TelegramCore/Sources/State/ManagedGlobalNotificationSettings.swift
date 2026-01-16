@@ -361,7 +361,7 @@ private func apiInputPeerNotifySettings(_ settings: MessageNotificationSettings)
         flags |= (1 << 8)
     }
     
-    return .inputPeerNotifySettings(flags: flags, showPreviews: settings.displayPreviews ? .boolTrue : .boolFalse, silent: nil, muteUntil: muteUntil, sound: sound, storiesMuted: storiesMuted, storiesHideSender: storiesHideSender, storiesSound: storiesSound)
+    return .inputPeerNotifySettings(.init(flags: flags, showPreviews: settings.displayPreviews ? .boolTrue : .boolFalse, silent: nil, muteUntil: muteUntil, sound: sound, storiesMuted: storiesMuted, storiesHideSender: storiesHideSender, storiesSound: storiesSound))
 }
 
 private func pushedNotificationSettings(network: Network, settings: GlobalNotificationSettingsSet) -> Signal<Void, NoError> {

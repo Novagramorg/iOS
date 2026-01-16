@@ -641,20 +641,22 @@ extension Api.EncryptedMessage {
 extension Api.InputMedia {
     func withUpdatedStickers(_ stickers: [Api.InputDocument]?) -> Api.InputMedia {
         switch self {
-        case let .inputMediaUploadedDocument(flags, file, thumb, mimeType, attributes, _, videoCover, videoTimestamp, ttlSeconds):
+        case let .inputMediaUploadedDocument(inputMediaUploadedDocumentData):
+            let (flags, file, thumb, mimeType, attributes, videoCover, videoTimestamp, ttlSeconds) = (inputMediaUploadedDocumentData.flags, inputMediaUploadedDocumentData.file, inputMediaUploadedDocumentData.thumb, inputMediaUploadedDocumentData.mimeType, inputMediaUploadedDocumentData.attributes, inputMediaUploadedDocumentData.videoCover, inputMediaUploadedDocumentData.videoTimestamp, inputMediaUploadedDocumentData.ttlSeconds)
             var flags = flags
             var attributes = attributes
             if let _ = stickers {
                 flags |= (1 << 0)
                 attributes.append(.documentAttributeHasStickers)
             }
-            return .inputMediaUploadedDocument(flags: flags, file: file, thumb: thumb, mimeType: mimeType, attributes: attributes, stickers: stickers, videoCover: videoCover, videoTimestamp: videoTimestamp, ttlSeconds: ttlSeconds)
-        case let .inputMediaUploadedPhoto(flags, file, _, ttlSeconds):
+            return .inputMediaUploadedDocument(.init(flags: flags, file: file, thumb: thumb, mimeType: mimeType, attributes: attributes, stickers: stickers, videoCover: videoCover, videoTimestamp: videoTimestamp, ttlSeconds: ttlSeconds))
+        case let .inputMediaUploadedPhoto(inputMediaUploadedPhotoData):
+            let (flags, file, ttlSeconds) = (inputMediaUploadedPhotoData.flags, inputMediaUploadedPhotoData.file, inputMediaUploadedPhotoData.ttlSeconds)
             var flags = flags
             if let _ = stickers {
                 flags |= (1 << 0)
             }
-            return .inputMediaUploadedPhoto(flags: flags, file: file, stickers: stickers, ttlSeconds: ttlSeconds)
+            return .inputMediaUploadedPhoto(.init(flags: flags, file: file, stickers: stickers, ttlSeconds: ttlSeconds))
         default:
             return self
         }

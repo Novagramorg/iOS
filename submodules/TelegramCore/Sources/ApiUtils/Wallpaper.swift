@@ -107,13 +107,13 @@ extension TelegramWallpaper {
         case .builtin:
             return nil
         case let .file(file):
-            return (.inputWallPaperSlug(slug: file.slug), apiWallpaperSettings(file.settings))
+            return (.inputWallPaperSlug(.init(slug: file.slug)), apiWallpaperSettings(file.settings))
         case let .color(color):
-            return (.inputWallPaperNoFile(id: 0), apiWallpaperSettings(WallpaperSettings(colors: [color])))
+            return (.inputWallPaperNoFile(.init(id: 0)), apiWallpaperSettings(WallpaperSettings(colors: [color])))
         case let .gradient(gradient):
-            return (.inputWallPaperNoFile(id: gradient.id ?? 0), apiWallpaperSettings(WallpaperSettings(colors: gradient.colors, rotation: gradient.settings.rotation)))
+            return (.inputWallPaperNoFile(.init(id: gradient.id ?? 0)), apiWallpaperSettings(WallpaperSettings(colors: gradient.colors, rotation: gradient.settings.rotation)))
         case let .emoticon(emoticon):
-            return (.inputWallPaperNoFile(id: 0), apiWallpaperSettings(WallpaperSettings(emoticon: emoticon)))
+            return (.inputWallPaperNoFile(.init(id: 0)), apiWallpaperSettings(WallpaperSettings(emoticon: emoticon)))
         default:
             return nil
         }

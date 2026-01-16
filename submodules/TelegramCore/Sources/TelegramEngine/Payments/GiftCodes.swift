@@ -349,9 +349,9 @@ func _internal_launchPrepaidGiveaway(account: Account, peerId: EnginePeer.Id, pu
         let inputPurpose: Api.InputStorePaymentPurpose
         switch purpose {
         case let .stars(stars, users):
-            inputPurpose = .inputStorePaymentStarsGiveaway(flags: flags, stars: stars, boostPeer: inputPeer, additionalPeers: additionalPeers, countriesIso2: countries, prizeDescription: prizeDescription, randomId: randomId, untilDate: untilDate, currency: "", amount: 0, users: users)
+            inputPurpose = .inputStorePaymentStarsGiveaway(.init(flags: flags, stars: stars, boostPeer: inputPeer, additionalPeers: additionalPeers, countriesIso2: countries, prizeDescription: prizeDescription, randomId: randomId, untilDate: untilDate, currency: "", amount: 0, users: users))
         case .premium:
-            inputPurpose = .inputStorePaymentPremiumGiveaway(flags: flags, boostPeer: inputPeer, additionalPeers: additionalPeers, countriesIso2: countries, prizeDescription: prizeDescription, randomId: randomId, untilDate: untilDate, currency: "", amount: 0)
+            inputPurpose = .inputStorePaymentPremiumGiveaway(.init(flags: flags, boostPeer: inputPeer, additionalPeers: additionalPeers, countriesIso2: countries, prizeDescription: prizeDescription, randomId: randomId, untilDate: untilDate, currency: "", amount: 0))
         }
         
         return account.network.request(Api.functions.payments.launchPrepaidGiveaway(peer: inputPeer, giveawayId: id, purpose: inputPurpose))

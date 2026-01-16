@@ -69,13 +69,16 @@ extension StickerPackReference {
         switch apiInputSet {
         case .inputStickerSetEmpty:
             return nil
-        case let .inputStickerSetID(id, accessHash):
+        case let .inputStickerSetID(inputStickerSetIDData):
+            let (id, accessHash) = (inputStickerSetIDData.id, inputStickerSetIDData.accessHash)
             self = .id(id: id, accessHash: accessHash)
-        case let .inputStickerSetShortName(shortName):
+        case let .inputStickerSetShortName(inputStickerSetShortNameData):
+            let shortName = inputStickerSetShortNameData.shortName
             self = .name(shortName)
         case .inputStickerSetAnimatedEmoji:
             self = .animatedEmoji
-        case let .inputStickerSetDice(emoticon):
+        case let .inputStickerSetDice(inputStickerSetDiceData):
+            let emoticon = inputStickerSetDiceData.emoticon
             self = .dice(emoticon)
         case .inputStickerSetAnimatedEmojiAnimations:
             self = .animatedEmojiAnimations

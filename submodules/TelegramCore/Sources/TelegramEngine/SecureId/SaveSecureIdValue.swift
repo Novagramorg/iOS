@@ -89,9 +89,9 @@ func decryptedSecureValueData(context: SecureIdValueAccessContext, encryptedData
 private func apiInputSecretFile(_ file: SecureIdVerificationDocumentReference) -> Api.InputSecureFile {
     switch file {
         case let .remote(file):
-            return Api.InputSecureFile.inputSecureFile(id: file.id, accessHash: file.accessHash)
+            return Api.InputSecureFile.inputSecureFile(.init(id: file.id, accessHash: file.accessHash))
         case let .uploaded(file):
-            return Api.InputSecureFile.inputSecureFileUploaded(id: file.id, parts: file.parts, md5Checksum: file.md5Checksum, fileHash: Buffer(data: file.fileHash), secret: Buffer(data: file.encryptedSecret))
+            return Api.InputSecureFile.inputSecureFileUploaded(.init(id: file.id, parts: file.parts, md5Checksum: file.md5Checksum, fileHash: Buffer(data: file.fileHash), secret: Buffer(data: file.encryptedSecret)))
     }
 }
 
@@ -205,7 +205,7 @@ private func makeInputSecureValue(context: SecureIdAccessContext, value: SecureI
         flags |= 1 << 5
     }
     
-    return Api.InputSecureValue.inputSecureValue(flags: flags, type: inputData.type, data: secureData, frontSide: inputData.frontSideReference.flatMap(apiInputSecretFile), reverseSide: inputData.backSideReference.flatMap(apiInputSecretFile), selfie: inputData.selfieReference.flatMap(apiInputSecretFile), translation: translations, files: files, plainData: inputData.publicData)
+    return Api.InputSecureValue.inputSecureValue(.init(flags: flags, type: inputData.type, data: secureData, frontSide: inputData.frontSideReference.flatMap(apiInputSecretFile), reverseSide: inputData.backSideReference.flatMap(apiInputSecretFile), selfie: inputData.selfieReference.flatMap(apiInputSecretFile), translation: translations, files: files, plainData: inputData.publicData))
 }
 
 public func saveSecureIdValue(postbox: Postbox, network: Network, context: SecureIdAccessContext, value: SecureIdValue, uploadedFiles: [Data: Data]) -> Signal<SecureIdValueWithContext, SaveSecureIdValueError> {

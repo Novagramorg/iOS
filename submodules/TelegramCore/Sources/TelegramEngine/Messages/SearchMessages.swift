@@ -673,12 +673,12 @@ func _internal_downloadMessage(accountPeerId: PeerId, postbox: Postbox, network:
                 let signal: Signal<Api.messages.Messages, MTRpcError>
                 if messageId.peerId.namespace == Namespaces.Peer.CloudChannel {
                     if let channel = apiInputChannel(peer) {
-                        signal = network.request(Api.functions.channels.getMessages(channel: channel, id: [Api.InputMessage.inputMessageID(id: messageId.id)]))
+                        signal = network.request(Api.functions.channels.getMessages(channel: channel, id: [Api.InputMessage.inputMessageID(.init(id: messageId.id))]))
                     } else {
                         signal = .complete()
                     }
                 } else {
-                    signal = network.request(Api.functions.messages.getMessages(id: [Api.InputMessage.inputMessageID(id: messageId.id)]))
+                    signal = network.request(Api.functions.messages.getMessages(id: [Api.InputMessage.inputMessageID(.init(id: messageId.id))]))
                 }
                 
                 return signal
@@ -762,12 +762,12 @@ func fetchRemoteMessage(accountPeerId: PeerId, postbox: Postbox, source: FetchMe
         }
     } else if id.peerId.namespace == Namespaces.Peer.CloudChannel {
         if let channel = peer.inputChannel {
-            signal = source.request(Api.functions.channels.getMessages(channel: channel, id: [Api.InputMessage.inputMessageID(id: id.id)]))
+            signal = source.request(Api.functions.channels.getMessages(channel: channel, id: [Api.InputMessage.inputMessageID(.init(id: id.id))]))
         } else {
             signal = .fail(MTRpcError(errorCode: 400, errorDescription: "Peer Not Found"))
         }
     } else if id.peerId.namespace == Namespaces.Peer.CloudUser || id.peerId.namespace == Namespaces.Peer.CloudGroup {
-        signal = source.request(Api.functions.messages.getMessages(id: [Api.InputMessage.inputMessageID(id: id.id)]))
+        signal = source.request(Api.functions.messages.getMessages(id: [Api.InputMessage.inputMessageID(.init(id: id.id))]))
     } else {
         signal = .fail(MTRpcError(errorCode: 400, errorDescription: "Invalid Peer"))
     }

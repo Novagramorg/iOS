@@ -1748,7 +1748,7 @@ func _internal_getStarsTransaction(accountPeerId: PeerId, postbox: Postbox, netw
             Api.functions.payments.getStarsTransactionsByID(
                 flags: transactionReference.ton ? 1 << 0 : 0,
                 peer: inputPeer,
-                id: [.inputStarsTransaction(flags: transactionReference.isRefund ? (1 << 0) : 0, id: transactionReference.id)]
+                id: [.inputStarsTransaction(.init(flags: transactionReference.isRefund ? (1 << 0) : 0, id: transactionReference.id))]
             )
         )
         |> map(Optional.init)
