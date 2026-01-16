@@ -11,13 +11,13 @@ extension StickerPackReference {
     var apiInputStickerSet: Api.InputStickerSet {
         switch self {
         case let .id(id, accessHash):
-            return .inputStickerSetID(id: id, accessHash: accessHash)
+            return .inputStickerSetID(.init(id: id, accessHash: accessHash))
         case let .name(name):
-            return .inputStickerSetShortName(shortName: name)
+            return .inputStickerSetShortName(.init(shortName: name))
         case .animatedEmoji:
             return .inputStickerSetAnimatedEmoji
         case let .dice(emoji):
-            return .inputStickerSetDice(emoticon: emoji)
+            return .inputStickerSetDice(.init(emoticon: emoji))
         case .animatedEmojiAnimations:
             return .inputStickerSetAnimatedEmojiAnimations
         case .premiumGifts:

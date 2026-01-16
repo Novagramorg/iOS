@@ -1,7 +1,21 @@
 public extension Api {
     enum InputTheme: TypeConstructorDescription {
-        case inputTheme(id: Int64, accessHash: Int64)
-        case inputThemeSlug(slug: String)
+        public class Cons_inputTheme {
+            public var id: Int64
+            public var accessHash: Int64
+            public init(id: Int64, accessHash: Int64) {
+                self.id = id
+                self.accessHash = accessHash
+            }
+        }
+        public class Cons_inputThemeSlug {
+            public var slug: String
+            public init(slug: String) {
+                self.slug = slug
+            }
+        }
+        case inputTheme(Cons_inputTheme)
+        case inputThemeSlug(Cons_inputThemeSlug)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -37,7 +51,25 @@ public extension Api {
 }
 public extension Api {
     enum InputThemeSettings: TypeConstructorDescription {
-        case inputThemeSettings(flags: Int32, baseTheme: Api.BaseTheme, accentColor: Int32, outboxAccentColor: Int32?, messageColors: [Int32]?, wallpaper: Api.InputWallPaper?, wallpaperSettings: Api.WallPaperSettings?)
+        public class Cons_inputThemeSettings {
+            public var flags: Int32
+            public var baseTheme: Api.BaseTheme
+            public var accentColor: Int32
+            public var outboxAccentColor: Int32?
+            public var messageColors: [Int32]?
+            public var wallpaper: Api.InputWallPaper?
+            public var wallpaperSettings: Api.WallPaperSettings?
+            public init(flags: Int32, baseTheme: Api.BaseTheme, accentColor: Int32, outboxAccentColor: Int32?, messageColors: [Int32]?, wallpaper: Api.InputWallPaper?, wallpaperSettings: Api.WallPaperSettings?) {
+                self.flags = flags
+                self.baseTheme = baseTheme
+                self.accentColor = accentColor
+                self.outboxAccentColor = outboxAccentColor
+                self.messageColors = messageColors
+                self.wallpaper = wallpaper
+                self.wallpaperSettings = wallpaperSettings
+            }
+        }
+        case inputThemeSettings(Cons_inputThemeSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -66,9 +98,27 @@ public extension Api {
 }
 public extension Api {
     indirect enum InputUser: TypeConstructorDescription {
-        case inputUser(userId: Int64, accessHash: Int64)
+        public class Cons_inputUser {
+            public var userId: Int64
+            public var accessHash: Int64
+            public init(userId: Int64, accessHash: Int64) {
+                self.userId = userId
+                self.accessHash = accessHash
+            }
+        }
+        public class Cons_inputUserFromMessage {
+            public var peer: Api.InputPeer
+            public var msgId: Int32
+            public var userId: Int64
+            public init(peer: Api.InputPeer, msgId: Int32, userId: Int64) {
+                self.peer = peer
+                self.msgId = msgId
+                self.userId = userId
+            }
+        }
+        case inputUser(Cons_inputUser)
         case inputUserEmpty
-        case inputUserFromMessage(peer: Api.InputPeer, msgId: Int32, userId: Int64)
+        case inputUserFromMessage(Cons_inputUserFromMessage)
         case inputUserSelf
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -119,9 +169,29 @@ public extension Api {
 }
 public extension Api {
     enum InputWallPaper: TypeConstructorDescription {
-        case inputWallPaper(id: Int64, accessHash: Int64)
-        case inputWallPaperNoFile(id: Int64)
-        case inputWallPaperSlug(slug: String)
+        public class Cons_inputWallPaper {
+            public var id: Int64
+            public var accessHash: Int64
+            public init(id: Int64, accessHash: Int64) {
+                self.id = id
+                self.accessHash = accessHash
+            }
+        }
+        public class Cons_inputWallPaperNoFile {
+            public var id: Int64
+            public init(id: Int64) {
+                self.id = id
+            }
+        }
+        public class Cons_inputWallPaperSlug {
+            public var slug: String
+            public init(slug: String) {
+                self.slug = slug
+            }
+        }
+        case inputWallPaper(Cons_inputWallPaper)
+        case inputWallPaperNoFile(Cons_inputWallPaperNoFile)
+        case inputWallPaperSlug(Cons_inputWallPaperSlug)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -164,7 +234,19 @@ public extension Api {
 }
 public extension Api {
     enum InputWebDocument: TypeConstructorDescription {
-        case inputWebDocument(url: String, size: Int32, mimeType: String, attributes: [Api.DocumentAttribute])
+        public class Cons_inputWebDocument {
+            public var url: String
+            public var size: Int32
+            public var mimeType: String
+            public var attributes: [Api.DocumentAttribute]
+            public init(url: String, size: Int32, mimeType: String, attributes: [Api.DocumentAttribute]) {
+                self.url = url
+                self.size = size
+                self.mimeType = mimeType
+                self.attributes = attributes
+            }
+        }
+        case inputWebDocument(Cons_inputWebDocument)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

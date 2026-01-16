@@ -544,7 +544,7 @@ func _internal_requestPasskeyRegistration(network: Network) -> Signal<String?, N
 }
 
 func _internal_requestCreatePasskey(network: Network, id: String, clientData: String, attestationObject: Data) -> Signal<TelegramPasskey?, NoError> {
-    return network.request(Api.functions.account.registerPasskey(credential: .inputPasskeyCredentialPublicKey(id: id, rawId: id, response: .inputPasskeyResponseRegister(clientData: .dataJSON(.init(data: clientData)), attestationData: Buffer(data: attestationObject)))))
+    return network.request(Api.functions.account.registerPasskey(credential: .inputPasskeyCredentialPublicKey(.init(id: id, rawId: id, response: .inputPasskeyResponseRegister(.init(clientData: .dataJSON(.init(data: clientData)), attestationData: Buffer(data: attestationObject)))))))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.Passkey?, NoError> in
         return .single(nil)

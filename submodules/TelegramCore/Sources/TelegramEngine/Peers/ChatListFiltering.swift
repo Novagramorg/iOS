@@ -364,22 +364,28 @@ extension ChatListFilter {
                     excludeArchived: (flags & (1 << 13)) != 0,
                     includePeers: ChatListFilterIncludePeers(rawPeers: includePeers.compactMap { peer -> PeerId? in
                         switch peer {
-                        case let .inputPeerUser(userId, _):
+                        case let .inputPeerUser(inputPeerUserData):
+                            let userId = inputPeerUserData.userId
                             return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                        case let .inputPeerChat(chatId):
+                        case let .inputPeerChat(inputPeerChatData):
+                            let chatId = inputPeerChatData.chatId
                             return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                        case let .inputPeerChannel(channelId, _):
+                        case let .inputPeerChannel(inputPeerChannelData):
+                            let channelId = inputPeerChannelData.channelId
                             return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                         default:
                             return nil
                         }
                     }, rawPinnedPeers: pinnedPeers.compactMap { peer -> PeerId? in
                         switch peer {
-                        case let .inputPeerUser(userId, _):
+                        case let .inputPeerUser(inputPeerUserData):
+                            let userId = inputPeerUserData.userId
                             return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                        case let .inputPeerChat(chatId):
+                        case let .inputPeerChat(inputPeerChatData):
+                            let chatId = inputPeerChatData.chatId
                             return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                        case let .inputPeerChannel(channelId, _):
+                        case let .inputPeerChannel(inputPeerChannelData):
+                            let channelId = inputPeerChannelData.channelId
                             return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                         default:
                             return nil
@@ -387,11 +393,14 @@ extension ChatListFilter {
                     }),
                     excludePeers: excludePeers.compactMap { peer -> PeerId? in
                         switch peer {
-                        case let .inputPeerUser(userId, _):
+                        case let .inputPeerUser(inputPeerUserData):
+                            let userId = inputPeerUserData.userId
                             return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                        case let .inputPeerChat(chatId):
+                        case let .inputPeerChat(inputPeerChatData):
+                            let chatId = inputPeerChatData.chatId
                             return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                        case let .inputPeerChannel(channelId, _):
+                        case let .inputPeerChannel(inputPeerChannelData):
+                            let channelId = inputPeerChannelData.channelId
                             return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                         default:
                             return nil
@@ -424,22 +433,28 @@ extension ChatListFilter {
                     excludeArchived: false,
                     includePeers: ChatListFilterIncludePeers(rawPeers: includePeers.compactMap { peer -> PeerId? in
                         switch peer {
-                        case let .inputPeerUser(userId, _):
+                        case let .inputPeerUser(inputPeerUserData):
+                            let userId = inputPeerUserData.userId
                             return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                        case let .inputPeerChat(chatId):
+                        case let .inputPeerChat(inputPeerChatData):
+                            let chatId = inputPeerChatData.chatId
                             return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                        case let .inputPeerChannel(channelId, _):
+                        case let .inputPeerChannel(inputPeerChannelData):
+                            let channelId = inputPeerChannelData.channelId
                             return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                         default:
                             return nil
                         }
                     }, rawPinnedPeers: pinnedPeers.compactMap { peer -> PeerId? in
                         switch peer {
-                        case let .inputPeerUser(userId, _):
+                        case let .inputPeerUser(inputPeerUserData):
+                            let userId = inputPeerUserData.userId
                             return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                        case let .inputPeerChat(chatId):
+                        case let .inputPeerChat(inputPeerChatData):
+                            let chatId = inputPeerChatData.chatId
                             return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                        case let .inputPeerChannel(channelId, _):
+                        case let .inputPeerChannel(inputPeerChannelData):
+                            let channelId = inputPeerChannelData.channelId
                             return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                         default:
                             return nil
@@ -451,7 +466,7 @@ extension ChatListFilter {
             )
         }
     }
-    
+
     func apiFilter(transaction: Transaction) -> Api.DialogFilter? {
         switch self {
         case .allChats:
@@ -581,11 +596,14 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                         for peer in pinnedPeers + includePeers + excludePeers {
                             var peerId: PeerId?
                             switch peer {
-                            case let .inputPeerUser(userId, _):
+                            case let .inputPeerUser(inputPeerUserData):
+                                let userId = inputPeerUserData.userId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                            case let .inputPeerChat(chatId):
+                            case let .inputPeerChat(inputPeerChatData):
+                                let chatId = inputPeerChatData.chatId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                            case let .inputPeerChannel(channelId, _):
+                            case let .inputPeerChannel(inputPeerChannelData):
+                                let channelId = inputPeerChannelData.channelId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                             default:
                                 break
@@ -597,15 +615,18 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                                 }
                             }
                         }
-                        
+
                         for peer in pinnedPeers {
                             var peerId: PeerId?
                             switch peer {
-                            case let .inputPeerUser(userId, _):
+                            case let .inputPeerUser(inputPeerUserData):
+                                let userId = inputPeerUserData.userId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                            case let .inputPeerChat(chatId):
+                            case let .inputPeerChat(inputPeerChatData):
+                                let chatId = inputPeerChatData.chatId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                            case let .inputPeerChannel(channelId, _):
+                            case let .inputPeerChannel(inputPeerChannelData):
+                                let channelId = inputPeerChannelData.channelId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                             default:
                                 break
@@ -622,11 +643,14 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                         for peer in pinnedPeers + includePeers {
                             var peerId: PeerId?
                             switch peer {
-                            case let .inputPeerUser(userId, _):
+                            case let .inputPeerUser(inputPeerUserData):
+                                let userId = inputPeerUserData.userId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                            case let .inputPeerChat(chatId):
+                            case let .inputPeerChat(inputPeerChatData):
+                                let chatId = inputPeerChatData.chatId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                            case let .inputPeerChannel(channelId, _):
+                            case let .inputPeerChannel(inputPeerChannelData):
+                                let channelId = inputPeerChannelData.channelId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                             default:
                                 break
@@ -638,15 +662,18 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                                 }
                             }
                         }
-                        
+
                         for peer in pinnedPeers {
                             var peerId: PeerId?
                             switch peer {
-                            case let .inputPeerUser(userId, _):
+                            case let .inputPeerUser(inputPeerUserData):
+                                let userId = inputPeerUserData.userId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                            case let .inputPeerChat(chatId):
+                            case let .inputPeerChat(inputPeerChatData):
+                                let chatId = inputPeerChatData.chatId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                            case let .inputPeerChannel(channelId, _):
+                            case let .inputPeerChannel(inputPeerChannelData):
+                                let channelId = inputPeerChannelData.channelId
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                             default:
                                 break
@@ -672,13 +699,16 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
             var missingGroups: [Int64] = []
             for peer in missingPeers {
                 switch peer {
-                case let .inputPeerUser(userId, accessHash):
-                    missingUsers.append(.inputUser(userId: userId, accessHash: accessHash))
+                case let .inputPeerUser(inputPeerUserData):
+                    let (userId, accessHash) = (inputPeerUserData.userId, inputPeerUserData.accessHash)
+                    missingUsers.append(.inputUser(.init(userId: userId, accessHash: accessHash)))
                 case .inputPeerSelf:
                     missingUsers.append(.inputUserSelf)
-                case let .inputPeerChannel(channelId, accessHash):
+                case let .inputPeerChannel(inputPeerChannelData):
+                    let (channelId, accessHash) = (inputPeerChannelData.channelId, inputPeerChannelData.accessHash)
                     missingChannels.append(.inputChannel(.init(channelId: channelId, accessHash: accessHash)))
-                case let .inputPeerChat(id):
+                case let .inputPeerChat(inputPeerChatData):
+                    let id = inputPeerChatData.chatId
                     missingGroups.append(id)
                 case .inputPeerEmpty:
                     break

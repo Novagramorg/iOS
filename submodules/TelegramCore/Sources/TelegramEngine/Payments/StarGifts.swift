@@ -3535,14 +3535,14 @@ extension StarGiftReference {
     func apiStarGiftReference(transaction: Transaction) -> Api.InputSavedStarGift? {
         switch self {
         case let .message(messageId):
-            return .inputSavedStarGiftUser(msgId: messageId.id)
+            return .inputSavedStarGiftUser(.init(msgId: messageId.id))
         case let .peer(peerId, id):
             guard let inputPeer = transaction.getPeer(peerId).flatMap({ apiInputPeer($0) }) else {
                 return nil
             }
-            return .inputSavedStarGiftChat(peer: inputPeer, savedId: id)
+            return .inputSavedStarGiftChat(.init(peer: inputPeer, savedId: id))
         case let .slug(slug):
-            return .inputSavedStarGiftSlug(slug: slug)
+            return .inputSavedStarGiftSlug(.init(slug: slug))
         }
     }
 }

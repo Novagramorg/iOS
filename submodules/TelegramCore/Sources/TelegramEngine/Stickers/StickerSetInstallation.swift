@@ -30,16 +30,16 @@ func _internal_requestStickerSet(postbox: Postbox, network: Network, reference: 
     switch reference {
     case let .name(name):
         collectionId = nil
-        input = .inputStickerSetShortName(shortName: name)
+        input = .inputStickerSetShortName(.init(shortName: name))
     case let .id(id, accessHash):
         collectionId = ItemCollectionId(namespace: Namespaces.ItemCollection.CloudStickerPacks, id: id)
-        input = .inputStickerSetID(id: id, accessHash: accessHash)
+        input = .inputStickerSetID(.init(id: id, accessHash: accessHash))
     case .animatedEmoji:
         collectionId = nil
         input = .inputStickerSetAnimatedEmoji
     case let .dice(emoji):
         collectionId = nil
-        input = .inputStickerSetDice(emoticon: emoji)
+        input = .inputStickerSetDice(.init(emoticon: emoji))
     case .animatedEmojiAnimations:
         collectionId = nil
         input = .inputStickerSetAnimatedEmojiAnimations
@@ -170,7 +170,7 @@ public final class CoveredStickerSet : Equatable {
 }
 
 func _internal_installStickerSetInteractively(account: Account, info: StickerPackCollectionInfo, items: [ItemCollectionItem]) -> Signal<InstallStickerSetResult, InstallStickerSetError> {
-    return account.network.request(Api.functions.messages.installStickerSet(stickerset: .inputStickerSetID(id: info.id.id, accessHash: info.accessHash), archived: .boolFalse)) |> mapError { _ -> InstallStickerSetError in
+    return account.network.request(Api.functions.messages.installStickerSet(stickerset: .inputStickerSetID(.init(id: info.id.id, accessHash: info.accessHash)), archived: .boolFalse)) |> mapError { _ -> InstallStickerSetError in
         return .generic
     }
     |> mapToSignal { result -> Signal<InstallStickerSetResult, InstallStickerSetError> in
@@ -243,7 +243,7 @@ func _internal_installStickerSetInteractively(account: Account, info: StickerPac
 
 
 func _internal_uninstallStickerSetInteractively(account: Account, info: StickerPackCollectionInfo) -> Signal<Void, NoError> {
-    return account.network.request(Api.functions.messages.uninstallStickerSet(stickerset: .inputStickerSetID(id: info.id.id, accessHash: info.accessHash)))
+    return account.network.request(Api.functions.messages.uninstallStickerSet(stickerset: .inputStickerSetID(.init(id: info.id.id, accessHash: info.accessHash))))
     |> `catch` { _ -> Signal<Api.Bool, NoError> in
         return .single(.boolFalse)
     }

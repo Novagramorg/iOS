@@ -72,7 +72,7 @@ func resolveMissingStickerSets(network: Network, postbox: Postbox, stickerSets: 
                     continue
                 }
                 
-                missingSignals.append(network.request(Api.functions.messages.getStickerSet(stickerset: .inputStickerSetID(id: id, accessHash: accessHash), hash: 0))
+                missingSignals.append(network.request(Api.functions.messages.getStickerSet(stickerset: .inputStickerSetID(.init(id: id, accessHash: accessHash)), hash: 0))
                 |> map(Optional.init)
                 |> `catch` { _ -> Signal<Api.messages.StickerSet?, NoError> in
                     return .single(nil)

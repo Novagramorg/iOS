@@ -533,10 +533,10 @@ func _internal_updateSelectiveAccountPrivacySettings(account: Account, type: Upd
                 let enablePeers = apiUserAndGroupIds(peerIds: enableFor)
                 
                 if !enablePeers.users.isEmpty {
-                    rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowUsers(users: apiInputUsers(transaction: transaction, peerIds: enablePeers.users)))
+                    rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowUsers(.init(users: apiInputUsers(transaction: transaction, peerIds: enablePeers.users))))
                 }
                 if !enablePeers.groups.isEmpty {
-                    rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowChatParticipants(chats: enablePeers.groups.map({ $0.id._internalGetInt64Value() })))
+                    rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowChatParticipants(.init(chats: enablePeers.groups.map({ $0.id._internalGetInt64Value() }))))
                 }
                 
                 rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowAll)
@@ -554,17 +554,17 @@ func _internal_updateSelectiveAccountPrivacySettings(account: Account, type: Upd
                 let disablePeers = apiUserAndGroupIds(peerIds: disableFor)
                 
                 if !enablePeers.users.isEmpty {
-                    rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowUsers(users: apiInputUsers(transaction: transaction, peerIds: enablePeers.users)))
+                    rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowUsers(.init(users: apiInputUsers(transaction: transaction, peerIds: enablePeers.users))))
                 }
                 if !enablePeers.groups.isEmpty {
-                    rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowChatParticipants(chats: enablePeers.groups.map({ $0.id._internalGetInt64Value() })))
+                    rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowChatParticipants(.init(chats: enablePeers.groups.map({ $0.id._internalGetInt64Value() }))))
                 }
                 
                 if !disablePeers.users.isEmpty {
-                    rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowUsers(users: apiInputUsers(transaction: transaction, peerIds: disablePeers.users)))
+                    rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowUsers(.init(users: apiInputUsers(transaction: transaction, peerIds: disablePeers.users))))
                 }
                 if !disablePeers.groups.isEmpty {
-                    rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowChatParticipants(chats: disablePeers.groups.map({ $0.id._internalGetInt64Value() })))
+                    rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowChatParticipants(.init(chats: disablePeers.groups.map({ $0.id._internalGetInt64Value() }))))
                 }
             
                 rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowContacts)
@@ -578,10 +578,10 @@ func _internal_updateSelectiveAccountPrivacySettings(account: Account, type: Upd
                 let disablePeers = apiUserAndGroupIds(peerIds: disableFor)
                 
                 if !disablePeers.users.isEmpty {
-                    rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowUsers(users: apiInputUsers(transaction: transaction, peerIds: disablePeers.users)))
+                    rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowUsers(.init(users: apiInputUsers(transaction: transaction, peerIds: disablePeers.users))))
                 }
                 if !disablePeers.groups.isEmpty {
-                    rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowChatParticipants(chats: disablePeers.groups.map({ $0.id._internalGetInt64Value() })))
+                    rules.append(Api.InputPrivacyRule.inputPrivacyValueDisallowChatParticipants(.init(chats: disablePeers.groups.map({ $0.id._internalGetInt64Value() }))))
                 }
 
                 rules.append(Api.InputPrivacyRule.inputPrivacyValueAllowAll)
