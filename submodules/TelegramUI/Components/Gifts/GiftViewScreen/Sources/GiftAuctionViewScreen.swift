@@ -164,7 +164,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         }).shuffled().prefix(5))
                         self.previewSymbols = randomSymbols
                                 
-                        for case let .model(_, file, _) in self.previewModels where !self.fetchedFiles.contains(file.fileId.id) {
+                        for case let .model(_, file, _, _) in self.previewModels where !self.fetchedFiles.contains(file.fileId.id) {
                             self.disposables.add(freeMediaFileResourceInteractiveFetched(account: context.account, userLocation: .other, fileReference: .standalone(media: file), resource: file.resource).start())
                             self.fetchedFiles.insert(file.fileId.id)
                         }
@@ -725,9 +725,9 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             if let genericGift {
                 var attributes: [StarGift.UniqueGift.Attribute] = []
                 if state.previewModelIndex == -1 {
-                    attributes.append(.model(name: "", file: genericGift.file, rarity: 0))
+                    attributes.append(.model(name: "", file: genericGift.file, rarity: .rare, crafted: false))
                     if let background = genericGift.background {
-                        attributes.append(.backdrop(name: "", id: 0, innerColor: background.centerColor, outerColor: background.edgeColor, patternColor: 0, textColor: 0, rarity: 0))
+                        attributes.append(.backdrop(name: "", id: 0, innerColor: background.centerColor, outerColor: background.edgeColor, patternColor: 0, textColor: 0, rarity: .rare))
                     }
                 } else if !state.previewModels.isEmpty {
                     attributes.append(state.previewModels[state.previewModelIndex])
