@@ -469,6 +469,31 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         return 0
                     }
                 }
+
+                public var isPermille: Bool {
+                    if case .permille = self {
+                        return true
+                    }
+                    return false
+                }
+
+                public var badgeText: String {
+                    switch self {
+                    case let .permille(value):
+                        let percent = Double(value) / 10.0
+                        if percent.truncatingRemainder(dividingBy: 1) == 0 {
+                            return "\(Int(percent))%"
+                        } else {
+                            return String(format: "%.1f%%", percent)
+                        }
+                    case .rare:
+                        return "Rare"
+                    case .epic:
+                        return "Epic"
+                    case .legendary:
+                        return "Legendary"
+                    }
+                }
             }
 
             case model(name: String, file: TelegramMediaFile, rarity: Rarity, crafted: Bool)
