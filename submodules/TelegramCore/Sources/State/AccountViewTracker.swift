@@ -733,7 +733,8 @@ public final class AccountViewTracker {
                                     
                                     for i in 0 ..< messageIds.count {
                                         if i < viewCounts.count {
-                                            if case let .messageViews(_, views, forwards, replies) = viewCounts[i] {
+                                            if case let .messageViews(messageViewsData) = viewCounts[i] {
+                                                let (views, forwards, replies) = (messageViewsData.views, messageViewsData.forwards, messageViewsData.replies)
                                                 transaction.updateMessage(messageIds[i], update: { currentMessage in
                                                     let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
                                                     var attributes = currentMessage.attributes
@@ -745,7 +746,8 @@ public final class AccountViewTracker {
                                                     var repliesReadMaxId: Int32?
                                                     if let replies = replies {
                                                         switch replies {
-                                                        case let .messageReplies(_, repliesCountValue, _, recentRepliers, channelId, maxId, readMaxId):
+                                                        case let .messageReplies(messageRepliesData):
+                                                            let (repliesCountValue, recentRepliers, channelId, maxId, readMaxId) = (messageRepliesData.replies, messageRepliesData.recentRepliers, messageRepliesData.channelId, messageRepliesData.maxId, messageRepliesData.readMaxId)
                                                             if let channelId = channelId {
                                                                 commentsChannelId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                                                             }

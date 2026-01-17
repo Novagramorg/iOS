@@ -5,7 +5,8 @@ import TelegramApi
 extension ReactionsMessageAttribute {
     func withUpdatedResults(_ reactions: Api.MessageReactions) -> ReactionsMessageAttribute {
         switch reactions {
-        case let .messageReactions(flags, results, recentReactions, topReactors):
+        case let .messageReactions(messageReactionsData):
+            let (flags, results, recentReactions, topReactors) = (messageReactionsData.flags, messageReactionsData.results, messageReactionsData.recentReactions, messageReactionsData.topReactors)
             let min = (flags & (1 << 0)) != 0
             let canViewList = (flags & (1 << 2)) != 0
             let isTags = (flags & (1 << 3)) != 0
@@ -60,7 +61,8 @@ extension ReactionsMessageAttribute {
             if let topReactors {
                 for item in topReactors {
                     switch item {
-                    case let .messageReactor(flags, peerId, count):
+                    case let .messageReactor(messageReactorData):
+                        let (flags, peerId, count) = (messageReactorData.flags, messageReactorData.peerId, messageReactorData.count)
                         topPeers.append(ReactionsMessageAttribute.TopPeer(
                             peerId: peerId?.peerId,
                             count: count,
@@ -71,7 +73,7 @@ extension ReactionsMessageAttribute {
                     }
                 }
             }
-            
+
             return ReactionsMessageAttribute(canViewList: canViewList, isTags: isTags, reactions: reactions, recentPeers: parsedRecentReactions, topPeers: topPeers)
         }
     }
@@ -259,7 +261,8 @@ public func mergedMessageReactions(attributes: [MessageAttribute], isTags: Bool)
 extension ReactionsMessageAttribute {
     convenience init(apiReactions: Api.MessageReactions) {
         switch apiReactions {
-        case let .messageReactions(flags, results, recentReactions, topReactors):
+        case let .messageReactions(messageReactionsData):
+            let (flags, results, recentReactions, topReactors) = (messageReactionsData.flags, messageReactionsData.results, messageReactionsData.recentReactions, messageReactionsData.topReactors)
             let canViewList = (flags & (1 << 2)) != 0
             let isTags = (flags & (1 << 3)) != 0
             let parsedRecentReactions: [ReactionsMessageAttribute.RecentPeer]
@@ -286,7 +289,8 @@ extension ReactionsMessageAttribute {
             if let topReactors {
                 for item in topReactors {
                     switch item {
-                    case let .messageReactor(flags, peerId, count):
+                    case let .messageReactor(messageReactorData):
+                        let (flags, peerId, count) = (messageReactorData.flags, messageReactorData.peerId, messageReactorData.count)
                         topPeers.append(ReactionsMessageAttribute.TopPeer(
                             peerId: peerId?.peerId,
                             count: count,
