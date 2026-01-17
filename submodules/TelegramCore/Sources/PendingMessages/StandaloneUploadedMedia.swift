@@ -68,7 +68,8 @@ public func standaloneUploadedImage(postbox: Postbox, network: Network, peerId: 
                         |> mapError { _ -> StandaloneUploadMediaError in return .generic }
                         |> mapToSignal { media -> Signal<StandaloneUploadMediaEvent, StandaloneUploadMediaError> in
                             switch media {
-                                case let .messageMediaPhoto(_, photo, _):
+                                case let .messageMediaPhoto(messageMediaPhotoData):
+                                    let photo = messageMediaPhotoData.photo
                                     if let photo = photo {
                                         if let mediaImage = telegramMediaImageFromApiPhoto(photo) {
                                             return .single(.result(.media(.standalone(media: mediaImage))))
@@ -163,7 +164,8 @@ public func standaloneUploadedFile(postbox: Postbox, network: Network, peerId: P
                                             |> mapError { _ -> StandaloneUploadMediaError in return .generic }
                                             |> mapToSignal { media -> Signal<StandaloneUploadMediaEvent, StandaloneUploadMediaError> in
                                                 switch media {
-                                                case let .messageMediaDocument(_, document, altDocuments, _, _, _):
+                                                case let .messageMediaDocument(messageMediaDocumentData):
+                                                    let (document, altDocuments) = (messageMediaDocumentData.document, messageMediaDocumentData.altDocuments)
                                                     if let document = document {
                                                         if let mediaFile = telegramMediaFileFromApiDocument(document, altDocuments: altDocuments) {
                                                             return .single(.result(.media(.standalone(media: mediaFile))))

@@ -178,7 +178,8 @@ public func webpagePreviewWithProgress(account: Account, urls: [String], webpage
                     switch result {
                     case let .webPagePreview(media, chats, users):
                         switch media {
-                        case let .messageMediaWebPage(_, webpage):
+                        case let .messageMediaWebPage(messageMediaWebPageData):
+                            let webpage = messageMediaWebPageData.webpage
                             return account.postbox.transaction { transaction -> Signal<WebpagePreviewWithProgressResult, NoError> in
                                 let peers = AccumulatedPeers(chats: chats, users: users)
                                 updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: peers)

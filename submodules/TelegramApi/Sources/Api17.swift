@@ -1,6 +1,18 @@
 public extension Api {
     enum MessagePeerReaction: TypeConstructorDescription {
-        case messagePeerReaction(flags: Int32, peerId: Api.Peer, date: Int32, reaction: Api.Reaction)
+        public class Cons_messagePeerReaction {
+            public var flags: Int32
+            public var peerId: Api.Peer
+            public var date: Int32
+            public var reaction: Api.Reaction
+            public init(flags: Int32, peerId: Api.Peer, date: Int32, reaction: Api.Reaction) {
+                self.flags = flags
+                self.peerId = peerId
+                self.date = date
+                self.reaction = reaction
+            }
+        }
+        case messagePeerReaction(Cons_messagePeerReaction)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

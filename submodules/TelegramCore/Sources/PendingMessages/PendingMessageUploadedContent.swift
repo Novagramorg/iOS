@@ -683,7 +683,8 @@ if "".isEmpty {
                                     |> mapError { _ -> PendingMessageUploadError in return .generic }
                                     |> mapToSignal { result -> Signal<PendingMessageUploadedContentResult, PendingMessageUploadError> in
                                         switch result {
-                                            case let .messageMediaPhoto(_, photo, _):
+                                            case let .messageMediaPhoto(messageMediaPhotoData):
+                                                let photo = messageMediaPhotoData.photo
                                                 if let photo = photo, let mediaImage = telegramMediaImageFromApiPhoto(photo), let reference = mediaImage.reference, case let .cloud(id, accessHash, maybeFileReference) = reference, let fileReference = maybeFileReference {
                                                     var flags: Int32 = 0
                                                     var ttlSeconds: Int32?
@@ -746,7 +747,7 @@ func inputDocumentAttributesFromFileAttributes(_ fileAttributes: [TelegramMediaF
                 var inputMaskCoords: Api.MaskCoords?
                 if let maskCoords = maskCoords {
                     flags |= 1 << 0
-                    inputMaskCoords = .maskCoords(n: maskCoords.n, x: maskCoords.x, y: maskCoords.y, zoom: maskCoords.zoom)
+                    inputMaskCoords = .maskCoords(.init(n: maskCoords.n, x: maskCoords.x, y: maskCoords.y, zoom: maskCoords.zoom))
                 }
                 attributes.append(.documentAttributeSticker(.init(flags: flags, alt: displayText, stickerset: stickerSet, maskCoords: inputMaskCoords)))
             case .HasLinkedStickers:
@@ -853,7 +854,8 @@ private func uploadedVideoCover(network: Network, postbox: Postbox, resourceRefe
                 |> mapError { _ -> PendingMessageUploadError in return .generic }
                 |> map { uploadResult in
                     switch uploadResult {
-                    case let .messageMediaPhoto(_, photo, _):
+                    case let .messageMediaPhoto(messageMediaPhotoData):
+                        let photo = messageMediaPhotoData.photo
                         if case let .photo(_, id, accessHash, fileReference, _, _, _, _) = photo {
                             return .inputPhoto(.init(id: id, accessHash: accessHash, fileReference: fileReference))
                         } else {
@@ -1230,7 +1232,8 @@ private func uploadedMediaFileContent(network: Network, postbox: Postbox, auxili
                                 |> mapError { _ -> PendingMessageUploadError in return .generic }
                                 |> mapToSignal { result -> Signal<PendingMessageUploadedContentResult, PendingMessageUploadError> in
                                     switch result {
-                                        case let .messageMediaDocument(_, document, altDocuments, _, _, _):
+                                        case let .messageMediaDocument(messageMediaDocumentData):
+                                            let (document, altDocuments) = (messageMediaDocumentData.document, messageMediaDocumentData.altDocuments)
                                         if let document = document, let mediaFile = telegramMediaFileFromApiDocument(document, altDocuments: altDocuments), let resource = mediaFile.resource as? CloudDocumentMediaResource, let fileReference = resource.fileReference {
                                                 var flags: Int32 = 0
                                                 var ttlSeconds: Int32?
