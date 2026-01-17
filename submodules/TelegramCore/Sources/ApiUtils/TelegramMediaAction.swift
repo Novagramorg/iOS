@@ -217,7 +217,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         let (peer, currency, totalAmount, payload, charge) = (messageActionPaymentRefundedData.peer, messageActionPaymentRefundedData.currency, messageActionPaymentRefundedData.totalAmount, messageActionPaymentRefundedData.payload, messageActionPaymentRefundedData.charge)
         let transactionId: String
         switch charge {
-        case let .paymentCharge(id, _):
+        case let .paymentCharge(paymentChargeData):
+            let id = paymentChargeData.id
             transactionId = id
         }
         return TelegramMediaAction(action: .paymentRefunded(peerId: peer.peerId, currency: currency, totalAmount: totalAmount, payload: payload?.makeData(), transactionId: transactionId))

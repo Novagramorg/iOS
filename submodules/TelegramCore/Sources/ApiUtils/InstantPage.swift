@@ -53,7 +53,8 @@ extension InstantPageListItem {
 extension InstantPageTableCell {
     convenience init(apiTableCell: Api.PageTableCell) {
         switch apiTableCell {
-            case let .pageTableCell(flags, text, colspan, rowspan):
+            case let .pageTableCell(pageTableCellData):
+                let (flags, text, colspan, rowspan) = (pageTableCellData.flags, pageTableCellData.text, pageTableCellData.colspan, pageTableCellData.rowspan)
                 var alignment = TableHorizontalAlignment.left
                 if (flags & (1 << 3)) != 0 {
                     alignment = .center
@@ -74,7 +75,8 @@ extension InstantPageTableCell {
 extension InstantPageTableRow {
     convenience init(apiTableRow: Api.PageTableRow) {
         switch apiTableRow {
-            case let .pageTableRow(cells):
+            case let .pageTableRow(pageTableRowData):
+                let cells = pageTableRowData.cells
                 self.init(cells: cells.map({ InstantPageTableCell(apiTableCell: $0) }))
         }
     }
@@ -83,7 +85,8 @@ extension InstantPageTableRow {
 extension InstantPageRelatedArticle {
     convenience init(apiRelatedArticle: Api.PageRelatedArticle) {
         switch apiRelatedArticle {
-            case let .pageRelatedArticle(_, url, webpageId, title, description, photoId, author, publishedDate):
+            case let .pageRelatedArticle(pageRelatedArticleData):
+                let (url, webpageId, title, description, photoId, author, publishedDate) = (pageRelatedArticleData.url, pageRelatedArticleData.webpageId, pageRelatedArticleData.title, pageRelatedArticleData.description, pageRelatedArticleData.photoId, pageRelatedArticleData.author, pageRelatedArticleData.publishedDate)
                 var posterPhotoId: MediaId?
                 if let photoId = photoId {
                     posterPhotoId = MediaId(namespace: Namespaces.Media.CloudImage, id: photoId)

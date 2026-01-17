@@ -171,7 +171,8 @@ public struct BotPaymentMethod: Equatable {
 extension BotPaymentMethod {
     init(apiPaymentFormMethod: Api.PaymentFormMethod) {
         switch apiPaymentFormMethod {
-            case let .paymentFormMethod(url, title):
+            case let .paymentFormMethod(paymentFormMethodData):
+                let (url, title) = (paymentFormMethodData.url, paymentFormMethodData.title)
                 self.init(url: url, title: title)
         }
     }
@@ -236,7 +237,8 @@ extension BotPaymentInvoice {
 extension BotPaymentRequestedInfo {
     init(apiInfo: Api.PaymentRequestedInfo) {
         switch apiInfo {
-            case let .paymentRequestedInfo(_, name, phone, email, shippingAddress):
+            case let .paymentRequestedInfo(paymentRequestedInfoData):
+                let (name, phone, email, shippingAddress) = (paymentRequestedInfoData.name, paymentRequestedInfoData.phone, paymentRequestedInfoData.email, paymentRequestedInfoData.shippingAddress)
                 var parsedShippingAddress: BotPaymentShippingAddress?
                 if let shippingAddress = shippingAddress {
                     switch shippingAddress {
@@ -560,7 +562,8 @@ func _internal_fetchBotPaymentForm(accountPeerId: PeerId, postbox: Postbox, netw
                     let parsedSavedInfo = savedInfo.flatMap(BotPaymentRequestedInfo.init)
                     let parsedSavedCredentials = savedCredentials?.map({ savedCredentials -> BotPaymentSavedCredentials in
                         switch savedCredentials {
-                            case let .paymentSavedCredentialsCard(id, title):
+                            case let .paymentSavedCredentialsCard(paymentSavedCredentialsCardData):
+                                let (id, title) = (paymentSavedCredentialsCardData.id, paymentSavedCredentialsCardData.title)
                                 return .card(id: id, title: title)
                         }
                     }) ?? []
@@ -655,7 +658,7 @@ func _internal_validateBotPaymentForm(account: Account, saveInfo: Bool, source: 
             infoFlags |= (1 << 3)
             apiShippingAddress = .postAddress(streetLine1: address.streetLine1, streetLine2: address.streetLine2, city: address.city, state: address.state, countryIso2: address.countryIso2, postCode: address.postCode)
         }
-        return account.network.request(Api.functions.payments.validateRequestedInfo(flags: flags, invoice: invoice, info: .paymentRequestedInfo(flags: infoFlags, name: formInfo.name, phone: formInfo.phone, email: formInfo.email, shippingAddress: apiShippingAddress)))
+        return account.network.request(Api.functions.payments.validateRequestedInfo(flags: flags, invoice: invoice, info: .paymentRequestedInfo(.init(flags: infoFlags, name: formInfo.name, phone: formInfo.phone, email: formInfo.email, shippingAddress: apiShippingAddress))))
         |> mapError { error -> ValidateBotPaymentFormError in
             if error.errorDescription == "SHIPPING_NOT_AVAILABLE" {
                 return .shippingNotAvailable
