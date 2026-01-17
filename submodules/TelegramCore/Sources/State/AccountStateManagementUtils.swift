@@ -1721,7 +1721,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updateLangPack(difference):
                 let langCode: String
                 switch difference {
-                    case let .langPackDifference(langCodeValue, _, _, _):
+                    case let .langPackDifference(langPackDifferenceData):
+                        let (langCodeValue) = (langPackDifferenceData.langCode)
                         langCode = langCodeValue
                 }
                 updatedState.updateLangPack(langCode: langCode, difference: difference)
@@ -5767,12 +5768,14 @@ func replayFinalState(
                     let sortedLangPackDifference = langPackDifference.sorted(by: { lhs, rhs in
                         let lhsVersion: Int32
                         switch lhs {
-                            case let .langPackDifference(_, fromVersion, _, _):
+                            case let .langPackDifference(langPackDifferenceData):
+                                let (fromVersion) = (langPackDifferenceData.fromVersion)
                                 lhsVersion = fromVersion
                         }
                         let rhsVersion: Int32
                         switch rhs {
-                            case let .langPackDifference(_, fromVersion, _, _):
+                            case let .langPackDifference(langPackDifferenceData):
+                                let (fromVersion) = (langPackDifferenceData.fromVersion)
                                 rhsVersion = fromVersion
                         }
                         return lhsVersion < rhsVersion

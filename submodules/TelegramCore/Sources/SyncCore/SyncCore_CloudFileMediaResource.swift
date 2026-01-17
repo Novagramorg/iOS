@@ -714,7 +714,7 @@ public final class WebFileReferenceMediaResource: TelegramMediaResource, MediaRe
     }
     
     var apiInputLocation: Api.InputWebFileLocation {
-        return .inputWebFileLocation(url: self.url, accessHash: self.accessHash)
+        return .inputWebFileLocation(.init(url: self.url, accessHash: self.accessHash))
     }
 }
 
@@ -775,12 +775,12 @@ final class AlbumCoverResource: TelegramMediaResource, MediaResourceWithWebFileR
         if self.isThumbnail {
             flags |= 1 << 2
         }
-        return .inputWebFileAudioAlbumThumbLocation(
+        return .inputWebFileAudioAlbumThumbLocation(.init(
             flags: flags,
             document: document,
             title: requestTitle,
             performer: requestPerformer
-        )
+        ))
     }
 }
 

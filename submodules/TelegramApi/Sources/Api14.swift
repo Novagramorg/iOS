@@ -275,9 +275,45 @@ public extension Api {
 }
 public extension Api {
     enum InputWebFileLocation: TypeConstructorDescription {
-        case inputWebFileAudioAlbumThumbLocation(flags: Int32, document: Api.InputDocument?, title: String?, performer: String?)
-        case inputWebFileGeoPointLocation(geoPoint: Api.InputGeoPoint, accessHash: Int64, w: Int32, h: Int32, zoom: Int32, scale: Int32)
-        case inputWebFileLocation(url: String, accessHash: Int64)
+        public class Cons_inputWebFileAudioAlbumThumbLocation {
+            public var flags: Int32
+            public var document: Api.InputDocument?
+            public var title: String?
+            public var performer: String?
+            public init(flags: Int32, document: Api.InputDocument?, title: String?, performer: String?) {
+                self.flags = flags
+                self.document = document
+                self.title = title
+                self.performer = performer
+            }
+        }
+        public class Cons_inputWebFileGeoPointLocation {
+            public var geoPoint: Api.InputGeoPoint
+            public var accessHash: Int64
+            public var w: Int32
+            public var h: Int32
+            public var zoom: Int32
+            public var scale: Int32
+            public init(geoPoint: Api.InputGeoPoint, accessHash: Int64, w: Int32, h: Int32, zoom: Int32, scale: Int32) {
+                self.geoPoint = geoPoint
+                self.accessHash = accessHash
+                self.w = w
+                self.h = h
+                self.zoom = zoom
+                self.scale = scale
+            }
+        }
+        public class Cons_inputWebFileLocation {
+            public var url: String
+            public var accessHash: Int64
+            public init(url: String, accessHash: Int64) {
+                self.url = url
+                self.accessHash = accessHash
+            }
+        }
+        case inputWebFileAudioAlbumThumbLocation(Cons_inputWebFileAudioAlbumThumbLocation)
+        case inputWebFileGeoPointLocation(Cons_inputWebFileGeoPointLocation)
+        case inputWebFileLocation(Cons_inputWebFileLocation)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -320,7 +356,25 @@ public extension Api {
 }
 public extension Api {
     enum Invoice: TypeConstructorDescription {
-        case invoice(flags: Int32, currency: String, prices: [Api.LabeledPrice], maxTipAmount: Int64?, suggestedTipAmounts: [Int64]?, termsUrl: String?, subscriptionPeriod: Int32?)
+        public class Cons_invoice {
+            public var flags: Int32
+            public var currency: String
+            public var prices: [Api.LabeledPrice]
+            public var maxTipAmount: Int64?
+            public var suggestedTipAmounts: [Int64]?
+            public var termsUrl: String?
+            public var subscriptionPeriod: Int32?
+            public init(flags: Int32, currency: String, prices: [Api.LabeledPrice], maxTipAmount: Int64?, suggestedTipAmounts: [Int64]?, termsUrl: String?, subscriptionPeriod: Int32?) {
+                self.flags = flags
+                self.currency = currency
+                self.prices = prices
+                self.maxTipAmount = maxTipAmount
+                self.suggestedTipAmounts = suggestedTipAmounts
+                self.termsUrl = termsUrl
+                self.subscriptionPeriod = subscriptionPeriod
+            }
+        }
+        case invoice(Cons_invoice)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -349,7 +403,15 @@ public extension Api {
 }
 public extension Api {
     enum JSONObjectValue: TypeConstructorDescription {
-        case jsonObjectValue(key: String, value: Api.JSONValue)
+        public class Cons_jsonObjectValue {
+            public var key: String
+            public var value: Api.JSONValue
+            public init(key: String, value: Api.JSONValue) {
+                self.key = key
+                self.value = value
+            }
+        }
+        case jsonObjectValue(Cons_jsonObjectValue)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -378,12 +440,42 @@ public extension Api {
 }
 public extension Api {
     enum JSONValue: TypeConstructorDescription {
-        case jsonArray(value: [Api.JSONValue])
-        case jsonBool(value: Api.Bool)
+        public class Cons_jsonArray {
+            public var value: [Api.JSONValue]
+            public init(value: [Api.JSONValue]) {
+                self.value = value
+            }
+        }
+        public class Cons_jsonBool {
+            public var value: Api.Bool
+            public init(value: Api.Bool) {
+                self.value = value
+            }
+        }
+        public class Cons_jsonNumber {
+            public var value: Double
+            public init(value: Double) {
+                self.value = value
+            }
+        }
+        public class Cons_jsonObject {
+            public var value: [Api.JSONObjectValue]
+            public init(value: [Api.JSONObjectValue]) {
+                self.value = value
+            }
+        }
+        public class Cons_jsonString {
+            public var value: String
+            public init(value: String) {
+                self.value = value
+            }
+        }
+        case jsonArray(Cons_jsonArray)
+        case jsonBool(Cons_jsonBool)
         case jsonNull
-        case jsonNumber(value: Double)
-        case jsonObject(value: [Api.JSONObjectValue])
-        case jsonString(value: String)
+        case jsonNumber(Cons_jsonNumber)
+        case jsonObject(Cons_jsonObject)
+        case jsonString(Cons_jsonString)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -447,24 +539,188 @@ public extension Api {
 }
 public extension Api {
     indirect enum KeyboardButton: TypeConstructorDescription {
-        case inputKeyboardButtonRequestPeer(flags: Int32, text: String, buttonId: Int32, peerType: Api.RequestPeerType, maxQuantity: Int32)
-        case inputKeyboardButtonUrlAuth(flags: Int32, text: String, fwdText: String?, url: String, bot: Api.InputUser)
-        case inputKeyboardButtonUserProfile(text: String, userId: Api.InputUser)
-        case keyboardButton(text: String)
-        case keyboardButtonBuy(text: String)
-        case keyboardButtonCallback(flags: Int32, text: String, data: Buffer)
-        case keyboardButtonCopy(text: String, copyText: String)
-        case keyboardButtonGame(text: String)
-        case keyboardButtonRequestGeoLocation(text: String)
-        case keyboardButtonRequestPeer(text: String, buttonId: Int32, peerType: Api.RequestPeerType, maxQuantity: Int32)
-        case keyboardButtonRequestPhone(text: String)
-        case keyboardButtonRequestPoll(flags: Int32, quiz: Api.Bool?, text: String)
-        case keyboardButtonSimpleWebView(text: String, url: String)
-        case keyboardButtonSwitchInline(flags: Int32, text: String, query: String, peerTypes: [Api.InlineQueryPeerType]?)
-        case keyboardButtonUrl(text: String, url: String)
-        case keyboardButtonUrlAuth(flags: Int32, text: String, fwdText: String?, url: String, buttonId: Int32)
-        case keyboardButtonUserProfile(text: String, userId: Int64)
-        case keyboardButtonWebView(text: String, url: String)
+        public class Cons_inputKeyboardButtonRequestPeer {
+            public var flags: Int32
+            public var text: String
+            public var buttonId: Int32
+            public var peerType: Api.RequestPeerType
+            public var maxQuantity: Int32
+            public init(flags: Int32, text: String, buttonId: Int32, peerType: Api.RequestPeerType, maxQuantity: Int32) {
+                self.flags = flags
+                self.text = text
+                self.buttonId = buttonId
+                self.peerType = peerType
+                self.maxQuantity = maxQuantity
+            }
+        }
+        public class Cons_inputKeyboardButtonUrlAuth {
+            public var flags: Int32
+            public var text: String
+            public var fwdText: String?
+            public var url: String
+            public var bot: Api.InputUser
+            public init(flags: Int32, text: String, fwdText: String?, url: String, bot: Api.InputUser) {
+                self.flags = flags
+                self.text = text
+                self.fwdText = fwdText
+                self.url = url
+                self.bot = bot
+            }
+        }
+        public class Cons_inputKeyboardButtonUserProfile {
+            public var text: String
+            public var userId: Api.InputUser
+            public init(text: String, userId: Api.InputUser) {
+                self.text = text
+                self.userId = userId
+            }
+        }
+        public class Cons_keyboardButton {
+            public var text: String
+            public init(text: String) {
+                self.text = text
+            }
+        }
+        public class Cons_keyboardButtonBuy {
+            public var text: String
+            public init(text: String) {
+                self.text = text
+            }
+        }
+        public class Cons_keyboardButtonCallback {
+            public var flags: Int32
+            public var text: String
+            public var data: Buffer
+            public init(flags: Int32, text: String, data: Buffer) {
+                self.flags = flags
+                self.text = text
+                self.data = data
+            }
+        }
+        public class Cons_keyboardButtonCopy {
+            public var text: String
+            public var copyText: String
+            public init(text: String, copyText: String) {
+                self.text = text
+                self.copyText = copyText
+            }
+        }
+        public class Cons_keyboardButtonGame {
+            public var text: String
+            public init(text: String) {
+                self.text = text
+            }
+        }
+        public class Cons_keyboardButtonRequestGeoLocation {
+            public var text: String
+            public init(text: String) {
+                self.text = text
+            }
+        }
+        public class Cons_keyboardButtonRequestPeer {
+            public var text: String
+            public var buttonId: Int32
+            public var peerType: Api.RequestPeerType
+            public var maxQuantity: Int32
+            public init(text: String, buttonId: Int32, peerType: Api.RequestPeerType, maxQuantity: Int32) {
+                self.text = text
+                self.buttonId = buttonId
+                self.peerType = peerType
+                self.maxQuantity = maxQuantity
+            }
+        }
+        public class Cons_keyboardButtonRequestPhone {
+            public var text: String
+            public init(text: String) {
+                self.text = text
+            }
+        }
+        public class Cons_keyboardButtonRequestPoll {
+            public var flags: Int32
+            public var quiz: Api.Bool?
+            public var text: String
+            public init(flags: Int32, quiz: Api.Bool?, text: String) {
+                self.flags = flags
+                self.quiz = quiz
+                self.text = text
+            }
+        }
+        public class Cons_keyboardButtonSimpleWebView {
+            public var text: String
+            public var url: String
+            public init(text: String, url: String) {
+                self.text = text
+                self.url = url
+            }
+        }
+        public class Cons_keyboardButtonSwitchInline {
+            public var flags: Int32
+            public var text: String
+            public var query: String
+            public var peerTypes: [Api.InlineQueryPeerType]?
+            public init(flags: Int32, text: String, query: String, peerTypes: [Api.InlineQueryPeerType]?) {
+                self.flags = flags
+                self.text = text
+                self.query = query
+                self.peerTypes = peerTypes
+            }
+        }
+        public class Cons_keyboardButtonUrl {
+            public var text: String
+            public var url: String
+            public init(text: String, url: String) {
+                self.text = text
+                self.url = url
+            }
+        }
+        public class Cons_keyboardButtonUrlAuth {
+            public var flags: Int32
+            public var text: String
+            public var fwdText: String?
+            public var url: String
+            public var buttonId: Int32
+            public init(flags: Int32, text: String, fwdText: String?, url: String, buttonId: Int32) {
+                self.flags = flags
+                self.text = text
+                self.fwdText = fwdText
+                self.url = url
+                self.buttonId = buttonId
+            }
+        }
+        public class Cons_keyboardButtonUserProfile {
+            public var text: String
+            public var userId: Int64
+            public init(text: String, userId: Int64) {
+                self.text = text
+                self.userId = userId
+            }
+        }
+        public class Cons_keyboardButtonWebView {
+            public var text: String
+            public var url: String
+            public init(text: String, url: String) {
+                self.text = text
+                self.url = url
+            }
+        }
+        case inputKeyboardButtonRequestPeer(Cons_inputKeyboardButtonRequestPeer)
+        case inputKeyboardButtonUrlAuth(Cons_inputKeyboardButtonUrlAuth)
+        case inputKeyboardButtonUserProfile(Cons_inputKeyboardButtonUserProfile)
+        case keyboardButton(Cons_keyboardButton)
+        case keyboardButtonBuy(Cons_keyboardButtonBuy)
+        case keyboardButtonCallback(Cons_keyboardButtonCallback)
+        case keyboardButtonCopy(Cons_keyboardButtonCopy)
+        case keyboardButtonGame(Cons_keyboardButtonGame)
+        case keyboardButtonRequestGeoLocation(Cons_keyboardButtonRequestGeoLocation)
+        case keyboardButtonRequestPeer(Cons_keyboardButtonRequestPeer)
+        case keyboardButtonRequestPhone(Cons_keyboardButtonRequestPhone)
+        case keyboardButtonRequestPoll(Cons_keyboardButtonRequestPoll)
+        case keyboardButtonSimpleWebView(Cons_keyboardButtonSimpleWebView)
+        case keyboardButtonSwitchInline(Cons_keyboardButtonSwitchInline)
+        case keyboardButtonUrl(Cons_keyboardButtonUrl)
+        case keyboardButtonUrlAuth(Cons_keyboardButtonUrlAuth)
+        case keyboardButtonUserProfile(Cons_keyboardButtonUserProfile)
+        case keyboardButtonWebView(Cons_keyboardButtonWebView)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

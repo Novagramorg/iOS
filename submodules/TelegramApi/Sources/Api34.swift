@@ -1,7 +1,7 @@
 public extension Api.messages {
-    enum FavedStickers: TypeConstructorDescription {
-        case favedStickers(hash: Int64, packs: [Api.StickerPack], stickers: [Api.Document])
-        case favedStickersNotModified
+    enum AllStickers: TypeConstructorDescription {
+        case allStickers(hash: Int64, sets: [Api.StickerSet])
+        case allStickersNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -19,14 +19,14 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_favedStickers(_ reader: BufferReader) -> FavedStickers? {
+        public static func parse_allStickers(_ reader: BufferReader) -> AllStickers? {
             #if DEBUG
             preconditionFailure()
             #else
             error
             #endif
         }
-        public static func parse_favedStickersNotModified(_ reader: BufferReader) -> FavedStickers? {
+        public static func parse_allStickersNotModified(_ reader: BufferReader) -> AllStickers? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -36,9 +36,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum FeaturedStickers: TypeConstructorDescription {
-        case featuredStickers(flags: Int32, hash: Int64, count: Int32, sets: [Api.StickerSetCovered], unread: [Int64])
-        case featuredStickersNotModified(count: Int32)
+    enum ArchivedStickers: TypeConstructorDescription {
+        case archivedStickers(count: Int32, sets: [Api.StickerSetCovered])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -56,14 +55,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_featuredStickers(_ reader: BufferReader) -> FeaturedStickers? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_featuredStickersNotModified(_ reader: BufferReader) -> FeaturedStickers? {
+        public static func parse_archivedStickers(_ reader: BufferReader) -> ArchivedStickers? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -73,8 +65,9 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum ForumTopics: TypeConstructorDescription {
-        case forumTopics(flags: Int32, count: Int32, topics: [Api.ForumTopic], messages: [Api.Message], chats: [Api.Chat], users: [Api.User], pts: Int32)
+    enum AvailableEffects: TypeConstructorDescription {
+        case availableEffects(hash: Int32, effects: [Api.AvailableEffect], documents: [Api.Document])
+        case availableEffectsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -92,7 +85,14 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_forumTopics(_ reader: BufferReader) -> ForumTopics? {
+        public static func parse_availableEffects(_ reader: BufferReader) -> AvailableEffects? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_availableEffectsNotModified(_ reader: BufferReader) -> AvailableEffects? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -102,9 +102,9 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum FoundStickerSets: TypeConstructorDescription {
-        case foundStickerSets(hash: Int64, sets: [Api.StickerSetCovered])
-        case foundStickerSetsNotModified
+    enum AvailableReactions: TypeConstructorDescription {
+        case availableReactions(hash: Int32, reactions: [Api.AvailableReaction])
+        case availableReactionsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -122,14 +122,14 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_foundStickerSets(_ reader: BufferReader) -> FoundStickerSets? {
+        public static func parse_availableReactions(_ reader: BufferReader) -> AvailableReactions? {
             #if DEBUG
             preconditionFailure()
             #else
             error
             #endif
         }
-        public static func parse_foundStickerSetsNotModified(_ reader: BufferReader) -> FoundStickerSets? {
+        public static func parse_availableReactionsNotModified(_ reader: BufferReader) -> AvailableReactions? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -139,9 +139,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum FoundStickers: TypeConstructorDescription {
-        case foundStickers(flags: Int32, nextOffset: Int32?, hash: Int64, stickers: [Api.Document])
-        case foundStickersNotModified(flags: Int32, nextOffset: Int32?)
+    enum BotApp: TypeConstructorDescription {
+        case botApp(flags: Int32, app: Api.BotApp)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -159,14 +158,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_foundStickers(_ reader: BufferReader) -> FoundStickers? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_foundStickersNotModified(_ reader: BufferReader) -> FoundStickers? {
+        public static func parse_botApp(_ reader: BufferReader) -> BotApp? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -176,8 +168,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum HighScores: TypeConstructorDescription {
-        case highScores(scores: [Api.HighScore], users: [Api.User])
+    enum BotCallbackAnswer: TypeConstructorDescription {
+        case botCallbackAnswer(flags: Int32, message: String?, url: String?, cacheTime: Int32)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -195,7 +187,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_highScores(_ reader: BufferReader) -> HighScores? {
+        public static func parse_botCallbackAnswer(_ reader: BufferReader) -> BotCallbackAnswer? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -205,8 +197,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum HistoryImport: TypeConstructorDescription {
-        case historyImport(id: Int64)
+    enum BotPreparedInlineMessage: TypeConstructorDescription {
+        case botPreparedInlineMessage(id: String, expireDate: Int32)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -224,7 +216,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_historyImport(_ reader: BufferReader) -> HistoryImport? {
+        public static func parse_botPreparedInlineMessage(_ reader: BufferReader) -> BotPreparedInlineMessage? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -234,8 +226,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum HistoryImportParsed: TypeConstructorDescription {
-        case historyImportParsed(flags: Int32, title: String?)
+    enum BotResults: TypeConstructorDescription {
+        case botResults(flags: Int32, queryId: Int64, nextOffset: String?, switchPm: Api.InlineBotSwitchPM?, switchWebview: Api.InlineBotWebView?, results: [Api.BotInlineResult], cacheTime: Int32, users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -253,7 +245,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_historyImportParsed(_ reader: BufferReader) -> HistoryImportParsed? {
+        public static func parse_botResults(_ reader: BufferReader) -> BotResults? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -263,8 +255,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum InactiveChats: TypeConstructorDescription {
-        case inactiveChats(dates: [Int32], chats: [Api.Chat], users: [Api.User])
+    enum ChatAdminsWithInvites: TypeConstructorDescription {
+        case chatAdminsWithInvites(admins: [Api.ChatAdminWithInvites], users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -282,7 +274,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_inactiveChats(_ reader: BufferReader) -> InactiveChats? {
+        public static func parse_chatAdminsWithInvites(_ reader: BufferReader) -> ChatAdminsWithInvites? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -292,8 +284,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    indirect enum InvitedUsers: TypeConstructorDescription {
-        case invitedUsers(updates: Api.Updates, missingInvitees: [Api.MissingInvitee])
+    enum ChatFull: TypeConstructorDescription {
+        case chatFull(fullChat: Api.ChatFull, chats: [Api.Chat], users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -311,7 +303,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_invitedUsers(_ reader: BufferReader) -> InvitedUsers? {
+        public static func parse_chatFull(_ reader: BufferReader) -> ChatFull? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -321,8 +313,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum MessageEditData: TypeConstructorDescription {
-        case messageEditData(flags: Int32)
+    enum ChatInviteImporters: TypeConstructorDescription {
+        case chatInviteImporters(count: Int32, importers: [Api.ChatInviteImporter], users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -340,7 +332,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_messageEditData(_ reader: BufferReader) -> MessageEditData? {
+        public static func parse_chatInviteImporters(_ reader: BufferReader) -> ChatInviteImporters? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -350,8 +342,9 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum MessageReactionsList: TypeConstructorDescription {
-        case messageReactionsList(flags: Int32, count: Int32, reactions: [Api.MessagePeerReaction], chats: [Api.Chat], users: [Api.User], nextOffset: String?)
+    enum Chats: TypeConstructorDescription {
+        case chats(chats: [Api.Chat])
+        case chatsSlice(count: Int32, chats: [Api.Chat])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -369,7 +362,14 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_messageReactionsList(_ reader: BufferReader) -> MessageReactionsList? {
+        public static func parse_chats(_ reader: BufferReader) -> Chats? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_chatsSlice(_ reader: BufferReader) -> Chats? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -379,8 +379,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum MessageViews: TypeConstructorDescription {
-        case messageViews(views: [Api.MessageViews], chats: [Api.Chat], users: [Api.User])
+    enum CheckedHistoryImportPeer: TypeConstructorDescription {
+        case checkedHistoryImportPeer(confirmText: String)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -398,7 +398,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_messageViews(_ reader: BufferReader) -> MessageViews? {
+        public static func parse_checkedHistoryImportPeer(_ reader: BufferReader) -> CheckedHistoryImportPeer? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -408,11 +408,9 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum Messages: TypeConstructorDescription {
-        case channelMessages(flags: Int32, pts: Int32, count: Int32, offsetIdOffset: Int32?, messages: [Api.Message], topics: [Api.ForumTopic], chats: [Api.Chat], users: [Api.User])
-        case messages(messages: [Api.Message], topics: [Api.ForumTopic], chats: [Api.Chat], users: [Api.User])
-        case messagesNotModified(count: Int32)
-        case messagesSlice(flags: Int32, count: Int32, nextRate: Int32?, offsetIdOffset: Int32?, searchFlood: Api.SearchPostsFlood?, messages: [Api.Message], topics: [Api.ForumTopic], chats: [Api.Chat], users: [Api.User])
+    enum DhConfig: TypeConstructorDescription {
+        case dhConfig(g: Int32, p: Buffer, version: Int32, random: Buffer)
+        case dhConfigNotModified(random: Buffer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -430,28 +428,14 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_channelMessages(_ reader: BufferReader) -> Messages? {
+        public static func parse_dhConfig(_ reader: BufferReader) -> DhConfig? {
             #if DEBUG
             preconditionFailure()
             #else
             error
             #endif
         }
-        public static func parse_messages(_ reader: BufferReader) -> Messages? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_messagesNotModified(_ reader: BufferReader) -> Messages? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_messagesSlice(_ reader: BufferReader) -> Messages? {
+        public static func parse_dhConfigNotModified(_ reader: BufferReader) -> DhConfig? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -461,8 +445,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum MyStickers: TypeConstructorDescription {
-        case myStickers(count: Int32, sets: [Api.StickerSetCovered])
+    enum DialogFilters: TypeConstructorDescription {
+        case dialogFilters(flags: Int32, filters: [Api.DialogFilter])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -480,7 +464,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_myStickers(_ reader: BufferReader) -> MyStickers? {
+        public static func parse_dialogFilters(_ reader: BufferReader) -> DialogFilters? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -490,8 +474,10 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum PeerDialogs: TypeConstructorDescription {
-        case peerDialogs(dialogs: [Api.Dialog], messages: [Api.Message], chats: [Api.Chat], users: [Api.User], state: Api.updates.State)
+    enum Dialogs: TypeConstructorDescription {
+        case dialogs(dialogs: [Api.Dialog], messages: [Api.Message], chats: [Api.Chat], users: [Api.User])
+        case dialogsNotModified(count: Int32)
+        case dialogsSlice(count: Int32, dialogs: [Api.Dialog], messages: [Api.Message], chats: [Api.Chat], users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -509,7 +495,21 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_peerDialogs(_ reader: BufferReader) -> PeerDialogs? {
+        public static func parse_dialogs(_ reader: BufferReader) -> Dialogs? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_dialogsNotModified(_ reader: BufferReader) -> Dialogs? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_dialogsSlice(_ reader: BufferReader) -> Dialogs? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -519,8 +519,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum PeerSettings: TypeConstructorDescription {
-        case peerSettings(settings: Api.PeerSettings, chats: [Api.Chat], users: [Api.User])
+    enum DiscussionMessage: TypeConstructorDescription {
+        case discussionMessage(flags: Int32, messages: [Api.Message], maxId: Int32?, readInboxMaxId: Int32?, readOutboxMaxId: Int32?, unreadCount: Int32, chats: [Api.Chat], users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -538,7 +538,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_peerSettings(_ reader: BufferReader) -> PeerSettings? {
+        public static func parse_discussionMessage(_ reader: BufferReader) -> DiscussionMessage? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -548,8 +548,9 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum PreparedInlineMessage: TypeConstructorDescription {
-        case preparedInlineMessage(queryId: Int64, result: Api.BotInlineResult, peerTypes: [Api.InlineQueryPeerType], cacheTime: Int32, users: [Api.User])
+    enum EmojiGameInfo: TypeConstructorDescription {
+        case emojiGameDiceInfo(flags: Int32, gameHash: String, prevStake: Int64, currentStreak: Int32, params: [Int32], playsLeft: Int32?)
+        case emojiGameUnavailable
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -567,7 +568,14 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_preparedInlineMessage(_ reader: BufferReader) -> PreparedInlineMessage? {
+        public static func parse_emojiGameDiceInfo(_ reader: BufferReader) -> EmojiGameInfo? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_emojiGameUnavailable(_ reader: BufferReader) -> EmojiGameInfo? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -577,9 +585,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum QuickReplies: TypeConstructorDescription {
-        case quickReplies(quickReplies: [Api.QuickReply], messages: [Api.Message], chats: [Api.Chat], users: [Api.User])
-        case quickRepliesNotModified
+    enum EmojiGameOutcome: TypeConstructorDescription {
+        case emojiGameOutcome(seed: Buffer, stakeTonAmount: Int64, tonAmount: Int64)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -597,14 +604,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_quickReplies(_ reader: BufferReader) -> QuickReplies? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_quickRepliesNotModified(_ reader: BufferReader) -> QuickReplies? {
+        public static func parse_emojiGameOutcome(_ reader: BufferReader) -> EmojiGameOutcome? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -614,9 +614,9 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum Reactions: TypeConstructorDescription {
-        case reactions(hash: Int64, reactions: [Api.Reaction])
-        case reactionsNotModified
+    enum EmojiGroups: TypeConstructorDescription {
+        case emojiGroups(hash: Int32, groups: [Api.EmojiGroup])
+        case emojiGroupsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -634,14 +634,14 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_reactions(_ reader: BufferReader) -> Reactions? {
+        public static func parse_emojiGroups(_ reader: BufferReader) -> EmojiGroups? {
             #if DEBUG
             preconditionFailure()
             #else
             error
             #endif
         }
-        public static func parse_reactionsNotModified(_ reader: BufferReader) -> Reactions? {
+        public static func parse_emojiGroupsNotModified(_ reader: BufferReader) -> EmojiGroups? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -651,9 +651,9 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum RecentStickers: TypeConstructorDescription {
-        case recentStickers(hash: Int64, packs: [Api.StickerPack], stickers: [Api.Document], dates: [Int32])
-        case recentStickersNotModified
+    enum ExportedChatInvite: TypeConstructorDescription {
+        case exportedChatInvite(invite: Api.ExportedChatInvite, users: [Api.User])
+        case exportedChatInviteReplaced(invite: Api.ExportedChatInvite, newInvite: Api.ExportedChatInvite, users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -671,14 +671,14 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_recentStickers(_ reader: BufferReader) -> RecentStickers? {
+        public static func parse_exportedChatInvite(_ reader: BufferReader) -> ExportedChatInvite? {
             #if DEBUG
             preconditionFailure()
             #else
             error
             #endif
         }
-        public static func parse_recentStickersNotModified(_ reader: BufferReader) -> RecentStickers? {
+        public static func parse_exportedChatInviteReplaced(_ reader: BufferReader) -> ExportedChatInvite? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -688,10 +688,8 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
-    enum SavedDialogs: TypeConstructorDescription {
-        case savedDialogs(dialogs: [Api.SavedDialog], messages: [Api.Message], chats: [Api.Chat], users: [Api.User])
-        case savedDialogsNotModified(count: Int32)
-        case savedDialogsSlice(count: Int32, dialogs: [Api.SavedDialog], messages: [Api.Message], chats: [Api.Chat], users: [Api.User])
+    enum ExportedChatInvites: TypeConstructorDescription {
+        case exportedChatInvites(count: Int32, invites: [Api.ExportedChatInvite], users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -709,21 +707,7 @@ public extension Api.messages {
             #endif
         }
 
-        public static func parse_savedDialogs(_ reader: BufferReader) -> SavedDialogs? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_savedDialogsNotModified(_ reader: BufferReader) -> SavedDialogs? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_savedDialogsSlice(_ reader: BufferReader) -> SavedDialogs? {
+        public static func parse_exportedChatInvites(_ reader: BufferReader) -> ExportedChatInvites? {
             #if DEBUG
             preconditionFailure()
             #else

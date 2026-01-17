@@ -189,7 +189,8 @@ public enum BotPaymentFormRequestError {
 extension BotPaymentInvoice {
     init(apiInvoice: Api.Invoice) {
         switch apiInvoice {
-        case let .invoice(flags, currency, prices, maxTipAmount, suggestedTipAmounts, termsUrl, subscriptionPeriod):
+        case let .invoice(invoiceData):
+            let (flags, currency, prices, maxTipAmount, suggestedTipAmounts, termsUrl, subscriptionPeriod) = (invoiceData.flags, invoiceData.currency, invoiceData.prices, invoiceData.maxTipAmount, invoiceData.suggestedTipAmounts, invoiceData.termsUrl, invoiceData.subscriptionPeriod)
             var fields = BotPaymentInvoiceFields()
             if (flags & (1 << 1)) != 0 {
                 fields.insert(.name)
@@ -223,7 +224,8 @@ extension BotPaymentInvoice {
             }
             self.init(isTest: (flags & (1 << 0)) != 0, requestedFields: fields, currency: currency, prices: prices.map {
                 switch $0 {
-                case let .labeledPrice(label, amount):
+                case let .labeledPrice(labeledPriceData):
+                    let (label, amount) = (labeledPriceData.label, labeledPriceData.amount)
                     return BotPaymentPrice(label: label, amount: amount)
                 }
             }, tip: parsedTip, termsInfo: termsInfo, subscriptionPeriod: subscriptionPeriod)
@@ -615,7 +617,8 @@ extension BotPaymentShippingOption {
             case let .shippingOption(id, title, prices):
                 self.init(id: id, title: title, prices: prices.map {
                     switch $0 {
-                        case let .labeledPrice(label, amount):
+                        case let .labeledPrice(labeledPriceData):
+                            let (label, amount) = (labeledPriceData.label, labeledPriceData.amount)
                             return BotPaymentPrice(label: label, amount: amount)
                         }
                 })

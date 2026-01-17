@@ -1525,7 +1525,7 @@ public class Account {
                     return .complete()
                 } else {
                     return network.request(Api.functions.help.saveAppLog(events: events.map { event -> Api.InputAppEvent in
-                        return .inputAppEvent(.init(time: event.0, type: "", peer: 0, data: .jsonString(value: event.1)))
+                        return .inputAppEvent(.init(time: event.0, type: "", peer: 0, data: .jsonString(.init(value: event.1))))
                     }))
                     |> ignoreValues
                     |> `catch` { _ -> Signal<Never, NoError> in
