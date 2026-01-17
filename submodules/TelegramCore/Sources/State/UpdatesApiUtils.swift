@@ -5,10 +5,12 @@ import TelegramApi
 
 private func collectPreCachedResources(for photo: Api.Photo) -> [(MediaResource, Data)]? {
     switch photo {
-        case let .photo(_, id, accessHash, fileReference, _, sizes, _, dcId):
+        case let .photo(photoData):
+            let (id, accessHash, fileReference, sizes, dcId) = (photoData.id, photoData.accessHash, photoData.fileReference, photoData.sizes, photoData.dcId)
             for size in sizes {
                 switch size {
-                    case let .photoCachedSize(type, _, _, bytes):
+                    case let .photoCachedSize(photoCachedSizeData):
+                        let (type, bytes) = (photoCachedSizeData.type, photoCachedSizeData.bytes)
                         let resource = CloudPhotoSizeMediaResource(datacenterId: dcId, photoId: id, accessHash: accessHash, sizeSpec: type, size: nil, fileReference: fileReference.makeData())
                         let data = bytes.makeData()
                         return [(resource, data)]
@@ -29,7 +31,8 @@ private func collectPreCachedResources(for document: Api.Document) -> [(MediaRes
             if let thumbs = thumbs {
                 for thumb in thumbs {
                     switch thumb {
-                        case let .photoCachedSize(type, _, _, bytes):
+                        case let .photoCachedSize(photoCachedSizeData):
+                            let (type, bytes) = (photoCachedSizeData.type, photoCachedSizeData.bytes)
                             let resource = CloudDocumentSizeMediaResource(datacenterId: dcId, documentId: id, accessHash: accessHash, sizeSpec: type, fileReference: fileReference.makeData())
                             let data = bytes.makeData()
                             return [(resource, data)]

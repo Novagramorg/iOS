@@ -330,10 +330,12 @@ public enum CallSessionConnection: Equatable {
 
 private func parseConnection(_ apiConnection: Api.PhoneConnection) -> CallSessionConnection {
     switch apiConnection {
-    case let .phoneConnection(flags, id, ip, ipv6, port, peerTag):
+    case let .phoneConnection(phoneConnectionData):
+        let (flags, id, ip, ipv6, port, peerTag) = (phoneConnectionData.flags, phoneConnectionData.id, phoneConnectionData.ip, phoneConnectionData.ipv6, phoneConnectionData.port, phoneConnectionData.peerTag)
         let isTcp = (flags & (1 << 0)) != 0
         return .reflector(CallSessionConnection.Reflector(id: id, ip: ip, ipv6: ipv6, isTcp: isTcp, port: port, peerTag: peerTag.makeData()))
-    case let .phoneConnectionWebrtc(flags, id, ip, ipv6, port, username, password):
+    case let .phoneConnectionWebrtc(phoneConnectionWebrtcData):
+        let (flags, id, ip, ipv6, port, username, password) = (phoneConnectionWebrtcData.flags, phoneConnectionWebrtcData.id, phoneConnectionWebrtcData.ip, phoneConnectionWebrtcData.ipv6, phoneConnectionWebrtcData.port, phoneConnectionWebrtcData.username, phoneConnectionWebrtcData.password)
         return .webRtcReflector(CallSessionConnection.WebRtcReflector(
             id: id,
             hasStun: (flags & (1 << 1)) != 0,
@@ -1078,7 +1080,8 @@ private final class CallSessionManagerContext {
             let (id, gB, remoteProtocol) = (phoneCallAcceptedData.id, phoneCallAcceptedData.gB, phoneCallAcceptedData.protocol)
             let remoteVersions: [String]
             switch remoteProtocol {
-            case let .phoneCallProtocol(_, _, _, versions):
+            case let .phoneCallProtocol(phoneCallProtocolData):
+                let versions = phoneCallProtocolData.libraryVersions
                 remoteVersions = versions
             }
             if let internalId = self.contextIdByStableId[id] {
@@ -1205,7 +1208,8 @@ private final class CallSessionManagerContext {
                             if let (key, calculatedKeyId, keyVisualHash) = self.makeSessionEncryptionKey(config: config, gAHash: gAHash, b: b, gA: gAOrB.makeData()) {
                                 if keyFingerprint == calculatedKeyId {
                                     switch callProtocol {
-                                        case let .phoneCallProtocol(_, _, maxLayer, versions):
+                                        case let .phoneCallProtocol(phoneCallProtocolData):
+                                            let (maxLayer, versions) = (phoneCallProtocolData.maxLayer, phoneCallProtocolData.libraryVersions)
                                             if !versions.isEmpty {
                                                 var customParametersValue: String?
                                                 switch customParameters {
@@ -1233,7 +1237,8 @@ private final class CallSessionManagerContext {
                             }
                         case let .confirming(id, accessHash, key, keyId, keyVisualHash, _):
                             switch callProtocol {
-                                case let .phoneCallProtocol(_, _, maxLayer, versions):
+                                case let .phoneCallProtocol(phoneCallProtocolData):
+                                    let (maxLayer, versions) = (phoneCallProtocolData.maxLayer, phoneCallProtocolData.libraryVersions)
                                     if !versions.isEmpty {
                                         var customParametersValue: String?
                                         switch customParameters {
@@ -1263,7 +1268,8 @@ private final class CallSessionManagerContext {
             let isVideo = (flags & (1 << 6)) != 0
             let versions: [String]
             switch requestedProtocol {
-            case let .phoneCallProtocol(_, _, _, libraryVersions):
+            case let .phoneCallProtocol(phoneCallProtocolData):
+                let libraryVersions = phoneCallProtocolData.libraryVersions
                 versions = libraryVersions
             }
             if self.contextIdByStableId[id] == nil {
@@ -1607,7 +1613,7 @@ private func acceptCallSession(accountPeerId: PeerId, postbox: Postbox, network:
             return .single(.failed)
         }
                 
-        return network.request(Api.functions.phone.acceptCall(peer: .inputPhoneCall(.init(id: stableId, accessHash: accessHash)), gB: Buffer(data: gb), protocol: .phoneCallProtocol(flags: (1 << 0) | (1 << 1), minLayer: minLayer, maxLayer: maxLayer, libraryVersions: versions)))
+        return network.request(Api.functions.phone.acceptCall(peer: .inputPhoneCall(.init(id: stableId, accessHash: accessHash)), gB: Buffer(data: gb), protocol: .phoneCallProtocol(.init(flags: (1 << 0) | (1 << 1), minLayer: minLayer, maxLayer: maxLayer, libraryVersions: versions))))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.phone.PhoneCall?, NoError> in
             return .single(nil)
@@ -1628,7 +1634,8 @@ private func acceptCallSession(accountPeerId: PeerId, postbox: Postbox, network:
                             let (flags, id, gAOrB, callProtocol, connections, startDate, customParameters) = (phoneCallData.flags, phoneCallData.id, phoneCallData.gAOrB, phoneCallData.protocol, phoneCallData.connections, phoneCallData.startDate, phoneCallData.customParameters)
                             if id == stableId {
                                 switch callProtocol{
-                                    case let .phoneCallProtocol(_, _, maxLayer, versions):
+                                    case let .phoneCallProtocol(phoneCallProtocolData):
+                                        let (maxLayer, versions) = (phoneCallProtocolData.maxLayer, phoneCallProtocolData.libraryVersions)
                                         if !versions.isEmpty {
                                             var customParametersValue: String?
                                             switch customParameters {
@@ -1683,7 +1690,7 @@ private func requestCallSession(postbox: Postbox, network: Network, peerId: Peer
                     callFlags |= 1 << 0
                 }
                 
-                return network.request(Api.functions.phone.requestCall(flags: callFlags, userId: inputUser, randomId: Int32(bitPattern: arc4random()), gAHash: Buffer(data: gAHash), protocol: .phoneCallProtocol(flags: (1 << 0) | (1 << 1), minLayer: minLayer, maxLayer: maxLayer, libraryVersions: versions)))
+                return network.request(Api.functions.phone.requestCall(flags: callFlags, userId: inputUser, randomId: Int32(bitPattern: arc4random()), gAHash: Buffer(data: gAHash), protocol: .phoneCallProtocol(.init(flags: (1 << 0) | (1 << 1), minLayer: minLayer, maxLayer: maxLayer, libraryVersions: versions))))
                 |> map { result -> RequestCallSessionResult in
                     switch result {
                         case let .phoneCall(phoneCall, _):
@@ -1722,7 +1729,7 @@ private func requestCallSession(postbox: Postbox, network: Network, peerId: Peer
 }
 
 private func confirmCallSession(network: Network, stableId: CallSessionStableId, accessHash: Int64, gA: Data, keyFingerprint: Int64, maxLayer: Int32, versions: [String]) -> Signal<Api.PhoneCall?, NoError> {
-    return network.request(Api.functions.phone.confirmCall(peer: Api.InputPhoneCall.inputPhoneCall(.init(id: stableId, accessHash: accessHash)), gA: Buffer(data: gA), keyFingerprint: keyFingerprint, protocol: .phoneCallProtocol(flags: (1 << 0) | (1 << 1), minLayer: minLayer, maxLayer: maxLayer, libraryVersions: versions)))
+    return network.request(Api.functions.phone.confirmCall(peer: Api.InputPhoneCall.inputPhoneCall(.init(id: stableId, accessHash: accessHash)), gA: Buffer(data: gA), keyFingerprint: keyFingerprint, protocol: .phoneCallProtocol(.init(flags: (1 << 0) | (1 << 1), minLayer: minLayer, maxLayer: maxLayer, libraryVersions: versions))))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.phone.PhoneCall?, NoError> in
             return .single(nil)

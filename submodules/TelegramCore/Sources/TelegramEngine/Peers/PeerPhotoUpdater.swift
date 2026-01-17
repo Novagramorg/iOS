@@ -240,17 +240,20 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                                             switch apiPhoto {
                                                 case .photoEmpty:
                                                     break
-                                                case let .photo(_, id, accessHash, fileReference, _, sizes, videoSizes, dcId):
-                                                    var sizes = sizes
+                                                case let .photo(photoData):
+                                                    let (id, accessHash, fileReference, apiSizes, videoSizes, dcId) = (photoData.id, photoData.accessHash, photoData.fileReference, photoData.sizes, photoData.videoSizes, photoData.dcId)
+                                                    var sizes = apiSizes
                                                     if sizes.count == 3 {
                                                         sizes.remove(at: 1)
                                                     }
                                                     for size in sizes {
                                                         switch size {
-                                                            case let .photoSize(_, w, h, _):
+                                                            case let .photoSize(photoSizeData):
+                                                                let (w, h) = (photoSizeData.w, photoSizeData.h)
                                                                 representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: CloudPeerPhotoSizeMediaResource(datacenterId: dcId, photoId: id, sizeSpec: w <= 200 ? .small : .fullSize, volumeId: nil, localId: nil), progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
-                                                            case let .photoSizeProgressive(_, w, h, sizes):
-                                                                representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: CloudPeerPhotoSizeMediaResource(datacenterId: dcId, photoId: id, sizeSpec: w <= 200 ? .small : .fullSize, volumeId: nil, localId: nil), progressiveSizes: sizes, immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
+                                                            case let .photoSizeProgressive(photoSizeProgressiveData):
+                                                                let (w, h, progressiveSizes) = (photoSizeProgressiveData.w, photoSizeProgressiveData.h, photoSizeProgressiveData.sizes)
+                                                                representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: CloudPeerPhotoSizeMediaResource(datacenterId: dcId, photoId: id, sizeSpec: w <= 200 ? .small : .fullSize, volumeId: nil, localId: nil), progressiveSizes: progressiveSizes, immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
                                                             default:
                                                                 break
                                                         }
@@ -452,17 +455,20 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                             switch apiPhoto {
                                 case .photoEmpty:
                                     break
-                                case let .photo(_, id, _, _, _, sizes, _, dcId):
-                                    var sizes = sizes
+                                case let .photo(photoData):
+                                    let (id, apiSizes, dcId) = (photoData.id, photoData.sizes, photoData.dcId)
+                                    var sizes = apiSizes
                                     if sizes.count == 3 {
                                         sizes.remove(at: 1)
                                     }
                                     for size in sizes {
                                         switch size {
-                                            case let .photoSize(_, w, h, _):
+                                            case let .photoSize(photoSizeData):
+                                                let (w, h) = (photoSizeData.w, photoSizeData.h)
                                                 representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: CloudPeerPhotoSizeMediaResource(datacenterId: dcId, photoId: id, sizeSpec: w <= 200 ? .small : .fullSize, volumeId: nil, localId: nil), progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
-                                            case let .photoSizeProgressive(_, w, h, sizes):
-                                                representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: CloudPeerPhotoSizeMediaResource(datacenterId: dcId, photoId: id, sizeSpec: w <= 200 ? .small : .fullSize, volumeId: nil, localId: nil), progressiveSizes: sizes, immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
+                                            case let .photoSizeProgressive(photoSizeProgressiveData):
+                                                let (w, h, progressiveSizes) = (photoSizeProgressiveData.w, photoSizeProgressiveData.h, photoSizeProgressiveData.sizes)
+                                                representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: CloudPeerPhotoSizeMediaResource(datacenterId: dcId, photoId: id, sizeSpec: w <= 200 ? .small : .fullSize, volumeId: nil, localId: nil), progressiveSizes: progressiveSizes, immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
                                             default:
                                                 break
                                         }

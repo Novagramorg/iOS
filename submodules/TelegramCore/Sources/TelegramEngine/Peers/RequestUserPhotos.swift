@@ -53,7 +53,8 @@ func _internal_requestPeerPhotos(accountPeerId: PeerId, postbox: Postbox, networ
                         if let image = telegramMediaImageFromApiPhoto(photos[i]), let reference = image.reference {
                             var date: Int32 = 0
                             switch photos[i] {
-                                case let .photo(_, _, _, _, apiDate, _, _, _):
+                                case let .photo(photoData):
+                                    let apiDate = photoData.date
                                     date = apiDate
                                 case .photoEmpty:
                                     break
