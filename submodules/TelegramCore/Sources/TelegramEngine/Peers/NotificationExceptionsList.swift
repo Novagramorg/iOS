@@ -51,7 +51,8 @@ func _internal_notificationExceptionsList(accountPeerId: PeerId, postbox: Postbo
                     switch update {
                     case let .updateNotifySettings(apiPeer, notifySettings):
                         switch apiPeer {
-                        case let .notifyPeer(notifyPeer):
+                        case let .notifyPeer(notifyPeerData):
+                            let notifyPeer = notifyPeerData.peer
                             let peerId: PeerId
                             switch notifyPeer {
                             case let .peerUser(userId):

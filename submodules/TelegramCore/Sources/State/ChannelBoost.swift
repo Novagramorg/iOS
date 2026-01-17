@@ -552,7 +552,8 @@ extension MyBoostStatus {
             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
             for boost in myBoosts {
                 switch boost {
-                case let .myBoost(_, slot, peer, date, expires, cooldownUntilDate):
+                case let .myBoost(myBoostData):
+                    let (slot, peer, date, expires, cooldownUntilDate) = (myBoostData.slot, myBoostData.peer, myBoostData.date, myBoostData.expires, myBoostData.cooldownUntilDate)
                     var boostPeer: EnginePeer?
                     if let peerId = peer?.peerId, let peer = transaction.getPeer(peerId) {
                         boostPeer = EnginePeer(peer)

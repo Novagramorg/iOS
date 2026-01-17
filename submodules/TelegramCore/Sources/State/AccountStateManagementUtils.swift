@@ -1253,10 +1253,12 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 updatedState.updateAudioTranscription(messageId: MessageId(peerId: peer.peerId, namespace: Namespaces.Message.Cloud, id: msgId), id: transcriptionId, isPending: isPending, text: text)
             case let .updateNotifySettings(apiPeer, apiNotificationSettings):
                 switch apiPeer {
-                    case let .notifyPeer(peer):
+                    case let .notifyPeer(notifyPeerData):
+                        let peer = notifyPeerData.peer
                         let notificationSettings = TelegramPeerNotificationSettings(apiSettings: apiNotificationSettings)
                         updatedState.updateNotificationSettings(.peer(peerId: peer.peerId, threadId: nil), notificationSettings: notificationSettings)
-                    case let .notifyForumTopic(peer, topMsgId):
+                    case let .notifyForumTopic(notifyForumTopicData):
+                        let (peer, topMsgId) = (notifyForumTopicData.peer, notifyForumTopicData.topMsgId)
                         let notificationSettings = TelegramPeerNotificationSettings(apiSettings: apiNotificationSettings)
                         updatedState.updateNotificationSettings(.peer(peerId: peer.peerId, threadId: Int64(topMsgId)), notificationSettings: notificationSettings)
                     case .notifyUsers:

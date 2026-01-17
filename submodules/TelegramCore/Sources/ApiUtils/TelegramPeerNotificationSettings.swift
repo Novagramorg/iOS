@@ -68,7 +68,8 @@ extension PeerMessageSound {
             self = .default
         case .notificationSoundNone:
             self = .none
-        case let .notificationSoundLocal(_, data):
+        case let .notificationSoundLocal(notificationSoundLocalData):
+            let (_, data) = (notificationSoundLocalData.title, notificationSoundLocalData.data)
             var rawApiSound = data
             if let index = rawApiSound.firstIndex(of: ".") {
                 rawApiSound = String(rawApiSound[..<index])
@@ -94,7 +95,8 @@ extension PeerMessageSound {
                 }
             }
             self = parsedSound
-        case let .notificationSoundRingtone(id):
+        case let .notificationSoundRingtone(notificationSoundRingtoneData):
+            let id = notificationSoundRingtoneData.id
             self = .cloud(fileId: id)
         }
     }
@@ -107,12 +109,12 @@ extension PeerMessageSound {
             return .notificationSoundDefault
         case let .bundledModern(id):
             let string = "\(id + 100)"
-            return .notificationSoundLocal(title: string, data: string)
+            return .notificationSoundLocal(.init(title: string, data: string))
         case let .bundledClassic(id):
             let string = "\(id + 2)"
-            return .notificationSoundLocal(title: string, data: string)
+            return .notificationSoundLocal(.init(title: string, data: string))
         case let .cloud(fileId):
-            return .notificationSoundRingtone(id: fileId)
+            return .notificationSoundRingtone(.init(id: fileId))
         }
     }
 }

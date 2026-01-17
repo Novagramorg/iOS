@@ -625,7 +625,23 @@ public extension Api {
 }
 public extension Api {
     enum MyBoost: TypeConstructorDescription {
-        case myBoost(flags: Int32, slot: Int32, peer: Api.Peer?, date: Int32, expires: Int32, cooldownUntilDate: Int32?)
+        public class Cons_myBoost {
+            public var flags: Int32
+            public var slot: Int32
+            public var peer: Api.Peer?
+            public var date: Int32
+            public var expires: Int32
+            public var cooldownUntilDate: Int32?
+            public init(flags: Int32, slot: Int32, peer: Api.Peer?, date: Int32, expires: Int32, cooldownUntilDate: Int32?) {
+                self.flags = flags
+                self.slot = slot
+                self.peer = peer
+                self.date = date
+                self.expires = expires
+                self.cooldownUntilDate = cooldownUntilDate
+            }
+        }
+        case myBoost(Cons_myBoost)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -654,7 +670,17 @@ public extension Api {
 }
 public extension Api {
     enum NearestDc: TypeConstructorDescription {
-        case nearestDc(country: String, thisDc: Int32, nearestDc: Int32)
+        public class Cons_nearestDc {
+            public var country: String
+            public var thisDc: Int32
+            public var nearestDc: Int32
+            public init(country: String, thisDc: Int32, nearestDc: Int32) {
+                self.country = country
+                self.thisDc = thisDc
+                self.nearestDc = nearestDc
+            }
+        }
+        case nearestDc(Cons_nearestDc)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

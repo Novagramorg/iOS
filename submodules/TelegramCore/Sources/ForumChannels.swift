@@ -1183,7 +1183,8 @@ func _internal_forumChannelTopicNotificationExceptions(account: Account, id: Eng
                 switch update {
                 case let .updateNotifySettings(peer, notifySettings):
                     switch peer {
-                    case let .notifyForumTopic(_, topMsgId):
+                    case let .notifyForumTopic(notifyForumTopicData):
+                        let topMsgId = notifyForumTopicData.topMsgId
                         list.append((Int64(topMsgId), EnginePeer.NotificationSettings(TelegramPeerNotificationSettings(apiSettings: notifySettings))))
                     default:
                         break

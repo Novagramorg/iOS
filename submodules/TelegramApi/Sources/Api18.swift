@@ -1,9 +1,23 @@
 public extension Api {
     enum NotificationSound: TypeConstructorDescription {
+        public class Cons_notificationSoundLocal {
+            public var title: String
+            public var data: String
+            public init(title: String, data: String) {
+                self.title = title
+                self.data = data
+            }
+        }
+        public class Cons_notificationSoundRingtone {
+            public var id: Int64
+            public init(id: Int64) {
+                self.id = id
+            }
+        }
         case notificationSoundDefault
-        case notificationSoundLocal(title: String, data: String)
+        case notificationSoundLocal(Cons_notificationSoundLocal)
         case notificationSoundNone
-        case notificationSoundRingtone(id: Int64)
+        case notificationSoundRingtone(Cons_notificationSoundRingtone)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -53,10 +67,24 @@ public extension Api {
 }
 public extension Api {
     enum NotifyPeer: TypeConstructorDescription {
+        public class Cons_notifyForumTopic {
+            public var peer: Api.Peer
+            public var topMsgId: Int32
+            public init(peer: Api.Peer, topMsgId: Int32) {
+                self.peer = peer
+                self.topMsgId = topMsgId
+            }
+        }
+        public class Cons_notifyPeer {
+            public var peer: Api.Peer
+            public init(peer: Api.Peer) {
+                self.peer = peer
+            }
+        }
         case notifyBroadcasts
         case notifyChats
-        case notifyForumTopic(peer: Api.Peer, topMsgId: Int32)
-        case notifyPeer(peer: Api.Peer)
+        case notifyForumTopic(Cons_notifyForumTopic)
+        case notifyPeer(Cons_notifyPeer)
         case notifyUsers
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -114,7 +142,13 @@ public extension Api {
 }
 public extension Api {
     enum OutboxReadDate: TypeConstructorDescription {
-        case outboxReadDate(date: Int32)
+        public class Cons_outboxReadDate {
+            public var date: Int32
+            public init(date: Int32) {
+                self.date = date
+            }
+        }
+        case outboxReadDate(Cons_outboxReadDate)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -143,7 +177,23 @@ public extension Api {
 }
 public extension Api {
     enum Page: TypeConstructorDescription {
-        case page(flags: Int32, url: String, blocks: [Api.PageBlock], photos: [Api.Photo], documents: [Api.Document], views: Int32?)
+        public class Cons_page {
+            public var flags: Int32
+            public var url: String
+            public var blocks: [Api.PageBlock]
+            public var photos: [Api.Photo]
+            public var documents: [Api.Document]
+            public var views: Int32?
+            public init(flags: Int32, url: String, blocks: [Api.PageBlock], photos: [Api.Photo], documents: [Api.Document], views: Int32?) {
+                self.flags = flags
+                self.url = url
+                self.blocks = blocks
+                self.photos = photos
+                self.documents = documents
+                self.views = views
+            }
+        }
+        case page(Cons_page)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -172,35 +222,265 @@ public extension Api {
 }
 public extension Api {
     indirect enum PageBlock: TypeConstructorDescription {
-        case pageBlockAnchor(name: String)
-        case pageBlockAudio(audioId: Int64, caption: Api.PageCaption)
-        case pageBlockAuthorDate(author: Api.RichText, publishedDate: Int32)
-        case pageBlockBlockquote(text: Api.RichText, caption: Api.RichText)
-        case pageBlockChannel(channel: Api.Chat)
-        case pageBlockCollage(items: [Api.PageBlock], caption: Api.PageCaption)
-        case pageBlockCover(cover: Api.PageBlock)
-        case pageBlockDetails(flags: Int32, blocks: [Api.PageBlock], title: Api.RichText)
+        public class Cons_pageBlockAnchor {
+            public var name: String
+            public init(name: String) {
+                self.name = name
+            }
+        }
+        public class Cons_pageBlockAudio {
+            public var audioId: Int64
+            public var caption: Api.PageCaption
+            public init(audioId: Int64, caption: Api.PageCaption) {
+                self.audioId = audioId
+                self.caption = caption
+            }
+        }
+        public class Cons_pageBlockAuthorDate {
+            public var author: Api.RichText
+            public var publishedDate: Int32
+            public init(author: Api.RichText, publishedDate: Int32) {
+                self.author = author
+                self.publishedDate = publishedDate
+            }
+        }
+        public class Cons_pageBlockBlockquote {
+            public var text: Api.RichText
+            public var caption: Api.RichText
+            public init(text: Api.RichText, caption: Api.RichText) {
+                self.text = text
+                self.caption = caption
+            }
+        }
+        public class Cons_pageBlockChannel {
+            public var channel: Api.Chat
+            public init(channel: Api.Chat) {
+                self.channel = channel
+            }
+        }
+        public class Cons_pageBlockCollage {
+            public var items: [Api.PageBlock]
+            public var caption: Api.PageCaption
+            public init(items: [Api.PageBlock], caption: Api.PageCaption) {
+                self.items = items
+                self.caption = caption
+            }
+        }
+        public class Cons_pageBlockCover {
+            public var cover: Api.PageBlock
+            public init(cover: Api.PageBlock) {
+                self.cover = cover
+            }
+        }
+        public class Cons_pageBlockDetails {
+            public var flags: Int32
+            public var blocks: [Api.PageBlock]
+            public var title: Api.RichText
+            public init(flags: Int32, blocks: [Api.PageBlock], title: Api.RichText) {
+                self.flags = flags
+                self.blocks = blocks
+                self.title = title
+            }
+        }
+        public class Cons_pageBlockEmbed {
+            public var flags: Int32
+            public var url: String?
+            public var html: String?
+            public var posterPhotoId: Int64?
+            public var w: Int32?
+            public var h: Int32?
+            public var caption: Api.PageCaption
+            public init(flags: Int32, url: String?, html: String?, posterPhotoId: Int64?, w: Int32?, h: Int32?, caption: Api.PageCaption) {
+                self.flags = flags
+                self.url = url
+                self.html = html
+                self.posterPhotoId = posterPhotoId
+                self.w = w
+                self.h = h
+                self.caption = caption
+            }
+        }
+        public class Cons_pageBlockEmbedPost {
+            public var url: String
+            public var webpageId: Int64
+            public var authorPhotoId: Int64
+            public var author: String
+            public var date: Int32
+            public var blocks: [Api.PageBlock]
+            public var caption: Api.PageCaption
+            public init(url: String, webpageId: Int64, authorPhotoId: Int64, author: String, date: Int32, blocks: [Api.PageBlock], caption: Api.PageCaption) {
+                self.url = url
+                self.webpageId = webpageId
+                self.authorPhotoId = authorPhotoId
+                self.author = author
+                self.date = date
+                self.blocks = blocks
+                self.caption = caption
+            }
+        }
+        public class Cons_pageBlockFooter {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_pageBlockHeader {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_pageBlockKicker {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_pageBlockList {
+            public var items: [Api.PageListItem]
+            public init(items: [Api.PageListItem]) {
+                self.items = items
+            }
+        }
+        public class Cons_pageBlockMap {
+            public var geo: Api.GeoPoint
+            public var zoom: Int32
+            public var w: Int32
+            public var h: Int32
+            public var caption: Api.PageCaption
+            public init(geo: Api.GeoPoint, zoom: Int32, w: Int32, h: Int32, caption: Api.PageCaption) {
+                self.geo = geo
+                self.zoom = zoom
+                self.w = w
+                self.h = h
+                self.caption = caption
+            }
+        }
+        public class Cons_pageBlockOrderedList {
+            public var items: [Api.PageListOrderedItem]
+            public init(items: [Api.PageListOrderedItem]) {
+                self.items = items
+            }
+        }
+        public class Cons_pageBlockParagraph {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_pageBlockPhoto {
+            public var flags: Int32
+            public var photoId: Int64
+            public var caption: Api.PageCaption
+            public var url: String?
+            public var webpageId: Int64?
+            public init(flags: Int32, photoId: Int64, caption: Api.PageCaption, url: String?, webpageId: Int64?) {
+                self.flags = flags
+                self.photoId = photoId
+                self.caption = caption
+                self.url = url
+                self.webpageId = webpageId
+            }
+        }
+        public class Cons_pageBlockPreformatted {
+            public var text: Api.RichText
+            public var language: String
+            public init(text: Api.RichText, language: String) {
+                self.text = text
+                self.language = language
+            }
+        }
+        public class Cons_pageBlockPullquote {
+            public var text: Api.RichText
+            public var caption: Api.RichText
+            public init(text: Api.RichText, caption: Api.RichText) {
+                self.text = text
+                self.caption = caption
+            }
+        }
+        public class Cons_pageBlockRelatedArticles {
+            public var title: Api.RichText
+            public var articles: [Api.PageRelatedArticle]
+            public init(title: Api.RichText, articles: [Api.PageRelatedArticle]) {
+                self.title = title
+                self.articles = articles
+            }
+        }
+        public class Cons_pageBlockSlideshow {
+            public var items: [Api.PageBlock]
+            public var caption: Api.PageCaption
+            public init(items: [Api.PageBlock], caption: Api.PageCaption) {
+                self.items = items
+                self.caption = caption
+            }
+        }
+        public class Cons_pageBlockSubheader {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_pageBlockSubtitle {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_pageBlockTable {
+            public var flags: Int32
+            public var title: Api.RichText
+            public var rows: [Api.PageTableRow]
+            public init(flags: Int32, title: Api.RichText, rows: [Api.PageTableRow]) {
+                self.flags = flags
+                self.title = title
+                self.rows = rows
+            }
+        }
+        public class Cons_pageBlockTitle {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_pageBlockVideo {
+            public var flags: Int32
+            public var videoId: Int64
+            public var caption: Api.PageCaption
+            public init(flags: Int32, videoId: Int64, caption: Api.PageCaption) {
+                self.flags = flags
+                self.videoId = videoId
+                self.caption = caption
+            }
+        }
+        case pageBlockAnchor(Cons_pageBlockAnchor)
+        case pageBlockAudio(Cons_pageBlockAudio)
+        case pageBlockAuthorDate(Cons_pageBlockAuthorDate)
+        case pageBlockBlockquote(Cons_pageBlockBlockquote)
+        case pageBlockChannel(Cons_pageBlockChannel)
+        case pageBlockCollage(Cons_pageBlockCollage)
+        case pageBlockCover(Cons_pageBlockCover)
+        case pageBlockDetails(Cons_pageBlockDetails)
         case pageBlockDivider
-        case pageBlockEmbed(flags: Int32, url: String?, html: String?, posterPhotoId: Int64?, w: Int32?, h: Int32?, caption: Api.PageCaption)
-        case pageBlockEmbedPost(url: String, webpageId: Int64, authorPhotoId: Int64, author: String, date: Int32, blocks: [Api.PageBlock], caption: Api.PageCaption)
-        case pageBlockFooter(text: Api.RichText)
-        case pageBlockHeader(text: Api.RichText)
-        case pageBlockKicker(text: Api.RichText)
-        case pageBlockList(items: [Api.PageListItem])
-        case pageBlockMap(geo: Api.GeoPoint, zoom: Int32, w: Int32, h: Int32, caption: Api.PageCaption)
-        case pageBlockOrderedList(items: [Api.PageListOrderedItem])
-        case pageBlockParagraph(text: Api.RichText)
-        case pageBlockPhoto(flags: Int32, photoId: Int64, caption: Api.PageCaption, url: String?, webpageId: Int64?)
-        case pageBlockPreformatted(text: Api.RichText, language: String)
-        case pageBlockPullquote(text: Api.RichText, caption: Api.RichText)
-        case pageBlockRelatedArticles(title: Api.RichText, articles: [Api.PageRelatedArticle])
-        case pageBlockSlideshow(items: [Api.PageBlock], caption: Api.PageCaption)
-        case pageBlockSubheader(text: Api.RichText)
-        case pageBlockSubtitle(text: Api.RichText)
-        case pageBlockTable(flags: Int32, title: Api.RichText, rows: [Api.PageTableRow])
-        case pageBlockTitle(text: Api.RichText)
+        case pageBlockEmbed(Cons_pageBlockEmbed)
+        case pageBlockEmbedPost(Cons_pageBlockEmbedPost)
+        case pageBlockFooter(Cons_pageBlockFooter)
+        case pageBlockHeader(Cons_pageBlockHeader)
+        case pageBlockKicker(Cons_pageBlockKicker)
+        case pageBlockList(Cons_pageBlockList)
+        case pageBlockMap(Cons_pageBlockMap)
+        case pageBlockOrderedList(Cons_pageBlockOrderedList)
+        case pageBlockParagraph(Cons_pageBlockParagraph)
+        case pageBlockPhoto(Cons_pageBlockPhoto)
+        case pageBlockPreformatted(Cons_pageBlockPreformatted)
+        case pageBlockPullquote(Cons_pageBlockPullquote)
+        case pageBlockRelatedArticles(Cons_pageBlockRelatedArticles)
+        case pageBlockSlideshow(Cons_pageBlockSlideshow)
+        case pageBlockSubheader(Cons_pageBlockSubheader)
+        case pageBlockSubtitle(Cons_pageBlockSubtitle)
+        case pageBlockTable(Cons_pageBlockTable)
+        case pageBlockTitle(Cons_pageBlockTitle)
         case pageBlockUnsupported
-        case pageBlockVideo(flags: Int32, videoId: Int64, caption: Api.PageCaption)
+        case pageBlockVideo(Cons_pageBlockVideo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
