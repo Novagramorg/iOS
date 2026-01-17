@@ -47,21 +47,23 @@ private func collectPreCachedResources(for document: Api.Document) -> [(MediaRes
 extension Api.MessageMedia {
     var preCachedResources: [(MediaResource, Data)]? {
         switch self {
-            case let .messageMediaPhoto(_, photo, _):
+            case let .messageMediaPhoto(messageMediaPhotoData):
+                let photo = messageMediaPhotoData.photo
                 if let photo = photo {
                     return collectPreCachedResources(for: photo)
                 } else {
                     return nil
                 }
-            case let .messageMediaDocument(_, document, _, _, _, _):
+            case let .messageMediaDocument(messageMediaDocumentData):
+                let document = messageMediaDocumentData.document
                 if let document = document {
                     return collectPreCachedResources(for: document)
                 }
                 return nil
-            case let .messageMediaWebPage(flags, webPage):
-                let _ = flags
+            case let .messageMediaWebPage(messageMediaWebPageData):
+                let webpage = messageMediaWebPageData.webpage
                 var result: [(MediaResource, Data)]?
-                switch webPage {
+                switch webpage {
                     case let .webPage(_, _, _, _, _, _, _, _, _, photo, _, _, _, _, _, _, document, _, _):
                         if let photo = photo {
                             if let photoResult = collectPreCachedResources(for: photo) {
@@ -90,9 +92,10 @@ extension Api.MessageMedia {
     
     var preCachedStories: [StoryId: Api.StoryItem]? {
         switch self {
-        case let .messageMediaStory(_, peerId, id, story):
+        case let .messageMediaStory(messageMediaStoryData):
+            let (peer, id, story) = (messageMediaStoryData.peer, messageMediaStoryData.id, messageMediaStoryData.story)
             if let story = story {
-                return [StoryId(peerId: peerId.peerId, id: id): story]
+                return [StoryId(peerId: peer.peerId, id: id): story]
             } else {
                 return nil
             }
@@ -105,31 +108,37 @@ extension Api.MessageMedia {
 extension Api.Message {
     var rawId: Int32 {
         switch self {
-        case let .message(_, _, id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+        case let .message(messageData):
+                let id = messageData.id
                 return id
-            case let .messageEmpty(_, id, _):
+            case let .messageEmpty(messageEmptyData):
+                let id = messageEmptyData.id
                 return id
-            case let .messageService(_, id, _, _, _, _, _, _, _, _):
+            case let .messageService(messageServiceData):
+                let id = messageServiceData.id
                 return id
         }
     }
     
     func id(namespace: MessageId.Namespace = Namespaces.Message.Cloud) -> MessageId? {
         switch self {
-            case let .message(_, flags2, id, _, _, messagePeerId, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+            case let .message(messageData):
+                let (flags2, id, messagePeerId) = (messageData.flags2, messageData.id, messageData.peerId)
                 var namespace = namespace
                 if (flags2 & (1 << 4)) != 0 {
                     namespace = Namespaces.Message.ScheduledCloud
                 }
                 let peerId: PeerId = messagePeerId.peerId
                 return MessageId(peerId: peerId, namespace: namespace, id: id)
-            case let .messageEmpty(_, id, peerId):
+            case let .messageEmpty(messageEmptyData):
+                let (id, peerId) = (messageEmptyData.id, messageEmptyData.peerId)
                 if let peerId = peerId {
                     return MessageId(peerId: peerId.peerId, namespace: Namespaces.Message.Cloud, id: id)
                 } else {
                     return nil
                 }
-            case let .messageService(_, id, _, chatPeerId, _, _, _, _, _, _):
+            case let .messageService(messageServiceData):
+                let (id, chatPeerId) = (messageServiceData.id, messageServiceData.peerId)
                 let peerId: PeerId = chatPeerId.peerId
                 return MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: id)
         }
@@ -137,12 +146,15 @@ extension Api.Message {
     
     var peerId: PeerId? {
         switch self {
-        case let .message(_, _, _, _, _, messagePeerId, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+        case let .message(messageData):
+            let messagePeerId = messageData.peerId
             let peerId: PeerId = messagePeerId.peerId
             return peerId
-        case let .messageEmpty(_, _, peerId):
+        case let .messageEmpty(messageEmptyData):
+            let peerId = messageEmptyData.peerId
             return peerId?.peerId
-        case let .messageService(_, _, _, chatPeerId, _, _, _, _, _, _):
+        case let .messageService(messageServiceData):
+            let chatPeerId = messageServiceData.peerId
             let peerId: PeerId = chatPeerId.peerId
             return peerId
         }
@@ -150,9 +162,11 @@ extension Api.Message {
 
     var timestamp: Int32? {
         switch self {
-            case let .message(_, _, _, _, _, _, _, _, _, _, _, date, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+            case let .message(messageData):
+                let date = messageData.date
                 return date
-            case let .messageService(_, _, _, _, _, _, date, _, _, _):
+            case let .messageService(messageServiceData):
+                let date = messageServiceData.date
                 return date
             case .messageEmpty:
                 return nil
@@ -161,16 +175,18 @@ extension Api.Message {
     
     var preCachedResources: [(MediaResource, Data)]? {
         switch self {
-        case let .message(_, _, _, _, _, _, _, _, _, _, _, _, _, media, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+        case let .message(messageData):
+            let media = messageData.media
             return media?.preCachedResources
         default:
             return nil
         }
     }
-    
+
     var preCachedStories: [StoryId: Api.StoryItem]? {
         switch self {
-        case let .message(_, _, _, _, _, _, _, _, _, _, _, _, _, media, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+        case let .message(messageData):
+            let media = messageData.media
             return media?.preCachedStories
         default:
             return nil

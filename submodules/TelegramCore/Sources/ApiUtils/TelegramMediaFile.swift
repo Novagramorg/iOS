@@ -101,7 +101,8 @@ extension StickerPackReference {
 extension StickerMaskCoords {
     init(apiMaskCoords: Api.MaskCoords) {
         switch apiMaskCoords {
-            case let .maskCoords(n, x, y, zoom):
+            case let .maskCoords(maskCoordsData):
+                let (n, x, y, zoom) = (maskCoordsData.n, maskCoordsData.x, maskCoordsData.y, maskCoordsData.zoom)
                 self.init(n: n, x: x, y: y, zoom: zoom)
         }
     }

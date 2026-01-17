@@ -87,7 +87,8 @@ func _internal_uploadSticker(account: Account, peer: Peer, resource: MediaResour
                             |> mapError { _ -> UploadStickerError in return .generic }
                             |> mapToSignal { media -> Signal<UploadStickerStatus, UploadStickerError> in
                                 switch media {
-                                case let .messageMediaDocument(_, document, altDocuments, _, _, _):
+                                case let .messageMediaDocument(messageMediaDocumentData):
+                                    let (document, altDocuments) = (messageMediaDocumentData.document, messageMediaDocumentData.altDocuments)
                                     if let document = document, let file = telegramMediaFileFromApiDocument(document, altDocuments: altDocuments), let uploadedResource = file.resource as? CloudDocumentMediaResource {
                                         account.postbox.mediaBox.copyResourceData(from: resource.id, to: uploadedResource.id, synchronous: true)
                                         if let thumbnail, let previewRepresentation = file.previewRepresentations.first(where: { $0.dimensions == PixelDimensions(width: 320, height: 320) }) {

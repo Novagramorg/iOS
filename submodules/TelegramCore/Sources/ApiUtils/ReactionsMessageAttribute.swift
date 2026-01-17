@@ -23,7 +23,8 @@ extension ReactionsMessageAttribute {
             if let recentReactions = recentReactions {
                 parsedRecentReactions = recentReactions.compactMap { recentReaction -> ReactionsMessageAttribute.RecentPeer? in
                     switch recentReaction {
-                    case let .messagePeerReaction(flags, peerId, date, reaction):
+                    case let .messagePeerReaction(messagePeerReactionData):
+                        let (flags, peerId, date, reaction) = (messagePeerReactionData.flags, messagePeerReactionData.peerId, messagePeerReactionData.date, messagePeerReactionData.reaction)
                         let isLarge = (flags & (1 << 0)) != 0
                         let isUnseen = (flags & (1 << 1)) != 0
                         let isMy = (flags & (1 << 2)) != 0
@@ -37,7 +38,7 @@ extension ReactionsMessageAttribute {
             } else {
                 parsedRecentReactions = []
             }
-            
+
             if min {
                 var currentSelectedReactions: [MessageReaction.Reaction: Int] = [:]
                 for reaction in self.reactions {
@@ -265,7 +266,8 @@ extension ReactionsMessageAttribute {
             if let recentReactions = recentReactions {
                 parsedRecentReactions = recentReactions.compactMap { recentReaction -> ReactionsMessageAttribute.RecentPeer? in
                     switch recentReaction {
-                    case let .messagePeerReaction(flags, peerId, date, reaction):
+                    case let .messagePeerReaction(messagePeerReactionData):
+                        let (flags, peerId, date, reaction) = (messagePeerReactionData.flags, messagePeerReactionData.peerId, messagePeerReactionData.date, messagePeerReactionData.reaction)
                         let isLarge = (flags & (1 << 0)) != 0
                         let isUnseen = (flags & (1 << 1)) != 0
                         let isMy = (flags & (1 << 2)) != 0
@@ -279,7 +281,7 @@ extension ReactionsMessageAttribute {
             } else {
                 parsedRecentReactions = []
             }
-            
+
             var topPeers: [ReactionsMessageAttribute.TopPeer] = []
             if let topReactors {
                 for item in topReactors {
@@ -295,7 +297,7 @@ extension ReactionsMessageAttribute {
                     }
                 }
             }
-            
+
             self.init(
                 canViewList: canViewList,
                 isTags: isTags,
