@@ -415,9 +415,11 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                     action = .toggleAntiSpam(isEnabled: channelAdminLogEventActionToggleAntiSpamData.newValue == .boolTrue)
                                 case let .channelAdminLogEventActionChangePeerColor(channelAdminLogEventActionChangePeerColorData):
                                     let (prevValue, newValue) = (channelAdminLogEventActionChangePeerColorData.prevValue, channelAdminLogEventActionChangePeerColorData.newValue)
-                                    guard case let .peerColor(_, prevColor, prevBackgroundEmojiId) = prevValue, case let .peerColor(_, newColor, newBackgroundEmojiId) = newValue else {
+                                    guard case let .peerColor(prevPeerColorData) = prevValue, case let .peerColor(newPeerColorData) = newValue else {
                                         continue
                                     }
+                                    let (prevColor, prevBackgroundEmojiId) = (prevPeerColorData.color, prevPeerColorData.backgroundEmojiId)
+                                    let (newColor, newBackgroundEmojiId) = (newPeerColorData.color, newPeerColorData.backgroundEmojiId)
                                     let prevColorIndex = prevColor ?? 0
                                     let prevEmojiId = prevBackgroundEmojiId
 
@@ -426,9 +428,11 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
 
                                     action = .changeNameColor(prevColor: PeerNameColor(rawValue: prevColorIndex), prevIcon: prevEmojiId, newColor: PeerNameColor(rawValue: newColorIndex), newIcon: newEmojiId)
                                 case let .channelAdminLogEventActionChangeProfilePeerColor(channelAdminLogEventActionChangeProfilePeerColorData):
-                                    guard case let .peerColor(_, prevColor, prevBackgroundEmojiId) = channelAdminLogEventActionChangeProfilePeerColorData.prevValue, case let .peerColor(_, newColor, newBackgroundEmojiId) = channelAdminLogEventActionChangeProfilePeerColorData.newValue else {
+                                    guard case let .peerColor(prevPeerColorData) = channelAdminLogEventActionChangeProfilePeerColorData.prevValue, case let .peerColor(newPeerColorData) = channelAdminLogEventActionChangeProfilePeerColorData.newValue else {
                                         continue
                                     }
+                                    let (prevColor, prevBackgroundEmojiId) = (prevPeerColorData.color, prevPeerColorData.backgroundEmojiId)
+                                    let (newColor, newBackgroundEmojiId) = (newPeerColorData.color, newPeerColorData.backgroundEmojiId)
                                     action = .changeProfileColor(prevColor: prevColor.flatMap(PeerNameColor.init(rawValue:)), prevIcon: prevBackgroundEmojiId, newColor: newColor.flatMap(PeerNameColor.init(rawValue:)), newIcon: newBackgroundEmojiId)
                                 case let .channelAdminLogEventActionChangeWallpaper(channelAdminLogEventActionChangeWallpaperData):
                                     let (prevValue, newValue) = (channelAdminLogEventActionChangeWallpaperData.prevValue, channelAdminLogEventActionChangeWallpaperData.newValue)

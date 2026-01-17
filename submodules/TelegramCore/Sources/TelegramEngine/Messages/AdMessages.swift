@@ -531,7 +531,8 @@ private class AdMessagesHistoryContextImpl {
                                 var backgroundEmojiId: Int64?
                                 if let color {
                                     switch color {
-                                    case let .peerColor(_, color, backgroundEmojiIdValue):
+                                    case let .peerColor(peerColorData):
+                                        let (color, backgroundEmojiIdValue) = (peerColorData.color, peerColorData.backgroundEmojiId)
                                         nameColorIndex = color
                                         backgroundEmojiId = backgroundEmojiIdValue
                                     default:

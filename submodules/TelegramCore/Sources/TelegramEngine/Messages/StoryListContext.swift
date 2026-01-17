@@ -431,11 +431,12 @@ public final class StorySubscriptionsContext {
                         
                         for peerStorySet in peerStories {
                             switch peerStorySet {
-                            case let .peerStories(_, peerIdValue, maxReadId, stories):
+                            case let .peerStories(peerStoriesData):
+                                let (_, peerIdValue, maxReadId, stories) = (peerStoriesData.flags, peerStoriesData.peer, peerStoriesData.maxReadId, peerStoriesData.stories)
                                 let peerId = peerIdValue.peerId
-                                
+
                                 let previousPeerEntries: [StoryItemsTableEntry] = transaction.getStoryItems(peerId: peerId)
-                                
+
                                 var updatedPeerEntries: [StoryItemsTableEntry] = []
                                 for story in stories {
                                     if let storedItem = Stories.StoredItem(apiStoryItem: story, peerId: peerId, transaction: transaction) {
@@ -2598,11 +2599,12 @@ public final class PeerExpiringStoryListContext {
                             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                             
                             switch stories {
-                            case let .peerStories(_, peerIdValue, maxReadId, stories):
+                            case let .peerStories(peerStoriesData):
+                                let (_, peerIdValue, maxReadId, stories) = (peerStoriesData.flags, peerStoriesData.peer, peerStoriesData.maxReadId, peerStoriesData.stories)
                                 let peerId = peerIdValue.peerId
-                                
+
                                 let previousPeerEntries: [StoryItemsTableEntry] = transaction.getStoryItems(peerId: peerId)
-                                
+
                                 for story in stories {
                                     if let storedItem = Stories.StoredItem(apiStoryItem: story, peerId: peerId, transaction: transaction) {
                                         if case .placeholder = storedItem, let previousEntry = previousPeerEntries.first(where: { $0.id == storedItem.id }) {
@@ -2614,12 +2616,12 @@ public final class PeerExpiringStoryListContext {
                                         }
                                     }
                                 }
-                                
+
                                 transaction.setPeerStoryState(peerId: peerId, state: Stories.PeerState(
                                     maxReadId: maxReadId ?? 0
                                 ).postboxRepresentation)
                             }
-                            
+
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                         }
                         
@@ -2779,11 +2781,12 @@ public func _internal_pollPeerStories(postbox: Postbox, network: Network, accoun
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                     
                     switch stories {
-                    case let .peerStories(_, peerIdValue, maxReadId, stories):
+                    case let .peerStories(peerStoriesData):
+                        let (_, peerIdValue, maxReadId, stories) = (peerStoriesData.flags, peerStoriesData.peer, peerStoriesData.maxReadId, peerStoriesData.stories)
                         let peerId = peerIdValue.peerId
-                        
+
                         let previousPeerEntries: [StoryItemsTableEntry] = transaction.getStoryItems(peerId: peerId)
-                        
+
                         for story in stories {
                             if let storedItem = Stories.StoredItem(apiStoryItem: story, peerId: peerId, transaction: transaction) {
                                 if case .placeholder = storedItem, let previousEntry = previousPeerEntries.first(where: { $0.id == storedItem.id }) {
@@ -2795,12 +2798,12 @@ public func _internal_pollPeerStories(postbox: Postbox, network: Network, accoun
                                 }
                             }
                         }
-                        
+
                         transaction.setPeerStoryState(peerId: peerId, state: Stories.PeerState(
                             maxReadId: maxReadId ?? 0
                         ).postboxRepresentation)
                     }
-                    
+
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                 }
                 

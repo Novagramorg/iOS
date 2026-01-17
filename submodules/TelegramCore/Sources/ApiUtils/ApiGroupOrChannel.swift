@@ -178,7 +178,8 @@ func parseTelegramGroupOrChannel(chat: Api.Chat) -> Peer? {
         var backgroundEmojiId: Int64?
         if let color = color {
             switch color {
-            case let .peerColor(_, color, backgroundEmojiIdValue):
+            case let .peerColor(peerColorData):
+                let (_, color, backgroundEmojiIdValue) = (peerColorData.flags, peerColorData.color, peerColorData.backgroundEmojiId)
                 nameColorIndex = color
                 backgroundEmojiId = backgroundEmojiIdValue
             case .peerColorCollectible:
@@ -187,19 +188,20 @@ func parseTelegramGroupOrChannel(chat: Api.Chat) -> Peer? {
                 break
             }
         }
-        
+
         var profileColorIndex: Int32?
         var profileBackgroundEmojiId: Int64?
         if let profileColor = profileColor {
             switch profileColor {
-            case let .peerColor(_, color, backgroundEmojiIdValue):
+            case let .peerColor(peerColorData):
+                let (_, color, backgroundEmojiIdValue) = (peerColorData.flags, peerColorData.color, peerColorData.backgroundEmojiId)
                 profileColorIndex = color
                 profileBackgroundEmojiId = backgroundEmojiIdValue
             default:
                 break
             }
         }
-        
+
         return TelegramChannel(id: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id)), accessHash: accessHashValue, title: title, username: username, photo: imageRepresentationsForApiChatPhoto(photo), creationDate: date, version: 0, participationStatus: participationStatus, info: info, flags: channelFlags, restrictionInfo: restrictionInfo, adminRights: adminRights.flatMap(TelegramChatAdminRights.init), bannedRights: bannedRights.flatMap(TelegramChatBannedRights.init), defaultBannedRights: defaultBannedRights.flatMap(TelegramChatBannedRights.init), usernames: usernames?.map(TelegramPeerUsername.init(apiUsername:)) ?? [], storiesHidden: storiesHidden, nameColor: nameColorIndex.flatMap { PeerNameColor(rawValue: $0) }, backgroundEmojiId: backgroundEmojiId, profileColor: profileColorIndex.flatMap { PeerNameColor(rawValue: $0) }, profileBackgroundEmojiId: profileBackgroundEmojiId, emojiStatus: emojiStatus.flatMap(PeerEmojiStatus.init(apiStatus:)), approximateBoostLevel: boostLevel, subscriptionUntilDate: subscriptionUntilDate, verificationIconFileId: verificationIconFileId, sendPaidMessageStars: sendPaidMessageStars.flatMap { StarsAmount(value: $0, nanos: 0) }, linkedMonoforumId: linkedMonoforumId.flatMap { PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) })
     case let .channelForbidden(channelForbiddenData):
         let (flags, id, accessHash, title, untilDate) = (channelForbiddenData.flags, channelForbiddenData.id, channelForbiddenData.accessHash, channelForbiddenData.title, channelForbiddenData.untilDate)
@@ -265,7 +267,8 @@ func mergeGroupOrChannel(lhs: Peer?, rhs: Api.Chat) -> Peer? {
                 var backgroundEmojiId: Int64?
                 if let color = color {
                     switch color {
-                    case let .peerColor(_, color, backgroundEmojiIdValue):
+                    case let .peerColor(peerColorData):
+                        let (_, color, backgroundEmojiIdValue) = (peerColorData.flags, peerColorData.color, peerColorData.backgroundEmojiId)
                         nameColorIndex = color
                         backgroundEmojiId = backgroundEmojiIdValue
                     case .peerColorCollectible:
@@ -274,19 +277,20 @@ func mergeGroupOrChannel(lhs: Peer?, rhs: Api.Chat) -> Peer? {
                         break
                     }
                 }
-                
+
                 var profileColorIndex: Int32?
                 var profileBackgroundEmojiId: Int64?
                 if let profileColor = profileColor {
                     switch profileColor {
-                    case let .peerColor(_, color, backgroundEmojiIdValue):
+                    case let .peerColor(peerColorData):
+                        let (_, color, backgroundEmojiIdValue) = (peerColorData.flags, peerColorData.color, peerColorData.backgroundEmojiId)
                         profileColorIndex = color
                         profileBackgroundEmojiId = backgroundEmojiIdValue
                     default:
                         break
                     }
                 }
-                
+
                 let parsedEmojiStatus = emojiStatus.flatMap(PeerEmojiStatus.init(apiStatus:))
                 
                 let linkedMonoforumId = linkedMonoforumIdValue.flatMap({ PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value($0)) }) ?? lhs.linkedMonoforumId

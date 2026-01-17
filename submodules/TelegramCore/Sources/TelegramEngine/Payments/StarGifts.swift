@@ -1265,7 +1265,8 @@ extension StarGift {
             }
             var peerCollectibleColor: PeerCollectibleColor?
             switch peerColor {
-            case let .peerColorCollectible(_, collectibleId, giftEmojiId, backgroundEmojiId, accentColor, colors, darkAccentColor, darkColors):
+            case let .peerColorCollectible(peerColorCollectibleData):
+                let (collectibleId, giftEmojiId, backgroundEmojiId, accentColor, colors, darkAccentColor, darkColors) = (peerColorCollectibleData.collectibleId, peerColorCollectibleData.giftEmojiId, peerColorCollectibleData.backgroundEmojiId, peerColorCollectibleData.accentColor, peerColorCollectibleData.colors, peerColorCollectibleData.darkAccentColor, peerColorCollectibleData.darkColors)
                 peerCollectibleColor = PeerCollectibleColor(
                     collectibleId: collectibleId,
                     giftEmojiFileId: giftEmojiId,

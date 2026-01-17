@@ -134,12 +134,14 @@ extension TelegramUser {
             var backgroundEmojiId: Int64?
             if let color = color {
                 switch color {
-                case let .peerColor(_, color, backgroundEmojiIdValue):
+                case let .peerColor(peerColorData):
+                    let (_, color, backgroundEmojiIdValue) = (peerColorData.flags, peerColorData.color, peerColorData.backgroundEmojiId)
                     if let color {
                         nameColor = .preset(PeerNameColor(rawValue: color))
                     }
                     backgroundEmojiId = backgroundEmojiIdValue
-                case let .peerColorCollectible(_, collectibleId, giftEmojiId, backgroundEmojiIdValue, accentColor, colors, darkAccentColor, darkColors):
+                case let .peerColorCollectible(peerColorCollectibleData):
+                    let (_, collectibleId, giftEmojiId, backgroundEmojiIdValue, accentColor, colors, darkAccentColor, darkColors) = (peerColorCollectibleData.flags, peerColorCollectibleData.collectibleId, peerColorCollectibleData.giftEmojiId, peerColorCollectibleData.backgroundEmojiId, peerColorCollectibleData.accentColor, peerColorCollectibleData.colors, peerColorCollectibleData.darkAccentColor, peerColorCollectibleData.darkColors)
                     nameColor = .collectible(PeerCollectibleColor(
                         collectibleId: collectibleId,
                         giftEmojiFileId: giftEmojiId,
@@ -154,12 +156,13 @@ extension TelegramUser {
                     break
                 }
             }
-            
+
             var profileColorIndex: Int32?
             var profileBackgroundEmojiId: Int64?
             if let profileColor = profileColor {
                 switch profileColor {
-                case let .peerColor(_, color, backgroundEmojiIdValue):
+                case let .peerColor(peerColorData):
+                    let (_, color, backgroundEmojiIdValue) = (peerColorData.flags, peerColorData.color, peerColorData.backgroundEmojiId)
                     profileColorIndex = color
                     profileBackgroundEmojiId = backgroundEmojiIdValue
                 default:
@@ -260,12 +263,14 @@ extension TelegramUser {
                         var backgroundEmojiId: Int64?
                         if let color {
                             switch color {
-                            case let .peerColor(_, color, backgroundEmojiIdValue):
+                            case let .peerColor(peerColorData):
+                                let (_, color, backgroundEmojiIdValue) = (peerColorData.flags, peerColorData.color, peerColorData.backgroundEmojiId)
                                 if let color {
                                     nameColor = .preset(PeerNameColor(rawValue: color))
                                 }
                                 backgroundEmojiId = backgroundEmojiIdValue
-                            case let .peerColorCollectible(_, collectibleId, giftEmojiId, backgroundEmojiIdValue, accentColor, colors, darkAccentColor, darkColors):
+                            case let .peerColorCollectible(peerColorCollectibleData):
+                                let (_, collectibleId, giftEmojiId, backgroundEmojiIdValue, accentColor, colors, darkAccentColor, darkColors) = (peerColorCollectibleData.flags, peerColorCollectibleData.collectibleId, peerColorCollectibleData.giftEmojiId, peerColorCollectibleData.backgroundEmojiId, peerColorCollectibleData.accentColor, peerColorCollectibleData.colors, peerColorCollectibleData.darkAccentColor, peerColorCollectibleData.darkColors)
                                 nameColor = .collectible(PeerCollectibleColor(
                                     collectibleId: collectibleId,
                                     giftEmojiFileId: giftEmojiId,
@@ -280,12 +285,13 @@ extension TelegramUser {
                                 break
                             }
                         }
-                        
+
                         var profileColorIndex: Int32?
                         var profileBackgroundEmojiId: Int64?
                         if let profileColor = profileColor {
                             switch profileColor {
-                            case let .peerColor(_, color, backgroundEmojiIdValue):
+                            case let .peerColor(peerColorData):
+                                let (_, color, backgroundEmojiIdValue) = (peerColorData.flags, peerColorData.color, peerColorData.backgroundEmojiId)
                                 profileColorIndex = color
                                 profileBackgroundEmojiId = backgroundEmojiIdValue
                             default:

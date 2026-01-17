@@ -230,11 +230,14 @@ extension Api.User {
 extension Api.Peer {
     var peerId: PeerId {
         switch self {
-            case let .peerChannel(channelId):
+            case let .peerChannel(peerChannelData):
+                let channelId = peerChannelData.channelId
                 return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
-            case let .peerChat(chatId):
+            case let .peerChat(peerChatData):
+                let chatId = peerChatData.chatId
                 return PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-            case let .peerUser(userId):
+            case let .peerUser(peerUserData):
+                let userId = peerUserData.userId
                 return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
         }
     }

@@ -110,11 +110,14 @@ private func parseDialogs(accountPeerId: PeerId, apiDialogs: [Api.Dialog], apiMe
                 }
                 let peerId: PeerId
                 switch apiPeer {
-                    case let .peerUser(userId):
+                    case let .peerUser(peerUserData):
+                        let userId = peerUserData.userId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
-                    case let .peerChat(chatId):
+                    case let .peerChat(peerChatData):
+                        let chatId = peerChatData.chatId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
-                    case let .peerChannel(channelId):
+                    case let .peerChannel(peerChannelData):
+                        let channelId = peerChannelData.channelId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                 }
                 

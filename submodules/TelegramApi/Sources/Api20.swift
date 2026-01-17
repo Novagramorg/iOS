@@ -1,9 +1,15 @@
 public extension Api {
     enum PhoneCallDiscardReason: TypeConstructorDescription {
+        public class Cons_phoneCallDiscardReasonMigrateConferenceCall {
+            public var slug: String
+            public init(slug: String) {
+                self.slug = slug
+            }
+        }
         case phoneCallDiscardReasonBusy
         case phoneCallDiscardReasonDisconnect
         case phoneCallDiscardReasonHangup
-        case phoneCallDiscardReasonMigrateConferenceCall(slug: String)
+        case phoneCallDiscardReasonMigrateConferenceCall(Cons_phoneCallDiscardReasonMigrateConferenceCall)
         case phoneCallDiscardReasonMissed
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {

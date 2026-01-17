@@ -2307,7 +2307,8 @@ public final class AccountStateManager {
                 switch update {
                 case let .updatePhoneCall(phoneCall):
                     switch phoneCall {
-                    case let .phoneCallRequested(flags, id, accessHash, date, adminId, _, _, _):
+                    case let .phoneCallRequested(phoneCallRequestedData):
+                        let (flags, id, accessHash, date, adminId) = (phoneCallRequestedData.flags, phoneCallRequestedData.id, phoneCallRequestedData.accessHash, phoneCallRequestedData.date, phoneCallRequestedData.adminId)
                         guard let peer = peers.first(where: { $0.id == PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(adminId)) }) else {
                             return nil
                         }
