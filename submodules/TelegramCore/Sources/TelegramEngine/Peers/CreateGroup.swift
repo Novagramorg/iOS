@@ -77,7 +77,8 @@ func _internal_createGroup(account: Account, title: String, peerIds: [PeerId], t
                             peerId: peerId,
                             result: TelegramInvitePeersResult(forbiddenPeers: missingInviteesValue.compactMap { invitee -> TelegramForbiddenInvitePeer? in
                                 switch invitee {
-                                case let .missingInvitee(flags, userId):
+                                case let .missingInvitee(missingInviteeData):
+                                    let (flags, userId) = (missingInviteeData.flags, missingInviteeData.userId)
                                     guard let peer = transaction.getPeer(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))) else {
                                         return nil
                                     }

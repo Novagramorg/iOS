@@ -287,11 +287,14 @@ private final class PollResultsOptionContext {
                             for vote in votes {
                                 let peerId: PeerId
                                 switch vote {
-                                case let .messagePeerVote(peerIdValue, _, _):
+                                case let .messagePeerVote(messagePeerVoteData):
+                                    let peerIdValue = messagePeerVoteData.peer
                                     peerId = peerIdValue.peerId
-                                case let .messagePeerVoteInputOption(peerIdValue, _):
+                                case let .messagePeerVoteInputOption(messagePeerVoteInputOptionData):
+                                    let peerIdValue = messagePeerVoteInputOptionData.peer
                                     peerId = peerIdValue.peerId
-                                case let .messagePeerVoteMultiple(peerIdValue, _, _):
+                                case let .messagePeerVoteMultiple(messagePeerVoteMultipleData):
+                                    let peerIdValue = messagePeerVoteMultipleData.peer
                                     peerId = peerIdValue.peerId
                                 }
                                 if let peer = transaction.getPeer(peerId) {

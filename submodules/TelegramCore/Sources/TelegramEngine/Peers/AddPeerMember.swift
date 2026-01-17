@@ -102,7 +102,8 @@ func _internal_addGroupMember(account: Account, peerId: PeerId, memberId: PeerId
                                                 
                         let result = TelegramInvitePeersResult(forbiddenPeers: missingInviteesValue.compactMap { invitee -> TelegramForbiddenInvitePeer? in
                             switch invitee {
-                            case let .missingInvitee(flags, userId):
+                            case let .missingInvitee(missingInviteeData):
+                                let (flags, userId) = (missingInviteeData.flags, missingInviteeData.userId)
                                 guard let peer = transaction.getPeer(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))) else {
                                     return nil
                                 }
@@ -189,7 +190,8 @@ func _internal_addChannelMember(account: Account, peerId: PeerId, memberId: Peer
                         let updatesValue: Api.Updates
                         switch result {
                         case let .invitedUsers(updates, missingInvitees):
-                            if case let .missingInvitee(flags, _) = missingInvitees.first {
+                            if case let .missingInvitee(missingInviteeData) = missingInvitees.first {
+                                let flags = missingInviteeData.flags
                                 let _ = _internal_updateIsPremiumRequiredToContact(account: account, peerIds: [memberPeer.id]).startStandalone()
                                 
                                 return .fail(.restricted(TelegramForbiddenInvitePeer(
@@ -310,7 +312,8 @@ func _internal_addChannelMembers(account: Account, peerId: PeerId, memberIds: [P
                 return account.postbox.transaction { transaction -> TelegramInvitePeersResult in
                     let result = TelegramInvitePeersResult(forbiddenPeers: missingInviteesValue.compactMap { invitee -> TelegramForbiddenInvitePeer? in
                         switch invitee {
-                        case let .missingInvitee(flags, userId):
+                        case let .missingInvitee(missingInviteeData):
+                            let (flags, userId) = (missingInviteeData.flags, missingInviteeData.userId)
                             guard let peer = transaction.getPeer(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))) else {
                                 return nil
                             }

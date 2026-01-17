@@ -41,9 +41,37 @@ public extension Api {
 }
 public extension Api {
     enum MessagePeerVote: TypeConstructorDescription {
-        case messagePeerVote(peer: Api.Peer, option: Buffer, date: Int32)
-        case messagePeerVoteInputOption(peer: Api.Peer, date: Int32)
-        case messagePeerVoteMultiple(peer: Api.Peer, options: [Buffer], date: Int32)
+        public class Cons_messagePeerVote {
+            public var peer: Api.Peer
+            public var option: Buffer
+            public var date: Int32
+            public init(peer: Api.Peer, option: Buffer, date: Int32) {
+                self.peer = peer
+                self.option = option
+                self.date = date
+            }
+        }
+        public class Cons_messagePeerVoteInputOption {
+            public var peer: Api.Peer
+            public var date: Int32
+            public init(peer: Api.Peer, date: Int32) {
+                self.peer = peer
+                self.date = date
+            }
+        }
+        public class Cons_messagePeerVoteMultiple {
+            public var peer: Api.Peer
+            public var options: [Buffer]
+            public var date: Int32
+            public init(peer: Api.Peer, options: [Buffer], date: Int32) {
+                self.peer = peer
+                self.options = options
+                self.date = date
+            }
+        }
+        case messagePeerVote(Cons_messagePeerVote)
+        case messagePeerVoteInputOption(Cons_messagePeerVoteInputOption)
+        case messagePeerVoteMultiple(Cons_messagePeerVoteMultiple)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -86,7 +114,15 @@ public extension Api {
 }
 public extension Api {
     enum MessageRange: TypeConstructorDescription {
-        case messageRange(minId: Int32, maxId: Int32)
+        public class Cons_messageRange {
+            public var minId: Int32
+            public var maxId: Int32
+            public init(minId: Int32, maxId: Int32) {
+                self.minId = minId
+                self.maxId = maxId
+            }
+        }
+        case messageRange(Cons_messageRange)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -115,7 +151,19 @@ public extension Api {
 }
 public extension Api {
     enum MessageReactions: TypeConstructorDescription {
-        case messageReactions(flags: Int32, results: [Api.ReactionCount], recentReactions: [Api.MessagePeerReaction]?, topReactors: [Api.MessageReactor]?)
+        public class Cons_messageReactions {
+            public var flags: Int32
+            public var results: [Api.ReactionCount]
+            public var recentReactions: [Api.MessagePeerReaction]?
+            public var topReactors: [Api.MessageReactor]?
+            public init(flags: Int32, results: [Api.ReactionCount], recentReactions: [Api.MessagePeerReaction]?, topReactors: [Api.MessageReactor]?) {
+                self.flags = flags
+                self.results = results
+                self.recentReactions = recentReactions
+                self.topReactors = topReactors
+            }
+        }
+        case messageReactions(Cons_messageReactions)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -144,7 +192,17 @@ public extension Api {
 }
 public extension Api {
     enum MessageReactor: TypeConstructorDescription {
-        case messageReactor(flags: Int32, peerId: Api.Peer?, count: Int32)
+        public class Cons_messageReactor {
+            public var flags: Int32
+            public var peerId: Api.Peer?
+            public var count: Int32
+            public init(flags: Int32, peerId: Api.Peer?, count: Int32) {
+                self.flags = flags
+                self.peerId = peerId
+                self.count = count
+            }
+        }
+        case messageReactor(Cons_messageReactor)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -173,7 +231,25 @@ public extension Api {
 }
 public extension Api {
     enum MessageReplies: TypeConstructorDescription {
-        case messageReplies(flags: Int32, replies: Int32, repliesPts: Int32, recentRepliers: [Api.Peer]?, channelId: Int64?, maxId: Int32?, readMaxId: Int32?)
+        public class Cons_messageReplies {
+            public var flags: Int32
+            public var replies: Int32
+            public var repliesPts: Int32
+            public var recentRepliers: [Api.Peer]?
+            public var channelId: Int64?
+            public var maxId: Int32?
+            public var readMaxId: Int32?
+            public init(flags: Int32, replies: Int32, repliesPts: Int32, recentRepliers: [Api.Peer]?, channelId: Int64?, maxId: Int32?, readMaxId: Int32?) {
+                self.flags = flags
+                self.replies = replies
+                self.repliesPts = repliesPts
+                self.recentRepliers = recentRepliers
+                self.channelId = channelId
+                self.maxId = maxId
+                self.readMaxId = readMaxId
+            }
+        }
+        case messageReplies(Cons_messageReplies)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -202,8 +278,40 @@ public extension Api {
 }
 public extension Api {
     indirect enum MessageReplyHeader: TypeConstructorDescription {
-        case messageReplyHeader(flags: Int32, replyToMsgId: Int32?, replyToPeerId: Api.Peer?, replyFrom: Api.MessageFwdHeader?, replyMedia: Api.MessageMedia?, replyToTopId: Int32?, quoteText: String?, quoteEntities: [Api.MessageEntity]?, quoteOffset: Int32?, todoItemId: Int32?)
-        case messageReplyStoryHeader(peer: Api.Peer, storyId: Int32)
+        public class Cons_messageReplyHeader {
+            public var flags: Int32
+            public var replyToMsgId: Int32?
+            public var replyToPeerId: Api.Peer?
+            public var replyFrom: Api.MessageFwdHeader?
+            public var replyMedia: Api.MessageMedia?
+            public var replyToTopId: Int32?
+            public var quoteText: String?
+            public var quoteEntities: [Api.MessageEntity]?
+            public var quoteOffset: Int32?
+            public var todoItemId: Int32?
+            public init(flags: Int32, replyToMsgId: Int32?, replyToPeerId: Api.Peer?, replyFrom: Api.MessageFwdHeader?, replyMedia: Api.MessageMedia?, replyToTopId: Int32?, quoteText: String?, quoteEntities: [Api.MessageEntity]?, quoteOffset: Int32?, todoItemId: Int32?) {
+                self.flags = flags
+                self.replyToMsgId = replyToMsgId
+                self.replyToPeerId = replyToPeerId
+                self.replyFrom = replyFrom
+                self.replyMedia = replyMedia
+                self.replyToTopId = replyToTopId
+                self.quoteText = quoteText
+                self.quoteEntities = quoteEntities
+                self.quoteOffset = quoteOffset
+                self.todoItemId = todoItemId
+            }
+        }
+        public class Cons_messageReplyStoryHeader {
+            public var peer: Api.Peer
+            public var storyId: Int32
+            public init(peer: Api.Peer, storyId: Int32) {
+                self.peer = peer
+                self.storyId = storyId
+            }
+        }
+        case messageReplyHeader(Cons_messageReplyHeader)
+        case messageReplyStoryHeader(Cons_messageReplyStoryHeader)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -239,7 +347,15 @@ public extension Api {
 }
 public extension Api {
     enum MessageReportOption: TypeConstructorDescription {
-        case messageReportOption(text: String, option: Buffer)
+        public class Cons_messageReportOption {
+            public var text: String
+            public var option: Buffer
+            public init(text: String, option: Buffer) {
+                self.text = text
+                self.option = option
+            }
+        }
+        case messageReportOption(Cons_messageReportOption)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -268,7 +384,19 @@ public extension Api {
 }
 public extension Api {
     enum MessageViews: TypeConstructorDescription {
-        case messageViews(flags: Int32, views: Int32?, forwards: Int32?, replies: Api.MessageReplies?)
+        public class Cons_messageViews {
+            public var flags: Int32
+            public var views: Int32?
+            public var forwards: Int32?
+            public var replies: Api.MessageReplies?
+            public init(flags: Int32, views: Int32?, forwards: Int32?, replies: Api.MessageReplies?) {
+                self.flags = flags
+                self.views = views
+                self.forwards = forwards
+                self.replies = replies
+            }
+        }
+        case messageViews(Cons_messageViews)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -297,6 +425,12 @@ public extension Api {
 }
 public extension Api {
     enum MessagesFilter: TypeConstructorDescription {
+        public class Cons_inputMessagesFilterPhoneCalls {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
         case inputMessagesFilterChatPhotos
         case inputMessagesFilterContacts
         case inputMessagesFilterDocument
@@ -305,7 +439,7 @@ public extension Api {
         case inputMessagesFilterGif
         case inputMessagesFilterMusic
         case inputMessagesFilterMyMentions
-        case inputMessagesFilterPhoneCalls(flags: Int32)
+        case inputMessagesFilterPhoneCalls(Cons_inputMessagesFilterPhoneCalls)
         case inputMessagesFilterPhotoVideo
         case inputMessagesFilterPhotos
         case inputMessagesFilterPinned
@@ -454,7 +588,15 @@ public extension Api {
 }
 public extension Api {
     enum MissingInvitee: TypeConstructorDescription {
-        case missingInvitee(flags: Int32, userId: Int64)
+        public class Cons_missingInvitee {
+            public var flags: Int32
+            public var userId: Int64
+            public init(flags: Int32, userId: Int64) {
+                self.flags = flags
+                self.userId = userId
+            }
+        }
+        case missingInvitee(Cons_missingInvitee)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

@@ -211,7 +211,8 @@ func apiMessagePeerIds(_ message: Api.Message) -> [PeerId] {
         
             if let replyTo = replyTo {
                 switch replyTo {
-                case let .messageReplyStoryHeader(peer, _):
+                case let .messageReplyStoryHeader(messageReplyStoryHeaderData):
+                    let peer = messageReplyStoryHeaderData.peer
                     let storyPeerId = peer.peerId
                     if !result.contains(storyPeerId) {
                         result.append(storyPeerId)
@@ -307,7 +308,8 @@ func apiMessageAssociatedMessageIds(_ message: Api.Message) -> (replyIds: Refere
                 let peerId: PeerId = chatPeerId.peerId
 
                 switch replyTo {
-                case let .messageReplyHeader(_, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId):
+                case let .messageReplyHeader(messageReplyHeaderData):
+                    let (replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId) = (messageReplyHeaderData.replyToMsgId, messageReplyHeaderData.replyToPeerId, messageReplyHeaderData.replyFrom, messageReplyHeaderData.replyMedia, messageReplyHeaderData.replyToTopId, messageReplyHeaderData.quoteText, messageReplyHeaderData.quoteEntities, messageReplyHeaderData.quoteOffset, messageReplyHeaderData.todoItemId)
                     let _ = replyHeader
                     let _ = replyMedia
                     let _ = replyToTopId
@@ -332,7 +334,8 @@ func apiMessageAssociatedMessageIds(_ message: Api.Message) -> (replyIds: Refere
             let (id, chatPeerId, replyHeader) = (messageServiceData.id, messageServiceData.peerId, messageServiceData.replyTo)
             if let replyHeader = replyHeader {
                 switch replyHeader {
-                case let .messageReplyHeader(_, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId):
+                case let .messageReplyHeader(messageReplyHeaderData):
+                    let (replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId) = (messageReplyHeaderData.replyToMsgId, messageReplyHeaderData.replyToPeerId, messageReplyHeaderData.replyFrom, messageReplyHeaderData.replyMedia, messageReplyHeaderData.replyToTopId, messageReplyHeaderData.quoteText, messageReplyHeaderData.quoteEntities, messageReplyHeaderData.quoteOffset, messageReplyHeaderData.todoItemId)
                     let _ = replyHeader
                     let _ = replyMedia
                     let _ = replyToTopId
@@ -816,7 +819,8 @@ extension StoreMessage {
                 if let replyTo = replyTo {
                     var threadMessageId: MessageId?
                     switch replyTo {
-                    case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId):
+                    case let .messageReplyHeader(messageReplyHeaderData):
+                        let (innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId) = (messageReplyHeaderData.flags, messageReplyHeaderData.replyToMsgId, messageReplyHeaderData.replyToPeerId, messageReplyHeaderData.replyFrom, messageReplyHeaderData.replyMedia, messageReplyHeaderData.replyToTopId, messageReplyHeaderData.quoteText, messageReplyHeaderData.quoteEntities, messageReplyHeaderData.quoteOffset, messageReplyHeaderData.todoItemId)
                         let isForumTopic = (innerFlags & (1 << 3)) != 0
                         
                         var quote: EngineMessageReplyQuote?
@@ -872,15 +876,16 @@ extension StoreMessage {
                         if let replyHeader = replyHeader {
                             attributes.append(QuotedReplyMessageAttribute(apiHeader: replyHeader, quote: quote, isQuote: isQuote))
                         }
-                    case let .messageReplyStoryHeader(peer, storyId):
+                    case let .messageReplyStoryHeader(messageReplyStoryHeaderData):
+                        let (peer, storyId) = (messageReplyStoryHeaderData.peer, messageReplyStoryHeaderData.storyId)
                         attributes.append(ReplyStoryAttribute(storyId: StoryId(peerId: peer.peerId, id: storyId)))
                     }
                 }
-            
+
                 if threadId == nil && peerId.namespace == Namespaces.Peer.CloudChannel {
                     threadId = 1
                 }
-                
+
                 var forwardInfo: StoreMessageForwardInfo?
                 if let fwdFrom = fwdFrom {
                     switch fwdFrom {
@@ -1085,7 +1090,8 @@ extension StoreMessage {
                 if let replies = replies {
                     let recentRepliersPeerIds: [PeerId]?
                     switch replies {
-                    case let .messageReplies(_, repliesCount, _, recentRepliers, channelId, maxId, readMaxId):
+                    case let .messageReplies(messageRepliesData):
+                        let (repliesCount, recentRepliers, channelId, maxId, readMaxId) = (messageRepliesData.replies, messageRepliesData.recentRepliers, messageRepliesData.channelId, messageRepliesData.maxId, messageRepliesData.readMaxId)
                         if let recentRepliers = recentRepliers {
                             recentRepliersPeerIds = recentRepliers.map { $0.peerId }
                         } else {
@@ -1196,27 +1202,30 @@ extension StoreMessage {
                     
                     if chatPeerId.peerId.namespace == Namespaces.Peer.CloudChannel, let replyTo {
                         switch replyTo {
-                        case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, _, quoteText, quoteEntities, quoteOffset, todoItemId):
+                        case let .messageReplyHeader(messageReplyHeaderData):
+                            let (innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, quoteText, quoteEntities, quoteOffset, todoItemId) = (messageReplyHeaderData.flags, messageReplyHeaderData.replyToMsgId, messageReplyHeaderData.replyToPeerId, messageReplyHeaderData.replyFrom, messageReplyHeaderData.replyMedia, messageReplyHeaderData.quoteText, messageReplyHeaderData.quoteEntities, messageReplyHeaderData.quoteOffset, messageReplyHeaderData.todoItemId)
                             var quote: EngineMessageReplyQuote?
                             let isQuote = (innerFlags & (1 << 9)) != 0
                             if quoteText != nil || replyMedia != nil {
                                 quote = EngineMessageReplyQuote(text: quoteText ?? "", offset: quoteOffset.flatMap(Int.init), entities: messageTextEntitiesFromApiEntities(quoteEntities ?? []), media: textMediaAndExpirationTimerFromApiMedia(replyMedia, peerId).media)
                             }
-                            
+
                             if let replyToMsgId = replyToMsgId {
                                 let replyPeerId = replyToPeerId?.peerId ?? peerId
                                 attributes.append(ReplyMessageAttribute(messageId: MessageId(peerId: replyPeerId, namespace: Namespaces.Message.Cloud, id: replyToMsgId), threadMessageId: nil, quote: quote, isQuote: isQuote, todoItemId: todoItemId))
                             } else if let replyHeader = replyHeader {
                                 attributes.append(QuotedReplyMessageAttribute(apiHeader: replyHeader, quote: quote, isQuote: isQuote))
                             }
-                        case let .messageReplyStoryHeader(peer, storyId):
+                        case let .messageReplyStoryHeader(messageReplyStoryHeaderData):
+                            let (peer, storyId) = (messageReplyStoryHeaderData.peer, messageReplyStoryHeaderData.storyId)
                             attributes.append(ReplyStoryAttribute(storyId: StoryId(peerId: peer.peerId, id: storyId)))
                         }
                     }
                 } else if let replyTo = replyTo {
                     var threadMessageId: MessageId?
                     switch replyTo {
-                    case let .messageReplyHeader(innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId):
+                    case let .messageReplyHeader(messageReplyHeaderData):
+                        let (innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId) = (messageReplyHeaderData.flags, messageReplyHeaderData.replyToMsgId, messageReplyHeaderData.replyToPeerId, messageReplyHeaderData.replyFrom, messageReplyHeaderData.replyMedia, messageReplyHeaderData.replyToTopId, messageReplyHeaderData.quoteText, messageReplyHeaderData.quoteEntities, messageReplyHeaderData.quoteOffset, messageReplyHeaderData.todoItemId)
                         var quote: EngineMessageReplyQuote?
                         let isQuote = (innerFlags & (1 << 9)) != 0
                         if quoteText != nil || replyMedia != nil {
@@ -1246,7 +1255,8 @@ extension StoreMessage {
                         } else if let replyHeader = replyHeader {
                             attributes.append(QuotedReplyMessageAttribute(apiHeader: replyHeader, quote: quote, isQuote: isQuote))
                         }
-                    case let .messageReplyStoryHeader(peer, storyId):
+                    case let .messageReplyStoryHeader(messageReplyStoryHeaderData):
+                        let (peer, storyId) = (messageReplyStoryHeaderData.peer, messageReplyStoryHeaderData.storyId)
                         attributes.append(ReplyStoryAttribute(storyId: StoryId(peerId: peer.peerId, id: storyId)))
                     }
                 } else {
