@@ -1742,9 +1742,11 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 var peersNearby: [PeerNearby] = []
                 for peer in peers {
                     switch peer {
-                        case let .peerLocated(peer, expires, distance):
+                        case let .peerLocated(peerLocatedData):
+                            let (peer, expires, distance) = (peerLocatedData.peer, peerLocatedData.expires, peerLocatedData.distance)
                             peersNearby.append(.peer(id: peer.peerId, expires: expires, distance: distance))
-                        case let .peerSelfLocated(expires):
+                        case let .peerSelfLocated(peerSelfLocatedData):
+                            let expires = peerSelfLocatedData.expires
                             peersNearby.append(.selfPeer(expires: expires))
                     }
                 }

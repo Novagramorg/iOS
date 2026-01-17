@@ -807,10 +807,12 @@ extension StoreMessage {
                     case .peerUser:
                         peerId = chatPeerId.peerId
                         authorId = resolvedFromId
-                    case let .peerChat(chatId):
+                    case let .peerChat(peerChatData):
+                        let chatId = peerChatData.chatId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))
                         authorId = resolvedFromId
-                    case let .peerChannel(channelId):
+                    case let .peerChannel(peerChannelData):
+                        let channelId = peerChannelData.channelId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                         authorId = resolvedFromId
                 }

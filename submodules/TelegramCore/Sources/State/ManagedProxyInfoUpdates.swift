@@ -175,7 +175,8 @@ extension ServerSuggestionInfo.Item.Text {
 extension ServerSuggestionInfo.Item {
     convenience init(_ apiItem: Api.PendingSuggestion) {
         switch apiItem {
-        case let .pendingSuggestion(suggestion, title, description, url):
+        case let .pendingSuggestion(pendingSuggestionData):
+            let (suggestion, title, description, url) = (pendingSuggestionData.suggestion, pendingSuggestionData.title, pendingSuggestionData.description, pendingSuggestionData.url)
             self.init(
                 id: suggestion,
                 title: ServerSuggestionInfo.Item.Text(title),

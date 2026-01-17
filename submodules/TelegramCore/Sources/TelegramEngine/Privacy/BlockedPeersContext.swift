@@ -92,13 +92,14 @@ public final class BlockedPeersContext {
                         var renderedPeers: [RenderedPeer] = []
                         for blockedPeer in blocked {
                             switch blockedPeer {
-                            case let .peerBlocked(peerId, _):
+                            case let .peerBlocked(peerBlockedData):
+                                let peerId = peerBlockedData.peerId
                                 if let peer = transaction.getPeer(peerId.peerId) {
                                     renderedPeers.append(RenderedPeer(peer: peer))
                                 }
                             }
                         }
-                        
+
                         return (renderedPeers, false, nil)
                     case let .blockedSlice(count, blocked, chats, users):
                         let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
@@ -107,13 +108,14 @@ public final class BlockedPeersContext {
                         var renderedPeers: [RenderedPeer] = []
                         for blockedPeer in blocked {
                             switch blockedPeer {
-                            case let .peerBlocked(peerId, _):
+                            case let .peerBlocked(peerBlockedData):
+                                let peerId = peerBlockedData.peerId
                                 if let peer = transaction.getPeer(peerId.peerId) {
                                     renderedPeers.append(RenderedPeer(peer: peer))
                                 }
                             }
                         }
-                        
+
                         return (renderedPeers, true, Int(count))
                 }
             }

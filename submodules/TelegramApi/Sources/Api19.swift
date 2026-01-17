@@ -563,9 +563,27 @@ public extension Api {
 }
 public extension Api {
     enum Peer: TypeConstructorDescription {
-        case peerChannel(channelId: Int64)
-        case peerChat(chatId: Int64)
-        case peerUser(userId: Int64)
+        public class Cons_peerChannel {
+            public var channelId: Int64
+            public init(channelId: Int64) {
+                self.channelId = channelId
+            }
+        }
+        public class Cons_peerChat {
+            public var chatId: Int64
+            public init(chatId: Int64) {
+                self.chatId = chatId
+            }
+        }
+        public class Cons_peerUser {
+            public var userId: Int64
+            public init(userId: Int64) {
+                self.userId = userId
+            }
+        }
+        case peerChannel(Cons_peerChannel)
+        case peerChat(Cons_peerChat)
+        case peerUser(Cons_peerUser)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -608,7 +626,15 @@ public extension Api {
 }
 public extension Api {
     enum PeerBlocked: TypeConstructorDescription {
-        case peerBlocked(peerId: Api.Peer, date: Int32)
+        public class Cons_peerBlocked {
+            public var peerId: Api.Peer
+            public var date: Int32
+            public init(peerId: Api.Peer, date: Int32) {
+                self.peerId = peerId
+                self.date = date
+            }
+        }
+        case peerBlocked(Cons_peerBlocked)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -637,9 +663,45 @@ public extension Api {
 }
 public extension Api {
     enum PeerColor: TypeConstructorDescription {
-        case inputPeerColorCollectible(collectibleId: Int64)
-        case peerColor(flags: Int32, color: Int32?, backgroundEmojiId: Int64?)
-        case peerColorCollectible(flags: Int32, collectibleId: Int64, giftEmojiId: Int64, backgroundEmojiId: Int64, accentColor: Int32, colors: [Int32], darkAccentColor: Int32?, darkColors: [Int32]?)
+        public class Cons_inputPeerColorCollectible {
+            public var collectibleId: Int64
+            public init(collectibleId: Int64) {
+                self.collectibleId = collectibleId
+            }
+        }
+        public class Cons_peerColor {
+            public var flags: Int32
+            public var color: Int32?
+            public var backgroundEmojiId: Int64?
+            public init(flags: Int32, color: Int32?, backgroundEmojiId: Int64?) {
+                self.flags = flags
+                self.color = color
+                self.backgroundEmojiId = backgroundEmojiId
+            }
+        }
+        public class Cons_peerColorCollectible {
+            public var flags: Int32
+            public var collectibleId: Int64
+            public var giftEmojiId: Int64
+            public var backgroundEmojiId: Int64
+            public var accentColor: Int32
+            public var colors: [Int32]
+            public var darkAccentColor: Int32?
+            public var darkColors: [Int32]?
+            public init(flags: Int32, collectibleId: Int64, giftEmojiId: Int64, backgroundEmojiId: Int64, accentColor: Int32, colors: [Int32], darkAccentColor: Int32?, darkColors: [Int32]?) {
+                self.flags = flags
+                self.collectibleId = collectibleId
+                self.giftEmojiId = giftEmojiId
+                self.backgroundEmojiId = backgroundEmojiId
+                self.accentColor = accentColor
+                self.colors = colors
+                self.darkAccentColor = darkAccentColor
+                self.darkColors = darkColors
+            }
+        }
+        case inputPeerColorCollectible(Cons_inputPeerColorCollectible)
+        case peerColor(Cons_peerColor)
+        case peerColorCollectible(Cons_peerColorCollectible)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -682,8 +744,24 @@ public extension Api {
 }
 public extension Api {
     enum PeerLocated: TypeConstructorDescription {
-        case peerLocated(peer: Api.Peer, expires: Int32, distance: Int32)
-        case peerSelfLocated(expires: Int32)
+        public class Cons_peerLocated {
+            public var peer: Api.Peer
+            public var expires: Int32
+            public var distance: Int32
+            public init(peer: Api.Peer, expires: Int32, distance: Int32) {
+                self.peer = peer
+                self.expires = expires
+                self.distance = distance
+            }
+        }
+        public class Cons_peerSelfLocated {
+            public var expires: Int32
+            public init(expires: Int32) {
+                self.expires = expires
+            }
+        }
+        case peerLocated(Cons_peerLocated)
+        case peerSelfLocated(Cons_peerSelfLocated)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -719,7 +797,35 @@ public extension Api {
 }
 public extension Api {
     enum PeerNotifySettings: TypeConstructorDescription {
-        case peerNotifySettings(flags: Int32, showPreviews: Api.Bool?, silent: Api.Bool?, muteUntil: Int32?, iosSound: Api.NotificationSound?, androidSound: Api.NotificationSound?, otherSound: Api.NotificationSound?, storiesMuted: Api.Bool?, storiesHideSender: Api.Bool?, storiesIosSound: Api.NotificationSound?, storiesAndroidSound: Api.NotificationSound?, storiesOtherSound: Api.NotificationSound?)
+        public class Cons_peerNotifySettings {
+            public var flags: Int32
+            public var showPreviews: Api.Bool?
+            public var silent: Api.Bool?
+            public var muteUntil: Int32?
+            public var iosSound: Api.NotificationSound?
+            public var androidSound: Api.NotificationSound?
+            public var otherSound: Api.NotificationSound?
+            public var storiesMuted: Api.Bool?
+            public var storiesHideSender: Api.Bool?
+            public var storiesIosSound: Api.NotificationSound?
+            public var storiesAndroidSound: Api.NotificationSound?
+            public var storiesOtherSound: Api.NotificationSound?
+            public init(flags: Int32, showPreviews: Api.Bool?, silent: Api.Bool?, muteUntil: Int32?, iosSound: Api.NotificationSound?, androidSound: Api.NotificationSound?, otherSound: Api.NotificationSound?, storiesMuted: Api.Bool?, storiesHideSender: Api.Bool?, storiesIosSound: Api.NotificationSound?, storiesAndroidSound: Api.NotificationSound?, storiesOtherSound: Api.NotificationSound?) {
+                self.flags = flags
+                self.showPreviews = showPreviews
+                self.silent = silent
+                self.muteUntil = muteUntil
+                self.iosSound = iosSound
+                self.androidSound = androidSound
+                self.otherSound = otherSound
+                self.storiesMuted = storiesMuted
+                self.storiesHideSender = storiesHideSender
+                self.storiesIosSound = storiesIosSound
+                self.storiesAndroidSound = storiesAndroidSound
+                self.storiesOtherSound = storiesOtherSound
+            }
+        }
+        case peerNotifySettings(Cons_peerNotifySettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -748,7 +854,33 @@ public extension Api {
 }
 public extension Api {
     enum PeerSettings: TypeConstructorDescription {
-        case peerSettings(flags: Int32, geoDistance: Int32?, requestChatTitle: String?, requestChatDate: Int32?, businessBotId: Int64?, businessBotManageUrl: String?, chargePaidMessageStars: Int64?, registrationMonth: String?, phoneCountry: String?, nameChangeDate: Int32?, photoChangeDate: Int32?)
+        public class Cons_peerSettings {
+            public var flags: Int32
+            public var geoDistance: Int32?
+            public var requestChatTitle: String?
+            public var requestChatDate: Int32?
+            public var businessBotId: Int64?
+            public var businessBotManageUrl: String?
+            public var chargePaidMessageStars: Int64?
+            public var registrationMonth: String?
+            public var phoneCountry: String?
+            public var nameChangeDate: Int32?
+            public var photoChangeDate: Int32?
+            public init(flags: Int32, geoDistance: Int32?, requestChatTitle: String?, requestChatDate: Int32?, businessBotId: Int64?, businessBotManageUrl: String?, chargePaidMessageStars: Int64?, registrationMonth: String?, phoneCountry: String?, nameChangeDate: Int32?, photoChangeDate: Int32?) {
+                self.flags = flags
+                self.geoDistance = geoDistance
+                self.requestChatTitle = requestChatTitle
+                self.requestChatDate = requestChatDate
+                self.businessBotId = businessBotId
+                self.businessBotManageUrl = businessBotManageUrl
+                self.chargePaidMessageStars = chargePaidMessageStars
+                self.registrationMonth = registrationMonth
+                self.phoneCountry = phoneCountry
+                self.nameChangeDate = nameChangeDate
+                self.photoChangeDate = photoChangeDate
+            }
+        }
+        case peerSettings(Cons_peerSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -777,7 +909,19 @@ public extension Api {
 }
 public extension Api {
     enum PeerStories: TypeConstructorDescription {
-        case peerStories(flags: Int32, peer: Api.Peer, maxReadId: Int32?, stories: [Api.StoryItem])
+        public class Cons_peerStories {
+            public var flags: Int32
+            public var peer: Api.Peer
+            public var maxReadId: Int32?
+            public var stories: [Api.StoryItem]
+            public init(flags: Int32, peer: Api.Peer, maxReadId: Int32?, stories: [Api.StoryItem]) {
+                self.flags = flags
+                self.peer = peer
+                self.maxReadId = maxReadId
+                self.stories = stories
+            }
+        }
+        case peerStories(Cons_peerStories)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -806,7 +950,19 @@ public extension Api {
 }
 public extension Api {
     enum PendingSuggestion: TypeConstructorDescription {
-        case pendingSuggestion(suggestion: String, title: Api.TextWithEntities, description: Api.TextWithEntities, url: String)
+        public class Cons_pendingSuggestion {
+            public var suggestion: String
+            public var title: Api.TextWithEntities
+            public var description: Api.TextWithEntities
+            public var url: String
+            public init(suggestion: String, title: Api.TextWithEntities, description: Api.TextWithEntities, url: String) {
+                self.suggestion = suggestion
+                self.title = title
+                self.description = description
+                self.url = url
+            }
+        }
+        case pendingSuggestion(Cons_pendingSuggestion)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -835,12 +991,118 @@ public extension Api {
 }
 public extension Api {
     enum PhoneCall: TypeConstructorDescription {
-        case phoneCall(flags: Int32, id: Int64, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gAOrB: Buffer, keyFingerprint: Int64, protocol: Api.PhoneCallProtocol, connections: [Api.PhoneConnection], startDate: Int32, customParameters: Api.DataJSON?)
-        case phoneCallAccepted(flags: Int32, id: Int64, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gB: Buffer, protocol: Api.PhoneCallProtocol)
-        case phoneCallDiscarded(flags: Int32, id: Int64, reason: Api.PhoneCallDiscardReason?, duration: Int32?)
-        case phoneCallEmpty(id: Int64)
-        case phoneCallRequested(flags: Int32, id: Int64, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gAHash: Buffer, protocol: Api.PhoneCallProtocol)
-        case phoneCallWaiting(flags: Int32, id: Int64, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, protocol: Api.PhoneCallProtocol, receiveDate: Int32?)
+        public class Cons_phoneCall {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var date: Int32
+            public var adminId: Int64
+            public var participantId: Int64
+            public var gAOrB: Buffer
+            public var keyFingerprint: Int64
+            public var `protocol`: Api.PhoneCallProtocol
+            public var connections: [Api.PhoneConnection]
+            public var startDate: Int32
+            public var customParameters: Api.DataJSON?
+            public init(flags: Int32, id: Int64, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gAOrB: Buffer, keyFingerprint: Int64, `protocol`: Api.PhoneCallProtocol, connections: [Api.PhoneConnection], startDate: Int32, customParameters: Api.DataJSON?) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.date = date
+                self.adminId = adminId
+                self.participantId = participantId
+                self.gAOrB = gAOrB
+                self.keyFingerprint = keyFingerprint
+                self.`protocol` = `protocol`
+                self.connections = connections
+                self.startDate = startDate
+                self.customParameters = customParameters
+            }
+        }
+        public class Cons_phoneCallAccepted {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var date: Int32
+            public var adminId: Int64
+            public var participantId: Int64
+            public var gB: Buffer
+            public var `protocol`: Api.PhoneCallProtocol
+            public init(flags: Int32, id: Int64, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gB: Buffer, `protocol`: Api.PhoneCallProtocol) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.date = date
+                self.adminId = adminId
+                self.participantId = participantId
+                self.gB = gB
+                self.`protocol` = `protocol`
+            }
+        }
+        public class Cons_phoneCallDiscarded {
+            public var flags: Int32
+            public var id: Int64
+            public var reason: Api.PhoneCallDiscardReason?
+            public var duration: Int32?
+            public init(flags: Int32, id: Int64, reason: Api.PhoneCallDiscardReason?, duration: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.reason = reason
+                self.duration = duration
+            }
+        }
+        public class Cons_phoneCallEmpty {
+            public var id: Int64
+            public init(id: Int64) {
+                self.id = id
+            }
+        }
+        public class Cons_phoneCallRequested {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var date: Int32
+            public var adminId: Int64
+            public var participantId: Int64
+            public var gAHash: Buffer
+            public var `protocol`: Api.PhoneCallProtocol
+            public init(flags: Int32, id: Int64, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, gAHash: Buffer, `protocol`: Api.PhoneCallProtocol) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.date = date
+                self.adminId = adminId
+                self.participantId = participantId
+                self.gAHash = gAHash
+                self.`protocol` = `protocol`
+            }
+        }
+        public class Cons_phoneCallWaiting {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var date: Int32
+            public var adminId: Int64
+            public var participantId: Int64
+            public var `protocol`: Api.PhoneCallProtocol
+            public var receiveDate: Int32?
+            public init(flags: Int32, id: Int64, accessHash: Int64, date: Int32, adminId: Int64, participantId: Int64, `protocol`: Api.PhoneCallProtocol, receiveDate: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.date = date
+                self.adminId = adminId
+                self.participantId = participantId
+                self.`protocol` = `protocol`
+                self.receiveDate = receiveDate
+            }
+        }
+        case phoneCall(Cons_phoneCall)
+        case phoneCallAccepted(Cons_phoneCallAccepted)
+        case phoneCallDiscarded(Cons_phoneCallDiscarded)
+        case phoneCallEmpty(Cons_phoneCallEmpty)
+        case phoneCallRequested(Cons_phoneCallRequested)
+        case phoneCallWaiting(Cons_phoneCallWaiting)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

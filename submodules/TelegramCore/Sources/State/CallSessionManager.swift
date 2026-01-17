@@ -1074,7 +1074,8 @@ private final class CallSessionManagerContext {
         switch call {
         case .phoneCallEmpty:
             break
-        case let .phoneCallAccepted(_, id, _, _, _, _, gB, remoteProtocol):
+        case let .phoneCallAccepted(phoneCallAcceptedData):
+            let (id, gB, remoteProtocol) = (phoneCallAcceptedData.id, phoneCallAcceptedData.gB, phoneCallAcceptedData.protocol)
             let remoteVersions: [String]
             switch remoteProtocol {
             case let .phoneCallProtocol(_, _, _, versions):
@@ -1130,7 +1131,8 @@ private final class CallSessionManagerContext {
                     assertionFailure()
                 }
             }
-        case let .phoneCallDiscarded(flags, id, reason, _):
+        case let .phoneCallDiscarded(phoneCallDiscardedData):
+            let (flags, id, reason) = (phoneCallDiscardedData.flags, phoneCallDiscardedData.id, phoneCallDiscardedData.reason)
             let reportRating = (flags & (1 << 2)) != 0
             let sendDebugLogs = (flags & (1 << 3)) != 0
             if let internalId = self.contextIdByStableId[id] {
@@ -1146,7 +1148,8 @@ private final class CallSessionManagerContext {
                             parsedReason = .ended(.hungUp)
                         case .phoneCallDiscardReasonMissed:
                             parsedReason = .ended(.missed)
-                        case let .phoneCallDiscardReasonMigrateConferenceCall(slug):
+                        case let .phoneCallDiscardReasonMigrateConferenceCall(phoneCallDiscardReasonMigrateConferenceCallData):
+                            let slug = phoneCallDiscardReasonMigrateConferenceCallData.slug
                             parsedReason = .ended(.switchedToConference(slug: slug))
                         }
                     } else {
@@ -1186,7 +1189,8 @@ private final class CallSessionManagerContext {
                     //assertionFailure()
                 }
             }
-        case let .phoneCall(flags, id, _, _, _, _, gAOrB, keyFingerprint, callProtocol, connections, startDate, customParameters):
+        case let .phoneCall(phoneCallData):
+            let (flags, id, gAOrB, keyFingerprint, callProtocol, connections, startDate, customParameters) = (phoneCallData.flags, phoneCallData.id, phoneCallData.gAOrB, phoneCallData.keyFingerprint, phoneCallData.protocol, phoneCallData.connections, phoneCallData.startDate, phoneCallData.customParameters)
             let allowsP2P = (flags & (1 << 5)) != 0
             let supportsConferenceCalls = (flags & (1 << 8)) != 0
             if let internalId = self.contextIdByStableId[id] {
@@ -1254,7 +1258,8 @@ private final class CallSessionManagerContext {
                     assertionFailure()
                 }
             }
-        case let .phoneCallRequested(flags, id, accessHash, date, adminId, _, gAHash, requestedProtocol):
+        case let .phoneCallRequested(phoneCallRequestedData):
+            let (flags, id, accessHash, date, adminId, gAHash, requestedProtocol) = (phoneCallRequestedData.flags, phoneCallRequestedData.id, phoneCallRequestedData.accessHash, phoneCallRequestedData.date, phoneCallRequestedData.adminId, phoneCallRequestedData.gAHash, phoneCallRequestedData.protocol)
             let isVideo = (flags & (1 << 6)) != 0
             let versions: [String]
             switch requestedProtocol {
@@ -1279,7 +1284,8 @@ private final class CallSessionManagerContext {
                     }
                 }
             }
-        case let .phoneCallWaiting(_, id, _, _, _, _, _, receiveDate):
+        case let .phoneCallWaiting(phoneCallWaitingData):
+            let (id, receiveDate) = (phoneCallWaitingData.id, phoneCallWaitingData.receiveDate)
             if let internalId = self.contextIdByStableId[id] {
                 if let context = self.contexts[internalId] {
                     switch context.state {
@@ -1618,7 +1624,8 @@ private func acceptCallSession(accountPeerId: PeerId, postbox: Postbox, network:
                             return .failed
                         case .phoneCallWaiting:
                             return .success(.waiting(config: config))
-                        case let .phoneCall(flags, id, _, _, _, _, gAOrB, _, callProtocol, connections, startDate, customParameters):
+                        case let .phoneCall(phoneCallData):
+                            let (flags, id, gAOrB, callProtocol, connections, startDate, customParameters) = (phoneCallData.flags, phoneCallData.id, phoneCallData.gAOrB, phoneCallData.protocol, phoneCallData.connections, phoneCallData.startDate, phoneCallData.customParameters)
                             if id == stableId {
                                 switch callProtocol{
                                     case let .phoneCallProtocol(_, _, maxLayer, versions):
@@ -1681,9 +1688,11 @@ private func requestCallSession(postbox: Postbox, network: Network, peerId: Peer
                     switch result {
                         case let .phoneCall(phoneCall, _):
                             switch phoneCall {
-                                case let .phoneCallRequested(_, id, accessHash, _, _, _, _, _):
+                                case let .phoneCallRequested(phoneCallRequestedData):
+                                    let (id, accessHash) = (phoneCallRequestedData.id, phoneCallRequestedData.accessHash)
                                     return .success(id: id, accessHash: accessHash, config: config, gA: ga, remoteConfirmationTimestamp: nil)
-                                case let .phoneCallWaiting(_, id, accessHash, _, _, _, _, receiveDate):
+                                case let .phoneCallWaiting(phoneCallWaitingData):
+                                    let (id, accessHash, receiveDate) = (phoneCallWaitingData.id, phoneCallWaitingData.accessHash, phoneCallWaitingData.receiveDate)
                                     return .success(id: id, accessHash: accessHash, config: config, gA: ga, remoteConfirmationTimestamp: receiveDate)
                                 default:
                                     return .failed(.generic)
@@ -1755,7 +1764,7 @@ private func dropCallSession(network: Network, addUpdates: @escaping (Api.Update
     case .missed:
         mappedReason = .phoneCallDiscardReasonMissed
     case let .switchToConference(slug):
-        mappedReason = .phoneCallDiscardReasonMigrateConferenceCall(slug: slug)
+        mappedReason = .phoneCallDiscardReasonMigrateConferenceCall(.init(slug: slug))
     }
     
     var callFlags: Int32 = 0
@@ -1778,7 +1787,8 @@ private func dropCallSession(network: Network, addUpdates: @escaping (Api.Update
                         switch update {
                             case .updatePhoneCall(let phoneCall):
                                 switch phoneCall {
-                                    case let .phoneCallDiscarded(flags, _, _, _):
+                                    case let .phoneCallDiscarded(phoneCallDiscardedData):
+                                        let flags = phoneCallDiscardedData.flags
                                         reportRating = (flags & (1 << 2)) != 0
                                         sendDebugLogs = (flags & (1 << 3)) != 0
                                     default:
