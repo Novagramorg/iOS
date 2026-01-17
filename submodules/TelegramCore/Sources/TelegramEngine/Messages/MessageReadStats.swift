@@ -37,7 +37,8 @@ func _internal_messageReadStats(account: Account, id: MessageId) -> Signal<Messa
                     return MessageReadStats(reactionCount: 0, peers: [], readTimestamps: [:])
                 }
                 switch result {
-                case let .outboxReadDate(date):
+                case let .outboxReadDate(outboxReadDateData):
+                    let date = outboxReadDateData.date
                     return MessageReadStats(reactionCount: 0, peers: [EnginePeer(peer)], readTimestamps: [peer.id: date])
                 }
             }

@@ -345,7 +345,8 @@ extension Api.Update {
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]
             case let .updateNotifySettings(peer, _):
                 switch peer {
-                    case let .notifyPeer(peer):
+                    case let .notifyPeer(notifyPeerData):
+                        let peer = notifyPeerData.peer
                         return [peer.peerId]
                     default:
                         return []

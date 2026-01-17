@@ -1,6 +1,14 @@
 public extension Api {
     indirect enum PageCaption: TypeConstructorDescription {
-        case pageCaption(text: Api.RichText, credit: Api.RichText)
+        public class Cons_pageCaption {
+            public var text: Api.RichText
+            public var credit: Api.RichText
+            public init(text: Api.RichText, credit: Api.RichText) {
+                self.text = text
+                self.credit = credit
+            }
+        }
+        case pageCaption(Cons_pageCaption)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,8 +37,20 @@ public extension Api {
 }
 public extension Api {
     indirect enum PageListItem: TypeConstructorDescription {
-        case pageListItemBlocks(blocks: [Api.PageBlock])
-        case pageListItemText(text: Api.RichText)
+        public class Cons_pageListItemBlocks {
+            public var blocks: [Api.PageBlock]
+            public init(blocks: [Api.PageBlock]) {
+                self.blocks = blocks
+            }
+        }
+        public class Cons_pageListItemText {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        case pageListItemBlocks(Cons_pageListItemBlocks)
+        case pageListItemText(Cons_pageListItemText)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -66,8 +86,24 @@ public extension Api {
 }
 public extension Api {
     indirect enum PageListOrderedItem: TypeConstructorDescription {
-        case pageListOrderedItemBlocks(num: String, blocks: [Api.PageBlock])
-        case pageListOrderedItemText(num: String, text: Api.RichText)
+        public class Cons_pageListOrderedItemBlocks {
+            public var num: String
+            public var blocks: [Api.PageBlock]
+            public init(num: String, blocks: [Api.PageBlock]) {
+                self.num = num
+                self.blocks = blocks
+            }
+        }
+        public class Cons_pageListOrderedItemText {
+            public var num: String
+            public var text: Api.RichText
+            public init(num: String, text: Api.RichText) {
+                self.num = num
+                self.text = text
+            }
+        }
+        case pageListOrderedItemBlocks(Cons_pageListOrderedItemBlocks)
+        case pageListOrderedItemText(Cons_pageListOrderedItemText)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
