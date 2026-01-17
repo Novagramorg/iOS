@@ -139,7 +139,27 @@ public extension Api {
 }
 public extension Api {
     enum PageRelatedArticle: TypeConstructorDescription {
-        case pageRelatedArticle(flags: Int32, url: String, webpageId: Int64, title: String?, description: String?, photoId: Int64?, author: String?, publishedDate: Int32?)
+        public class Cons_pageRelatedArticle {
+            public var flags: Int32
+            public var url: String
+            public var webpageId: Int64
+            public var title: String?
+            public var description: String?
+            public var photoId: Int64?
+            public var author: String?
+            public var publishedDate: Int32?
+            public init(flags: Int32, url: String, webpageId: Int64, title: String?, description: String?, photoId: Int64?, author: String?, publishedDate: Int32?) {
+                self.flags = flags
+                self.url = url
+                self.webpageId = webpageId
+                self.title = title
+                self.description = description
+                self.photoId = photoId
+                self.author = author
+                self.publishedDate = publishedDate
+            }
+        }
+        case pageRelatedArticle(Cons_pageRelatedArticle)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -168,7 +188,19 @@ public extension Api {
 }
 public extension Api {
     indirect enum PageTableCell: TypeConstructorDescription {
-        case pageTableCell(flags: Int32, text: Api.RichText?, colspan: Int32?, rowspan: Int32?)
+        public class Cons_pageTableCell {
+            public var flags: Int32
+            public var text: Api.RichText?
+            public var colspan: Int32?
+            public var rowspan: Int32?
+            public init(flags: Int32, text: Api.RichText?, colspan: Int32?, rowspan: Int32?) {
+                self.flags = flags
+                self.text = text
+                self.colspan = colspan
+                self.rowspan = rowspan
+            }
+        }
+        case pageTableCell(Cons_pageTableCell)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -197,7 +229,13 @@ public extension Api {
 }
 public extension Api {
     enum PageTableRow: TypeConstructorDescription {
-        case pageTableRow(cells: [Api.PageTableCell])
+        public class Cons_pageTableRow {
+            public var cells: [Api.PageTableCell]
+            public init(cells: [Api.PageTableCell]) {
+                self.cells = cells
+            }
+        }
+        case pageTableRow(Cons_pageTableRow)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -226,9 +264,15 @@ public extension Api {
 }
 public extension Api {
     indirect enum PaidReactionPrivacy: TypeConstructorDescription {
+        public class Cons_paidReactionPrivacyPeer {
+            public var peer: Api.InputPeer
+            public init(peer: Api.InputPeer) {
+                self.peer = peer
+            }
+        }
         case paidReactionPrivacyAnonymous
         case paidReactionPrivacyDefault
-        case paidReactionPrivacyPeer(peer: Api.InputPeer)
+        case paidReactionPrivacyPeer(Cons_paidReactionPrivacyPeer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -271,7 +315,23 @@ public extension Api {
 }
 public extension Api {
     enum Passkey: TypeConstructorDescription {
-        case passkey(flags: Int32, id: String, name: String, date: Int32, softwareEmojiId: Int64?, lastUsageDate: Int32?)
+        public class Cons_passkey {
+            public var flags: Int32
+            public var id: String
+            public var name: String
+            public var date: Int32
+            public var softwareEmojiId: Int64?
+            public var lastUsageDate: Int32?
+            public init(flags: Int32, id: String, name: String, date: Int32, softwareEmojiId: Int64?, lastUsageDate: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.name = name
+                self.date = date
+                self.softwareEmojiId = softwareEmojiId
+                self.lastUsageDate = lastUsageDate
+            }
+        }
+        case passkey(Cons_passkey)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -300,7 +360,19 @@ public extension Api {
 }
 public extension Api {
     enum PasswordKdfAlgo: TypeConstructorDescription {
-        case passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(salt1: Buffer, salt2: Buffer, g: Int32, p: Buffer)
+        public class Cons_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow {
+            public var salt1: Buffer
+            public var salt2: Buffer
+            public var g: Int32
+            public var p: Buffer
+            public init(salt1: Buffer, salt2: Buffer, g: Int32, p: Buffer) {
+                self.salt1 = salt1
+                self.salt2 = salt2
+                self.g = g
+                self.p = p
+            }
+        }
+        case passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(Cons_passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow)
         case passwordKdfAlgoUnknown
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -337,7 +409,15 @@ public extension Api {
 }
 public extension Api {
     enum PaymentCharge: TypeConstructorDescription {
-        case paymentCharge(id: String, providerChargeId: String)
+        public class Cons_paymentCharge {
+            public var id: String
+            public var providerChargeId: String
+            public init(id: String, providerChargeId: String) {
+                self.id = id
+                self.providerChargeId = providerChargeId
+            }
+        }
+        case paymentCharge(Cons_paymentCharge)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -366,7 +446,15 @@ public extension Api {
 }
 public extension Api {
     enum PaymentFormMethod: TypeConstructorDescription {
-        case paymentFormMethod(url: String, title: String)
+        public class Cons_paymentFormMethod {
+            public var url: String
+            public var title: String
+            public init(url: String, title: String) {
+                self.url = url
+                self.title = title
+            }
+        }
+        case paymentFormMethod(Cons_paymentFormMethod)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -395,7 +483,21 @@ public extension Api {
 }
 public extension Api {
     enum PaymentRequestedInfo: TypeConstructorDescription {
-        case paymentRequestedInfo(flags: Int32, name: String?, phone: String?, email: String?, shippingAddress: Api.PostAddress?)
+        public class Cons_paymentRequestedInfo {
+            public var flags: Int32
+            public var name: String?
+            public var phone: String?
+            public var email: String?
+            public var shippingAddress: Api.PostAddress?
+            public init(flags: Int32, name: String?, phone: String?, email: String?, shippingAddress: Api.PostAddress?) {
+                self.flags = flags
+                self.name = name
+                self.phone = phone
+                self.email = email
+                self.shippingAddress = shippingAddress
+            }
+        }
+        case paymentRequestedInfo(Cons_paymentRequestedInfo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -424,7 +526,15 @@ public extension Api {
 }
 public extension Api {
     enum PaymentSavedCredentials: TypeConstructorDescription {
-        case paymentSavedCredentialsCard(id: String, title: String)
+        public class Cons_paymentSavedCredentialsCard {
+            public var id: String
+            public var title: String
+            public init(id: String, title: String) {
+                self.id = id
+                self.title = title
+            }
+        }
+        case paymentSavedCredentialsCard(Cons_paymentSavedCredentialsCard)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

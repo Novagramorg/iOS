@@ -1902,7 +1902,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     mappedPrivacy = .default
                 case .paidReactionPrivacyAnonymous:
                     mappedPrivacy = .anonymous
-                case let .paidReactionPrivacyPeer(peer):
+                case let .paidReactionPrivacyPeer(paidReactionPrivacyPeerData):
+                    let peer = paidReactionPrivacyPeerData.peer
                     let peerId: PeerId
                     switch peer {
                     case let .inputPeerChannel(inputPeerChannelData):

@@ -309,7 +309,7 @@ func _internal_updateStarsReactionPrivacy(account: Account, messageId: MessageId
             guard let inputPrivacyPeer else {
                 return .complete()
             }
-            mappedPrivacy = .paidReactionPrivacyPeer(peer: inputPrivacyPeer)
+            mappedPrivacy = .paidReactionPrivacyPeer(.init(peer: inputPrivacyPeer))
         }
         
         return account.network.request(Api.functions.messages.togglePaidReactionPrivacy(peer: inputPeer, msgId: messageId.id, private: mappedPrivacy))
@@ -431,7 +431,7 @@ private func requestSendStarsReaction(postbox: Postbox, network: Network, stateM
                     guard let inputPrivacyPeer = transaction.getPeer(peerId).flatMap(apiInputPeer) else {
                         return nil
                     }
-                    mappedPrivacy = .paidReactionPrivacyPeer(peer: inputPrivacyPeer)
+                    mappedPrivacy = .paidReactionPrivacyPeer(.init(peer: inputPrivacyPeer))
                 }
                 privacy = mappedPrivacy
                 break

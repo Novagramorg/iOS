@@ -364,7 +364,8 @@ public enum TwoStepPasswordDerivation {
         switch apiAlgo {
             case .passwordKdfAlgoUnknown:
                 self = .unknown
-            case let .passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(salt1, salt2, g, p):
+            case let .passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPowData):
+                let (salt1, salt2, g, p) = (passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPowData.salt1, passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPowData.salt2, passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPowData.g, passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPowData.p)
                 self = .sha256_sha256_PBKDF2_HMAC_sha512_sha256_srp(salt1: salt1.makeData(), salt2: salt2.makeData(), iterations: 100000, g: g, p: p.makeData())
         }
     }
@@ -375,7 +376,7 @@ public enum TwoStepPasswordDerivation {
                 return .passwordKdfAlgoUnknown
             case let .sha256_sha256_PBKDF2_HMAC_sha512_sha256_srp(salt1, salt2, iterations, g, p):
                 precondition(iterations == 100000)
-                return .passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(salt1: Buffer(data: salt1), salt2: Buffer(data: salt2), g: g, p: Buffer(data: p))
+                return .passwordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow(.init(salt1: Buffer(data: salt1), salt2: Buffer(data: salt2), g: g, p: Buffer(data: p)))
         }
     }
 }
@@ -497,7 +498,8 @@ public final class TelegramPasskey: Equatable {
 extension TelegramPasskey {
     convenience init(apiPasskey: Api.Passkey) {
         switch apiPasskey {
-        case let .passkey(_, id, name, date, softwareEmojiId, lastUsageDate):
+        case let .passkey(passkeyData):
+            let (id, name, date, softwareEmojiId, lastUsageDate) = (passkeyData.id, passkeyData.name, passkeyData.date, passkeyData.softwareEmojiId, passkeyData.lastUsageDate)
             self.init(id: id, name: name, date: date, emojiId: softwareEmojiId, lastUsageDate: lastUsageDate)
         }
     }
