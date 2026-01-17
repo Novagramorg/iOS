@@ -1,4 +1,128 @@
 public extension Api {
+    enum StarsAmount: TypeConstructorDescription {
+        case starsAmount(amount: Int64, nanos: Int32)
+        case starsTonAmount(amount: Int64)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starsAmount(_ reader: BufferReader) -> StarsAmount? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_starsTonAmount(_ reader: BufferReader) -> StarsAmount? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api {
+    enum StarsGiftOption: TypeConstructorDescription {
+        case starsGiftOption(flags: Int32, stars: Int64, storeProduct: String?, currency: String, amount: Int64)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starsGiftOption(_ reader: BufferReader) -> StarsGiftOption? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api {
+    enum StarsGiveawayOption: TypeConstructorDescription {
+        case starsGiveawayOption(flags: Int32, stars: Int64, yearlyBoosts: Int32, storeProduct: String?, currency: String, amount: Int64, winners: [Api.StarsGiveawayWinnersOption])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starsGiveawayOption(_ reader: BufferReader) -> StarsGiveawayOption? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api {
+    enum StarsGiveawayWinnersOption: TypeConstructorDescription {
+        case starsGiveawayWinnersOption(flags: Int32, users: Int32, perUserStars: Int64)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starsGiveawayWinnersOption(_ reader: BufferReader) -> StarsGiveawayWinnersOption? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api {
     enum StarsRating: TypeConstructorDescription {
         case starsRating(flags: Int32, level: Int32, currentLevelStars: Int64, stars: Int64, nextLevelStars: Int64?)
 
@@ -584,88 +708,6 @@ public extension Api {
         }
 
         public static func parse_stickerSet(_ reader: BufferReader) -> StickerSet? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api {
-    enum StickerSetCovered: TypeConstructorDescription {
-        case stickerSetCovered(set: Api.StickerSet, cover: Api.Document)
-        case stickerSetFullCovered(set: Api.StickerSet, packs: [Api.StickerPack], keywords: [Api.StickerKeyword], documents: [Api.Document])
-        case stickerSetMultiCovered(set: Api.StickerSet, covers: [Api.Document])
-        case stickerSetNoCovered(set: Api.StickerSet)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_stickerSetCovered(_ reader: BufferReader) -> StickerSetCovered? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_stickerSetFullCovered(_ reader: BufferReader) -> StickerSetCovered? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_stickerSetMultiCovered(_ reader: BufferReader) -> StickerSetCovered? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_stickerSetNoCovered(_ reader: BufferReader) -> StickerSetCovered? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api {
-    enum StoriesStealthMode: TypeConstructorDescription {
-        case storiesStealthMode(flags: Int32, activeUntilDate: Int32?, cooldownUntilDate: Int32?)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_storiesStealthMode(_ reader: BufferReader) -> StoriesStealthMode? {
             #if DEBUG
             preconditionFailure()
             #else

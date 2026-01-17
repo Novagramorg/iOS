@@ -211,10 +211,10 @@ public extension Api {
 }
 public extension Api {
     enum StarGiftAttribute: TypeConstructorDescription {
-        case starGiftAttributeBackdrop(name: String, backdropId: Int32, centerColor: Int32, edgeColor: Int32, patternColor: Int32, textColor: Int32, rarityPermille: Int32)
-        case starGiftAttributeModel(name: String, document: Api.Document, rarityPermille: Int32)
+        case starGiftAttributeBackdrop(name: String, backdropId: Int32, centerColor: Int32, edgeColor: Int32, patternColor: Int32, textColor: Int32, rarity: Api.StarGiftAttributeRarity)
+        case starGiftAttributeModel(flags: Int32, name: String, document: Api.Document, rarity: Api.StarGiftAttributeRarity)
         case starGiftAttributeOriginalDetails(flags: Int32, senderId: Api.Peer?, recipientId: Api.Peer, date: Int32, message: Api.TextWithEntities?)
-        case starGiftAttributePattern(name: String, document: Api.Document, rarityPermille: Int32)
+        case starGiftAttributePattern(name: String, document: Api.Document, rarity: Api.StarGiftAttributeRarity)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -328,6 +328,67 @@ public extension Api {
             #endif
         }
         public static func parse_starGiftAttributeIdPattern(_ reader: BufferReader) -> StarGiftAttributeId? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api {
+    enum StarGiftAttributeRarity: TypeConstructorDescription {
+        case starGiftAttributeRarity(permille: Int32)
+        case starGiftAttributeRarityEpic
+        case starGiftAttributeRarityLegendary
+        case starGiftAttributeRarityMythic
+        case starGiftAttributeRarityRare
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGiftAttributeRarity(_ reader: BufferReader) -> StarGiftAttributeRarity? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_starGiftAttributeRarityEpic(_ reader: BufferReader) -> StarGiftAttributeRarity? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_starGiftAttributeRarityLegendary(_ reader: BufferReader) -> StarGiftAttributeRarity? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_starGiftAttributeRarityMythic(_ reader: BufferReader) -> StarGiftAttributeRarity? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_starGiftAttributeRarityRare(_ reader: BufferReader) -> StarGiftAttributeRarity? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -584,130 +645,6 @@ public extension Api {
         }
 
         public static func parse_starRefProgram(_ reader: BufferReader) -> StarRefProgram? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api {
-    enum StarsAmount: TypeConstructorDescription {
-        case starsAmount(amount: Int64, nanos: Int32)
-        case starsTonAmount(amount: Int64)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_starsAmount(_ reader: BufferReader) -> StarsAmount? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_starsTonAmount(_ reader: BufferReader) -> StarsAmount? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api {
-    enum StarsGiftOption: TypeConstructorDescription {
-        case starsGiftOption(flags: Int32, stars: Int64, storeProduct: String?, currency: String, amount: Int64)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_starsGiftOption(_ reader: BufferReader) -> StarsGiftOption? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api {
-    enum StarsGiveawayOption: TypeConstructorDescription {
-        case starsGiveawayOption(flags: Int32, stars: Int64, yearlyBoosts: Int32, storeProduct: String?, currency: String, amount: Int64, winners: [Api.StarsGiveawayWinnersOption])
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_starsGiveawayOption(_ reader: BufferReader) -> StarsGiveawayOption? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api {
-    enum StarsGiveawayWinnersOption: TypeConstructorDescription {
-        case starsGiveawayWinnersOption(flags: Int32, users: Int32, perUserStars: Int64)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_starsGiveawayWinnersOption(_ reader: BufferReader) -> StarsGiveawayWinnersOption? {
             #if DEBUG
             preconditionFailure()
             #else

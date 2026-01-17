@@ -26,11 +26,14 @@ func _internal_suggestedLocalizationInfo(network: Network, languageCode: String,
             var entries: [LocalizationEntry] = []
             for string in strings {
                 switch string {
-                    case let .langPackString(key, value):
+                    case let .langPackString(langPackStringData):
+                        let (key, value) = (langPackStringData.key, langPackStringData.value)
                         entries.append(.string(key: key, value: value))
-                    case let .langPackStringPluralized(_, key, zeroValue, oneValue, twoValue, fewValue, manyValue, otherValue):
+                    case let .langPackStringPluralized(langPackStringPluralizedData):
+                        let (key, zeroValue, oneValue, twoValue, fewValue, manyValue, otherValue) = (langPackStringPluralizedData.key, langPackStringPluralizedData.zeroValue, langPackStringPluralizedData.oneValue, langPackStringPluralizedData.twoValue, langPackStringPluralizedData.fewValue, langPackStringPluralizedData.manyValue, langPackStringPluralizedData.otherValue)
                         entries.append(.pluralizedString(key: key, zero: zeroValue, one: oneValue, two: twoValue, few: fewValue, many: manyValue, other: otherValue))
-                    case let .langPackStringDeleted(key):
+                    case let .langPackStringDeleted(langPackStringDeletedData):
+                        let (key) = (langPackStringDeletedData.key)
                         entries.append(.string(key: key, value: ""))
                 }
             }
@@ -79,15 +82,19 @@ func _internal_downloadLocalization(network: Network, languageCode: String) -> S
         let version: Int32
         var entries: [LocalizationEntry] = []
         switch result {
-            case let .langPackDifference(_, _, versionValue, strings):
+            case let .langPackDifference(langPackDifferenceData):
+                let (versionValue, strings) = (langPackDifferenceData.version, langPackDifferenceData.strings)
                 version = versionValue
                 for string in strings {
                     switch string {
-                        case let .langPackString(key, value):
+                        case let .langPackString(langPackStringData):
+                            let (key, value) = (langPackStringData.key, langPackStringData.value)
                             entries.append(.string(key: key, value: value))
-                        case let .langPackStringPluralized(_, key, zeroValue, oneValue, twoValue, fewValue, manyValue, otherValue):
+                        case let .langPackStringPluralized(langPackStringPluralizedData):
+                            let (key, zeroValue, oneValue, twoValue, fewValue, manyValue, otherValue) = (langPackStringPluralizedData.key, langPackStringPluralizedData.zeroValue, langPackStringPluralizedData.oneValue, langPackStringPluralizedData.twoValue, langPackStringPluralizedData.fewValue, langPackStringPluralizedData.manyValue, langPackStringPluralizedData.otherValue)
                             entries.append(.pluralizedString(key: key, zero: zeroValue, one: oneValue, two: twoValue, few: fewValue, many: manyValue, other: otherValue))
-                        case let .langPackStringDeleted(key):
+                        case let .langPackStringDeleted(langPackStringDeletedData):
+                            let (key) = (langPackStringDeletedData.key)
                             entries.append(.string(key: key, value: ""))
                     }
                 }

@@ -1,6 +1,7 @@
-public extension Api.phone {
-    enum JoinAsPeers: TypeConstructorDescription {
-        case joinAsPeers(peers: [Api.Peer], chats: [Api.Chat], users: [Api.User])
+public extension Api.payments {
+    enum PaymentReceipt: TypeConstructorDescription {
+        case paymentReceipt(flags: Int32, date: Int32, botId: Int64, providerId: Int64, title: String, description: String, photo: Api.WebDocument?, invoice: Api.Invoice, info: Api.PaymentRequestedInfo?, shipping: Api.ShippingOption?, tipAmount: Int64?, currency: String, totalAmount: Int64, credentialsTitle: String, users: [Api.User])
+        case paymentReceiptStars(flags: Int32, date: Int32, botId: Int64, title: String, description: String, photo: Api.WebDocument?, invoice: Api.Invoice, currency: String, totalAmount: Int64, transactionId: String, users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -18,7 +19,626 @@ public extension Api.phone {
             #endif
         }
 
-        public static func parse_joinAsPeers(_ reader: BufferReader) -> JoinAsPeers? {
+        public static func parse_paymentReceipt(_ reader: BufferReader) -> PaymentReceipt? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_paymentReceiptStars(_ reader: BufferReader) -> PaymentReceipt? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    indirect enum PaymentResult: TypeConstructorDescription {
+        case paymentResult(updates: Api.Updates)
+        case paymentVerificationNeeded(url: String)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_paymentResult(_ reader: BufferReader) -> PaymentResult? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_paymentVerificationNeeded(_ reader: BufferReader) -> PaymentResult? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum ResaleStarGifts: TypeConstructorDescription {
+        case resaleStarGifts(flags: Int32, count: Int32, gifts: [Api.StarGift], nextOffset: String?, attributes: [Api.StarGiftAttribute]?, attributesHash: Int64?, chats: [Api.Chat], counters: [Api.StarGiftAttributeCounter]?, users: [Api.User])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_resaleStarGifts(_ reader: BufferReader) -> ResaleStarGifts? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum SavedInfo: TypeConstructorDescription {
+        case savedInfo(flags: Int32, savedInfo: Api.PaymentRequestedInfo?)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_savedInfo(_ reader: BufferReader) -> SavedInfo? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum SavedStarGifts: TypeConstructorDescription {
+        case savedStarGifts(flags: Int32, count: Int32, chatNotificationsEnabled: Api.Bool?, gifts: [Api.SavedStarGift], nextOffset: String?, chats: [Api.Chat], users: [Api.User])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_savedStarGifts(_ reader: BufferReader) -> SavedStarGifts? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarGiftActiveAuctions: TypeConstructorDescription {
+        case starGiftActiveAuctions(auctions: [Api.StarGiftActiveAuctionState], users: [Api.User], chats: [Api.Chat])
+        case starGiftActiveAuctionsNotModified
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGiftActiveAuctions(_ reader: BufferReader) -> StarGiftActiveAuctions? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_starGiftActiveAuctionsNotModified(_ reader: BufferReader) -> StarGiftActiveAuctions? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarGiftAuctionAcquiredGifts: TypeConstructorDescription {
+        case starGiftAuctionAcquiredGifts(gifts: [Api.StarGiftAuctionAcquiredGift], users: [Api.User], chats: [Api.Chat])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGiftAuctionAcquiredGifts(_ reader: BufferReader) -> StarGiftAuctionAcquiredGifts? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarGiftAuctionState: TypeConstructorDescription {
+        case starGiftAuctionState(gift: Api.StarGift, state: Api.StarGiftAuctionState, userState: Api.StarGiftAuctionUserState, timeout: Int32, users: [Api.User], chats: [Api.Chat])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGiftAuctionState(_ reader: BufferReader) -> StarGiftAuctionState? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarGiftCollections: TypeConstructorDescription {
+        case starGiftCollections(collections: [Api.StarGiftCollection])
+        case starGiftCollectionsNotModified
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGiftCollections(_ reader: BufferReader) -> StarGiftCollections? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_starGiftCollectionsNotModified(_ reader: BufferReader) -> StarGiftCollections? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarGiftUpgradeAttributes: TypeConstructorDescription {
+        case starGiftUpgradeAttributes(attributes: [Api.StarGiftAttribute])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGiftUpgradeAttributes(_ reader: BufferReader) -> StarGiftUpgradeAttributes? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarGiftUpgradePreview: TypeConstructorDescription {
+        case starGiftUpgradePreview(sampleAttributes: [Api.StarGiftAttribute], prices: [Api.StarGiftUpgradePrice], nextPrices: [Api.StarGiftUpgradePrice])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGiftUpgradePreview(_ reader: BufferReader) -> StarGiftUpgradePreview? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarGiftWithdrawalUrl: TypeConstructorDescription {
+        case starGiftWithdrawalUrl(url: String)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGiftWithdrawalUrl(_ reader: BufferReader) -> StarGiftWithdrawalUrl? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarGifts: TypeConstructorDescription {
+        case starGifts(hash: Int32, gifts: [Api.StarGift], chats: [Api.Chat], users: [Api.User])
+        case starGiftsNotModified
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starGifts(_ reader: BufferReader) -> StarGifts? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+        public static func parse_starGiftsNotModified(_ reader: BufferReader) -> StarGifts? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarsRevenueAdsAccountUrl: TypeConstructorDescription {
+        case starsRevenueAdsAccountUrl(url: String)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starsRevenueAdsAccountUrl(_ reader: BufferReader) -> StarsRevenueAdsAccountUrl? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarsRevenueStats: TypeConstructorDescription {
+        case starsRevenueStats(flags: Int32, topHoursGraph: Api.StatsGraph?, revenueGraph: Api.StatsGraph, status: Api.StarsRevenueStatus, usdRate: Double)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starsRevenueStats(_ reader: BufferReader) -> StarsRevenueStats? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarsRevenueWithdrawalUrl: TypeConstructorDescription {
+        case starsRevenueWithdrawalUrl(url: String)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starsRevenueWithdrawalUrl(_ reader: BufferReader) -> StarsRevenueWithdrawalUrl? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum StarsStatus: TypeConstructorDescription {
+        case starsStatus(flags: Int32, balance: Api.StarsAmount, subscriptions: [Api.StarsSubscription]?, subscriptionsNextOffset: String?, subscriptionsMissingBalance: Int64?, history: [Api.StarsTransaction]?, nextOffset: String?, chats: [Api.Chat], users: [Api.User])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_starsStatus(_ reader: BufferReader) -> StarsStatus? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum SuggestedStarRefBots: TypeConstructorDescription {
+        case suggestedStarRefBots(flags: Int32, count: Int32, suggestedBots: [Api.StarRefProgram], users: [Api.User], nextOffset: String?)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_suggestedStarRefBots(_ reader: BufferReader) -> SuggestedStarRefBots? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum UniqueStarGift: TypeConstructorDescription {
+        case uniqueStarGift(gift: Api.StarGift, chats: [Api.Chat], users: [Api.User])
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_uniqueStarGift(_ reader: BufferReader) -> UniqueStarGift? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum UniqueStarGiftValueInfo: TypeConstructorDescription {
+        case uniqueStarGiftValueInfo(flags: Int32, currency: String, value: Int64, initialSaleDate: Int32, initialSaleStars: Int64, initialSalePrice: Int64, lastSaleDate: Int32?, lastSalePrice: Int64?, floorPrice: Int64?, averagePrice: Int64?, listedCount: Int32?, fragmentListedCount: Int32?, fragmentListedUrl: String?)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_uniqueStarGiftValueInfo(_ reader: BufferReader) -> UniqueStarGiftValueInfo? {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+    }
+}
+public extension Api.payments {
+    enum ValidatedRequestedInfo: TypeConstructorDescription {
+        case validatedRequestedInfo(flags: Int32, id: String?, shippingOptions: [Api.ShippingOption]?)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            #if DEBUG
+            preconditionFailure()
+            #else
+            error
+            #endif
+        }
+
+        public static func parse_validatedRequestedInfo(_ reader: BufferReader) -> ValidatedRequestedInfo? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -28,8 +648,8 @@ public extension Api.phone {
     }
 }
 public extension Api.phone {
-    enum PhoneCall: TypeConstructorDescription {
-        case phoneCall(phoneCall: Api.PhoneCall, users: [Api.User])
+    enum ExportedGroupCallInvite: TypeConstructorDescription {
+        case exportedGroupCallInvite(link: String)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -47,7 +667,7 @@ public extension Api.phone {
             #endif
         }
 
-        public static func parse_phoneCall(_ reader: BufferReader) -> PhoneCall? {
+        public static func parse_exportedGroupCallInvite(_ reader: BufferReader) -> ExportedGroupCallInvite? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -56,9 +676,9 @@ public extension Api.phone {
         }
     }
 }
-public extension Api.photos {
-    enum Photo: TypeConstructorDescription {
-        case photo(photo: Api.Photo, users: [Api.User])
+public extension Api.phone {
+    enum GroupCall: TypeConstructorDescription {
+        case groupCall(call: Api.GroupCall, participants: [Api.GroupCallParticipant], participantsNextOffset: String, chats: [Api.Chat], users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -76,7 +696,7 @@ public extension Api.photos {
             #endif
         }
 
-        public static func parse_photo(_ reader: BufferReader) -> Photo? {
+        public static func parse_groupCall(_ reader: BufferReader) -> GroupCall? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -85,10 +705,9 @@ public extension Api.photos {
         }
     }
 }
-public extension Api.photos {
-    enum Photos: TypeConstructorDescription {
-        case photos(photos: [Api.Photo], users: [Api.User])
-        case photosSlice(count: Int32, photos: [Api.Photo], users: [Api.User])
+public extension Api.phone {
+    enum GroupCallStars: TypeConstructorDescription {
+        case groupCallStars(totalStars: Int64, topDonors: [Api.GroupCallDonor], chats: [Api.Chat], users: [Api.User])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -106,14 +725,7 @@ public extension Api.photos {
             #endif
         }
 
-        public static func parse_photos(_ reader: BufferReader) -> Photos? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_photosSlice(_ reader: BufferReader) -> Photos? {
+        public static func parse_groupCallStars(_ reader: BufferReader) -> GroupCallStars? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -122,9 +734,9 @@ public extension Api.photos {
         }
     }
 }
-public extension Api.premium {
-    enum BoostsList: TypeConstructorDescription {
-        case boostsList(flags: Int32, count: Int32, boosts: [Api.Boost], nextOffset: String?, users: [Api.User])
+public extension Api.phone {
+    enum GroupCallStreamChannels: TypeConstructorDescription {
+        case groupCallStreamChannels(channels: [Api.GroupCallStreamChannel])
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -142,7 +754,7 @@ public extension Api.premium {
             #endif
         }
 
-        public static func parse_boostsList(_ reader: BufferReader) -> BoostsList? {
+        public static func parse_groupCallStreamChannels(_ reader: BufferReader) -> GroupCallStreamChannels? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -151,9 +763,9 @@ public extension Api.premium {
         }
     }
 }
-public extension Api.premium {
-    enum BoostsStatus: TypeConstructorDescription {
-        case boostsStatus(flags: Int32, level: Int32, currentLevelBoosts: Int32, boosts: Int32, giftBoosts: Int32?, nextLevelBoosts: Int32?, premiumAudience: Api.StatsPercentValue?, boostUrl: String, prepaidGiveaways: [Api.PrepaidGiveaway]?, myBoostSlots: [Int32]?)
+public extension Api.phone {
+    enum GroupCallStreamRtmpUrl: TypeConstructorDescription {
+        case groupCallStreamRtmpUrl(url: String, key: String)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -171,7 +783,7 @@ public extension Api.premium {
             #endif
         }
 
-        public static func parse_boostsStatus(_ reader: BufferReader) -> BoostsStatus? {
+        public static func parse_groupCallStreamRtmpUrl(_ reader: BufferReader) -> GroupCallStreamRtmpUrl? {
             #if DEBUG
             preconditionFailure()
             #else
@@ -180,9 +792,9 @@ public extension Api.premium {
         }
     }
 }
-public extension Api.premium {
-    enum MyBoosts: TypeConstructorDescription {
-        case myBoosts(myBoosts: [Api.MyBoost], chats: [Api.Chat], users: [Api.User])
+public extension Api.phone {
+    enum GroupParticipants: TypeConstructorDescription {
+        case groupParticipants(count: Int32, participants: [Api.GroupCallParticipant], nextOffset: String, chats: [Api.Chat], users: [Api.User], version: Int32)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -200,472 +812,7 @@ public extension Api.premium {
             #endif
         }
 
-        public static func parse_myBoosts(_ reader: BufferReader) -> MyBoosts? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.smsjobs {
-    enum EligibilityToJoin: TypeConstructorDescription {
-        case eligibleToJoin(termsUrl: String, monthlySentSms: Int32)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_eligibleToJoin(_ reader: BufferReader) -> EligibilityToJoin? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.smsjobs {
-    enum Status: TypeConstructorDescription {
-        case status(flags: Int32, recentSent: Int32, recentSince: Int32, recentRemains: Int32, totalSent: Int32, totalSince: Int32, lastGiftSlug: String?, termsUrl: String)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_status(_ reader: BufferReader) -> Status? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stats {
-    enum BroadcastStats: TypeConstructorDescription {
-        case broadcastStats(period: Api.StatsDateRangeDays, followers: Api.StatsAbsValueAndPrev, viewsPerPost: Api.StatsAbsValueAndPrev, sharesPerPost: Api.StatsAbsValueAndPrev, reactionsPerPost: Api.StatsAbsValueAndPrev, viewsPerStory: Api.StatsAbsValueAndPrev, sharesPerStory: Api.StatsAbsValueAndPrev, reactionsPerStory: Api.StatsAbsValueAndPrev, enabledNotifications: Api.StatsPercentValue, growthGraph: Api.StatsGraph, followersGraph: Api.StatsGraph, muteGraph: Api.StatsGraph, topHoursGraph: Api.StatsGraph, interactionsGraph: Api.StatsGraph, ivInteractionsGraph: Api.StatsGraph, viewsBySourceGraph: Api.StatsGraph, newFollowersBySourceGraph: Api.StatsGraph, languagesGraph: Api.StatsGraph, reactionsByEmotionGraph: Api.StatsGraph, storyInteractionsGraph: Api.StatsGraph, storyReactionsByEmotionGraph: Api.StatsGraph, recentPostsInteractions: [Api.PostInteractionCounters])
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_broadcastStats(_ reader: BufferReader) -> BroadcastStats? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stats {
-    enum MegagroupStats: TypeConstructorDescription {
-        case megagroupStats(period: Api.StatsDateRangeDays, members: Api.StatsAbsValueAndPrev, messages: Api.StatsAbsValueAndPrev, viewers: Api.StatsAbsValueAndPrev, posters: Api.StatsAbsValueAndPrev, growthGraph: Api.StatsGraph, membersGraph: Api.StatsGraph, newMembersBySourceGraph: Api.StatsGraph, languagesGraph: Api.StatsGraph, messagesGraph: Api.StatsGraph, actionsGraph: Api.StatsGraph, topHoursGraph: Api.StatsGraph, weekdaysGraph: Api.StatsGraph, topPosters: [Api.StatsGroupTopPoster], topAdmins: [Api.StatsGroupTopAdmin], topInviters: [Api.StatsGroupTopInviter], users: [Api.User])
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_megagroupStats(_ reader: BufferReader) -> MegagroupStats? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stats {
-    enum MessageStats: TypeConstructorDescription {
-        case messageStats(viewsGraph: Api.StatsGraph, reactionsByEmotionGraph: Api.StatsGraph)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_messageStats(_ reader: BufferReader) -> MessageStats? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stats {
-    enum PublicForwards: TypeConstructorDescription {
-        case publicForwards(flags: Int32, count: Int32, forwards: [Api.PublicForward], nextOffset: String?, chats: [Api.Chat], users: [Api.User])
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_publicForwards(_ reader: BufferReader) -> PublicForwards? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stats {
-    enum StoryStats: TypeConstructorDescription {
-        case storyStats(viewsGraph: Api.StatsGraph, reactionsByEmotionGraph: Api.StatsGraph)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_storyStats(_ reader: BufferReader) -> StoryStats? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stickers {
-    enum SuggestedShortName: TypeConstructorDescription {
-        case suggestedShortName(shortName: String)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_suggestedShortName(_ reader: BufferReader) -> SuggestedShortName? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.storage {
-    enum FileType: TypeConstructorDescription {
-        case fileGif
-        case fileJpeg
-        case fileMov
-        case fileMp3
-        case fileMp4
-        case filePartial
-        case filePdf
-        case filePng
-        case fileUnknown
-        case fileWebp
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_fileGif(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_fileJpeg(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_fileMov(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_fileMp3(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_fileMp4(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_filePartial(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_filePdf(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_filePng(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_fileUnknown(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_fileWebp(_ reader: BufferReader) -> FileType? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stories {
-    enum Albums: TypeConstructorDescription {
-        case albums(hash: Int64, albums: [Api.StoryAlbum])
-        case albumsNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_albums(_ reader: BufferReader) -> Albums? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_albumsNotModified(_ reader: BufferReader) -> Albums? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stories {
-    enum AllStories: TypeConstructorDescription {
-        case allStories(flags: Int32, count: Int32, state: String, peerStories: [Api.PeerStories], chats: [Api.Chat], users: [Api.User], stealthMode: Api.StoriesStealthMode)
-        case allStoriesNotModified(flags: Int32, state: String, stealthMode: Api.StoriesStealthMode)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_allStories(_ reader: BufferReader) -> AllStories? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-        public static func parse_allStoriesNotModified(_ reader: BufferReader) -> AllStories? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stories {
-    enum CanSendStoryCount: TypeConstructorDescription {
-        case canSendStoryCount(countRemains: Int32)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_canSendStoryCount(_ reader: BufferReader) -> CanSendStoryCount? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-    }
-}
-public extension Api.stories {
-    enum FoundStories: TypeConstructorDescription {
-        case foundStories(flags: Int32, count: Int32, stories: [Api.FoundStory], nextOffset: String?, chats: [Api.Chat], users: [Api.User])
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
-        }
-
-        public static func parse_foundStories(_ reader: BufferReader) -> FoundStories? {
+        public static func parse_groupParticipants(_ reader: BufferReader) -> GroupParticipants? {
             #if DEBUG
             preconditionFailure()
             #else

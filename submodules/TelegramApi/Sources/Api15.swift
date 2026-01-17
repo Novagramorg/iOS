@@ -1,6 +1,12 @@
 public extension Api {
     enum KeyboardButtonRow: TypeConstructorDescription {
-        case keyboardButtonRow(buttons: [Api.KeyboardButton])
+        public class Cons_keyboardButtonRow {
+            public var buttons: [Api.KeyboardButton]
+            public init(buttons: [Api.KeyboardButton]) {
+                self.buttons = buttons
+            }
+        }
+        case keyboardButtonRow(Cons_keyboardButtonRow)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,7 +35,15 @@ public extension Api {
 }
 public extension Api {
     enum LabeledPrice: TypeConstructorDescription {
-        case labeledPrice(label: String, amount: Int64)
+        public class Cons_labeledPrice {
+            public var label: String
+            public var amount: Int64
+            public init(label: String, amount: Int64) {
+                self.label = label
+                self.amount = amount
+            }
+        }
+        case labeledPrice(Cons_labeledPrice)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -58,7 +72,19 @@ public extension Api {
 }
 public extension Api {
     enum LangPackDifference: TypeConstructorDescription {
-        case langPackDifference(langCode: String, fromVersion: Int32, version: Int32, strings: [Api.LangPackString])
+        public class Cons_langPackDifference {
+            public var langCode: String
+            public var fromVersion: Int32
+            public var version: Int32
+            public var strings: [Api.LangPackString]
+            public init(langCode: String, fromVersion: Int32, version: Int32, strings: [Api.LangPackString]) {
+                self.langCode = langCode
+                self.fromVersion = fromVersion
+                self.version = version
+                self.strings = strings
+            }
+        }
+        case langPackDifference(Cons_langPackDifference)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -87,7 +113,29 @@ public extension Api {
 }
 public extension Api {
     enum LangPackLanguage: TypeConstructorDescription {
-        case langPackLanguage(flags: Int32, name: String, nativeName: String, langCode: String, baseLangCode: String?, pluralCode: String, stringsCount: Int32, translatedCount: Int32, translationsUrl: String)
+        public class Cons_langPackLanguage {
+            public var flags: Int32
+            public var name: String
+            public var nativeName: String
+            public var langCode: String
+            public var baseLangCode: String?
+            public var pluralCode: String
+            public var stringsCount: Int32
+            public var translatedCount: Int32
+            public var translationsUrl: String
+            public init(flags: Int32, name: String, nativeName: String, langCode: String, baseLangCode: String?, pluralCode: String, stringsCount: Int32, translatedCount: Int32, translationsUrl: String) {
+                self.flags = flags
+                self.name = name
+                self.nativeName = nativeName
+                self.langCode = langCode
+                self.baseLangCode = baseLangCode
+                self.pluralCode = pluralCode
+                self.stringsCount = stringsCount
+                self.translatedCount = translatedCount
+                self.translationsUrl = translationsUrl
+            }
+        }
+        case langPackLanguage(Cons_langPackLanguage)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -116,9 +164,43 @@ public extension Api {
 }
 public extension Api {
     enum LangPackString: TypeConstructorDescription {
-        case langPackString(key: String, value: String)
-        case langPackStringDeleted(key: String)
-        case langPackStringPluralized(flags: Int32, key: String, zeroValue: String?, oneValue: String?, twoValue: String?, fewValue: String?, manyValue: String?, otherValue: String)
+        public class Cons_langPackString {
+            public var key: String
+            public var value: String
+            public init(key: String, value: String) {
+                self.key = key
+                self.value = value
+            }
+        }
+        public class Cons_langPackStringDeleted {
+            public var key: String
+            public init(key: String) {
+                self.key = key
+            }
+        }
+        public class Cons_langPackStringPluralized {
+            public var flags: Int32
+            public var key: String
+            public var zeroValue: String?
+            public var oneValue: String?
+            public var twoValue: String?
+            public var fewValue: String?
+            public var manyValue: String?
+            public var otherValue: String
+            public init(flags: Int32, key: String, zeroValue: String?, oneValue: String?, twoValue: String?, fewValue: String?, manyValue: String?, otherValue: String) {
+                self.flags = flags
+                self.key = key
+                self.zeroValue = zeroValue
+                self.oneValue = oneValue
+                self.twoValue = twoValue
+                self.fewValue = fewValue
+                self.manyValue = manyValue
+                self.otherValue = otherValue
+            }
+        }
+        case langPackString(Cons_langPackString)
+        case langPackStringDeleted(Cons_langPackStringDeleted)
+        case langPackStringPluralized(Cons_langPackStringPluralized)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
