@@ -446,7 +446,8 @@ func textMediaAndExpirationTimerFromApiMedia(_ media: Api.MessageMedia?, _ peerI
         case let .messageMediaPoll(messageMediaPollData):
             let (poll, results) = (messageMediaPollData.poll, messageMediaPollData.results)
             switch poll {
-            case let .poll(id, flags, question, answers, closePeriod, _):
+            case let .poll(pollData):
+                let (id, flags, question, answers, closePeriod, _) = (pollData.id, pollData.flags, pollData.question, pollData.answers, pollData.closePeriod, pollData.closeDate)
                 let publicity: TelegramMediaPollPublicity
                 if (flags & (1 << 1)) != 0 {
                     publicity = .public

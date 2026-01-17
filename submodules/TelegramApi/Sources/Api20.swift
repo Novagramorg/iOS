@@ -67,7 +67,19 @@ public extension Api {
 }
 public extension Api {
     enum PhoneCallProtocol: TypeConstructorDescription {
-        case phoneCallProtocol(flags: Int32, minLayer: Int32, maxLayer: Int32, libraryVersions: [String])
+        public class Cons_phoneCallProtocol {
+            public var flags: Int32
+            public var minLayer: Int32
+            public var maxLayer: Int32
+            public var libraryVersions: [String]
+            public init(flags: Int32, minLayer: Int32, maxLayer: Int32, libraryVersions: [String]) {
+                self.flags = flags
+                self.minLayer = minLayer
+                self.maxLayer = maxLayer
+                self.libraryVersions = libraryVersions
+            }
+        }
+        case phoneCallProtocol(Cons_phoneCallProtocol)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -96,8 +108,42 @@ public extension Api {
 }
 public extension Api {
     enum PhoneConnection: TypeConstructorDescription {
-        case phoneConnection(flags: Int32, id: Int64, ip: String, ipv6: String, port: Int32, peerTag: Buffer)
-        case phoneConnectionWebrtc(flags: Int32, id: Int64, ip: String, ipv6: String, port: Int32, username: String, password: String)
+        public class Cons_phoneConnection {
+            public var flags: Int32
+            public var id: Int64
+            public var ip: String
+            public var ipv6: String
+            public var port: Int32
+            public var peerTag: Buffer
+            public init(flags: Int32, id: Int64, ip: String, ipv6: String, port: Int32, peerTag: Buffer) {
+                self.flags = flags
+                self.id = id
+                self.ip = ip
+                self.ipv6 = ipv6
+                self.port = port
+                self.peerTag = peerTag
+            }
+        }
+        public class Cons_phoneConnectionWebrtc {
+            public var flags: Int32
+            public var id: Int64
+            public var ip: String
+            public var ipv6: String
+            public var port: Int32
+            public var username: String
+            public var password: String
+            public init(flags: Int32, id: Int64, ip: String, ipv6: String, port: Int32, username: String, password: String) {
+                self.flags = flags
+                self.id = id
+                self.ip = ip
+                self.ipv6 = ipv6
+                self.port = port
+                self.username = username
+                self.password = password
+            }
+        }
+        case phoneConnection(Cons_phoneConnection)
+        case phoneConnectionWebrtc(Cons_phoneConnectionWebrtc)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -133,8 +179,34 @@ public extension Api {
 }
 public extension Api {
     enum Photo: TypeConstructorDescription {
-        case photo(flags: Int32, id: Int64, accessHash: Int64, fileReference: Buffer, date: Int32, sizes: [Api.PhotoSize], videoSizes: [Api.VideoSize]?, dcId: Int32)
-        case photoEmpty(id: Int64)
+        public class Cons_photo {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var fileReference: Buffer
+            public var date: Int32
+            public var sizes: [Api.PhotoSize]
+            public var videoSizes: [Api.VideoSize]?
+            public var dcId: Int32
+            public init(flags: Int32, id: Int64, accessHash: Int64, fileReference: Buffer, date: Int32, sizes: [Api.PhotoSize], videoSizes: [Api.VideoSize]?, dcId: Int32) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.fileReference = fileReference
+                self.date = date
+                self.sizes = sizes
+                self.videoSizes = videoSizes
+                self.dcId = dcId
+            }
+        }
+        public class Cons_photoEmpty {
+            public var id: Int64
+            public init(id: Int64) {
+                self.id = id
+            }
+        }
+        case photo(Cons_photo)
+        case photoEmpty(Cons_photoEmpty)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -170,12 +242,70 @@ public extension Api {
 }
 public extension Api {
     enum PhotoSize: TypeConstructorDescription {
-        case photoCachedSize(type: String, w: Int32, h: Int32, bytes: Buffer)
-        case photoPathSize(type: String, bytes: Buffer)
-        case photoSize(type: String, w: Int32, h: Int32, size: Int32)
-        case photoSizeEmpty(type: String)
-        case photoSizeProgressive(type: String, w: Int32, h: Int32, sizes: [Int32])
-        case photoStrippedSize(type: String, bytes: Buffer)
+        public class Cons_photoCachedSize {
+            public var type: String
+            public var w: Int32
+            public var h: Int32
+            public var bytes: Buffer
+            public init(type: String, w: Int32, h: Int32, bytes: Buffer) {
+                self.type = type
+                self.w = w
+                self.h = h
+                self.bytes = bytes
+            }
+        }
+        public class Cons_photoPathSize {
+            public var type: String
+            public var bytes: Buffer
+            public init(type: String, bytes: Buffer) {
+                self.type = type
+                self.bytes = bytes
+            }
+        }
+        public class Cons_photoSize {
+            public var type: String
+            public var w: Int32
+            public var h: Int32
+            public var size: Int32
+            public init(type: String, w: Int32, h: Int32, size: Int32) {
+                self.type = type
+                self.w = w
+                self.h = h
+                self.size = size
+            }
+        }
+        public class Cons_photoSizeEmpty {
+            public var type: String
+            public init(type: String) {
+                self.type = type
+            }
+        }
+        public class Cons_photoSizeProgressive {
+            public var type: String
+            public var w: Int32
+            public var h: Int32
+            public var sizes: [Int32]
+            public init(type: String, w: Int32, h: Int32, sizes: [Int32]) {
+                self.type = type
+                self.w = w
+                self.h = h
+                self.sizes = sizes
+            }
+        }
+        public class Cons_photoStrippedSize {
+            public var type: String
+            public var bytes: Buffer
+            public init(type: String, bytes: Buffer) {
+                self.type = type
+                self.bytes = bytes
+            }
+        }
+        case photoCachedSize(Cons_photoCachedSize)
+        case photoPathSize(Cons_photoPathSize)
+        case photoSize(Cons_photoSize)
+        case photoSizeEmpty(Cons_photoSizeEmpty)
+        case photoSizeProgressive(Cons_photoSizeProgressive)
+        case photoStrippedSize(Cons_photoStrippedSize)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -239,7 +369,23 @@ public extension Api {
 }
 public extension Api {
     enum Poll: TypeConstructorDescription {
-        case poll(id: Int64, flags: Int32, question: Api.TextWithEntities, answers: [Api.PollAnswer], closePeriod: Int32?, closeDate: Int32?)
+        public class Cons_poll {
+            public var id: Int64
+            public var flags: Int32
+            public var question: Api.TextWithEntities
+            public var answers: [Api.PollAnswer]
+            public var closePeriod: Int32?
+            public var closeDate: Int32?
+            public init(id: Int64, flags: Int32, question: Api.TextWithEntities, answers: [Api.PollAnswer], closePeriod: Int32?, closeDate: Int32?) {
+                self.id = id
+                self.flags = flags
+                self.question = question
+                self.answers = answers
+                self.closePeriod = closePeriod
+                self.closeDate = closeDate
+            }
+        }
+        case poll(Cons_poll)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -268,7 +414,15 @@ public extension Api {
 }
 public extension Api {
     enum PollAnswer: TypeConstructorDescription {
-        case pollAnswer(text: Api.TextWithEntities, option: Buffer)
+        public class Cons_pollAnswer {
+            public var text: Api.TextWithEntities
+            public var option: Buffer
+            public init(text: Api.TextWithEntities, option: Buffer) {
+                self.text = text
+                self.option = option
+            }
+        }
+        case pollAnswer(Cons_pollAnswer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -297,7 +451,17 @@ public extension Api {
 }
 public extension Api {
     enum PollAnswerVoters: TypeConstructorDescription {
-        case pollAnswerVoters(flags: Int32, option: Buffer, voters: Int32)
+        public class Cons_pollAnswerVoters {
+            public var flags: Int32
+            public var option: Buffer
+            public var voters: Int32
+            public init(flags: Int32, option: Buffer, voters: Int32) {
+                self.flags = flags
+                self.option = option
+                self.voters = voters
+            }
+        }
+        case pollAnswerVoters(Cons_pollAnswerVoters)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -326,7 +490,23 @@ public extension Api {
 }
 public extension Api {
     enum PollResults: TypeConstructorDescription {
-        case pollResults(flags: Int32, results: [Api.PollAnswerVoters]?, totalVoters: Int32?, recentVoters: [Api.Peer]?, solution: String?, solutionEntities: [Api.MessageEntity]?)
+        public class Cons_pollResults {
+            public var flags: Int32
+            public var results: [Api.PollAnswerVoters]?
+            public var totalVoters: Int32?
+            public var recentVoters: [Api.Peer]?
+            public var solution: String?
+            public var solutionEntities: [Api.MessageEntity]?
+            public init(flags: Int32, results: [Api.PollAnswerVoters]?, totalVoters: Int32?, recentVoters: [Api.Peer]?, solution: String?, solutionEntities: [Api.MessageEntity]?) {
+                self.flags = flags
+                self.results = results
+                self.totalVoters = totalVoters
+                self.recentVoters = recentVoters
+                self.solution = solution
+                self.solutionEntities = solutionEntities
+            }
+        }
+        case pollResults(Cons_pollResults)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -355,7 +535,15 @@ public extension Api {
 }
 public extension Api {
     enum PopularContact: TypeConstructorDescription {
-        case popularContact(clientId: Int64, importers: Int32)
+        public class Cons_popularContact {
+            public var clientId: Int64
+            public var importers: Int32
+            public init(clientId: Int64, importers: Int32) {
+                self.clientId = clientId
+                self.importers = importers
+            }
+        }
+        case popularContact(Cons_popularContact)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -384,7 +572,23 @@ public extension Api {
 }
 public extension Api {
     enum PostAddress: TypeConstructorDescription {
-        case postAddress(streetLine1: String, streetLine2: String, city: String, state: String, countryIso2: String, postCode: String)
+        public class Cons_postAddress {
+            public var streetLine1: String
+            public var streetLine2: String
+            public var city: String
+            public var state: String
+            public var countryIso2: String
+            public var postCode: String
+            public init(streetLine1: String, streetLine2: String, city: String, state: String, countryIso2: String, postCode: String) {
+                self.streetLine1 = streetLine1
+                self.streetLine2 = streetLine2
+                self.city = city
+                self.state = state
+                self.countryIso2 = countryIso2
+                self.postCode = postCode
+            }
+        }
+        case postAddress(Cons_postAddress)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

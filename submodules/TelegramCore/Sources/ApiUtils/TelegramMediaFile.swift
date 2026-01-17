@@ -167,18 +167,23 @@ func telegramMediaFileThumbnailRepresentationsFromApiSizes(datacenterId: Int32, 
     var representations: [TelegramMediaImageRepresentation] = []
     for size in sizes {
         switch size {
-            case let .photoCachedSize(type, w, h, _):
+            case let .photoCachedSize(photoCachedSizeData):
+                let (type, w, h, _) = (photoCachedSizeData.type, photoCachedSizeData.w, photoCachedSizeData.h, photoCachedSizeData.bytes)
                 let resource = CloudDocumentSizeMediaResource(datacenterId: datacenterId, documentId: documentId, accessHash: accessHash, sizeSpec: type, fileReference: fileReference)
                 representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: resource, progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
-            case let .photoSize(type, w, h, _):
+            case let .photoSize(photoSizeData):
+                let (type, w, h, _) = (photoSizeData.type, photoSizeData.w, photoSizeData.h, photoSizeData.size)
                 let resource = CloudDocumentSizeMediaResource(datacenterId: datacenterId, documentId: documentId, accessHash: accessHash, sizeSpec: type, fileReference: fileReference)
                 representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: resource, progressiveSizes: [], immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
-            case let .photoSizeProgressive(type, w, h, sizes):
+            case let .photoSizeProgressive(photoSizeProgressiveData):
+                let (type, w, h, sizes) = (photoSizeProgressiveData.type, photoSizeProgressiveData.w, photoSizeProgressiveData.h, photoSizeProgressiveData.sizes)
                 let resource = CloudDocumentSizeMediaResource(datacenterId: datacenterId, documentId: documentId, accessHash: accessHash, sizeSpec: type, fileReference: fileReference)
                 representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: resource, progressiveSizes: sizes, immediateThumbnailData: nil, hasVideo: false, isPersonal: false))
-            case let .photoPathSize(_, data):
+            case let .photoPathSize(photoPathSizeData):
+                let (_, data) = (photoPathSizeData.type, photoPathSizeData.bytes)
                 immediateThumbnailData = data.makeData()
-            case let .photoStrippedSize(_, data):
+            case let .photoStrippedSize(photoStrippedSizeData):
+                let (_, data) = (photoStrippedSizeData.type, photoStrippedSizeData.bytes)
                 immediateThumbnailData = data.makeData()
             case .photoSizeEmpty:
                 break

@@ -4364,12 +4364,14 @@ func replayFinalState(
                     var updatedPoll = poll
                     let resultsMin: Bool
                     switch results {
-                    case let .pollResults(flags, _, _, _, _, _):
+                    case let .pollResults(pollResultsData):
+                        let flags = pollResultsData.flags
                         resultsMin = (flags & (1 << 0)) != 0
                     }
                     if let apiPoll = apiPoll {
                         switch apiPoll {
-                        case let .poll(id, flags, question, answers, closePeriod, _):
+                        case let .poll(pollData):
+                            let (id, flags, question, answers, closePeriod) = (pollData.id, pollData.flags, pollData.question, pollData.answers, pollData.closePeriod)
                             let publicity: TelegramMediaPollPublicity
                             if (flags & (1 << 1)) != 0 {
                                 publicity = .public

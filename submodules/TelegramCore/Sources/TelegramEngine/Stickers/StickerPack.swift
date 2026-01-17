@@ -21,16 +21,20 @@ func telegramStickerPackThumbnailRepresentationFromApiSizes(datacenterId: Int32,
     var representations: [TelegramMediaImageRepresentation] = []
     for size in sizes {
         switch size {
-            case let .photoCachedSize(type, w, h, _):
+            case let .photoCachedSize(photoCachedSizeData):
+                let (type, w, h) = (photoCachedSizeData.type, photoCachedSizeData.w, photoCachedSizeData.h)
                 let resource = CloudStickerPackThumbnailMediaResource(datacenterId: datacenterId, thumbVersion: thumbVersion, volumeId: nil, localId: nil)
                 representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: resource, progressiveSizes: [], immediateThumbnailData: nil, typeHint: stickerTypeHint(for: type)))
-            case let .photoSize(type, w, h, _):
+            case let .photoSize(photoSizeData):
+                let (type, w, h) = (photoSizeData.type, photoSizeData.w, photoSizeData.h)
                 let resource = CloudStickerPackThumbnailMediaResource(datacenterId: datacenterId, thumbVersion: thumbVersion, volumeId: nil, localId: nil)
                 representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: resource, progressiveSizes: [], immediateThumbnailData: nil, typeHint: stickerTypeHint(for: type)))
-            case let .photoSizeProgressive(type, w, h, sizes):
+            case let .photoSizeProgressive(photoSizeProgressiveData):
+                let (type, w, h, sizes) = (photoSizeProgressiveData.type, photoSizeProgressiveData.w, photoSizeProgressiveData.h, photoSizeProgressiveData.sizes)
                 let resource = CloudStickerPackThumbnailMediaResource(datacenterId: datacenterId, thumbVersion: thumbVersion, volumeId: nil, localId: nil)
                 representations.append(TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: resource, progressiveSizes: sizes, immediateThumbnailData: nil, typeHint: stickerTypeHint(for: type)))
-            case let .photoPathSize(_, data):
+            case let .photoPathSize(photoPathSizeData):
+                let data = photoPathSizeData.bytes
                 immediateThumbnailData = data.makeData()
             case .photoStrippedSize:
                 break

@@ -358,7 +358,8 @@ private func pushDeviceContactData(accountPeerId: PeerId, postbox: Postbox, netw
                                 }
                                 for item in popularInvites {
                                     switch item {
-                                        case let .popularContact(clientId, importers):
+                                        case let .popularContact(popularContactData):
+                                            let (clientId, importers) = (popularContactData.clientId, popularContactData.importers)
                                             importedCounts[Int(clientId)] = importers
                                     }
                                 }

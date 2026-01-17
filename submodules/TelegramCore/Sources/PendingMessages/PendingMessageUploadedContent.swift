@@ -330,7 +330,7 @@ func mediaContentToUpload(accountPeerId: PeerId, network: Network, postbox: Post
             mappedSolutionEntities = apiTextAttributeEntities(TextEntitiesMessageAttribute(entities: solution.entities), associatedPeers: SimpleDictionary())
             pollMediaFlags |= 1 << 1
         }
-        let inputPoll = Api.InputMedia.inputMediaPoll(.init(flags: pollMediaFlags, poll: Api.Poll.poll(id: 0, flags: pollFlags, question: .textWithEntities(text: poll.text, entities: apiEntitiesFromMessageTextEntities(poll.textEntities, associatedPeers: SimpleDictionary())), answers: poll.options.map({ $0.apiOption }), closePeriod: poll.deadlineTimeout, closeDate: nil), correctAnswers: correctAnswers, solution: mappedSolution, solutionEntities: mappedSolutionEntities))
+        let inputPoll = Api.InputMedia.inputMediaPoll(.init(flags: pollMediaFlags, poll: Api.Poll.poll(.init(id: 0, flags: pollFlags, question: .textWithEntities(text: poll.text, entities: apiEntitiesFromMessageTextEntities(poll.textEntities, associatedPeers: SimpleDictionary())), answers: poll.options.map({ $0.apiOption }), closePeriod: poll.deadlineTimeout, closeDate: nil)), correctAnswers: correctAnswers, solution: mappedSolution, solutionEntities: mappedSolutionEntities))
         return .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(inputPoll, text), reuploadInfo: nil, cacheReferenceKey: nil)))
     } else if let todo = media as? TelegramMediaTodo {
         var flags: Int32 = 0
@@ -856,7 +856,8 @@ private func uploadedVideoCover(network: Network, postbox: Postbox, resourceRefe
                     switch uploadResult {
                     case let .messageMediaPhoto(messageMediaPhotoData):
                         let photo = messageMediaPhotoData.photo
-                        if case let .photo(_, id, accessHash, fileReference, _, _, _, _) = photo {
+                        if case let .photo(photoData) = photo {
+                            let (id, accessHash, fileReference) = (photoData.id, photoData.accessHash, photoData.fileReference)
                             return .inputPhoto(.init(id: id, accessHash: accessHash, fileReference: fileReference))
                         } else {
                             return .inputPhotoEmpty

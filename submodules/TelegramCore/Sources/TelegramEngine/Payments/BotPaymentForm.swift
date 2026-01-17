@@ -242,7 +242,8 @@ extension BotPaymentRequestedInfo {
                 var parsedShippingAddress: BotPaymentShippingAddress?
                 if let shippingAddress = shippingAddress {
                     switch shippingAddress {
-                    case let .postAddress(streetLine1, streetLine2, city, state, countryIso2, postCode):
+                    case let .postAddress(postAddressData):
+                        let (streetLine1, streetLine2, city, state, countryIso2, postCode) = (postAddressData.streetLine1, postAddressData.streetLine2, postAddressData.city, postAddressData.state, postAddressData.countryIso2, postAddressData.postCode)
                         parsedShippingAddress = BotPaymentShippingAddress(streetLine1: streetLine1, streetLine2: streetLine2, city: city, state: state, countryIso2: countryIso2, postCode: postCode)
                     }
                 }
@@ -656,7 +657,7 @@ func _internal_validateBotPaymentForm(account: Account, saveInfo: Bool, source: 
         var apiShippingAddress: Api.PostAddress?
         if let address = formInfo.shippingAddress {
             infoFlags |= (1 << 3)
-            apiShippingAddress = .postAddress(streetLine1: address.streetLine1, streetLine2: address.streetLine2, city: address.city, state: address.state, countryIso2: address.countryIso2, postCode: address.postCode)
+            apiShippingAddress = .postAddress(.init(streetLine1: address.streetLine1, streetLine2: address.streetLine2, city: address.city, state: address.state, countryIso2: address.countryIso2, postCode: address.postCode))
         }
         return account.network.request(Api.functions.payments.validateRequestedInfo(flags: flags, invoice: invoice, info: .paymentRequestedInfo(.init(flags: infoFlags, name: formInfo.name, phone: formInfo.phone, email: formInfo.email, shippingAddress: apiShippingAddress))))
         |> mapError { error -> ValidateBotPaymentFormError in
