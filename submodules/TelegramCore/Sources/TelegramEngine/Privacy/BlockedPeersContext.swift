@@ -85,7 +85,8 @@ public final class BlockedPeersContext {
             }
             return postbox.transaction { transaction -> (peers: [RenderedPeer], canLoadMore: Bool, totalCount: Int?) in
                 switch result {
-                    case let .blocked(blocked, chats, users):
+                    case let .blocked(blockedData):
+                        let (blocked, chats, users) = (blockedData.blocked, blockedData.chats, blockedData.users)
                         let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                             
@@ -101,7 +102,8 @@ public final class BlockedPeersContext {
                         }
 
                         return (renderedPeers, false, nil)
-                    case let .blockedSlice(count, blocked, chats, users):
+                    case let .blockedSlice(blockedSliceData):
+                        let (count, blocked, chats, users) = (blockedSliceData.count, blockedSliceData.blocked, blockedSliceData.chats, blockedSliceData.users)
                         let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                         

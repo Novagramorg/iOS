@@ -341,8 +341,9 @@ private func pushDeviceContactData(accountPeerId: PeerId, postbox: Postbox, netw
                         var importedCounts: [Int: Int32] = [:]
                         var peerIdByClientId: [Int64: PeerId] = [:]
                         switch result {
-                            case let .importedContacts(imported, popularInvites, retryContacts, users):
-                            updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
+                            case let .importedContacts(importedContactsData):
+                                let (imported, popularInvites, retryContacts, users) = (importedContactsData.imported, importedContactsData.popularInvites, importedContactsData.retryContacts, importedContactsData.users)
+                                updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
                             
                                 for item in imported {
                                     switch item {

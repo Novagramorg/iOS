@@ -477,7 +477,17 @@ public extension Api.chatlists {
 }
 public extension Api.chatlists {
     enum ExportedInvites: TypeConstructorDescription {
-        case exportedInvites(invites: [Api.ExportedChatlistInvite], chats: [Api.Chat], users: [Api.User])
+        public class Cons_exportedInvites {
+            public var invites: [Api.ExportedChatlistInvite]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(invites: [Api.ExportedChatlistInvite], chats: [Api.Chat], users: [Api.User]) {
+                self.invites = invites
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case exportedInvites(Cons_exportedInvites)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -506,8 +516,30 @@ public extension Api.chatlists {
 }
 public extension Api.contacts {
     enum Blocked: TypeConstructorDescription {
-        case blocked(blocked: [Api.PeerBlocked], chats: [Api.Chat], users: [Api.User])
-        case blockedSlice(count: Int32, blocked: [Api.PeerBlocked], chats: [Api.Chat], users: [Api.User])
+        public class Cons_blocked {
+            public var blocked: [Api.PeerBlocked]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(blocked: [Api.PeerBlocked], chats: [Api.Chat], users: [Api.User]) {
+                self.blocked = blocked
+                self.chats = chats
+                self.users = users
+            }
+        }
+        public class Cons_blockedSlice {
+            public var count: Int32
+            public var blocked: [Api.PeerBlocked]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(count: Int32, blocked: [Api.PeerBlocked], chats: [Api.Chat], users: [Api.User]) {
+                self.count = count
+                self.blocked = blocked
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case blocked(Cons_blocked)
+        case blockedSlice(Cons_blockedSlice)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -543,7 +575,15 @@ public extension Api.contacts {
 }
 public extension Api.contacts {
     enum ContactBirthdays: TypeConstructorDescription {
-        case contactBirthdays(contacts: [Api.ContactBirthday], users: [Api.User])
+        public class Cons_contactBirthdays {
+            public var contacts: [Api.ContactBirthday]
+            public var users: [Api.User]
+            public init(contacts: [Api.ContactBirthday], users: [Api.User]) {
+                self.contacts = contacts
+                self.users = users
+            }
+        }
+        case contactBirthdays(Cons_contactBirthdays)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -572,7 +612,17 @@ public extension Api.contacts {
 }
 public extension Api.contacts {
     enum Contacts: TypeConstructorDescription {
-        case contacts(contacts: [Api.Contact], savedCount: Int32, users: [Api.User])
+        public class Cons_contacts {
+            public var contacts: [Api.Contact]
+            public var savedCount: Int32
+            public var users: [Api.User]
+            public init(contacts: [Api.Contact], savedCount: Int32, users: [Api.User]) {
+                self.contacts = contacts
+                self.savedCount = savedCount
+                self.users = users
+            }
+        }
+        case contacts(Cons_contacts)
         case contactsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -609,7 +659,19 @@ public extension Api.contacts {
 }
 public extension Api.contacts {
     enum Found: TypeConstructorDescription {
-        case found(myResults: [Api.Peer], results: [Api.Peer], chats: [Api.Chat], users: [Api.User])
+        public class Cons_found {
+            public var myResults: [Api.Peer]
+            public var results: [Api.Peer]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(myResults: [Api.Peer], results: [Api.Peer], chats: [Api.Chat], users: [Api.User]) {
+                self.myResults = myResults
+                self.results = results
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case found(Cons_found)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -638,7 +700,19 @@ public extension Api.contacts {
 }
 public extension Api.contacts {
     enum ImportedContacts: TypeConstructorDescription {
-        case importedContacts(imported: [Api.ImportedContact], popularInvites: [Api.PopularContact], retryContacts: [Int64], users: [Api.User])
+        public class Cons_importedContacts {
+            public var imported: [Api.ImportedContact]
+            public var popularInvites: [Api.PopularContact]
+            public var retryContacts: [Int64]
+            public var users: [Api.User]
+            public init(imported: [Api.ImportedContact], popularInvites: [Api.PopularContact], retryContacts: [Int64], users: [Api.User]) {
+                self.imported = imported
+                self.popularInvites = popularInvites
+                self.retryContacts = retryContacts
+                self.users = users
+            }
+        }
+        case importedContacts(Cons_importedContacts)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -667,7 +741,17 @@ public extension Api.contacts {
 }
 public extension Api.contacts {
     enum ResolvedPeer: TypeConstructorDescription {
-        case resolvedPeer(peer: Api.Peer, chats: [Api.Chat], users: [Api.User])
+        public class Cons_resolvedPeer {
+            public var peer: Api.Peer
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(peer: Api.Peer, chats: [Api.Chat], users: [Api.User]) {
+                self.peer = peer
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case resolvedPeer(Cons_resolvedPeer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -696,7 +780,17 @@ public extension Api.contacts {
 }
 public extension Api.contacts {
     enum SponsoredPeers: TypeConstructorDescription {
-        case sponsoredPeers(peers: [Api.SponsoredPeer], chats: [Api.Chat], users: [Api.User])
+        public class Cons_sponsoredPeers {
+            public var peers: [Api.SponsoredPeer]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(peers: [Api.SponsoredPeer], chats: [Api.Chat], users: [Api.User]) {
+                self.peers = peers
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case sponsoredPeers(Cons_sponsoredPeers)
         case sponsoredPeersEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -733,7 +827,17 @@ public extension Api.contacts {
 }
 public extension Api.contacts {
     enum TopPeers: TypeConstructorDescription {
-        case topPeers(categories: [Api.TopPeerCategoryPeers], chats: [Api.Chat], users: [Api.User])
+        public class Cons_topPeers {
+            public var categories: [Api.TopPeerCategoryPeers]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(categories: [Api.TopPeerCategoryPeers], chats: [Api.Chat], users: [Api.User]) {
+                self.categories = categories
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case topPeers(Cons_topPeers)
         case topPeersDisabled
         case topPeersNotModified
 
@@ -778,7 +882,23 @@ public extension Api.contacts {
 }
 public extension Api.fragment {
     enum CollectibleInfo: TypeConstructorDescription {
-        case collectibleInfo(purchaseDate: Int32, currency: String, amount: Int64, cryptoCurrency: String, cryptoAmount: Int64, url: String)
+        public class Cons_collectibleInfo {
+            public var purchaseDate: Int32
+            public var currency: String
+            public var amount: Int64
+            public var cryptoCurrency: String
+            public var cryptoAmount: Int64
+            public var url: String
+            public init(purchaseDate: Int32, currency: String, amount: Int64, cryptoCurrency: String, cryptoAmount: Int64, url: String) {
+                self.purchaseDate = purchaseDate
+                self.currency = currency
+                self.amount = amount
+                self.cryptoCurrency = cryptoCurrency
+                self.cryptoAmount = cryptoAmount
+                self.url = url
+            }
+        }
+        case collectibleInfo(Cons_collectibleInfo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -807,7 +927,15 @@ public extension Api.fragment {
 }
 public extension Api.help {
     enum AppConfig: TypeConstructorDescription {
-        case appConfig(hash: Int32, config: Api.JSONValue)
+        public class Cons_appConfig {
+            public var hash: Int32
+            public var config: Api.JSONValue
+            public init(hash: Int32, config: Api.JSONValue) {
+                self.hash = hash
+                self.config = config
+            }
+        }
+        case appConfig(Cons_appConfig)
         case appConfigNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {

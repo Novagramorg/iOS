@@ -167,7 +167,8 @@ func _internal_getExportedChatFolderLinks(account: Account, id: Int32) -> Signal
         }
         return account.postbox.transaction { transaction -> [ExportedChatFolderLink]? in
             switch result {
-            case let .exportedInvites(invites, chats, users):
+            case let .exportedInvites(exportedInvitesData):
+                let (invites, chats, users) = (exportedInvitesData.invites, exportedInvitesData.chats, exportedInvitesData.users)
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                 
