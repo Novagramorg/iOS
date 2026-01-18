@@ -245,7 +245,8 @@ public extension TelegramEngine {
                 }
                 |> map { result -> CheckPeerImportResult in
                     switch result {
-                    case let .checkedHistoryImportPeer(confirmText):
+                    case let .checkedHistoryImportPeer(checkedHistoryImportPeerData):
+                        let confirmText = checkedHistoryImportPeerData.confirmText
                         if confirmText.isEmpty {
                             return .allowed
                         } else {

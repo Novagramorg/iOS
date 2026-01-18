@@ -1439,9 +1439,19 @@ func _internal_getPossibleStarRefBotTargets(account: Account) -> Signal<[EngineP
             
             if let apiChannels {
                 switch apiChannels {
-                case let .chats(chats), let .chatsSlice(_, chats):
+                case let .chats(chatsData):
+                    let chats = chatsData.chats
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(chats: chats, users: []))
-                    
+
+                    for chat in chats {
+                        if let peer = transaction.getPeer(chat.peerId) {
+                            result.append(EnginePeer(peer))
+                        }
+                    }
+                case let .chatsSlice(chatsSliceData):
+                    let chats = chatsSliceData.chats
+                    updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(chats: chats, users: []))
+
                     for chat in chats {
                         if let peer = transaction.getPeer(chat.peerId) {
                             result.append(EnginePeer(peer))

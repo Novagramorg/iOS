@@ -1032,14 +1032,16 @@ func _internal_updatedRemotePeer(accountPeerId: PeerId, postbox: Postbox, networ
             return postbox.transaction { transaction -> Signal<Peer, UpdatedRemotePeerError> in
                 let chats: [Api.Chat]
                 switch result {
-                case let .chats(c):
+                case let .chats(chatsData):
+                    let c = chatsData.chats
                     chats = c
-                case let .chatsSlice(_, c):
+                case let .chatsSlice(chatsSliceData):
+                    let c = chatsSliceData.chats
                     chats = c
                 }
-                
+
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
-                
+
                 if let firstId = chats.first?.peerId, let updatedPeer = parsedPeers.get(firstId), updatedPeer.id == peer.id {
                     return postbox.transaction { transaction -> Peer in
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
@@ -1063,9 +1065,11 @@ func _internal_updatedRemotePeer(accountPeerId: PeerId, postbox: Postbox, networ
             return postbox.transaction { transaction -> Signal<Peer, UpdatedRemotePeerError> in
                 let chats: [Api.Chat]
                 switch result {
-                case let .chats(c):
+                case let .chats(chatsData):
+                    let c = chatsData.chats
                     chats = c
-                case let .chatsSlice(_, c):
+                case let .chatsSlice(chatsSliceData):
+                    let c = chatsSliceData.chats
                     chats = c
                 }
                 

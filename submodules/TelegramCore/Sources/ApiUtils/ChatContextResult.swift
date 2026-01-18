@@ -638,7 +638,8 @@ extension ChatContextResultWebView {
 extension ChatContextResultCollection {
     convenience init(apiResults: Api.messages.BotResults, botId: PeerId, peerId: PeerId, query: String, geoPoint: (Double, Double)?) {
         switch apiResults {
-            case let .botResults(flags, queryId, nextOffset, switchPm, switchWebView, results, cacheTime, _):
+            case let .botResults(botResultsData):
+                let (flags, queryId, nextOffset, switchPm, switchWebView, results, cacheTime, _) = (botResultsData.flags, botResultsData.queryId, botResultsData.nextOffset, botResultsData.switchPm, botResultsData.switchWebview, botResultsData.results, botResultsData.cacheTime, botResultsData.users)
                 var switchPeer: ChatContextResultSwitchPeer?
                 if let switchPm = switchPm {
                     switchPeer = ChatContextResultSwitchPeer(apiSwitchPeer: switchPm)

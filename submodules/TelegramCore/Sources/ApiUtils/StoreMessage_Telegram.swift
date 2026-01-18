@@ -504,7 +504,8 @@ func textMediaAndExpirationTimerFromApiMedia(_ media: Api.MessageMedia?, _ peerI
             var gameOutcome: TelegramMediaDice.GameOutcome?
             var tonAmount: Int64?
             switch apiGameOutcome {
-            case let .emojiGameOutcome(seed, stakeTonAmount, outcomeTonAmount):
+            case let .emojiGameOutcome(emojiGameOutcomeData):
+                let (seed, stakeTonAmount, outcomeTonAmount) = (emojiGameOutcomeData.seed, emojiGameOutcomeData.stakeTonAmount, emojiGameOutcomeData.tonAmount)
                 gameOutcome = TelegramMediaDice.GameOutcome(seed: seed.makeData(), tonAmount: outcomeTonAmount)
                 tonAmount = stakeTonAmount
             default:

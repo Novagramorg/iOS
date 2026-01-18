@@ -493,7 +493,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                     }
                     return postbox.transaction { transaction -> Bool in
                         switch result {
-                        case let .chatFull(fullChat, chats, users):
+                        case let .chatFull(messagesChatFullData):
+                            let (fullChat, chats, users) = (messagesChatFullData.fullChat, messagesChatFullData.chats, messagesChatFullData.users)
                             switch fullChat {
                             case let .chatFull(chatFullData):
                                 let (notifySettings) = (chatFullData.notifySettings)
@@ -641,7 +642,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                     return postbox.transaction { transaction -> Bool in
                         if let result = result {
                             switch result {
-                                case let .chatFull(fullChat, chats, users):
+                                case let .chatFull(messagesChatFullData):
+                                    let (fullChat, chats, users) = (messagesChatFullData.fullChat, messagesChatFullData.chats, messagesChatFullData.users)
                                     switch fullChat {
                                     case let .channelFull(channelFullData):
                                         let notifySettings = channelFullData.notifySettings

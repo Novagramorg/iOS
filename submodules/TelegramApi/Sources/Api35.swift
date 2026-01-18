@@ -1,6 +1,16 @@
 public extension Api.messages {
     enum FavedStickers: TypeConstructorDescription {
-        case favedStickers(hash: Int64, packs: [Api.StickerPack], stickers: [Api.Document])
+        public class Cons_favedStickers {
+            public var hash: Int64
+            public var packs: [Api.StickerPack]
+            public var stickers: [Api.Document]
+            public init(hash: Int64, packs: [Api.StickerPack], stickers: [Api.Document]) {
+                self.hash = hash
+                self.packs = packs
+                self.stickers = stickers
+            }
+        }
+        case favedStickers(Cons_favedStickers)
         case favedStickersNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -37,8 +47,28 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum FeaturedStickers: TypeConstructorDescription {
-        case featuredStickers(flags: Int32, hash: Int64, count: Int32, sets: [Api.StickerSetCovered], unread: [Int64])
-        case featuredStickersNotModified(count: Int32)
+        public class Cons_featuredStickers {
+            public var flags: Int32
+            public var hash: Int64
+            public var count: Int32
+            public var sets: [Api.StickerSetCovered]
+            public var unread: [Int64]
+            public init(flags: Int32, hash: Int64, count: Int32, sets: [Api.StickerSetCovered], unread: [Int64]) {
+                self.flags = flags
+                self.hash = hash
+                self.count = count
+                self.sets = sets
+                self.unread = unread
+            }
+        }
+        public class Cons_featuredStickersNotModified {
+            public var count: Int32
+            public init(count: Int32) {
+                self.count = count
+            }
+        }
+        case featuredStickers(Cons_featuredStickers)
+        case featuredStickersNotModified(Cons_featuredStickersNotModified)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -74,7 +104,25 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum ForumTopics: TypeConstructorDescription {
-        case forumTopics(flags: Int32, count: Int32, topics: [Api.ForumTopic], messages: [Api.Message], chats: [Api.Chat], users: [Api.User], pts: Int32)
+        public class Cons_forumTopics {
+            public var flags: Int32
+            public var count: Int32
+            public var topics: [Api.ForumTopic]
+            public var messages: [Api.Message]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public var pts: Int32
+            public init(flags: Int32, count: Int32, topics: [Api.ForumTopic], messages: [Api.Message], chats: [Api.Chat], users: [Api.User], pts: Int32) {
+                self.flags = flags
+                self.count = count
+                self.topics = topics
+                self.messages = messages
+                self.chats = chats
+                self.users = users
+                self.pts = pts
+            }
+        }
+        case forumTopics(Cons_forumTopics)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -103,7 +151,15 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum FoundStickerSets: TypeConstructorDescription {
-        case foundStickerSets(hash: Int64, sets: [Api.StickerSetCovered])
+        public class Cons_foundStickerSets {
+            public var hash: Int64
+            public var sets: [Api.StickerSetCovered]
+            public init(hash: Int64, sets: [Api.StickerSetCovered]) {
+                self.hash = hash
+                self.sets = sets
+            }
+        }
+        case foundStickerSets(Cons_foundStickerSets)
         case foundStickerSetsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -140,8 +196,28 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum FoundStickers: TypeConstructorDescription {
-        case foundStickers(flags: Int32, nextOffset: Int32?, hash: Int64, stickers: [Api.Document])
-        case foundStickersNotModified(flags: Int32, nextOffset: Int32?)
+        public class Cons_foundStickers {
+            public var flags: Int32
+            public var nextOffset: Int32?
+            public var hash: Int64
+            public var stickers: [Api.Document]
+            public init(flags: Int32, nextOffset: Int32?, hash: Int64, stickers: [Api.Document]) {
+                self.flags = flags
+                self.nextOffset = nextOffset
+                self.hash = hash
+                self.stickers = stickers
+            }
+        }
+        public class Cons_foundStickersNotModified {
+            public var flags: Int32
+            public var nextOffset: Int32?
+            public init(flags: Int32, nextOffset: Int32?) {
+                self.flags = flags
+                self.nextOffset = nextOffset
+            }
+        }
+        case foundStickers(Cons_foundStickers)
+        case foundStickersNotModified(Cons_foundStickersNotModified)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

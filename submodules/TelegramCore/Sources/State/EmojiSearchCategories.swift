@@ -159,7 +159,8 @@ func managedSynchronizeEmojiSearchCategories(postbox: Postbox, network: Network,
             |> mapToSignal { result -> Signal<Never, NoError> in
                 return postbox.transaction { transaction -> Signal<Never, NoError> in
                     switch result {
-                    case let .emojiGroups(hash, groups):
+                    case let .emojiGroups(emojiGroupsData):
+                        let (hash, groups) = (emojiGroupsData.hash, emojiGroupsData.groups)
                         let categories = EmojiSearchCategories(
                             hash: hash,
                             groups: groups.compactMap { item -> EmojiSearchCategories.Group? in

@@ -105,7 +105,8 @@ func managedSavedStickers(postbox: Postbox, network: Network, forceFetch: Bool =
                 switch result {
                     case .favedStickersNotModified:
                         return .single(nil)
-                    case let .favedStickers(_, packs, stickers):
+                    case let .favedStickers(favedStickersData):
+                        let (packs, stickers) = (favedStickersData.packs, favedStickersData.stickers)
                         var fileStringRepresentations: [MediaId: [String]] = [:]
                         for pack in packs {
                             switch pack {

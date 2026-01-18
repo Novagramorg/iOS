@@ -579,7 +579,8 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
     |> mapToSignal { result -> Signal<([ChatListFilter], Bool), RequestChatListFiltersError> in
         return postbox.transaction { transaction -> ([ChatListFilter], [Api.InputPeer], [Api.InputPeer], Bool) in
             switch result {
-            case let .dialogFilters(flags, apiFilters):
+            case let .dialogFilters(dialogFiltersData):
+                let (flags, apiFilters) = (dialogFiltersData.flags, dialogFiltersData.filters)
                 let tagsEnabled = (flags & (1 << 0)) != 0
                 
                 var filters: [ChatListFilter] = []
@@ -749,7 +750,11 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                         if let result = result {
                             let parsedPeers: AccumulatedPeers
                             switch result {
-                            case .chats(let chats), .chatsSlice(_, let chats):
+                            case let .chats(chatsData):
+                                let chats = chatsData.chats
+                                parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
+                            case let .chatsSlice(chatsSliceData):
+                                let chats = chatsSliceData.chats
                                 parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
                             }
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
@@ -773,7 +778,11 @@ private func requestChatListFilters(accountPeerId: PeerId, postbox: Postbox, net
                         if let result = result {
                             let parsedPeers: AccumulatedPeers
                             switch result {
-                            case .chats(let chats), .chatsSlice(_, let chats):
+                            case let .chats(chatsData):
+                                let chats = chatsData.chats
+                                parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
+                            case let .chatsSlice(chatsSliceData):
+                                let chats = chatsSliceData.chats
                                 parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
                             }
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)

@@ -30,9 +30,11 @@ struct ParsedDialogs {
 
 private func extractDialogsData(dialogs: Api.messages.Dialogs) -> (apiDialogs: [Api.Dialog], apiMessages: [Api.Message], apiChats: [Api.Chat], apiUsers: [Api.User], apiIsAtLowestBoundary: Bool) {
     switch dialogs {
-        case let .dialogs(dialogs, messages, chats, users):
+        case let .dialogs(dialogsData):
+            let (dialogs, messages, chats, users) = (dialogsData.dialogs, dialogsData.messages, dialogsData.chats, dialogsData.users)
             return (dialogs, messages, chats, users, true)
-        case let .dialogsSlice(_, dialogs, messages, chats, users):
+        case let .dialogsSlice(dialogsSliceData):
+            let (_, dialogs, messages, chats, users) = (dialogsSliceData.count, dialogsSliceData.dialogs, dialogsSliceData.messages, dialogsSliceData.chats, dialogsSliceData.users)
             return (dialogs, messages, chats, users, false)
         case .dialogsNotModified:
             assertionFailure()

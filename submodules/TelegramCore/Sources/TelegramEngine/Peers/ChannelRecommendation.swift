@@ -104,10 +104,12 @@ func _internal_requestRecommendedChannels(account: Account, peerId: EnginePeer.I
                 let parsedPeers: AccumulatedPeers
                 var count: Int32
                 switch result {
-                case let .chats(apiChats):
+                case let .chats(chatsData):
+                    let apiChats = chatsData.chats
                     chats = apiChats
                     count = Int32(apiChats.count)
-                case let .chatsSlice(apiCount, apiChats):
+                case let .chatsSlice(chatsSliceData):
+                    let (apiCount, apiChats) = (chatsSliceData.count, chatsSliceData.chats)
                     chats = apiChats
                     count = apiCount
                 }

@@ -985,7 +985,8 @@ func _internal_requestMessageHistoryThreads(accountPeerId: PeerId, postbox: Post
                 }
                 |> mapToSignal { result -> Signal<LoadMessageHistoryThreadsResult, LoadMessageHistoryThreadsError> in
                     switch result {
-                    case let .forumTopics(_, _, topics, messages, chats, users, pts):
+                    case let .forumTopics(forumTopicsData):
+                        let (topics, messages, chats, users, pts) = (forumTopicsData.topics, forumTopicsData.messages, forumTopicsData.chats, forumTopicsData.users, forumTopicsData.pts)
                         var items: [LoadMessageHistoryThreadsResult.Item] = []
                         var pinnedIds: [Int64] = []
                         
@@ -1206,7 +1207,8 @@ func _internal_forumChannelTopicNotificationExceptions(account: Account, id: Eng
                 var infoMapping: [Int64: EngineMessageHistoryThread.Info] = [:]
                 
                 switch result {
-                case let .forumTopics(_, _, topics, _, _, _, _):
+                case let .forumTopics(forumTopicsData):
+                    let topics = forumTopicsData.topics
                     for topic in topics {
                         switch topic {
                         case let .forumTopic(forumTopicData):
