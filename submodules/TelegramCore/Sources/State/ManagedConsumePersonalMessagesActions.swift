@@ -738,7 +738,8 @@ func synchronizeSavedMessageTags(postbox: Postbox, network: Network, peerId: Pee
                 var parsedTags: [SavedMessageTags.Tag] = []
                 for tag in tags {
                     switch tag {
-                    case let .savedReactionTag(_, reaction, title, count):
+                    case let .savedReactionTag(savedReactionTagData):
+                        let (reaction, title, count) = (savedReactionTagData.reaction, savedReactionTagData.title, savedReactionTagData.count)
                         guard let reaction = MessageReaction.Reaction(apiReaction: reaction) else {
                             continue
                         }

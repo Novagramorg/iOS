@@ -2171,7 +2171,8 @@ extension Stories.Item.Views {
             if let reactions = reactions {
                 for result in reactions {
                     switch result {
-                    case let .reactionCount(_, chosenOrder, reaction, count):
+                    case let .reactionCount(reactionCountData):
+                        let (chosenOrder, reaction, count) = (reactionCountData.chosenOrder, reactionCountData.reaction, reactionCountData.count)
                         if let reaction = MessageReaction.Reaction(apiReaction: reaction) {
                             mappedReactions.append(MessageReaction(value: reaction, count: count, chosenOrder: chosenOrder.flatMap(Int.init)))
                         }

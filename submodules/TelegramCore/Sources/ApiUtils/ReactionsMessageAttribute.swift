@@ -12,7 +12,8 @@ extension ReactionsMessageAttribute {
             let isTags = (flags & (1 << 3)) != 0
             var reactions = results.compactMap { result -> MessageReaction? in
                 switch result {
-                case let .reactionCount(_, chosenOrder, reaction, count):
+                case let .reactionCount(reactionCountData):
+                    let (_, chosenOrder, reaction, count) = (reactionCountData.flags, reactionCountData.chosenOrder, reactionCountData.reaction, reactionCountData.count)
                     if let reaction = MessageReaction.Reaction(apiReaction: reaction) {
                         return MessageReaction(value: reaction, count: count, chosenOrder: chosenOrder.flatMap(Int.init))
                     } else {
@@ -307,7 +308,8 @@ extension ReactionsMessageAttribute {
                 isTags: isTags,
                 reactions: results.compactMap { result -> MessageReaction? in
                     switch result {
-                    case let .reactionCount(_, chosenOrder, reaction, count):
+                    case let .reactionCount(reactionCountData):
+                        let (_, chosenOrder, reaction, count) = (reactionCountData.flags, reactionCountData.chosenOrder, reactionCountData.reaction, reactionCountData.count)
                         if let reaction = MessageReaction.Reaction(apiReaction: reaction) {
                             return MessageReaction(value: reaction, count: count, chosenOrder: chosenOrder.flatMap(Int.init))
                         } else {

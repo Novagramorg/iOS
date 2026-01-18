@@ -102,12 +102,14 @@ extension ReplyMarkupButton {
                 let (text, buttonId, peerType, maxQuantity) = (keyboardButtonRequestPeerData.text, keyboardButtonRequestPeerData.buttonId, keyboardButtonRequestPeerData.peerType, keyboardButtonRequestPeerData.maxQuantity)
                 let mappedPeerType: ReplyMarkupButtonRequestPeerType
                 switch peerType {
-                case let .requestPeerTypeUser(_, bot, premium):
+                case let .requestPeerTypeUser(requestPeerTypeUserData):
+                    let (bot, premium) = (requestPeerTypeUserData.bot, requestPeerTypeUserData.premium)
                     mappedPeerType = .user(ReplyMarkupButtonRequestPeerType.User(
                         isBot: bot.flatMap({ $0 == .boolTrue }),
                         isPremium: premium.flatMap({ $0 == .boolTrue })
                     ))
-                case let .requestPeerTypeChat(flags, hasUsername, forum, userAdminRights, botAdminRights):
+                case let .requestPeerTypeChat(requestPeerTypeChatData):
+                    let (flags, hasUsername, forum, userAdminRights, botAdminRights) = (requestPeerTypeChatData.flags, requestPeerTypeChatData.hasUsername, requestPeerTypeChatData.forum, requestPeerTypeChatData.userAdminRights, requestPeerTypeChatData.botAdminRights)
                     mappedPeerType = .group(ReplyMarkupButtonRequestPeerType.Group(
                         isCreator: (flags & (1 << 0)) != 0,
                         hasUsername: hasUsername.flatMap({ $0 == .boolTrue }),
@@ -116,7 +118,8 @@ extension ReplyMarkupButton {
                         userAdminRights: userAdminRights.flatMap(TelegramChatAdminRights.init(apiAdminRights:)),
                         botAdminRights: botAdminRights.flatMap(TelegramChatAdminRights.init(apiAdminRights:))
                     ))
-                case let .requestPeerTypeBroadcast(flags, hasUsername, userAdminRights, botAdminRights):
+                case let .requestPeerTypeBroadcast(requestPeerTypeBroadcastData):
+                    let (flags, hasUsername, userAdminRights, botAdminRights) = (requestPeerTypeBroadcastData.flags, requestPeerTypeBroadcastData.hasUsername, requestPeerTypeBroadcastData.userAdminRights, requestPeerTypeBroadcastData.botAdminRights)
                     mappedPeerType = .channel(ReplyMarkupButtonRequestPeerType.Channel(
                         isCreator: (flags & (1 << 0)) != 0,
                         hasUsername: hasUsername.flatMap({ $0 == .boolTrue }),
@@ -129,12 +132,14 @@ extension ReplyMarkupButton {
                 let (text, buttonId, peerType, maxQuantity) = (inputKeyboardButtonRequestPeerData.text, inputKeyboardButtonRequestPeerData.buttonId, inputKeyboardButtonRequestPeerData.peerType, inputKeyboardButtonRequestPeerData.maxQuantity)
                 let mappedPeerType: ReplyMarkupButtonRequestPeerType
                 switch peerType {
-                case let .requestPeerTypeUser(_, bot, premium):
+                case let .requestPeerTypeUser(requestPeerTypeUserData):
+                    let (bot, premium) = (requestPeerTypeUserData.bot, requestPeerTypeUserData.premium)
                     mappedPeerType = .user(ReplyMarkupButtonRequestPeerType.User(
                         isBot: bot.flatMap({ $0 == .boolTrue }),
                         isPremium: premium.flatMap({ $0 == .boolTrue })
                     ))
-                case let .requestPeerTypeChat(flags, hasUsername, forum, userAdminRights, botAdminRights):
+                case let .requestPeerTypeChat(requestPeerTypeChatData):
+                    let (flags, hasUsername, forum, userAdminRights, botAdminRights) = (requestPeerTypeChatData.flags, requestPeerTypeChatData.hasUsername, requestPeerTypeChatData.forum, requestPeerTypeChatData.userAdminRights, requestPeerTypeChatData.botAdminRights)
                     mappedPeerType = .group(ReplyMarkupButtonRequestPeerType.Group(
                         isCreator: (flags & (1 << 0)) != 0,
                         hasUsername: hasUsername.flatMap({ $0 == .boolTrue }),
@@ -143,7 +148,8 @@ extension ReplyMarkupButton {
                         userAdminRights: userAdminRights.flatMap(TelegramChatAdminRights.init(apiAdminRights:)),
                         botAdminRights: botAdminRights.flatMap(TelegramChatAdminRights.init(apiAdminRights:))
                     ))
-                case let .requestPeerTypeBroadcast(flags, hasUsername, userAdminRights, botAdminRights):
+                case let .requestPeerTypeBroadcast(requestPeerTypeBroadcastData):
+                    let (flags, hasUsername, userAdminRights, botAdminRights) = (requestPeerTypeBroadcastData.flags, requestPeerTypeBroadcastData.hasUsername, requestPeerTypeBroadcastData.userAdminRights, requestPeerTypeBroadcastData.botAdminRights)
                     mappedPeerType = .channel(ReplyMarkupButtonRequestPeerType.Channel(
                         isCreator: (flags & (1 << 0)) != 0,
                         hasUsername: hasUsername.flatMap({ $0 == .boolTrue }),
@@ -175,7 +181,8 @@ extension ReplyMarkupMessageAttribute {
         var flags = ReplyMarkupMessageFlags()
         var placeholder: String?
         switch apiMarkup {
-            case let .replyKeyboardMarkup(markupFlags, apiRows, apiPlaceholder):
+            case let .replyKeyboardMarkup(replyKeyboardMarkupData):
+                let (markupFlags, apiRows, apiPlaceholder) = (replyKeyboardMarkupData.flags, replyKeyboardMarkupData.rows, replyKeyboardMarkupData.placeholder)
                 rows = apiRows.map { ReplyMarkupRow(apiRow: $0) }
                 if (markupFlags & (1 << 0)) != 0 {
                     flags.insert(.fit)
@@ -190,10 +197,12 @@ extension ReplyMarkupMessageAttribute {
                     flags.insert(.persistent)
                 }
                 placeholder = apiPlaceholder
-            case let .replyInlineMarkup(apiRows):
+            case let .replyInlineMarkup(replyInlineMarkupData):
+                let apiRows = replyInlineMarkupData.rows
                 rows = apiRows.map { ReplyMarkupRow(apiRow: $0) }
                 flags.insert(.inline)
-            case let .replyKeyboardForceReply(forceReplyFlags, apiPlaceholder):
+            case let .replyKeyboardForceReply(replyKeyboardForceReplyData):
+                let (forceReplyFlags, apiPlaceholder) = (replyKeyboardForceReplyData.flags, replyKeyboardForceReplyData.placeholder)
                 if (forceReplyFlags & (1 << 1)) != 0 {
                     flags.insert(.once)
                 }
@@ -202,7 +211,8 @@ extension ReplyMarkupMessageAttribute {
                 }
                 flags.insert(.setupReply)
                 placeholder = apiPlaceholder
-            case let .replyKeyboardHide(hideFlags):
+            case let .replyKeyboardHide(replyKeyboardHideData):
+                let hideFlags = replyKeyboardHideData.flags
                 if (hideFlags & (1 << 2)) != 0 {
                     flags.insert(.personal)
                 }

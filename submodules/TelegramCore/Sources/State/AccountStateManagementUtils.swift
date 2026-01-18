@@ -2203,7 +2203,8 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                     }
                                 case let .savedDialog(savedDialog):
                                     switch savedDialog {
-                                    case let .monoForumDialog(flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadReactionsCount, _):
+                                    case let .monoForumDialog(monoForumDialogData):
+                                        let (flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadReactionsCount, _) = (monoForumDialogData.flags, monoForumDialogData.peer, monoForumDialogData.topMessage, monoForumDialogData.readInboxMaxId, monoForumDialogData.readOutboxMaxId, monoForumDialogData.unreadCount, monoForumDialogData.unreadReactionsCount, monoForumDialogData.draft)
                                         state.operations.append(.ResetForumTopic(
                                             topicId: PeerAndBoundThreadId(peerId: peerId, threadId: peer.peerId.toInt64()),
                                             data: StoreMessageHistoryThreadData(
@@ -2366,7 +2367,8 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                         }
                                     case let .savedDialog(savedDialog):
                                         switch savedDialog {
-                                        case let .monoForumDialog(flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadReactionsCount, _):
+                                        case let .monoForumDialog(monoForumDialogData):
+                                            let (flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadReactionsCount, _) = (monoForumDialogData.flags, monoForumDialogData.peer, monoForumDialogData.topMessage, monoForumDialogData.readInboxMaxId, monoForumDialogData.readOutboxMaxId, monoForumDialogData.unreadCount, monoForumDialogData.unreadReactionsCount, monoForumDialogData.draft)
                                             let data = MessageHistoryThreadData(
                                                 creationDate: 0,
                                                 isOwnedByMe: true,
@@ -2533,8 +2535,9 @@ func resolveForumThreads(accountPeerId: PeerId, postbox: Postbox, source: FetchM
                                     }
                                 case let .savedDialog(savedDialog):
                                     switch savedDialog {
-                                    case let .monoForumDialog(flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadReactionsCount, _):
-                                        
+                                    case let .monoForumDialog(monoForumDialogData):
+                                        let (flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadReactionsCount, _) = (monoForumDialogData.flags, monoForumDialogData.peer, monoForumDialogData.topMessage, monoForumDialogData.readInboxMaxId, monoForumDialogData.readOutboxMaxId, monoForumDialogData.unreadCount, monoForumDialogData.unreadReactionsCount, monoForumDialogData.draft)
+
                                         fetchedChatList.threadInfos[PeerAndBoundThreadId(peerId: peerId, threadId: peer.peerId.toInt64())] = StoreMessageHistoryThreadData(
                                             data: MessageHistoryThreadData(
                                                 creationDate: 0,

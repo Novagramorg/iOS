@@ -1,6 +1,16 @@
 public extension Api {
     enum RestrictionReason: TypeConstructorDescription {
-        case restrictionReason(platform: String, reason: String, text: String)
+        public class Cons_restrictionReason {
+            public var platform: String
+            public var reason: String
+            public var text: String
+            public init(platform: String, reason: String, text: String) {
+                self.platform = platform
+                self.reason = reason
+                self.text = text
+            }
+        }
+        case restrictionReason(Cons_restrictionReason)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,22 +39,126 @@ public extension Api {
 }
 public extension Api {
     indirect enum RichText: TypeConstructorDescription {
-        case textAnchor(text: Api.RichText, name: String)
-        case textBold(text: Api.RichText)
-        case textConcat(texts: [Api.RichText])
-        case textEmail(text: Api.RichText, email: String)
+        public class Cons_textAnchor {
+            public var text: Api.RichText
+            public var name: String
+            public init(text: Api.RichText, name: String) {
+                self.text = text
+                self.name = name
+            }
+        }
+        public class Cons_textBold {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_textConcat {
+            public var texts: [Api.RichText]
+            public init(texts: [Api.RichText]) {
+                self.texts = texts
+            }
+        }
+        public class Cons_textEmail {
+            public var text: Api.RichText
+            public var email: String
+            public init(text: Api.RichText, email: String) {
+                self.text = text
+                self.email = email
+            }
+        }
+        public class Cons_textFixed {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_textImage {
+            public var documentId: Int64
+            public var w: Int32
+            public var h: Int32
+            public init(documentId: Int64, w: Int32, h: Int32) {
+                self.documentId = documentId
+                self.w = w
+                self.h = h
+            }
+        }
+        public class Cons_textItalic {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_textMarked {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_textPhone {
+            public var text: Api.RichText
+            public var phone: String
+            public init(text: Api.RichText, phone: String) {
+                self.text = text
+                self.phone = phone
+            }
+        }
+        public class Cons_textPlain {
+            public var text: String
+            public init(text: String) {
+                self.text = text
+            }
+        }
+        public class Cons_textStrike {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_textSubscript {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_textSuperscript {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_textUnderline {
+            public var text: Api.RichText
+            public init(text: Api.RichText) {
+                self.text = text
+            }
+        }
+        public class Cons_textUrl {
+            public var text: Api.RichText
+            public var url: String
+            public var webpageId: Int64
+            public init(text: Api.RichText, url: String, webpageId: Int64) {
+                self.text = text
+                self.url = url
+                self.webpageId = webpageId
+            }
+        }
+        case textAnchor(Cons_textAnchor)
+        case textBold(Cons_textBold)
+        case textConcat(Cons_textConcat)
+        case textEmail(Cons_textEmail)
         case textEmpty
-        case textFixed(text: Api.RichText)
-        case textImage(documentId: Int64, w: Int32, h: Int32)
-        case textItalic(text: Api.RichText)
-        case textMarked(text: Api.RichText)
-        case textPhone(text: Api.RichText, phone: String)
-        case textPlain(text: String)
-        case textStrike(text: Api.RichText)
-        case textSubscript(text: Api.RichText)
-        case textSuperscript(text: Api.RichText)
-        case textUnderline(text: Api.RichText)
-        case textUrl(text: Api.RichText, url: String, webpageId: Int64)
+        case textFixed(Cons_textFixed)
+        case textImage(Cons_textImage)
+        case textItalic(Cons_textItalic)
+        case textMarked(Cons_textMarked)
+        case textPhone(Cons_textPhone)
+        case textPlain(Cons_textPlain)
+        case textStrike(Cons_textStrike)
+        case textSubscript(Cons_textSubscript)
+        case textSuperscript(Cons_textSuperscript)
+        case textUnderline(Cons_textUnderline)
+        case textUrl(Cons_textUrl)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -178,7 +292,19 @@ public extension Api {
 }
 public extension Api {
     enum SavedContact: TypeConstructorDescription {
-        case savedPhoneContact(phone: String, firstName: String, lastName: String, date: Int32)
+        public class Cons_savedPhoneContact {
+            public var phone: String
+            public var firstName: String
+            public var lastName: String
+            public var date: Int32
+            public init(phone: String, firstName: String, lastName: String, date: Int32) {
+                self.phone = phone
+                self.firstName = firstName
+                self.lastName = lastName
+                self.date = date
+            }
+        }
+        case savedPhoneContact(Cons_savedPhoneContact)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -207,8 +333,38 @@ public extension Api {
 }
 public extension Api {
     indirect enum SavedDialog: TypeConstructorDescription {
-        case monoForumDialog(flags: Int32, peer: Api.Peer, topMessage: Int32, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, unreadReactionsCount: Int32, draft: Api.DraftMessage?)
-        case savedDialog(flags: Int32, peer: Api.Peer, topMessage: Int32)
+        public class Cons_monoForumDialog {
+            public var flags: Int32
+            public var peer: Api.Peer
+            public var topMessage: Int32
+            public var readInboxMaxId: Int32
+            public var readOutboxMaxId: Int32
+            public var unreadCount: Int32
+            public var unreadReactionsCount: Int32
+            public var draft: Api.DraftMessage?
+            public init(flags: Int32, peer: Api.Peer, topMessage: Int32, readInboxMaxId: Int32, readOutboxMaxId: Int32, unreadCount: Int32, unreadReactionsCount: Int32, draft: Api.DraftMessage?) {
+                self.flags = flags
+                self.peer = peer
+                self.topMessage = topMessage
+                self.readInboxMaxId = readInboxMaxId
+                self.readOutboxMaxId = readOutboxMaxId
+                self.unreadCount = unreadCount
+                self.unreadReactionsCount = unreadReactionsCount
+                self.draft = draft
+            }
+        }
+        public class Cons_savedDialog {
+            public var flags: Int32
+            public var peer: Api.Peer
+            public var topMessage: Int32
+            public init(flags: Int32, peer: Api.Peer, topMessage: Int32) {
+                self.flags = flags
+                self.peer = peer
+                self.topMessage = topMessage
+            }
+        }
+        case monoForumDialog(Cons_monoForumDialog)
+        case savedDialog(Cons_savedDialog)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -244,7 +400,19 @@ public extension Api {
 }
 public extension Api {
     enum SavedReactionTag: TypeConstructorDescription {
-        case savedReactionTag(flags: Int32, reaction: Api.Reaction, title: String?, count: Int32)
+        public class Cons_savedReactionTag {
+            public var flags: Int32
+            public var reaction: Api.Reaction
+            public var title: String?
+            public var count: Int32
+            public init(flags: Int32, reaction: Api.Reaction, title: String?, count: Int32) {
+                self.flags = flags
+                self.reaction = reaction
+                self.title = title
+                self.count = count
+            }
+        }
+        case savedReactionTag(Cons_savedReactionTag)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -273,7 +441,49 @@ public extension Api {
 }
 public extension Api {
     enum SavedStarGift: TypeConstructorDescription {
-        case savedStarGift(flags: Int32, fromId: Api.Peer?, date: Int32, gift: Api.StarGift, message: Api.TextWithEntities?, msgId: Int32?, savedId: Int64?, convertStars: Int64?, upgradeStars: Int64?, canExportAt: Int32?, transferStars: Int64?, canTransferAt: Int32?, canResellAt: Int32?, collectionId: [Int32]?, prepaidUpgradeHash: String?, dropOriginalDetailsStars: Int64?, giftNum: Int32?, canCraftAt: Int32?, craftChancePermille: Int32?)
+        public class Cons_savedStarGift {
+            public var flags: Int32
+            public var fromId: Api.Peer?
+            public var date: Int32
+            public var gift: Api.StarGift
+            public var message: Api.TextWithEntities?
+            public var msgId: Int32?
+            public var savedId: Int64?
+            public var convertStars: Int64?
+            public var upgradeStars: Int64?
+            public var canExportAt: Int32?
+            public var transferStars: Int64?
+            public var canTransferAt: Int32?
+            public var canResellAt: Int32?
+            public var collectionId: [Int32]?
+            public var prepaidUpgradeHash: String?
+            public var dropOriginalDetailsStars: Int64?
+            public var giftNum: Int32?
+            public var canCraftAt: Int32?
+            public var craftChancePermille: Int32?
+            public init(flags: Int32, fromId: Api.Peer?, date: Int32, gift: Api.StarGift, message: Api.TextWithEntities?, msgId: Int32?, savedId: Int64?, convertStars: Int64?, upgradeStars: Int64?, canExportAt: Int32?, transferStars: Int64?, canTransferAt: Int32?, canResellAt: Int32?, collectionId: [Int32]?, prepaidUpgradeHash: String?, dropOriginalDetailsStars: Int64?, giftNum: Int32?, canCraftAt: Int32?, craftChancePermille: Int32?) {
+                self.flags = flags
+                self.fromId = fromId
+                self.date = date
+                self.gift = gift
+                self.message = message
+                self.msgId = msgId
+                self.savedId = savedId
+                self.convertStars = convertStars
+                self.upgradeStars = upgradeStars
+                self.canExportAt = canExportAt
+                self.transferStars = transferStars
+                self.canTransferAt = canTransferAt
+                self.canResellAt = canResellAt
+                self.collectionId = collectionId
+                self.prepaidUpgradeHash = prepaidUpgradeHash
+                self.dropOriginalDetailsStars = dropOriginalDetailsStars
+                self.giftNum = giftNum
+                self.canCraftAt = canCraftAt
+                self.craftChancePermille = craftChancePermille
+            }
+        }
+        case savedStarGift(Cons_savedStarGift)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -302,7 +512,21 @@ public extension Api {
 }
 public extension Api {
     enum SearchPostsFlood: TypeConstructorDescription {
-        case searchPostsFlood(flags: Int32, totalDaily: Int32, remains: Int32, waitTill: Int32?, starsAmount: Int64)
+        public class Cons_searchPostsFlood {
+            public var flags: Int32
+            public var totalDaily: Int32
+            public var remains: Int32
+            public var waitTill: Int32?
+            public var starsAmount: Int64
+            public init(flags: Int32, totalDaily: Int32, remains: Int32, waitTill: Int32?, starsAmount: Int64) {
+                self.flags = flags
+                self.totalDaily = totalDaily
+                self.remains = remains
+                self.waitTill = waitTill
+                self.starsAmount = starsAmount
+            }
+        }
+        case searchPostsFlood(Cons_searchPostsFlood)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

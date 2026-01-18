@@ -1444,7 +1444,8 @@ public final class AccountViewTracker {
                                         if i < slice.count {
                                             let value = result[i]
                                             switch value {
-                                            case let .recentStory(flags, maxId):
+                                            case let .recentStory(recentStoryData):
+                                                let (flags, maxId) = (recentStoryData.flags, recentStoryData.maxId)
                                                 if let maxId {
                                                     transaction.setStoryItemsInexactMaxId(peerId: slice[i].0, id: maxId, hasLiveItems: (flags & (1 << 0)) != 0)
                                                 } else {
@@ -1556,7 +1557,8 @@ public final class AccountViewTracker {
                                                 case .requirementToContactPremium:
                                                     flags.insert(.premiumRequired)
                                                     sendPaidMessageStars = nil
-                                                case let .requirementToContactPaidMessages(starsAmount):
+                                                case let .requirementToContactPaidMessages(requirementToContactPaidMessagesData):
+                                                    let starsAmount = requirementToContactPaidMessagesData.starsAmount
                                                     flags.remove(.premiumRequired)
                                                     sendPaidMessageStars = StarsAmount(value: starsAmount, nanos: 0)
                                                 }

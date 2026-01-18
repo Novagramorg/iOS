@@ -383,7 +383,19 @@ public extension Api {
 }
 public extension Api {
     enum ReactionCount: TypeConstructorDescription {
-        case reactionCount(flags: Int32, chosenOrder: Int32?, reaction: Api.Reaction, count: Int32)
+        public class Cons_reactionCount {
+            public var flags: Int32
+            public var chosenOrder: Int32?
+            public var reaction: Api.Reaction
+            public var count: Int32
+            public init(flags: Int32, chosenOrder: Int32?, reaction: Api.Reaction, count: Int32) {
+                self.flags = flags
+                self.chosenOrder = chosenOrder
+                self.reaction = reaction
+                self.count = count
+            }
+        }
+        case reactionCount(Cons_reactionCount)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -449,7 +461,21 @@ public extension Api {
 }
 public extension Api {
     enum ReactionsNotifySettings: TypeConstructorDescription {
-        case reactionsNotifySettings(flags: Int32, messagesNotifyFrom: Api.ReactionNotificationsFrom?, storiesNotifyFrom: Api.ReactionNotificationsFrom?, sound: Api.NotificationSound, showPreviews: Api.Bool)
+        public class Cons_reactionsNotifySettings {
+            public var flags: Int32
+            public var messagesNotifyFrom: Api.ReactionNotificationsFrom?
+            public var storiesNotifyFrom: Api.ReactionNotificationsFrom?
+            public var sound: Api.NotificationSound
+            public var showPreviews: Api.Bool
+            public init(flags: Int32, messagesNotifyFrom: Api.ReactionNotificationsFrom?, storiesNotifyFrom: Api.ReactionNotificationsFrom?, sound: Api.NotificationSound, showPreviews: Api.Bool) {
+                self.flags = flags
+                self.messagesNotifyFrom = messagesNotifyFrom
+                self.storiesNotifyFrom = storiesNotifyFrom
+                self.sound = sound
+                self.showPreviews = showPreviews
+            }
+        }
+        case reactionsNotifySettings(Cons_reactionsNotifySettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -478,7 +504,15 @@ public extension Api {
 }
 public extension Api {
     enum ReadParticipantDate: TypeConstructorDescription {
-        case readParticipantDate(userId: Int64, date: Int32)
+        public class Cons_readParticipantDate {
+            public var userId: Int64
+            public var date: Int32
+            public init(userId: Int64, date: Int32) {
+                self.userId = userId
+                self.date = date
+            }
+        }
+        case readParticipantDate(Cons_readParticipantDate)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

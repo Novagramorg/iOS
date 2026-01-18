@@ -312,7 +312,8 @@ private func synchronizePinnedSavedChats(transaction: Transaction, postbox: Post
                 
                 loop: for dialog in dialogs {
                     switch dialog {
-                    case let .savedDialog(_, peer, _):
+                    case let .savedDialog(savedDialogData):
+                        let peer = savedDialogData.peer
                         remoteItemIds.append(peer.peerId)
                     }
                 }
