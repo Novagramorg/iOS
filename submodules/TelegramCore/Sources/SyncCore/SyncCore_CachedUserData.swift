@@ -996,7 +996,8 @@ public final class TelegramStarRefProgram: Codable, Equatable {
 extension TelegramStarRefProgram {
     convenience init(apiStarRefProgram: Api.StarRefProgram) {
         switch apiStarRefProgram {
-        case let .starRefProgram(_, botId, commissionPermille, durationMonths, endDate, dailyRevenuePerUser):
+        case let .starRefProgram(starRefProgramData):
+            let (botId, commissionPermille, durationMonths, endDate, dailyRevenuePerUser) = (starRefProgramData.botId, starRefProgramData.commissionPermille, starRefProgramData.durationMonths, starRefProgramData.endDate, starRefProgramData.dailyRevenuePerUser)
             self.init(botId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId)), commissionPermille: commissionPermille, durationMonths: durationMonths, endDate: endDate, dailyRevenuePerUser: dailyRevenuePerUser.flatMap(StarsAmount.init(apiAmount:)))
         }
     }
@@ -1110,7 +1111,8 @@ extension TelegramProfileTab {
 extension TelegramStarRating {
     convenience init(apiRating: Api.StarsRating) {
         switch apiRating {
-        case let .starsRating(_, level, currentLevelStars, stars, nextLevelStars):
+        case let .starsRating(starsRatingData):
+            let (level, currentLevelStars, stars, nextLevelStars) = (starsRatingData.level, starsRatingData.currentLevelStars, starsRatingData.stars, starsRatingData.nextLevelStars)
             self.init(
                 level: level,
                 currentLevelStars: currentLevelStars,

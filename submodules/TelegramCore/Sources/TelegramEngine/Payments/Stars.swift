@@ -117,7 +117,8 @@ public struct StarsGiftOption: Equatable, Codable {
 extension StarsGiftOption {
     init(apiStarsGiftOption: Api.StarsGiftOption) {
         switch apiStarsGiftOption {
-        case let .starsGiftOption(flags, stars, storeProduct, currency, amount):
+        case let .starsGiftOption(starsGiftOptionData):
+            let (flags, stars, storeProduct, currency, amount) = (starsGiftOptionData.flags, starsGiftOptionData.stars, starsGiftOptionData.storeProduct, starsGiftOptionData.currency, starsGiftOptionData.amount)
             self.init(count: stars, storeProductId: storeProduct, currency: currency, amount: amount, isExtended: (flags & (1 << 1)) != 0)
         }
     }
@@ -241,7 +242,8 @@ public struct StarsGiveawayOption: Equatable, Codable {
 extension StarsGiveawayOption.Winners {
     init(apiStarsGiveawayWinnersOption: Api.StarsGiveawayWinnersOption) {
         switch apiStarsGiveawayWinnersOption {
-        case let .starsGiveawayWinnersOption(flags, users, starsPerUser):
+        case let .starsGiveawayWinnersOption(starsGiveawayWinnersOptionData):
+            let (flags, users, starsPerUser) = (starsGiveawayWinnersOptionData.flags, starsGiveawayWinnersOptionData.users, starsGiveawayWinnersOptionData.perUserStars)
             self.init(users: users, starsPerUser: starsPerUser, isDefault: (flags & (1 << 0)) != 0)
         }
     }
@@ -250,7 +252,8 @@ extension StarsGiveawayOption.Winners {
 extension StarsGiveawayOption {
     init(apiStarsGiveawayOption: Api.StarsGiveawayOption) {
         switch apiStarsGiveawayOption {
-        case let .starsGiveawayOption(flags, stars, yearlyBoosts, storeProduct, currency, amount, winners):
+        case let .starsGiveawayOption(starsGiveawayOptionData):
+            let (flags, stars, yearlyBoosts, storeProduct, currency, amount, winners) = (starsGiveawayOptionData.flags, starsGiveawayOptionData.stars, starsGiveawayOptionData.yearlyBoosts, starsGiveawayOptionData.storeProduct, starsGiveawayOptionData.currency, starsGiveawayOptionData.amount, starsGiveawayOptionData.winners)
             self.init(count: stars, yearlyBoosts: yearlyBoosts, storeProductId: storeProduct, currency: currency, amount: amount, winners: winners.map { StarsGiveawayOption.Winners(apiStarsGiveawayWinnersOption: $0) }, isExtended: (flags & (1 << 0)) != 0, isDefault: (flags & (1 << 1)) != 0)
         }
     }
@@ -346,9 +349,11 @@ public struct StarsAmount: Equatable, Comparable, Hashable, Codable, CustomStrin
 extension StarsAmount {
     init(apiAmount: Api.StarsAmount) {
         switch apiAmount {
-        case let .starsAmount(amount, nanos):
+        case let .starsAmount(starsAmountData):
+            let (amount, nanos) = (starsAmountData.amount, starsAmountData.nanos)
             self.init(value: amount, nanos: nanos)
-        case let .starsTonAmount(amount):
+        case let .starsTonAmount(starsTonAmountData):
+            let amount = starsTonAmountData.amount
             self.init(value: amount, nanos: 0)
         }
     }
@@ -389,9 +394,11 @@ public struct CurrencyAmount: Equatable, Hashable, Codable {
 extension CurrencyAmount {
     init(apiAmount: Api.StarsAmount) {
         switch apiAmount {
-        case let .starsAmount(amount, nanos):
+        case let .starsAmount(starsAmountData):
+            let (amount, nanos) = (starsAmountData.amount, starsAmountData.nanos)
             self.init(amount: StarsAmount(value: amount, nanos: nanos), currency: .stars)
-        case let .starsTonAmount(amount):
+        case let .starsTonAmount(starsTonAmountData):
+            let amount = starsTonAmountData.amount
             self.init(amount: StarsAmount(value: amount, nanos: 0), currency: .ton)
         }
     }
@@ -399,10 +406,10 @@ extension CurrencyAmount {
     var apiAmount: Api.StarsAmount {
         switch self.currency {
         case .stars:
-            return .starsAmount(amount: self.amount.value, nanos: self.amount.nanos)
+            return .starsAmount(.init(amount: self.amount.value, nanos: self.amount.nanos))
         case .ton:
             assert(self.amount.nanos == 0)
-            return .starsTonAmount(amount: self.amount.value)
+            return .starsTonAmount(.init(amount: self.amount.value))
         }
     }
 }

@@ -293,9 +293,11 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
                 switch starsAmount {
                 case .none:
                     balanceNeeded = CurrencyAmount(amount: .zero, currency: .stars)
-                case let .starsAmount(amount, nanos):
+                case let .starsAmount(starsAmountData):
+                    let (amount, nanos) = (starsAmountData.amount, starsAmountData.nanos)
                     balanceNeeded = CurrencyAmount(amount: StarsAmount(value: amount, nanos: nanos), currency: .stars)
-                case let .starsTonAmount(amount):
+                case let .starsTonAmount(starsTonAmountData):
+                    let amount = starsTonAmountData.amount
                     balanceNeeded = CurrencyAmount(amount: StarsAmount(value: amount, nanos: 0), currency: .ton)
                 }
                 reason = .lowBalance(balanceNeeded: balanceNeeded)
@@ -308,9 +310,11 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
             switch starsAmount {
             case .none:
                 amountValue = CurrencyAmount(amount: .zero, currency: .stars)
-            case let .starsAmount(amount, nanos):
+            case let .starsAmount(starsAmountData):
+                let (amount, nanos) = (starsAmountData.amount, starsAmountData.nanos)
                 amountValue = CurrencyAmount(amount: StarsAmount(value: amount, nanos: nanos), currency: .stars)
-            case let .starsTonAmount(amount):
+            case let .starsTonAmount(starsTonAmountData):
+                let amount = starsTonAmountData.amount
                 amountValue = CurrencyAmount(amount: StarsAmount(value: amount, nanos: 0), currency: .ton)
             }
             status = .rejected(reason: .lowBalance(balanceNeeded: amountValue), comment: nil)

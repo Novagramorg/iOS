@@ -1186,7 +1186,8 @@ public extension StarGift {
 extension StarGift {
     init?(apiStarGift: Api.StarGift) {
         switch apiStarGift {
-        case let .starGift(apiFlags, id, sticker, stars, availabilityRemains, availabilityTotal, availabilityResale, convertStars, firstSale, lastSale, upgradeStars, minResaleStars, title, releasedBy, perUserTotal, perUserRemains, lockedUntilDate, auctionSlug, giftsPerRound, auctionStartDate, upgradeVariantsCount, apiBackground):
+        case let .starGift(starGiftData):
+            let (apiFlags, id, sticker, stars, availabilityRemains, availabilityTotal, availabilityResale, convertStars, firstSale, lastSale, upgradeStars, minResaleStars, title, releasedBy, perUserTotal, perUserRemains, lockedUntilDate, auctionSlug, giftsPerRound, auctionStartDate, upgradeVariantsCount, apiBackground) = (starGiftData.flags, starGiftData.id, starGiftData.sticker, starGiftData.stars, starGiftData.availabilityRemains, starGiftData.availabilityTotal, starGiftData.availabilityResale, starGiftData.convertStars, starGiftData.firstSaleDate, starGiftData.lastSaleDate, starGiftData.upgradeStars, starGiftData.resellMinStars, starGiftData.title, starGiftData.releasedBy, starGiftData.perUserTotal, starGiftData.perUserRemains, starGiftData.lockedUntilDate, starGiftData.auctionSlug, starGiftData.giftsPerRound, starGiftData.auctionStartDate, starGiftData.upgradeVariants, starGiftData.background)
             var flags = StarGift.Gift.Flags()
             if (apiFlags & (1 << 2)) != 0 {
                 flags.insert(.isBirthdayGift)
@@ -1220,7 +1221,8 @@ extension StarGift {
             }
             var background: StarGift.Gift.Background?
             switch apiBackground {
-            case let .starGiftBackground(centerColor, edgeColor, textColor):
+            case let .starGiftBackground(starGiftBackgroundData):
+                let (centerColor, edgeColor, textColor) = (starGiftBackgroundData.centerColor, starGiftBackgroundData.edgeColor, starGiftBackgroundData.textColor)
                 background = StarGift.Gift.Background(centerColor: centerColor, edgeColor: edgeColor, textColor: textColor)
             default:
                 break
@@ -1247,7 +1249,8 @@ extension StarGift {
                 upgradeVariantsCount: upgradeVariantsCount,
                 background: background
             ))
-        case let .starGiftUnique(apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellAmounts, releasedBy, valueAmount, valueCurrency, valueUsdAmount, themePeer, peerColor, hostPeerId, minOfferStars):
+        case let .starGiftUnique(starGiftUniqueData):
+            let (apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, apiResellAmount, releasedBy, valueAmount, valueCurrency, valueUsdAmount, themePeer, peerColor, hostPeerId, minOfferStars) = (starGiftUniqueData.flags, starGiftUniqueData.id, starGiftUniqueData.giftId, starGiftUniqueData.title, starGiftUniqueData.slug, starGiftUniqueData.num, starGiftUniqueData.ownerId, starGiftUniqueData.ownerName, starGiftUniqueData.ownerAddress, starGiftUniqueData.attributes, starGiftUniqueData.availabilityIssued, starGiftUniqueData.availabilityTotal, starGiftUniqueData.giftAddress, starGiftUniqueData.resellAmount, starGiftUniqueData.releasedBy, starGiftUniqueData.valueAmount, starGiftUniqueData.valueCurrency, starGiftUniqueData.valueUsdAmount, starGiftUniqueData.themePeer, starGiftUniqueData.peerColor, starGiftUniqueData.hostId, starGiftUniqueData.offerMinStars)
             let owner: StarGift.UniqueGift.Owner
             if let ownerAddress {
                 owner = .address(ownerAddress)
@@ -1258,7 +1261,7 @@ extension StarGift {
             } else {
                 return nil
             }
-            let resellAmounts = resellAmounts?.compactMap { CurrencyAmount(apiAmount: $0) }
+            let resellAmounts = apiResellAmount?.compactMap { CurrencyAmount(apiAmount: $0) }
             var flags = StarGift.UniqueGift.Flags()
             if (apiFlags & (1 << 9)) != 0 {
                 flags.insert(.isThemeAvailable)
@@ -1725,13 +1728,15 @@ func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal
             var nextPrices: [StarGiftUpgradePreview.Price] = []
             for price in apiPrices {
                 switch price {
-                case let .starGiftUpgradePrice(date, upgradeStars):
+                case let .starGiftUpgradePrice(starGiftUpgradePriceData):
+                    let (date, upgradeStars) = (starGiftUpgradePriceData.date, starGiftUpgradePriceData.upgradeStars)
                     prices.append(StarGiftUpgradePreview.Price(stars: upgradeStars, date: date))
                 }
             }
             for price in apiNextPrices {
                 switch price {
-                case let .starGiftUpgradePrice(date, upgradeStars):
+                case let .starGiftUpgradePrice(starGiftUpgradePriceData):
+                    let (date, upgradeStars) = (starGiftUpgradePriceData.date, starGiftUpgradePriceData.upgradeStars)
                     nextPrices.append(StarGiftUpgradePreview.Price(stars: upgradeStars, date: date))
                 }
             }
@@ -3489,7 +3494,8 @@ extension StarGift.UniqueGift.Attribute {
     init?(apiAttribute: Api.StarGiftAttribute) {
         func parseRarity(_ apiRarity: Api.StarGiftAttributeRarity) -> Rarity {
             switch apiRarity {
-            case let .starGiftAttributeRarity(permille):
+            case let .starGiftAttributeRarity(starGiftAttributeRarityData):
+                let permille = starGiftAttributeRarityData.permille
                 return .permille(permille)
             case .starGiftAttributeRarityRare:
                 return .rare
@@ -3503,20 +3509,24 @@ extension StarGift.UniqueGift.Attribute {
         }
 
         switch apiAttribute {
-        case let .starGiftAttributeModel(flags, name, document, rarity):
+        case let .starGiftAttributeModel(starGiftAttributeModelData):
+            let (flags, name, document, rarity) = (starGiftAttributeModelData.flags, starGiftAttributeModelData.name, starGiftAttributeModelData.document, starGiftAttributeModelData.rarity)
             guard let file = telegramMediaFileFromApiDocument(document, altDocuments: nil) else {
                 return nil
             }
             let crafted = (flags & (1 << 0)) != 0
             self = .model(name: name, file: file, rarity: parseRarity(rarity), crafted: crafted)
-        case let .starGiftAttributePattern(name, document, rarity):
+        case let .starGiftAttributePattern(starGiftAttributePatternData):
+            let (name, document, rarity) = (starGiftAttributePatternData.name, starGiftAttributePatternData.document, starGiftAttributePatternData.rarity)
             guard let file = telegramMediaFileFromApiDocument(document, altDocuments: nil) else {
                 return nil
             }
             self = .pattern(name: name, file: file, rarity: parseRarity(rarity))
-        case let .starGiftAttributeBackdrop(name, id, centerColor, edgeColor, patternColor, textColor, rarity):
+        case let .starGiftAttributeBackdrop(starGiftAttributeBackdropData):
+            let (name, id, centerColor, edgeColor, patternColor, textColor, rarity) = (starGiftAttributeBackdropData.name, starGiftAttributeBackdropData.backdropId, starGiftAttributeBackdropData.centerColor, starGiftAttributeBackdropData.edgeColor, starGiftAttributeBackdropData.patternColor, starGiftAttributeBackdropData.textColor, starGiftAttributeBackdropData.rarity)
             self = .backdrop(name: name, id: id, innerColor: centerColor, outerColor: edgeColor, patternColor: patternColor, textColor: textColor, rarity: parseRarity(rarity))
-        case let .starGiftAttributeOriginalDetails(_, sender, recipient, date, message):
+        case let .starGiftAttributeOriginalDetails(starGiftAttributeOriginalDetailsData):
+            let (_, sender, recipient, date, message) = (starGiftAttributeOriginalDetailsData.flags, starGiftAttributeOriginalDetailsData.senderId, starGiftAttributeOriginalDetailsData.recipientId, starGiftAttributeOriginalDetailsData.date, starGiftAttributeOriginalDetailsData.message)
             var text: String?
             var entities: [MessageTextEntity]?
             if case let .textWithEntities(textValue, entitiesValue) = message {
@@ -3903,11 +3913,11 @@ private final class ResaleGiftsContextImpl {
                 apiAttributes = filterAttributes.map {
                     switch $0 {
                     case let .model(id):
-                        return .starGiftAttributeIdModel(documentId: id)
+                        return .starGiftAttributeIdModel(.init(documentId: id))
                     case let .pattern(id):
-                        return .starGiftAttributeIdPattern(documentId: id)
+                        return .starGiftAttributeIdPattern(.init(documentId: id))
                     case let .backdrop(id):
-                        return .starGiftAttributeIdBackdrop(backdropId: id)
+                        return .starGiftAttributeIdBackdrop(.init(backdropId: id))
                     }
                 }
             }
@@ -3939,13 +3949,17 @@ private final class ResaleGiftsContextImpl {
                             var attributeCountValue: [ResaleGiftsContext.Attribute: Int32] = [:]
                             for counter in counters {
                                 switch counter {
-                                case let .starGiftAttributeCounter(attribute, count):
+                                case let .starGiftAttributeCounter(starGiftAttributeCounterData):
+                                    let (attribute, count) = (starGiftAttributeCounterData.attribute, starGiftAttributeCounterData.count)
                                     switch attribute {
-                                    case let .starGiftAttributeIdModel(documentId):
+                                    case let .starGiftAttributeIdModel(starGiftAttributeIdModelData):
+                                        let documentId = starGiftAttributeIdModelData.documentId
                                         attributeCountValue[.model(documentId)] = count
-                                    case let .starGiftAttributeIdPattern(documentId):
+                                    case let .starGiftAttributeIdPattern(starGiftAttributeIdPatternData):
+                                        let documentId = starGiftAttributeIdPatternData.documentId
                                         attributeCountValue[.pattern(documentId)] = count
-                                    case let .starGiftAttributeIdBackdrop(backdropId):
+                                    case let .starGiftAttributeIdBackdrop(starGiftAttributeIdBackdropData):
+                                        let backdropId = starGiftAttributeIdBackdropData.backdropId
                                         attributeCountValue[.backdrop(backdropId)] = count
                                     }
                                 }

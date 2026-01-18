@@ -42,7 +42,13 @@ public struct StarGiftCollection: Codable, Equatable {
 extension StarGiftCollection {
     init?(apiStarGiftCollection: Api.StarGiftCollection) {
         switch apiStarGiftCollection {
-        case let .starGiftCollection(_, collectionId, title, icon, giftsCount, hash):
+        case let .starGiftCollection(starGiftCollectionData):
+            let _ = starGiftCollectionData.flags
+            let collectionId = starGiftCollectionData.collectionId
+            let title = starGiftCollectionData.title
+            let icon = starGiftCollectionData.icon
+            let giftsCount = starGiftCollectionData.giftsCount
+            let hash = starGiftCollectionData.hash
             self.id = collectionId
             self.title = title
             self.icon = icon.flatMap { telegramMediaFileFromApiDocument($0, altDocuments: nil) }
