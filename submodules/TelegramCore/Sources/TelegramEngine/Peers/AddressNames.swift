@@ -558,7 +558,8 @@ func _internal_adminedPublicChannels(account: Account, scope: AdminedPublicChann
             var subscriberCounts: [PeerId: Int] = [:]
             let parsedPeers: AccumulatedPeers
             switch result {
-            case let .chats(apiChats):
+            case let .chats(chatsData):
+                let apiChats = chatsData.chats
                 chats = apiChats
                 for chat in apiChats {
                     if case let .channel(channelData) = chat {
@@ -566,7 +567,8 @@ func _internal_adminedPublicChannels(account: Account, scope: AdminedPublicChann
                         subscriberCounts[chat.peerId] = participantsCount.flatMap(Int.init)
                     }
                 }
-            case let .chatsSlice(_, apiChats):
+            case let .chatsSlice(chatsSliceData):
+                let apiChats = chatsSliceData.chats
                 chats = apiChats
             }
             parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
@@ -626,9 +628,11 @@ func _internal_channelsForStories(account: Account) -> Signal<[Peer], NoError> {
                 let chats: [Api.Chat]
                 let parsedPeers: AccumulatedPeers
                 switch result {
-                case let .chats(apiChats):
+                case let .chats(chatsData):
+                    let apiChats = chatsData.chats
                     chats = apiChats
-                case let .chatsSlice(_, apiChats):
+                case let .chatsSlice(chatsSliceData):
+                    let apiChats = chatsSliceData.chats
                     chats = apiChats
                 }
                 parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
@@ -688,9 +692,11 @@ func _internal_channelsForPublicReaction(account: Account, useLocalCache: Bool) 
                 let chats: [Api.Chat]
                 let parsedPeers: AccumulatedPeers
                 switch result {
-                case let .chats(apiChats):
+                case let .chats(chatsData):
+                    let apiChats = chatsData.chats
                     chats = apiChats
-                case let .chatsSlice(_, apiChats):
+                case let .chatsSlice(chatsSliceData):
+                    let apiChats = chatsSliceData.chats
                     chats = apiChats
                 }
                 parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])

@@ -2102,7 +2102,8 @@ final class FetchedForumThreads {
     
     convenience init(forumTopics: Api.messages.ForumTopics) {
         switch forumTopics {
-        case let .forumTopics(flags, count, topics, messages, chats, users, pts):
+        case let .forumTopics(forumTopicsData):
+            let (flags, count, topics, messages, chats, users, pts) = (forumTopicsData.flags, forumTopicsData.count, forumTopicsData.topics, forumTopicsData.messages, forumTopicsData.chats, forumTopicsData.users, forumTopicsData.pts)
             let orderByDate = (flags & (1 << 0)) != 0
             self.init(items: topics.map(Item.forum), totalCount: Int(count), orderByDate: orderByDate, pts: pts, messages: messages, users: users, chats: chats)
         }

@@ -171,7 +171,8 @@ func updatedFeaturedStickerPacks(network: Network, postbox: Postbox, category: F
                 switch result {
                 case .featuredStickersNotModified:
                     return .single(.notModified)
-                case let .featuredStickers(flags, _, _, sets, unread):
+                case let .featuredStickers(featuredStickersData):
+                    let (flags, sets, unread) = (featuredStickersData.flags, featuredStickersData.sets, featuredStickersData.unread)
                     return resolveMissingStickerSets(network: network, postbox: postbox, stickerSets: sets, ignorePacksWithHashes: initialPackMap.filter { $0.value.topItems.count > 1 }.mapValues({ item in
                         item.info.hash
                     }))
@@ -208,7 +209,8 @@ func updatedFeaturedStickerPacks(network: Network, postbox: Postbox, category: F
                 switch result {
                 case .featuredStickersNotModified:
                     return .single(.notModified)
-                case let .featuredStickers(flags, _, _, sets, unread):
+                case let .featuredStickers(featuredStickersData):
+                    let (flags, sets, unread) = (featuredStickersData.flags, featuredStickersData.sets, featuredStickersData.unread)
                     return resolveMissingStickerSets(network: network, postbox: postbox, stickerSets: sets, ignorePacksWithHashes: initialPackMap.mapValues({ item in
                         item.info.hash
                     }))
@@ -271,7 +273,8 @@ public func requestOldFeaturedStickerPacks(network: Network, postbox: Postbox, o
         switch result {
         case .featuredStickersNotModified:
             return []
-        case let .featuredStickers(_, _, _, sets, unread):
+        case let .featuredStickers(featuredStickersData):
+            let (sets, unread) = (featuredStickersData.sets, featuredStickersData.unread)
             let unreadIds = Set(unread)
             var updatedPacks: [FeaturedStickerPackItem] = []
             for set in sets {

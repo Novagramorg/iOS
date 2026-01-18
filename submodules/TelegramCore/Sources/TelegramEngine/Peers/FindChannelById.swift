@@ -16,9 +16,11 @@ func _internal_findChannelById(accountPeerId: PeerId, postbox: Postbox, network:
             }
             let chats: [Api.Chat]
             switch result {
-            case let .chats(apiChats):
+            case let .chats(chatsData):
+                let apiChats = chatsData.chats
                 chats = apiChats
-            case let .chatsSlice(_, apiChats):
+            case let .chatsSlice(chatsSliceData):
+                let (_, apiChats) = (chatsSliceData.count, chatsSliceData.chats)
                 chats = apiChats
             }
             guard let id = chats.first?.peerId else {
