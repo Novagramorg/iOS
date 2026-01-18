@@ -957,7 +957,13 @@ public extension Api.payments {
 }
 public extension Api.phone {
     enum ExportedGroupCallInvite: TypeConstructorDescription {
-        case exportedGroupCallInvite(link: String)
+        public class Cons_exportedGroupCallInvite {
+            public var link: String
+            public init(link: String) {
+                self.link = link
+            }
+        }
+        case exportedGroupCallInvite(Cons_exportedGroupCallInvite)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -986,7 +992,21 @@ public extension Api.phone {
 }
 public extension Api.phone {
     enum GroupCall: TypeConstructorDescription {
-        case groupCall(call: Api.GroupCall, participants: [Api.GroupCallParticipant], participantsNextOffset: String, chats: [Api.Chat], users: [Api.User])
+        public class Cons_groupCall {
+            public var call: Api.GroupCall
+            public var participants: [Api.GroupCallParticipant]
+            public var participantsNextOffset: String
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(call: Api.GroupCall, participants: [Api.GroupCallParticipant], participantsNextOffset: String, chats: [Api.Chat], users: [Api.User]) {
+                self.call = call
+                self.participants = participants
+                self.participantsNextOffset = participantsNextOffset
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case groupCall(Cons_groupCall)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -1015,7 +1035,19 @@ public extension Api.phone {
 }
 public extension Api.phone {
     enum GroupCallStars: TypeConstructorDescription {
-        case groupCallStars(totalStars: Int64, topDonors: [Api.GroupCallDonor], chats: [Api.Chat], users: [Api.User])
+        public class Cons_groupCallStars {
+            public var totalStars: Int64
+            public var topDonors: [Api.GroupCallDonor]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(totalStars: Int64, topDonors: [Api.GroupCallDonor], chats: [Api.Chat], users: [Api.User]) {
+                self.totalStars = totalStars
+                self.topDonors = topDonors
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case groupCallStars(Cons_groupCallStars)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -1044,7 +1076,13 @@ public extension Api.phone {
 }
 public extension Api.phone {
     enum GroupCallStreamChannels: TypeConstructorDescription {
-        case groupCallStreamChannels(channels: [Api.GroupCallStreamChannel])
+        public class Cons_groupCallStreamChannels {
+            public var channels: [Api.GroupCallStreamChannel]
+            public init(channels: [Api.GroupCallStreamChannel]) {
+                self.channels = channels
+            }
+        }
+        case groupCallStreamChannels(Cons_groupCallStreamChannels)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -1073,7 +1111,15 @@ public extension Api.phone {
 }
 public extension Api.phone {
     enum GroupCallStreamRtmpUrl: TypeConstructorDescription {
-        case groupCallStreamRtmpUrl(url: String, key: String)
+        public class Cons_groupCallStreamRtmpUrl {
+            public var url: String
+            public var key: String
+            public init(url: String, key: String) {
+                self.url = url
+                self.key = key
+            }
+        }
+        case groupCallStreamRtmpUrl(Cons_groupCallStreamRtmpUrl)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -1102,7 +1148,23 @@ public extension Api.phone {
 }
 public extension Api.phone {
     enum GroupParticipants: TypeConstructorDescription {
-        case groupParticipants(count: Int32, participants: [Api.GroupCallParticipant], nextOffset: String, chats: [Api.Chat], users: [Api.User], version: Int32)
+        public class Cons_groupParticipants {
+            public var count: Int32
+            public var participants: [Api.GroupCallParticipant]
+            public var nextOffset: String
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public var version: Int32
+            public init(count: Int32, participants: [Api.GroupCallParticipant], nextOffset: String, chats: [Api.Chat], users: [Api.User], version: Int32) {
+                self.count = count
+                self.participants = participants
+                self.nextOffset = nextOffset
+                self.chats = chats
+                self.users = users
+                self.version = version
+            }
+        }
+        case groupParticipants(Cons_groupParticipants)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

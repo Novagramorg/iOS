@@ -100,7 +100,8 @@ func _internal_getChannelBoostStatus(account: Account, peerId: PeerId) -> Signal
                 return nil
             }
             switch result {
-            case let .boostsStatus(flags, level, currentLevelBoosts, boosts, giftBoosts, nextLevelBoosts, premiumAudience, boostUrl, prepaidGiveaways, myBoostSlots):
+            case let .boostsStatus(boostsStatusData):
+                let (flags, level, currentLevelBoosts, boosts, giftBoosts, nextLevelBoosts, premiumAudience, boostUrl, prepaidGiveaways, myBoostSlots) = (boostsStatusData.flags, boostsStatusData.level, boostsStatusData.currentLevelBoosts, boostsStatusData.boosts, boostsStatusData.giftBoosts, boostsStatusData.nextLevelBoosts, boostsStatusData.premiumAudience, boostsStatusData.boostUrl, boostsStatusData.prepaidGiveaways, boostsStatusData.myBoostSlots)
                 let _ = myBoostSlots
                 return ChannelBoostStatus(level: Int(level), boosts: Int(boosts), giftBoosts: giftBoosts.flatMap(Int.init), currentLevelBoosts: Int(currentLevelBoosts), nextLevelBoosts: nextLevelBoosts.flatMap(Int.init), premiumAudience: premiumAudience.flatMap({ StatsPercentValue(apiPercentValue: $0) }), url: boostUrl, prepaidGiveaways: prepaidGiveaways?.map({ PrepaidGiveaway(apiPrepaidGiveaway: $0) }) ?? [], boostedByMe: (flags & (1 << 2)) != 0)
             }
@@ -274,7 +275,8 @@ private final class ChannelBoostersContextImpl {
                             return ([], 0, nil)
                         }
                         switch result {
-                        case let .boostsList(_, count, boosts, nextOffset, users):
+                        case let .boostsList(boostsListData):
+                            let (_, count, boosts, nextOffset, users) = (boostsListData.flags, boostsListData.count, boostsListData.boosts, boostsListData.nextOffset, boostsListData.users)
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
                             var resultBoosts: [ChannelBoostersContext.State.Boost] = []
                             for boost in boosts {
@@ -547,7 +549,8 @@ extension MyBoostStatus {
     init(apiMyBoostStatus: Api.premium.MyBoosts, accountPeerId: PeerId, transaction: Transaction) {
         var boostsResult: [MyBoostStatus.Boost] = []
         switch apiMyBoostStatus {
-        case let .myBoosts(myBoosts, chats, users):
+        case let .myBoosts(myBoostsData):
+            let (myBoosts, chats, users) = (myBoostsData.myBoosts, myBoostsData.chats, myBoostsData.users)
             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
             for boost in myBoosts {

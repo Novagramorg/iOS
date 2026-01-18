@@ -218,7 +218,8 @@ func _internal_getCurrentGroupCall(account: Account, reference: InternalGroupCal
     }
     |> mapToSignal { result -> Signal<GroupCallSummary?, GetCurrentGroupCallError> in
         switch result {
-        case let .groupCall(call, participants, _, chats, users):
+        case let .groupCall(groupCallData):
+            let (call, participants, chats, users) = (groupCallData.call, groupCallData.participants, groupCallData.chats, groupCallData.users)
             return account.postbox.transaction { transaction -> GroupCallSummary? in
                 guard let info = GroupCallInfo(call) else {
                     return nil
@@ -278,7 +279,8 @@ func _internal_getCurrentGroupCallInfo(account: Account, reference: InternalGrou
             return .single(nil)
         }
         switch result {
-        case let .groupCall(call, participants, _, chats, users):
+        case let .groupCall(groupCallData):
+            let (call, participants, chats, users) = (groupCallData.call, groupCallData.participants, groupCallData.chats, groupCallData.users)
             return account.postbox.transaction { transaction -> (participants: [PeerId], duration: Int32?)? in
                 if case let .groupCallDiscarded(groupCallDiscardedData) = call {
                     let (_, _, duration) = (groupCallDiscardedData.id, groupCallDiscardedData.accessHash, groupCallDiscardedData.duration)
@@ -557,7 +559,8 @@ func _internal_getGroupCallParticipants(account: Account, reference: InternalGro
             
             if let result {
                 switch result {
-                case let .groupParticipants(count, participants, nextOffset, chats, users, apiVersion):
+                case let .groupParticipants(groupParticipantsData):
+                    let (count, participants, nextOffset, chats, users, apiVersion) = (groupParticipantsData.count, groupParticipantsData.participants, groupParticipantsData.nextOffset, groupParticipantsData.chats, groupParticipantsData.users, groupParticipantsData.version)
                     totalCount = Int(count)
                     version = apiVersion
                     
@@ -2850,7 +2853,8 @@ func _internal_groupCallInviteLinks(account: Account, reference: InternalGroupCa
         return .single(nil)
     }
     |> mapToSignal { result -> Signal<String?, NoError> in
-        if let result = result,  case let .exportedGroupCallInvite(link) = result {
+        if let result = result,  case let .exportedGroupCallInvite(exportedGroupCallInviteData) = result {
+            let link = exportedGroupCallInviteData.link
             return .single(link)
         }
         return .single(nil)
@@ -2862,7 +2866,8 @@ func _internal_groupCallInviteLinks(account: Account, reference: InternalGroupCa
         return .single(nil)
     }
     |> mapToSignal { result -> Signal<String?, NoError> in
-        if let result = result,  case let .exportedGroupCallInvite(link) = result {
+        if let result = result,  case let .exportedGroupCallInvite(exportedGroupCallInviteData) = result {
+            let link = exportedGroupCallInviteData.link
             return .single(link)
         }
         return .single(nil)
@@ -2921,7 +2926,8 @@ func _internal_groupCallDisplayAsAvailablePeers(accountPeerId: PeerId, network: 
                 return .single([])
             }
             switch result {
-            case let .joinAsPeers(_, chats, users):
+            case let .joinAsPeers(joinAsPeersData):
+                let (chats, users) = (joinAsPeersData.chats, joinAsPeersData.users)
                 return postbox.transaction { transaction -> [FoundPeer] in
                     var subscribers: [PeerId: Int32] = [:]
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
@@ -3080,7 +3086,8 @@ func _internal_getAudioBroadcastDataSource(account: Account, callId: Int64, acce
             return .single(nil)
         }
         switch result {
-        case let .groupCall(call, _, _, _, _):
+        case let .groupCall(groupCallData):
+            let call = groupCallData.call
             if let datacenterId = GroupCallInfo(call)?.streamDcId.flatMap(Int.init) {
                 return account.network.download(datacenterId: datacenterId, isMedia: true, tag: nil)
                 |> map { download -> AudioBroadcastDataSource? in
@@ -3311,7 +3318,8 @@ func _internal_getGroupCallStreamCredentials(account: Account, peerId: PeerId, i
         }
         |> map { result -> GroupCallStreamCredentials in
             switch result {
-            case let .groupCallStreamRtmpUrl(url, key):
+            case let .groupCallStreamRtmpUrl(groupCallStreamRtmpUrlData):
+                let (url, key) = (groupCallStreamRtmpUrlData.url, groupCallStreamRtmpUrlData.key)
                 return GroupCallStreamCredentials(url: url, streamKey: key)
             }
         }
@@ -3359,7 +3367,8 @@ func _internal_createConferenceCall(postbox: Postbox, network: Network, accountP
                     }
                     |> castError(CreateConferenceCallError.self)
                     |> mapToSignal { result -> Signal<EngineCreatedGroupCall, CreateConferenceCallError> in
-                        if let result, case let .exportedGroupCallInvite(link) = result {
+                        if let result, case let .exportedGroupCallInvite(exportedGroupCallInviteData) = result {
+                            let link = exportedGroupCallInviteData.link
                             let slug = link.components(separatedBy: "/").last ?? link
                             return .single(EngineCreatedGroupCall(
                                 slug: slug,
@@ -4124,7 +4133,8 @@ public final class GroupCallMessagesContext {
                 return postbox.transaction { transaction -> (Api.phone.GroupCallStars, [PeerId: Peer])? in
                     var peers: [PeerId: Peer] = [:]
                     switch result {
-                    case let .groupCallStars(_, topDonors, chats, users):
+                    case let .groupCallStars(groupCallStarsData):
+                        let (topDonors, chats, users) = (groupCallStarsData.topDonors, groupCallStarsData.chats, groupCallStarsData.users)
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(chats: chats, users: users))
                         for topDonor in topDonors {
                             switch topDonor {
@@ -4147,7 +4157,8 @@ public final class GroupCallMessagesContext {
                 }
                 if let (result, _) = result {
                     switch result {
-                    case let .groupCallStars(totalStars, topDonors, _, _):
+                    case let .groupCallStars(groupCallStarsData):
+                        let (totalStars, topDonors) = (groupCallStarsData.totalStars, groupCallStarsData.topDonors)
                         var state = self.state
                         state.topStars = topDonors.map { topDonor in
                             switch topDonor {

@@ -235,7 +235,8 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                                         var videoRepresentations: [TelegramMediaImage.VideoRepresentation] = []
                                         var image: TelegramMediaImage?
                                         switch photo {
-                                        case let .photo(apiPhoto, _):
+                                        case let .photo(photoData):
+                                            let (apiPhoto, _) = (photoData.photo, photoData.users)
                                             image = telegramMediaImageFromApiPhoto(apiPhoto)
                                             switch apiPhoto {
                                                 case .photoEmpty:
@@ -451,7 +452,8 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                         var updatedImage: TelegramMediaImage?
                         var representations: [TelegramMediaImageRepresentation] = []
                         switch photo {
-                        case let .photo(apiPhoto, _):
+                        case let .photo(photoData):
+                            let (apiPhoto, _) = (photoData.photo, photoData.users)
                             updatedImage = telegramMediaImageFromApiPhoto(apiPhoto)
                             switch apiPhoto {
                                 case .photoEmpty:
@@ -502,7 +504,8 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                     } else {
                         var updatedUsers: [TelegramUser] = []
                         switch photo {
-                        case let .photo(_, apiUsers):
+                        case let .photo(photoData):
+                            let (_, apiUsers) = (photoData.photo, photoData.users)
                             updatedUsers = apiUsers.map { TelegramUser(user: $0) }
                         }
                         return postbox.transaction { transaction -> UpdatePeerPhotoStatus in
@@ -585,7 +588,8 @@ func _internal_updatePeerPhotoExisting(network: Network, reference: TelegramMedi
             return .complete()
         }
         |> mapToSignal { photo -> Signal<TelegramMediaImage?, NoError> in
-            if case let .photo(photo, _) = photo {
+            if case let .photo(photoData) = photo {
+                let (photo, _) = (photoData.photo, photoData.users)
                 return .single(telegramMediaImageFromApiPhoto(photo))
             } else {
                 return .complete()
