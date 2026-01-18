@@ -925,7 +925,8 @@ public final class AccountStateManager {
                             return postbox.transaction { transaction -> (difference: Api.updates.Difference?, finalStatte: AccountReplayedFinalState?, skipBecauseOfError: Bool, resetState: Bool) in
                                 if let currentState = transaction.getState() as? AuthorizedAccountState {
                                     switch state {
-                                    case let .state(pts, qts, date, seq, _):
+                                    case let .state(stateData):
+                                        let (pts, qts, date, seq) = (stateData.pts, stateData.qts, stateData.date, stateData.seq)
                                         transaction.setState(currentState.changedState(AuthorizedAccountState.State(pts: pts, qts: qts, date: date, seq: seq)))
                                     }
                                 }

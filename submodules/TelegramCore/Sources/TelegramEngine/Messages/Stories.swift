@@ -1927,7 +1927,8 @@ func _internal_checkStoriesUploadAvailability(account: Account, target: Stories.
         return account.network.request(Api.functions.stories.canSendStory(peer: inputPeer))
         |> map { result -> StoriesUploadAvailability in
             switch result {
-            case let .canSendStoryCount(countRemains):
+            case let .canSendStoryCount(canSendStoryCountData):
+                let countRemains = canSendStoryCountData.countRemains
                 return .available(remainingCount: countRemains)
             }
         }
@@ -2381,9 +2382,10 @@ func _internal_getStoryById(accountPeerId: PeerId, postbox: Postbox, network: Ne
             }
             return postbox.transaction { transaction -> EngineStoryItem? in
                 switch result {
-                case let .stories(_, _, stories, _, chats, users):
+                case let .stories(storiesData):
+                    let (stories, chats, users) = (storiesData.stories, storiesData.chats, storiesData.users)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(transaction: transaction, chats: chats, users: users))
-                    
+
                     if let storyItem = stories.first.flatMap({ Stories.StoredItem(apiStoryItem: $0, peerId: peerId, transaction: transaction) }) {
                         if let entry = CodableEntry(storyItem) {
                             transaction.setStory(id: storyId, value: entry)
@@ -2449,9 +2451,10 @@ func _internal_getStoriesById(accountPeerId: PeerId, postbox: Postbox, network: 
         }
         return postbox.transaction { transaction -> [Stories.StoredItem] in
             switch result {
-            case let .stories(_, _, stories, _, chats, users):
+            case let .stories(storiesData):
+                let (stories, chats, users) = (storiesData.stories, storiesData.chats, storiesData.users)
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(transaction: transaction, chats: chats, users: users))
-                
+
                 return stories.compactMap { apiStoryItem -> Stories.StoredItem? in
                     return Stories.StoredItem(apiStoryItem: apiStoryItem, peerId: peer.id, transaction: transaction)
                 }
@@ -2480,9 +2483,10 @@ func _internal_getStoriesById(accountPeerId: PeerId, postbox: Postbox, source: F
             }
             return postbox.transaction { transaction -> [Stories.StoredItem]? in
                 switch result {
-                case let .stories(_, _, stories, _, chats, users):
+                case let .stories(storiesData):
+                    let (stories, chats, users) = (storiesData.stories, storiesData.chats, storiesData.users)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(transaction: transaction, chats: chats, users: users))
-                    
+
                     return stories.compactMap { apiStoryItem -> Stories.StoredItem? in
                         return Stories.StoredItem(apiStoryItem: apiStoryItem, peerId: peerId, transaction: transaction)
                     }
@@ -2536,7 +2540,8 @@ func _internal_getStoryViews(account: Account, peerId: PeerId, ids: [Int32]) -> 
             return account.postbox.transaction { transaction -> [Int32: Stories.Item.Views] in
                 var parsedViews: [Int32: Stories.Item.Views] = [:]
                 switch result {
-                case let .storyViews(views, users):
+                case let .storyViews(storyViewsData):
+                    let (views, users) = (storyViewsData.views, storyViewsData.users)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
                     
                     for i in 0 ..< views.count {

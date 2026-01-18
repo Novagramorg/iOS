@@ -222,7 +222,8 @@ private func peerIdsFromDifference(_ difference: Api.updates.Difference) -> Set<
     var peerIds = Set<PeerId>()
     
     switch difference {
-        case let .difference(newMessages, _, otherUpdates, chats, users, _):
+        case let .difference(differenceData):
+            let (newMessages, _, otherUpdates, chats, users, _) = (differenceData.newMessages, differenceData.newEncryptedMessages, differenceData.otherUpdates, differenceData.chats, differenceData.users, differenceData.state)
             for message in newMessages {
                 for peerId in apiMessagePeerIds(message) {
                     peerIds.insert(peerId)
@@ -241,7 +242,8 @@ private func peerIdsFromDifference(_ difference: Api.updates.Difference) -> Set<
             }
         case .differenceEmpty:
             break
-        case let .differenceSlice(newMessages, _, otherUpdates, chats, users, _):
+        case let .differenceSlice(differenceSliceData):
+            let (newMessages, _, otherUpdates, chats, users, _) = (differenceSliceData.newMessages, differenceSliceData.newEncryptedMessages, differenceSliceData.otherUpdates, differenceSliceData.chats, differenceSliceData.users, differenceSliceData.intermediateState)
             for message in newMessages {
                 for peerId in apiMessagePeerIds(message) {
                     peerIds.insert(peerId)
@@ -271,11 +273,13 @@ private func activeChannelsFromDifference(_ difference: Api.updates.Difference) 
     
     var chats: [Api.Chat] = []
     switch difference {
-        case let .difference(_, _, _, differenceChats, _, _):
+        case let .difference(differenceData):
+            let (_, _, _, differenceChats, _, _) = (differenceData.newMessages, differenceData.newEncryptedMessages, differenceData.otherUpdates, differenceData.chats, differenceData.users, differenceData.state)
             chats = differenceChats
         case .differenceEmpty:
             break
-        case let .differenceSlice(_, _, _, differenceChats, _, _):
+        case let .differenceSlice(differenceSliceData):
+            let (_, _, _, differenceChats, _, _) = (differenceSliceData.newMessages, differenceSliceData.newEncryptedMessages, differenceSliceData.otherUpdates, differenceSliceData.chats, differenceSliceData.users, differenceSliceData.intermediateState)
             chats = differenceChats
         case .differenceTooLong:
             break
@@ -302,7 +306,8 @@ private func associatedMessageIdsFromDifference(_ difference: Api.updates.Differ
     var generalIds = Set<MessageId>()
     
     switch difference {
-        case let .difference(newMessages, _, otherUpdates, _, _, _):
+        case let .difference(differenceData):
+            let (newMessages, _, otherUpdates, _, _, _) = (differenceData.newMessages, differenceData.newEncryptedMessages, differenceData.otherUpdates, differenceData.chats, differenceData.users, differenceData.state)
             for message in newMessages {
                 if let associatedMessageIds = apiMessageAssociatedMessageIds(message) {
                     replyIds.formUnion(associatedMessageIds.replyIds)
@@ -317,14 +322,15 @@ private func associatedMessageIdsFromDifference(_ difference: Api.updates.Differ
             }
         case .differenceEmpty:
             break
-        case let .differenceSlice(newMessages, _, otherUpdates, _, _, _):
+        case let .differenceSlice(differenceSliceData):
+            let (newMessages, _, otherUpdates, _, _, _) = (differenceSliceData.newMessages, differenceSliceData.newEncryptedMessages, differenceSliceData.otherUpdates, differenceSliceData.chats, differenceSliceData.users, differenceSliceData.intermediateState)
             for message in newMessages {
                 if let associatedMessageIds = apiMessageAssociatedMessageIds(message) {
                     replyIds.formUnion(associatedMessageIds.replyIds)
                     generalIds.formUnion(associatedMessageIds.generalIds)
                 }
             }
-            
+
             for update in otherUpdates {
                 if let associatedMessageIds = update.associatedMessageIds {
                     replyIds.formUnion(associatedMessageIds.replyIds)
@@ -334,7 +340,7 @@ private func associatedMessageIdsFromDifference(_ difference: Api.updates.Differ
         case .differenceTooLong:
             break
     }
-    
+
     return (replyIds, generalIds)
 }
 
@@ -342,7 +348,8 @@ private func peerIdsRequiringLocalChatStateFromDifference(_ difference: Api.upda
     var peerIds = Set<PeerId>()
     
     switch difference {
-        case let .difference(newMessages, _, otherUpdates, _, _, _):
+        case let .difference(differenceData):
+            let (newMessages, _, otherUpdates, _, _, _) = (differenceData.newMessages, differenceData.newEncryptedMessages, differenceData.otherUpdates, differenceData.chats, differenceData.users, differenceData.state)
             for message in newMessages {
                 if let messageId = message.id() {
                     peerIds.insert(messageId.peerId)
@@ -367,13 +374,14 @@ private func peerIdsRequiringLocalChatStateFromDifference(_ difference: Api.upda
             }
         case .differenceEmpty:
             break
-        case let .differenceSlice(newMessages, _, otherUpdates, _, _, _):
+        case let .differenceSlice(differenceSliceData):
+            let (newMessages, _, otherUpdates, _, _, _) = (differenceSliceData.newMessages, differenceSliceData.newEncryptedMessages, differenceSliceData.otherUpdates, differenceSliceData.chats, differenceSliceData.users, differenceSliceData.intermediateState)
             for message in newMessages {
                 if let messageId = message.id() {
                     peerIds.insert(messageId.peerId)
                 }
             }
-            
+
             peerIds.formUnion(peerIdsRequiringLocalChatStateFromUpdates(otherUpdates))
             for update in otherUpdates {
                 if let messageId = update.messageId {
@@ -403,11 +411,13 @@ private func locallyGeneratedMessageTimestampsFromDifference(_ difference: Api.u
     
     var otherUpdates: [Api.Update]?
     switch difference {
-        case let .difference(_, _, apiOtherUpdates, _, _, _):
+        case let .difference(differenceData):
+            let (_, _, apiOtherUpdates, _, _, _) = (differenceData.newMessages, differenceData.newEncryptedMessages, differenceData.otherUpdates, differenceData.chats, differenceData.users, differenceData.state)
             otherUpdates = apiOtherUpdates
         case .differenceEmpty:
             break
-        case let .differenceSlice(_, _, apiOtherUpdates, _, _, _):
+        case let .differenceSlice(differenceSliceData):
+            let (_, _, apiOtherUpdates, _, _, _) = (differenceSliceData.newMessages, differenceSliceData.newEncryptedMessages, differenceSliceData.otherUpdates, differenceSliceData.chats, differenceSliceData.users, differenceSliceData.intermediateState)
             otherUpdates = apiOtherUpdates
         case .differenceTooLong:
             break
@@ -690,26 +700,31 @@ func finalStateWithDifference(accountPeerId: PeerId, postbox: Postbox, network: 
     var users: [Api.User] = []
     
     switch difference {
-        case let .difference(newMessages, newEncryptedMessages, otherUpdates, apiChats, apiUsers, apiState):
+        case let .difference(differenceData):
+            let (newMessages, newEncryptedMessages, otherUpdates, apiChats, apiUsers, apiState) = (differenceData.newMessages, differenceData.newEncryptedMessages, differenceData.otherUpdates, differenceData.chats, differenceData.users, differenceData.state)
             messages = newMessages
             encryptedMessages = newEncryptedMessages
             updates = otherUpdates
             chats = apiChats
             users = apiUsers
             switch apiState {
-                case let .state(pts, qts, date, seq, _):
+                case let .state(stateData):
+                    let (pts, qts, date, seq, _) = (stateData.pts, stateData.qts, stateData.date, stateData.seq, stateData.unreadCount)
                     updatedState.updateState(AuthorizedAccountState.State(pts: pts, qts: qts, date: date, seq: seq))
             }
-        case let .differenceEmpty(date, seq):
+        case let .differenceEmpty(differenceEmptyData):
+            let (date, seq) = (differenceEmptyData.date, differenceEmptyData.seq)
             updatedState.updateState(AuthorizedAccountState.State(pts: updatedState.state.pts, qts: updatedState.state.qts, date: date, seq: seq))
-        case let .differenceSlice(newMessages, newEncryptedMessages, otherUpdates, apiChats, apiUsers, apiState):
+        case let .differenceSlice(differenceSliceData):
+            let (newMessages, newEncryptedMessages, otherUpdates, apiChats, apiUsers, apiState) = (differenceSliceData.newMessages, differenceSliceData.newEncryptedMessages, differenceSliceData.otherUpdates, differenceSliceData.chats, differenceSliceData.users, differenceSliceData.intermediateState)
             messages = newMessages
             encryptedMessages = newEncryptedMessages
             updates = otherUpdates
             chats = apiChats
             users = apiUsers
             switch apiState {
-                case let .state(pts, qts, date, seq, _):
+                case let .state(stateData):
+                    let (pts, qts, date, seq, _) = (stateData.pts, stateData.qts, stateData.date, stateData.seq, stateData.unreadCount)
                     updatedState.updateState(AuthorizedAccountState.State(pts: pts, qts: qts, date: date, seq: seq))
             }
         case .differenceTooLong:
@@ -3391,7 +3406,8 @@ private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Netwo
             }
             
             switch difference {
-            case let .channelDifference(_, pts, timeout, newMessages, otherUpdates, chats, users):
+            case let .channelDifference(channelDifferenceData):
+                let (_, pts, timeout, newMessages, otherUpdates, chats, users) = (channelDifferenceData.flags, channelDifferenceData.pts, channelDifferenceData.timeout, channelDifferenceData.newMessages, channelDifferenceData.otherUpdates, channelDifferenceData.chats, channelDifferenceData.users)
                 var updatedState = state
                 var apiTimeout: Int32?
                 
@@ -3535,12 +3551,13 @@ private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Netwo
                         return (updatedState, true, apiTimeout)
                     }
                 }
-            case let .channelDifferenceEmpty(_, pts, timeout):
+            case let .channelDifferenceEmpty(channelDifferenceEmptyData):
+                let (_, pts, timeout) = (channelDifferenceEmptyData.flags, channelDifferenceEmptyData.pts, channelDifferenceEmptyData.timeout)
                 var updatedState = state
                 var apiTimeout: Int32?
-                
+
                 apiTimeout = timeout
-                
+
                 let channelPts: Int32
                 if let _ = updatedState.channelStates[peer.id] {
                     channelPts = pts
@@ -3548,9 +3565,10 @@ private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Netwo
                     channelPts = pts
                 }
                 updatedState.updateChannelState(peer.id, pts: channelPts)
-                
+
                 return .single((updatedState, true, apiTimeout))
-            case let .channelDifferenceTooLong(_, timeout, dialog, messages, chats, users):
+            case let .channelDifferenceTooLong(channelDifferenceTooLongData):
+                let (_, timeout, dialog, messages, chats, users) = (channelDifferenceTooLongData.flags, channelDifferenceTooLongData.timeout, channelDifferenceTooLongData.dialog, channelDifferenceTooLongData.messages, channelDifferenceTooLongData.chats, channelDifferenceTooLongData.users)
                 var updatedState = state
                 var apiTimeout: Int32?
                 

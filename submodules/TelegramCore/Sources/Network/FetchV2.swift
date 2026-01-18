@@ -801,7 +801,8 @@ private final class FetchImpl {
                 )
                 |> map { result -> FilePartResult in
                     switch result {
-                    case let .cdnFile(bytes):
+                    case let .cdnFile(cdnFileData):
+                        let bytes = cdnFileData.bytes
                         if bytes.size == 0 {
                             return .data(data: Data(), verifyPartHashData: nil)
                         } else {
@@ -819,7 +820,8 @@ private final class FetchImpl {
                                 verifyPartHashData: VerifyPartHashData(fetchRange: fetchRange, fetchedData: fetchedData)
                             )
                         }
-                    case let .cdnFileReuploadNeeded(requestToken):
+                    case let .cdnFileReuploadNeeded(cdnFileReuploadNeededData):
+                        let requestToken = cdnFileReuploadNeededData.requestToken
                         return .cdnRefresh(cdnData: cdnData, refreshToken: requestToken.makeData())
                     }
                 }
@@ -858,9 +860,11 @@ private final class FetchImpl {
                         )
                         |> map { result -> FilePartResult in
                             switch result {
-                            case let .file(_, _, bytes):
+                            case let .file(fileData):
+                                let bytes = fileData.bytes
                                 return .data(data: bytes.makeData(), verifyPartHashData: nil)
-                            case let .fileCdnRedirect(dcId, fileToken, encryptionKey, encryptionIv, fileHashes):
+                            case let .fileCdnRedirect(fileCdnRedirectData):
+                                let (dcId, fileToken, encryptionKey, encryptionIv, fileHashes) = (fileCdnRedirectData.dcId, fileCdnRedirectData.fileToken, fileCdnRedirectData.encryptionKey, fileCdnRedirectData.encryptionIv, fileCdnRedirectData.fileHashes)
                                 let _ = fileHashes
                                 return .cdnRedirect(CdnData(
                                     id: Int(dcId),

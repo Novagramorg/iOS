@@ -465,7 +465,8 @@ public final class EngineStoryViewListContext {
                     |> mapToSignal { result -> Signal<InternalState, NoError> in
                         return account.postbox.transaction { transaction -> InternalState in
                             switch result {
-                            case let .storyViewsList(_, count, viewsCount, forwardsCount, reactionsCount, views, chats, users, nextOffset):
+                            case let .storyViewsList(storyViewsListData):
+                                let (count, viewsCount, forwardsCount, reactionsCount, views, chats, users, nextOffset) = (storyViewsListData.count, storyViewsListData.viewsCount, storyViewsListData.forwardsCount, storyViewsListData.reactionsCount, storyViewsListData.views, storyViewsListData.chats, storyViewsListData.users, storyViewsListData.nextOffset)
                                 let peers = AccumulatedPeers(chats: chats, users: users)
                                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: peers)
                                 
@@ -688,7 +689,8 @@ public final class EngineStoryViewListContext {
                     |> mapToSignal { result -> Signal<InternalState, NoError> in
                         return account.postbox.transaction { transaction -> InternalState in
                             switch result {
-                            case let .storyReactionsList(_, count, reactions, chats, users, nextOffset):
+                            case let .storyReactionsList(storyReactionsListData):
+                                let (count, reactions, chats, users, nextOffset) = (storyReactionsListData.count, storyReactionsListData.reactions, storyReactionsListData.chats, storyReactionsListData.users, storyReactionsListData.nextOffset)
                                 let peers = AccumulatedPeers(chats: chats, users: users)
                                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: peers)
                                 

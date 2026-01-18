@@ -652,7 +652,13 @@ public extension Api.stats {
 }
 public extension Api.stickers {
     enum SuggestedShortName: TypeConstructorDescription {
-        case suggestedShortName(shortName: String)
+        public class Cons_suggestedShortName {
+            public var shortName: String
+            public init(shortName: String) {
+                self.shortName = shortName
+            }
+        }
+        case suggestedShortName(Cons_suggestedShortName)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -782,7 +788,15 @@ public extension Api.storage {
 }
 public extension Api.stories {
     enum Albums: TypeConstructorDescription {
-        case albums(hash: Int64, albums: [Api.StoryAlbum])
+        public class Cons_albums {
+            public var hash: Int64
+            public var albums: [Api.StoryAlbum]
+            public init(hash: Int64, albums: [Api.StoryAlbum]) {
+                self.hash = hash
+                self.albums = albums
+            }
+        }
+        case albums(Cons_albums)
         case albumsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -819,8 +833,36 @@ public extension Api.stories {
 }
 public extension Api.stories {
     enum AllStories: TypeConstructorDescription {
-        case allStories(flags: Int32, count: Int32, state: String, peerStories: [Api.PeerStories], chats: [Api.Chat], users: [Api.User], stealthMode: Api.StoriesStealthMode)
-        case allStoriesNotModified(flags: Int32, state: String, stealthMode: Api.StoriesStealthMode)
+        public class Cons_allStories {
+            public var flags: Int32
+            public var count: Int32
+            public var state: String
+            public var peerStories: [Api.PeerStories]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public var stealthMode: Api.StoriesStealthMode
+            public init(flags: Int32, count: Int32, state: String, peerStories: [Api.PeerStories], chats: [Api.Chat], users: [Api.User], stealthMode: Api.StoriesStealthMode) {
+                self.flags = flags
+                self.count = count
+                self.state = state
+                self.peerStories = peerStories
+                self.chats = chats
+                self.users = users
+                self.stealthMode = stealthMode
+            }
+        }
+        public class Cons_allStoriesNotModified {
+            public var flags: Int32
+            public var state: String
+            public var stealthMode: Api.StoriesStealthMode
+            public init(flags: Int32, state: String, stealthMode: Api.StoriesStealthMode) {
+                self.flags = flags
+                self.state = state
+                self.stealthMode = stealthMode
+            }
+        }
+        case allStories(Cons_allStories)
+        case allStoriesNotModified(Cons_allStoriesNotModified)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -856,7 +898,13 @@ public extension Api.stories {
 }
 public extension Api.stories {
     enum CanSendStoryCount: TypeConstructorDescription {
-        case canSendStoryCount(countRemains: Int32)
+        public class Cons_canSendStoryCount {
+            public var countRemains: Int32
+            public init(countRemains: Int32) {
+                self.countRemains = countRemains
+            }
+        }
+        case canSendStoryCount(Cons_canSendStoryCount)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -885,7 +933,23 @@ public extension Api.stories {
 }
 public extension Api.stories {
     enum FoundStories: TypeConstructorDescription {
-        case foundStories(flags: Int32, count: Int32, stories: [Api.FoundStory], nextOffset: String?, chats: [Api.Chat], users: [Api.User])
+        public class Cons_foundStories {
+            public var flags: Int32
+            public var count: Int32
+            public var stories: [Api.FoundStory]
+            public var nextOffset: String?
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(flags: Int32, count: Int32, stories: [Api.FoundStory], nextOffset: String?, chats: [Api.Chat], users: [Api.User]) {
+                self.flags = flags
+                self.count = count
+                self.stories = stories
+                self.nextOffset = nextOffset
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case foundStories(Cons_foundStories)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

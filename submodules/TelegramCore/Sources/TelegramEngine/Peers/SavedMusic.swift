@@ -62,8 +62,8 @@ func _internal_getSavedMusicById(postbox: Postbox, network: Network, peer: PeerR
     |> map { result -> TelegramMediaFile? in
         if let result {
             switch result {
-            case let .savedMusic(_, documents):
-                if let file = documents.first.flatMap({ telegramMediaFileFromApiDocument($0, altDocuments: nil) }) {
+            case let .savedMusic(savedMusicData):
+                if let file = savedMusicData.documents.first.flatMap({ telegramMediaFileFromApiDocument($0, altDocuments: nil) }) {
                     return file
                 }
             default:
@@ -366,10 +366,10 @@ public final class ProfileSavedMusicContext {
             return network.request(Api.functions.users.getSavedMusic(id: inputUser, offset: offset, limit: 32, hash: 0))
             |> map { result -> ([TelegramMediaFile], Int32) in
                 switch result {
-                case let .savedMusic(count, documents):
-                    return (documents.compactMap { telegramMediaFileFromApiDocument($0, altDocuments: nil) }, count)
-                case let .savedMusicNotModified(count):
-                    return ([], count)
+                case let .savedMusic(savedMusicData):
+                    return (savedMusicData.documents.compactMap { telegramMediaFileFromApiDocument($0, altDocuments: nil) }, savedMusicData.count)
+                case let .savedMusicNotModified(savedMusicNotModifiedData):
+                    return ([], savedMusicNotModifiedData.count)
                 }
             }
         }
