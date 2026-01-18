@@ -35,7 +35,8 @@ func _internal_exportAuthTransferToken(accountManager: AccountManager<TelegramAc
             }
             |> mapToSignal { result -> Signal<Api.auth.LoginToken?, ExportAuthTransferTokenError> in
                 switch result {
-                case let .password(_, _, _, _, hint, _, _, _, _, _, _):
+                case let .password(passwordData):
+                    let hint = passwordData.hint
                     return account.postbox.transaction { transaction -> Api.auth.LoginToken? in
                         transaction.setState(UnauthorizedAccountState(isTestingEnvironment: account.testingEnvironment, masterDatacenterId: account.masterDatacenterId, contents: .passwordEntry(hint: hint ?? "", number: nil, code: nil, suggestReset: false, syncContacts: syncContacts)))
                         return nil
@@ -73,7 +74,8 @@ func _internal_exportAuthTransferToken(accountManager: AccountManager<TelegramAc
                         }
                         |> mapToSignal { result -> Signal<Api.auth.LoginToken?, ExportAuthTransferTokenError> in
                             switch result {
-                            case let .password(_, _, _, _, hint, _, _, _, _, _, _):
+                            case let .password(passwordData):
+                                let hint = passwordData.hint
                                 return updatedAccount.postbox.transaction { transaction -> Api.auth.LoginToken? in
                                     transaction.setState(UnauthorizedAccountState(isTestingEnvironment: updatedAccount.testingEnvironment, masterDatacenterId: updatedAccount.masterDatacenterId, contents: .passwordEntry(hint: hint ?? "", number: nil, code: nil, suggestReset: false, syncContacts: syncContacts)))
                                     return nil

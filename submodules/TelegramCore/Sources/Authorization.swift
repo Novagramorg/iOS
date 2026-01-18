@@ -213,7 +213,8 @@ public func sendAuthorizationCode(accountManager: AccountManager<TelegramAccount
                                 return updatedAccount.network.request(Api.functions.account.getPassword(), automaticFloodWait: false)
                                 |> mapToSignal { result -> Signal<(SendCodeResult, UnauthorizedAccount), MTRpcError> in
                                     switch result {
-                                    case let .password(_, _, _, _, hint, _, _, _, _, _, _):
+                                    case let .password(passwordData):
+                                        let hint = passwordData.hint
                                         return .single((.password(hint: hint), updatedAccount))
                                     }
                                 }
@@ -248,7 +249,8 @@ public func sendAuthorizationCode(accountManager: AccountManager<TelegramAccount
                 }
                 |> mapToSignal { result -> Signal<(SendCodeResult, UnauthorizedAccount), AuthorizationCodeRequestError> in
                     switch result {
-                    case let .password(_, _, _, _, hint, _, _, _, _, _, _):
+                    case let .password(passwordData):
+                        let hint = passwordData.hint
                         return .single((.password(hint: hint), account))
                     }
                 }
@@ -776,7 +778,8 @@ public func sendLoginEmailChangeCode(account: Account, email: String) -> Signal<
     }
     |> map { result -> ChangeLoginEmailData in
         switch result {
-            case let .sentEmailCode(_, length):
+            case let .sentEmailCode(sentEmailCodeData):
+                let length = sentEmailCodeData.length
                 return ChangeLoginEmailData(email: email, length: length)
         }
     }
@@ -805,7 +808,8 @@ public func sendLoginEmailCode(account: UnauthorizedAccount, email: String) -> S
                     |> mapToSignal { result -> Signal<Never, AuthorizationSendEmailCodeError> in
                         return account.postbox.transaction { transaction -> Signal<Void, NoError> in
                             switch result {
-                            case let .sentEmailCode(emailPattern, length):
+                            case let .sentEmailCode(sentEmailCodeData):
+                                let (emailPattern, length) = (sentEmailCodeData.emailPattern, sentEmailCodeData.length)
                                 transaction.setState(UnauthorizedAccountState(isTestingEnvironment: account.testingEnvironment, masterDatacenterId: account.masterDatacenterId, contents: .confirmationCodeEntry(number: phoneNumber, type: .email(emailPattern: emailPattern, length: length, resetAvailablePeriod: nil, resetPendingDate: nil, appleSignInAllowed: false, setup: true), hash: phoneCodeHash, timeout: nil, nextType: nil, syncContacts: syncContacts, previousCodeEntry: nil, usePrevious: false)))
                             }
                             return .complete()
@@ -896,7 +900,8 @@ public func verifyLoginEmailSetup(account: UnauthorizedAccount, code: Authorizat
                     |> mapToSignal { result -> Signal<Never, AuthorizationEmailVerificationError> in
                         return account.postbox.transaction { transaction -> Signal<Void, NoError> in
                             switch result {
-                                case let .emailVerifiedLogin(_, sentCode):
+                                case let .emailVerifiedLogin(emailVerifiedLoginData):
+                                    let sentCode = emailVerifiedLoginData.sentCode
                                     switch sentCode {
                                     case let .sentCode(_, type, phoneCodeHash, nextType, timeout):
                                         var parsedNextType: AuthorizationCodeNextType?
@@ -1037,7 +1042,8 @@ public func authorizeWithCode(accountManager: AccountManager<TelegramAccountMana
                                 }
                                 |> mapToSignal { result -> Signal<AuthorizationCodeResult, AuthorizationCodeVerificationError> in
                                     switch result {
-                                        case let .password(_, _, _, _, hint, _, _, _, _, _, _):
+                                        case let .password(passwordData):
+                                            let hint = passwordData.hint
                                             return .single(.password(hint: hint ?? ""))
                                     }
                                 }
@@ -1232,7 +1238,8 @@ public func authorizeWithPasskey(accountManager: AccountManager<TelegramAccountM
                 }
                 |> mapToSignal { result -> Signal<AuthorizationCodeResult, AuthorizationCodeVerificationError> in
                     switch result {
-                        case let .password(_, _, _, _, hint, _, _, _, _, _, _):
+                        case let .password(passwordData):
+                            let hint = passwordData.hint
                             return .single(.password(hint: hint ?? ""))
                     }
                 }
@@ -1385,7 +1392,7 @@ func _internal_performPasswordRecovery(network: Network, code: String, updatedPa
                 return .fail(.invalidCode)
             }
 
-            newSettings = Api.account.PasswordInputSettings.passwordInputSettings(flags: flags, newAlgo: updatedPasswordDerivation.apiAlgo, newPasswordHash: Buffer(data: updatedPasswordHash), hint: hint, email: email, newSecureSettings: nil)
+            newSettings = Api.account.PasswordInputSettings.passwordInputSettings(.init(flags: flags, newAlgo: updatedPasswordDerivation.apiAlgo, newPasswordHash: Buffer(data: updatedPasswordHash), hint: hint, email: email, newSecureSettings: nil))
         }
 
         var flags: Int32 = 0

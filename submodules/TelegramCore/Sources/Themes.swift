@@ -17,7 +17,8 @@ public func telegramThemes(postbox: Postbox, network: Network, accountManager: A
         |> retryRequest
         |> mapToSignal { result -> Signal<([TelegramTheme], Int64), NoError> in
             switch result {
-                case let .themes(hash, themes):
+                case let .themes(themesData):
+                    let (hash, themes) = (themesData.hash, themesData.themes)
                     let result = themes.compactMap { TelegramTheme(apiTheme: $0) }
                     if result == current {
                         return .complete()
