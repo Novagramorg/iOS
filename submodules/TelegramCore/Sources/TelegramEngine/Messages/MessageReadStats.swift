@@ -48,7 +48,8 @@ func _internal_messageReadStats(account: Account, id: MessageId) -> Signal<Messa
                 var items: [(Int64, Int32)] = []
                 for item in result {
                     switch item {
-                    case let .readParticipantDate(userId, date):
+                    case let .readParticipantDate(readParticipantDateData):
+                        let (userId, date) = (readParticipantDateData.userId, readParticipantDateData.date)
                         items.append((userId, date))
                     }
                 }

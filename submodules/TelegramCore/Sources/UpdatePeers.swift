@@ -57,7 +57,8 @@ func updatePeers(transaction: Transaction, accountPeerId: PeerId, peers: Accumul
                 
                 if let storiesMaxId {
                     switch storiesMaxId {
-                    case let .recentStory(flags, maxId):
+                    case let .recentStory(recentStoryData):
+                        let (flags, maxId) = (recentStoryData.flags, recentStoryData.maxId)
                         if let maxId {
                             transaction.setStoryItemsInexactMaxId(peerId: user.peerId, id: maxId, hasLiveItems: (flags & (1 << 0)) != 0)
                         } else {
@@ -88,7 +89,8 @@ func updatePeers(transaction: Transaction, accountPeerId: PeerId, peers: Accumul
             
             if let storiesMaxId {
                 switch storiesMaxId {
-                case let .recentStory(flags, maxId):
+                case let .recentStory(recentStoryData):
+                    let (flags, maxId) = (recentStoryData.flags, recentStoryData.maxId)
                     if let maxId {
                         transaction.setStoryItemsInexactMaxId(peerId: chat.peerId, id: maxId, hasLiveItems: (flags & (1 << 0)) != 0)
                     } else {

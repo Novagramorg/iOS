@@ -608,7 +608,8 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                     if let searchFlood {
                         transaction.updatePreferencesEntry(key: PreferencesKeys.globalPostSearchState(), { _ in
                             switch searchFlood {
-                            case let .searchPostsFlood(_, totalDaily, remains, waitTill, starsAmount):
+                            case let .searchPostsFlood(searchPostsFloodData):
+                                let (_, totalDaily, remains, waitTill, starsAmount) = (searchPostsFloodData.flags, searchPostsFloodData.totalDaily, searchPostsFloodData.remains, searchPostsFloodData.waitTill, searchPostsFloodData.starsAmount)
                                 return PreferencesEntry(TelegramGlobalPostSearchState(
                                     totalFreeSearches: totalDaily,
                                     remainingFreeSearches: remains,
@@ -1102,7 +1103,8 @@ func _internal_refreshGlobalPostSearchState(account: Account) -> Signal<Never, N
             }
             transaction.updatePreferencesEntry(key: PreferencesKeys.globalPostSearchState(), { _ in
                 switch result {
-                case let .searchPostsFlood(_, totalDaily, remains, waitTill, starsAmount):
+                case let .searchPostsFlood(searchPostsFloodData):
+                    let (_, totalDaily, remains, waitTill, starsAmount) = (searchPostsFloodData.flags, searchPostsFloodData.totalDaily, searchPostsFloodData.remains, searchPostsFloodData.waitTill, searchPostsFloodData.starsAmount)
                     return PreferencesEntry(TelegramGlobalPostSearchState(
                         totalFreeSearches: totalDaily,
                         remainingFreeSearches: remains,

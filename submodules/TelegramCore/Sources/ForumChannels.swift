@@ -785,7 +785,8 @@ func _internal_requestMessageHistoryThreads(accountPeerId: PeerId, postbox: Post
                     
                     for dialog in dialogs {
                         switch dialog {
-                        case let .savedDialog(flags, peer, topMessage):
+                        case let .savedDialog(savedDialogData):
+                            let (flags, peer, topMessage) = (savedDialogData.flags, savedDialogData.peer, savedDialogData.topMessage)
                             if (flags & (1 << 2)) != 0 {
                                 pinnedIds.append(peer.peerId.toInt64())
                             }
@@ -843,7 +844,8 @@ func _internal_requestMessageHistoryThreads(accountPeerId: PeerId, postbox: Post
                                 index: topicIndex,
                                 threadPeer: threadPeer
                             ))
-                        case let .monoForumDialog(flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadReactionsCount, _):
+                        case let .monoForumDialog(monoForumDialogData):
+                            let (flags, peer, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadReactionsCount) = (monoForumDialogData.flags, monoForumDialogData.peer, monoForumDialogData.topMessage, monoForumDialogData.readInboxMaxId, monoForumDialogData.readOutboxMaxId, monoForumDialogData.unreadCount, monoForumDialogData.unreadReactionsCount)
                             let isMarkedUnread = (flags & (1 << 3)) != 0
                             let data = MessageHistoryThreadData(
                                 creationDate: 0,

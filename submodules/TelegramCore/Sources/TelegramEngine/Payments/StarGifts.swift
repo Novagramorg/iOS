@@ -3426,7 +3426,8 @@ func _internal_craftStarGift(account: Account, references: [StarGiftReference]) 
 extension ProfileGiftsContext.State.StarGift {
     init?(apiSavedStarGift: Api.SavedStarGift, peerId: EnginePeer.Id, transaction: Transaction) {
         switch apiSavedStarGift {
-        case let .savedStarGift(flags, fromId, date, apiGift, message, msgId, savedId, convertStars, upgradeStars, canExportDate, transferStars, canTransferAt, canResaleAt, collectionIds, prepaidUpgradeHash, dropOriginalDetailsStars, number, canCraftAt, craftChancePermille):
+        case let .savedStarGift(savedStarGiftData):
+            let (flags, fromId, date, apiGift, message, msgId, savedId, convertStars, upgradeStars, canExportDate, transferStars, canTransferAt, canResaleAt, collectionIds, prepaidUpgradeHash, dropOriginalDetailsStars, number, canCraftAt, craftChancePermille) = (savedStarGiftData.flags, savedStarGiftData.fromId, savedStarGiftData.date, savedStarGiftData.gift, savedStarGiftData.message, savedStarGiftData.msgId, savedStarGiftData.savedId, savedStarGiftData.convertStars, savedStarGiftData.upgradeStars, savedStarGiftData.canExportAt, savedStarGiftData.transferStars, savedStarGiftData.canTransferAt, savedStarGiftData.canResellAt, savedStarGiftData.collectionId, savedStarGiftData.prepaidUpgradeHash, savedStarGiftData.dropOriginalDetailsStars, savedStarGiftData.giftNum, savedStarGiftData.canCraftAt, savedStarGiftData.craftChancePermille)
             guard let gift = StarGift(apiStarGift: apiGift) else {
                 return nil
             }

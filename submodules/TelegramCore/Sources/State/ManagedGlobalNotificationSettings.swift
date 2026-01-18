@@ -279,7 +279,8 @@ private func fetchedNotificationSettings(network: Network) -> Signal<GlobalNotif
         
         let reactionSettings: PeerReactionNotificationSettings
         switch reactions {
-        case let .reactionsNotifySettings(_, messagesNotifyFrom, storiesNotifyFrom, sound, showPreviews):
+        case let .reactionsNotifySettings(reactionsNotifySettingsData):
+            let (_, messagesNotifyFrom, storiesNotifyFrom, sound, showPreviews) = (reactionsNotifySettingsData.flags, reactionsNotifySettingsData.messagesNotifyFrom, reactionsNotifySettingsData.storiesNotifyFrom, reactionsNotifySettingsData.sound, reactionsNotifySettingsData.showPreviews)
             let mappedMessages: PeerReactionNotificationSettings.Sources
             if let messagesNotifyFrom {
                 switch messagesNotifyFrom {
@@ -416,13 +417,13 @@ private func pushedNotificationSettings(network: Network, settings: GlobalNotifi
         reactionFlags |= 1 << 1
     }
     
-    let inputReactionSettings: Api.ReactionsNotifySettings = .reactionsNotifySettings(
+    let inputReactionSettings: Api.ReactionsNotifySettings = .reactionsNotifySettings(.init(
         flags: reactionFlags,
         messagesNotifyFrom: reactionsMessages,
         storiesNotifyFrom: reactionsStories,
         sound: settings.reactionSettings.sound.apiSound,
         showPreviews: settings.reactionSettings.hideSender == .hide ? .boolFalse : .boolTrue
-    )
+    ))
     let pushedReactions = network.request(Api.functions.account.setReactionsNotifySettings(settings: inputReactionSettings))
     |> map(Optional.init)
     |> `catch` { _ -> Signal<Api.ReactionsNotifySettings?, NoError> in
