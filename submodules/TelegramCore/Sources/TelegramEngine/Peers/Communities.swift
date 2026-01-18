@@ -310,11 +310,12 @@ func _internal_checkChatFolderLink(account: Account, slug: String) -> Signal<Cha
                 let titleText: String
                 let titleEntities: [MessageTextEntity]
                 switch title {
-                case let .textWithEntities(text, entities):
+                case let .textWithEntities(textWithEntitiesData):
+                    let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                     titleText = text
                     titleEntities = messageTextEntitiesFromApiEntities(entities)
                 }
-                
+
                 return ChatFolderLinkContents(localFilterId: nil, title: ChatFolderTitle(text: titleText, entities: titleEntities, enableAnimations: !disableTitleAnimation), peers: resultPeers, alreadyMemberPeerIds: alreadyMemberPeerIds, memberCounts: memberCounts)
             case let .chatlistInviteAlready(filterId, missingPeers, alreadyPeers, chats, users):
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
@@ -487,7 +488,8 @@ func _internal_joinChatFolderLink(account: Account, slug: String, peerIds: [Engi
             
             var folderResult: JoinChatFolderResult?
             for update in result.allUpdates {
-                if case let .updateDialogFilter(_, id, data) = update {
+                if case let .updateDialogFilter(updateDialogFilterData) = update {
+                    let (id, data) = (updateDialogFilterData.id, updateDialogFilterData.filter)
                     if let data = data, case let .filter(_, title, _, _) = ChatListFilter(apiFilter: data) {
                         folderResult = JoinChatFolderResult(folderId: id, title: title, newChatCount: newChatCount)
                     }

@@ -19,9 +19,11 @@ public enum JoinLinkError {
 
 func apiUpdatesGroups(_ updates: Api.Updates) -> [Api.Chat] {
     switch updates {
-        case let .updates( _, _, chats, _, _):
+        case let .updates(updatesData):
+            let chats = updatesData.chats
             return chats
-        case let .updatesCombined(_, _, chats, _, _, _):
+        case let .updatesCombined(updatesCombinedData):
+            let chats = updatesCombinedData.chats
             return chats
         default:
             return []

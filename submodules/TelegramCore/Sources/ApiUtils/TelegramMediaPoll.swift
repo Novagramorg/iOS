@@ -11,7 +11,8 @@ extension TelegramMediaPollOption {
             let answerText: String
             let answerEntities: [MessageTextEntity]
             switch text {
-            case let .textWithEntities(text, entities):
+            case let .textWithEntities(textWithEntitiesData):
+                let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                 answerText = text
                 answerEntities = messageTextEntitiesFromApiEntities(entities)
             }
@@ -21,7 +22,7 @@ extension TelegramMediaPollOption {
     }
     
     var apiOption: Api.PollAnswer {
-        return .pollAnswer(.init(text: .textWithEntities(text: self.text, entities: apiEntitiesFromMessageTextEntities(self.entities, associatedPeers: SimpleDictionary())), option: Buffer(data: self.opaqueIdentifier)))
+        return .pollAnswer(.init(text: .textWithEntities(.init(text: self.text, entities: apiEntitiesFromMessageTextEntities(self.entities, associatedPeers: SimpleDictionary()))), option: Buffer(data: self.opaqueIdentifier)))
     }
 }
 

@@ -67,7 +67,8 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
         
         for update in result.allUpdates {
             switch update {
-            case let .updateMessageID(id, randomId):
+            case let .updateMessageID(updateMessageIDData):
+                let (id, randomId) = (updateMessageIDData.id, updateMessageIDData.randomId)
                 for attribute in message.attributes {
                     if let attribute = attribute as? OutgoingMessageInfoAttribute {
                         if attribute.uniqueId == randomId {
@@ -115,7 +116,8 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
             }
         } else {
             switch result {
-                case let .updateShortSentMessage(_, _, _, _, date, _, _, _):
+                case let .updateShortSentMessage(updateShortSentMessageData):
+                    let (_, _, _, _, date, _, _, _) = (updateShortSentMessageData.flags, updateShortSentMessageData.id, updateShortSentMessageData.pts, updateShortSentMessageData.ptsCount, updateShortSentMessageData.date, updateShortSentMessageData.media, updateShortSentMessageData.entities, updateShortSentMessageData.ttlPeriod)
                     updatedTimestamp = date
                 default:
                     break
@@ -153,7 +155,8 @@ func applyUpdateMessage(postbox: Postbox, stateManager: AccountStateManager, mes
                 text = updatedMessage.text
                 forwardInfo = updatedMessage.forwardInfo
                 threadId = updatedMessage.threadId
-            } else if case let .updateShortSentMessage(_, _, _, _, _, apiMedia, entities, ttlPeriod) = result {
+            } else if case let .updateShortSentMessage(updateShortSentMessageData) = result {
+                let (_, _, _, _, _, apiMedia, entities, ttlPeriod) = (updateShortSentMessageData.flags, updateShortSentMessageData.id, updateShortSentMessageData.pts, updateShortSentMessageData.ptsCount, updateShortSentMessageData.date, updateShortSentMessageData.media, updateShortSentMessageData.entities, updateShortSentMessageData.ttlPeriod)
                 let (mediaValue, _, nonPremium, hasSpoiler, _, _) = textMediaAndExpirationTimerFromApiMedia(apiMedia, currentMessage.id.peerId)
                 if let mediaValue = mediaValue {
                     media = [mediaValue]

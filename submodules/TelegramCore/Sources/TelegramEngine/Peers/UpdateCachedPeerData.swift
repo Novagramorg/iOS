@@ -266,7 +266,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                             }
                             
                             switch fullUser {
-                            case let .userFull(_, _, _, _, _, _, _, _, userFullNotifySettings, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+                            case let .userFull(userFullData):
+                                let userFullNotifySettings = userFullData.notifySettings
                                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                                 transaction.updateCurrentPeerNotificationSettings([peerId: TelegramPeerNotificationSettings(apiSettings: userFullNotifySettings)])
                             }
@@ -278,7 +279,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                     previous = CachedUserData()
                                 }
                                 switch fullUser {
-                                    case let .userFull(userFullFlags, userFullFlags2, _, userFullAbout, userFullSettings, personalPhoto, profilePhoto, fallbackPhoto, _, userFullBotInfo, userFullPinnedMsgId, userFullCommonChatsCount, _, userFullTtlPeriod, userFullChatTheme, _, groupAdminRights, channelAdminRights, userWallpaper, _, businessWorkHours, businessLocation, greetingMessage, awayMessage, businessIntro, birthday, personalChannelId, personalChannelMessage, starGiftsCount, starRefProgram, verification, sendPaidMessageStars, disallowedStarGifts, starsRating, starsMyPendingRating, starsMyPendingRatingDate, mainTab, savedMusic, note):
+                                    case let .userFull(userFullData):
+                                        let (userFullFlags, userFullFlags2, userFullAbout, userFullSettings, apiPersonalPhoto, profilePhoto, apiFallbackPhoto, userFullBotInfo, userFullPinnedMsgId, userFullCommonChatsCount, userFullTtlPeriod, userFullChatTheme, groupAdminRights, channelAdminRights, userWallpaper, businessWorkHours, businessLocation, greetingMessage, awayMessage, businessIntro, birthday, personalChannelId, personalChannelMessage, starGiftsCount, starRefProgram, apiVerification, apiSendPaidMessageStars, disallowedStarGifts, starsRating, starsMyPendingRating, starsMyPendingRatingDate, mainTab, savedMusic, note) = (userFullData.flags, userFullData.flags2, userFullData.about, userFullData.settings, userFullData.personalPhoto, userFullData.profilePhoto, userFullData.fallbackPhoto, userFullData.botInfo, userFullData.pinnedMsgId, userFullData.commonChatsCount, userFullData.ttlPeriod, userFullData.theme, userFullData.botGroupAdminRights, userFullData.botBroadcastAdminRights, userFullData.wallpaper, userFullData.businessWorkHours, userFullData.businessLocation, userFullData.businessGreetingMessage, userFullData.businessAwayMessage, userFullData.businessIntro, userFullData.birthday, userFullData.personalChannelId, userFullData.personalChannelMessage, userFullData.stargiftsCount, userFullData.starrefProgram, userFullData.botVerification, userFullData.sendPaidMessagesStars, userFullData.disallowedGifts, userFullData.starsRating, userFullData.starsMyPendingRating, userFullData.starsMyPendingRatingDate, userFullData.mainTab, userFullData.savedMusic, userFullData.note)
                                         let botInfo = userFullBotInfo.flatMap(BotInfo.init(apiBotInfo:))
                                         let isBlocked = (userFullFlags & (1 << 0)) != 0
                                         let voiceCallsAvailable = (userFullFlags & (1 << 4)) != 0
@@ -339,9 +341,9 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                         
                                         let autoremoveTimeout: CachedPeerAutoremoveTimeout = .known(CachedPeerAutoremoveTimeout.Value(userFullTtlPeriod))
                                     
-                                        let personalPhoto = personalPhoto.flatMap { telegramMediaImageFromApiPhoto($0) }
+                                        let personalPhoto = apiPersonalPhoto.flatMap { telegramMediaImageFromApiPhoto($0) }
                                         let photo = profilePhoto.flatMap { telegramMediaImageFromApiPhoto($0) }
-                                        let fallbackPhoto = fallbackPhoto.flatMap { telegramMediaImageFromApiPhoto($0) }
+                                        let fallbackPhoto = apiFallbackPhoto.flatMap { telegramMediaImageFromApiPhoto($0) }
                                                                         
                                         let wallpaper = userWallpaper.flatMap { TelegramWallpaper(apiWallpaper: $0) }
                                     
@@ -401,9 +403,9 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             mappedStarRefProgram = TelegramStarRefProgram(apiStarRefProgram: starRefProgram)
                                         }
                                     
-                                        let verification = verification.flatMap { PeerVerification(apiBotVerification: $0) }
+                                        let verification = apiVerification.flatMap { PeerVerification(apiBotVerification: $0) }
                                         
-                                        let sendPaidMessageStars = sendPaidMessageStars.flatMap { StarsAmount(value: $0, nanos: 0) }
+                                        let sendPaidMessageStars = apiSendPaidMessageStars.flatMap { StarsAmount(value: $0, nanos: 0) }
                                     
                                         let disallowedGifts = TelegramDisallowedGifts(apiDisallowedGifts: disallowedStarGifts)
                                     
@@ -427,7 +429,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                         var mappedNote: CachedUserData.Note?
                                         if let note {
                                             switch note {
-                                            case let .textWithEntities(text, entities):
+                                            case let .textWithEntities(textWithEntitiesData):
+                                                let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                                                 mappedNote = CachedUserData.Note(text: text, entities: messageTextEntitiesFromApiEntities(entities))
                                             }
                                         }

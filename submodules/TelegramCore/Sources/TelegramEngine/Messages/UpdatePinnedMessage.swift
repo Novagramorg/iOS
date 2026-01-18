@@ -73,7 +73,8 @@ func _internal_requestUpdatePinnedMessage(account: Account, peerId: PeerId, upda
             account.stateManager.addUpdates(updates)
             return account.postbox.transaction { transaction in
                 switch updates {
-                case let .updates(updates, _, _, _, _):
+                case let .updates(updatesData):
+                    let updates = updatesData.updates
                     if updates.isEmpty {
                         if peerId.namespace == Namespaces.Peer.CloudChannel {
                             let messageId: MessageId

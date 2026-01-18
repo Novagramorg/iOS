@@ -64,7 +64,7 @@ private func apiInputStorePaymentPurpose(postbox: Postbox, purpose: AppStoreTran
             var message: Api.TextWithEntities?
             if let text, !text.isEmpty {
                 flags |= (1 << 1)
-                message = .textWithEntities(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? [])
+                message = .textWithEntities(.init(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? []))
             }
             
             return .inputStorePaymentPremiumGiftCode(.init(flags: flags, users: apiInputUsers, boostPeer: apiBoostPeer, currency: currency, amount: amount, message: message))

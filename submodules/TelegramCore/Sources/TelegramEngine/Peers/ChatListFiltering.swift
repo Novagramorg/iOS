@@ -346,7 +346,8 @@ extension ChatListFilter {
             let titleText: String
             let titleEntities: [MessageTextEntity]
             switch title {
-            case let .textWithEntities(text, entities):
+            case let .textWithEntities(textWithEntitiesData):
+                let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                 titleText = text
                 titleEntities = messageTextEntitiesFromApiEntities(entities)
             }
@@ -414,12 +415,13 @@ extension ChatListFilter {
             let titleText: String
             let titleEntities: [MessageTextEntity]
             switch title {
-            case let .textWithEntities(text, entities):
+            case let .textWithEntities(textWithEntitiesData):
+                let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                 titleText = text
                 titleEntities = messageTextEntitiesFromApiEntities(entities)
             }
             let disableTitleAnimations = (flags & (1 << 28)) != 0
-            
+
             self = .filter(
                 id: id,
                 title: ChatFolderTitle(text: titleText, entities: titleEntities, enableAnimations: !disableTitleAnimations),
@@ -483,7 +485,7 @@ extension ChatListFilter {
                 if !title.enableAnimations {
                     flags |= 1 << 28
                 }
-                return .dialogFilterChatlist(.init(flags: flags, id: id, title: .textWithEntities(text: title.text, entities: apiEntitiesFromMessageTextEntities(title.entities, associatedPeers: SimpleDictionary())), emoticon: emoticon, color: data.color?.rawValue, pinnedPeers: data.includePeers.pinnedPeers.compactMap { peerId -> Api.InputPeer? in
+                return .dialogFilterChatlist(.init(flags: flags, id: id, title: .textWithEntities(.init(text: title.text, entities: apiEntitiesFromMessageTextEntities(title.entities, associatedPeers: SimpleDictionary()))), emoticon: emoticon, color: data.color?.rawValue, pinnedPeers: data.includePeers.pinnedPeers.compactMap { peerId -> Api.InputPeer? in
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
                 }, includePeers: data.includePeers.peers.compactMap { peerId -> Api.InputPeer? in
                     if data.includePeers.pinnedPeers.contains(peerId) {
@@ -512,7 +514,7 @@ extension ChatListFilter {
                 if !title.enableAnimations {
                     flags |= 1 << 28
                 }
-                return .dialogFilter(.init(flags: flags, id: id, title: .textWithEntities(text: title.text, entities: apiEntitiesFromMessageTextEntities(title.entities, associatedPeers: SimpleDictionary())), emoticon: emoticon, color: data.color?.rawValue, pinnedPeers: data.includePeers.pinnedPeers.compactMap { peerId -> Api.InputPeer? in
+                return .dialogFilter(.init(flags: flags, id: id, title: .textWithEntities(.init(text: title.text, entities: apiEntitiesFromMessageTextEntities(title.entities, associatedPeers: SimpleDictionary()))), emoticon: emoticon, color: data.color?.rawValue, pinnedPeers: data.includePeers.pinnedPeers.compactMap { peerId -> Api.InputPeer? in
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
                 }, includePeers: data.includePeers.peers.compactMap { peerId -> Api.InputPeer? in
                     if data.includePeers.pinnedPeers.contains(peerId) {

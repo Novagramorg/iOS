@@ -105,9 +105,11 @@ public final class PeersNearbyContext {
             var peersNearby: [PeerNearby] = []
             if let updates = updates {
                 switch updates {
-                case let .updates(updates, _, _, _, _):
+                case let .updates(updatesData):
+                    let updates = updatesData.updates
                     for update in updates {
-                        if case let .updatePeerLocated(peers) = update {
+                        if case let .updatePeerLocated(updatePeerLocatedData) = update {
+                            let peers = updatePeerLocatedData.peers
                             for peer in peers {
                                 switch peer {
                                     case let .peerLocated(peerLocatedData):

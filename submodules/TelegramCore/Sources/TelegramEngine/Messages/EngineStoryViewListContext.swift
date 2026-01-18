@@ -472,10 +472,11 @@ public final class EngineStoryViewListContext {
                                 var items: [Item] = []
                                 for view in views {
                                     switch view {
-                                    case let .storyView(flags, userId, date, reaction):
+                                    case let .storyView(storyViewData):
+                                        let (flags, userId, date, reaction) = (storyViewData.flags, storyViewData.userId, storyViewData.date, storyViewData.reaction)
                                         let isBlocked = (flags & (1 << 0)) != 0
                                         let isBlockedFromStories = (flags & (1 << 1)) != 0
-                                        
+
                                         let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))
                                         transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, cachedData in
                                             let previousData: CachedUserData
@@ -511,7 +512,8 @@ public final class EngineStoryViewListContext {
                                                 }
                                             )))
                                         }
-                                    case let .storyViewPublicForward(flags, message):
+                                    case let .storyViewPublicForward(storyViewPublicForwardData):
+                                        let (flags, message) = (storyViewPublicForwardData.flags, storyViewPublicForwardData.message)
                                         let _ = flags
                                         if let storeMessage = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: false), let message = locallyRenderedMessage(message: storeMessage, peers: peers.peers) {
                                             items.append(.forward(Item.Forward(
@@ -519,7 +521,8 @@ public final class EngineStoryViewListContext {
                                                 storyStats: transaction.getPeerStoryStats(peerId: message.id.peerId)
                                             )))
                                         }
-                                    case let .storyViewPublicRepost(flags, peerId, story):
+                                    case let .storyViewPublicRepost(storyViewPublicRepostData):
+                                        let (flags, peerId, story) = (storyViewPublicRepostData.flags, storyViewPublicRepostData.peerId, storyViewPublicRepostData.story)
                                         let _ = flags
                                         if let peer = transaction.getPeer(peerId.peerId) {
                                             if let storedItem = Stories.StoredItem(apiStoryItem: story, peerId: peer.id, transaction: transaction), case let .item(item) = storedItem, let media = item.media {
@@ -692,7 +695,8 @@ public final class EngineStoryViewListContext {
                                 var items: [Item] = []
                                 for reaction in reactions {
                                     switch reaction {
-                                    case let .storyReaction(peerId, date, reaction):
+                                    case let .storyReaction(storyReactionData):
+                                        let (peerId, date, reaction) = (storyReactionData.peerId, storyReactionData.date, storyReactionData.reaction)
                                         if let peer = transaction.getPeer(peerId.peerId) {
                                             if let parsedReaction = MessageReaction.Reaction(apiReaction: reaction) {
                                                 let reactionFile: TelegramMediaFile?
@@ -713,14 +717,16 @@ public final class EngineStoryViewListContext {
                                                 )))
                                             }
                                         }
-                                    case let .storyReactionPublicForward(message):
+                                    case let .storyReactionPublicForward(storyReactionPublicForwardData):
+                                        let message = storyReactionPublicForwardData.message
                                         if let storeMessage = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: false), let message = locallyRenderedMessage(message: storeMessage, peers: peers.peers) {
                                             items.append(.forward(Item.Forward(
                                                 message: EngineMessage(message),
                                                 storyStats: transaction.getPeerStoryStats(peerId: message.id.peerId)
                                             )))
                                         }
-                                    case let .storyReactionPublicRepost(peerId, story):
+                                    case let .storyReactionPublicRepost(storyReactionPublicRepostData):
+                                        let (peerId, story) = (storyReactionPublicRepostData.peerId, storyReactionPublicRepostData.story)
                                         if let peer = transaction.getPeer(peerId.peerId) {
                                             if let storedItem = Stories.StoredItem(apiStoryItem: story, peerId: peer.id, transaction: transaction), case let .item(item) = storedItem, let media = item.media {
                                                 items.append(.repost(Item.Repost(

@@ -244,13 +244,15 @@ func _internal_createForumChannelTopic(postbox: Postbox, network: Network, state
             topicId = nil
             for update in result.allUpdates {
                 switch update {
-                case let .updateNewChannelMessage(message, _, _):
+                case let .updateNewChannelMessage(updateNewChannelMessageData):
+                    let (message, _, _) = (updateNewChannelMessageData.message, updateNewChannelMessageData.pts, updateNewChannelMessageData.ptsCount)
                     if let message = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: peer.isForum) {
                         if case let .Id(id) = message.id {
                             topicId = Int64(id.id)
                         }
                     }
-                case let .updateNewMessage(message, _, _):
+                case let .updateNewMessage(updateNewMessageData):
+                    let (message, _, _) = (updateNewMessageData.message, updateNewMessageData.pts, updateNewMessageData.ptsCount)
                     if let message = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: peer.isForum) {
                         if case let .Id(id) = message.id {
                             topicId = Int64(id.id)
@@ -1183,7 +1185,8 @@ func _internal_forumChannelTopicNotificationExceptions(account: Account, id: Eng
             var list: [(threadId: Int64, notificationSettings: EnginePeer.NotificationSettings)] = []
             for update in result.allUpdates {
                 switch update {
-                case let .updateNotifySettings(peer, notifySettings):
+                case let .updateNotifySettings(updateNotifySettingsData):
+                    let (peer, notifySettings) = (updateNotifySettingsData.peer, updateNotifySettingsData.notifySettings)
                     switch peer {
                     case let .notifyForumTopic(notifyForumTopicData):
                         let topMsgId = notifyForumTopicData.topMsgId

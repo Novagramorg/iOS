@@ -864,18 +864,22 @@ public final class AccountViewTracker {
                                     return account.postbox.transaction { transaction -> Void in
                                         let updateList: [Api.Update]
                                         switch updates {
-                                        case let .updates(updates, _, _, _, _):
+                                        case let .updates(updatesData):
+                                            let updates = updatesData.updates
                                             updateList = updates
-                                        case let .updatesCombined(updates, _, _, _, _, _):
+                                        case let .updatesCombined(updatesCombinedData):
+                                            let updates = updatesCombinedData.updates
                                             updateList = updates
-                                        case let .updateShort(update, _):
+                                        case let .updateShort(updateShortData):
+                                            let update = updateShortData.update
                                             updateList = [update]
                                         default:
                                             updateList = []
                                         }
                                         for update in updateList {
                                             switch update {
-                                            case let .updateMessageReactions(_, peer, msgId, _, _, reactions):
+                                            case let .updateMessageReactions(updateMessageReactionsData):
+                                                let (peer, msgId, reactions) = (updateMessageReactionsData.peer, updateMessageReactionsData.msgId, updateMessageReactionsData.reactions)
                                                 transaction.updateMessage(MessageId(peerId: peer.peerId, namespace: Namespaces.Message.Cloud, id: msgId), update: { currentMessage in
                                                     var updatedReactions = ReactionsMessageAttribute(apiReactions: reactions)
                                                     

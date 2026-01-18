@@ -50,7 +50,8 @@ extension PeerVerification {
 extension TelegramUser {
     convenience init(user: Api.User) {
         switch user {
-        case let .user(flags, flags2, id, accessHash, firstName, lastName, username, phone, photo, _, _, restrictionReason, botInlinePlaceholder, _, emojiStatus, usernames, _, color, profileColor, subscriberCount, verificationIconFileId, _):
+        case let .user(userData):
+            let (flags, flags2, id, accessHash, firstName, lastName, username, phone, photo, _, _, restrictionReason, botInlinePlaceholder, _, emojiStatus, usernames, _, color, profileColor, subscriberCount, verificationIconFileId, _) = (userData.flags, userData.flags2, userData.id, userData.accessHash, userData.firstName, userData.lastName, userData.username, userData.phone, userData.photo, userData.status, userData.botInfoVersion, userData.restrictionReason, userData.botInlinePlaceholder, userData.langCode, userData.emojiStatus, userData.usernames, userData.storiesMaxId, userData.color, userData.profileColor, userData.botActiveUsers, userData.botVerificationIcon, userData.sendPaidMessagesStars)
             let representations: [TelegramMediaImageRepresentation] = photo.flatMap(parsedTelegramProfilePhoto) ?? []
             
             let isMin = (flags & (1 << 20)) != 0
@@ -171,14 +172,16 @@ extension TelegramUser {
             }
             
             self.init(id: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(id)), accessHash: accessHashValue, firstName: firstName, lastName: lastName, username: username, phone: phone, photo: representations, botInfo: botInfo, restrictionInfo: restrictionInfo, flags: userFlags, emojiStatus: emojiStatus.flatMap(PeerEmojiStatus.init(apiStatus:)), usernames: usernames?.map(TelegramPeerUsername.init(apiUsername:)) ?? [], storiesHidden: storiesHidden, nameColor: nameColor, backgroundEmojiId: backgroundEmojiId, profileColor: profileColorIndex.flatMap { PeerNameColor(rawValue: $0) }, profileBackgroundEmojiId: profileBackgroundEmojiId, subscriberCount: subscriberCount, verificationIconFileId: verificationIconFileId)
-        case let .userEmpty(id):
+        case let .userEmpty(userEmptyData):
+            let id = userEmptyData.id
             self.init(id: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(id)), accessHash: nil, firstName: nil, lastName: nil, username: nil, phone: nil, photo: [], botInfo: nil, restrictionInfo: nil, flags: [], emojiStatus: nil, usernames: [], storiesHidden: nil, nameColor: nil, backgroundEmojiId: nil, profileColor: nil, profileBackgroundEmojiId: nil, subscriberCount: nil, verificationIconFileId: nil)
         }
     }
     
     static func merge(_ lhs: TelegramUser?, rhs: Api.User) -> TelegramUser? {
         switch rhs {
-            case let .user(flags, _, _, rhsAccessHash, _, _, _, _, photo, _, _, restrictionReason, botInlinePlaceholder, _, emojiStatus, _, _, color, profileColor, subscriberCount, _, _):
+            case let .user(userData):
+                let (flags, _, _, rhsAccessHash, _, _, _, _, photo, _, _, restrictionReason, botInlinePlaceholder, _, emojiStatus, _, _, color, profileColor, subscriberCount, _, _) = (userData.flags, userData.flags2, userData.id, userData.accessHash, userData.firstName, userData.lastName, userData.username, userData.phone, userData.photo, userData.status, userData.botInfoVersion, userData.restrictionReason, userData.botInlinePlaceholder, userData.langCode, userData.emojiStatus, userData.usernames, userData.storiesMaxId, userData.color, userData.profileColor, userData.botActiveUsers, userData.botVerificationIcon, userData.sendPaidMessagesStars)
                 let isMin = (flags & (1 << 20)) != 0
                 if !isMin {
                     return TelegramUser(user: rhs)

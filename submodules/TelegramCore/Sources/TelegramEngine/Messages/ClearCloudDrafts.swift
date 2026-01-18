@@ -15,12 +15,14 @@ func _internal_clearCloudDraftsInteractively(postbox: Postbox, network: Network,
             }
             var keys = Set<Key>()
             switch updates {
-                case let .updates(updates, users, chats, _, _):
+                case let .updates(updatesData):
+                    let (updates, users, chats) = (updatesData.updates, updatesData.users, updatesData.chats)
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
-                    
+
                     for update in updates {
                         switch update {
-                            case let .updateDraftMessage(_, peer, topMsgId, savedPeerId, _):
+                            case let .updateDraftMessage(updateDraftMessageData):
+                                let (peer, topMsgId, savedPeerId) = (updateDraftMessageData.peer, updateDraftMessageData.topMsgId, updateDraftMessageData.savedPeerId)
                                 var threadId: Int64?
                                 if let savedPeerId {
                                     threadId = savedPeerId.peerId.toInt64()

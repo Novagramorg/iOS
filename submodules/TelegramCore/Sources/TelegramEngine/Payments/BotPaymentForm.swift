@@ -316,7 +316,7 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
         var message: Api.TextWithEntities?
         if let text, !text.isEmpty {
             inputPurposeFlags |= (1 << 1)
-            message = .textWithEntities(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? [])
+            message = .textWithEntities(.init(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? []))
         }
         
         let inputPurpose: Api.InputStorePaymentPurpose = .inputStorePaymentPremiumGiftCode(.init(flags: inputPurposeFlags, users: inputUsers, boostPeer: nil, currency: currency, amount: amount, message: message))
@@ -388,7 +388,7 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
         var message: Api.TextWithEntities?
         if let text, !text.isEmpty {
             flags |= (1 << 1)
-            message = .textWithEntities(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? [])
+            message = .textWithEntities(.init(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? []))
         }
         return .inputInvoiceStarGift(.init(flags: flags, peer: inputPeer, giftId: giftId, message: message))
     case let .starGiftUpgrade(keepOriginalInfo, reference):
@@ -410,7 +410,7 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
         var message: Api.TextWithEntities?
         if let text, !text.isEmpty {
             flags |= (1 << 0)
-            message = .textWithEntities(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? [])
+            message = .textWithEntities(.init(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? []))
         }
         return .inputInvoicePremiumGiftStars(.init(flags: flags, userId: inputUser, months: option.months, message: message))
     case let .starGiftResale(slug, toPeerId, ton):
@@ -450,7 +450,7 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
             
             if let text, !text.isEmpty {
                 flags |= (1 << 1)
-                message = .textWithEntities(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? [])
+                message = .textWithEntities(.init(text: text, entities: entities.flatMap { apiEntitiesFromMessageTextEntities($0, associatedPeers: SimpleDictionary()) } ?? []))
             }
         }
         return .inputInvoiceStarGiftAuctionBid(.init(flags: flags, peer: inputPeer, giftId: giftId, bidAmount: bidAmount, message: message))

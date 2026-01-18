@@ -89,7 +89,8 @@ func _internal_keepCachedTimeZoneListUpdated(account: Account) -> Signal<Never, 
                     var items: [TimeZoneList.Item] = []
                     for item in timezones {
                         switch item {
-                        case let .timezone(id, name, utcOffset):
+                        case let .timezone(timezoneData):
+                            let (id, name, utcOffset) = (timezoneData.id, timezoneData.name, timezoneData.utcOffset)
                             items.append(TimeZoneList.Item(id: id, title: name, utcOffset: utcOffset))
                         }
                     }

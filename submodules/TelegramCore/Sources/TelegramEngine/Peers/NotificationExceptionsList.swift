@@ -34,22 +34,24 @@ func _internal_notificationExceptionsList(accountPeerId: PeerId, postbox: Postbo
         }
         return postbox.transaction { transaction -> NotificationExceptionsList in
             switch result {
-            case let .updates(updates, users, chats, _, _):
+            case let .updates(updatesData):
+                let (updates, users, chats) = (updatesData.updates, updatesData.users, updatesData.chats)
                 var settings: [PeerId: TelegramPeerNotificationSettings] = [:]
-                
+
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                 updatePeers(transaction: transaction,  accountPeerId: accountPeerId,peers: parsedPeers)
-                
+
                 var peers: [PeerId: Peer] = [:]
                 for id in parsedPeers.allIds {
                     if let peer = transaction.getPeer(id) {
                         peers[peer.id] = peer
                     }
                 }
-                
+
                 for update in updates {
                     switch update {
-                    case let .updateNotifySettings(apiPeer, notifySettings):
+                    case let .updateNotifySettings(updateNotifySettingsData):
+                        let (apiPeer, notifySettings) = (updateNotifySettingsData.peer, updateNotifySettingsData.notifySettings)
                         switch apiPeer {
                         case let .notifyPeer(notifyPeerData):
                             let notifyPeer = notifyPeerData.peer

@@ -464,7 +464,8 @@ func textMediaAndExpirationTimerFromApiMedia(_ media: Api.MessageMedia?, _ peerI
                 let questionText: String
                 let questionEntities: [MessageTextEntity]
                 switch question {
-                case let .textWithEntities(text, entities):
+                case let .textWithEntities(textWithEntitiesData):
+                    let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                     questionText = text
                     questionEntities = messageTextEntitiesFromApiEntities(entities)
                 }
@@ -474,7 +475,8 @@ func textMediaAndExpirationTimerFromApiMedia(_ media: Api.MessageMedia?, _ peerI
         case let .messageMediaToDo(messageMediaToDoData):
             let (todo, completions) = (messageMediaToDoData.todo, messageMediaToDoData.completions)
             switch todo {
-            case let .todoList(apiFlags, title, list):
+            case let .todoList(todoListData):
+                let (apiFlags, title, list) = (todoListData.flags, todoListData.title, todoListData.list)
                 var flags: TelegramMediaTodo.Flags = []
                 if (apiFlags & (1 << 0)) != 0 {
                     flags.insert(.othersCanAppend)
@@ -482,11 +484,12 @@ func textMediaAndExpirationTimerFromApiMedia(_ media: Api.MessageMedia?, _ peerI
                 if (apiFlags & (1 << 1)) != 0 {
                     flags.insert(.othersCanComplete)
                 }
-                
+
                 let todoText: String
                 let todoEntities: [MessageTextEntity]
                 switch title {
-                case let .textWithEntities(text, entities):
+                case let .textWithEntities(textWithEntitiesData):
+                    let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                     todoText = text
                     todoEntities = messageTextEntitiesFromApiEntities(entities)
                 }
@@ -1122,7 +1125,8 @@ extension StoreMessage {
                         let content: FactCheckMessageAttribute.Content
                         if let text, let country {
                             switch text {
-                            case let .textWithEntities(text, entities):
+                            case let .textWithEntities(textWithEntitiesData):
+                                let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                                 content = .Loaded(text: text, entities: messageTextEntitiesFromApiEntities(entities), country: country)
                             }
                         } else {

@@ -76,7 +76,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
             if todo.flags.contains(.othersCanComplete) {
                 flags |= 1 << 1
             }
-            let inputTodo = Api.InputMedia.inputMediaTodo(.init(todo: .todoList(flags: flags, title: .textWithEntities(text: todo.text, entities: apiEntitiesFromMessageTextEntities(todo.textEntities, associatedPeers: SimpleDictionary())), list: todo.items.map { $0.apiItem })))
+            let inputTodo = Api.InputMedia.inputMediaTodo(.init(todo: .todoList(.init(flags: flags, title: .textWithEntities(.init(text: todo.text, entities: apiEntitiesFromMessageTextEntities(todo.textEntities, associatedPeers: SimpleDictionary()))), list: todo.items.map { $0.apiItem }))))
             uploadedMedia = .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(inputTodo, text), reuploadInfo: nil, cacheReferenceKey: nil)))
         }
         else if let uploadSignal = generateUploadSignal(forceReupload) {
@@ -234,10 +234,90 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                             }
                             
                             switch result {
-                            case let .updates(updates, users, chats, _, _):
+                            case let .updates(updatesData):
+                                let (updates, users, chats) = (updatesData.updates, updatesData.users, updatesData.chats)
                                 for update in updates {
                                     switch update {
-                                    case .updateEditMessage(let message, _, _), .updateNewMessage(let message, _, _), .updateEditChannelMessage(let message, _, _), .updateNewChannelMessage(let message, _, _):
+                                    case .updateEditMessage(let data):
+                                        let message = data.message
+                                        let peers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
+                                        updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: peers)
+
+                                        if let message = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: peer.isForumOrMonoForum), case let .Id(id) = message.id {
+                                            transaction.updateMessage(id, update: { previousMessage in
+                                                var updatedFlags = message.flags
+                                                var updatedLocalTags = message.localTags
+                                                if previousMessage.localTags.contains(.OutgoingLiveLocation) {
+                                                    updatedLocalTags.insert(.OutgoingLiveLocation)
+                                                }
+                                                if previousMessage.flags.contains(.Incoming) {
+                                                    updatedFlags.insert(.Incoming)
+                                                } else {
+                                                    updatedFlags.remove(.Incoming)
+                                                }
+
+                                                var updatedMedia = message.media
+                                                if let previousPaidContent = previousMessage.media.first(where: { $0 is TelegramMediaPaidContent }) as? TelegramMediaPaidContent, case .full = previousPaidContent.extendedMedia.first {
+                                                    updatedMedia = previousMessage.media
+                                                }
+
+                                                return .update(message.withUpdatedLocalTags(updatedLocalTags).withUpdatedFlags(updatedFlags).withUpdatedMedia(updatedMedia))
+                                            })
+                                        }
+                                    case .updateNewMessage(let data):
+                                        let message = data.message
+                                        let peers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
+                                        updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: peers)
+
+                                        if let message = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: peer.isForumOrMonoForum), case let .Id(id) = message.id {
+                                            transaction.updateMessage(id, update: { previousMessage in
+                                                var updatedFlags = message.flags
+                                                var updatedLocalTags = message.localTags
+                                                if previousMessage.localTags.contains(.OutgoingLiveLocation) {
+                                                    updatedLocalTags.insert(.OutgoingLiveLocation)
+                                                }
+                                                if previousMessage.flags.contains(.Incoming) {
+                                                    updatedFlags.insert(.Incoming)
+                                                } else {
+                                                    updatedFlags.remove(.Incoming)
+                                                }
+
+                                                var updatedMedia = message.media
+                                                if let previousPaidContent = previousMessage.media.first(where: { $0 is TelegramMediaPaidContent }) as? TelegramMediaPaidContent, case .full = previousPaidContent.extendedMedia.first {
+                                                    updatedMedia = previousMessage.media
+                                                }
+
+                                                return .update(message.withUpdatedLocalTags(updatedLocalTags).withUpdatedFlags(updatedFlags).withUpdatedMedia(updatedMedia))
+                                            })
+                                        }
+                                    case .updateEditChannelMessage(let data):
+                                        let message = data.message
+                                        let peers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
+                                        updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: peers)
+
+                                        if let message = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: peer.isForumOrMonoForum), case let .Id(id) = message.id {
+                                            transaction.updateMessage(id, update: { previousMessage in
+                                                var updatedFlags = message.flags
+                                                var updatedLocalTags = message.localTags
+                                                if previousMessage.localTags.contains(.OutgoingLiveLocation) {
+                                                    updatedLocalTags.insert(.OutgoingLiveLocation)
+                                                }
+                                                if previousMessage.flags.contains(.Incoming) {
+                                                    updatedFlags.insert(.Incoming)
+                                                } else {
+                                                    updatedFlags.remove(.Incoming)
+                                                }
+
+                                                var updatedMedia = message.media
+                                                if let previousPaidContent = previousMessage.media.first(where: { $0 is TelegramMediaPaidContent }) as? TelegramMediaPaidContent, case .full = previousPaidContent.extendedMedia.first {
+                                                    updatedMedia = previousMessage.media
+                                                }
+
+                                                return .update(message.withUpdatedLocalTags(updatedLocalTags).withUpdatedFlags(updatedFlags).withUpdatedMedia(updatedMedia))
+                                            })
+                                        }
+                                    case .updateNewChannelMessage(let data):
+                                        let message = data.message
                                         let peers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: peers)
                                         

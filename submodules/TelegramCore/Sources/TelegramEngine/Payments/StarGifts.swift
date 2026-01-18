@@ -1642,7 +1642,8 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
                 account.stateManager.addUpdates(updates)
                 for update in updates.allUpdates {
                     switch update {
-                    case let .updateNewMessage(message, _, _):
+                    case let .updateNewMessage(updateNewMessageData):
+                        let message = updateNewMessageData.message
                         if let message = StoreMessage(apiMessage: message, accountPeerId: account.peerId, peerIsForum: false) {
                             for media in message.media {
                                 if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt, craftChancePermille) = action.action, case let .Id(messageId) = message.id {
@@ -1766,7 +1767,8 @@ func _internal_checkCanSendStarGift(account: Account, giftId: Int64) -> Signal<C
             return .available
         case let .checkCanSendGiftResultFail(reason):
             switch reason {
-            case let .textWithEntities(text, entities):
+            case let .textWithEntities(textWithEntitiesData):
+                let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                 return .unavailable(text: text, entities: messageTextEntitiesFromApiEntities(entities))
             }
         }
@@ -3380,7 +3382,8 @@ func _internal_craftStarGift(account: Account, references: [StarGiftReference]) 
             account.stateManager.addUpdates(updates)
             for update in updates.allUpdates {
                 switch update {
-                case let .updateNewMessage(message, _, _):
+                case let .updateNewMessage(updateNewMessageData):
+                    let message = updateNewMessageData.message
                     if let message = StoreMessage(apiMessage: message, accountPeerId: account.peerId, peerIsForum: false) {
                         for media in message.media {
                             if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt, craftChancePermille) = action.action, case let .Id(messageId) = message.id {
@@ -3447,7 +3450,8 @@ extension ProfileGiftsContext.State.StarGift {
 
             if let message {
                 switch message {
-                case let .textWithEntities(text, entities):
+                case let .textWithEntities(textWithEntitiesData):
+                    let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                     self.text = text
                     self.entities = messageTextEntitiesFromApiEntities(entities)
                 }
@@ -3529,9 +3533,9 @@ extension StarGift.UniqueGift.Attribute {
             let (_, sender, recipient, date, message) = (starGiftAttributeOriginalDetailsData.flags, starGiftAttributeOriginalDetailsData.senderId, starGiftAttributeOriginalDetailsData.recipientId, starGiftAttributeOriginalDetailsData.date, starGiftAttributeOriginalDetailsData.message)
             var text: String?
             var entities: [MessageTextEntity]?
-            if case let .textWithEntities(textValue, entitiesValue) = message {
-                text = textValue
-                entities = messageTextEntitiesFromApiEntities(entitiesValue)
+            if case let .textWithEntities(textWithEntitiesData) = message {
+                text = textWithEntitiesData.text
+                entities = messageTextEntitiesFromApiEntities(textWithEntitiesData.entities)
             }
             self = .originalInfo(senderPeerId: sender?.peerId, recipientPeerId: recipient.peerId, date: date, text: text, entities: entities)
         }

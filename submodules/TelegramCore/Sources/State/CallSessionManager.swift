@@ -1789,10 +1789,12 @@ private func dropCallSession(network: Network, addUpdates: @escaping (Api.Update
         var sendDebugLogs: Bool = false
         if let updates = updates {
             switch updates {
-                case .updates(let updates, _, _, _, _):
+                case let .updates(updatesData):
+                    let updates = updatesData.updates
                     for update in updates {
                         switch update {
-                            case .updatePhoneCall(let phoneCall):
+                            case let .updatePhoneCall(updatePhoneCallData):
+                                let phoneCall = updatePhoneCallData.phoneCall
                                 switch phoneCall {
                                     case let .phoneCallDiscarded(phoneCallDiscardedData):
                                         let flags = phoneCallDiscardedData.flags

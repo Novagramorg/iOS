@@ -210,9 +210,59 @@ public extension Api {
 }
 public extension Api {
     indirect enum StoryItem: TypeConstructorDescription {
-        case storyItem(flags: Int32, id: Int32, date: Int32, fromId: Api.Peer?, fwdFrom: Api.StoryFwdHeader?, expireDate: Int32, caption: String?, entities: [Api.MessageEntity]?, media: Api.MessageMedia, mediaAreas: [Api.MediaArea]?, privacy: [Api.PrivacyRule]?, views: Api.StoryViews?, sentReaction: Api.Reaction?, albums: [Int32]?)
-        case storyItemDeleted(id: Int32)
-        case storyItemSkipped(flags: Int32, id: Int32, date: Int32, expireDate: Int32)
+        public class Cons_storyItem {
+            public var flags: Int32
+            public var id: Int32
+            public var date: Int32
+            public var fromId: Api.Peer?
+            public var fwdFrom: Api.StoryFwdHeader?
+            public var expireDate: Int32
+            public var caption: String?
+            public var entities: [Api.MessageEntity]?
+            public var media: Api.MessageMedia
+            public var mediaAreas: [Api.MediaArea]?
+            public var privacy: [Api.PrivacyRule]?
+            public var views: Api.StoryViews?
+            public var sentReaction: Api.Reaction?
+            public var albums: [Int32]?
+            public init(flags: Int32, id: Int32, date: Int32, fromId: Api.Peer?, fwdFrom: Api.StoryFwdHeader?, expireDate: Int32, caption: String?, entities: [Api.MessageEntity]?, media: Api.MessageMedia, mediaAreas: [Api.MediaArea]?, privacy: [Api.PrivacyRule]?, views: Api.StoryViews?, sentReaction: Api.Reaction?, albums: [Int32]?) {
+                self.flags = flags
+                self.id = id
+                self.date = date
+                self.fromId = fromId
+                self.fwdFrom = fwdFrom
+                self.expireDate = expireDate
+                self.caption = caption
+                self.entities = entities
+                self.media = media
+                self.mediaAreas = mediaAreas
+                self.privacy = privacy
+                self.views = views
+                self.sentReaction = sentReaction
+                self.albums = albums
+            }
+        }
+        public class Cons_storyItemDeleted {
+            public var id: Int32
+            public init(id: Int32) {
+                self.id = id
+            }
+        }
+        public class Cons_storyItemSkipped {
+            public var flags: Int32
+            public var id: Int32
+            public var date: Int32
+            public var expireDate: Int32
+            public init(flags: Int32, id: Int32, date: Int32, expireDate: Int32) {
+                self.flags = flags
+                self.id = id
+                self.date = date
+                self.expireDate = expireDate
+            }
+        }
+        case storyItem(Cons_storyItem)
+        case storyItemDeleted(Cons_storyItemDeleted)
+        case storyItemSkipped(Cons_storyItemSkipped)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -255,9 +305,33 @@ public extension Api {
 }
 public extension Api {
     indirect enum StoryReaction: TypeConstructorDescription {
-        case storyReaction(peerId: Api.Peer, date: Int32, reaction: Api.Reaction)
-        case storyReactionPublicForward(message: Api.Message)
-        case storyReactionPublicRepost(peerId: Api.Peer, story: Api.StoryItem)
+        public class Cons_storyReaction {
+            public var peerId: Api.Peer
+            public var date: Int32
+            public var reaction: Api.Reaction
+            public init(peerId: Api.Peer, date: Int32, reaction: Api.Reaction) {
+                self.peerId = peerId
+                self.date = date
+                self.reaction = reaction
+            }
+        }
+        public class Cons_storyReactionPublicForward {
+            public var message: Api.Message
+            public init(message: Api.Message) {
+                self.message = message
+            }
+        }
+        public class Cons_storyReactionPublicRepost {
+            public var peerId: Api.Peer
+            public var story: Api.StoryItem
+            public init(peerId: Api.Peer, story: Api.StoryItem) {
+                self.peerId = peerId
+                self.story = story
+            }
+        }
+        case storyReaction(Cons_storyReaction)
+        case storyReactionPublicForward(Cons_storyReactionPublicForward)
+        case storyReactionPublicRepost(Cons_storyReactionPublicRepost)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -300,9 +374,39 @@ public extension Api {
 }
 public extension Api {
     indirect enum StoryView: TypeConstructorDescription {
-        case storyView(flags: Int32, userId: Int64, date: Int32, reaction: Api.Reaction?)
-        case storyViewPublicForward(flags: Int32, message: Api.Message)
-        case storyViewPublicRepost(flags: Int32, peerId: Api.Peer, story: Api.StoryItem)
+        public class Cons_storyView {
+            public var flags: Int32
+            public var userId: Int64
+            public var date: Int32
+            public var reaction: Api.Reaction?
+            public init(flags: Int32, userId: Int64, date: Int32, reaction: Api.Reaction?) {
+                self.flags = flags
+                self.userId = userId
+                self.date = date
+                self.reaction = reaction
+            }
+        }
+        public class Cons_storyViewPublicForward {
+            public var flags: Int32
+            public var message: Api.Message
+            public init(flags: Int32, message: Api.Message) {
+                self.flags = flags
+                self.message = message
+            }
+        }
+        public class Cons_storyViewPublicRepost {
+            public var flags: Int32
+            public var peerId: Api.Peer
+            public var story: Api.StoryItem
+            public init(flags: Int32, peerId: Api.Peer, story: Api.StoryItem) {
+                self.flags = flags
+                self.peerId = peerId
+                self.story = story
+            }
+        }
+        case storyView(Cons_storyView)
+        case storyViewPublicForward(Cons_storyViewPublicForward)
+        case storyViewPublicRepost(Cons_storyViewPublicRepost)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -345,7 +449,23 @@ public extension Api {
 }
 public extension Api {
     enum StoryViews: TypeConstructorDescription {
-        case storyViews(flags: Int32, viewsCount: Int32, forwardsCount: Int32?, reactions: [Api.ReactionCount]?, reactionsCount: Int32?, recentViewers: [Int64]?)
+        public class Cons_storyViews {
+            public var flags: Int32
+            public var viewsCount: Int32
+            public var forwardsCount: Int32?
+            public var reactions: [Api.ReactionCount]?
+            public var reactionsCount: Int32?
+            public var recentViewers: [Int64]?
+            public init(flags: Int32, viewsCount: Int32, forwardsCount: Int32?, reactions: [Api.ReactionCount]?, reactionsCount: Int32?, recentViewers: [Int64]?) {
+                self.flags = flags
+                self.viewsCount = viewsCount
+                self.forwardsCount = forwardsCount
+                self.reactions = reactions
+                self.reactionsCount = reactionsCount
+                self.recentViewers = recentViewers
+            }
+        }
+        case storyViews(Cons_storyViews)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -374,7 +494,17 @@ public extension Api {
 }
 public extension Api {
     enum SuggestedPost: TypeConstructorDescription {
-        case suggestedPost(flags: Int32, price: Api.StarsAmount?, scheduleDate: Int32?)
+        public class Cons_suggestedPost {
+            public var flags: Int32
+            public var price: Api.StarsAmount?
+            public var scheduleDate: Int32?
+            public init(flags: Int32, price: Api.StarsAmount?, scheduleDate: Int32?) {
+                self.flags = flags
+                self.price = price
+                self.scheduleDate = scheduleDate
+            }
+        }
+        case suggestedPost(Cons_suggestedPost)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -403,7 +533,15 @@ public extension Api {
 }
 public extension Api {
     enum TextWithEntities: TypeConstructorDescription {
-        case textWithEntities(text: String, entities: [Api.MessageEntity])
+        public class Cons_textWithEntities {
+            public var text: String
+            public var entities: [Api.MessageEntity]
+            public init(text: String, entities: [Api.MessageEntity]) {
+                self.text = text
+                self.entities = entities
+            }
+        }
+        case textWithEntities(Cons_textWithEntities)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -432,7 +570,29 @@ public extension Api {
 }
 public extension Api {
     enum Theme: TypeConstructorDescription {
-        case theme(flags: Int32, id: Int64, accessHash: Int64, slug: String, title: String, document: Api.Document?, settings: [Api.ThemeSettings]?, emoticon: String?, installsCount: Int32?)
+        public class Cons_theme {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var slug: String
+            public var title: String
+            public var document: Api.Document?
+            public var settings: [Api.ThemeSettings]?
+            public var emoticon: String?
+            public var installsCount: Int32?
+            public init(flags: Int32, id: Int64, accessHash: Int64, slug: String, title: String, document: Api.Document?, settings: [Api.ThemeSettings]?, emoticon: String?, installsCount: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.slug = slug
+                self.title = title
+                self.document = document
+                self.settings = settings
+                self.emoticon = emoticon
+                self.installsCount = installsCount
+            }
+        }
+        case theme(Cons_theme)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -461,7 +621,23 @@ public extension Api {
 }
 public extension Api {
     enum ThemeSettings: TypeConstructorDescription {
-        case themeSettings(flags: Int32, baseTheme: Api.BaseTheme, accentColor: Int32, outboxAccentColor: Int32?, messageColors: [Int32]?, wallpaper: Api.WallPaper?)
+        public class Cons_themeSettings {
+            public var flags: Int32
+            public var baseTheme: Api.BaseTheme
+            public var accentColor: Int32
+            public var outboxAccentColor: Int32?
+            public var messageColors: [Int32]?
+            public var wallpaper: Api.WallPaper?
+            public init(flags: Int32, baseTheme: Api.BaseTheme, accentColor: Int32, outboxAccentColor: Int32?, messageColors: [Int32]?, wallpaper: Api.WallPaper?) {
+                self.flags = flags
+                self.baseTheme = baseTheme
+                self.accentColor = accentColor
+                self.outboxAccentColor = outboxAccentColor
+                self.messageColors = messageColors
+                self.wallpaper = wallpaper
+            }
+        }
+        case themeSettings(Cons_themeSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -490,7 +666,17 @@ public extension Api {
 }
 public extension Api {
     enum Timezone: TypeConstructorDescription {
-        case timezone(id: String, name: String, utcOffset: Int32)
+        public class Cons_timezone {
+            public var id: String
+            public var name: String
+            public var utcOffset: Int32
+            public init(id: String, name: String, utcOffset: Int32) {
+                self.id = id
+                self.name = name
+                self.utcOffset = utcOffset
+            }
+        }
+        case timezone(Cons_timezone)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -519,7 +705,17 @@ public extension Api {
 }
 public extension Api {
     enum TodoCompletion: TypeConstructorDescription {
-        case todoCompletion(id: Int32, completedBy: Api.Peer, date: Int32)
+        public class Cons_todoCompletion {
+            public var id: Int32
+            public var completedBy: Api.Peer
+            public var date: Int32
+            public init(id: Int32, completedBy: Api.Peer, date: Int32) {
+                self.id = id
+                self.completedBy = completedBy
+                self.date = date
+            }
+        }
+        case todoCompletion(Cons_todoCompletion)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -548,7 +744,15 @@ public extension Api {
 }
 public extension Api {
     enum TodoItem: TypeConstructorDescription {
-        case todoItem(id: Int32, title: Api.TextWithEntities)
+        public class Cons_todoItem {
+            public var id: Int32
+            public var title: Api.TextWithEntities
+            public init(id: Int32, title: Api.TextWithEntities) {
+                self.id = id
+                self.title = title
+            }
+        }
+        case todoItem(Cons_todoItem)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -577,7 +781,17 @@ public extension Api {
 }
 public extension Api {
     enum TodoList: TypeConstructorDescription {
-        case todoList(flags: Int32, title: Api.TextWithEntities, list: [Api.TodoItem])
+        public class Cons_todoList {
+            public var flags: Int32
+            public var title: Api.TextWithEntities
+            public var list: [Api.TodoItem]
+            public init(flags: Int32, title: Api.TextWithEntities, list: [Api.TodoItem]) {
+                self.flags = flags
+                self.title = title
+                self.list = list
+            }
+        }
+        case todoList(Cons_todoList)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -606,7 +820,15 @@ public extension Api {
 }
 public extension Api {
     enum TopPeer: TypeConstructorDescription {
-        case topPeer(peer: Api.Peer, rating: Double)
+        public class Cons_topPeer {
+            public var peer: Api.Peer
+            public var rating: Double
+            public init(peer: Api.Peer, rating: Double) {
+                self.peer = peer
+                self.rating = rating
+            }
+        }
+        case topPeer(Cons_topPeer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
