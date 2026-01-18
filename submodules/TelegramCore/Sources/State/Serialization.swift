@@ -227,7 +227,8 @@ public class Serialization: NSObject, MTSerialization {
         return { data -> MTExportedAuthorizationData? in
             if let exported = functionContext.2.parse(Buffer(data: data)) {
                 switch exported {
-                    case let .exportedAuthorization(id, bytes):
+                    case let .exportedAuthorization(exportedAuthorizationData):
+                        let (id, bytes) = (exportedAuthorizationData.id, exportedAuthorizationData.bytes)
                         return MTExportedAuthorizationData(authorizationBytes: bytes.makeData(), authorizationId: id)
                 }
             } else {

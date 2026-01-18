@@ -1,6 +1,16 @@
 public extension Api.bots {
     enum BotInfo: TypeConstructorDescription {
-        case botInfo(name: String, about: String, description: String)
+        public class Cons_botInfo {
+            public var name: String
+            public var about: String
+            public var description: String
+            public init(name: String, about: String, description: String) {
+                self.name = name
+                self.about = about
+                self.description = description
+            }
+        }
+        case botInfo(Cons_botInfo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,7 +39,17 @@ public extension Api.bots {
 }
 public extension Api.bots {
     enum PopularAppBots: TypeConstructorDescription {
-        case popularAppBots(flags: Int32, nextOffset: String?, users: [Api.User])
+        public class Cons_popularAppBots {
+            public var flags: Int32
+            public var nextOffset: String?
+            public var users: [Api.User]
+            public init(flags: Int32, nextOffset: String?, users: [Api.User]) {
+                self.flags = flags
+                self.nextOffset = nextOffset
+                self.users = users
+            }
+        }
+        case popularAppBots(Cons_popularAppBots)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -58,7 +78,15 @@ public extension Api.bots {
 }
 public extension Api.bots {
     enum PreviewInfo: TypeConstructorDescription {
-        case previewInfo(media: [Api.BotPreviewMedia], langCodes: [String])
+        public class Cons_previewInfo {
+            public var media: [Api.BotPreviewMedia]
+            public var langCodes: [String]
+            public init(media: [Api.BotPreviewMedia], langCodes: [String]) {
+                self.media = media
+                self.langCodes = langCodes
+            }
+        }
+        case previewInfo(Cons_previewInfo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -87,7 +115,17 @@ public extension Api.bots {
 }
 public extension Api.channels {
     enum AdminLogResults: TypeConstructorDescription {
-        case adminLogResults(events: [Api.ChannelAdminLogEvent], chats: [Api.Chat], users: [Api.User])
+        public class Cons_adminLogResults {
+            public var events: [Api.ChannelAdminLogEvent]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(events: [Api.ChannelAdminLogEvent], chats: [Api.Chat], users: [Api.User]) {
+                self.events = events
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case adminLogResults(Cons_adminLogResults)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -116,7 +154,17 @@ public extension Api.channels {
 }
 public extension Api.channels {
     enum ChannelParticipant: TypeConstructorDescription {
-        case channelParticipant(participant: Api.ChannelParticipant, chats: [Api.Chat], users: [Api.User])
+        public class Cons_channelParticipant {
+            public var participant: Api.ChannelParticipant
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(participant: Api.ChannelParticipant, chats: [Api.Chat], users: [Api.User]) {
+                self.participant = participant
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case channelParticipant(Cons_channelParticipant)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -145,7 +193,19 @@ public extension Api.channels {
 }
 public extension Api.channels {
     enum ChannelParticipants: TypeConstructorDescription {
-        case channelParticipants(count: Int32, participants: [Api.ChannelParticipant], chats: [Api.Chat], users: [Api.User])
+        public class Cons_channelParticipants {
+            public var count: Int32
+            public var participants: [Api.ChannelParticipant]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(count: Int32, participants: [Api.ChannelParticipant], chats: [Api.Chat], users: [Api.User]) {
+                self.count = count
+                self.participants = participants
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case channelParticipants(Cons_channelParticipants)
         case channelParticipantsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -182,7 +242,17 @@ public extension Api.channels {
 }
 public extension Api.channels {
     enum SendAsPeers: TypeConstructorDescription {
-        case sendAsPeers(peers: [Api.SendAsPeer], chats: [Api.Chat], users: [Api.User])
+        public class Cons_sendAsPeers {
+            public var peers: [Api.SendAsPeer]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(peers: [Api.SendAsPeer], chats: [Api.Chat], users: [Api.User]) {
+                self.peers = peers
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case sendAsPeers(Cons_sendAsPeers)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -211,8 +281,16 @@ public extension Api.channels {
 }
 public extension Api.channels {
     enum SponsoredMessageReportResult: TypeConstructorDescription {
+        public class Cons_sponsoredMessageReportResultChooseOption {
+            public var title: String
+            public var options: [Api.SponsoredMessageReportOption]
+            public init(title: String, options: [Api.SponsoredMessageReportOption]) {
+                self.title = title
+                self.options = options
+            }
+        }
         case sponsoredMessageReportResultAdsHidden
-        case sponsoredMessageReportResultChooseOption(title: String, options: [Api.SponsoredMessageReportOption])
+        case sponsoredMessageReportResultChooseOption(Cons_sponsoredMessageReportResultChooseOption)
         case sponsoredMessageReportResultReported
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -256,8 +334,38 @@ public extension Api.channels {
 }
 public extension Api.chatlists {
     enum ChatlistInvite: TypeConstructorDescription {
-        case chatlistInvite(flags: Int32, title: Api.TextWithEntities, emoticon: String?, peers: [Api.Peer], chats: [Api.Chat], users: [Api.User])
-        case chatlistInviteAlready(filterId: Int32, missingPeers: [Api.Peer], alreadyPeers: [Api.Peer], chats: [Api.Chat], users: [Api.User])
+        public class Cons_chatlistInvite {
+            public var flags: Int32
+            public var title: Api.TextWithEntities
+            public var emoticon: String?
+            public var peers: [Api.Peer]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(flags: Int32, title: Api.TextWithEntities, emoticon: String?, peers: [Api.Peer], chats: [Api.Chat], users: [Api.User]) {
+                self.flags = flags
+                self.title = title
+                self.emoticon = emoticon
+                self.peers = peers
+                self.chats = chats
+                self.users = users
+            }
+        }
+        public class Cons_chatlistInviteAlready {
+            public var filterId: Int32
+            public var missingPeers: [Api.Peer]
+            public var alreadyPeers: [Api.Peer]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(filterId: Int32, missingPeers: [Api.Peer], alreadyPeers: [Api.Peer], chats: [Api.Chat], users: [Api.User]) {
+                self.filterId = filterId
+                self.missingPeers = missingPeers
+                self.alreadyPeers = alreadyPeers
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case chatlistInvite(Cons_chatlistInvite)
+        case chatlistInviteAlready(Cons_chatlistInviteAlready)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -293,7 +401,17 @@ public extension Api.chatlists {
 }
 public extension Api.chatlists {
     enum ChatlistUpdates: TypeConstructorDescription {
-        case chatlistUpdates(missingPeers: [Api.Peer], chats: [Api.Chat], users: [Api.User])
+        public class Cons_chatlistUpdates {
+            public var missingPeers: [Api.Peer]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(missingPeers: [Api.Peer], chats: [Api.Chat], users: [Api.User]) {
+                self.missingPeers = missingPeers
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case chatlistUpdates(Cons_chatlistUpdates)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -322,7 +440,15 @@ public extension Api.chatlists {
 }
 public extension Api.chatlists {
     enum ExportedChatlistInvite: TypeConstructorDescription {
-        case exportedChatlistInvite(filter: Api.DialogFilter, invite: Api.ExportedChatlistInvite)
+        public class Cons_exportedChatlistInvite {
+            public var filter: Api.DialogFilter
+            public var invite: Api.ExportedChatlistInvite
+            public init(filter: Api.DialogFilter, invite: Api.ExportedChatlistInvite) {
+                self.filter = filter
+                self.invite = invite
+            }
+        }
+        case exportedChatlistInvite(Cons_exportedChatlistInvite)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

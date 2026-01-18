@@ -28,7 +28,8 @@ public func secureIdPreparePhoneVerification(network: Network, value: SecureIdPh
     }
     |> mapToSignal { sentCode -> Signal<SecureIdPreparePhoneVerificationPayload, SecureIdPreparePhoneVerificationError> in
         switch sentCode {
-        case let .sentCode(_, type, phoneCodeHash, nextType, timeout):
+        case let .sentCode(sentCodeData):
+            let (type, phoneCodeHash, nextType, timeout) = (sentCodeData.type, sentCodeData.phoneCodeHash, sentCodeData.nextType, sentCodeData.timeout)
             return .single(SecureIdPreparePhoneVerificationPayload(type: SentAuthorizationCodeType(apiType: type), nextType: nextType.flatMap(AuthorizationCodeNextType.init), timeout: timeout, phone: value.phone, phoneCodeHash: phoneCodeHash))
         case .sentCodeSuccess, .sentCodePaymentRequired:
             return .never()

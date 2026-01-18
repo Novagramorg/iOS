@@ -133,7 +133,8 @@ func _internal_fetchChannelParticipant(account: Account, peerId: PeerId, partici
                 return account.network.request(Api.functions.channels.getParticipant(channel: inputChannel, participant: inputPeer))
                 |> map { result -> ChannelParticipant? in
                     switch result {
-                        case let .channelParticipant(participant, _, _):
+                        case let .channelParticipant(channelParticipantData):
+                            let participant = channelParticipantData.participant
                             return ChannelParticipant(apiParticipant: participant)
                     }
                 }

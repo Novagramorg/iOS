@@ -29,7 +29,8 @@ func _internal_reportAdMessage(account: Account, opaqueId: Data, option: Data?) 
     }
     |> map { result -> ReportAdMessageResult in
         switch result {
-        case let .sponsoredMessageReportResultChooseOption(title, options):
+        case let .sponsoredMessageReportResultChooseOption(sponsoredMessageReportResultChooseOptionData):
+            let (title, options) = (sponsoredMessageReportResultChooseOptionData.title, sponsoredMessageReportResultChooseOptionData.options)
             return .options(title: title, options: options.map {
                 switch $0 {
                 case let .sponsoredMessageReportOption(sponsoredMessageReportOptionData):

@@ -330,7 +330,8 @@ func _internal_requestTwoStepVerificationPasswordRecoveryCode(network: Network) 
     }
     |> map { result -> String in
         switch result {
-            case let .passwordRecovery(emailPattern):
+            case let .passwordRecovery(passwordRecoveryData):
+                let (emailPattern) = (passwordRecoveryData.emailPattern)
                 return emailPattern
         }
     }

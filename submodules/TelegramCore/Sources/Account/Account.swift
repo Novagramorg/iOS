@@ -121,7 +121,8 @@ public class UnauthorizedAccount {
             switch sentCode {
             case .sentCodePaymentRequired:
                 break
-            case let .sentCode(_, type, phoneCodeHash, nextType, codeTimeout):
+            case let .sentCode(sentCodeData):
+                let (type, phoneCodeHash, nextType, codeTimeout) = (sentCodeData.type, sentCodeData.phoneCodeHash, sentCodeData.nextType, sentCodeData.timeout)
                 let _ = postbox.transaction({ transaction in
                     var parsedNextType: AuthorizationCodeNextType?
                     if let nextType = nextType {
@@ -131,20 +132,22 @@ public class UnauthorizedAccount {
                         transaction.setState(UnauthorizedAccountState(isTestingEnvironment: testingEnvironment, masterDatacenterId: masterDatacenterId, contents: .confirmationCodeEntry(number: phoneNumber, type: SentAuthorizationCodeType(apiType: type), hash: phoneCodeHash, timeout: codeTimeout, nextType: parsedNextType, syncContacts: syncContacts, previousCodeEntry: nil, usePrevious: false)))
                     }
                 }).start()
-            case let .sentCodeSuccess(authorization):
+            case let .sentCodeSuccess(sentCodeSuccessData):
+                let authorization = sentCodeSuccessData.authorization
                 switch authorization {
-                case let .authorization(_, _, _, futureAuthToken, user):
+                case let .authorization(authorizationData):
+                    let (futureAuthToken, apiUser) = (authorizationData.futureAuthToken, authorizationData.user)
                     let _ = postbox.transaction({ [weak self] transaction in
                         var syncContacts = true
                         if let state = transaction.getState() as? UnauthorizedAccountState, case let .payment(_, _, _, _, _, syncContactsValue) = state.contents {
                             syncContacts = syncContactsValue
                         }
-                        
+
                         if let futureAuthToken = futureAuthToken {
                             storeFutureLoginToken(accountManager: accountManager, token: futureAuthToken.makeData())
                         }
-                        
-                        let user = TelegramUser(user: user)
+
+                        let user = TelegramUser(user: apiUser)
                         var isSupportUser = false
                         if let phone = user.phone, phone.hasPrefix("42"), phone.count <= 5 {
                             isSupportUser = true
@@ -159,7 +162,8 @@ public class UnauthorizedAccount {
                             return .loggedIn
                         }
                     }).start()
-                case let .authorizationSignUpRequired(_, termsOfService):
+                case let .authorizationSignUpRequired(authorizationSignUpRequiredData):
+                    let termsOfService = authorizationSignUpRequiredData.termsOfService
                     let _ = postbox.transaction({ [weak self] transaction in
                         if let self {
                             if let state = transaction.getState() as? UnauthorizedAccountState, case let .payment(number, codeHash, _, _, _, syncContacts) = state.contents {
@@ -583,7 +587,8 @@ func _internal_requestPasskeyLoginData(network: Network, apiId: Int32, apiHash: 
             return nil
         }
         switch result {
-        case let .passkeyLoginOptions(options):
+        case let .passkeyLoginOptions(passkeyLoginOptionsData):
+            let options = passkeyLoginOptionsData.options
             switch options {
             case let .dataJSON(dataJSONData):
                 let data = dataJSONData.data

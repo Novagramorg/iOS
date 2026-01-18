@@ -193,7 +193,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                     |> mapToSignal { result -> Signal<EditableBotInfo?, NoError> in
                         if let result = result {
                             switch result {
-                            case let .botInfo(name, about, description):
+                            case let .botInfo(botInfoData):
+                                let (name, about, description) = (botInfoData.name, botInfoData.about, botInfoData.description)
                                 return .single(EditableBotInfo(name: name, about: about, description: description))
                             }
                         } else {
@@ -753,7 +754,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             
                                             if let participantResult = participantResult {
                                                 switch participantResult {
-                                                case let .channelParticipant(_, chats, users):
+                                                case let .channelParticipant(channelParticipantData):
+                                                    let (chats, users) = (channelParticipantData.chats, channelParticipantData.users)
                                                     parsedPeers = parsedPeers.union(with: AccumulatedPeers(transaction: transaction, chats: chats, users: users))
                                                 }
                                             }
@@ -786,7 +788,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             var invitedOn: Int32?
                                             if let participantResult = participantResult {
                                                 switch participantResult {
-                                                case let .channelParticipant(participant, _, _):
+                                                case let .channelParticipant(channelParticipantData):
+                                                    let participant = channelParticipantData.participant
                                                     switch participant {
                                                     case let .channelParticipantSelf(channelParticipantSelfData):
                                                         let (flags, inviterId, invitedDate) = (channelParticipantSelfData.flags, channelParticipantSelfData.inviterId, channelParticipantSelfData.date)
@@ -962,7 +965,8 @@ func _internal_requestBotAdminPreview(network: Network, peerId: PeerId, inputUse
             return nil
         }
         switch result {
-        case let .previewInfo(media, langCodes):
+        case let .previewInfo(previewInfoData):
+            let (media, langCodes) = (previewInfoData.media, previewInfoData.langCodes)
             return CachedUserData.BotPreview(
                 items: media.compactMap { item -> CachedUserData.BotPreview.Item? in
                     switch item {

@@ -167,7 +167,8 @@ func _internal_requestRecommendedApps(account: Account, forceUpdate: Bool) -> Si
                 let users: [Api.User]
                 let parsedPeers: AccumulatedPeers
                 switch result {
-                case let .popularAppBots(_, nextOffset, apiUsers):
+                case let .popularAppBots(popularAppBotsData):
+                    let (nextOffset, apiUsers) = (popularAppBotsData.nextOffset, popularAppBotsData.users)
                     let _ = nextOffset
                     users = apiUsers
                 }
