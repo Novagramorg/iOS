@@ -1456,7 +1456,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 let threadId = topMsgId.flatMap { Int64($0) }
             
                 if let date = updatesDate, date + 60 > serverTime {
-                    if case let .sendMessageTextDraftAction(randomId, text) = type {
+                    if case let .sendMessageTextDraftAction(sendMessageTextDraftActionData) = type {
+                        let (randomId, text) = (sendMessageTextDraftActionData.randomId, sendMessageTextDraftActionData.text)
                         switch text {
                         case let .textWithEntities(text, entities):
                             updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), threadId: threadId), id: randomId, timestamp: date, peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), text: text, entities: messageTextEntitiesFromApiEntities(entities))
@@ -1485,8 +1486,9 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 if let date = updatesDate, date + 60 > serverTime {
                     let channelPeerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                     let threadId = topMsgId.flatMap { Int64($0) }
-                    
-                    if case let .sendMessageTextDraftAction(randomId, text) = type {
+
+                    if case let .sendMessageTextDraftAction(sendMessageTextDraftActionData) = type {
+                        let (randomId, text) = (sendMessageTextDraftActionData.randomId, sendMessageTextDraftActionData.text)
                         switch text {
                         case let .textWithEntities(text, entities):
                             updatedState.addPeerLiveTypingDraftUpdate(peerAndThreadId: PeerAndThreadId(peerId: channelPeerId, threadId: threadId), id: randomId, timestamp: date, peerId: userId.peerId, text: text, entities: messageTextEntitiesFromApiEntities(entities))

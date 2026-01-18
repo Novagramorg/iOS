@@ -618,7 +618,8 @@ public struct BotPaymentValidatedFormInfo : Equatable {
 extension BotPaymentShippingOption {
     init(apiOption: Api.ShippingOption) {
         switch apiOption {
-            case let .shippingOption(id, title, prices):
+            case let .shippingOption(shippingOptionData):
+                let (id, title, prices) = (shippingOptionData.id, shippingOptionData.title, shippingOptionData.prices)
                 self.init(id: id, title: title, prices: prices.map {
                     switch $0 {
                         case let .labeledPrice(labeledPriceData):

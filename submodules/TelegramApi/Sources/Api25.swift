@@ -1,6 +1,16 @@
 public extension Api {
     enum ShippingOption: TypeConstructorDescription {
-        case shippingOption(id: String, title: String, prices: [Api.LabeledPrice])
+        public class Cons_shippingOption {
+            public var id: String
+            public var title: String
+            public var prices: [Api.LabeledPrice]
+            public init(id: String, title: String, prices: [Api.LabeledPrice]) {
+                self.id = id
+                self.title = title
+                self.prices = prices
+            }
+        }
+        case shippingOption(Cons_shippingOption)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -29,7 +39,17 @@ public extension Api {
 }
 public extension Api {
     enum SmsJob: TypeConstructorDescription {
-        case smsJob(jobId: String, phoneNumber: String, text: String)
+        public class Cons_smsJob {
+            public var jobId: String
+            public var phoneNumber: String
+            public var text: String
+            public init(jobId: String, phoneNumber: String, text: String) {
+                self.jobId = jobId
+                self.phoneNumber = phoneNumber
+                self.text = text
+            }
+        }
+        case smsJob(Cons_smsJob)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -58,7 +78,39 @@ public extension Api {
 }
 public extension Api {
     indirect enum SponsoredMessage: TypeConstructorDescription {
-        case sponsoredMessage(flags: Int32, randomId: Buffer, url: String, title: String, message: String, entities: [Api.MessageEntity]?, photo: Api.Photo?, media: Api.MessageMedia?, color: Api.PeerColor?, buttonText: String, sponsorInfo: String?, additionalInfo: String?, minDisplayDuration: Int32?, maxDisplayDuration: Int32?)
+        public class Cons_sponsoredMessage {
+            public var flags: Int32
+            public var randomId: Buffer
+            public var url: String
+            public var title: String
+            public var message: String
+            public var entities: [Api.MessageEntity]?
+            public var photo: Api.Photo?
+            public var media: Api.MessageMedia?
+            public var color: Api.PeerColor?
+            public var buttonText: String
+            public var sponsorInfo: String?
+            public var additionalInfo: String?
+            public var minDisplayDuration: Int32?
+            public var maxDisplayDuration: Int32?
+            public init(flags: Int32, randomId: Buffer, url: String, title: String, message: String, entities: [Api.MessageEntity]?, photo: Api.Photo?, media: Api.MessageMedia?, color: Api.PeerColor?, buttonText: String, sponsorInfo: String?, additionalInfo: String?, minDisplayDuration: Int32?, maxDisplayDuration: Int32?) {
+                self.flags = flags
+                self.randomId = randomId
+                self.url = url
+                self.title = title
+                self.message = message
+                self.entities = entities
+                self.photo = photo
+                self.media = media
+                self.color = color
+                self.buttonText = buttonText
+                self.sponsorInfo = sponsorInfo
+                self.additionalInfo = additionalInfo
+                self.minDisplayDuration = minDisplayDuration
+                self.maxDisplayDuration = maxDisplayDuration
+            }
+        }
+        case sponsoredMessage(Cons_sponsoredMessage)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -87,7 +139,15 @@ public extension Api {
 }
 public extension Api {
     enum SponsoredMessageReportOption: TypeConstructorDescription {
-        case sponsoredMessageReportOption(text: String, option: Buffer)
+        public class Cons_sponsoredMessageReportOption {
+            public var text: String
+            public var option: Buffer
+            public init(text: String, option: Buffer) {
+                self.text = text
+                self.option = option
+            }
+        }
+        case sponsoredMessageReportOption(Cons_sponsoredMessageReportOption)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -116,7 +176,21 @@ public extension Api {
 }
 public extension Api {
     enum SponsoredPeer: TypeConstructorDescription {
-        case sponsoredPeer(flags: Int32, randomId: Buffer, peer: Api.Peer, sponsorInfo: String?, additionalInfo: String?)
+        public class Cons_sponsoredPeer {
+            public var flags: Int32
+            public var randomId: Buffer
+            public var peer: Api.Peer
+            public var sponsorInfo: String?
+            public var additionalInfo: String?
+            public init(flags: Int32, randomId: Buffer, peer: Api.Peer, sponsorInfo: String?, additionalInfo: String?) {
+                self.flags = flags
+                self.randomId = randomId
+                self.peer = peer
+                self.sponsorInfo = sponsorInfo
+                self.additionalInfo = additionalInfo
+            }
+        }
+        case sponsoredPeer(Cons_sponsoredPeer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

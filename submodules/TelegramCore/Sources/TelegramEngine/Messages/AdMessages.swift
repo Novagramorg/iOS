@@ -518,7 +518,8 @@ private class AdMessagesHistoryContextImpl {
 
                         for message in messages {
                             switch message {
-                            case let .sponsoredMessage(flags, randomId, url, title, message, entities, photo, media, color, buttonText, sponsorInfo, additionalInfo, minDisplayDuration, maxDisplayDuration):
+                            case let .sponsoredMessage(sponsoredMessageData):
+                                let (flags, randomId, url, title, message, entities, apiPhoto, media, color, buttonText, sponsorInfo, additionalInfo, minDisplayDuration, maxDisplayDuration) = (sponsoredMessageData.flags, sponsoredMessageData.randomId, sponsoredMessageData.url, sponsoredMessageData.title, sponsoredMessageData.message, sponsoredMessageData.entities, sponsoredMessageData.photo, sponsoredMessageData.media, sponsoredMessageData.color, sponsoredMessageData.buttonText, sponsoredMessageData.sponsorInfo, sponsoredMessageData.additionalInfo, sponsoredMessageData.minDisplayDuration, sponsoredMessageData.maxDisplayDuration)
                                 var parsedEntities: [MessageTextEntity] = []
                                 if let entities = entities {
                                     parsedEntities = messageTextEntitiesFromApiEntities(entities)
@@ -540,7 +541,7 @@ private class AdMessagesHistoryContextImpl {
                                     }
                                 }
                                 
-                                let photo = photo.flatMap { telegramMediaImageFromApiPhoto($0) }
+                                let photo = apiPhoto.flatMap { telegramMediaImageFromApiPhoto($0) }
                                 let contentMedia = textMediaAndExpirationTimerFromApiMedia(media, peerId).media
                                 
                                 parsedMessages.append(CachedMessage(

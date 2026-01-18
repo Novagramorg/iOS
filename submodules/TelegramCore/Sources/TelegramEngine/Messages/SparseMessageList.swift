@@ -124,7 +124,8 @@ public final class SparseMessageList {
                             }
                             var positions: [Position] = positions.map { position -> Position in
                                 switch position {
-                                case let .searchResultPosition(id, date, offset):
+                                case let .searchResultPosition(searchResultPositionData):
+                                    let (id, date, offset) = (searchResultPositionData.msgId, searchResultPositionData.date, searchResultPositionData.offset)
                                     return Position(id: id, date: date, offset: Int(offset))
                                 }
                             }
@@ -854,7 +855,8 @@ public final class SparseMessageCalendar {
                             var messagesByDay: [Int32: SparseMessageCalendar.Entry] = [:]
                             for period in periods {
                                 switch period {
-                                case let .searchResultsCalendarPeriod(date, minMsgId, _, count):
+                                case let .searchResultsCalendarPeriod(searchResultsCalendarPeriodData):
+                                    let (date, minMsgId, count) = (searchResultsCalendarPeriodData.date, searchResultsCalendarPeriodData.minMsgId, searchResultsCalendarPeriodData.count)
                                     if let message = transaction.getMessage(MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: minMsgId)) {
                                         messagesByDay[date] = SparseMessageCalendar.Entry(message: message, count: Int(count))
                                     }

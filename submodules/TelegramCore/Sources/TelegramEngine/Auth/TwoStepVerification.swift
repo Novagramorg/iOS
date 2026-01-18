@@ -72,7 +72,8 @@ func _internal_requestTwoStepVerifiationSettings(network: Network, password: Str
                     var parsedSecureSecret: TwoStepVerificationSecureSecret?
                     if let secureSettings = secureSettings {
                         switch secureSettings {
-                            case let .secureSecretSettings(secureAlgo, secureSecret, secureSecretId):
+                            case let .secureSecretSettings(secureSecretSettingsData):
+                                let (secureAlgo, secureSecret, secureSecretId) = (secureSecretSettingsData.secureAlgo, secureSecretSettingsData.secureSecret, secureSecretSettingsData.secureSecretId)
                                 if secureSecret.size != 32 {
                                     return .fail(.generic)
                                 }
@@ -189,7 +190,7 @@ func _internal_updateTwoStepVerificationPassword(network: Network, currentPasswo
                 var updatedSecureSettings: Api.SecureSecretSettings?
                 if let updatedSecureSecret = updatedSecureSecret {
                     flags |= 1 << 2
-                    updatedSecureSettings = .secureSecretSettings(secureAlgo: updatedSecureSecret.derivation.apiAlgo, secureSecret: Buffer(data: updatedSecureSecret.data), secureSecretId: updatedSecureSecret.id)
+                    updatedSecureSettings = .secureSecretSettings(.init(secureAlgo: updatedSecureSecret.derivation.apiAlgo, secureSecret: Buffer(data: updatedSecureSecret.data), secureSecretId: updatedSecureSecret.id))
                 }
                 
                 return network.request(Api.functions.account.updatePasswordSettings(password:  checkPassword, newSettings: Api.account.PasswordInputSettings.passwordInputSettings(flags: flags, newAlgo: updatedPasswordDerivation.apiAlgo, newPasswordHash: Buffer(data: updatedPasswordHash), hint: hint, email: email, newSecureSettings: updatedSecureSettings)), automaticFloodWait: false)
@@ -252,7 +253,7 @@ func updateTwoStepVerificationSecureSecret(network: Network, password: String, s
         }
         
         let flags: Int32 = (1 << 2)
-        return network.request(Api.functions.account.updatePasswordSettings(password: checkPassword, newSettings: .passwordInputSettings(flags: flags, newAlgo: nil, newPasswordHash: nil, hint: "", email: "", newSecureSettings: .secureSecretSettings(secureAlgo: secretDerivation.apiAlgo, secureSecret: Buffer(data: encryptedSecret), secureSecretId: secretId))), automaticFloodWait: true)
+        return network.request(Api.functions.account.updatePasswordSettings(password: checkPassword, newSettings: .passwordInputSettings(flags: flags, newAlgo: nil, newPasswordHash: nil, hint: "", email: "", newSecureSettings: .secureSecretSettings(.init(secureAlgo: secretDerivation.apiAlgo, secureSecret: Buffer(data: encryptedSecret), secureSecretId: secretId)))), automaticFloodWait: true)
         |> mapError { _ -> UpdateTwoStepVerificationSecureSecretError in
             return .generic
         }

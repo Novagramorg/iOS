@@ -555,7 +555,19 @@ public extension Api {
 }
 public extension Api {
     enum SearchResultsCalendarPeriod: TypeConstructorDescription {
-        case searchResultsCalendarPeriod(date: Int32, minMsgId: Int32, maxMsgId: Int32, count: Int32)
+        public class Cons_searchResultsCalendarPeriod {
+            public var date: Int32
+            public var minMsgId: Int32
+            public var maxMsgId: Int32
+            public var count: Int32
+            public init(date: Int32, minMsgId: Int32, maxMsgId: Int32, count: Int32) {
+                self.date = date
+                self.minMsgId = minMsgId
+                self.maxMsgId = maxMsgId
+                self.count = count
+            }
+        }
+        case searchResultsCalendarPeriod(Cons_searchResultsCalendarPeriod)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -584,7 +596,17 @@ public extension Api {
 }
 public extension Api {
     enum SearchResultsPosition: TypeConstructorDescription {
-        case searchResultPosition(msgId: Int32, date: Int32, offset: Int32)
+        public class Cons_searchResultPosition {
+            public var msgId: Int32
+            public var date: Int32
+            public var offset: Int32
+            public init(msgId: Int32, date: Int32, offset: Int32) {
+                self.msgId = msgId
+                self.date = date
+                self.offset = offset
+            }
+        }
+        case searchResultPosition(Cons_searchResultPosition)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -613,7 +635,17 @@ public extension Api {
 }
 public extension Api {
     enum SecureCredentialsEncrypted: TypeConstructorDescription {
-        case secureCredentialsEncrypted(data: Buffer, hash: Buffer, secret: Buffer)
+        public class Cons_secureCredentialsEncrypted {
+            public var data: Buffer
+            public var hash: Buffer
+            public var secret: Buffer
+            public init(data: Buffer, hash: Buffer, secret: Buffer) {
+                self.data = data
+                self.hash = hash
+                self.secret = secret
+            }
+        }
+        case secureCredentialsEncrypted(Cons_secureCredentialsEncrypted)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -642,7 +674,17 @@ public extension Api {
 }
 public extension Api {
     enum SecureData: TypeConstructorDescription {
-        case secureData(data: Buffer, dataHash: Buffer, secret: Buffer)
+        public class Cons_secureData {
+            public var data: Buffer
+            public var dataHash: Buffer
+            public var secret: Buffer
+            public init(data: Buffer, dataHash: Buffer, secret: Buffer) {
+                self.data = data
+                self.dataHash = dataHash
+                self.secret = secret
+            }
+        }
+        case secureData(Cons_secureData)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -671,7 +713,25 @@ public extension Api {
 }
 public extension Api {
     enum SecureFile: TypeConstructorDescription {
-        case secureFile(id: Int64, accessHash: Int64, size: Int64, dcId: Int32, date: Int32, fileHash: Buffer, secret: Buffer)
+        public class Cons_secureFile {
+            public var id: Int64
+            public var accessHash: Int64
+            public var size: Int64
+            public var dcId: Int32
+            public var date: Int32
+            public var fileHash: Buffer
+            public var secret: Buffer
+            public init(id: Int64, accessHash: Int64, size: Int64, dcId: Int32, date: Int32, fileHash: Buffer, secret: Buffer) {
+                self.id = id
+                self.accessHash = accessHash
+                self.size = size
+                self.dcId = dcId
+                self.date = date
+                self.fileHash = fileHash
+                self.secret = secret
+            }
+        }
+        case secureFile(Cons_secureFile)
         case secureFileEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -708,8 +768,20 @@ public extension Api {
 }
 public extension Api {
     enum SecurePasswordKdfAlgo: TypeConstructorDescription {
-        case securePasswordKdfAlgoPBKDF2HMACSHA512iter100000(salt: Buffer)
-        case securePasswordKdfAlgoSHA512(salt: Buffer)
+        public class Cons_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000 {
+            public var salt: Buffer
+            public init(salt: Buffer) {
+                self.salt = salt
+            }
+        }
+        public class Cons_securePasswordKdfAlgoSHA512 {
+            public var salt: Buffer
+            public init(salt: Buffer) {
+                self.salt = salt
+            }
+        }
+        case securePasswordKdfAlgoPBKDF2HMACSHA512iter100000(Cons_securePasswordKdfAlgoPBKDF2HMACSHA512iter100000)
+        case securePasswordKdfAlgoSHA512(Cons_securePasswordKdfAlgoSHA512)
         case securePasswordKdfAlgoUnknown
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {

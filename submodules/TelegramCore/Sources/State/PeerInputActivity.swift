@@ -125,15 +125,19 @@ extension PeerInputActivity {
                 self = .recordingVoice
             case .sendMessageTypingAction:
                 self = .typingText
-            case let .sendMessageUploadDocumentAction(progress):
+            case let .sendMessageUploadDocumentAction(sendMessageUploadDocumentActionData):
+                let progress = sendMessageUploadDocumentActionData.progress
                 self = .uploadingFile(progress: progress)
-            case let .sendMessageUploadPhotoAction(progress):
+            case let .sendMessageUploadPhotoAction(sendMessageUploadPhotoActionData):
+                let progress = sendMessageUploadPhotoActionData.progress
                 self = .uploadingPhoto(progress: progress)
-            case let .sendMessageUploadVideoAction(progress):
+            case let .sendMessageUploadVideoAction(sendMessageUploadVideoActionData):
+                let progress = sendMessageUploadVideoActionData.progress
                 self = .uploadingVideo(progress: progress)
             case .sendMessageRecordRoundAction:
                 self = .recordingInstantVideo
-            case let .sendMessageUploadRoundAction(progress):
+            case let .sendMessageUploadRoundAction(sendMessageUploadRoundActionData):
+                let progress = sendMessageUploadRoundActionData.progress
                 self = .uploadingInstantVideo(progress: progress)
             case .speakingInGroupCallAction:
                 self = .speakingInGroupCall(timestamp: timestamp)
@@ -141,13 +145,15 @@ extension PeerInputActivity {
                 self = .choosingSticker
             case .sendMessageHistoryImportAction:
                 return nil
-            case let .sendMessageEmojiInteraction(emoticon, messageId, interaction):
+            case let .sendMessageEmojiInteraction(sendMessageEmojiInteractionData):
+                let (emoticon, messageId, interaction) = (sendMessageEmojiInteractionData.emoticon, sendMessageEmojiInteractionData.msgId, sendMessageEmojiInteractionData.interaction)
                 if let peerId = peerId {
                     self = .interactingWithEmoji(emoticon: emoticon, messageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: messageId), interaction: EmojiInteraction(apiDataJson: interaction))
                 } else {
                     return nil
                 }
-            case let .sendMessageEmojiInteractionSeen(emoticon):
+            case let .sendMessageEmojiInteractionSeen(sendMessageEmojiInteractionSeenData):
+                let emoticon = sendMessageEmojiInteractionSeenData.emoticon
                 self = .seeingEmojiInteraction(emoticon: emoticon)
             case .sendMessageTextDraftAction:
                 return nil
