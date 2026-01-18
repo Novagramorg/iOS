@@ -1765,7 +1765,8 @@ func _internal_checkCanSendStarGift(account: Account, giftId: Int64) -> Signal<C
         switch result {
         case .checkCanSendGiftResultOk:
             return .available
-        case let .checkCanSendGiftResultFail(reason):
+        case let .checkCanSendGiftResultFail(checkCanSendGiftResultFailData):
+            let reason = checkCanSendGiftResultFailData.reason
             switch reason {
             case let .textWithEntities(textWithEntitiesData):
                 let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)

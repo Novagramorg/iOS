@@ -1211,7 +1211,8 @@ public final class AccountViewTracker {
                                 return account.postbox.transaction { transaction -> Void in
                                     for result in results {
                                         switch result {
-                                        case let .stickerSet(_, _, _, documents)?:
+                                        case let .stickerSet(stickerSetData)?:
+                                            let documents = stickerSetData.documents
                                             for document in documents {
                                                 if let file = telegramMediaFileFromApiDocument(document, altDocuments: []) {
                                                     if transaction.getMedia(file.fileId) != nil {

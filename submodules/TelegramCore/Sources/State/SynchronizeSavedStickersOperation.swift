@@ -75,7 +75,8 @@ public func addSavedSticker(postbox: Postbox, network: Network, file: TelegramMe
                             switch result {
                             case .stickerSetNotModified:
                                 break
-                            case let .stickerSet(_, packs, _, _):
+                            case let .stickerSet(stickerSetData):
+                                let packs = stickerSetData.packs
                                 var stringRepresentationsByFile: [MediaId: [String]] = [:]
                                 for pack in packs {
                                     switch pack {

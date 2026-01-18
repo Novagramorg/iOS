@@ -5570,7 +5570,8 @@ func replayFinalState(
                         let namespace: ItemCollectionId.Namespace
                         var items: [ItemCollectionItem] = []
                         let info: StickerPackCollectionInfo
-                        if case let .stickerSet(set, packs, keywords, documents) = apiSet {
+                        if case let .stickerSet(stickerSetData) = apiSet {
+                            let (set, packs, keywords, documents) = (stickerSetData.set, stickerSetData.packs, stickerSetData.keywords, stickerSetData.documents)
                             var indexKeysByFile: [MediaId: [MemoryBuffer]] = [:]
                             for pack in packs {
                                 switch pack {

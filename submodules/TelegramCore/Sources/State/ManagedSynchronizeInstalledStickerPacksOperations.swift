@@ -150,7 +150,8 @@ private func fetchStickerPack(network: Network, info: StickerPackCollectionInfo)
         switch result {
         case .stickerSetNotModified:
             break
-        case let .stickerSet(stickerSet, packs, keywords, documents):
+        case let .stickerSet(stickerSetData):
+            let (stickerSet, packs, keywords, documents) = (stickerSetData.set, stickerSetData.packs, stickerSetData.keywords, stickerSetData.documents)
             updatedInfo = StickerPackCollectionInfo(apiSet: stickerSet, namespace: info.id.namespace)
             var indexKeysByFile: [MediaId: [MemoryBuffer]] = [:]
             for pack in packs {
@@ -235,7 +236,8 @@ private func installRemoteStickerPacks(network: Network, infos: [StickerPackColl
                 switch result {
                     case .stickerSetInstallResultSuccess:
                         return Set()
-                    case let .stickerSetInstallResultArchive(archivedSets):
+                    case let .stickerSetInstallResultArchive(stickerSetInstallResultArchiveData):
+                        let archivedSets = stickerSetInstallResultArchiveData.sets
                         var archivedIds = Set<ItemCollectionId>()
                         for archivedSet in archivedSets {
                             switch archivedSet {

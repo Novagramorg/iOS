@@ -154,7 +154,8 @@ func managedGreetingStickers(postbox: Postbox, network: Network) -> Signal<Void,
             switch result {
                 case .stickersNotModified:
                     return .single(nil)
-                case let .stickers(_, stickers):
+                case let .stickers(stickersData):
+                    let stickers = stickersData.stickers
                     var items: [OrderedItemListEntry] = []
                     for sticker in stickers {
                         if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
@@ -181,7 +182,8 @@ func managedPremiumStickers(postbox: Postbox, network: Network) -> Signal<Void, 
             switch result {
                 case .stickersNotModified:
                     return .single(nil)
-                case let .stickers(_, stickers):
+                case let .stickers(stickersData):
+                    let stickers = stickersData.stickers
                     var items: [OrderedItemListEntry] = []
                     for sticker in stickers {
                         if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
@@ -208,7 +210,8 @@ func managedAllPremiumStickers(postbox: Postbox, network: Network) -> Signal<Voi
             switch result {
                 case .stickersNotModified:
                     return .single(nil)
-                case let .stickers(_, stickers):
+                case let .stickers(stickersData):
+                    let stickers = stickersData.stickers
                     var items: [OrderedItemListEntry] = []
                     for sticker in stickers {
                         if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {

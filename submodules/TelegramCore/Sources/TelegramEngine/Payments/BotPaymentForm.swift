@@ -480,7 +480,8 @@ func _internal_fetchBotPaymentInvoice(postbox: Postbox, network: Network, source
         |> mapToSignal { result -> Signal<TelegramMediaInvoice, BotPaymentFormRequestError> in
             return postbox.transaction { transaction -> TelegramMediaInvoice in
                 switch result {
-                case let .paymentForm(_, _, _, title, description, photo, invoice, _, _, _, _, _, _, _, _):
+                case let .paymentForm(paymentFormData):
+                    let (title, description, photo, invoice) = (paymentFormData.title, paymentFormData.description, paymentFormData.photo, paymentFormData.invoice)
                     let parsedInvoice = BotPaymentInvoice(apiInvoice: invoice)
                     
                     var parsedFlags = TelegramMediaInvoiceFlags()
@@ -492,10 +493,12 @@ func _internal_fetchBotPaymentInvoice(postbox: Postbox, network: Network, source
                     }
                     
                     return TelegramMediaInvoice(title: title, description: description, photo: photo.flatMap(TelegramMediaWebFile.init), receiptMessageId: nil, currency: parsedInvoice.currency, totalAmount: 0, startParam: "", extendedMedia: nil, subscriptionPeriod: parsedInvoice.subscriptionPeriod, flags: parsedFlags, version: TelegramMediaInvoice.lastVersion)
-                case let .paymentFormStars(_, _, _, title, description, photo, invoice, _):
+                case let .paymentFormStars(paymentFormStarsData):
+                    let (title, description, photo, invoice) = (paymentFormStarsData.title, paymentFormStarsData.description, paymentFormStarsData.photo, paymentFormStarsData.invoice)
                     let parsedInvoice = BotPaymentInvoice(apiInvoice: invoice)
                     return TelegramMediaInvoice(title: title, description: description, photo: photo.flatMap(TelegramMediaWebFile.init), receiptMessageId: nil, currency: parsedInvoice.currency, totalAmount: parsedInvoice.prices.reduce(0, { $0 + $1.amount }), startParam: "", extendedMedia: nil, subscriptionPeriod: parsedInvoice.subscriptionPeriod, flags: [], version: TelegramMediaInvoice.lastVersion)
-                case let .paymentFormStarGift(_, invoice):
+                case let .paymentFormStarGift(paymentFormStarGiftData):
+                    let invoice = paymentFormStarGiftData.invoice
                     let parsedInvoice = BotPaymentInvoice(apiInvoice: invoice)
                     return TelegramMediaInvoice(title: "", description: "", photo: nil, receiptMessageId: nil, currency: parsedInvoice.currency, totalAmount: parsedInvoice.prices.reduce(0, { $0 + $1.amount }), startParam: "", extendedMedia: nil, subscriptionPeriod: parsedInvoice.subscriptionPeriod, flags: [], version: TelegramMediaInvoice.lastVersion)
                 }
@@ -543,11 +546,12 @@ func _internal_fetchBotPaymentForm(accountPeerId: PeerId, postbox: Postbox, netw
         |> mapToSignal { result -> Signal<BotPaymentForm, BotPaymentFormRequestError> in
             return postbox.transaction { transaction -> BotPaymentForm in
                 switch result {
-                case let .paymentForm(flags, id, botId, title, description, photo, invoice, providerId, url, nativeProvider, nativeParams, additionalMethods, savedInfo, savedCredentials, apiUsers):
+                case let .paymentForm(paymentFormData):
+                    let (flags, id, botId, title, description, photo, invoice, providerId, url, nativeProvider, nativeParams, additionalMethods, savedInfo, savedCredentials, apiUsers) = (paymentFormData.flags, paymentFormData.formId, paymentFormData.botId, paymentFormData.title, paymentFormData.description, paymentFormData.photo, paymentFormData.invoice, paymentFormData.providerId, paymentFormData.url, paymentFormData.nativeProvider, paymentFormData.nativeParams, paymentFormData.additionalMethods, paymentFormData.savedInfo, paymentFormData.savedCredentials, paymentFormData.users)
                     let _ = title
                     let _ = description
                     let _ = photo
-                    
+
                     let parsedPeers = AccumulatedPeers(users: apiUsers)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
 
@@ -571,19 +575,21 @@ func _internal_fetchBotPaymentForm(accountPeerId: PeerId, postbox: Postbox, netw
 
                     let additionalPaymentMethods = additionalMethods?.map({ BotPaymentMethod(apiPaymentFormMethod: $0) }) ?? []
                     return BotPaymentForm(id: id, canSaveCredentials: (flags & (1 << 2)) != 0, passwordMissing: (flags & (1 << 3)) != 0, invoice: parsedInvoice, paymentBotId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId)), providerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(providerId)), url: url, nativeProvider: parsedNativeProvider, savedInfo: parsedSavedInfo, savedCredentials: parsedSavedCredentials, additionalPaymentMethods: additionalPaymentMethods)
-                case let .paymentFormStars(flags, id, botId, title, description, photo, invoice, apiUsers):
+                case let .paymentFormStars(paymentFormStarsData):
+                    let (flags, id, botId, title, description, photo, invoice, apiUsers) = (paymentFormStarsData.flags, paymentFormStarsData.formId, paymentFormStarsData.botId, paymentFormStarsData.title, paymentFormStarsData.description, paymentFormStarsData.photo, paymentFormStarsData.invoice, paymentFormStarsData.users)
                     let _ = flags
                     let _ = title
                     let _ = description
                     let _ = photo
-                
+
                     let parsedPeers = AccumulatedPeers(users: apiUsers)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                
+
                     let parsedInvoice = BotPaymentInvoice(apiInvoice: invoice)
                     return BotPaymentForm(id: id, canSaveCredentials: false, passwordMissing: false, invoice: parsedInvoice, paymentBotId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId)), providerId: nil, url: nil, nativeProvider: nil, savedInfo: nil, savedCredentials: [], additionalPaymentMethods: [])
                     
-                case let .paymentFormStarGift(id, invoice):
+                case let .paymentFormStarGift(paymentFormStarGiftData):
+                    let (id, invoice) = (paymentFormStarGiftData.formId, paymentFormStarGiftData.invoice)
                     let parsedInvoice = BotPaymentInvoice(apiInvoice: invoice)
                     return BotPaymentForm(id: id, canSaveCredentials: false, passwordMissing: false, invoice: parsedInvoice, paymentBotId: nil, providerId: nil, url: nil, nativeProvider: nil, savedInfo: nil, savedCredentials: [], additionalPaymentMethods: [])
                 }
@@ -891,7 +897,8 @@ func _internal_requestBotPaymentReceipt(account: Account, messageId: MessageId) 
         |> mapToSignal { result -> Signal<BotPaymentReceipt, RequestBotPaymentReceiptError> in
             return account.postbox.transaction { transaction -> BotPaymentReceipt in
                 switch result {
-                case let .paymentReceipt(_, date, botId, _, title, description, photo, invoice, info, shipping, tipAmount, currency, totalAmount, credentialsTitle, users):
+                case let .paymentReceipt(paymentReceiptData):
+                    let (date, botId, title, description, photo, invoice, info, shipping, tipAmount, currency, totalAmount, credentialsTitle, users) = (paymentReceiptData.date, paymentReceiptData.botId, paymentReceiptData.title, paymentReceiptData.description, paymentReceiptData.photo, paymentReceiptData.invoice, paymentReceiptData.info, paymentReceiptData.shipping, paymentReceiptData.tipAmount, paymentReceiptData.currency, paymentReceiptData.totalAmount, paymentReceiptData.credentialsTitle, paymentReceiptData.users)
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: [], users: users)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
 
@@ -912,16 +919,17 @@ func _internal_requestBotPaymentReceipt(account: Account, messageId: MessageId) 
                         flags: [],
                         version: TelegramMediaInvoice.lastVersion
                     )
-                    
+
                     let botPaymentId = PeerId.init(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId))
 
                     return BotPaymentReceipt(invoice: parsedInvoice, date: date, info: parsedInfo, shippingOption: shippingOption, credentialsTitle: credentialsTitle, invoiceMedia: invoiceMedia, tipAmount: tipAmount, botPaymentId: botPaymentId, transactionId: nil)
-                case let .paymentReceiptStars(_, date, botId, title, description, photo, invoice, currency, totalAmount, transactionId, users):
+                case let .paymentReceiptStars(paymentReceiptStarsData):
+                    let (date, botId, title, description, photo, invoice, currency, totalAmount, transactionId, users) = (paymentReceiptStarsData.date, paymentReceiptStarsData.botId, paymentReceiptStarsData.title, paymentReceiptStarsData.description, paymentReceiptStarsData.photo, paymentReceiptStarsData.invoice, paymentReceiptStarsData.currency, paymentReceiptStarsData.totalAmount, paymentReceiptStarsData.transactionId, paymentReceiptStarsData.users)
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: [], users: users)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                    
+
                     let parsedInvoice = BotPaymentInvoice(apiInvoice: invoice)
-                    
+
                     let invoiceMedia = TelegramMediaInvoice(
                         title: title,
                         description: description,
@@ -935,7 +943,7 @@ func _internal_requestBotPaymentReceipt(account: Account, messageId: MessageId) 
                         flags: [],
                         version: TelegramMediaInvoice.lastVersion
                     )
-                    
+
                     let botPaymentId = PeerId.init(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(botId))
                     return BotPaymentReceipt(invoice: parsedInvoice, date: date, info: nil, shippingOption: nil, credentialsTitle: "", invoiceMedia: invoiceMedia, tipAmount: nil, botPaymentId: botPaymentId, transactionId: transactionId)
                 }

@@ -58,7 +58,8 @@ func updatedRemoteStickerPack(postbox: Postbox, network: Network, reference: Sti
             switch result {
             case .stickerSetNotModified:
                 return .complete()
-            case let .stickerSet(set, packs, keywords, documents):
+            case let .stickerSet(stickerSetData):
+                let (set, packs, keywords, documents) = (stickerSetData.set, stickerSetData.packs, stickerSetData.keywords, stickerSetData.documents)
                 let namespace: ItemCollectionId.Namespace
                 switch set {
                     case let .stickerSet(stickerSetData):

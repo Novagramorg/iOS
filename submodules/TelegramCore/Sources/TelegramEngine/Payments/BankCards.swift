@@ -51,7 +51,8 @@ extension BankCardUrl {
 extension BankCardInfo {
     init(apiBankCardData: Api.payments.BankCardData) {
         switch apiBankCardData {
-            case let .bankCardData(title, urls):
+            case let .bankCardData(bankCardDataData):
+                let (title, urls) = (bankCardDataData.title, bankCardDataData.openUrls)
                 self.title = title
                 self.urls = urls.map { BankCardUrl(apiBankCardOpenUrl: $0) }
         }

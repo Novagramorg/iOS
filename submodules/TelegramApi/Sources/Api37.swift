@@ -1,7 +1,67 @@
 public extension Api.payments {
     enum PaymentReceipt: TypeConstructorDescription {
-        case paymentReceipt(flags: Int32, date: Int32, botId: Int64, providerId: Int64, title: String, description: String, photo: Api.WebDocument?, invoice: Api.Invoice, info: Api.PaymentRequestedInfo?, shipping: Api.ShippingOption?, tipAmount: Int64?, currency: String, totalAmount: Int64, credentialsTitle: String, users: [Api.User])
-        case paymentReceiptStars(flags: Int32, date: Int32, botId: Int64, title: String, description: String, photo: Api.WebDocument?, invoice: Api.Invoice, currency: String, totalAmount: Int64, transactionId: String, users: [Api.User])
+        public class Cons_paymentReceipt {
+            public var flags: Int32
+            public var date: Int32
+            public var botId: Int64
+            public var providerId: Int64
+            public var title: String
+            public var description: String
+            public var photo: Api.WebDocument?
+            public var invoice: Api.Invoice
+            public var info: Api.PaymentRequestedInfo?
+            public var shipping: Api.ShippingOption?
+            public var tipAmount: Int64?
+            public var currency: String
+            public var totalAmount: Int64
+            public var credentialsTitle: String
+            public var users: [Api.User]
+            public init(flags: Int32, date: Int32, botId: Int64, providerId: Int64, title: String, description: String, photo: Api.WebDocument?, invoice: Api.Invoice, info: Api.PaymentRequestedInfo?, shipping: Api.ShippingOption?, tipAmount: Int64?, currency: String, totalAmount: Int64, credentialsTitle: String, users: [Api.User]) {
+                self.flags = flags
+                self.date = date
+                self.botId = botId
+                self.providerId = providerId
+                self.title = title
+                self.description = description
+                self.photo = photo
+                self.invoice = invoice
+                self.info = info
+                self.shipping = shipping
+                self.tipAmount = tipAmount
+                self.currency = currency
+                self.totalAmount = totalAmount
+                self.credentialsTitle = credentialsTitle
+                self.users = users
+            }
+        }
+        public class Cons_paymentReceiptStars {
+            public var flags: Int32
+            public var date: Int32
+            public var botId: Int64
+            public var title: String
+            public var description: String
+            public var photo: Api.WebDocument?
+            public var invoice: Api.Invoice
+            public var currency: String
+            public var totalAmount: Int64
+            public var transactionId: String
+            public var users: [Api.User]
+            public init(flags: Int32, date: Int32, botId: Int64, title: String, description: String, photo: Api.WebDocument?, invoice: Api.Invoice, currency: String, totalAmount: Int64, transactionId: String, users: [Api.User]) {
+                self.flags = flags
+                self.date = date
+                self.botId = botId
+                self.title = title
+                self.description = description
+                self.photo = photo
+                self.invoice = invoice
+                self.currency = currency
+                self.totalAmount = totalAmount
+                self.transactionId = transactionId
+                self.users = users
+            }
+        }
+        case paymentReceipt(Cons_paymentReceipt)
+        case paymentReceiptStars(Cons_paymentReceiptStars)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

@@ -116,13 +116,14 @@ public final class SparseMessageList {
                     return account.network.request(Api.functions.messages.getSearchResultsPositions(flags: 0, peer: inputPeer, savedPeerId: nil, filter: messageFilter, offsetId: 0, limit: 1000))
                     |> map { result -> SparseItems in
                         switch result {
-                        case let .searchResultsPositions(totalCount, positions):
+                        case let .searchResultsPositions(searchResultsPositionsData):
+                            let (totalCount, apiPositions) = (searchResultsPositionsData.count, searchResultsPositionsData.positions)
                             struct Position: Equatable {
                                 var id: Int32
                                 var date: Int32
                                 var offset: Int
                             }
-                            var positions: [Position] = positions.map { position -> Position in
+                            var positions: [Position] = apiPositions.map { position -> Position in
                                 switch position {
                                 case let .searchResultPosition(searchResultPositionData):
                                     let (id, date, offset) = (searchResultPositionData.msgId, searchResultPositionData.date, searchResultPositionData.offset)
@@ -837,7 +838,8 @@ public final class SparseMessageCalendar {
                         }
 
                         switch result {
-                        case let .searchResultsCalendar(_, _, minDate, minMsgId, _, periods, messages, chats, users):
+                        case let .searchResultsCalendar(searchResultsCalendarData):
+                            let (minDate, minMsgId, periods, messages, chats, users) = (searchResultsCalendarData.minDate, searchResultsCalendarData.minMsgId, searchResultsCalendarData.periods, searchResultsCalendarData.messages, searchResultsCalendarData.chats, searchResultsCalendarData.users)
                             var parsedMessages: [StoreMessage] = []
                             
                             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)

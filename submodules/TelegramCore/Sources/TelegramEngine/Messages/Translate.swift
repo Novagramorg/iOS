@@ -38,7 +38,8 @@ func _internal_translate(network: Network, text: String, toLang: String, entitie
     }
     |> mapToSignal { result -> Signal<(String, [MessageTextEntity])?, TranslationError> in
         switch result {
-        case let .translateResult(results):
+        case let .translateResult(translateResultData):
+            let results = translateResultData.result
             if case let .textWithEntities(textWithEntitiesData) = results.first {
                 let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                 return .single((text, messageTextEntitiesFromApiEntities(entities)))
@@ -77,7 +78,8 @@ func _internal_translateTexts(network: Network, texts: [(String, [MessageTextEnt
     |> mapToSignal { result -> Signal<[(String, [MessageTextEntity])], TranslationError> in
         var texts: [(String, [MessageTextEntity])] = []
         switch result {
-        case let .translateResult(results):
+        case let .translateResult(translateResultData):
+            let results = translateResultData.result
             for result in results {
                 if case let .textWithEntities(textWithEntitiesData) = result {
                     let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
@@ -185,7 +187,7 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
                                 result.append(.textWithEntities(.init(text: "", entities: [])))
                             }
                         }
-                        return .single(.translateResult(result: result))
+                        return .single(.translateResult(.init(result: result)))
                     }
                 }
             } else {
@@ -212,7 +214,8 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
         return combineLatest(msgs, combineLatest(pollSignals), combineLatest(audioTranscriptionsSignals))
         |> mapToSignal { (result, pollResults, audioTranscriptionsResults) -> Signal<Void, TranslationError> in
             return account.postbox.transaction { transaction in
-                if case let .translateResult(results) = result {
+                if case let .translateResult(translateResultData) = result {
+                    let results = translateResultData.result
                     var index = 0
                     for result in results {
                         let messageId = messageIds[index]
