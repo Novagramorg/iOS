@@ -127,8 +127,9 @@ private func _internal_getStarGiftCollections(postbox: Postbox, network: Network
                 }
                 return postbox.transaction { transaction -> [StarGiftCollection]? in
                     switch result {
-                    case let .starGiftCollections(collections):
-                        let collections = collections.compactMap { StarGiftCollection(apiStarGiftCollection: $0) }
+                    case let .starGiftCollections(starGiftCollectionsData):
+                        let apiCollections = starGiftCollectionsData.collections
+                        let collections = apiCollections.compactMap { StarGiftCollection(apiStarGiftCollection: $0) }
                         return collections
                     case .starGiftCollectionsNotModified:
                         return cachedCollections ?? []

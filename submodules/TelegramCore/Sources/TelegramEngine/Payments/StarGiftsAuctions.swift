@@ -30,7 +30,8 @@ private func _internal_getStarGiftAuctionState(postbox: Postbox, network: Networ
         }
         return postbox.transaction { transaction -> (gift: StarGift, state: GiftAuctionContext.State.AuctionState?, myState: GiftAuctionContext.State.MyState, timeout: Int32)? in
             switch result {
-            case let .starGiftAuctionState(apiGift, state, userState, timeout, users, chats):
+            case let .starGiftAuctionState(starGiftAuctionStateData):
+                let (apiGift, state, userState, timeout, users, chats) = (starGiftAuctionStateData.gift, starGiftAuctionStateData.state, starGiftAuctionStateData.userState, starGiftAuctionStateData.timeout, starGiftAuctionStateData.users, starGiftAuctionStateData.chats)
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(chats: chats, users: users))
                 guard let gift = StarGift(apiStarGift: apiGift) else {
                     return nil
@@ -392,7 +393,8 @@ func _internal_getGiftAuctionAcquiredGifts(account: Account, giftId: Int64) -> S
         }
         return account.postbox.transaction { transaction -> [GiftAuctionAcquiredGift] in
             switch result {
-            case let .starGiftAuctionAcquiredGifts(gifts, users, chats):
+            case let .starGiftAuctionAcquiredGifts(starGiftAuctionAcquiredGiftsData):
+                let (gifts, users, chats) = (starGiftAuctionAcquiredGiftsData.gifts, starGiftAuctionAcquiredGiftsData.users, starGiftAuctionAcquiredGiftsData.chats)
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                 updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
                 
@@ -438,7 +440,8 @@ func _internal_getActiveGiftAuctions(account: Account, hash: Int64) -> Signal<[G
     |> mapToSignal { result in
         return account.postbox.transaction { transaction -> [GiftAuctionContext]? in
             switch result {
-            case let .starGiftActiveAuctions(auctions, users, chats):
+            case let .starGiftActiveAuctions(starGiftActiveAuctionsData):
+                let (auctions, users, chats) = (starGiftActiveAuctionsData.auctions, starGiftActiveAuctionsData.users, starGiftActiveAuctionsData.chats)
                 let parsedPeers = AccumulatedPeers(chats: chats, users: users)
                 updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
                 

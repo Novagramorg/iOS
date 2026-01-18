@@ -688,7 +688,8 @@ func _internal_validateBotPaymentForm(account: Account, saveInfo: Bool, source: 
         }
         |> map { result -> BotPaymentValidatedFormInfo in
             switch result {
-                case let .validatedRequestedInfo(_, id, shippingOptions):
+                case let .validatedRequestedInfo(validatedRequestedInfoData):
+                    let (id, shippingOptions) = (validatedRequestedInfoData.id, validatedRequestedInfoData.shippingOptions)
                     return BotPaymentValidatedFormInfo(id: id, shippingOptions: shippingOptions.flatMap {
                         return $0.map(BotPaymentShippingOption.init)
                     })
@@ -756,7 +757,8 @@ func _internal_sendBotPaymentForm(account: Account, formId: Int64, source: BotPa
         return account.network.request(Api.functions.payments.sendPaymentForm(flags: flags, formId: formId, invoice: invoice, requestedInfoId: validatedInfoId, shippingOptionId: shippingOptionId, credentials: apiCredentials, tipAmount: tipAmount))
         |> map { result -> SendBotPaymentResult in
             switch result {
-                case let .paymentResult(updates):
+                case let .paymentResult(paymentResultData):
+                    let updates = paymentResultData.updates
                     account.stateManager.addUpdates(updates)
                     var receiptMessageId: MessageId?
                 
@@ -815,7 +817,8 @@ func _internal_sendBotPaymentForm(account: Account, formId: Int64, source: BotPa
                         }
                     }
                     return .done(receiptMessageId: receiptMessageId, subscriptionPeerId: nil, uniqueStarGift: nil)
-                case let .paymentVerificationNeeded(url):
+                case let .paymentVerificationNeeded(paymentVerificationNeededData):
+                    let url = paymentVerificationNeededData.url
                     return .externalVerificationRequired(url: url)
             }
         }
