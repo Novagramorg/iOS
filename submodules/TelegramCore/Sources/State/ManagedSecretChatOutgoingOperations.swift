@@ -1783,9 +1783,11 @@ private func sendMessage(auxiliaryMethods: AccountAuxiliaryMethods, postbox: Pos
                             var encryptedFile: SecretChatFileReference?
                             if case let .message(result) = result {
                                 switch result {
-                                    case let .sentEncryptedMessage(date):
+                                    case let .sentEncryptedMessage(sentEncryptedMessageData):
+                                        let date = sentEncryptedMessageData.date
                                         timestamp = date
-                                    case let .sentEncryptedFile(date, file):
+                                    case let .sentEncryptedFile(sentEncryptedFileData):
+                                        let (date, file) = (sentEncryptedFileData.date, sentEncryptedFileData.file)
                                         timestamp = date
                                         encryptedFile = SecretChatFileReference(file)
                                 }
@@ -1928,9 +1930,11 @@ private func sendStandaloneMessage(auxiliaryMethods: AccountAuxiliaryMethods, po
                     var encryptedFile: SecretChatFileReference?
                     if case let .message(result) = result {
                         switch result {
-                        case let .sentEncryptedMessage(date):
+                        case let .sentEncryptedMessage(sentEncryptedMessageData):
+                            let date = sentEncryptedMessageData.date
                             timestamp = date
-                        case let .sentEncryptedFile(date, file):
+                        case let .sentEncryptedFile(sentEncryptedFileData):
+                            let (date, file) = (sentEncryptedFileData.date, sentEncryptedFileData.file)
                             timestamp = date
                             encryptedFile = SecretChatFileReference(file)
                         }
@@ -2048,9 +2052,11 @@ private func sendServiceActionMessage(postbox: Postbox, network: Network, peerId
                             var timestamp = currentMessage.timestamp
                             if case let .message(result) = result {
                                 switch result {
-                                    case let .sentEncryptedMessage(date):
+                                    case let .sentEncryptedMessage(sentEncryptedMessageData):
+                                        let date = sentEncryptedMessageData.date
                                         timestamp = date
-                                    case let .sentEncryptedFile(date, _):
+                                    case let .sentEncryptedFile(sentEncryptedFileData):
+                                        let date = sentEncryptedFileData.date
                                         timestamp = date
                                 }
                                 flags.remove(.Unsent)

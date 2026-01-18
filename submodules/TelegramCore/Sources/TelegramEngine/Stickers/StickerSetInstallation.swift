@@ -80,7 +80,8 @@ func _internal_requestStickerSet(postbox: Postbox, network: Network, reference: 
         switch result {
             case .stickerSetNotModified:
                 return .complete()
-            case let .stickerSet(set, packs, keywords, documents):
+            case let .stickerSet(stickerSetData):
+                let (set, packs, keywords, documents) = (stickerSetData.set, stickerSetData.packs, stickerSetData.keywords, stickerSetData.documents)
                 info = StickerPackCollectionInfo(apiSet: set, namespace: Namespaces.ItemCollection.CloudStickerPacks)
                 
                 switch set {
@@ -181,7 +182,8 @@ func _internal_installStickerSetInteractively(account: Account, info: StickerPac
         switch result {
         case .stickerSetInstallResultSuccess:
             addResult = .successful
-        case let .stickerSetInstallResultArchive(sets: archived):
+        case let .stickerSetInstallResultArchive(stickerSetInstallResultArchiveData):
+            let archived = stickerSetInstallResultArchiveData.sets
             var coveredSets: [CoveredStickerSet] = []
             for archived in archived {
                 let apiDocuments:[Api.Document]

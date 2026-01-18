@@ -82,7 +82,8 @@ func resolveMissingStickerSets(network: Network, postbox: Postbox, stickerSets: 
                 |> map { result -> (Int, Api.StickerSetCovered)? in
                     if let result = result {
                         switch result {
-                        case let .stickerSet(set, packs, keywords, documents):
+                        case let .stickerSet(stickerSetData):
+                            let (set, packs, keywords, documents) = (stickerSetData.set, stickerSetData.packs, stickerSetData.keywords, stickerSetData.documents)
                             return (i, Api.StickerSetCovered.stickerSetFullCovered(.init(set: set, packs: packs, keywords: keywords, documents: documents)))
                         case .stickerSetNotModified:
                             return nil
@@ -109,7 +110,8 @@ func resolveMissingStickerSets(network: Network, postbox: Postbox, stickerSets: 
                 |> map { result -> (Int, Api.StickerSetCovered)? in
                     if let result = result {
                         switch result {
-                        case let .stickerSet(set, packs, keywords, documents):
+                        case let .stickerSet(stickerSetData):
+                            let (set, packs, keywords, documents) = (stickerSetData.set, stickerSetData.packs, stickerSetData.keywords, stickerSetData.documents)
                             return (i, Api.StickerSetCovered.stickerSetFullCovered(.init(set: set, packs: packs, keywords: keywords, documents: documents)))
                         case .stickerSetNotModified:
                             return nil

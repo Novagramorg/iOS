@@ -285,7 +285,8 @@ private final class PollResultsOptionContext {
                             return ([], 0, nil)
                         }
                         switch result {
-                        case let .votesList(_, count, votes, chats, users, nextOffset):
+                        case let .votesList(votesListData):
+                            let (count, votes, chats, users, nextOffset) = (votesListData.count, votesListData.votes, votesListData.chats, votesListData.users, votesListData.nextOffset)
                             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                             var resultPeers: [RenderedPeer] = []

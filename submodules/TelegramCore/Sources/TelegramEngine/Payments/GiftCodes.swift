@@ -114,7 +114,8 @@ func _internal_getPremiumGiveawayInfo(account: Account, peerId: EnginePeer.Id, m
         |> map { result -> PremiumGiveawayInfo? in
             if let result = result {
                 switch result {
-                case let .giveawayInfo(flags, startDate, joinedTooEarlyDate, adminDisallowedChatId, disallowedCountry):
+                case let .giveawayInfo(giveawayInfoData):
+                    let (flags, startDate, joinedTooEarlyDate, adminDisallowedChatId, disallowedCountry) = (giveawayInfoData.flags, giveawayInfoData.startDate, giveawayInfoData.joinedTooEarlyDate, giveawayInfoData.adminDisallowedChatId, giveawayInfoData.disallowedCountry)
                     if (flags & (1 << 3)) != 0 {
                         return .ongoing(startDate: startDate, status: .almostOver)
                     } else if (flags & (1 << 0)) != 0 {
@@ -128,7 +129,8 @@ func _internal_getPremiumGiveawayInfo(account: Account, peerId: EnginePeer.Id, m
                     } else {
                         return .ongoing(startDate: startDate, status: .notQualified)
                     }
-                case let .giveawayInfoResults(flags, startDate, giftCodeSlug, stars, finishDate, winnersCount, activatedCount):
+                case let .giveawayInfoResults(giveawayInfoResultsData):
+                    let (flags, startDate, giftCodeSlug, stars, finishDate, winnersCount, activatedCount) = (giveawayInfoResultsData.flags, giveawayInfoResultsData.startDate, giveawayInfoResultsData.giftCodeSlug, giveawayInfoResultsData.starsPrize, giveawayInfoResultsData.finishDate, giveawayInfoResultsData.winnersCount, giveawayInfoResultsData.activatedCount)
                     let status: PremiumGiveawayInfo.ResultStatus
                     if (flags & (1 << 1)) != 0 {
                         status = .refunded
@@ -270,7 +272,8 @@ func _internal_checkPremiumGiftCode(account: Account, slug: String) -> Signal<Pr
     |> mapToSignal { result -> Signal<PremiumGiftCodeInfo?, NoError> in
         if let result = result {
             switch result {
-            case let .checkedGiftCode(_, _, _, _, _, _, _, chats, users):
+            case let .checkedGiftCode(checkedGiftCodeData):
+                let (chats, users) = (checkedGiftCodeData.chats, checkedGiftCodeData.users)
                 return account.postbox.transaction { transaction in
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
@@ -380,7 +383,8 @@ extension PremiumGiftCodeOption {
 extension PremiumGiftCodeInfo {
     init(apiCheckedGiftCode: Api.payments.CheckedGiftCode, slug: String) {
         switch apiCheckedGiftCode {
-        case let .checkedGiftCode(flags, fromId, giveawayMsgId, toId, date, months, usedDate, _, _):
+        case let .checkedGiftCode(checkedGiftCodeData):
+            let (flags, fromId, giveawayMsgId, toId, date, months, usedDate) = (checkedGiftCodeData.flags, checkedGiftCodeData.fromId, checkedGiftCodeData.giveawayMsgId, checkedGiftCodeData.toId, checkedGiftCodeData.date, checkedGiftCodeData.days, checkedGiftCodeData.usedDate)
             self.slug = slug
             self.fromPeerId = fromId?.peerId
             if let fromId = fromId, let giveawayMsgId = giveawayMsgId {

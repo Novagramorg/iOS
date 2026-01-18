@@ -157,7 +157,7 @@ public func webpagePreviewWithProgress(account: Account, urls: [String], webpage
             
             return account.network.requestWithAdditionalInfo(Api.functions.messages.getWebPagePreview(flags: 0, message: urls.joined(separator: " "), entities: nil), info: .progress)
             |> `catch` { _ -> Signal<NetworkRequestResult<Api.messages.WebPagePreview>, NoError> in
-                return .single(.result(.webPagePreview(media: .messageMediaEmpty, chats: [], users: [])))
+                return .single(.result(.webPagePreview(.init(media: .messageMediaEmpty, chats: [], users: []))))
             }
             |> mapToSignal { result -> Signal<WebpagePreviewWithProgressResult, NoError> in
                 switch result {
@@ -170,13 +170,14 @@ public func webpagePreviewWithProgress(account: Account, urls: [String], webpage
                         return .complete()
                     }
                 case let .result(result):
-                    if case let .webPagePreview(result, _, _) = result, let preCachedResources = result.preCachedResources {
+                    if case let .webPagePreview(webPagePreviewData) = result, let preCachedResources = webPagePreviewData.media.preCachedResources {
                         for (resource, data) in preCachedResources {
                             account.postbox.mediaBox.storeResourceData(resource.id, data: data)
                         }
                     }
                     switch result {
-                    case let .webPagePreview(media, chats, users):
+                    case let .webPagePreview(webPagePreviewData):
+                        let (media, chats, users) = (webPagePreviewData.media, webPagePreviewData.chats, webPagePreviewData.users)
                         switch media {
                         case let .messageMediaWebPage(messageMediaWebPageData):
                             let webpage = messageMediaWebPageData.webpage
@@ -228,7 +229,8 @@ public func actualizedWebpage(account: Account, webpage: TelegramMediaWebpage) -
             if let result = result {
                 return account.postbox.transaction { transaction -> Signal<TelegramMediaWebpage, NoError> in
                     switch result {
-                    case let .webPage(apiWebpage, chats, users):
+                    case let .webPage(webPageData):
+                        let (apiWebpage, chats, users) = (webPageData.webpage, webPageData.chats, webPageData.users)
                         let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                         updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
 
@@ -281,7 +283,8 @@ public func updatedRemoteWebpage(postbox: Postbox, network: Network, accountPeer
             return .single(nil)
         }
         |> mapToSignal { result -> Signal<TelegramMediaWebpage?, NoError> in
-            if let result = result, case let .webPage(webpage, chats, users) = result, let updatedWebpage = telegramMediaWebpageFromApiWebpage(webpage), case .Loaded = updatedWebpage.content {
+            if let result = result, case let .webPage(webPageData) = result, let updatedWebpage = telegramMediaWebpageFromApiWebpage(webPageData.webpage), case .Loaded = updatedWebpage.content {
+                let (chats, users) = (webPageData.chats, webPageData.users)
                 if updatedWebpage.webpageId.id == id {
                     return postbox.transaction { transaction -> TelegramMediaWebpage? in
                         let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)

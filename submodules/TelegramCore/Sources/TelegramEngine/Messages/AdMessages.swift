@@ -510,7 +510,8 @@ private class AdMessagesHistoryContextImpl {
 
                 return account.postbox.transaction { transaction -> (interPostInterval: Int32?, startDelay: Int32?, betweenDelay: Int32?, messages: [Message]) in
                     switch result {
-                    case let .sponsoredMessages(_, postsBetween, startDelay, betweenDelay, messages, chats, users):
+                    case let .sponsoredMessages(sponsoredMessagesData):
+                        let (postsBetween, startDelay, betweenDelay, messages, chats, users) = (sponsoredMessagesData.postsBetween, sponsoredMessagesData.startDelay, sponsoredMessagesData.betweenDelay, sponsoredMessagesData.messages, sponsoredMessagesData.chats, sponsoredMessagesData.users)
                         let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
 

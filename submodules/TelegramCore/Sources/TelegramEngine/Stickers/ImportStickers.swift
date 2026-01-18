@@ -603,7 +603,8 @@ private func parseStickerSetInfoAndItems(apiStickerSet: Api.messages.StickerSet)
     switch apiStickerSet {
     case .stickerSetNotModified:
         return nil
-    case let .stickerSet(set, packs, keywords, documents):
+    case let .stickerSet(stickerSetData):
+        let (set, packs, keywords, documents) = (stickerSetData.set, stickerSetData.packs, stickerSetData.keywords, stickerSetData.documents)
         let namespace: ItemCollectionId.Namespace
         switch set {
             case let .stickerSet(stickerSetData):

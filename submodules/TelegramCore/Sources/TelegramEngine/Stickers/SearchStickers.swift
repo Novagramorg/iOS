@@ -395,7 +395,8 @@ func _internal_searchStickers(account: Account, query: String?, emoticon: [Strin
             |> mapToSignal { result -> Signal<(items: [FoundStickerItem], isFinalResult: Bool), NoError> in
                 return account.postbox.transaction { transaction -> (items: [FoundStickerItem], isFinalResult: Bool) in
                     switch result {
-                        case let .stickers(hash, stickers):
+                        case let .stickers(stickersData):
+                            let (hash, stickers) = (stickersData.hash, stickersData.stickers)
                             var result: [FoundStickerItem] = []
                             let currentItemIds = Set<MediaId>(localItems.map { $0.file.fileId })
                             
@@ -785,13 +786,14 @@ func _internal_searchStickers(account: Account, category: EmojiSearchCategories.
         |> mapToSignal { result -> Signal<(items: [FoundStickerItem], isFinalResult: Bool), NoError> in
             return account.postbox.transaction { transaction -> (items: [FoundStickerItem], isFinalResult: Bool) in
                 switch result {
-                    case let .stickers(hash, stickers):
+                    case let .stickers(stickersData):
+                        let (hash, stickers) = (stickersData.hash, stickersData.stickers)
                         var result: [FoundStickerItem] = []
                         let currentItemIds = Set<MediaId>(localItems.map { $0.file.fileId })
-                        
+
                         var premiumItems: [FoundStickerItem] = []
                         var otherItems: [FoundStickerItem] = []
-                        
+
                         for item in localItems {
                             if item.file.isPremiumSticker {
                                 premiumItems.append(item)
@@ -799,11 +801,11 @@ func _internal_searchStickers(account: Account, category: EmojiSearchCategories.
                                 otherItems.append(item)
                             }
                         }
-                    
+
                         var foundItems: [FoundStickerItem] = []
                         var foundAnimatedItems: [FoundStickerItem] = []
                         var foundPremiumItems: [FoundStickerItem] = []
-                    
+
                         var files: [TelegramMediaFile] = []
                         for sticker in stickers {
                             if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
@@ -819,10 +821,10 @@ func _internal_searchStickers(account: Account, category: EmojiSearchCategories.
                                 }
                             }
                         }
-                    
+
                         let allPremiumItems = premiumItems + foundPremiumItems
                         let allOtherItems = otherItems + foundAnimatedItems + foundItems
-                        
+
                         if isPremium {
                             let batchCount = Int(searchStickersConfiguration.normalStickersPerPremiumCount)
                             if batchCount == 0 {
@@ -853,12 +855,12 @@ func _internal_searchStickers(account: Account, category: EmojiSearchCategories.
                             result.append(contentsOf: allOtherItems)
                             result.append(contentsOf: allPremiumItems.prefix(max(0, Int(searchStickersConfiguration.premiumStickersCount))))
                         }
-                    
+
                         let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
                         if let entry = CodableEntry(CachedStickerQueryResult(items: files, hash: hash, timestamp: currentTime)) {
                             transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedStickerQueryResults, key: CachedStickerQueryResult.cacheKey(query.joined(separator: ""))), entry: entry)
                         }
-                    
+
                         return (result, true)
                     case .stickersNotModified:
                         break

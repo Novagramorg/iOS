@@ -1169,7 +1169,8 @@ fileprivate func  _internal_requestConnectedStarRefBots(account: Account, id: En
             }
             return account.postbox.transaction { transaction -> (items: [EngineConnectedStarRefBotsContext.Item], totalCount: Int, nextOffset: (timestamp: Int32, link: String)?)? in
                 switch result {
-                case let .connectedStarRefBots(count, connectedBots, users):
+                case let .connectedStarRefBots(connectedStarRefBotsData):
+                    let (count, connectedBots, users) = (connectedStarRefBotsData.count, connectedStarRefBotsData.connectedBots, connectedStarRefBotsData.users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(users: users))
                     
                     var items: [EngineConnectedStarRefBotsContext.Item] = []
@@ -1284,9 +1285,10 @@ func _internal_connectStarRefBot(account: Account, id: EnginePeer.Id, botId: Eng
         |> mapToSignal { result -> Signal<EngineConnectedStarRefBotsContext.Item, ConnectStarRefBotError> in
             return account.postbox.transaction { transaction -> EngineConnectedStarRefBotsContext.Item? in
                 switch result {
-                case let .connectedStarRefBots(_, connectedBots, users):
+                case let .connectedStarRefBots(connectedStarRefBotsData):
+                    let (connectedBots, users) = (connectedStarRefBotsData.connectedBots, connectedStarRefBotsData.users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(users: users))
-                    
+
                     if let bot = connectedBots.first {
                         switch bot {
                         case let .connectedBotStarRef(connectedBotStarRefData):
@@ -1340,9 +1342,10 @@ fileprivate func _internal_removeConnectedStarRefBot(account: Account, id: Engin
         |> mapToSignal { result -> Signal<Never, ConnectStarRefBotError> in
             return account.postbox.transaction { transaction -> Void in
                 switch result {
-                case let .connectedStarRefBots(_, connectedBots, users):
+                case let .connectedStarRefBots(connectedStarRefBotsData):
+                    let (connectedBots, users) = (connectedStarRefBotsData.connectedBots, connectedStarRefBotsData.users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(users: users))
-                    
+
                     let _ = connectedBots
                 }
                 
@@ -1376,9 +1379,10 @@ func _internal_getStarRefBotConnection(account: Account, id: EnginePeer.Id, targ
             }
             return account.postbox.transaction { transaction -> EngineConnectedStarRefBotsContext.Item? in
                 switch result {
-                case let .connectedStarRefBots(_, connectedBots, users):
+                case let .connectedStarRefBots(connectedStarRefBotsData):
+                    let (connectedBots, users) = (connectedStarRefBotsData.connectedBots, connectedStarRefBotsData.users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(users: users))
-                    
+
                     if let bot = connectedBots.first {
                         switch bot {
                         case let .connectedBotStarRef(connectedBotStarRefData):
