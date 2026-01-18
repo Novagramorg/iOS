@@ -31,7 +31,8 @@ extension AutodownloadPresetSettings {
 extension AutodownloadSettings {
     init(apiAutodownloadSettings: Api.account.AutoDownloadSettings) {
         switch apiAutodownloadSettings {
-            case let .autoDownloadSettings(low, medium, high):
+            case let .autoDownloadSettings(autoDownloadSettingsData):
+                let (low, medium, high) = (autoDownloadSettingsData.low, autoDownloadSettingsData.medium, autoDownloadSettingsData.high)
                 self.init(lowPreset: AutodownloadPresetSettings(apiAutodownloadSettings: low), mediumPreset: AutodownloadPresetSettings(apiAutodownloadSettings: medium), highPreset: AutodownloadPresetSettings(apiAutodownloadSettings: high))
         }
     }

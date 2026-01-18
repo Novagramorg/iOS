@@ -266,7 +266,8 @@ public func requestSecureIdForm(accountPeerId: PeerId, postbox: Postbox, network
     |> mapToSignal { result -> Signal<EncryptedSecureIdForm, RequestSecureIdFormError> in
         return postbox.transaction { transaction -> EncryptedSecureIdForm in
             switch result {
-                case let .authorizationForm(_, requiredTypes, values, errors, users, termsUrl):
+                case let .authorizationForm(authorizationFormData):
+                    let (_, requiredTypes, values, errors, users, termsUrl) = (authorizationFormData.flags, authorizationFormData.requiredTypes, authorizationFormData.values, authorizationFormData.errors, authorizationFormData.users, authorizationFormData.privacyPolicyUrl)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
                     
                     return EncryptedSecureIdForm(peerId: peerId, requestedFields: requiredTypes.map { requiredType in

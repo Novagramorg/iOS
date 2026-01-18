@@ -437,10 +437,11 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                 case let .channelAdminLogEventActionChangeWallpaper(channelAdminLogEventActionChangeWallpaperData):
                                     let (prevValue, newValue) = (channelAdminLogEventActionChangeWallpaperData.prevValue, channelAdminLogEventActionChangeWallpaperData.newValue)
                                     let prev: TelegramWallpaper?
-                                    if case let .wallPaperNoFile(_, _, settings) = prevValue {
+                                    if case let .wallPaperNoFile(wallPaperNoFileData) = prevValue {
+                                        let (_, _, settings) = (wallPaperNoFileData.id, wallPaperNoFileData.flags, wallPaperNoFileData.settings)
                                         if settings == nil {
                                             prev = nil
-                                        } else if case let .wallPaperSettings(flags, _, _, _, _, _, _, _) = settings, flags == 0 {
+                                        } else if case let .wallPaperSettings(wallPaperSettingsData) = settings, wallPaperSettingsData.flags == 0 {
                                             prev = nil
                                         } else {
                                             prev = TelegramWallpaper(apiWallpaper: prevValue)
@@ -449,10 +450,11 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
                                         prev = TelegramWallpaper(apiWallpaper: prevValue)
                                     }
                                     let new: TelegramWallpaper?
-                                    if case let .wallPaperNoFile(_, _, settings) = newValue {
+                                    if case let .wallPaperNoFile(wallPaperNoFileData) = newValue {
+                                        let (_, _, settings) = (wallPaperNoFileData.id, wallPaperNoFileData.flags, wallPaperNoFileData.settings)
                                         if settings == nil {
                                             new = nil
-                                        } else if case let .wallPaperSettings(flags, _, _, _, _, _, _, _) = settings, flags == 0 {
+                                        } else if case let .wallPaperSettings(wallPaperSettingsData) = settings, wallPaperSettingsData.flags == 0 {
                                             new = nil
                                         } else {
                                             new = TelegramWallpaper(apiWallpaper: newValue)

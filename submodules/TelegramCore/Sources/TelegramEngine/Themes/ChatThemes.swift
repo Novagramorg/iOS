@@ -565,7 +565,8 @@ public final class UniqueGiftChatThemesContext {
             }
             return postbox.transaction { transaction -> ([ChatTheme], String?) in
                 switch result {
-                case let .chatThemes(_, _, themes, chats, users, nextOffset):
+                case let .chatThemes(chatThemesData):
+                    let (themes, chats, users, nextOffset) = (chatThemesData.themes, chatThemesData.chats, chatThemesData.users, chatThemesData.nextOffset)
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                     return (themes.compactMap { ChatTheme(apiChatTheme: $0) }, nextOffset)

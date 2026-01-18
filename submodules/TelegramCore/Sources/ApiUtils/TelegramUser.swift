@@ -5,7 +5,8 @@ import TelegramApi
 func parsedTelegramProfilePhoto(_ photo: Api.UserProfilePhoto) -> [TelegramMediaImageRepresentation] {
     var representations: [TelegramMediaImageRepresentation] = []
     switch photo {
-        case let .userProfilePhoto(flags, id, strippedThumb, dcId):
+        case let .userProfilePhoto(userProfilePhotoData):
+            let (flags, id, strippedThumb, dcId) = (userProfilePhotoData.flags, userProfilePhotoData.photoId, userProfilePhotoData.strippedThumb, userProfilePhotoData.dcId)
             let hasVideo = (flags & (1 << 0)) != 0
             let isPersonal = (flags & (1 << 2)) != 0
             
@@ -26,7 +27,8 @@ func parsedTelegramProfilePhoto(_ photo: Api.UserProfilePhoto) -> [TelegramMedia
 extension TelegramPeerUsername {
     init(apiUsername: Api.Username) {
         switch apiUsername {
-        case let .username(flags, username):
+        case let .username(usernameData):
+            let (flags, username) = (usernameData.flags, usernameData.username)
             self.init(flags: Flags(rawValue: flags), username: username)
         }
     }

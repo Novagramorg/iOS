@@ -67,7 +67,8 @@ extension Api.MessageMedia {
                 let webpage = messageMediaWebPageData.webpage
                 var result: [(MediaResource, Data)]?
                 switch webpage {
-                    case let .webPage(_, _, _, _, _, _, _, _, _, photo, _, _, _, _, _, _, document, _, _):
+                    case let .webPage(webPageData):
+                        let (photo, document) = (webPageData.photo, webPageData.document)
                         if let photo = photo {
                             if let photoResult = collectPreCachedResources(for: photo) {
                                 if result == nil {

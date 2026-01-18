@@ -999,7 +999,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     if previousState.pts >= pts {
                     } else if previousState.pts + ptsCount == pts {
                         switch apiWebpage {
-                            case let .webPageEmpty(flags, id, url):
+                            case let .webPageEmpty(webPageEmptyData):
+                                let (flags, id, url) = (webPageEmptyData.flags, webPageEmptyData.id, webPageEmptyData.url)
                                 let _ = flags
                                 let _ = url
                                 updatedState.updateMedia(MediaId(namespace: Namespaces.Media.CloudWebpage, id: id), media: nil)
@@ -1256,7 +1257,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 }
             case let .updateWebPage(updateWebPageData):
                 switch updateWebPageData.webpage {
-                    case let .webPageEmpty(flags, id, url):
+                    case let .webPageEmpty(webPageEmptyData):
+                        let (flags, id, url) = (webPageEmptyData.flags, webPageEmptyData.id, webPageEmptyData.url)
                         let _ = flags
                         let _ = url
                         updatedState.updateMedia(MediaId(namespace: Namespaces.Media.CloudWebpage, id: id), media: nil)
@@ -3487,7 +3489,8 @@ private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Netwo
                     case let .updateChannelWebPage(updateChannelWebPageData):
                         let apiWebpage = updateChannelWebPageData.webpage
                         switch apiWebpage {
-                        case let .webPageEmpty(flags, id, url):
+                        case let .webPageEmpty(webPageEmptyData):
+                            let (flags, id, url) = (webPageEmptyData.flags, webPageEmptyData.id, webPageEmptyData.url)
                             let _ = flags
                             let _ = url
                             updatedState.updateMedia(MediaId(namespace: Namespaces.Media.CloudWebpage, id: id), media: nil)
@@ -4803,9 +4806,11 @@ func replayFinalState(
                     if peerId == accountPeerId {
                         if explicit {
                             switch status {
-                                case let .userStatusOnline(timestamp):
+                                case let .userStatusOnline(userStatusOnlineData):
+                                    let timestamp = userStatusOnlineData.expires
                                     delayNotificatonsUntil = timestamp + 30
-                                case let .userStatusOffline(timestamp):
+                                case let .userStatusOffline(userStatusOfflineData):
+                                    let timestamp = userStatusOfflineData.wasOnline
                                     delayNotificatonsUntil = timestamp
                                 default:
                                     break

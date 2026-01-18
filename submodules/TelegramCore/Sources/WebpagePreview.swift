@@ -234,7 +234,7 @@ public func actualizedWebpage(account: Account, webpage: TelegramMediaWebpage) -
 
                         if let updatedWebpage = telegramMediaWebpageFromApiWebpage(apiWebpage), case .Loaded = updatedWebpage.content, updatedWebpage.webpageId == webpage.webpageId {
                             return .single(updatedWebpage)
-                        } else if case let .webPageNotModified(_, viewsValue) = apiWebpage, let views = viewsValue, case let .Loaded(content) = webpage.content {
+                        } else if case let .webPageNotModified(webPageNotModifiedData) = apiWebpage, let views = webPageNotModifiedData.cachedPageViews, case let .Loaded(content) = webpage.content {
                             let updatedContent: TelegramMediaWebpageContent = .Loaded(TelegramMediaWebpageLoadedContent(
                                 url: content.url,
                                 displayUrl: content.displayUrl,
