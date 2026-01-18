@@ -24,7 +24,8 @@ func _internal_importContact(account: Account, firstName: String, lastName: Stri
         return account.postbox.transaction { transaction -> PeerId? in
             if let result = result {
                 switch result {
-                    case let .importedContacts(_, _, _, users):
+                    case let .importedContacts(importedContactsData):
+                        let users = importedContactsData.users
                         if let first = users.first {
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
                             

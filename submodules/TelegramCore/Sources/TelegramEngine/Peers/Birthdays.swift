@@ -118,7 +118,8 @@ func managedContactBirthdays(stateManager: AccountStateManager) -> Signal<Never,
             return .complete()
         }
         return stateManager.postbox.transaction { transaction -> Void in
-            if case let .contactBirthdays(contactBirthdays, users) = result {
+            if case let .contactBirthdays(contactBirthdaysData) = result {
+                let (contactBirthdays, users) = (contactBirthdaysData.contacts, contactBirthdaysData.users)
                 updatePeers(transaction: transaction, accountPeerId: stateManager.accountPeerId, peers: AccumulatedPeers(users: users))
                 
                 var birthdays: [EnginePeer.Id: TelegramBirthday] = [:]

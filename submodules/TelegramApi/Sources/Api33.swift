@@ -1,6 +1,26 @@
 public extension Api.help {
     enum AppUpdate: TypeConstructorDescription {
-        case appUpdate(flags: Int32, id: Int32, version: String, text: String, entities: [Api.MessageEntity], document: Api.Document?, url: String?, sticker: Api.Document?)
+        public class Cons_appUpdate {
+            public var flags: Int32
+            public var id: Int32
+            public var version: String
+            public var text: String
+            public var entities: [Api.MessageEntity]
+            public var document: Api.Document?
+            public var url: String?
+            public var sticker: Api.Document?
+            public init(flags: Int32, id: Int32, version: String, text: String, entities: [Api.MessageEntity], document: Api.Document?, url: String?, sticker: Api.Document?) {
+                self.flags = flags
+                self.id = id
+                self.version = version
+                self.text = text
+                self.entities = entities
+                self.document = document
+                self.url = url
+                self.sticker = sticker
+            }
+        }
+        case appUpdate(Cons_appUpdate)
         case noAppUpdate
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -37,7 +57,15 @@ public extension Api.help {
 }
 public extension Api.help {
     enum CountriesList: TypeConstructorDescription {
-        case countriesList(countries: [Api.help.Country], hash: Int32)
+        public class Cons_countriesList {
+            public var countries: [Api.help.Country]
+            public var hash: Int32
+            public init(countries: [Api.help.Country], hash: Int32) {
+                self.countries = countries
+                self.hash = hash
+            }
+        }
+        case countriesList(Cons_countriesList)
         case countriesListNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -74,7 +102,21 @@ public extension Api.help {
 }
 public extension Api.help {
     enum Country: TypeConstructorDescription {
-        case country(flags: Int32, iso2: String, defaultName: String, name: String?, countryCodes: [Api.help.CountryCode])
+        public class Cons_country {
+            public var flags: Int32
+            public var iso2: String
+            public var defaultName: String
+            public var name: String?
+            public var countryCodes: [Api.help.CountryCode]
+            public init(flags: Int32, iso2: String, defaultName: String, name: String?, countryCodes: [Api.help.CountryCode]) {
+                self.flags = flags
+                self.iso2 = iso2
+                self.defaultName = defaultName
+                self.name = name
+                self.countryCodes = countryCodes
+            }
+        }
+        case country(Cons_country)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -103,7 +145,19 @@ public extension Api.help {
 }
 public extension Api.help {
     enum CountryCode: TypeConstructorDescription {
-        case countryCode(flags: Int32, countryCode: String, prefixes: [String]?, patterns: [String]?)
+        public class Cons_countryCode {
+            public var flags: Int32
+            public var countryCode: String
+            public var prefixes: [String]?
+            public var patterns: [String]?
+            public init(flags: Int32, countryCode: String, prefixes: [String]?, patterns: [String]?) {
+                self.flags = flags
+                self.countryCode = countryCode
+                self.prefixes = prefixes
+                self.patterns = patterns
+            }
+        }
+        case countryCode(Cons_countryCode)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -132,7 +186,17 @@ public extension Api.help {
 }
 public extension Api.help {
     enum DeepLinkInfo: TypeConstructorDescription {
-        case deepLinkInfo(flags: Int32, message: String, entities: [Api.MessageEntity]?)
+        public class Cons_deepLinkInfo {
+            public var flags: Int32
+            public var message: String
+            public var entities: [Api.MessageEntity]?
+            public init(flags: Int32, message: String, entities: [Api.MessageEntity]?) {
+                self.flags = flags
+                self.message = message
+                self.entities = entities
+            }
+        }
+        case deepLinkInfo(Cons_deepLinkInfo)
         case deepLinkInfoEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -169,7 +233,13 @@ public extension Api.help {
 }
 public extension Api.help {
     enum InviteText: TypeConstructorDescription {
-        case inviteText(message: String)
+        public class Cons_inviteText {
+            public var message: String
+            public init(message: String) {
+                self.message = message
+            }
+        }
+        case inviteText(Cons_inviteText)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -198,7 +268,15 @@ public extension Api.help {
 }
 public extension Api.help {
     enum PassportConfig: TypeConstructorDescription {
-        case passportConfig(hash: Int32, countriesLangs: Api.DataJSON)
+        public class Cons_passportConfig {
+            public var hash: Int32
+            public var countriesLangs: Api.DataJSON
+            public init(hash: Int32, countriesLangs: Api.DataJSON) {
+                self.hash = hash
+                self.countriesLangs = countriesLangs
+            }
+        }
+        case passportConfig(Cons_passportConfig)
         case passportConfigNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -235,7 +313,23 @@ public extension Api.help {
 }
 public extension Api.help {
     enum PeerColorOption: TypeConstructorDescription {
-        case peerColorOption(flags: Int32, colorId: Int32, colors: Api.help.PeerColorSet?, darkColors: Api.help.PeerColorSet?, channelMinLevel: Int32?, groupMinLevel: Int32?)
+        public class Cons_peerColorOption {
+            public var flags: Int32
+            public var colorId: Int32
+            public var colors: Api.help.PeerColorSet?
+            public var darkColors: Api.help.PeerColorSet?
+            public var channelMinLevel: Int32?
+            public var groupMinLevel: Int32?
+            public init(flags: Int32, colorId: Int32, colors: Api.help.PeerColorSet?, darkColors: Api.help.PeerColorSet?, channelMinLevel: Int32?, groupMinLevel: Int32?) {
+                self.flags = flags
+                self.colorId = colorId
+                self.colors = colors
+                self.darkColors = darkColors
+                self.channelMinLevel = channelMinLevel
+                self.groupMinLevel = groupMinLevel
+            }
+        }
+        case peerColorOption(Cons_peerColorOption)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -264,8 +358,24 @@ public extension Api.help {
 }
 public extension Api.help {
     enum PeerColorSet: TypeConstructorDescription {
-        case peerColorProfileSet(paletteColors: [Int32], bgColors: [Int32], storyColors: [Int32])
-        case peerColorSet(colors: [Int32])
+        public class Cons_peerColorProfileSet {
+            public var paletteColors: [Int32]
+            public var bgColors: [Int32]
+            public var storyColors: [Int32]
+            public init(paletteColors: [Int32], bgColors: [Int32], storyColors: [Int32]) {
+                self.paletteColors = paletteColors
+                self.bgColors = bgColors
+                self.storyColors = storyColors
+            }
+        }
+        public class Cons_peerColorSet {
+            public var colors: [Int32]
+            public init(colors: [Int32]) {
+                self.colors = colors
+            }
+        }
+        case peerColorProfileSet(Cons_peerColorProfileSet)
+        case peerColorSet(Cons_peerColorSet)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

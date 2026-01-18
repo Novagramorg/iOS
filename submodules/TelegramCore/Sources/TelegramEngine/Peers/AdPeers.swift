@@ -50,7 +50,8 @@ func _internal_searchAdPeers(account: Account, query: String) -> Signal<[AdPeer]
         }
         return account.postbox.transaction { transaction -> [AdPeer] in
             switch result {
-            case let .sponsoredPeers(peers, chats, users):
+            case let .sponsoredPeers(sponsoredPeersData):
+                let (peers, chats, users) = (sponsoredPeersData.peers, sponsoredPeersData.chats, sponsoredPeersData.users)
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                 updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
                 

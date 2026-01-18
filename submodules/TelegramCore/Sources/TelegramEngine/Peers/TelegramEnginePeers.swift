@@ -1658,7 +1658,8 @@ public extension TelegramEngine {
                     return nil
                 }
                 switch result {
-                case let .collectibleInfo(purchaseDate, currency, amount, cryptoCurrency, cryptoAmount, url):
+                case let .collectibleInfo(collectibleInfoData):
+                    let (purchaseDate, currency, amount, cryptoCurrency, cryptoAmount, url) = (collectibleInfoData.purchaseDate, collectibleInfoData.currency, collectibleInfoData.amount, collectibleInfoData.cryptoCurrency, collectibleInfoData.cryptoAmount, collectibleInfoData.url)
                     return TelegramCollectibleItemInfo(
                         subject: .username(username),
                         purchaseDate: purchaseDate,
@@ -1683,7 +1684,8 @@ public extension TelegramEngine {
                     return nil
                 }
                 switch result {
-                case let .collectibleInfo(purchaseDate, currency, amount, cryptoCurrency, cryptoAmount, url):
+                case let .collectibleInfo(collectibleInfoData):
+                    let (purchaseDate, currency, amount, cryptoCurrency, cryptoAmount, url) = (collectibleInfoData.purchaseDate, collectibleInfoData.currency, collectibleInfoData.amount, collectibleInfoData.cryptoCurrency, collectibleInfoData.cryptoAmount, collectibleInfoData.url)
                     return TelegramCollectibleItemInfo(
                         subject: .phoneNumber(phoneNumber),
                         purchaseDate: purchaseDate,
