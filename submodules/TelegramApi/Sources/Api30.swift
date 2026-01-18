@@ -525,8 +525,22 @@ public extension Api.account {
 }
 public extension Api.account {
     enum EmailVerified: TypeConstructorDescription {
-        case emailVerified(email: String)
-        case emailVerifiedLogin(email: String, sentCode: Api.auth.SentCode)
+        public class Cons_emailVerified {
+            public var email: String
+            public init(email: String) {
+                self.email = email
+            }
+        }
+        public class Cons_emailVerifiedLogin {
+            public var email: String
+            public var sentCode: Api.auth.SentCode
+            public init(email: String, sentCode: Api.auth.SentCode) {
+                self.email = email
+                self.sentCode = sentCode
+            }
+        }
+        case emailVerified(Cons_emailVerified)
+        case emailVerifiedLogin(Cons_emailVerifiedLogin)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -562,7 +576,15 @@ public extension Api.account {
 }
 public extension Api.account {
     enum EmojiStatuses: TypeConstructorDescription {
-        case emojiStatuses(hash: Int64, statuses: [Api.EmojiStatus])
+        public class Cons_emojiStatuses {
+            public var hash: Int64
+            public var statuses: [Api.EmojiStatus]
+            public init(hash: Int64, statuses: [Api.EmojiStatus]) {
+                self.hash = hash
+                self.statuses = statuses
+            }
+        }
+        case emojiStatuses(Cons_emojiStatuses)
         case emojiStatusesNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -599,7 +621,13 @@ public extension Api.account {
 }
 public extension Api.account {
     enum PaidMessagesRevenue: TypeConstructorDescription {
-        case paidMessagesRevenue(starsAmount: Int64)
+        public class Cons_paidMessagesRevenue {
+            public var starsAmount: Int64
+            public init(starsAmount: Int64) {
+                self.starsAmount = starsAmount
+            }
+        }
+        case paidMessagesRevenue(Cons_paidMessagesRevenue)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -628,7 +656,13 @@ public extension Api.account {
 }
 public extension Api.account {
     enum PasskeyRegistrationOptions: TypeConstructorDescription {
-        case passkeyRegistrationOptions(options: Api.DataJSON)
+        public class Cons_passkeyRegistrationOptions {
+            public var options: Api.DataJSON
+            public init(options: Api.DataJSON) {
+                self.options = options
+            }
+        }
+        case passkeyRegistrationOptions(Cons_passkeyRegistrationOptions)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -657,7 +691,13 @@ public extension Api.account {
 }
 public extension Api.account {
     enum Passkeys: TypeConstructorDescription {
-        case passkeys(passkeys: [Api.Passkey])
+        public class Cons_passkeys {
+            public var passkeys: [Api.Passkey]
+            public init(passkeys: [Api.Passkey]) {
+                self.passkeys = passkeys
+            }
+        }
+        case passkeys(Cons_passkeys)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -686,7 +726,33 @@ public extension Api.account {
 }
 public extension Api.account {
     enum Password: TypeConstructorDescription {
-        case password(flags: Int32, currentAlgo: Api.PasswordKdfAlgo?, srpB: Buffer?, srpId: Int64?, hint: String?, emailUnconfirmedPattern: String?, newAlgo: Api.PasswordKdfAlgo, newSecureAlgo: Api.SecurePasswordKdfAlgo, secureRandom: Buffer, pendingResetDate: Int32?, loginEmailPattern: String?)
+        public class Cons_password {
+            public var flags: Int32
+            public var currentAlgo: Api.PasswordKdfAlgo?
+            public var srpB: Buffer?
+            public var srpId: Int64?
+            public var hint: String?
+            public var emailUnconfirmedPattern: String?
+            public var newAlgo: Api.PasswordKdfAlgo
+            public var newSecureAlgo: Api.SecurePasswordKdfAlgo
+            public var secureRandom: Buffer
+            public var pendingResetDate: Int32?
+            public var loginEmailPattern: String?
+            public init(flags: Int32, currentAlgo: Api.PasswordKdfAlgo?, srpB: Buffer?, srpId: Int64?, hint: String?, emailUnconfirmedPattern: String?, newAlgo: Api.PasswordKdfAlgo, newSecureAlgo: Api.SecurePasswordKdfAlgo, secureRandom: Buffer, pendingResetDate: Int32?, loginEmailPattern: String?) {
+                self.flags = flags
+                self.currentAlgo = currentAlgo
+                self.srpB = srpB
+                self.srpId = srpId
+                self.hint = hint
+                self.emailUnconfirmedPattern = emailUnconfirmedPattern
+                self.newAlgo = newAlgo
+                self.newSecureAlgo = newSecureAlgo
+                self.secureRandom = secureRandom
+                self.pendingResetDate = pendingResetDate
+                self.loginEmailPattern = loginEmailPattern
+            }
+        }
+        case password(Cons_password)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -715,7 +781,23 @@ public extension Api.account {
 }
 public extension Api.account {
     enum PasswordInputSettings: TypeConstructorDescription {
-        case passwordInputSettings(flags: Int32, newAlgo: Api.PasswordKdfAlgo?, newPasswordHash: Buffer?, hint: String?, email: String?, newSecureSettings: Api.SecureSecretSettings?)
+        public class Cons_passwordInputSettings {
+            public var flags: Int32
+            public var newAlgo: Api.PasswordKdfAlgo?
+            public var newPasswordHash: Buffer?
+            public var hint: String?
+            public var email: String?
+            public var newSecureSettings: Api.SecureSecretSettings?
+            public init(flags: Int32, newAlgo: Api.PasswordKdfAlgo?, newPasswordHash: Buffer?, hint: String?, email: String?, newSecureSettings: Api.SecureSecretSettings?) {
+                self.flags = flags
+                self.newAlgo = newAlgo
+                self.newPasswordHash = newPasswordHash
+                self.hint = hint
+                self.email = email
+                self.newSecureSettings = newSecureSettings
+            }
+        }
+        case passwordInputSettings(Cons_passwordInputSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -744,7 +826,17 @@ public extension Api.account {
 }
 public extension Api.account {
     enum PasswordSettings: TypeConstructorDescription {
-        case passwordSettings(flags: Int32, email: String?, secureSettings: Api.SecureSecretSettings?)
+        public class Cons_passwordSettings {
+            public var flags: Int32
+            public var email: String?
+            public var secureSettings: Api.SecureSecretSettings?
+            public init(flags: Int32, email: String?, secureSettings: Api.SecureSecretSettings?) {
+                self.flags = flags
+                self.email = email
+                self.secureSettings = secureSettings
+            }
+        }
+        case passwordSettings(Cons_passwordSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -773,7 +865,17 @@ public extension Api.account {
 }
 public extension Api.account {
     enum PrivacyRules: TypeConstructorDescription {
-        case privacyRules(rules: [Api.PrivacyRule], chats: [Api.Chat], users: [Api.User])
+        public class Cons_privacyRules {
+            public var rules: [Api.PrivacyRule]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(rules: [Api.PrivacyRule], chats: [Api.Chat], users: [Api.User]) {
+                self.rules = rules
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case privacyRules(Cons_privacyRules)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -802,9 +904,21 @@ public extension Api.account {
 }
 public extension Api.account {
     enum ResetPasswordResult: TypeConstructorDescription {
-        case resetPasswordFailedWait(retryDate: Int32)
+        public class Cons_resetPasswordFailedWait {
+            public var retryDate: Int32
+            public init(retryDate: Int32) {
+                self.retryDate = retryDate
+            }
+        }
+        public class Cons_resetPasswordRequestedWait {
+            public var untilDate: Int32
+            public init(untilDate: Int32) {
+                self.untilDate = untilDate
+            }
+        }
+        case resetPasswordFailedWait(Cons_resetPasswordFailedWait)
         case resetPasswordOk
-        case resetPasswordRequestedWait(untilDate: Int32)
+        case resetPasswordRequestedWait(Cons_resetPasswordRequestedWait)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -847,7 +961,23 @@ public extension Api.account {
 }
 public extension Api.account {
     enum ResolvedBusinessChatLinks: TypeConstructorDescription {
-        case resolvedBusinessChatLinks(flags: Int32, peer: Api.Peer, message: String, entities: [Api.MessageEntity]?, chats: [Api.Chat], users: [Api.User])
+        public class Cons_resolvedBusinessChatLinks {
+            public var flags: Int32
+            public var peer: Api.Peer
+            public var message: String
+            public var entities: [Api.MessageEntity]?
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(flags: Int32, peer: Api.Peer, message: String, entities: [Api.MessageEntity]?, chats: [Api.Chat], users: [Api.User]) {
+                self.flags = flags
+                self.peer = peer
+                self.message = message
+                self.entities = entities
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case resolvedBusinessChatLinks(Cons_resolvedBusinessChatLinks)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

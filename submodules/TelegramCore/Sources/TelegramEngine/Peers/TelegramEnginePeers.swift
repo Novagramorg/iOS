@@ -1741,7 +1741,8 @@ public extension TelegramEngine {
                 }
                 return self.account.postbox.transaction { transaction -> TelegramResolvedMessageLink? in
                     switch result {
-                    case let .resolvedBusinessChatLinks(_, peer, message, entities, chats, users):
+                    case let .resolvedBusinessChatLinks(resolvedBusinessChatLinksData):
+                        let (peer, message, entities, chats, users) = (resolvedBusinessChatLinksData.peer, resolvedBusinessChatLinksData.message, resolvedBusinessChatLinksData.entities, resolvedBusinessChatLinksData.chats, resolvedBusinessChatLinksData.users)
                         updatePeers(transaction: transaction, accountPeerId: self.account.peerId, peers: AccumulatedPeers(transaction: transaction, chats: chats, users: users))
                         
                         guard let peer = transaction.getPeer(peer.peerId) else {

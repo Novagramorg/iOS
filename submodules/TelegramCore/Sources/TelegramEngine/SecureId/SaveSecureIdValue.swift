@@ -305,7 +305,7 @@ public func dropSecureId(network: Network, currentPassword: String) -> Signal<Vo
             case .passwordSettings:
                 var flags: Int32 = 0
                 flags |= (1 << 2)
-                return network.request(Api.functions.account.updatePasswordSettings(password: .inputCheckPasswordEmpty, newSettings: .passwordInputSettings(flags: flags, newAlgo: nil, newPasswordHash: nil, hint: nil, email: nil, newSecureSettings: nil)), automaticFloodWait: false)
+                return network.request(Api.functions.account.updatePasswordSettings(password: .inputCheckPasswordEmpty, newSettings: .passwordInputSettings(.init(flags: flags, newAlgo: nil, newPasswordHash: nil, hint: nil, email: nil, newSecureSettings: nil))), automaticFloodWait: false)
                 |> map { _ in }
                 |> mapError { _ in
                     return AuthorizationPasswordVerificationError.generic

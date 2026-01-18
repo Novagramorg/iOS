@@ -30,7 +30,8 @@ func webSessions(network: Network) -> Signal<([WebAuthorization], [PeerId: Peer]
         var sessions: [WebAuthorization] = []
         var peers:[PeerId : Peer] = [:]
         switch result {
-        case let .webAuthorizations(authorizations, users):
+        case let .webAuthorizations(webAuthorizationsData):
+            let (authorizations, users) = (webAuthorizationsData.authorizations, webAuthorizationsData.users)
             for authorization in authorizations {
                 switch authorization {
                 case let .webAuthorization(webAuthorizationData):

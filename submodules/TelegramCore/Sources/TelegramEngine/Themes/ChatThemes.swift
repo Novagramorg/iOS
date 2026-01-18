@@ -203,7 +203,8 @@ func _internal_getChatThemes(accountManager: AccountManager<TelegramAccountManag
                 return .complete()
             }
             switch result {
-                case let .themes(hash, apiThemes):
+                case let .themes(themesData):
+                    let (hash, apiThemes) = (themesData.hash, themesData.themes)
                     let result = apiThemes.compactMap { TelegramTheme(apiTheme: $0) }
                     if result == current {
                         return .complete()

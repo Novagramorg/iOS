@@ -180,7 +180,8 @@ func requestNotificationSoundList(network: Network, hash: Int64) -> Signal<Notif
         }
         
         switch result {
-        case let .savedRingtones(hash, ringtones):
+        case let .savedRingtones(savedRingtonesData):
+            let (hash, ringtones) = (savedRingtonesData.hash, savedRingtonesData.ringtones)
             let notificationSoundList = NotificationSoundList(
                 hash: hash,
                 sounds: ringtones.compactMap(NotificationSoundList.NotificationSound.init(apiDocument:))
@@ -207,7 +208,8 @@ private func pollNotificationSoundList(postbox: Postbox, network: Network) -> Si
                         return .complete()
                     }
                     switch result {
-                    case let .savedRingtones(hash, ringtones):
+                    case let .savedRingtones(savedRingtonesData):
+                        let (hash, ringtones) = (savedRingtonesData.hash, savedRingtonesData.ringtones)
                         let notificationSoundList = NotificationSoundList(
                             hash: hash,
                             sounds: ringtones.compactMap(NotificationSoundList.NotificationSound.init(apiDocument:))

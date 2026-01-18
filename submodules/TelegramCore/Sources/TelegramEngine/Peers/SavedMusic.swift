@@ -104,7 +104,8 @@ func _internal_keepSavedMusicIdsUpdated(postbox: Postbox, network: Network, acco
             }
             return postbox.transaction { transaction in
                 switch result {
-                case let .savedMusicIds(ids):
+                case let .savedMusicIds(savedMusicIdsData):
+                    let ids = savedMusicIdsData.ids
                     let savedMusicIdsList = SavedMusicIdsList(items: ids)
                     transaction.setPreferencesEntry(key: PreferencesKeys.savedMusicIds(), value: PreferencesEntry(savedMusicIdsList))
                 case .savedMusicIdsNotModified:

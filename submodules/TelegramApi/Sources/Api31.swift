@@ -1,6 +1,12 @@
 public extension Api.account {
     enum SavedMusicIds: TypeConstructorDescription {
-        case savedMusicIds(ids: [Int64])
+        public class Cons_savedMusicIds {
+            public var ids: [Int64]
+            public init(ids: [Int64]) {
+                self.ids = ids
+            }
+        }
+        case savedMusicIds(Cons_savedMusicIds)
         case savedMusicIdsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -37,8 +43,14 @@ public extension Api.account {
 }
 public extension Api.account {
     enum SavedRingtone: TypeConstructorDescription {
+        public class Cons_savedRingtoneConverted {
+            public var document: Api.Document
+            public init(document: Api.Document) {
+                self.document = document
+            }
+        }
         case savedRingtone
-        case savedRingtoneConverted(document: Api.Document)
+        case savedRingtoneConverted(Cons_savedRingtoneConverted)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -74,7 +86,15 @@ public extension Api.account {
 }
 public extension Api.account {
     enum SavedRingtones: TypeConstructorDescription {
-        case savedRingtones(hash: Int64, ringtones: [Api.Document])
+        public class Cons_savedRingtones {
+            public var hash: Int64
+            public var ringtones: [Api.Document]
+            public init(hash: Int64, ringtones: [Api.Document]) {
+                self.hash = hash
+                self.ringtones = ringtones
+            }
+        }
+        case savedRingtones(Cons_savedRingtones)
         case savedRingtonesNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -111,7 +131,15 @@ public extension Api.account {
 }
 public extension Api.account {
     enum SentEmailCode: TypeConstructorDescription {
-        case sentEmailCode(emailPattern: String, length: Int32)
+        public class Cons_sentEmailCode {
+            public var emailPattern: String
+            public var length: Int32
+            public init(emailPattern: String, length: Int32) {
+                self.emailPattern = emailPattern
+                self.length = length
+            }
+        }
+        case sentEmailCode(Cons_sentEmailCode)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -140,7 +168,13 @@ public extension Api.account {
 }
 public extension Api.account {
     enum Takeout: TypeConstructorDescription {
-        case takeout(id: Int64)
+        public class Cons_takeout {
+            public var id: Int64
+            public init(id: Int64) {
+                self.id = id
+            }
+        }
+        case takeout(Cons_takeout)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -169,7 +203,15 @@ public extension Api.account {
 }
 public extension Api.account {
     enum Themes: TypeConstructorDescription {
-        case themes(hash: Int64, themes: [Api.Theme])
+        public class Cons_themes {
+            public var hash: Int64
+            public var themes: [Api.Theme]
+            public init(hash: Int64, themes: [Api.Theme]) {
+                self.hash = hash
+                self.themes = themes
+            }
+        }
+        case themes(Cons_themes)
         case themesNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -206,7 +248,15 @@ public extension Api.account {
 }
 public extension Api.account {
     enum TmpPassword: TypeConstructorDescription {
-        case tmpPassword(tmpPassword: Buffer, validUntil: Int32)
+        public class Cons_tmpPassword {
+            public var tmpPassword: Buffer
+            public var validUntil: Int32
+            public init(tmpPassword: Buffer, validUntil: Int32) {
+                self.tmpPassword = tmpPassword
+                self.validUntil = validUntil
+            }
+        }
+        case tmpPassword(Cons_tmpPassword)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -235,7 +285,15 @@ public extension Api.account {
 }
 public extension Api.account {
     enum WallPapers: TypeConstructorDescription {
-        case wallPapers(hash: Int64, wallpapers: [Api.WallPaper])
+        public class Cons_wallPapers {
+            public var hash: Int64
+            public var wallpapers: [Api.WallPaper]
+            public init(hash: Int64, wallpapers: [Api.WallPaper]) {
+                self.hash = hash
+                self.wallpapers = wallpapers
+            }
+        }
+        case wallPapers(Cons_wallPapers)
         case wallPapersNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -272,7 +330,15 @@ public extension Api.account {
 }
 public extension Api.account {
     enum WebAuthorizations: TypeConstructorDescription {
-        case webAuthorizations(authorizations: [Api.WebAuthorization], users: [Api.User])
+        public class Cons_webAuthorizations {
+            public var authorizations: [Api.WebAuthorization]
+            public var users: [Api.User]
+            public init(authorizations: [Api.WebAuthorization], users: [Api.User]) {
+                self.authorizations = authorizations
+                self.users = users
+            }
+        }
+        case webAuthorizations(Cons_webAuthorizations)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

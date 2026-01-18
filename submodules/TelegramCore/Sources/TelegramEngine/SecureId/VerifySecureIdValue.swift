@@ -84,7 +84,8 @@ public func secureIdPrepareEmailVerification(network: Network, value: SecureIdEm
     }
     |> map { sentCode -> SecureIdPrepareEmailVerificationPayload in
         switch sentCode {
-            case .sentEmailCode(_, let length):
+            case let .sentEmailCode(sentEmailCodeData):
+                let length = sentEmailCodeData.length
                 return SecureIdPrepareEmailVerificationPayload(email: value.email, length: length)
         }
     }

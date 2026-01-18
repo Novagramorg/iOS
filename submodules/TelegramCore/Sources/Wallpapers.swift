@@ -13,7 +13,8 @@ public func telegramWallpapers(postbox: Postbox, network: Network, forceUpdate: 
                 return .single(([], -1))
             }
             switch result {
-                case let .wallPapers(hash, wallpapers):
+                case let .wallPapers(wallPapersData):
+                    let (hash, wallpapers) = (wallPapersData.hash, wallPapersData.wallpapers)
                     var items: [TelegramWallpaper] = []
                     var addedBuiltin = false
                     for apiWallpaper in wallpapers {

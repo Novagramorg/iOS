@@ -113,49 +113,56 @@ func _internal_requestAccountPrivacySettings(account: Account) -> Signal<Account
         var apiChats: [Api.Chat] = []
         
         switch lastSeenPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 lastSeenRules = rules
         }
         
         switch groupPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 groupRules = rules
         }
         
         switch voiceCallPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 voiceRules = rules
         }
         
         switch voiceCallP2P {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 voiceP2PRules = rules
         }
         
         switch profilePhotoPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 profilePhotoRules = rules
         }
         
         switch forwardPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 forwardRules = rules
         }
         
         switch phoneNumberPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 phoneNumberRules = rules
@@ -163,7 +170,8 @@ func _internal_requestAccountPrivacySettings(account: Account) -> Signal<Account
         
         var phoneDiscoveryValue = false
         switch phoneDiscoveryPrivacy {
-            case let .privacyRules(rules, _, _):
+            case let .privacyRules(privacyRulesData):
+                let rules = privacyRulesData.rules
                 for rule in rules {
                     switch rule {
                     case .privacyValueAllowAll:
@@ -175,40 +183,46 @@ func _internal_requestAccountPrivacySettings(account: Account) -> Signal<Account
         }
         
         switch voiceMessagesPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 voiceMessagesRules = rules
         }
         
         switch bioPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 bioRules = rules
         }
         
         switch birthdayPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 birthdayRules = rules
         }
         
         switch giftsAutoSavePrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 giftsAutoSaveRules = rules
         }
         switch noPaidMessagesPrivacy {
-            case let .privacyRules(rules, chats, users):
+            case let .privacyRules(privacyRulesData):
+                let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
                 apiUsers.append(contentsOf: users)
                 apiChats.append(contentsOf: chats)
                 noPaidMessagesRules = rules
         }
         switch savedMusicPrivacy {
-        case let .privacyRules(rules, chats, users):
+        case let .privacyRules(privacyRulesData):
+            let (rules, chats, users) = (privacyRulesData.rules, privacyRulesData.chats, privacyRulesData.users)
             apiUsers.append(contentsOf: users)
             apiChats.append(contentsOf: chats)
             savedMusicRules = rules
