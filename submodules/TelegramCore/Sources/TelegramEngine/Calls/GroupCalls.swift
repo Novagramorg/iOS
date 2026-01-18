@@ -3131,7 +3131,8 @@ func _internal_getAudioBroadcastPart(dataSource: AudioBroadcastDataSource, callI
     return dataSource.download.requestWithAdditionalData(Api.functions.upload.getFile(flags: 0, location: .inputGroupCallStream(.init(flags: 0, call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), timeMs: timestampIdMilliseconds, scale: scale, videoChannel: nil, videoQuality: nil)), offset: 0, limit: 128 * 1024), automaticFloodWait: false, failOnServerErrors: true)
     |> map { result, responseTimestamp -> GetAudioBroadcastPartResult in
         switch result {
-        case let .file(_, _, bytes):
+        case let .file(fileData):
+            let (bytes) = (fileData.bytes)
             return GetAudioBroadcastPartResult(
                 status: .data(bytes.makeData()),
                 responseTimestamp: responseTimestamp
@@ -3184,7 +3185,8 @@ func _internal_getVideoBroadcastPart(dataSource: AudioBroadcastDataSource, callI
     return dataSource.download.requestWithAdditionalData(Api.functions.upload.getFile(flags: 0, location: .inputGroupCallStream(.init(flags: 1 << 0, call: .inputGroupCall(.init(id: callId, accessHash: accessHash)), timeMs: timestampIdMilliseconds, scale: scale, videoChannel: channelId, videoQuality: quality)), offset: 0, limit: 512 * 1024), automaticFloodWait: false, failOnServerErrors: true)
     |> map { result, responseTimestamp -> GetAudioBroadcastPartResult in
         switch result {
-        case let .file(_, _, bytes):
+        case let .file(fileData):
+            let (bytes) = (fileData.bytes)
             return GetAudioBroadcastPartResult(
                 status: .data(bytes.makeData()),
                 responseTimestamp: responseTimestamp

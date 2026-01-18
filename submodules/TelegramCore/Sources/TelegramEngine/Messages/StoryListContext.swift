@@ -402,7 +402,8 @@ public final class StorySubscriptionsContext {
                 let _ = (self.postbox.transaction { transaction -> Void in
                     var updatedStealthMode: Api.StoriesStealthMode?
                     switch result {
-                    case let .allStoriesNotModified(_, state, stealthMode):
+                    case let .allStoriesNotModified(allStoriesNotModifiedData):
+                        let (state, stealthMode) = (allStoriesNotModifiedData.state, allStoriesNotModifiedData.stealthMode)
                         self.loadedStateMark = .value(state)
                         let (currentStateValue, _) = transaction.getAllStorySubscriptions(key: subscriptionsKey)
                         let currentState = currentStateValue.flatMap { $0.get(Stories.SubscriptionsState.self) }
@@ -421,7 +422,8 @@ public final class StorySubscriptionsContext {
                         if isRefresh && !isHidden {
                             updatedStealthMode = stealthMode
                         }
-                    case let .allStories(flags, _, state, peerStories, chats, users, stealthMode):
+                    case let .allStories(allStoriesData):
+                        let (flags, state, peerStories, chats, users, stealthMode) = (allStoriesData.flags, allStoriesData.state, allStoriesData.peerStories, allStoriesData.chats, allStoriesData.users, allStoriesData.stealthMode)
                         let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                         
                         let hasMore: Bool = (flags & (1 << 0)) != 0
@@ -890,7 +892,8 @@ public final class PeerStoryListContext: StoryListContext {
                         
                         if let updatedFolders {
                             switch updatedFolders {
-                            case let .albums(_, albums):
+                            case let .albums(albumsData):
+                                let albums = albumsData.albums
                                 for album in albums {
                                     switch album {
                                     case let .storyAlbum(storyAlbumData):
@@ -917,7 +920,8 @@ public final class PeerStoryListContext: StoryListContext {
                         }
                         
                         switch result {
-                        case let .stories(_, count, stories, pinnedStories, chats, users):
+                        case let .stories(storiesData):
+                            let (count, stories, pinnedStories, chats, users) = (storiesData.count, storiesData.stories, storiesData.pinnedToTop, storiesData.chats, storiesData.users)
                             totalCount = Int(count)
                             hasMore = stories.count >= limit
                             
@@ -2150,7 +2154,8 @@ public final class SearchStoryListContext: StoryListContext {
                     var nextOffsetValue: String?
                     
                     switch result {
-                    case let .foundStories(_, count, stories, nextOffset, chats, users):
+                    case let .foundStories(foundStoriesData):
+                        let (count, stories, nextOffset, chats, users) = (foundStoriesData.count, foundStoriesData.stories, foundStoriesData.nextOffset, foundStoriesData.chats, foundStoriesData.users)
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(transaction: transaction, chats: chats, users: users))
                         
                         totalCount = Int(count)
@@ -2598,9 +2603,10 @@ public final class PeerExpiringStoryListContext {
                         var updatedPeerEntries: [StoryItemsTableEntry] = []
                         updatedPeerEntries.removeAll()
                         
-                        if let result = result, case let .peerStories(stories, chats, users) = result {
+                        if let result = result, case let .peerStories(peerStoriesData) = result {
+                            let (stories, chats, users) = (peerStoriesData.stories, peerStoriesData.chats, peerStoriesData.users)
                             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
-                            
+
                             switch stories {
                             case let .peerStories(peerStoriesData):
                                 let (_, peerIdValue, maxReadId, stories) = (peerStoriesData.flags, peerStoriesData.peer, peerStoriesData.maxReadId, peerStoriesData.stories)
@@ -2627,7 +2633,7 @@ public final class PeerExpiringStoryListContext {
 
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                         }
-                        
+
                         transaction.setStoryItems(peerId: peerId, items: updatedPeerEntries)
                     }
                     |> ignoreValues
@@ -2780,9 +2786,10 @@ public func _internal_pollPeerStories(postbox: Postbox, network: Network, accoun
                 var updatedPeerEntries: [StoryItemsTableEntry] = []
                 updatedPeerEntries.removeAll()
                 
-                if let result = result, case let .peerStories(stories, chats, users) = result {
+                if let result = result, case let .peerStories(peerStoriesData) = result {
+                    let (stories, chats, users) = (peerStoriesData.stories, peerStoriesData.chats, peerStoriesData.users)
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
-                    
+
                     switch stories {
                     case let .peerStories(peerStoriesData):
                         let (_, peerIdValue, maxReadId, stories) = (peerStoriesData.flags, peerStoriesData.peer, peerStoriesData.maxReadId, peerStoriesData.stories)
@@ -2809,9 +2816,9 @@ public func _internal_pollPeerStories(postbox: Postbox, network: Network, accoun
 
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                 }
-                
+
                 transaction.setStoryItems(peerId: peerId, items: updatedPeerEntries)
-                
+
                 var isContactOrMember = false
                 if transaction.isPeerContact(peerId: peerId) {
                     isContactOrMember = true

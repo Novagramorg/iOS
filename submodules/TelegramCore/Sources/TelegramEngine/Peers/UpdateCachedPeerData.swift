@@ -236,7 +236,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                 |> mapToSignal { result, editableBotInfo, botPreview, additionalConnectedBots -> Signal<Bool, NoError> in
                     return postbox.transaction { transaction -> Bool in
                         switch result {
-                        case let .userFull(fullUser, chats, users):
+                        case let .userFull(userFullData):
+                            let (fullUser, chats, users) = (userFullData.fullUser, userFullData.chats, userFullData.users)
                             var accountUser: Api.User?
                             var parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                             for user in users {

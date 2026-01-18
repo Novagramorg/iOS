@@ -677,8 +677,8 @@ func _internal_getStickerSetShortNameSuggestion(account: Account, title: String)
             return nil
         }
         switch result {
-            case let .suggestedShortName(shortName):
-                return shortName
+            case let .suggestedShortName(suggestedShortNameData):
+                return suggestedShortNameData.shortName
         }
     }
 }

@@ -112,7 +112,8 @@ private func dialogReadState(network: Network, postbox: Postbox, peerId: PeerId)
                         } else {
                             let pts: Int32
                             switch state {
-                            case let .state(statePts, _, _, _, _):
+                            case let .state(stateData):
+                                let (statePts) = (stateData.pts)
                                 pts = statePts
                             }
                             
