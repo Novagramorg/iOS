@@ -53,7 +53,8 @@ func managedRecentStickers(postbox: Postbox, network: Network, forceFetch: Bool 
             switch result {
                 case .recentStickersNotModified:
                     return .single(nil)
-                case let .recentStickers(_, _, stickers, _):
+                case let .recentStickers(recentStickersData):
+                    let stickers = recentStickersData.stickers
                     var items: [OrderedItemListEntry] = []
                     for sticker in stickers {
                         if let file = telegramMediaFileFromApiDocument(sticker, altDocuments: []), let id = file.id {
@@ -79,7 +80,8 @@ func managedRecentGifs(postbox: Postbox, network: Network, forceFetch: Bool = fa
                 switch result {
                     case .savedGifsNotModified:
                         return .single(nil)
-                    case let .savedGifs(_, gifs):
+                    case let .savedGifs(savedGifsData):
+                        let gifs = savedGifsData.gifs
                         var items: [OrderedItemListEntry] = []
                         for gif in gifs {
                             if let file = telegramMediaFileFromApiDocument(gif, altDocuments: []), let id = file.id {
@@ -538,9 +540,10 @@ func managedRecentReactions(postbox: Postbox, network: Network) -> Signal<Void, 
             switch result {
             case .reactionsNotModified:
                 return .single(nil)
-            case let .reactions(_, reactions):
+            case let .reactions(reactionsData):
+                let reactions = reactionsData.reactions
                 let parsedReactions = reactions.compactMap(MessageReaction.Reaction.init(apiReaction:))
-                
+
                 return _internal_resolveInlineStickers(postbox: postbox, network: network, fileIds: parsedReactions.compactMap { reaction -> Int64? in
                     switch reaction {
                     case .builtin:
@@ -598,9 +601,10 @@ func managedTopReactions(postbox: Postbox, network: Network) -> Signal<Void, NoE
             switch result {
             case .reactionsNotModified:
                 return .single(nil)
-            case let .reactions(_, reactions):
+            case let .reactions(reactionsData):
+                let reactions = reactionsData.reactions
                 let parsedReactions = reactions.compactMap(MessageReaction.Reaction.init(apiReaction:))
-                
+
                 return _internal_resolveInlineStickers(postbox: postbox, network: network, fileIds: parsedReactions.compactMap { reaction -> Int64? in
                     switch reaction {
                     case .builtin:
@@ -658,9 +662,10 @@ func managedDefaultTagReactions(postbox: Postbox, network: Network) -> Signal<Vo
             switch result {
             case .reactionsNotModified:
                 return .single(nil)
-            case let .reactions(_, reactions):
+            case let .reactions(reactionsData):
+                let reactions = reactionsData.reactions
                 let parsedReactions = reactions.compactMap(MessageReaction.Reaction.init(apiReaction:))
-                
+
                 return _internal_resolveInlineStickers(postbox: postbox, network: network, fileIds: parsedReactions.compactMap { reaction -> Int64? in
                     switch reaction {
                     case .builtin:

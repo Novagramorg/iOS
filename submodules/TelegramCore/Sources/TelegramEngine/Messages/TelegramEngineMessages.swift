@@ -544,11 +544,14 @@ public extension TelegramEngine {
                     signals.append(self.account.network.request(Api.functions.messages.search(flags: flags, peer: inputPeer, q: "", fromId: nil, savedPeerId: inputSavedPeer, savedReaction: nil, topMsgId: topMsgId, filter: filter, minDate: 0, maxDate: 0, offsetId: 0, addOffset: 0, limit: 1, maxId: 0, minId: 0, hash: 0))
                     |> map { result -> (count: Int32?, topId: Int32?) in
                         switch result {
-                        case let .messagesSlice(_, count, _, _, _, messages, _, _, _):
+                        case let .messagesSlice(messagesSliceData):
+                            let (count, messages) = (messagesSliceData.count, messagesSliceData.messages)
                             return (count, messages.first?.id(namespace: Namespaces.Message.Cloud)?.id)
-                        case let .channelMessages(_, _, count, _, messages, _, _, _):
+                        case let .channelMessages(channelMessagesData):
+                            let (count, messages) = (channelMessagesData.count, channelMessagesData.messages)
                             return (count, messages.first?.id(namespace: Namespaces.Message.Cloud)?.id)
-                        case let .messages(messages, _, _, _):
+                        case let .messages(messagesData):
+                            let messages = messagesData.messages
                             return (Int32(messages.count), messages.first?.id(namespace: Namespaces.Message.Cloud)?.id)
                         case .messagesNotModified:
                             return (nil, nil)

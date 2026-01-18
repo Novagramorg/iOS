@@ -47,11 +47,14 @@ private func dialogTopMessage(network: Network, postbox: Postbox, peerId: PeerId
             }
             let apiMessages: [Api.Message]
             switch result {
-                case let .channelMessages(_, _, _, _, messages, _, _, _):
+                case let .channelMessages(channelMessagesData):
+                    let messages = channelMessagesData.messages
                     apiMessages = messages
-                case let .messages(messages, _, _, _):
+                case let .messages(messagesData):
+                    let messages = messagesData.messages
                     apiMessages = messages
-                case let .messagesSlice(_, _, _, _, _, messages, _, _, _):
+                case let .messagesSlice(messagesSliceData):
+                    let messages = messagesSliceData.messages
                     apiMessages = messages
                 case .messagesNotModified:
                     apiMessages = []
@@ -78,7 +81,8 @@ private func dialogReadState(network: Network, postbox: Postbox, peerId: PeerId)
             |> retryRequest
             |> mapToSignalPromotingError { result -> Signal<(PeerReadState, PeerReadStateMarker)?, PeerReadStateValidationError> in
                 switch result {
-                case let .peerDialogs(dialogs, _, _, _, state):
+                case let .peerDialogs(peerDialogsData):
+                    let (dialogs, state) = (peerDialogsData.dialogs, peerDialogsData.state)
                     if let dialog = dialogs.filter({ $0.peerId == peerId }).first {
                         let apiTopMessage: Int32
                         let apiReadInboxMaxId: Int32

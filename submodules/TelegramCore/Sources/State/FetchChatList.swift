@@ -44,7 +44,8 @@ private func extractDialogsData(dialogs: Api.messages.Dialogs) -> (apiDialogs: [
 
 private func extractDialogsData(peerDialogs: Api.messages.PeerDialogs) -> (apiDialogs: [Api.Dialog], apiMessages: [Api.Message], apiChats: [Api.Chat], apiUsers: [Api.User], apiIsAtLowestBoundary: Bool) {
     switch peerDialogs {
-        case let .peerDialogs(dialogs, messages, chats, users, _):
+        case let .peerDialogs(peerDialogsData):
+            let (dialogs, messages, chats, users) = (peerDialogsData.dialogs, peerDialogsData.messages, peerDialogsData.chats, peerDialogsData.users)
             return (dialogs, messages, chats, users, false)
     }
 }

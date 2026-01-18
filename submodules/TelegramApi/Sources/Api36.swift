@@ -1,6 +1,14 @@
 public extension Api.messages {
     enum SavedGifs: TypeConstructorDescription {
-        case savedGifs(hash: Int64, gifs: [Api.Document])
+        public class Cons_savedGifs {
+            public var hash: Int64
+            public var gifs: [Api.Document]
+            public init(hash: Int64, gifs: [Api.Document]) {
+                self.hash = hash
+                self.gifs = gifs
+            }
+        }
+        case savedGifs(Cons_savedGifs)
         case savedGifsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -37,7 +45,15 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum SavedReactionTags: TypeConstructorDescription {
-        case savedReactionTags(tags: [Api.SavedReactionTag], hash: Int64)
+        public class Cons_savedReactionTags {
+            public var tags: [Api.SavedReactionTag]
+            public var hash: Int64
+            public init(tags: [Api.SavedReactionTag], hash: Int64) {
+                self.tags = tags
+                self.hash = hash
+            }
+        }
+        case savedReactionTags(Cons_savedReactionTags)
         case savedReactionTagsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -74,7 +90,17 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum SearchCounter: TypeConstructorDescription {
-        case searchCounter(flags: Int32, filter: Api.MessagesFilter, count: Int32)
+        public class Cons_searchCounter {
+            public var flags: Int32
+            public var filter: Api.MessagesFilter
+            public var count: Int32
+            public init(flags: Int32, filter: Api.MessagesFilter, count: Int32) {
+                self.flags = flags
+                self.filter = filter
+                self.count = count
+            }
+        }
+        case searchCounter(Cons_searchCounter)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

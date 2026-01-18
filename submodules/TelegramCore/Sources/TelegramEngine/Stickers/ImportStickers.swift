@@ -544,7 +544,8 @@ func _internal_getMyStickerSets(account: Account) -> Signal<[(StickerPackCollect
         }
         var infos: [(StickerPackCollectionInfo, StickerPackItem?)] = []
         switch result {
-        case let .myStickers(_, sets):
+        case let .myStickers(myStickersData):
+            let sets = myStickersData.sets
             for set in sets {
                 switch set {
                 case let .stickerSetCovered(stickerSetCoveredData):

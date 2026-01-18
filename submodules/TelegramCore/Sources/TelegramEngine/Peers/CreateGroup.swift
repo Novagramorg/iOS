@@ -58,7 +58,8 @@ func _internal_createGroup(account: Account, title: String, peerIds: [PeerId], t
             let updatesValue: Api.Updates
             let missingInviteesValue: [Api.MissingInvitee]
             switch result {
-            case let .invitedUsers(updates, missingInvitees):
+            case let .invitedUsers(invitedUsersData):
+                let (updates, missingInvitees) = (invitedUsersData.updates, invitedUsersData.missingInvitees)
                 updatesValue = updates
                 missingInviteesValue = missingInvitees
             }

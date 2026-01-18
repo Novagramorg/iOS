@@ -396,7 +396,8 @@ private func synchronizeUnseenPersonalMentionsTag(postbox: Postbox, network: Net
                 |> mapToSignal { result -> Signal<Void, NoError> in
                     if let result = result {
                         switch result {
-                            case let .peerDialogs(dialogs, _, _, _, _):
+                            case let .peerDialogs(peerDialogsData):
+                                let dialogs = peerDialogsData.dialogs
                                 if let dialog = dialogs.filter({ $0.peerId == entry.key.peerId }).first {
                                     let apiTopMessage: Int32
                                     let apiUnreadMentionsCount: Int32
@@ -405,12 +406,12 @@ private func synchronizeUnseenPersonalMentionsTag(postbox: Postbox, network: Net
                                             let (topMessage, unreadMentionsCount) = (dialogData.topMessage, dialogData.unreadMentionsCount)
                                             apiTopMessage = topMessage
                                             apiUnreadMentionsCount = unreadMentionsCount
-                                        
+
                                         case .dialogFolder:
                                             assertionFailure()
                                             return .complete()
                                     }
-                                    
+
                                     return postbox.transaction { transaction -> Void in
                                         transaction.replaceMessageTagSummary(peerId: entry.key.peerId, threadId: nil, tagMask: entry.key.tagMask, namespace: entry.key.namespace, customTag: nil, count: apiUnreadMentionsCount, maxId: apiTopMessage)
                                     }
@@ -439,7 +440,8 @@ private func synchronizeUnseenReactionsTag(postbox: Postbox, network: Network, e
                 |> mapToSignal { result -> Signal<Void, NoError> in
                     if let result = result {
                         switch result {
-                            case let .peerDialogs(dialogs, _, _, _, _):
+                            case let .peerDialogs(peerDialogsData):
+                                let dialogs = peerDialogsData.dialogs
                                 if let dialog = dialogs.filter({ $0.peerId == entry.key.peerId }).first {
                                     let apiTopMessage: Int32
                                     let apiUnreadReactionsCount: Int32
@@ -448,12 +450,12 @@ private func synchronizeUnseenReactionsTag(postbox: Postbox, network: Network, e
                                             let (topMessage, unreadReactionsCount) = (dialogData.topMessage, dialogData.unreadReactionsCount)
                                             apiTopMessage = topMessage
                                             apiUnreadReactionsCount = unreadReactionsCount
-                                        
+
                                         case .dialogFolder:
                                             assertionFailure()
                                             return .complete()
                                     }
-                                    
+
                                     return postbox.transaction { transaction -> Void in
                                         transaction.replaceMessageTagSummary(peerId: entry.key.peerId, threadId: nil, tagMask: entry.key.tagMask, namespace: entry.key.namespace, customTag: nil, count: apiUnreadReactionsCount, maxId: apiTopMessage)
                                     }
@@ -550,7 +552,8 @@ private func synchronizeMessageHistoryTagSummary(accountPeerId: PeerId, postbox:
                     }
                     return postbox.transaction { transaction -> Void in
                         switch result {
-                        case let .channelMessages(_, _, count, _, messages, _, _, _):
+                        case let .channelMessages(channelMessagesData):
+                            let (count, messages) = (channelMessagesData.count, channelMessagesData.messages)
                             let topId: Int32 = messages.first?.id(namespace: Namespaces.Message.Cloud)?.id ?? 1
                             transaction.replaceMessageTagSummary(peerId: entry.key.peerId, threadId: threadId, tagMask: entry.key.tagMask, namespace: entry.key.namespace, customTag: nil, count: count, maxId: topId)
                         default:
@@ -578,16 +581,20 @@ private func synchronizeMessageHistoryTagSummary(accountPeerId: PeerId, postbox:
                             let apiMessages: [Api.Message]
                             let apiCount: Int32
                             switch result {
-                            case let .channelMessages(_, _, count, _, messages, _, _, _):
+                            case let .channelMessages(channelMessagesData):
+                                let (count, messages) = (channelMessagesData.count, channelMessagesData.messages)
                                 apiMessages = messages
                                 apiCount = count
-                            case let .messages(messages, _, _, _):
+                            case let .messages(messagesData):
+                                let messages = messagesData.messages
                                 apiMessages = messages
                                 apiCount = Int32(messages.count)
-                            case let .messagesNotModified(count):
+                            case let .messagesNotModified(messagesNotModifiedData):
+                                let count = messagesNotModifiedData.count
                                 apiMessages = []
                                 apiCount = count
-                            case let .messagesSlice(_, count, _, _, _, messages, _, _, _):
+                            case let .messagesSlice(messagesSliceData):
+                                let (count, messages) = (messagesSliceData.count, messagesSliceData.messages)
                                 apiMessages = messages
                                 apiCount = count
                             }
@@ -735,7 +742,8 @@ func synchronizeSavedMessageTags(postbox: Postbox, network: Network, peerId: Pee
                     transaction.setPreferencesEntry(key: PreferencesKeys.didCacheSavedMessageTags(threadId: threadId), value: PreferencesEntry(data: Data()))
                 }
                 |> ignoreValues
-            case let .savedReactionTags(tags, _):
+            case let .savedReactionTags(savedReactionTagsData):
+                let tags = savedReactionTagsData.tags
                 var customFileIds: [Int64] = []
                 var parsedTags: [SavedMessageTags.Tag] = []
                 for tag in tags {

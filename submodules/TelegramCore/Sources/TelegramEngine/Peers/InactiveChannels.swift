@@ -24,7 +24,8 @@ func _internal_inactiveChannelList(network: Network) -> Signal<[InactiveChannel]
     |> retryRequest
     |> map { result in
         switch result {
-        case let .inactiveChats(dates, chats, _):
+        case let .inactiveChats(inactiveChatsData):
+            let (dates, chats) = (inactiveChatsData.dates, inactiveChatsData.chats)
             let channels = chats.compactMap {
                 parseTelegramGroupOrChannel(chat: $0)
             }

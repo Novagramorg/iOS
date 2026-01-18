@@ -45,7 +45,8 @@ public extension TelegramEngine {
             }
             |> mapToSignal { result -> Signal<ParsedInfo, GetInfoError> in
                 switch result {
-                case let .historyImportParsed(flags, title):
+                case let .historyImportParsed(historyImportParsedData):
+                    let (flags, title) = (historyImportParsedData.flags, historyImportParsedData.title)
                     if (flags & (1 << 0)) != 0 {
                         return .single(.privateChat(title: title))
                     } else if (flags & (1 << 1)) != 0 {
@@ -91,7 +92,8 @@ public extension TelegramEngine {
                         }
                         |> map { result -> Session in
                             switch result {
-                            case let .historyImport(id):
+                            case let .historyImport(historyImportData):
+                                let id = historyImportData.id
                                 return Session(peerId: peerId, inputPeer: inputPeer, id: id)
                             }
                         }

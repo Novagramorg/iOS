@@ -35,11 +35,14 @@ public func loadedPeerFromMessage(account: Account, peerId: PeerId, messageId: M
                                 if let result = result {
                                     let apiUsers: [Api.User]
                                     switch result {
-                                    case let .messages(_, _, _, users):
+                                    case let .messages(messagesData):
+                                        let users = messagesData.users
                                         apiUsers = users
-                                    case let .messagesSlice(_, _, _, _, _, _, _, _, users):
+                                    case let .messagesSlice(messagesSliceData):
+                                        let users = messagesSliceData.users
                                         apiUsers = users
-                                    case let .channelMessages(_, _, _, _, _, _, _, users):
+                                    case let .channelMessages(channelMessagesData):
+                                        let users = channelMessagesData.users
                                         apiUsers = users
                                     case .messagesNotModified:
                                         apiUsers = []

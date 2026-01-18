@@ -80,15 +80,18 @@ func _internal_requestPeerPhotos(accountPeerId: PeerId, postbox: Postbox, networ
                     let chats: [Api.Chat]
                     let users: [Api.User]
                     switch result {
-                        case let .channelMessages(_, _, _, _, apiMessages, _, apiChats, apiUsers):
+                        case let .channelMessages(channelMessagesData):
+                            let (apiMessages, apiChats, apiUsers) = (channelMessagesData.messages, channelMessagesData.chats, channelMessagesData.users)
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers
-                        case let .messages(apiMessages, _, apiChats, apiUsers):
+                        case let .messages(messagesData):
+                            let (apiMessages, apiChats, apiUsers) = (messagesData.messages, messagesData.chats, messagesData.users)
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers
-                        case let .messagesSlice(_, _, _, _, _, apiMessages, _, apiChats, apiUsers):
+                        case let .messagesSlice(messagesSliceData):
+                            let (apiMessages, apiChats, apiUsers) = (messagesSliceData.messages, messagesSliceData.chats, messagesSliceData.users)
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers

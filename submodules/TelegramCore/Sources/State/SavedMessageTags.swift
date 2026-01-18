@@ -168,7 +168,8 @@ func managedSynchronizeSavedMessageTags(postbox: Postbox, network: Network, acco
                 switch result {
                 case .savedReactionTagsNotModified:
                     return .complete()
-                case let .savedReactionTags(tags, hash):
+                case let .savedReactionTags(savedReactionTagsData):
+                    let (tags, hash) = (savedReactionTagsData.tags, savedReactionTagsData.hash)
                     var customFileIds: [Int64] = []
                     
                     var parsedTags: [SavedMessageTags.Tag] = []
