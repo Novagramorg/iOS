@@ -97,8 +97,20 @@ public extension Api.payments {
 }
 public extension Api.payments {
     indirect enum PaymentResult: TypeConstructorDescription {
-        case paymentResult(updates: Api.Updates)
-        case paymentVerificationNeeded(url: String)
+        public class Cons_paymentResult {
+            public var updates: Api.Updates
+            public init(updates: Api.Updates) {
+                self.updates = updates
+            }
+        }
+        public class Cons_paymentVerificationNeeded {
+            public var url: String
+            public init(url: String) {
+                self.url = url
+            }
+        }
+        case paymentResult(Cons_paymentResult)
+        case paymentVerificationNeeded(Cons_paymentVerificationNeeded)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -134,7 +146,29 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum ResaleStarGifts: TypeConstructorDescription {
-        case resaleStarGifts(flags: Int32, count: Int32, gifts: [Api.StarGift], nextOffset: String?, attributes: [Api.StarGiftAttribute]?, attributesHash: Int64?, chats: [Api.Chat], counters: [Api.StarGiftAttributeCounter]?, users: [Api.User])
+        public class Cons_resaleStarGifts {
+            public var flags: Int32
+            public var count: Int32
+            public var gifts: [Api.StarGift]
+            public var nextOffset: String?
+            public var attributes: [Api.StarGiftAttribute]?
+            public var attributesHash: Int64?
+            public var chats: [Api.Chat]
+            public var counters: [Api.StarGiftAttributeCounter]?
+            public var users: [Api.User]
+            public init(flags: Int32, count: Int32, gifts: [Api.StarGift], nextOffset: String?, attributes: [Api.StarGiftAttribute]?, attributesHash: Int64?, chats: [Api.Chat], counters: [Api.StarGiftAttributeCounter]?, users: [Api.User]) {
+                self.flags = flags
+                self.count = count
+                self.gifts = gifts
+                self.nextOffset = nextOffset
+                self.attributes = attributes
+                self.attributesHash = attributesHash
+                self.chats = chats
+                self.counters = counters
+                self.users = users
+            }
+        }
+        case resaleStarGifts(Cons_resaleStarGifts)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -163,7 +197,15 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum SavedInfo: TypeConstructorDescription {
-        case savedInfo(flags: Int32, savedInfo: Api.PaymentRequestedInfo?)
+        public class Cons_savedInfo {
+            public var flags: Int32
+            public var savedInfo: Api.PaymentRequestedInfo?
+            public init(flags: Int32, savedInfo: Api.PaymentRequestedInfo?) {
+                self.flags = flags
+                self.savedInfo = savedInfo
+            }
+        }
+        case savedInfo(Cons_savedInfo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -192,7 +234,25 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum SavedStarGifts: TypeConstructorDescription {
-        case savedStarGifts(flags: Int32, count: Int32, chatNotificationsEnabled: Api.Bool?, gifts: [Api.SavedStarGift], nextOffset: String?, chats: [Api.Chat], users: [Api.User])
+        public class Cons_savedStarGifts {
+            public var flags: Int32
+            public var count: Int32
+            public var chatNotificationsEnabled: Api.Bool?
+            public var gifts: [Api.SavedStarGift]
+            public var nextOffset: String?
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(flags: Int32, count: Int32, chatNotificationsEnabled: Api.Bool?, gifts: [Api.SavedStarGift], nextOffset: String?, chats: [Api.Chat], users: [Api.User]) {
+                self.flags = flags
+                self.count = count
+                self.chatNotificationsEnabled = chatNotificationsEnabled
+                self.gifts = gifts
+                self.nextOffset = nextOffset
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case savedStarGifts(Cons_savedStarGifts)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -221,7 +281,17 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGiftActiveAuctions: TypeConstructorDescription {
-        case starGiftActiveAuctions(auctions: [Api.StarGiftActiveAuctionState], users: [Api.User], chats: [Api.Chat])
+        public class Cons_starGiftActiveAuctions {
+            public var auctions: [Api.StarGiftActiveAuctionState]
+            public var users: [Api.User]
+            public var chats: [Api.Chat]
+            public init(auctions: [Api.StarGiftActiveAuctionState], users: [Api.User], chats: [Api.Chat]) {
+                self.auctions = auctions
+                self.users = users
+                self.chats = chats
+            }
+        }
+        case starGiftActiveAuctions(Cons_starGiftActiveAuctions)
         case starGiftActiveAuctionsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -258,7 +328,17 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGiftAuctionAcquiredGifts: TypeConstructorDescription {
-        case starGiftAuctionAcquiredGifts(gifts: [Api.StarGiftAuctionAcquiredGift], users: [Api.User], chats: [Api.Chat])
+        public class Cons_starGiftAuctionAcquiredGifts {
+            public var gifts: [Api.StarGiftAuctionAcquiredGift]
+            public var users: [Api.User]
+            public var chats: [Api.Chat]
+            public init(gifts: [Api.StarGiftAuctionAcquiredGift], users: [Api.User], chats: [Api.Chat]) {
+                self.gifts = gifts
+                self.users = users
+                self.chats = chats
+            }
+        }
+        case starGiftAuctionAcquiredGifts(Cons_starGiftAuctionAcquiredGifts)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -287,7 +367,23 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGiftAuctionState: TypeConstructorDescription {
-        case starGiftAuctionState(gift: Api.StarGift, state: Api.StarGiftAuctionState, userState: Api.StarGiftAuctionUserState, timeout: Int32, users: [Api.User], chats: [Api.Chat])
+        public class Cons_starGiftAuctionState {
+            public var gift: Api.StarGift
+            public var state: Api.StarGiftAuctionState
+            public var userState: Api.StarGiftAuctionUserState
+            public var timeout: Int32
+            public var users: [Api.User]
+            public var chats: [Api.Chat]
+            public init(gift: Api.StarGift, state: Api.StarGiftAuctionState, userState: Api.StarGiftAuctionUserState, timeout: Int32, users: [Api.User], chats: [Api.Chat]) {
+                self.gift = gift
+                self.state = state
+                self.userState = userState
+                self.timeout = timeout
+                self.users = users
+                self.chats = chats
+            }
+        }
+        case starGiftAuctionState(Cons_starGiftAuctionState)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -316,7 +412,13 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGiftCollections: TypeConstructorDescription {
-        case starGiftCollections(collections: [Api.StarGiftCollection])
+        public class Cons_starGiftCollections {
+            public var collections: [Api.StarGiftCollection]
+            public init(collections: [Api.StarGiftCollection]) {
+                self.collections = collections
+            }
+        }
+        case starGiftCollections(Cons_starGiftCollections)
         case starGiftCollectionsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -353,7 +455,13 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGiftUpgradeAttributes: TypeConstructorDescription {
-        case starGiftUpgradeAttributes(attributes: [Api.StarGiftAttribute])
+        public class Cons_starGiftUpgradeAttributes {
+            public var attributes: [Api.StarGiftAttribute]
+            public init(attributes: [Api.StarGiftAttribute]) {
+                self.attributes = attributes
+            }
+        }
+        case starGiftUpgradeAttributes(Cons_starGiftUpgradeAttributes)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -382,7 +490,17 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGiftUpgradePreview: TypeConstructorDescription {
-        case starGiftUpgradePreview(sampleAttributes: [Api.StarGiftAttribute], prices: [Api.StarGiftUpgradePrice], nextPrices: [Api.StarGiftUpgradePrice])
+        public class Cons_starGiftUpgradePreview {
+            public var sampleAttributes: [Api.StarGiftAttribute]
+            public var prices: [Api.StarGiftUpgradePrice]
+            public var nextPrices: [Api.StarGiftUpgradePrice]
+            public init(sampleAttributes: [Api.StarGiftAttribute], prices: [Api.StarGiftUpgradePrice], nextPrices: [Api.StarGiftUpgradePrice]) {
+                self.sampleAttributes = sampleAttributes
+                self.prices = prices
+                self.nextPrices = nextPrices
+            }
+        }
+        case starGiftUpgradePreview(Cons_starGiftUpgradePreview)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -411,7 +529,13 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGiftWithdrawalUrl: TypeConstructorDescription {
-        case starGiftWithdrawalUrl(url: String)
+        public class Cons_starGiftWithdrawalUrl {
+            public var url: String
+            public init(url: String) {
+                self.url = url
+            }
+        }
+        case starGiftWithdrawalUrl(Cons_starGiftWithdrawalUrl)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -440,7 +564,19 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarGifts: TypeConstructorDescription {
-        case starGifts(hash: Int32, gifts: [Api.StarGift], chats: [Api.Chat], users: [Api.User])
+        public class Cons_starGifts {
+            public var hash: Int32
+            public var gifts: [Api.StarGift]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(hash: Int32, gifts: [Api.StarGift], chats: [Api.Chat], users: [Api.User]) {
+                self.hash = hash
+                self.gifts = gifts
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case starGifts(Cons_starGifts)
         case starGiftsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -477,7 +613,13 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarsRevenueAdsAccountUrl: TypeConstructorDescription {
-        case starsRevenueAdsAccountUrl(url: String)
+        public class Cons_starsRevenueAdsAccountUrl {
+            public var url: String
+            public init(url: String) {
+                self.url = url
+            }
+        }
+        case starsRevenueAdsAccountUrl(Cons_starsRevenueAdsAccountUrl)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -506,7 +648,21 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarsRevenueStats: TypeConstructorDescription {
-        case starsRevenueStats(flags: Int32, topHoursGraph: Api.StatsGraph?, revenueGraph: Api.StatsGraph, status: Api.StarsRevenueStatus, usdRate: Double)
+        public class Cons_starsRevenueStats {
+            public var flags: Int32
+            public var topHoursGraph: Api.StatsGraph?
+            public var revenueGraph: Api.StatsGraph
+            public var status: Api.StarsRevenueStatus
+            public var usdRate: Double
+            public init(flags: Int32, topHoursGraph: Api.StatsGraph?, revenueGraph: Api.StatsGraph, status: Api.StarsRevenueStatus, usdRate: Double) {
+                self.flags = flags
+                self.topHoursGraph = topHoursGraph
+                self.revenueGraph = revenueGraph
+                self.status = status
+                self.usdRate = usdRate
+            }
+        }
+        case starsRevenueStats(Cons_starsRevenueStats)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -535,7 +691,13 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarsRevenueWithdrawalUrl: TypeConstructorDescription {
-        case starsRevenueWithdrawalUrl(url: String)
+        public class Cons_starsRevenueWithdrawalUrl {
+            public var url: String
+            public init(url: String) {
+                self.url = url
+            }
+        }
+        case starsRevenueWithdrawalUrl(Cons_starsRevenueWithdrawalUrl)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -564,7 +726,29 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum StarsStatus: TypeConstructorDescription {
-        case starsStatus(flags: Int32, balance: Api.StarsAmount, subscriptions: [Api.StarsSubscription]?, subscriptionsNextOffset: String?, subscriptionsMissingBalance: Int64?, history: [Api.StarsTransaction]?, nextOffset: String?, chats: [Api.Chat], users: [Api.User])
+        public class Cons_starsStatus {
+            public var flags: Int32
+            public var balance: Api.StarsAmount
+            public var subscriptions: [Api.StarsSubscription]?
+            public var subscriptionsNextOffset: String?
+            public var subscriptionsMissingBalance: Int64?
+            public var history: [Api.StarsTransaction]?
+            public var nextOffset: String?
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(flags: Int32, balance: Api.StarsAmount, subscriptions: [Api.StarsSubscription]?, subscriptionsNextOffset: String?, subscriptionsMissingBalance: Int64?, history: [Api.StarsTransaction]?, nextOffset: String?, chats: [Api.Chat], users: [Api.User]) {
+                self.flags = flags
+                self.balance = balance
+                self.subscriptions = subscriptions
+                self.subscriptionsNextOffset = subscriptionsNextOffset
+                self.subscriptionsMissingBalance = subscriptionsMissingBalance
+                self.history = history
+                self.nextOffset = nextOffset
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case starsStatus(Cons_starsStatus)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -593,7 +777,21 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum SuggestedStarRefBots: TypeConstructorDescription {
-        case suggestedStarRefBots(flags: Int32, count: Int32, suggestedBots: [Api.StarRefProgram], users: [Api.User], nextOffset: String?)
+        public class Cons_suggestedStarRefBots {
+            public var flags: Int32
+            public var count: Int32
+            public var suggestedBots: [Api.StarRefProgram]
+            public var users: [Api.User]
+            public var nextOffset: String?
+            public init(flags: Int32, count: Int32, suggestedBots: [Api.StarRefProgram], users: [Api.User], nextOffset: String?) {
+                self.flags = flags
+                self.count = count
+                self.suggestedBots = suggestedBots
+                self.users = users
+                self.nextOffset = nextOffset
+            }
+        }
+        case suggestedStarRefBots(Cons_suggestedStarRefBots)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -622,7 +820,17 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum UniqueStarGift: TypeConstructorDescription {
-        case uniqueStarGift(gift: Api.StarGift, chats: [Api.Chat], users: [Api.User])
+        public class Cons_uniqueStarGift {
+            public var gift: Api.StarGift
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(gift: Api.StarGift, chats: [Api.Chat], users: [Api.User]) {
+                self.gift = gift
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case uniqueStarGift(Cons_uniqueStarGift)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -651,7 +859,37 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum UniqueStarGiftValueInfo: TypeConstructorDescription {
-        case uniqueStarGiftValueInfo(flags: Int32, currency: String, value: Int64, initialSaleDate: Int32, initialSaleStars: Int64, initialSalePrice: Int64, lastSaleDate: Int32?, lastSalePrice: Int64?, floorPrice: Int64?, averagePrice: Int64?, listedCount: Int32?, fragmentListedCount: Int32?, fragmentListedUrl: String?)
+        public class Cons_uniqueStarGiftValueInfo {
+            public var flags: Int32
+            public var currency: String
+            public var value: Int64
+            public var initialSaleDate: Int32
+            public var initialSaleStars: Int64
+            public var initialSalePrice: Int64
+            public var lastSaleDate: Int32?
+            public var lastSalePrice: Int64?
+            public var floorPrice: Int64?
+            public var averagePrice: Int64?
+            public var listedCount: Int32?
+            public var fragmentListedCount: Int32?
+            public var fragmentListedUrl: String?
+            public init(flags: Int32, currency: String, value: Int64, initialSaleDate: Int32, initialSaleStars: Int64, initialSalePrice: Int64, lastSaleDate: Int32?, lastSalePrice: Int64?, floorPrice: Int64?, averagePrice: Int64?, listedCount: Int32?, fragmentListedCount: Int32?, fragmentListedUrl: String?) {
+                self.flags = flags
+                self.currency = currency
+                self.value = value
+                self.initialSaleDate = initialSaleDate
+                self.initialSaleStars = initialSaleStars
+                self.initialSalePrice = initialSalePrice
+                self.lastSaleDate = lastSaleDate
+                self.lastSalePrice = lastSalePrice
+                self.floorPrice = floorPrice
+                self.averagePrice = averagePrice
+                self.listedCount = listedCount
+                self.fragmentListedCount = fragmentListedCount
+                self.fragmentListedUrl = fragmentListedUrl
+            }
+        }
+        case uniqueStarGiftValueInfo(Cons_uniqueStarGiftValueInfo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -680,7 +918,17 @@ public extension Api.payments {
 }
 public extension Api.payments {
     enum ValidatedRequestedInfo: TypeConstructorDescription {
-        case validatedRequestedInfo(flags: Int32, id: String?, shippingOptions: [Api.ShippingOption]?)
+        public class Cons_validatedRequestedInfo {
+            public var flags: Int32
+            public var id: String?
+            public var shippingOptions: [Api.ShippingOption]?
+            public init(flags: Int32, id: String?, shippingOptions: [Api.ShippingOption]?) {
+                self.flags = flags
+                self.id = id
+                self.shippingOptions = shippingOptions
+            }
+        }
+        case validatedRequestedInfo(Cons_validatedRequestedInfo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

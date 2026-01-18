@@ -1240,7 +1240,8 @@ fileprivate func _internal_requestSuggestedStarRefBots(account: Account, id: Eng
             }
             return account.postbox.transaction { transaction -> (items: [EngineSuggestedStarRefBotsContext.Item], totalCount: Int, nextOffset: String?)? in
                 switch result {
-                case let .suggestedStarRefBots(_, count, suggestedBots, users, nextOffset):
+                case let .suggestedStarRefBots(suggestedStarRefBotsData):
+                    let (count, suggestedBots, users, nextOffset) = (suggestedStarRefBotsData.count, suggestedStarRefBotsData.suggestedBots, suggestedStarRefBotsData.users, suggestedStarRefBotsData.nextOffset)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: AccumulatedPeers(users: users))
                     
                     var items: [EngineSuggestedStarRefBotsContext.Item] = []

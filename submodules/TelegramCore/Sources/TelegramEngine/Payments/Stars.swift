@@ -470,7 +470,8 @@ private func _internal_requestStarsState(account: Account, peerId: EnginePeer.Id
         |> mapToSignal { result -> Signal<InternalStarsStatus, RequestStarsStateError> in
             return account.postbox.transaction { transaction -> InternalStarsStatus in
                 switch result {
-                case let .starsStatus(_, balance, _, _, subscriptionsMissingBalance, transactions, nextTransactionsOffset, chats, users):
+                case let .starsStatus(starsStatusData):
+                    let (_, balance, _, _, subscriptionsMissingBalance, transactions, nextTransactionsOffset, chats, users) = (starsStatusData.flags, starsStatusData.balance, starsStatusData.subscriptions, starsStatusData.subscriptionsNextOffset, starsStatusData.subscriptionsMissingBalance, starsStatusData.history, starsStatusData.nextOffset, starsStatusData.chats, starsStatusData.users)
                     let peers = AccumulatedPeers(chats: chats, users: users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: peers)
                 
@@ -523,10 +524,11 @@ private func _internal_requestStarsSubscriptions(account: Account, peerId: Engin
             }
             return account.postbox.transaction { transaction -> InternalStarsStatus in
                 switch result {
-                case let .starsStatus(_, balance, subscriptions, subscriptionsNextOffset, subscriptionsMissingBalance, _, _, chats, users):
+                case let .starsStatus(starsStatusData):
+                    let (_, balance, subscriptions, subscriptionsNextOffset, subscriptionsMissingBalance, _, _, chats, users) = (starsStatusData.flags, starsStatusData.balance, starsStatusData.subscriptions, starsStatusData.subscriptionsNextOffset, starsStatusData.subscriptionsMissingBalance, starsStatusData.history, starsStatusData.nextOffset, starsStatusData.chats, starsStatusData.users)
                     let peers = AccumulatedPeers(chats: chats, users: users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: peers)
-                    
+
                     var parsedSubscriptions: [StarsContext.State.Subscription] = []
                     if let subscriptions {
                         for entry in subscriptions {
@@ -1602,7 +1604,8 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
         return account.network.request(Api.functions.payments.sendStarsForm(formId: formId, invoice: invoice))
         |> map { result -> SendBotPaymentResult in
             switch result {
-                case let .paymentResult(updates):
+                case let .paymentResult(paymentResultData):
+                    let updates = paymentResultData.updates
                     account.stateManager.addUpdates(updates)
                 
                     switch source {
@@ -1694,7 +1697,8 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
                         }
                     }
                     return .done(receiptMessageId: receiptMessageId, subscriptionPeerId: nil, uniqueStarGift: resultGift)
-                case let .paymentVerificationNeeded(url):
+                case let .paymentVerificationNeeded(paymentVerificationNeededData):
+                    let url = paymentVerificationNeededData.url
                     return .externalVerificationRequired(url: url)
             }
         }
@@ -1768,9 +1772,11 @@ func _internal_getStarsTransaction(accountPeerId: PeerId, postbox: Postbox, netw
         }
         |> mapToSignal { result -> Signal<StarsContext.State.Transaction?, NoError> in
             return postbox.transaction { transaction -> StarsContext.State.Transaction? in
-                guard let result, case let .starsStatus(_, _, _, _, _, transactions, _, chats, users) = result, let matchingTransaction = transactions?.first else {
+                guard let result, case let .starsStatus(starsStatusData) = result, let matchingTransaction = starsStatusData.history?.first else {
                     return nil
                 }
+                let (_, _, _, _, _, transactions, _, chats, users) = (starsStatusData.flags, starsStatusData.balance, starsStatusData.subscriptions, starsStatusData.subscriptionsNextOffset, starsStatusData.subscriptionsMissingBalance, starsStatusData.history, starsStatusData.nextOffset, starsStatusData.chats, starsStatusData.users)
+                let _ = transactions
                 let peers = AccumulatedPeers(chats: chats, users: users)
                 updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: peers)
                 

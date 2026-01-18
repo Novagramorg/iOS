@@ -1340,10 +1340,11 @@ func _internal_keepCachedStarGiftsUpdated(postbox: Postbox, network: Network, ac
             
             return postbox.transaction { transaction in
                 switch result {
-                case let .starGifts(hash, gifts, chats, users):
+                case let .starGifts(starGiftsData):
+                    let (hash, gifts, chats, users) = (starGiftsData.hash, starGiftsData.gifts, starGiftsData.chats, starGiftsData.users)
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                    
+
                     let starGiftsLists = StarGiftsList(items: gifts.compactMap { StarGift(apiStarGift: $0) }, hashValue: hash)
                     transaction.setPreferencesEntry(key: PreferencesKeys.starGifts(), value: PreferencesEntry(starGiftsLists))
                 case .starGiftsNotModified:
@@ -1723,7 +1724,8 @@ func _internal_starGiftUpgradePreview(account: Account, giftId: Int64) -> Signal
             return nil
         }
         switch result {
-        case let .starGiftUpgradePreview(apiSampleAttributes, apiPrices, apiNextPrices):
+        case let .starGiftUpgradePreview(starGiftUpgradePreviewData):
+            let (apiSampleAttributes, apiPrices, apiNextPrices) = (starGiftUpgradePreviewData.sampleAttributes, starGiftUpgradePreviewData.prices, starGiftUpgradePreviewData.nextPrices)
             let attributes = apiSampleAttributes.compactMap { StarGift.UniqueGift.Attribute(apiAttribute: $0) }
             var prices: [StarGiftUpgradePreview.Price] = []
             var nextPrices: [StarGiftUpgradePreview.Price] = []
@@ -2015,7 +2017,8 @@ private final class ProfileGiftsContextImpl {
                 }
                 return postbox.transaction { transaction -> ([ProfileGiftsContext.State.StarGift], Int32, String?, Bool?) in
                     switch result {
-                    case let .savedStarGifts(_, count, apiNotificationsEnabled, apiGifts, nextOffset, chats, users):
+                    case let .savedStarGifts(savedStarGiftsData):
+                        let (_, count, apiNotificationsEnabled, apiGifts, nextOffset, chats, users) = (savedStarGiftsData.flags, savedStarGiftsData.count, savedStarGiftsData.chatNotificationsEnabled, savedStarGiftsData.gifts, savedStarGiftsData.nextOffset, savedStarGiftsData.chats, savedStarGiftsData.users)
                         let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                         
@@ -3232,7 +3235,8 @@ private final class CraftGiftsContextImpl {
             }
             return postbox.transaction { transaction -> ([ProfileGiftsContext.State.StarGift], Int32, String?) in
                 switch result {
-                case let .savedStarGifts(_, count, _, apiGifts, nextOffset, chats, users):
+                case let .savedStarGifts(savedStarGiftsData):
+                    let (_, count, _, apiGifts, nextOffset, chats, users) = (savedStarGiftsData.flags, savedStarGiftsData.count, savedStarGiftsData.chatNotificationsEnabled, savedStarGiftsData.gifts, savedStarGiftsData.nextOffset, savedStarGiftsData.chats, savedStarGiftsData.users)
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
 
@@ -3553,7 +3557,8 @@ func _internal_getUniqueStarGift(account: Account, slug: String) -> Signal<StarG
     |> mapToSignal { result -> Signal<StarGift.UniqueGift?, NoError> in
         if let result = result {
             switch result {
-            case let .uniqueStarGift(gift, chats, users):
+            case let .uniqueStarGift(uniqueStarGiftData):
+                let (gift, chats, users) = (uniqueStarGiftData.gift, uniqueStarGiftData.chats, uniqueStarGiftData.users)
                 return account.postbox.transaction { transaction in
                     let parsedPeers = AccumulatedPeers(chats: chats, users: users)
                     updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
@@ -3578,7 +3583,8 @@ func _internal_getUniqueStarGiftValueInfo(account: Account, slug: String) -> Sig
     |> map { result -> StarGift.UniqueGift.ValueInfo? in
         if let result {
             switch result {
-            case let .uniqueStarGiftValueInfo(flags, currency, value, initialSaleDate, initialSaleStars, initialSalePrice, lastSaleDate, lastSalePrice, floorPrice, averagePrice, listedCount, fragmentListedCount, fragmentListedUrl):
+            case let .uniqueStarGiftValueInfo(uniqueStarGiftValueInfoData):
+                let (flags, currency, value, initialSaleDate, initialSaleStars, initialSalePrice, lastSaleDate, lastSalePrice, floorPrice, averagePrice, listedCount, fragmentListedCount, fragmentListedUrl) = (uniqueStarGiftValueInfoData.flags, uniqueStarGiftValueInfoData.currency, uniqueStarGiftValueInfoData.value, uniqueStarGiftValueInfoData.initialSaleDate, uniqueStarGiftValueInfoData.initialSaleStars, uniqueStarGiftValueInfoData.initialSalePrice, uniqueStarGiftValueInfoData.lastSaleDate, uniqueStarGiftValueInfoData.lastSalePrice, uniqueStarGiftValueInfoData.floorPrice, uniqueStarGiftValueInfoData.averagePrice, uniqueStarGiftValueInfoData.listedCount, uniqueStarGiftValueInfoData.fragmentListedCount, uniqueStarGiftValueInfoData.fragmentListedUrl)
                 return StarGift.UniqueGift.ValueInfo(
                     isLastSaleOnFragment: flags & (1 << 1) != 0,
                     valueIsAverage: flags & (1 << 6) != 0,
@@ -3769,7 +3775,8 @@ func _internal_requestStarGiftWithdrawalUrl(account: Account, reference: StarGif
             }
             |> map { result -> String in
                 switch result {
-                case let .starGiftWithdrawalUrl(url):
+                case let .starGiftWithdrawalUrl(starGiftWithdrawalUrlData):
+                    let url = starGiftWithdrawalUrlData.url
                     return url
                 }
             }
@@ -3941,7 +3948,8 @@ private final class ResaleGiftsContextImpl {
                 }
                 return postbox.transaction { transaction -> ([StarGift], [StarGift.UniqueGift.Attribute]?, [ResaleGiftsContext.Attribute: Int32]?, Int64?, Int32, String?) in
                     switch result {
-                    case let .resaleStarGifts(_, count, gifts, nextOffset, attributes, attributesHash, chats, counters, users):
+                    case let .resaleStarGifts(resaleStarGiftsData):
+                        let (_, count, gifts, nextOffset, attributes, attributesHash, chats, counters, users) = (resaleStarGiftsData.flags, resaleStarGiftsData.count, resaleStarGiftsData.gifts, resaleStarGiftsData.nextOffset, resaleStarGiftsData.attributes, resaleStarGiftsData.attributesHash, resaleStarGiftsData.chats, resaleStarGiftsData.counters, resaleStarGiftsData.users)
                         let _ = attributesHash
 
                         var resultAttributes: [StarGift.UniqueGift.Attribute]?
@@ -4285,7 +4293,8 @@ func _internal_getStarGiftUpgradeAttributes(account: Account, giftId: Int64) -> 
                 return .single(nil)
             }
             switch result {
-            case let .starGiftUpgradeAttributes(apiAttributes):
+            case let .starGiftUpgradeAttributes(starGiftUpgradeAttributesData):
+                let apiAttributes = starGiftUpgradeAttributesData.attributes
                 let attributes = apiAttributes.compactMap { StarGift.UniqueGift.Attribute(apiAttribute: $0) }
                 return account.postbox.transaction { transaction in
                     if !attributes.isEmpty {
