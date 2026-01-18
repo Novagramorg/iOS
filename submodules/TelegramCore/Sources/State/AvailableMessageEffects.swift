@@ -240,7 +240,8 @@ func managedSynchronizeAvailableMessageEffects(postbox: Postbox, network: Networ
                         return .complete()
                     }
                     switch result {
-                    case let .availableEffects(hash, effects, documents):
+                    case let .availableEffects(availableEffectsData):
+                        let (hash, effects, documents) = (availableEffectsData.hash, availableEffectsData.effects, availableEffectsData.documents)
                         var files: [Int64: TelegramMediaFile] = [:]
                         for document in documents {
                             if let file = telegramMediaFileFromApiDocument(document, altDocuments: []) {

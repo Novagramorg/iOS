@@ -747,7 +747,8 @@ func _internal_getBotApp(account: Account, reference: BotAppReference) -> Signal
         }
         |> mapToSignal { result -> Signal<BotApp, GetBotAppError> in
             switch result {
-            case let .botApp(botAppFlags, app):
+            case let .botApp(botAppData):
+                let (botAppFlags, app) = (botAppData.flags, botAppData.app)
                 switch app {
                 case let .botApp(botAppData):
                     let (flags, id, accessHash, shortName, title, description, photo, document, hash) = (botAppData.flags, botAppData.id, botAppData.accessHash, botAppData.shortName, botAppData.title, botAppData.description, botAppData.photo, botAppData.document, botAppData.hash)

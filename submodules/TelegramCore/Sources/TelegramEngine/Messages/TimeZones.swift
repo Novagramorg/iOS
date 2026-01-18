@@ -85,7 +85,8 @@ func _internal_keepCachedTimeZoneListUpdated(account: Account) -> Signal<Never, 
             
             return account.postbox.transaction { transaction in
                 switch result {
-                case let .timezonesList(timezones, hash):
+                case let .timezonesList(timezonesListData):
+                    let (timezones, hash) = (timezonesListData.timezones, timezonesListData.hash)
                     var items: [TimeZoneList.Item] = []
                     for item in timezones {
                         switch item {

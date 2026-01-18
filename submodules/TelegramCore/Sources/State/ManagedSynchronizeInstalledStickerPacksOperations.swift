@@ -507,7 +507,8 @@ private func continueSynchronizeInstalledStickerPacks(transaction: Transaction, 
             
             var remoteCollectionInfos: [StickerPackCollectionInfo] = []
             switch result {
-                case let .allStickers(_, sets):
+                case let .allStickers(allStickersData):
+                    let sets = allStickersData.sets
                     for apiSet in sets {
                         let info = StickerPackCollectionInfo(apiSet: apiSet, namespace: collectionNamespace)
                         remoteCollectionInfos.append(info)

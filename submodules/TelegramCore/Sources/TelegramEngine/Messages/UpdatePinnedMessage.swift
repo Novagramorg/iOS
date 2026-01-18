@@ -174,7 +174,8 @@ func _internal_requestUnpinAllMessages(account: Account, peerId: PeerId, threadI
         }
         |> mapToSignal { result -> Signal<Bool, InternalError> in
             switch result {
-            case let .affectedHistory(_, _, count):
+            case let .affectedHistory(affectedHistoryData):
+                let count = affectedHistoryData.offset
                 if count != 0 {
                     return .fail(.restart)
                 }

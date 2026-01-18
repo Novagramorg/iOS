@@ -43,7 +43,8 @@ func _internal_markAllChatsAsRead(postbox: Postbox, network: Network, stateManag
                                 |> mapToSignal { result -> Signal<Void, NoError> in
                                     if let result = result {
                                         switch result {
-                                            case let .affectedMessages(pts, ptsCount):
+                                            case let .affectedMessages(affectedMessagesData):
+                                                let (pts, ptsCount) = (affectedMessagesData.pts, affectedMessagesData.ptsCount)
                                                 stateManager.addUpdateGroups([.updatePts(pts: pts, ptsCount: ptsCount)])
                                         }
                                     }

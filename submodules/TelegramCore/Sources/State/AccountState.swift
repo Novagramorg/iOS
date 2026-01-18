@@ -6,7 +6,8 @@ import TelegramApi
 extension UnauthorizedAccountTermsOfService {
     init?(apiTermsOfService: Api.help.TermsOfService) {
         switch apiTermsOfService {
-            case let .termsOfService(_, id, text, entities, minAgeConfirm):
+            case let .termsOfService(termsOfServiceData):
+                let (_, id, text, entities, minAgeConfirm) = (termsOfServiceData.flags, termsOfServiceData.id, termsOfServiceData.text, termsOfServiceData.entities, termsOfServiceData.minAgeConfirm)
                 let idData: String
                 switch id {
                     case let .dataJSON(dataJSONData):

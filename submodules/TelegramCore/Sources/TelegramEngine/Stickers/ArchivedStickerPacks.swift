@@ -42,7 +42,8 @@ func _internal_archivedStickerPacks(account: Account, namespace: ArchivedSticker
     |> map { result -> [ArchivedStickerPackItem] in
         var archivedItems: [ArchivedStickerPackItem] = []
         switch result {
-            case let .archivedStickers(_, sets):
+            case let .archivedStickers(archivedStickersData):
+                let sets = archivedStickersData.sets
                 for set in sets {
                     let (info, items) = parsePreviewStickerSet(set, namespace: namespace.itemCollectionNamespace)
                     archivedItems.append(ArchivedStickerPackItem(info: info, topItems: items))
