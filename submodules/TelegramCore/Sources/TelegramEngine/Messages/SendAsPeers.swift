@@ -130,7 +130,8 @@ func _internal_peerSendAsAvailablePeers(accountPeerId: PeerId, network: Network,
                 return .single([])
             }
             switch result {
-            case let .sendAsPeers(sendAsPeers, chats, _):
+            case let .sendAsPeers(sendAsPeersData):
+                let (sendAsPeers, chats) = (sendAsPeersData.peers, sendAsPeersData.chats)
                 return postbox.transaction { transaction -> [SendAsPeer] in
                     var subscribers: [PeerId: Int32] = [:]
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
@@ -289,7 +290,8 @@ func _internal_liveStorySendAsAvailablePeers(account: Account, peerId: PeerId) -
                 return .single([])
             }
             switch result {
-            case let .sendAsPeers(sendAsPeers, chats, _):
+            case let .sendAsPeers(sendAsPeersData):
+                let (sendAsPeers, chats) = (sendAsPeersData.peers, sendAsPeersData.chats)
                 return account.postbox.transaction { transaction -> [SendAsPeer] in
                     var subscribers: [PeerId: Int32] = [:]
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])

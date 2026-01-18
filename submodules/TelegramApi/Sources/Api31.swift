@@ -367,8 +367,30 @@ public extension Api.account {
 }
 public extension Api.auth {
     enum Authorization: TypeConstructorDescription {
-        case authorization(flags: Int32, otherwiseReloginDays: Int32?, tmpSessions: Int32?, futureAuthToken: Buffer?, user: Api.User)
-        case authorizationSignUpRequired(flags: Int32, termsOfService: Api.help.TermsOfService?)
+        public class Cons_authorization {
+            public var flags: Int32
+            public var otherwiseReloginDays: Int32?
+            public var tmpSessions: Int32?
+            public var futureAuthToken: Buffer?
+            public var user: Api.User
+            public init(flags: Int32, otherwiseReloginDays: Int32?, tmpSessions: Int32?, futureAuthToken: Buffer?, user: Api.User) {
+                self.flags = flags
+                self.otherwiseReloginDays = otherwiseReloginDays
+                self.tmpSessions = tmpSessions
+                self.futureAuthToken = futureAuthToken
+                self.user = user
+            }
+        }
+        public class Cons_authorizationSignUpRequired {
+            public var flags: Int32
+            public var termsOfService: Api.help.TermsOfService?
+            public init(flags: Int32, termsOfService: Api.help.TermsOfService?) {
+                self.flags = flags
+                self.termsOfService = termsOfService
+            }
+        }
+        case authorization(Cons_authorization)
+        case authorizationSignUpRequired(Cons_authorizationSignUpRequired)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -465,7 +487,15 @@ public extension Api.auth {
 }
 public extension Api.auth {
     enum ExportedAuthorization: TypeConstructorDescription {
-        case exportedAuthorization(id: Int64, bytes: Buffer)
+        public class Cons_exportedAuthorization {
+            public var id: Int64
+            public var bytes: Buffer
+            public init(id: Int64, bytes: Buffer) {
+                self.id = id
+                self.bytes = bytes
+            }
+        }
+        case exportedAuthorization(Cons_exportedAuthorization)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -494,7 +524,15 @@ public extension Api.auth {
 }
 public extension Api.auth {
     enum LoggedOut: TypeConstructorDescription {
-        case loggedOut(flags: Int32, futureAuthToken: Buffer?)
+        public class Cons_loggedOut {
+            public var flags: Int32
+            public var futureAuthToken: Buffer?
+            public init(flags: Int32, futureAuthToken: Buffer?) {
+                self.flags = flags
+                self.futureAuthToken = futureAuthToken
+            }
+        }
+        case loggedOut(Cons_loggedOut)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -523,9 +561,31 @@ public extension Api.auth {
 }
 public extension Api.auth {
     enum LoginToken: TypeConstructorDescription {
-        case loginToken(expires: Int32, token: Buffer)
-        case loginTokenMigrateTo(dcId: Int32, token: Buffer)
-        case loginTokenSuccess(authorization: Api.auth.Authorization)
+        public class Cons_loginToken {
+            public var expires: Int32
+            public var token: Buffer
+            public init(expires: Int32, token: Buffer) {
+                self.expires = expires
+                self.token = token
+            }
+        }
+        public class Cons_loginTokenMigrateTo {
+            public var dcId: Int32
+            public var token: Buffer
+            public init(dcId: Int32, token: Buffer) {
+                self.dcId = dcId
+                self.token = token
+            }
+        }
+        public class Cons_loginTokenSuccess {
+            public var authorization: Api.auth.Authorization
+            public init(authorization: Api.auth.Authorization) {
+                self.authorization = authorization
+            }
+        }
+        case loginToken(Cons_loginToken)
+        case loginTokenMigrateTo(Cons_loginTokenMigrateTo)
+        case loginTokenSuccess(Cons_loginTokenSuccess)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -568,7 +628,13 @@ public extension Api.auth {
 }
 public extension Api.auth {
     enum PasskeyLoginOptions: TypeConstructorDescription {
-        case passkeyLoginOptions(options: Api.DataJSON)
+        public class Cons_passkeyLoginOptions {
+            public var options: Api.DataJSON
+            public init(options: Api.DataJSON) {
+                self.options = options
+            }
+        }
+        case passkeyLoginOptions(Cons_passkeyLoginOptions)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -597,7 +663,13 @@ public extension Api.auth {
 }
 public extension Api.auth {
     enum PasswordRecovery: TypeConstructorDescription {
-        case passwordRecovery(emailPattern: String)
+        public class Cons_passwordRecovery {
+            public var emailPattern: String
+            public init(emailPattern: String) {
+                self.emailPattern = emailPattern
+            }
+        }
+        case passwordRecovery(Cons_passwordRecovery)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -626,9 +698,45 @@ public extension Api.auth {
 }
 public extension Api.auth {
     enum SentCode: TypeConstructorDescription {
-        case sentCode(flags: Int32, type: Api.auth.SentCodeType, phoneCodeHash: String, nextType: Api.auth.CodeType?, timeout: Int32?)
-        case sentCodePaymentRequired(storeProduct: String, phoneCodeHash: String, supportEmailAddress: String, supportEmailSubject: String, currency: String, amount: Int64)
-        case sentCodeSuccess(authorization: Api.auth.Authorization)
+        public class Cons_sentCode {
+            public var flags: Int32
+            public var type: Api.auth.SentCodeType
+            public var phoneCodeHash: String
+            public var nextType: Api.auth.CodeType?
+            public var timeout: Int32?
+            public init(flags: Int32, type: Api.auth.SentCodeType, phoneCodeHash: String, nextType: Api.auth.CodeType?, timeout: Int32?) {
+                self.flags = flags
+                self.type = type
+                self.phoneCodeHash = phoneCodeHash
+                self.nextType = nextType
+                self.timeout = timeout
+            }
+        }
+        public class Cons_sentCodePaymentRequired {
+            public var storeProduct: String
+            public var phoneCodeHash: String
+            public var supportEmailAddress: String
+            public var supportEmailSubject: String
+            public var currency: String
+            public var amount: Int64
+            public init(storeProduct: String, phoneCodeHash: String, supportEmailAddress: String, supportEmailSubject: String, currency: String, amount: Int64) {
+                self.storeProduct = storeProduct
+                self.phoneCodeHash = phoneCodeHash
+                self.supportEmailAddress = supportEmailAddress
+                self.supportEmailSubject = supportEmailSubject
+                self.currency = currency
+                self.amount = amount
+            }
+        }
+        public class Cons_sentCodeSuccess {
+            public var authorization: Api.auth.Authorization
+            public init(authorization: Api.auth.Authorization) {
+                self.authorization = authorization
+            }
+        }
+        case sentCode(Cons_sentCode)
+        case sentCodePaymentRequired(Cons_sentCodePaymentRequired)
+        case sentCodeSuccess(Cons_sentCodeSuccess)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -671,17 +779,111 @@ public extension Api.auth {
 }
 public extension Api.auth {
     enum SentCodeType: TypeConstructorDescription {
-        case sentCodeTypeApp(length: Int32)
-        case sentCodeTypeCall(length: Int32)
-        case sentCodeTypeEmailCode(flags: Int32, emailPattern: String, length: Int32, resetAvailablePeriod: Int32?, resetPendingDate: Int32?)
-        case sentCodeTypeFirebaseSms(flags: Int32, nonce: Buffer?, playIntegrityProjectId: Int64?, playIntegrityNonce: Buffer?, receipt: String?, pushTimeout: Int32?, length: Int32)
-        case sentCodeTypeFlashCall(pattern: String)
-        case sentCodeTypeFragmentSms(url: String, length: Int32)
-        case sentCodeTypeMissedCall(prefix: String, length: Int32)
-        case sentCodeTypeSetUpEmailRequired(flags: Int32)
-        case sentCodeTypeSms(length: Int32)
-        case sentCodeTypeSmsPhrase(flags: Int32, beginning: String?)
-        case sentCodeTypeSmsWord(flags: Int32, beginning: String?)
+        public class Cons_sentCodeTypeApp {
+            public var length: Int32
+            public init(length: Int32) {
+                self.length = length
+            }
+        }
+        public class Cons_sentCodeTypeCall {
+            public var length: Int32
+            public init(length: Int32) {
+                self.length = length
+            }
+        }
+        public class Cons_sentCodeTypeEmailCode {
+            public var flags: Int32
+            public var emailPattern: String
+            public var length: Int32
+            public var resetAvailablePeriod: Int32?
+            public var resetPendingDate: Int32?
+            public init(flags: Int32, emailPattern: String, length: Int32, resetAvailablePeriod: Int32?, resetPendingDate: Int32?) {
+                self.flags = flags
+                self.emailPattern = emailPattern
+                self.length = length
+                self.resetAvailablePeriod = resetAvailablePeriod
+                self.resetPendingDate = resetPendingDate
+            }
+        }
+        public class Cons_sentCodeTypeFirebaseSms {
+            public var flags: Int32
+            public var nonce: Buffer?
+            public var playIntegrityProjectId: Int64?
+            public var playIntegrityNonce: Buffer?
+            public var receipt: String?
+            public var pushTimeout: Int32?
+            public var length: Int32
+            public init(flags: Int32, nonce: Buffer?, playIntegrityProjectId: Int64?, playIntegrityNonce: Buffer?, receipt: String?, pushTimeout: Int32?, length: Int32) {
+                self.flags = flags
+                self.nonce = nonce
+                self.playIntegrityProjectId = playIntegrityProjectId
+                self.playIntegrityNonce = playIntegrityNonce
+                self.receipt = receipt
+                self.pushTimeout = pushTimeout
+                self.length = length
+            }
+        }
+        public class Cons_sentCodeTypeFlashCall {
+            public var pattern: String
+            public init(pattern: String) {
+                self.pattern = pattern
+            }
+        }
+        public class Cons_sentCodeTypeFragmentSms {
+            public var url: String
+            public var length: Int32
+            public init(url: String, length: Int32) {
+                self.url = url
+                self.length = length
+            }
+        }
+        public class Cons_sentCodeTypeMissedCall {
+            public var prefix: String
+            public var length: Int32
+            public init(prefix: String, length: Int32) {
+                self.prefix = prefix
+                self.length = length
+            }
+        }
+        public class Cons_sentCodeTypeSetUpEmailRequired {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
+        public class Cons_sentCodeTypeSms {
+            public var length: Int32
+            public init(length: Int32) {
+                self.length = length
+            }
+        }
+        public class Cons_sentCodeTypeSmsPhrase {
+            public var flags: Int32
+            public var beginning: String?
+            public init(flags: Int32, beginning: String?) {
+                self.flags = flags
+                self.beginning = beginning
+            }
+        }
+        public class Cons_sentCodeTypeSmsWord {
+            public var flags: Int32
+            public var beginning: String?
+            public init(flags: Int32, beginning: String?) {
+                self.flags = flags
+                self.beginning = beginning
+            }
+        }
+        case sentCodeTypeApp(Cons_sentCodeTypeApp)
+        case sentCodeTypeCall(Cons_sentCodeTypeCall)
+        case sentCodeTypeEmailCode(Cons_sentCodeTypeEmailCode)
+        case sentCodeTypeFirebaseSms(Cons_sentCodeTypeFirebaseSms)
+        case sentCodeTypeFlashCall(Cons_sentCodeTypeFlashCall)
+        case sentCodeTypeFragmentSms(Cons_sentCodeTypeFragmentSms)
+        case sentCodeTypeMissedCall(Cons_sentCodeTypeMissedCall)
+        case sentCodeTypeSetUpEmailRequired(Cons_sentCodeTypeSetUpEmailRequired)
+        case sentCodeTypeSms(Cons_sentCodeTypeSms)
+        case sentCodeTypeSmsPhrase(Cons_sentCodeTypeSmsPhrase)
+        case sentCodeTypeSmsWord(Cons_sentCodeTypeSmsWord)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

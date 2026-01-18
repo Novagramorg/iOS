@@ -53,9 +53,11 @@ func _internal_exportAuthTransferToken(accountManager: AccountManager<TelegramAc
             return .single(.passwordRequested(account))
         }
         switch result {
-        case let .loginToken(expires, token):
+        case let .loginToken(loginTokenData):
+            let (expires, token) = (loginTokenData.expires, loginTokenData.token)
             return .single(.displayToken(AuthTransferExportedToken(value: token.makeData(), validUntil: expires)))
-        case let .loginTokenMigrateTo(dcId, token):
+        case let .loginTokenMigrateTo(loginTokenMigrateToData):
+            let (dcId, token) = (loginTokenMigrateToData.dcId, loginTokenMigrateToData.token)
             let updatedAccount = account.changedMasterDatacenterId(accountManager: accountManager, masterDatacenterId: dcId)
             return updatedAccount
             |> castError(ExportAuthTransferTokenError.self)
@@ -92,15 +94,17 @@ func _internal_exportAuthTransferToken(accountManager: AccountManager<TelegramAc
                         return .single(.passwordRequested(updatedAccount))
                     }
                     switch result {
-                    case let .loginTokenSuccess(authorization):
+                    case let .loginTokenSuccess(loginTokenSuccessData):
+                        let authorization = loginTokenSuccessData.authorization
                         switch authorization {
-                        case let .authorization(_, _, _, futureAuthToken, user):
+                        case let .authorization(authorizationData):
+                            let (futureAuthToken, apiUser) = (authorizationData.futureAuthToken, authorizationData.user)
                             if let futureAuthToken = futureAuthToken {
                                 storeFutureLoginToken(accountManager: accountManager, token: futureAuthToken.makeData())
                             }
-                            
+
                             return updatedAccount.postbox.transaction { transaction -> Signal<ExportAuthTransferTokenResult, ExportAuthTransferTokenError> in
-                                let user = TelegramUser(user: user)
+                                let user = TelegramUser(user: apiUser)
                                 let state = AuthorizedAccountState(isTestingEnvironment: updatedAccount.testingEnvironment, masterDatacenterId: updatedAccount.masterDatacenterId, peerId: user.id, state: nil, invalidatedChannels: [])
                                 initializedAppSettingsAfterLogin(transaction: transaction, appVersion: updatedAccount.networkArguments.appVersion, syncContacts: syncContacts)
                                 transaction.setState(state)
@@ -120,15 +124,17 @@ func _internal_exportAuthTransferToken(accountManager: AccountManager<TelegramAc
                     }
                 }
             }
-        case let .loginTokenSuccess(authorization):
+        case let .loginTokenSuccess(loginTokenSuccessData):
+            let authorization = loginTokenSuccessData.authorization
             switch authorization {
-            case let .authorization(_, _, _, futureAuthToken, user):
+            case let .authorization(authorizationData):
+                let (futureAuthToken, apiUser) = (authorizationData.futureAuthToken, authorizationData.user)
                 if let futureAuthToken = futureAuthToken {
                     storeFutureLoginToken(accountManager: accountManager, token: futureAuthToken.makeData())
                 }
-                
+
                 return account.postbox.transaction { transaction -> Signal<ExportAuthTransferTokenResult, ExportAuthTransferTokenError> in
-                    let user = TelegramUser(user: user)
+                    let user = TelegramUser(user: apiUser)
                     let state = AuthorizedAccountState(isTestingEnvironment: account.testingEnvironment, masterDatacenterId: account.masterDatacenterId, peerId: user.id, state: nil, invalidatedChannels: [])
                     initializedAppSettingsAfterLogin(transaction: transaction, appVersion: account.networkArguments.appVersion, syncContacts: syncContacts)
                     transaction.setState(state)

@@ -168,7 +168,8 @@ func channelAdminLogEvents(accountPeerId: PeerId, postbox: Postbox, network: Net
             return network.request(Api.functions.channels.getAdminLog(flags: flags, channel: inputChannel, q: query ?? "", eventsFilter: eventsFilter, admins: inputAdmins, maxId: maxId, minId: minId, limit: limit))
             |> mapToSignal { result in
                 switch result {
-                case let .adminLogResults(apiEvents, apiChats, apiUsers):
+                case let .adminLogResults(adminLogResultsData):
+                    let (apiEvents, apiChats, apiUsers) = (adminLogResultsData.events, adminLogResultsData.chats, adminLogResultsData.users)
                     return postbox.transaction { transaction -> AdminLogEventsResult in
                         var peers: [PeerId: Peer] = [:]
                         for apiChat in apiChats {

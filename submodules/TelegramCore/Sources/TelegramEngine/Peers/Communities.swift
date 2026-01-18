@@ -121,7 +121,8 @@ func _internal_exportChatFolder(account: Account, filterId: Int32, title: String
         |> mapToSignal { result -> Signal<ExportedChatFolderLink, ExportChatFolderError> in
             return account.postbox.transaction { transaction -> Signal<ExportedChatFolderLink, ExportChatFolderError> in
                 switch result {
-                case let .exportedChatlistInvite(filter, invite):
+                case let .exportedChatlistInvite(exportedChatlistInviteData):
+                    let (filter, invite) = (exportedChatlistInviteData.filter, exportedChatlistInviteData.invite)
                     let parsedFilter = ChatListFilter(apiFilter: filter)
                     
                     let _ = updateChatListFiltersState(transaction: transaction, { state in
@@ -276,7 +277,8 @@ func _internal_checkChatFolderLink(account: Account, slug: String) -> Signal<Cha
     |> mapToSignal { result -> Signal<ChatFolderLinkContents, CheckChatFolderLinkError> in
         return account.postbox.transaction { transaction -> ChatFolderLinkContents in
             switch result {
-            case let .chatlistInvite(flags, title, emoticon, peers, chats, users):
+            case let .chatlistInvite(chatlistInviteData):
+                let (flags, title, emoticon, peers, chats, users) = (chatlistInviteData.flags, chatlistInviteData.title, chatlistInviteData.emoticon, chatlistInviteData.peers, chatlistInviteData.chats, chatlistInviteData.users)
                 let _ = emoticon
                 
                 let disableTitleAnimation = (flags & (1 << 1)) != 0
@@ -317,7 +319,8 @@ func _internal_checkChatFolderLink(account: Account, slug: String) -> Signal<Cha
                 }
 
                 return ChatFolderLinkContents(localFilterId: nil, title: ChatFolderTitle(text: titleText, entities: titleEntities, enableAnimations: !disableTitleAnimation), peers: resultPeers, alreadyMemberPeerIds: alreadyMemberPeerIds, memberCounts: memberCounts)
-            case let .chatlistInviteAlready(filterId, missingPeers, alreadyPeers, chats, users):
+            case let .chatlistInviteAlready(chatlistInviteAlreadyData):
+                let (filterId, missingPeers, alreadyPeers, chats, users) = (chatlistInviteAlreadyData.filterId, chatlistInviteAlreadyData.missingPeers, chatlistInviteAlreadyData.alreadyPeers, chatlistInviteAlreadyData.chats, chatlistInviteAlreadyData.users)
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                 var memberCounts: [PeerId: Int] = [:]
                 
@@ -613,7 +616,8 @@ func _internal_pollChatFolderUpdatesOnce(account: Account, folderId: Int32) -> S
                 |> ignoreValues
             }
             switch result {
-            case let .chatlistUpdates(missingPeers, chats, users):
+            case let .chatlistUpdates(chatlistUpdatesData):
+                let (missingPeers, chats, users) = (chatlistUpdatesData.missingPeers, chatlistUpdatesData.chats, chatlistUpdatesData.users)
                 return account.postbox.transaction { transaction -> Void in
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                     var memberCounts: [ChatListFiltersState.ChatListFilterUpdates.MemberCount] = []

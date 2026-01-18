@@ -95,7 +95,8 @@ func _internal_channelMembers(postbox: Postbox, network: Network, accountPeerId:
                 return postbox.transaction { transaction -> [RenderedChannelParticipant]? in
                     var items: [RenderedChannelParticipant] = []
                     switch result {
-                        case let .channelParticipants(_, participants, chats, users):
+                        case let .channelParticipants(channelParticipantsData):
+                            let (participants, chats, users) = (channelParticipantsData.participants, channelParticipantsData.chats, channelParticipantsData.users)
                             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
                             var peers: [PeerId: Peer] = [:]
