@@ -5501,7 +5501,8 @@ func replayFinalState(
                             var indexKeysByFile: [MediaId: [MemoryBuffer]] = [:]
                             for pack in packs {
                                 switch pack {
-                                case let .stickerPack(text, fileIds):
+                                case let .stickerPack(stickerPackData):
+                                    let (text, fileIds) = (stickerPackData.emoticon, stickerPackData.documents)
                                     let key = ValueBoxKey(text).toMemoryBuffer()
                                     for fileId in fileIds {
                                         let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: fileId)
@@ -5516,7 +5517,8 @@ func replayFinalState(
                             }
                             for keyword in keywords {
                                 switch keyword {
-                                case let .stickerKeyword(documentId, texts):
+                                case let .stickerKeyword(stickerKeywordData):
+                                    let (documentId, texts) = (stickerKeywordData.documentId, stickerKeywordData.keyword)
                                     for text in texts {
                                         let key = ValueBoxKey(text).toMemoryBuffer()
                                         let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: documentId)
@@ -5541,7 +5543,8 @@ func replayFinalState(
                                 }
                             }
                             switch set {
-                                case let .stickerSet(flags, _, _, _, _, _, _, _, _, _, _, _):
+                                case let .stickerSet(stickerSetData):
+                                    let flags = stickerSetData.flags
                                     if (flags & (1 << 3)) != 0 {
                                         namespace = Namespaces.ItemCollection.CloudMaskPacks
                                     } else if (flags & (1 << 7)) != 0 {

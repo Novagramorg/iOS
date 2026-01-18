@@ -1114,7 +1114,8 @@ public final class GroupStatsContext {
 extension StatsGraph {
     init(apiStatsGraph: Api.StatsGraph) {
         switch apiStatsGraph {
-            case let .statsGraph(_, json, zoomToken):
+            case let .statsGraph(statsGraphData):
+                let (_, json, zoomToken) = (statsGraphData.flags, statsGraphData.json, statsGraphData.zoomToken)
                 if case let .dataJSON(dataJSONData) = json {
                     let string = dataJSONData.data
                     if let data = string.data(using: .utf8) {
@@ -1142,9 +1143,11 @@ extension StatsGraph {
                 } else {
                     self = .Failed(error: "")
                 }
-            case let .statsGraphError(error):
+            case let .statsGraphError(statsGraphErrorData):
+                let error = statsGraphErrorData.error
                 self = .Failed(error: error)
-            case let .statsGraphAsync(token):
+            case let .statsGraphAsync(statsGraphAsyncData):
+                let token = statsGraphAsyncData.token
                 if !token.isEmpty {
                     self = .OnDemand(token: token)
                 } else {
@@ -1157,7 +1160,8 @@ extension StatsGraph {
 extension StatsDateRange {
     init(apiStatsDateRangeDays: Api.StatsDateRangeDays) {
         switch apiStatsDateRangeDays {
-            case let .statsDateRangeDays(minDate, maxDate):
+            case let .statsDateRangeDays(statsDateRangeDaysData):
+                let (minDate, maxDate) = (statsDateRangeDaysData.minDate, statsDateRangeDaysData.maxDate)
                 self = StatsDateRange(minDate: minDate, maxDate: maxDate)
         }
     }
@@ -1166,7 +1170,8 @@ extension StatsDateRange {
 extension StatsValue {
     init(apiStatsAbsValueAndPrev: Api.StatsAbsValueAndPrev) {
         switch apiStatsAbsValueAndPrev {
-            case let .statsAbsValueAndPrev(current, previous):
+            case let .statsAbsValueAndPrev(statsAbsValueAndPrevData):
+                let (current, previous) = (statsAbsValueAndPrevData.current, statsAbsValueAndPrevData.previous)
                 self = StatsValue(current: current, previous: previous)
         }
     }
@@ -1175,7 +1180,8 @@ extension StatsValue {
 extension StatsPercentValue {
     init(apiPercentValue: Api.StatsPercentValue) {
         switch apiPercentValue {
-            case let .statsPercentValue(part, total):
+            case let .statsPercentValue(statsPercentValueData):
+                let (part, total) = (statsPercentValueData.part, statsPercentValueData.total)
                 self = StatsPercentValue(value: part, total: total)
         }
     }
@@ -1231,7 +1237,8 @@ extension ChannelStats {
 extension GroupStatsTopPoster {
     init(apiStatsGroupTopPoster: Api.StatsGroupTopPoster) {
         switch apiStatsGroupTopPoster {
-            case let .statsGroupTopPoster(userId, messages, avgChars):
+            case let .statsGroupTopPoster(statsGroupTopPosterData):
+                let (userId, messages, avgChars) = (statsGroupTopPosterData.userId, statsGroupTopPosterData.messages, statsGroupTopPosterData.avgChars)
                 self = GroupStatsTopPoster(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), messageCount: messages, averageChars: avgChars)
         }
     }
@@ -1240,7 +1247,8 @@ extension GroupStatsTopPoster {
 extension GroupStatsTopAdmin {
     init(apiStatsGroupTopAdmin: Api.StatsGroupTopAdmin) {
         switch apiStatsGroupTopAdmin {
-            case let .statsGroupTopAdmin(userId, deleted, kicked, banned):
+            case let .statsGroupTopAdmin(statsGroupTopAdminData):
+                let (userId, deleted, kicked, banned) = (statsGroupTopAdminData.userId, statsGroupTopAdminData.deleted, statsGroupTopAdminData.kicked, statsGroupTopAdminData.banned)
                 self = GroupStatsTopAdmin(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), deletedCount: deleted, kickedCount: kicked, bannedCount: banned)
         }
     }
@@ -1249,7 +1257,8 @@ extension GroupStatsTopAdmin {
 extension GroupStatsTopInviter {
     init(apiStatsGroupTopInviter: Api.StatsGroupTopInviter) {
         switch apiStatsGroupTopInviter {
-            case let .statsGroupTopInviter(userId, invitations):
+            case let .statsGroupTopInviter(statsGroupTopInviterData):
+                let (userId, invitations) = (statsGroupTopInviterData.userId, statsGroupTopInviterData.invitations)
                 self = GroupStatsTopInviter(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), inviteCount: invitations)
         }
     }

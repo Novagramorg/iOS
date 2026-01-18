@@ -79,7 +79,8 @@ public func addSavedSticker(postbox: Postbox, network: Network, file: TelegramMe
                                 var stringRepresentationsByFile: [MediaId: [String]] = [:]
                                 for pack in packs {
                                     switch pack {
-                                    case let .stickerPack(text, fileIds):
+                                    case let .stickerPack(stickerPackData):
+                                        let (text, fileIds) = (stickerPackData.emoticon, stickerPackData.documents)
                                         for fileId in fileIds {
                                             let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: fileId)
                                             if stringRepresentationsByFile[mediaId] == nil {

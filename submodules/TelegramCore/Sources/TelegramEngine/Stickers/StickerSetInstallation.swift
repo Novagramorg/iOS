@@ -84,14 +84,16 @@ func _internal_requestStickerSet(postbox: Postbox, network: Network, reference: 
                 info = StickerPackCollectionInfo(apiSet: set, namespace: Namespaces.ItemCollection.CloudStickerPacks)
                 
                 switch set {
-                    case let .stickerSet(flags, _, _, _, _, _, _, _, _, _, _, _):
+                    case let .stickerSet(stickerSetData):
+                        let flags = stickerSetData.flags
                         installed = (flags & (1 << 0) != 0)
                 }
                 
                 var indexKeysByFile: [MediaId: [MemoryBuffer]] = [:]
                 for pack in packs {
                     switch pack {
-                    case let .stickerPack(text, fileIds):
+                    case let .stickerPack(stickerPackData):
+                        let (text, fileIds) = (stickerPackData.emoticon, stickerPackData.documents)
                         let key = ValueBoxKey(text).toMemoryBuffer()
                         for fileId in fileIds {
                             let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: fileId)
@@ -106,7 +108,8 @@ func _internal_requestStickerSet(postbox: Postbox, network: Network, reference: 
                 }
                 for keyword in keywords {
                     switch keyword {
-                    case let .stickerKeyword(documentId, texts):
+                    case let .stickerKeyword(stickerKeywordData):
+                        let (documentId, texts) = (stickerKeywordData.documentId, stickerKeywordData.keyword)
                         for text in texts {
                             let key = ValueBoxKey(text).toMemoryBuffer()
                             let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: documentId)
@@ -184,16 +187,20 @@ func _internal_installStickerSetInteractively(account: Account, info: StickerPac
                 let apiDocuments:[Api.Document]
                 let apiSet:Api.StickerSet
                 switch archived {
-                case let .stickerSetCovered(set: set, cover: cover):
+                case let .stickerSetCovered(stickerSetCoveredData):
+                    let (set, cover) = (stickerSetCoveredData.set, stickerSetCoveredData.cover)
                     apiSet = set
                     apiDocuments = [cover]
-                case let .stickerSetMultiCovered(set: set, covers: covers):
+                case let .stickerSetMultiCovered(stickerSetMultiCoveredData):
+                    let (set, covers) = (stickerSetMultiCoveredData.set, stickerSetMultiCoveredData.covers)
                     apiSet = set
                     apiDocuments = covers
-                case let .stickerSetFullCovered(set, _, _, documents):
+                case let .stickerSetFullCovered(stickerSetFullCoveredData):
+                    let (set, documents) = (stickerSetFullCoveredData.set, stickerSetFullCoveredData.documents)
                     apiSet = set
                     apiDocuments = documents
-                case let .stickerSetNoCovered(set):
+                case let .stickerSetNoCovered(stickerSetNoCoveredData):
+                    let set = stickerSetNoCoveredData.set
                     apiSet = set
                     apiDocuments = []
                 }

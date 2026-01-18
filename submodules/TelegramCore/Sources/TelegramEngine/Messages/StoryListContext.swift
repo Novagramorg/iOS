@@ -893,7 +893,8 @@ public final class PeerStoryListContext: StoryListContext {
                             case let .albums(_, albums):
                                 for album in albums {
                                     switch album {
-                                    case let .storyAlbum(_, albumId, title, iconPhoto, iconVideo):
+                                    case let .storyAlbum(storyAlbumData):
+                                        let (albumId, title, iconPhoto, iconVideo) = (storyAlbumData.albumId, storyAlbumData.title, storyAlbumData.iconPhoto, storyAlbumData.iconVideo)
                                         let _ = iconPhoto
                                         let _ = iconVideo
                                         folderItems.append(State.Folder(
@@ -1411,7 +1412,8 @@ public final class PeerStoryListContext: StoryListContext {
                 }
                 if let result {
                     switch result {
-                    case let .storyAlbum(_, albumId, _, _, _):
+                    case let .storyAlbum(storyAlbumData):
+                        let albumId = storyAlbumData.albumId
                         var state = self.stateValue
                         state.availableFolders.append(StoryListContextState.Folder(id: Int64(albumId), title: title))
                         self.stateValue = state
@@ -1915,7 +1917,8 @@ public final class PeerStoryListContext: StoryListContext {
         }).start(next: { result in
             if let result {
                 switch result {
-                case let .storyAlbum(_, albumId, _, _, _):
+                case let .storyAlbum(storyAlbumData):
+                    let albumId = storyAlbumData.albumId
                     let _ = (account.postbox.transaction { transaction -> Void in
                         let key = ValueBoxKey(length: 8 + 1)
                         key.setInt64(0, value: peerId.toInt64())

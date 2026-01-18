@@ -759,7 +759,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             let stickerPack: StickerPackCollectionInfo? = stickerSet.flatMap { apiSet -> StickerPackCollectionInfo in
                                                 let namespace: ItemCollectionId.Namespace
                                                 switch apiSet {
-                                                    case let .stickerSet(flags, _, _, _, _, _, _, _, _, _, _, _):
+                                                    case let .stickerSet(stickerSetData):
+                                                        let flags = stickerSetData.flags
                                                         if (flags & (1 << 3)) != 0 {
                                                             namespace = Namespaces.ItemCollection.CloudMaskPacks
                                                         } else if (flags & (1 << 7)) != 0 {
@@ -768,7 +769,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                             namespace = Namespaces.ItemCollection.CloudStickerPacks
                                                         }
                                                 }
-                                                
+
                                                 return StickerPackCollectionInfo(apiSet: apiSet, namespace: namespace)
                                             }
                                             
@@ -800,7 +801,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                             let emojiPack: StickerPackCollectionInfo? = emojiSet.flatMap { apiSet -> StickerPackCollectionInfo in
                                                 let namespace: ItemCollectionId.Namespace
                                                 switch apiSet {
-                                                    case let .stickerSet(flags, _, _, _, _, _, _, _, _, _, _, _):
+                                                    case let .stickerSet(stickerSetData):
+                                                        let flags = stickerSetData.flags
                                                         if (flags & (1 << 3)) != 0 {
                                                             namespace = Namespaces.ItemCollection.CloudMaskPacks
                                                         } else if (flags & (1 << 7)) != 0 {
@@ -809,7 +811,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                             namespace = Namespaces.ItemCollection.CloudStickerPacks
                                                         }
                                                 }
-                                                
+
                                                 return StickerPackCollectionInfo(apiSet: apiSet, namespace: namespace)
                                             }
                                             

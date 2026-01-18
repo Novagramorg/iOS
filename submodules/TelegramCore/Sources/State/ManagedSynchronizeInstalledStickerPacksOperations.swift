@@ -155,7 +155,8 @@ private func fetchStickerPack(network: Network, info: StickerPackCollectionInfo)
             var indexKeysByFile: [MediaId: [MemoryBuffer]] = [:]
             for pack in packs {
                 switch pack {
-                case let .stickerPack(text, fileIds):
+                case let .stickerPack(stickerPackData):
+                    let (text, fileIds) = (stickerPackData.emoticon, stickerPackData.documents)
                     let key = ValueBoxKey(text).toMemoryBuffer()
                     for fileId in fileIds {
                         let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: fileId)
@@ -170,7 +171,8 @@ private func fetchStickerPack(network: Network, info: StickerPackCollectionInfo)
             }
             for keyword in keywords {
                 switch keyword {
-                case let .stickerKeyword(documentId, texts):
+                case let .stickerKeyword(stickerKeywordData):
+                    let (documentId, texts) = (stickerKeywordData.documentId, stickerKeywordData.keyword)
                     for text in texts {
                         let key = ValueBoxKey(text).toMemoryBuffer()
                         let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: documentId)
@@ -237,13 +239,17 @@ private func installRemoteStickerPacks(network: Network, infos: [StickerPackColl
                         var archivedIds = Set<ItemCollectionId>()
                         for archivedSet in archivedSets {
                             switch archivedSet {
-                            case let .stickerSetCovered(set, _):
+                            case let .stickerSetCovered(stickerSetCoveredData):
+                                let set = stickerSetCoveredData.set
                                 archivedIds.insert(StickerPackCollectionInfo(apiSet: set, namespace: info.id.namespace).id)
-                            case let .stickerSetMultiCovered(set, _):
+                            case let .stickerSetMultiCovered(stickerSetMultiCoveredData):
+                                let set = stickerSetMultiCoveredData.set
                                 archivedIds.insert(StickerPackCollectionInfo(apiSet: set, namespace: info.id.namespace).id)
-                            case let .stickerSetFullCovered(set, _, _, _):
+                            case let .stickerSetFullCovered(stickerSetFullCoveredData):
+                                let set = stickerSetFullCoveredData.set
                                 archivedIds.insert(StickerPackCollectionInfo(apiSet: set, namespace: info.id.namespace).id)
-                                case let .stickerSetNoCovered(set):
+                                case let .stickerSetNoCovered(stickerSetNoCoveredData):
+                                    let set = stickerSetNoCoveredData.set
                                     archivedIds.insert(StickerPackCollectionInfo(apiSet: set, namespace: info.id.namespace).id)
                             }
                         }

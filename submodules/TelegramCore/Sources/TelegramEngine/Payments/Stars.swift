@@ -51,7 +51,8 @@ public struct StarsTopUpOption: Equatable, Codable {
 extension StarsTopUpOption {
     init(apiStarsTopupOption: Api.StarsTopupOption) {
         switch apiStarsTopupOption {
-        case let .starsTopupOption(flags, stars, storeProduct, currency, amount):
+        case let .starsTopupOption(starsTopupOptionData):
+            let (flags, stars, storeProduct, currency, amount) = (starsTopupOptionData.flags, starsTopupOptionData.stars, starsTopupOptionData.storeProduct, starsTopupOptionData.currency, starsTopupOptionData.amount)
             self.init(count: stars, storeProductId: storeProduct, currency: currency, amount: amount, isExtended: (flags & (1 << 1)) != 0)
         }
     }
@@ -662,11 +663,12 @@ private final class StarsContextImpl {
 private extension StarsContext.State.Transaction {
     init?(apiTransaction: Api.StarsTransaction, peerId: EnginePeer.Id?, transaction: Transaction) {
         switch apiTransaction {
-        case let .starsTransaction(apiFlags, id, stars, date, transactionPeer, title, description, photo, transactionDate, transactionUrl, _, messageId, extendedMedia, subscriptionPeriod, giveawayPostId, starGift, floodskipNumber, starrefCommissionPermille, starrefPeer, starrefAmount, paidMessageCount, premiumGiftMonths, adsProceedsFromDate, adsProceedsToDate):
+        case let .starsTransaction(starsTransactionData):
+            let (apiFlags, id, stars, date, transactionPeer, title, description, photo, transactionDate, transactionUrl, _, messageId, extendedMedia, subscriptionPeriod, giveawayPostId, starGift, floodskipNumber, starrefCommissionPermille, starrefPeer, starrefAmount, paidMessageCount, premiumGiftMonths, adsProceedsFromDate, adsProceedsToDate) = (starsTransactionData.flags, starsTransactionData.id, starsTransactionData.amount, starsTransactionData.date, starsTransactionData.peer, starsTransactionData.title, starsTransactionData.description, starsTransactionData.photo, starsTransactionData.transactionDate, starsTransactionData.transactionUrl, starsTransactionData.botPayload, starsTransactionData.msgId, starsTransactionData.extendedMedia, starsTransactionData.subscriptionPeriod, starsTransactionData.giveawayPostId, starsTransactionData.stargift, starsTransactionData.floodskipNumber, starsTransactionData.starrefCommissionPermille, starsTransactionData.starrefPeer, starsTransactionData.starrefAmount, starsTransactionData.paidMessages, starsTransactionData.premiumGiftMonths, starsTransactionData.adsProceedsFromDate, starsTransactionData.adsProceedsToDate)
             let parsedPeer: StarsContext.State.Transaction.Peer
             var paidMessageId: MessageId?
             var giveawayMessageId: MessageId?
-           
+
             switch transactionPeer {
             case .starsTransactionPeerAppStore:
                 parsedPeer = .appStore
@@ -682,7 +684,8 @@ private extension StarsContext.State.Transaction {
                 parsedPeer = .apiLimitExtension
             case .starsTransactionPeerUnsupported:
                 parsedPeer = .unsupported
-            case let .starsTransactionPeer(apiPeer):
+            case let .starsTransactionPeer(starsTransactionPeerData):
+                let apiPeer = starsTransactionPeerData.peer
                 guard let peer = transaction.getPeer(apiPeer.peerId) else {
                     return nil
                 }
@@ -756,7 +759,8 @@ private extension StarsContext.State.Transaction {
 private extension StarsContext.State.Subscription {
     init?(apiSubscription: Api.StarsSubscription, transaction: Transaction) {
         switch apiSubscription {
-        case let .starsSubscription(apiFlags, id, apiPeer, untilDate, pricing, inviteHash, title, photo, invoiceSlug):
+        case let .starsSubscription(starsSubscriptionData):
+            let (apiFlags, id, apiPeer, untilDate, pricing, inviteHash, title, photo, invoiceSlug) = (starsSubscriptionData.flags, starsSubscriptionData.id, starsSubscriptionData.peer, starsSubscriptionData.untilDate, starsSubscriptionData.pricing, starsSubscriptionData.chatInviteHash, starsSubscriptionData.title, starsSubscriptionData.photo, starsSubscriptionData.invoiceSlug)
             guard let peer = transaction.getPeer(apiPeer.peerId) else {
                 return nil
             }
@@ -1817,13 +1821,14 @@ public struct StarsSubscriptionPricing: Codable, Equatable {
 extension StarsSubscriptionPricing {
     init(apiStarsSubscriptionPricing: Api.StarsSubscriptionPricing) {
         switch apiStarsSubscriptionPricing {
-        case let .starsSubscriptionPricing(period, amount):
+        case let .starsSubscriptionPricing(starsSubscriptionPricingData):
+            let (period, amount) = (starsSubscriptionPricingData.period, starsSubscriptionPricingData.amount)
             self = .init(period: period, amount: StarsAmount(value: amount, nanos: 0))
         }
     }
-    
+
     var apiStarsSubscriptionPricing: Api.StarsSubscriptionPricing {
-        return .starsSubscriptionPricing(period: self.period, amount: self.amount.value)
+        return .starsSubscriptionPricing(.init(period: self.period, amount: self.amount.value))
     }
 }
 

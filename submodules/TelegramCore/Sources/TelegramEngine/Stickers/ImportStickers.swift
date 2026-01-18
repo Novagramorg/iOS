@@ -547,10 +547,12 @@ func _internal_getMyStickerSets(account: Account) -> Signal<[(StickerPackCollect
         case let .myStickers(_, sets):
             for set in sets {
                 switch set {
-                case let .stickerSetCovered(set, cover):
+                case let .stickerSetCovered(stickerSetCoveredData):
+                    let (set, cover) = (stickerSetCoveredData.set, stickerSetCoveredData.cover)
                     let namespace: ItemCollectionId.Namespace
                     switch set {
-                        case let .stickerSet(flags, _, _, _, _, _, _, _, _, _, _, _):
+                        case let .stickerSet(stickerSetData):
+                            let flags = stickerSetData.flags
                             if (flags & (1 << 3)) != 0 {
                                 namespace = Namespaces.ItemCollection.CloudMaskPacks
                             } else if (flags & (1 << 7)) != 0 {
@@ -565,10 +567,12 @@ func _internal_getMyStickerSets(account: Account) -> Signal<[(StickerPackCollect
                         firstItem = StickerPackItem(index: ItemCollectionItemIndex(index: 0, id: id.id), file: file, indexKeys: [])
                     }
                     infos.append((info, firstItem))
-                case let .stickerSetFullCovered(set, _, _, documents):
+                case let .stickerSetFullCovered(stickerSetFullCoveredData):
+                    let (set, documents) = (stickerSetFullCoveredData.set, stickerSetFullCoveredData.documents)
                     let namespace: ItemCollectionId.Namespace
                     switch set {
-                        case let .stickerSet(flags, _, _, _, _, _, _, _, _, _, _, _):
+                        case let .stickerSet(stickerSetData):
+                            let flags = stickerSetData.flags
                             if (flags & (1 << 3)) != 0 {
                                 namespace = Namespaces.ItemCollection.CloudMaskPacks
                             } else if (flags & (1 << 7)) != 0 {
@@ -601,7 +605,8 @@ private func parseStickerSetInfoAndItems(apiStickerSet: Api.messages.StickerSet)
     case let .stickerSet(set, packs, keywords, documents):
         let namespace: ItemCollectionId.Namespace
         switch set {
-            case let .stickerSet(flags, _, _, _, _, _, _, _, _, _, _, _):
+            case let .stickerSet(stickerSetData):
+                let flags = stickerSetData.flags
                 if (flags & (1 << 3)) != 0 {
                     namespace = Namespaces.ItemCollection.CloudMaskPacks
                 } else if (flags & (1 << 7)) != 0 {
@@ -614,7 +619,8 @@ private func parseStickerSetInfoAndItems(apiStickerSet: Api.messages.StickerSet)
         var indexKeysByFile: [MediaId: [MemoryBuffer]] = [:]
         for pack in packs {
             switch pack {
-                case let .stickerPack(text, fileIds):
+                case let .stickerPack(stickerPackData):
+                    let (text, fileIds) = (stickerPackData.emoticon, stickerPackData.documents)
                     let key = ValueBoxKey(text).toMemoryBuffer()
                     for fileId in fileIds {
                         let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: fileId)
@@ -628,7 +634,8 @@ private func parseStickerSetInfoAndItems(apiStickerSet: Api.messages.StickerSet)
         }
         for keyword in keywords {
             switch keyword {
-            case let .stickerKeyword(documentId, texts):
+            case let .stickerKeyword(stickerKeywordData):
+                let (documentId, texts) = (stickerKeywordData.documentId, stickerKeywordData.keyword)
                 for text in texts {
                     let key = ValueBoxKey(text).toMemoryBuffer()
                     let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: documentId)

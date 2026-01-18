@@ -48,7 +48,8 @@ func telegramStickerPackThumbnailRepresentationFromApiSizes(datacenterId: Int32,
 extension StickerPackCollectionInfo {
     convenience init(apiSet: Api.StickerSet, namespace: ItemCollectionId.Namespace) {
         switch apiSet {
-            case let .stickerSet(flags, _, id, accessHash, title, shortName, thumbs, thumbDcId, thumbVersion, thumbDocumentId, count, nHash):
+            case let .stickerSet(stickerSetData):
+                let (flags, _, id, accessHash, title, shortName, thumbs, thumbDcId, thumbVersion, thumbDocumentId, count, nHash) = (stickerSetData.flags, stickerSetData.installedDate, stickerSetData.id, stickerSetData.accessHash, stickerSetData.title, stickerSetData.shortName, stickerSetData.thumbs, stickerSetData.thumbDcId, stickerSetData.thumbVersion, stickerSetData.thumbDocumentId, stickerSetData.count, stickerSetData.hash)
                 var setFlags: StickerPackCollectionInfoFlags = StickerPackCollectionInfoFlags()
                 if (flags & (1 << 2)) != 0 {
                     setFlags.insert(.isOfficial)
@@ -122,11 +123,19 @@ func _internal_stickerPacksAttachedToMedia(account: Account, media: AnyMediaRefe
     }
     |> map { result -> [StickerPackReference] in
         return result.map { pack in
+            let set: Api.StickerSet
             switch pack {
-            case let .stickerSetCovered(set, _), let .stickerSetMultiCovered(set, _), let .stickerSetFullCovered(set, _, _, _), let .stickerSetNoCovered(set):
-                let info = StickerPackCollectionInfo(apiSet: set, namespace: Namespaces.ItemCollection.CloudStickerPacks)
-                return .id(id: info.id.id, accessHash: info.accessHash)
+            case let .stickerSetCovered(stickerSetCoveredData):
+                set = stickerSetCoveredData.set
+            case let .stickerSetMultiCovered(stickerSetMultiCoveredData):
+                set = stickerSetMultiCoveredData.set
+            case let .stickerSetFullCovered(stickerSetFullCoveredData):
+                set = stickerSetFullCoveredData.set
+            case let .stickerSetNoCovered(stickerSetNoCoveredData):
+                set = stickerSetNoCoveredData.set
             }
+            let info = StickerPackCollectionInfo(apiSet: set, namespace: Namespaces.ItemCollection.CloudStickerPacks)
+            return .id(id: info.id.id, accessHash: info.accessHash)
         }
     }
     |> `catch` { _ -> Signal<[StickerPackReference], NoError> in
