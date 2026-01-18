@@ -390,9 +390,11 @@ public enum TwoStepSecurePasswordDerivation {
         switch apiAlgo {
             case .securePasswordKdfAlgoUnknown:
                 self = .unknown
-            case let .securePasswordKdfAlgoPBKDF2HMACSHA512iter100000(salt):
+            case let .securePasswordKdfAlgoPBKDF2HMACSHA512iter100000(securePasswordKdfAlgoPBKDF2HMACSHA512iter100000Data):
+                let (salt) = (securePasswordKdfAlgoPBKDF2HMACSHA512iter100000Data.salt)
                 self = .PBKDF2_HMAC_sha512(salt: salt.makeData(), iterations: 100000)
-            case let .securePasswordKdfAlgoSHA512(salt):
+            case let .securePasswordKdfAlgoSHA512(securePasswordKdfAlgoSHA512Data):
+                let (salt) = (securePasswordKdfAlgoSHA512Data.salt)
                 self = .sha512(salt: salt.makeData())
         }
     }
@@ -403,9 +405,9 @@ public enum TwoStepSecurePasswordDerivation {
                 return .securePasswordKdfAlgoUnknown
             case let .PBKDF2_HMAC_sha512(salt, iterations):
                 precondition(iterations == 100000)
-                return .securePasswordKdfAlgoPBKDF2HMACSHA512iter100000(salt: Buffer(data: salt))
+                return .securePasswordKdfAlgoPBKDF2HMACSHA512iter100000(.init(salt: Buffer(data: salt)))
             case let .sha512(salt):
-                return .securePasswordKdfAlgoSHA512(salt: Buffer(data: salt))
+                return .securePasswordKdfAlgoSHA512(.init(salt: Buffer(data: salt)))
         }
     }
 }

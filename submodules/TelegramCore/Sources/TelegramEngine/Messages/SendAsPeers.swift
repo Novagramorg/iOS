@@ -134,10 +134,11 @@ func _internal_peerSendAsAvailablePeers(accountPeerId: PeerId, network: Network,
                 return postbox.transaction { transaction -> [SendAsPeer] in
                     var subscribers: [PeerId: Int32] = [:]
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
-                    
+
                     var premiumRequiredPeerIds = Set<PeerId>()
                     for sendAsPeer in sendAsPeers {
-                        if case let .sendAsPeer(flags, peer) = sendAsPeer, (flags & (1 << 0)) != 0 {
+                        if case let .sendAsPeer(sendAsPeerData) = sendAsPeer, (sendAsPeerData.flags & (1 << 0)) != 0 {
+                            let peer = sendAsPeerData.peer
                             premiumRequiredPeerIds.insert(peer.peerId)
                         }
                     }
@@ -292,10 +293,11 @@ func _internal_liveStorySendAsAvailablePeers(account: Account, peerId: PeerId) -
                 return account.postbox.transaction { transaction -> [SendAsPeer] in
                     var subscribers: [PeerId: Int32] = [:]
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: [])
-                    
+
                     var premiumRequiredPeerIds = Set<PeerId>()
                     for sendAsPeer in sendAsPeers {
-                        if case let .sendAsPeer(flags, peer) = sendAsPeer, (flags & (1 << 0)) != 0 {
+                        if case let .sendAsPeer(sendAsPeerData) = sendAsPeer, (sendAsPeerData.flags & (1 << 0)) != 0 {
+                            let peer = sendAsPeerData.peer
                             premiumRequiredPeerIds.insert(peer.peerId)
                         }
                     }

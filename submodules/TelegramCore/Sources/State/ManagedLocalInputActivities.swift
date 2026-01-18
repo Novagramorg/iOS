@@ -118,23 +118,23 @@ private func actionFromActivity(_ activity: PeerInputActivity?) -> Api.SendMessa
             case .playingGame:
                 return .sendMessageGamePlayAction
             case let .uploadingFile(progress):
-                return .sendMessageUploadDocumentAction(progress: progress)
+                return .sendMessageUploadDocumentAction(.init(progress: progress))
             case let .uploadingPhoto(progress):
-                return .sendMessageUploadPhotoAction(progress: progress)
+                return .sendMessageUploadPhotoAction(.init(progress: progress))
             case let .uploadingVideo(progress):
-                return .sendMessageUploadVideoAction(progress: progress)
+                return .sendMessageUploadVideoAction(.init(progress: progress))
             case .recordingInstantVideo:
                 return .sendMessageRecordRoundAction
             case let .uploadingInstantVideo(progress):
-                return .sendMessageUploadRoundAction(progress: progress)
+                return .sendMessageUploadRoundAction(.init(progress: progress))
             case .speakingInGroupCall:
                 return .speakingInGroupCallAction
             case .choosingSticker:
                 return .sendMessageChooseStickerAction
             case let .interactingWithEmoji(emoticon, messageId, interaction):
-                return .sendMessageEmojiInteraction(emoticon: emoticon, msgId: messageId.id, interaction: interaction?.apiDataJson ?? .dataJSON(.init(data: "")))
+                return .sendMessageEmojiInteraction(.init(emoticon: emoticon, msgId: messageId.id, interaction: interaction?.apiDataJson ?? .dataJSON(.init(data: ""))))
             case let .seeingEmojiInteraction(emoticon):
-                return .sendMessageEmojiInteractionSeen(emoticon: emoticon)
+                return .sendMessageEmojiInteractionSeen(.init(emoticon: emoticon))
         }
     } else {
         return .sendMessageCancelAction

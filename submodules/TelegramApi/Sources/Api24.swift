@@ -1,7 +1,19 @@
 public extension Api {
     enum SecurePlainData: TypeConstructorDescription {
-        case securePlainEmail(email: String)
-        case securePlainPhone(phone: String)
+        public class Cons_securePlainEmail {
+            public var email: String
+            public init(email: String) {
+                self.email = email
+            }
+        }
+        public class Cons_securePlainPhone {
+            public var phone: String
+            public init(phone: String) {
+                self.phone = phone
+            }
+        }
+        case securePlainEmail(Cons_securePlainEmail)
+        case securePlainPhone(Cons_securePlainPhone)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -37,8 +49,22 @@ public extension Api {
 }
 public extension Api {
     enum SecureRequiredType: TypeConstructorDescription {
-        case secureRequiredType(flags: Int32, type: Api.SecureValueType)
-        case secureRequiredTypeOneOf(types: [Api.SecureRequiredType])
+        public class Cons_secureRequiredType {
+            public var flags: Int32
+            public var type: Api.SecureValueType
+            public init(flags: Int32, type: Api.SecureValueType) {
+                self.flags = flags
+                self.type = type
+            }
+        }
+        public class Cons_secureRequiredTypeOneOf {
+            public var types: [Api.SecureRequiredType]
+            public init(types: [Api.SecureRequiredType]) {
+                self.types = types
+            }
+        }
+        case secureRequiredType(Cons_secureRequiredType)
+        case secureRequiredTypeOneOf(Cons_secureRequiredTypeOneOf)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -74,7 +100,17 @@ public extension Api {
 }
 public extension Api {
     enum SecureSecretSettings: TypeConstructorDescription {
-        case secureSecretSettings(secureAlgo: Api.SecurePasswordKdfAlgo, secureSecret: Buffer, secureSecretId: Int64)
+        public class Cons_secureSecretSettings {
+            public var secureAlgo: Api.SecurePasswordKdfAlgo
+            public var secureSecret: Buffer
+            public var secureSecretId: Int64
+            public init(secureAlgo: Api.SecurePasswordKdfAlgo, secureSecret: Buffer, secureSecretId: Int64) {
+                self.secureAlgo = secureAlgo
+                self.secureSecret = secureSecret
+                self.secureSecretId = secureSecretId
+            }
+        }
+        case secureSecretSettings(Cons_secureSecretSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -103,7 +139,31 @@ public extension Api {
 }
 public extension Api {
     enum SecureValue: TypeConstructorDescription {
-        case secureValue(flags: Int32, type: Api.SecureValueType, data: Api.SecureData?, frontSide: Api.SecureFile?, reverseSide: Api.SecureFile?, selfie: Api.SecureFile?, translation: [Api.SecureFile]?, files: [Api.SecureFile]?, plainData: Api.SecurePlainData?, hash: Buffer)
+        public class Cons_secureValue {
+            public var flags: Int32
+            public var type: Api.SecureValueType
+            public var data: Api.SecureData?
+            public var frontSide: Api.SecureFile?
+            public var reverseSide: Api.SecureFile?
+            public var selfie: Api.SecureFile?
+            public var translation: [Api.SecureFile]?
+            public var files: [Api.SecureFile]?
+            public var plainData: Api.SecurePlainData?
+            public var hash: Buffer
+            public init(flags: Int32, type: Api.SecureValueType, data: Api.SecureData?, frontSide: Api.SecureFile?, reverseSide: Api.SecureFile?, selfie: Api.SecureFile?, translation: [Api.SecureFile]?, files: [Api.SecureFile]?, plainData: Api.SecurePlainData?, hash: Buffer) {
+                self.flags = flags
+                self.type = type
+                self.data = data
+                self.frontSide = frontSide
+                self.reverseSide = reverseSide
+                self.selfie = selfie
+                self.translation = translation
+                self.files = files
+                self.plainData = plainData
+                self.hash = hash
+            }
+        }
+        case secureValue(Cons_secureValue)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -132,15 +192,107 @@ public extension Api {
 }
 public extension Api {
     enum SecureValueError: TypeConstructorDescription {
-        case secureValueError(type: Api.SecureValueType, hash: Buffer, text: String)
-        case secureValueErrorData(type: Api.SecureValueType, dataHash: Buffer, field: String, text: String)
-        case secureValueErrorFile(type: Api.SecureValueType, fileHash: Buffer, text: String)
-        case secureValueErrorFiles(type: Api.SecureValueType, fileHash: [Buffer], text: String)
-        case secureValueErrorFrontSide(type: Api.SecureValueType, fileHash: Buffer, text: String)
-        case secureValueErrorReverseSide(type: Api.SecureValueType, fileHash: Buffer, text: String)
-        case secureValueErrorSelfie(type: Api.SecureValueType, fileHash: Buffer, text: String)
-        case secureValueErrorTranslationFile(type: Api.SecureValueType, fileHash: Buffer, text: String)
-        case secureValueErrorTranslationFiles(type: Api.SecureValueType, fileHash: [Buffer], text: String)
+        public class Cons_secureValueError {
+            public var type: Api.SecureValueType
+            public var hash: Buffer
+            public var text: String
+            public init(type: Api.SecureValueType, hash: Buffer, text: String) {
+                self.type = type
+                self.hash = hash
+                self.text = text
+            }
+        }
+        public class Cons_secureValueErrorData {
+            public var type: Api.SecureValueType
+            public var dataHash: Buffer
+            public var field: String
+            public var text: String
+            public init(type: Api.SecureValueType, dataHash: Buffer, field: String, text: String) {
+                self.type = type
+                self.dataHash = dataHash
+                self.field = field
+                self.text = text
+            }
+        }
+        public class Cons_secureValueErrorFile {
+            public var type: Api.SecureValueType
+            public var fileHash: Buffer
+            public var text: String
+            public init(type: Api.SecureValueType, fileHash: Buffer, text: String) {
+                self.type = type
+                self.fileHash = fileHash
+                self.text = text
+            }
+        }
+        public class Cons_secureValueErrorFiles {
+            public var type: Api.SecureValueType
+            public var fileHash: [Buffer]
+            public var text: String
+            public init(type: Api.SecureValueType, fileHash: [Buffer], text: String) {
+                self.type = type
+                self.fileHash = fileHash
+                self.text = text
+            }
+        }
+        public class Cons_secureValueErrorFrontSide {
+            public var type: Api.SecureValueType
+            public var fileHash: Buffer
+            public var text: String
+            public init(type: Api.SecureValueType, fileHash: Buffer, text: String) {
+                self.type = type
+                self.fileHash = fileHash
+                self.text = text
+            }
+        }
+        public class Cons_secureValueErrorReverseSide {
+            public var type: Api.SecureValueType
+            public var fileHash: Buffer
+            public var text: String
+            public init(type: Api.SecureValueType, fileHash: Buffer, text: String) {
+                self.type = type
+                self.fileHash = fileHash
+                self.text = text
+            }
+        }
+        public class Cons_secureValueErrorSelfie {
+            public var type: Api.SecureValueType
+            public var fileHash: Buffer
+            public var text: String
+            public init(type: Api.SecureValueType, fileHash: Buffer, text: String) {
+                self.type = type
+                self.fileHash = fileHash
+                self.text = text
+            }
+        }
+        public class Cons_secureValueErrorTranslationFile {
+            public var type: Api.SecureValueType
+            public var fileHash: Buffer
+            public var text: String
+            public init(type: Api.SecureValueType, fileHash: Buffer, text: String) {
+                self.type = type
+                self.fileHash = fileHash
+                self.text = text
+            }
+        }
+        public class Cons_secureValueErrorTranslationFiles {
+            public var type: Api.SecureValueType
+            public var fileHash: [Buffer]
+            public var text: String
+            public init(type: Api.SecureValueType, fileHash: [Buffer], text: String) {
+                self.type = type
+                self.fileHash = fileHash
+                self.text = text
+            }
+        }
+        case secureValueError(Cons_secureValueError)
+        case secureValueErrorData(Cons_secureValueErrorData)
+        case secureValueErrorFile(Cons_secureValueErrorFile)
+        case secureValueErrorFiles(Cons_secureValueErrorFiles)
+        case secureValueErrorFrontSide(Cons_secureValueErrorFrontSide)
+        case secureValueErrorReverseSide(Cons_secureValueErrorReverseSide)
+        case secureValueErrorSelfie(Cons_secureValueErrorSelfie)
+        case secureValueErrorTranslationFile(Cons_secureValueErrorTranslationFile)
+        case secureValueErrorTranslationFiles(Cons_secureValueErrorTranslationFiles)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -225,7 +377,15 @@ public extension Api {
 }
 public extension Api {
     enum SecureValueHash: TypeConstructorDescription {
-        case secureValueHash(type: Api.SecureValueType, hash: Buffer)
+        public class Cons_secureValueHash {
+            public var type: Api.SecureValueType
+            public var hash: Buffer
+            public init(type: Api.SecureValueType, hash: Buffer) {
+                self.type = type
+                self.hash = hash
+            }
+        }
+        case secureValueHash(Cons_secureValueHash)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -379,7 +539,15 @@ public extension Api {
 }
 public extension Api {
     enum SendAsPeer: TypeConstructorDescription {
-        case sendAsPeer(flags: Int32, peer: Api.Peer)
+        public class Cons_sendAsPeer {
+            public var flags: Int32
+            public var peer: Api.Peer
+            public init(flags: Int32, peer: Api.Peer) {
+                self.flags = flags
+                self.peer = peer
+            }
+        }
+        case sendAsPeer(Cons_sendAsPeer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -408,24 +576,84 @@ public extension Api {
 }
 public extension Api {
     enum SendMessageAction: TypeConstructorDescription {
+        public class Cons_sendMessageEmojiInteraction {
+            public var emoticon: String
+            public var msgId: Int32
+            public var interaction: Api.DataJSON
+            public init(emoticon: String, msgId: Int32, interaction: Api.DataJSON) {
+                self.emoticon = emoticon
+                self.msgId = msgId
+                self.interaction = interaction
+            }
+        }
+        public class Cons_sendMessageEmojiInteractionSeen {
+            public var emoticon: String
+            public init(emoticon: String) {
+                self.emoticon = emoticon
+            }
+        }
+        public class Cons_sendMessageHistoryImportAction {
+            public var progress: Int32
+            public init(progress: Int32) {
+                self.progress = progress
+            }
+        }
+        public class Cons_sendMessageTextDraftAction {
+            public var randomId: Int64
+            public var text: Api.TextWithEntities
+            public init(randomId: Int64, text: Api.TextWithEntities) {
+                self.randomId = randomId
+                self.text = text
+            }
+        }
+        public class Cons_sendMessageUploadAudioAction {
+            public var progress: Int32
+            public init(progress: Int32) {
+                self.progress = progress
+            }
+        }
+        public class Cons_sendMessageUploadDocumentAction {
+            public var progress: Int32
+            public init(progress: Int32) {
+                self.progress = progress
+            }
+        }
+        public class Cons_sendMessageUploadPhotoAction {
+            public var progress: Int32
+            public init(progress: Int32) {
+                self.progress = progress
+            }
+        }
+        public class Cons_sendMessageUploadRoundAction {
+            public var progress: Int32
+            public init(progress: Int32) {
+                self.progress = progress
+            }
+        }
+        public class Cons_sendMessageUploadVideoAction {
+            public var progress: Int32
+            public init(progress: Int32) {
+                self.progress = progress
+            }
+        }
         case sendMessageCancelAction
         case sendMessageChooseContactAction
         case sendMessageChooseStickerAction
-        case sendMessageEmojiInteraction(emoticon: String, msgId: Int32, interaction: Api.DataJSON)
-        case sendMessageEmojiInteractionSeen(emoticon: String)
+        case sendMessageEmojiInteraction(Cons_sendMessageEmojiInteraction)
+        case sendMessageEmojiInteractionSeen(Cons_sendMessageEmojiInteractionSeen)
         case sendMessageGamePlayAction
         case sendMessageGeoLocationAction
-        case sendMessageHistoryImportAction(progress: Int32)
+        case sendMessageHistoryImportAction(Cons_sendMessageHistoryImportAction)
         case sendMessageRecordAudioAction
         case sendMessageRecordRoundAction
         case sendMessageRecordVideoAction
-        case sendMessageTextDraftAction(randomId: Int64, text: Api.TextWithEntities)
+        case sendMessageTextDraftAction(Cons_sendMessageTextDraftAction)
         case sendMessageTypingAction
-        case sendMessageUploadAudioAction(progress: Int32)
-        case sendMessageUploadDocumentAction(progress: Int32)
-        case sendMessageUploadPhotoAction(progress: Int32)
-        case sendMessageUploadRoundAction(progress: Int32)
-        case sendMessageUploadVideoAction(progress: Int32)
+        case sendMessageUploadAudioAction(Cons_sendMessageUploadAudioAction)
+        case sendMessageUploadDocumentAction(Cons_sendMessageUploadDocumentAction)
+        case sendMessageUploadPhotoAction(Cons_sendMessageUploadPhotoAction)
+        case sendMessageUploadRoundAction(Cons_sendMessageUploadRoundAction)
+        case sendMessageUploadVideoAction(Cons_sendMessageUploadVideoAction)
         case speakingInGroupCallAction
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {

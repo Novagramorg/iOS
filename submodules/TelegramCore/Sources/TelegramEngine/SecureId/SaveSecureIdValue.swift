@@ -142,9 +142,9 @@ private func inputSecureIdValueData(value: SecureIdValue) -> InputSecureIdValueD
             let (dict, fileReferences, translations) = rentalAgreement.serialize()
             return InputSecureIdValueData(type: .secureValueTypeRentalAgreement, dict: dict, fileReferences: fileReferences, translationReferences: translations, frontSideReference: nil, backSideReference: nil, selfieReference: nil, publicData: nil)
         case let .phone(phone):
-            return InputSecureIdValueData(type: .secureValueTypePhone, dict: nil, fileReferences: [], translationReferences: [], frontSideReference: nil, backSideReference: nil, selfieReference: nil, publicData: .securePlainPhone(phone: phone.phone))
+            return InputSecureIdValueData(type: .secureValueTypePhone, dict: nil, fileReferences: [], translationReferences: [], frontSideReference: nil, backSideReference: nil, selfieReference: nil, publicData: .securePlainPhone(.init(phone: phone.phone)))
         case let .email(email):
-            return InputSecureIdValueData(type: .secureValueTypeEmail, dict: nil, fileReferences: [], translationReferences: [], frontSideReference: nil, backSideReference: nil, selfieReference: nil, publicData: .securePlainEmail(email: email.email))
+            return InputSecureIdValueData(type: .secureValueTypeEmail, dict: nil, fileReferences: [], translationReferences: [], frontSideReference: nil, backSideReference: nil, selfieReference: nil, publicData: .securePlainEmail(.init(email: email.email)))
     }
 }
 
@@ -175,7 +175,7 @@ private func makeInputSecureValue(context: SecureIdAccessContext, value: SecureI
         } else {
             return nil
         }
-        secureData = .secureData(data: Buffer(data: encryptedData.data), dataHash: Buffer(data: encryptedData.dataHash), secret: Buffer(data: encryptedData.encryptedSecret))
+        secureData = .secureData(.init(data: Buffer(data: encryptedData.data), dataHash: Buffer(data: encryptedData.dataHash), secret: Buffer(data: encryptedData.encryptedSecret)))
     }
     
     var flags: Int32 = 0

@@ -72,7 +72,8 @@ func _internal_searchAdPeers(account: Account, query: String) -> Signal<[AdPeer]
                 var result: [AdPeer] = []
                 for peer in peers {
                     switch peer {
-                    case let .sponsoredPeer(_, randomId, apiPeer, sponsorInfo, additionalInfo):
+                    case let .sponsoredPeer(sponsoredPeerData):
+                        let (randomId, apiPeer, sponsorInfo, additionalInfo) = (sponsoredPeerData.randomId, sponsoredPeerData.peer, sponsoredPeerData.sponsorInfo, sponsoredPeerData.additionalInfo)
                         guard let peer = parsedPeers.get(apiPeer.peerId) else {
                             continue
                         }
