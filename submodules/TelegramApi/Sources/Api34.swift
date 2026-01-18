@@ -1,6 +1,14 @@
 public extension Api.messages {
     enum AllStickers: TypeConstructorDescription {
-        case allStickers(hash: Int64, sets: [Api.StickerSet])
+        public class Cons_allStickers {
+            public var hash: Int64
+            public var sets: [Api.StickerSet]
+            public init(hash: Int64, sets: [Api.StickerSet]) {
+                self.hash = hash
+                self.sets = sets
+            }
+        }
+        case allStickers(Cons_allStickers)
         case allStickersNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -37,7 +45,15 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum ArchivedStickers: TypeConstructorDescription {
-        case archivedStickers(count: Int32, sets: [Api.StickerSetCovered])
+        public class Cons_archivedStickers {
+            public var count: Int32
+            public var sets: [Api.StickerSetCovered]
+            public init(count: Int32, sets: [Api.StickerSetCovered]) {
+                self.count = count
+                self.sets = sets
+            }
+        }
+        case archivedStickers(Cons_archivedStickers)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -66,7 +82,17 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum AvailableEffects: TypeConstructorDescription {
-        case availableEffects(hash: Int32, effects: [Api.AvailableEffect], documents: [Api.Document])
+        public class Cons_availableEffects {
+            public var hash: Int32
+            public var effects: [Api.AvailableEffect]
+            public var documents: [Api.Document]
+            public init(hash: Int32, effects: [Api.AvailableEffect], documents: [Api.Document]) {
+                self.hash = hash
+                self.effects = effects
+                self.documents = documents
+            }
+        }
+        case availableEffects(Cons_availableEffects)
         case availableEffectsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -103,7 +129,15 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum AvailableReactions: TypeConstructorDescription {
-        case availableReactions(hash: Int32, reactions: [Api.AvailableReaction])
+        public class Cons_availableReactions {
+            public var hash: Int32
+            public var reactions: [Api.AvailableReaction]
+            public init(hash: Int32, reactions: [Api.AvailableReaction]) {
+                self.hash = hash
+                self.reactions = reactions
+            }
+        }
+        case availableReactions(Cons_availableReactions)
         case availableReactionsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -140,7 +174,15 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum BotApp: TypeConstructorDescription {
-        case botApp(flags: Int32, app: Api.BotApp)
+        public class Cons_botApp {
+            public var flags: Int32
+            public var app: Api.BotApp
+            public init(flags: Int32, app: Api.BotApp) {
+                self.flags = flags
+                self.app = app
+            }
+        }
+        case botApp(Cons_botApp)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -169,7 +211,19 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum BotCallbackAnswer: TypeConstructorDescription {
-        case botCallbackAnswer(flags: Int32, message: String?, url: String?, cacheTime: Int32)
+        public class Cons_botCallbackAnswer {
+            public var flags: Int32
+            public var message: String?
+            public var url: String?
+            public var cacheTime: Int32
+            public init(flags: Int32, message: String?, url: String?, cacheTime: Int32) {
+                self.flags = flags
+                self.message = message
+                self.url = url
+                self.cacheTime = cacheTime
+            }
+        }
+        case botCallbackAnswer(Cons_botCallbackAnswer)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -198,7 +252,15 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum BotPreparedInlineMessage: TypeConstructorDescription {
-        case botPreparedInlineMessage(id: String, expireDate: Int32)
+        public class Cons_botPreparedInlineMessage {
+            public var id: String
+            public var expireDate: Int32
+            public init(id: String, expireDate: Int32) {
+                self.id = id
+                self.expireDate = expireDate
+            }
+        }
+        case botPreparedInlineMessage(Cons_botPreparedInlineMessage)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

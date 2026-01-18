@@ -411,7 +411,15 @@ public extension Api.help {
 }
 public extension Api.help {
     enum PeerColors: TypeConstructorDescription {
-        case peerColors(hash: Int32, colors: [Api.help.PeerColorOption])
+        public class Cons_peerColors {
+            public var hash: Int32
+            public var colors: [Api.help.PeerColorOption]
+            public init(hash: Int32, colors: [Api.help.PeerColorOption]) {
+                self.hash = hash
+                self.colors = colors
+            }
+        }
+        case peerColors(Cons_peerColors)
         case peerColorsNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -448,7 +456,23 @@ public extension Api.help {
 }
 public extension Api.help {
     enum PremiumPromo: TypeConstructorDescription {
-        case premiumPromo(statusText: String, statusEntities: [Api.MessageEntity], videoSections: [String], videos: [Api.Document], periodOptions: [Api.PremiumSubscriptionOption], users: [Api.User])
+        public class Cons_premiumPromo {
+            public var statusText: String
+            public var statusEntities: [Api.MessageEntity]
+            public var videoSections: [String]
+            public var videos: [Api.Document]
+            public var periodOptions: [Api.PremiumSubscriptionOption]
+            public var users: [Api.User]
+            public init(statusText: String, statusEntities: [Api.MessageEntity], videoSections: [String], videos: [Api.Document], periodOptions: [Api.PremiumSubscriptionOption], users: [Api.User]) {
+                self.statusText = statusText
+                self.statusEntities = statusEntities
+                self.videoSections = videoSections
+                self.videos = videos
+                self.periodOptions = periodOptions
+                self.users = users
+            }
+        }
+        case premiumPromo(Cons_premiumPromo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -477,8 +501,38 @@ public extension Api.help {
 }
 public extension Api.help {
     enum PromoData: TypeConstructorDescription {
-        case promoData(flags: Int32, expires: Int32, peer: Api.Peer?, psaType: String?, psaMessage: String?, pendingSuggestions: [String], dismissedSuggestions: [String], customPendingSuggestion: Api.PendingSuggestion?, chats: [Api.Chat], users: [Api.User])
-        case promoDataEmpty(expires: Int32)
+        public class Cons_promoData {
+            public var flags: Int32
+            public var expires: Int32
+            public var peer: Api.Peer?
+            public var psaType: String?
+            public var psaMessage: String?
+            public var pendingSuggestions: [String]
+            public var dismissedSuggestions: [String]
+            public var customPendingSuggestion: Api.PendingSuggestion?
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(flags: Int32, expires: Int32, peer: Api.Peer?, psaType: String?, psaMessage: String?, pendingSuggestions: [String], dismissedSuggestions: [String], customPendingSuggestion: Api.PendingSuggestion?, chats: [Api.Chat], users: [Api.User]) {
+                self.flags = flags
+                self.expires = expires
+                self.peer = peer
+                self.psaType = psaType
+                self.psaMessage = psaMessage
+                self.pendingSuggestions = pendingSuggestions
+                self.dismissedSuggestions = dismissedSuggestions
+                self.customPendingSuggestion = customPendingSuggestion
+                self.chats = chats
+                self.users = users
+            }
+        }
+        public class Cons_promoDataEmpty {
+            public var expires: Int32
+            public init(expires: Int32) {
+                self.expires = expires
+            }
+        }
+        case promoData(Cons_promoData)
+        case promoDataEmpty(Cons_promoDataEmpty)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -514,7 +568,17 @@ public extension Api.help {
 }
 public extension Api.help {
     enum RecentMeUrls: TypeConstructorDescription {
-        case recentMeUrls(urls: [Api.RecentMeUrl], chats: [Api.Chat], users: [Api.User])
+        public class Cons_recentMeUrls {
+            public var urls: [Api.RecentMeUrl]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public init(urls: [Api.RecentMeUrl], chats: [Api.Chat], users: [Api.User]) {
+                self.urls = urls
+                self.chats = chats
+                self.users = users
+            }
+        }
+        case recentMeUrls(Cons_recentMeUrls)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -543,7 +607,15 @@ public extension Api.help {
 }
 public extension Api.help {
     enum Support: TypeConstructorDescription {
-        case support(phoneNumber: String, user: Api.User)
+        public class Cons_support {
+            public var phoneNumber: String
+            public var user: Api.User
+            public init(phoneNumber: String, user: Api.User) {
+                self.phoneNumber = phoneNumber
+                self.user = user
+            }
+        }
+        case support(Cons_support)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -572,7 +644,13 @@ public extension Api.help {
 }
 public extension Api.help {
     enum SupportName: TypeConstructorDescription {
-        case supportName(name: String)
+        public class Cons_supportName {
+            public var name: String
+            public init(name: String) {
+                self.name = name
+            }
+        }
+        case supportName(Cons_supportName)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -601,7 +679,21 @@ public extension Api.help {
 }
 public extension Api.help {
     enum TermsOfService: TypeConstructorDescription {
-        case termsOfService(flags: Int32, id: Api.DataJSON, text: String, entities: [Api.MessageEntity], minAgeConfirm: Int32?)
+        public class Cons_termsOfService {
+            public var flags: Int32
+            public var id: Api.DataJSON
+            public var text: String
+            public var entities: [Api.MessageEntity]
+            public var minAgeConfirm: Int32?
+            public init(flags: Int32, id: Api.DataJSON, text: String, entities: [Api.MessageEntity], minAgeConfirm: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.text = text
+                self.entities = entities
+                self.minAgeConfirm = minAgeConfirm
+            }
+        }
+        case termsOfService(Cons_termsOfService)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -630,8 +722,22 @@ public extension Api.help {
 }
 public extension Api.help {
     enum TermsOfServiceUpdate: TypeConstructorDescription {
-        case termsOfServiceUpdate(expires: Int32, termsOfService: Api.help.TermsOfService)
-        case termsOfServiceUpdateEmpty(expires: Int32)
+        public class Cons_termsOfServiceUpdate {
+            public var expires: Int32
+            public var termsOfService: Api.help.TermsOfService
+            public init(expires: Int32, termsOfService: Api.help.TermsOfService) {
+                self.expires = expires
+                self.termsOfService = termsOfService
+            }
+        }
+        public class Cons_termsOfServiceUpdateEmpty {
+            public var expires: Int32
+            public init(expires: Int32) {
+                self.expires = expires
+            }
+        }
+        case termsOfServiceUpdate(Cons_termsOfServiceUpdate)
+        case termsOfServiceUpdateEmpty(Cons_termsOfServiceUpdateEmpty)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -667,7 +773,15 @@ public extension Api.help {
 }
 public extension Api.help {
     enum TimezonesList: TypeConstructorDescription {
-        case timezonesList(timezones: [Api.Timezone], hash: Int32)
+        public class Cons_timezonesList {
+            public var timezones: [Api.Timezone]
+            public var hash: Int32
+            public init(timezones: [Api.Timezone], hash: Int32) {
+                self.timezones = timezones
+                self.hash = hash
+            }
+        }
+        case timezonesList(Cons_timezonesList)
         case timezonesListNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -704,7 +818,19 @@ public extension Api.help {
 }
 public extension Api.help {
     enum UserInfo: TypeConstructorDescription {
-        case userInfo(message: String, entities: [Api.MessageEntity], author: String, date: Int32)
+        public class Cons_userInfo {
+            public var message: String
+            public var entities: [Api.MessageEntity]
+            public var author: String
+            public var date: Int32
+            public init(message: String, entities: [Api.MessageEntity], author: String, date: Int32) {
+                self.message = message
+                self.entities = entities
+                self.author = author
+                self.date = date
+            }
+        }
+        case userInfo(Cons_userInfo)
         case userInfoEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -741,7 +867,19 @@ public extension Api.help {
 }
 public extension Api.messages {
     enum AffectedFoundMessages: TypeConstructorDescription {
-        case affectedFoundMessages(pts: Int32, ptsCount: Int32, offset: Int32, messages: [Int32])
+        public class Cons_affectedFoundMessages {
+            public var pts: Int32
+            public var ptsCount: Int32
+            public var offset: Int32
+            public var messages: [Int32]
+            public init(pts: Int32, ptsCount: Int32, offset: Int32, messages: [Int32]) {
+                self.pts = pts
+                self.ptsCount = ptsCount
+                self.offset = offset
+                self.messages = messages
+            }
+        }
+        case affectedFoundMessages(Cons_affectedFoundMessages)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -770,7 +908,17 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum AffectedHistory: TypeConstructorDescription {
-        case affectedHistory(pts: Int32, ptsCount: Int32, offset: Int32)
+        public class Cons_affectedHistory {
+            public var pts: Int32
+            public var ptsCount: Int32
+            public var offset: Int32
+            public init(pts: Int32, ptsCount: Int32, offset: Int32) {
+                self.pts = pts
+                self.ptsCount = ptsCount
+                self.offset = offset
+            }
+        }
+        case affectedHistory(Cons_affectedHistory)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -799,7 +947,15 @@ public extension Api.messages {
 }
 public extension Api.messages {
     enum AffectedMessages: TypeConstructorDescription {
-        case affectedMessages(pts: Int32, ptsCount: Int32)
+        public class Cons_affectedMessages {
+            public var pts: Int32
+            public var ptsCount: Int32
+            public init(pts: Int32, ptsCount: Int32) {
+                self.pts = pts
+                self.ptsCount = ptsCount
+            }
+        }
+        case affectedMessages(Cons_affectedMessages)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

@@ -191,12 +191,12 @@ extension ServerSuggestionInfo.Item {
 func _internal_fetchPromoInfo(accountPeerId: EnginePeer.Id, postbox: Postbox, network: Network) -> Signal<Void, NoError> {
     return network.request(Api.functions.help.getPromoData())
     |> `catch` { _ -> Signal<Api.help.PromoData, NoError> in
-        return .single(.promoDataEmpty(expires: 10 * 60))
+        return .single(.promoDataEmpty(.init(expires: 10 * 60)))
     }
     |> mapToSignal { data -> Signal<Void, NoError> in
         return postbox.transaction { transaction -> Void in
             switch data {
-            case .promoDataEmpty:
+            case .promoDataEmpty(_):
                 transaction.replaceAdditionalChatListItems([])
                 
                 let suggestionInfo = ServerSuggestionInfo(
@@ -208,7 +208,8 @@ func _internal_fetchPromoInfo(accountPeerId: EnginePeer.Id, postbox: Postbox, ne
                 transaction.updatePreferencesEntry(key: PreferencesKeys.serverSuggestionInfo(), { _ in
                     return PreferencesEntry(suggestionInfo)
                 })
-            case let .promoData(flags, expires, peer, psaType, psaMessage, pendingSuggestions, dismissedSuggestions, customPendingSuggestion, chats, users):
+            case let .promoData(promoDataData):
+                let (flags, expires, peer, psaType, psaMessage, pendingSuggestions, dismissedSuggestions, customPendingSuggestion, chats, users) = (promoDataData.flags, promoDataData.expires, promoDataData.peer, promoDataData.psaType, promoDataData.psaMessage, promoDataData.pendingSuggestions, promoDataData.dismissedSuggestions, promoDataData.customPendingSuggestion, promoDataData.chats, promoDataData.users)
                 let _ = expires
                 
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)

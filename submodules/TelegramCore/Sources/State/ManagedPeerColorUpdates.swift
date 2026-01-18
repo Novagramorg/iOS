@@ -351,7 +351,8 @@ private func _internal_fetchPeerColors(postbox: Postbox, network: Network, scope
             switch result {
             case .peerColorsNotModified:
                 return .complete()
-            case let .peerColors(hash, colors):
+            case let .peerColors(peerColorsData):
+                let (hash, colors) = (peerColorsData.hash, peerColorsData.colors)
                 return postbox.transaction { transaction -> Void in
                     let value = EngineAvailableColorOptions(hash: hash, apiColors: colors)
                     _internal_setCachedAvailableColorOptions(transaction: transaction, scope: scope, value: value)

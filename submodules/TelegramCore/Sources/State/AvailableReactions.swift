@@ -420,7 +420,8 @@ func managedSynchronizeAvailableReactions(postbox: Postbox, network: Network) ->
                     }
                     
                     switch result {
-                    case let .availableReactions(hash, reactions):
+                    case let .availableReactions(availableReactionsData):
+                        let (hash, reactions) = (availableReactionsData.hash, availableReactionsData.reactions)
                         let availableReactions = AvailableReactions(
                             hash: hash,
                             reactions: reactions.compactMap(AvailableReactions.Reaction.init(apiReaction:))

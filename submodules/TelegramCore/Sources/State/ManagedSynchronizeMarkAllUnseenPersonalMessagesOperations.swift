@@ -157,7 +157,8 @@ private func synchronizeMarkAllUnseen(transaction: Transaction, postbox: Postbox
                 return network.request(Api.functions.messages.readMessageContents(id: filteredIds.map { $0.id }))
                 |> map { result -> Int32? in
                     switch result {
-                        case let .affectedMessages(pts, ptsCount):
+                        case let .affectedMessages(affectedMessagesData):
+                            let (pts, ptsCount) = (affectedMessagesData.pts, affectedMessagesData.ptsCount)
                             stateManager.addUpdateGroups([.updatePts(pts: pts, ptsCount: ptsCount)])
                     }
                     if ids.count < limit {
@@ -310,7 +311,8 @@ private func synchronizeMarkAllUnseenReactions(transaction: Transaction, postbox
     |> mapToSignal { result -> Signal<Void, Bool> in
         if let result = result {
             switch result {
-            case let .affectedHistory(pts, ptsCount, offset):
+            case let .affectedHistory(affectedHistoryData):
+                let (pts, ptsCount, offset) = (affectedHistoryData.pts, affectedHistoryData.ptsCount, affectedHistoryData.offset)
                 stateManager.addUpdateGroups([.updatePts(pts: pts, ptsCount: ptsCount)])
                 if offset == 0 {
                     return .fail(true)

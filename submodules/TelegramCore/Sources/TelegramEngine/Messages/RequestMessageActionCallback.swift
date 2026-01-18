@@ -146,7 +146,8 @@ func _internal_requestMessageActionCallback(account: Account, messageId: Message
                         return .none
                     }
                     switch result {
-                        case let .botCallbackAnswer(flags, message, url, _):
+                        case let .botCallbackAnswer(botCallbackAnswerData):
+                            let (flags, message, url) = (botCallbackAnswerData.flags, botCallbackAnswerData.message, botCallbackAnswerData.url)
                             if let message = message {
                                 if (flags & (1 << 1)) != 0 {
                                     return .alert(message)
