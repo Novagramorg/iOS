@@ -2234,15 +2234,18 @@ extension Stories.StoredItem {
                             base = .everyone
                         case .privacyValueDisallowAll:
                             base = .nobody
-                        case let .privacyValueAllowUsers(users):
+                        case let .privacyValueAllowUsers(privacyValueAllowUsersData):
+                            let users = privacyValueAllowUsersData.users
                             for id in users {
                                 additionalPeerIds.append(EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(id)))
                             }
-                        case let .privacyValueDisallowUsers(users):
+                        case let .privacyValueDisallowUsers(privacyValueDisallowUsersData):
+                            let users = privacyValueDisallowUsersData.users
                             for id in users {
                                 additionalPeerIds.append(EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(id)))
                             }
-                        case let .privacyValueAllowChatParticipants(chats):
+                        case let .privacyValueAllowChatParticipants(privacyValueAllowChatParticipantsData):
+                            let chats = privacyValueAllowChatParticipantsData.chats
                             for id in chats {
                                 if let peer = transaction.getPeer(EnginePeer.Id(namespace: Namespaces.Peer.CloudGroup, id: EnginePeer.Id.Id._internalFromInt64Value(id))) {
                                     additionalPeerIds.append(peer.id)

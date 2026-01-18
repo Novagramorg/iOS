@@ -310,11 +310,13 @@ private final class StoryStatsPublicForwardsContextImpl {
                             var resultForwards: [StoryStatsPublicForwardsContext.State.Forward] = []
                             for forward in forwards {
                                 switch forward {
-                                case let .publicForwardMessage(apiMessage):
+                                case let .publicForwardMessage(publicForwardMessageData):
+                                    let apiMessage = publicForwardMessageData.message
                                     if let message = StoreMessage(apiMessage: apiMessage, accountPeerId: accountPeerId, peerIsForum: false), let renderedMessage = locallyRenderedMessage(message: message, peers: peers) {
                                         resultForwards.append(.message(EngineMessage(renderedMessage)))
                                     }
-                                case let .publicForwardStory(apiPeer, apiStory):
+                                case let .publicForwardStory(publicForwardStoryData):
+                                    let (apiPeer, apiStory) = (publicForwardStoryData.peer, publicForwardStoryData.story)
                                     if let storedItem = Stories.StoredItem(apiStoryItem: apiStory, peerId: apiPeer.peerId, transaction: transaction), case let .item(item) = storedItem, let media = item.media, let peer = peers[apiPeer.peerId] {
                                         let mappedItem = EngineStoryItem(
                                             id: item.id,
