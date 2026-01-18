@@ -1,9 +1,43 @@
 public extension Api {
     enum StickerSetCovered: TypeConstructorDescription {
-        case stickerSetCovered(set: Api.StickerSet, cover: Api.Document)
-        case stickerSetFullCovered(set: Api.StickerSet, packs: [Api.StickerPack], keywords: [Api.StickerKeyword], documents: [Api.Document])
-        case stickerSetMultiCovered(set: Api.StickerSet, covers: [Api.Document])
-        case stickerSetNoCovered(set: Api.StickerSet)
+        public class Cons_stickerSetCovered {
+            public var set: Api.StickerSet
+            public var cover: Api.Document
+            public init(set: Api.StickerSet, cover: Api.Document) {
+                self.set = set
+                self.cover = cover
+            }
+        }
+        public class Cons_stickerSetFullCovered {
+            public var set: Api.StickerSet
+            public var packs: [Api.StickerPack]
+            public var keywords: [Api.StickerKeyword]
+            public var documents: [Api.Document]
+            public init(set: Api.StickerSet, packs: [Api.StickerPack], keywords: [Api.StickerKeyword], documents: [Api.Document]) {
+                self.set = set
+                self.packs = packs
+                self.keywords = keywords
+                self.documents = documents
+            }
+        }
+        public class Cons_stickerSetMultiCovered {
+            public var set: Api.StickerSet
+            public var covers: [Api.Document]
+            public init(set: Api.StickerSet, covers: [Api.Document]) {
+                self.set = set
+                self.covers = covers
+            }
+        }
+        public class Cons_stickerSetNoCovered {
+            public var set: Api.StickerSet
+            public init(set: Api.StickerSet) {
+                self.set = set
+            }
+        }
+        case stickerSetCovered(Cons_stickerSetCovered)
+        case stickerSetFullCovered(Cons_stickerSetFullCovered)
+        case stickerSetMultiCovered(Cons_stickerSetMultiCovered)
+        case stickerSetNoCovered(Cons_stickerSetNoCovered)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -53,7 +87,17 @@ public extension Api {
 }
 public extension Api {
     enum StoriesStealthMode: TypeConstructorDescription {
-        case storiesStealthMode(flags: Int32, activeUntilDate: Int32?, cooldownUntilDate: Int32?)
+        public class Cons_storiesStealthMode {
+            public var flags: Int32
+            public var activeUntilDate: Int32?
+            public var cooldownUntilDate: Int32?
+            public init(flags: Int32, activeUntilDate: Int32?, cooldownUntilDate: Int32?) {
+                self.flags = flags
+                self.activeUntilDate = activeUntilDate
+                self.cooldownUntilDate = cooldownUntilDate
+            }
+        }
+        case storiesStealthMode(Cons_storiesStealthMode)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -82,7 +126,21 @@ public extension Api {
 }
 public extension Api {
     enum StoryAlbum: TypeConstructorDescription {
-        case storyAlbum(flags: Int32, albumId: Int32, title: String, iconPhoto: Api.Photo?, iconVideo: Api.Document?)
+        public class Cons_storyAlbum {
+            public var flags: Int32
+            public var albumId: Int32
+            public var title: String
+            public var iconPhoto: Api.Photo?
+            public var iconVideo: Api.Document?
+            public init(flags: Int32, albumId: Int32, title: String, iconPhoto: Api.Photo?, iconVideo: Api.Document?) {
+                self.flags = flags
+                self.albumId = albumId
+                self.title = title
+                self.iconPhoto = iconPhoto
+                self.iconVideo = iconVideo
+            }
+        }
+        case storyAlbum(Cons_storyAlbum)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -111,7 +169,19 @@ public extension Api {
 }
 public extension Api {
     enum StoryFwdHeader: TypeConstructorDescription {
-        case storyFwdHeader(flags: Int32, from: Api.Peer?, fromName: String?, storyId: Int32?)
+        public class Cons_storyFwdHeader {
+            public var flags: Int32
+            public var from: Api.Peer?
+            public var fromName: String?
+            public var storyId: Int32?
+            public init(flags: Int32, from: Api.Peer?, fromName: String?, storyId: Int32?) {
+                self.flags = flags
+                self.from = from
+                self.fromName = fromName
+                self.storyId = storyId
+            }
+        }
+        case storyFwdHeader(Cons_storyFwdHeader)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

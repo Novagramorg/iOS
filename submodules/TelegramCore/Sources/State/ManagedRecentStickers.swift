@@ -109,7 +109,8 @@ func managedSavedStickers(postbox: Postbox, network: Network, forceFetch: Bool =
                         var fileStringRepresentations: [MediaId: [String]] = [:]
                         for pack in packs {
                             switch pack {
-                                case let .stickerPack(text, fileIds):
+                                case let .stickerPack(stickerPackData):
+                                    let (text, fileIds) = (stickerPackData.emoticon, stickerPackData.documents)
                                     for fileId in fileIds {
                                         let mediaId = MediaId(namespace: Namespaces.Media.CloudFile, id: fileId)
                                         if fileStringRepresentations[mediaId] == nil {

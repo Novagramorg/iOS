@@ -2194,7 +2194,8 @@ extension Stories.Item.Views {
 extension Stories.Item.ForwardInfo {
     init?(apiForwardInfo: Api.StoryFwdHeader) {
         switch apiForwardInfo {
-        case let .storyFwdHeader(flags, from, fromName, storyId):
+        case let .storyFwdHeader(storyFwdHeaderData):
+            let (flags, from, fromName, storyId) = (storyFwdHeaderData.flags, storyFwdHeaderData.from, storyFwdHeaderData.fromName, storyFwdHeaderData.storyId)
             let isModified = (flags & (1 << 3)) != 0
             if let from = from, let storyId = storyId {
                 self = .known(peerId: from.peerId, storyId: storyId, isModified: isModified)
@@ -2700,7 +2701,8 @@ extension Stories.ConfigurationState {
 extension Stories.StealthModeState {
     init(apiMode: Api.StoriesStealthMode) {
         switch apiMode {
-        case let .storiesStealthMode(_, activeUntilDate, cooldownUntilDate):
+        case let .storiesStealthMode(storiesStealthModeData):
+            let (activeUntilDate, cooldownUntilDate) = (storiesStealthModeData.activeUntilDate, storiesStealthModeData.cooldownUntilDate)
             self.init(
                 activeUntilTimestamp: activeUntilDate,
                 cooldownUntilTimestamp: cooldownUntilDate
