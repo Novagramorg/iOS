@@ -155,7 +155,12 @@ extension StarsRevenueStats {
 extension StarsRevenueStats.Balances {
     init(apiStarsRevenueStatus: Api.StarsRevenueStatus) {
         switch apiStarsRevenueStatus {
-        case let .starsRevenueStatus(flags, currentBalance, availableBalance, overallRevenue, nextWithdrawalAt):
+        case let .starsRevenueStatus(starsRevenueStatusData):
+            let flags = starsRevenueStatusData.flags
+            let currentBalance = starsRevenueStatusData.currentBalance
+            let availableBalance = starsRevenueStatusData.availableBalance
+            let overallRevenue = starsRevenueStatusData.overallRevenue
+            let nextWithdrawalAt = starsRevenueStatusData.nextWithdrawalAt
             self.init(currentBalance: CurrencyAmount(apiAmount: currentBalance), availableBalance: CurrencyAmount(apiAmount: availableBalance), overallRevenue: CurrencyAmount(apiAmount: overallRevenue), withdrawEnabled: ((flags & (1 << 0)) != 0), nextWithdrawalTimestamp: nextWithdrawalAt)
         }
     }
