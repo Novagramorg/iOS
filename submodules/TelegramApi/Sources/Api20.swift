@@ -617,8 +617,32 @@ public extension Api {
 }
 public extension Api {
     enum PostInteractionCounters: TypeConstructorDescription {
-        case postInteractionCountersMessage(msgId: Int32, views: Int32, forwards: Int32, reactions: Int32)
-        case postInteractionCountersStory(storyId: Int32, views: Int32, forwards: Int32, reactions: Int32)
+        public class Cons_postInteractionCountersMessage {
+            public var msgId: Int32
+            public var views: Int32
+            public var forwards: Int32
+            public var reactions: Int32
+            public init(msgId: Int32, views: Int32, forwards: Int32, reactions: Int32) {
+                self.msgId = msgId
+                self.views = views
+                self.forwards = forwards
+                self.reactions = reactions
+            }
+        }
+        public class Cons_postInteractionCountersStory {
+            public var storyId: Int32
+            public var views: Int32
+            public var forwards: Int32
+            public var reactions: Int32
+            public init(storyId: Int32, views: Int32, forwards: Int32, reactions: Int32) {
+                self.storyId = storyId
+                self.views = views
+                self.forwards = forwards
+                self.reactions = reactions
+            }
+        }
+        case postInteractionCountersMessage(Cons_postInteractionCountersMessage)
+        case postInteractionCountersStory(Cons_postInteractionCountersStory)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -654,7 +678,25 @@ public extension Api {
 }
 public extension Api {
     enum PremiumGiftCodeOption: TypeConstructorDescription {
-        case premiumGiftCodeOption(flags: Int32, users: Int32, months: Int32, storeProduct: String?, storeQuantity: Int32?, currency: String, amount: Int64)
+        public class Cons_premiumGiftCodeOption {
+            public var flags: Int32
+            public var users: Int32
+            public var months: Int32
+            public var storeProduct: String?
+            public var storeQuantity: Int32?
+            public var currency: String
+            public var amount: Int64
+            public init(flags: Int32, users: Int32, months: Int32, storeProduct: String?, storeQuantity: Int32?, currency: String, amount: Int64) {
+                self.flags = flags
+                self.users = users
+                self.months = months
+                self.storeProduct = storeProduct
+                self.storeQuantity = storeQuantity
+                self.currency = currency
+                self.amount = amount
+            }
+        }
+        case premiumGiftCodeOption(Cons_premiumGiftCodeOption)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -683,7 +725,25 @@ public extension Api {
 }
 public extension Api {
     enum PremiumSubscriptionOption: TypeConstructorDescription {
-        case premiumSubscriptionOption(flags: Int32, transaction: String?, months: Int32, currency: String, amount: Int64, botUrl: String, storeProduct: String?)
+        public class Cons_premiumSubscriptionOption {
+            public var flags: Int32
+            public var transaction: String?
+            public var months: Int32
+            public var currency: String
+            public var amount: Int64
+            public var botUrl: String
+            public var storeProduct: String?
+            public init(flags: Int32, transaction: String?, months: Int32, currency: String, amount: Int64, botUrl: String, storeProduct: String?) {
+                self.flags = flags
+                self.transaction = transaction
+                self.months = months
+                self.currency = currency
+                self.amount = amount
+                self.botUrl = botUrl
+                self.storeProduct = storeProduct
+            }
+        }
+        case premiumSubscriptionOption(Cons_premiumSubscriptionOption)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -712,8 +772,34 @@ public extension Api {
 }
 public extension Api {
     enum PrepaidGiveaway: TypeConstructorDescription {
-        case prepaidGiveaway(id: Int64, months: Int32, quantity: Int32, date: Int32)
-        case prepaidStarsGiveaway(id: Int64, stars: Int64, quantity: Int32, boosts: Int32, date: Int32)
+        public class Cons_prepaidGiveaway {
+            public var id: Int64
+            public var months: Int32
+            public var quantity: Int32
+            public var date: Int32
+            public init(id: Int64, months: Int32, quantity: Int32, date: Int32) {
+                self.id = id
+                self.months = months
+                self.quantity = quantity
+                self.date = date
+            }
+        }
+        public class Cons_prepaidStarsGiveaway {
+            public var id: Int64
+            public var stars: Int64
+            public var quantity: Int32
+            public var boosts: Int32
+            public var date: Int32
+            public init(id: Int64, stars: Int64, quantity: Int32, boosts: Int32, date: Int32) {
+                self.id = id
+                self.stars = stars
+                self.quantity = quantity
+                self.boosts = boosts
+                self.date = date
+            }
+        }
+        case prepaidGiveaway(Cons_prepaidGiveaway)
+        case prepaidStarsGiveaway(Cons_prepaidStarsGiveaway)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

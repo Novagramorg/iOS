@@ -171,7 +171,8 @@ func _internal_keepShortcutMessagesUpdated(account: Account) -> Signal<Never, No
                     
                     for quickReply in quickReplies {
                         switch quickReply {
-                        case let .quickReply(shortcutId, shortcut, topMessage, _):
+                        case let .quickReply(quickReplyData):
+                            let (shortcutId, shortcut, topMessage, _) = (quickReplyData.shortcutId, quickReplyData.shortcut, quickReplyData.topMessage, quickReplyData.count)
                             state.shortcuts.append(QuickReplyMessageShortcut(
                                 id: shortcutId,
                                 shortcut: shortcut

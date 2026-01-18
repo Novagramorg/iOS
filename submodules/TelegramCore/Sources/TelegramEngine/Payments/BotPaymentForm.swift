@@ -299,7 +299,7 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
             flags |= (1 << 1)
         }
         
-        let option: Api.PremiumGiftCodeOption = .premiumGiftCodeOption(flags: flags, users: option.users, months: option.months, storeProduct: option.storeProductId, storeQuantity: option.storeQuantity, currency: option.currency, amount: option.amount)
+        let option: Api.PremiumGiftCodeOption = .premiumGiftCodeOption(.init(flags: flags, users: option.users, months: option.months, storeProduct: option.storeProductId, storeQuantity: option.storeQuantity, currency: option.currency, amount: option.amount))
         
         return .inputInvoicePremiumGiftCode(.init(purpose: inputPurpose, option: option))
     case let .giftCode(users, currency, amount, option, text, entities):
@@ -329,7 +329,7 @@ func _internal_parseInputInvoice(transaction: Transaction, source: BotPaymentInv
             flags |= (1 << 1)
         }
         
-        let option: Api.PremiumGiftCodeOption = .premiumGiftCodeOption(flags: flags, users: option.users, months: option.months, storeProduct: option.storeProductId, storeQuantity: option.storeQuantity, currency: option.currency, amount: option.amount)
+        let option: Api.PremiumGiftCodeOption = .premiumGiftCodeOption(.init(flags: flags, users: option.users, months: option.months, storeProduct: option.storeProductId, storeQuantity: option.storeQuantity, currency: option.currency, amount: option.amount))
 
         return .inputInvoicePremiumGiftCode(.init(purpose: inputPurpose, option: option))
     case let .stars(option, peerId):

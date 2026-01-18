@@ -1184,9 +1184,11 @@ extension StatsPercentValue {
 extension ChannelStatsPostInteractions {
     init(apiPostInteractionCounters: Api.PostInteractionCounters, peerId: PeerId) {
         switch apiPostInteractionCounters {
-        case let .postInteractionCountersMessage(msgId, views, forwards, reactions):
+        case let .postInteractionCountersMessage(postInteractionCountersMessageData):
+            let (msgId, views, forwards, reactions) = (postInteractionCountersMessageData.msgId, postInteractionCountersMessageData.views, postInteractionCountersMessageData.forwards, postInteractionCountersMessageData.reactions)
             self = ChannelStatsPostInteractions(postId: .message(id: EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: msgId)), views: views, forwards: forwards, reactions: reactions)
-        case let .postInteractionCountersStory(storyId, views, forwards, reactions):
+        case let .postInteractionCountersStory(postInteractionCountersStoryData):
+            let (storyId, views, forwards, reactions) = (postInteractionCountersStoryData.storyId, postInteractionCountersStoryData.views, postInteractionCountersStoryData.forwards, postInteractionCountersStoryData.reactions)
             self = ChannelStatsPostInteractions(postId: .story(peerId: peerId, id: storyId), views: views, forwards: forwards, reactions: reactions)
         }
     }

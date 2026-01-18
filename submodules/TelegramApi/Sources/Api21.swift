@@ -1,17 +1,41 @@
 public extension Api {
     enum PrivacyRule: TypeConstructorDescription {
+        public class Cons_privacyValueAllowChatParticipants {
+            public var chats: [Int64]
+            public init(chats: [Int64]) {
+                self.chats = chats
+            }
+        }
+        public class Cons_privacyValueAllowUsers {
+            public var users: [Int64]
+            public init(users: [Int64]) {
+                self.users = users
+            }
+        }
+        public class Cons_privacyValueDisallowChatParticipants {
+            public var chats: [Int64]
+            public init(chats: [Int64]) {
+                self.chats = chats
+            }
+        }
+        public class Cons_privacyValueDisallowUsers {
+            public var users: [Int64]
+            public init(users: [Int64]) {
+                self.users = users
+            }
+        }
         case privacyValueAllowAll
         case privacyValueAllowBots
-        case privacyValueAllowChatParticipants(chats: [Int64])
+        case privacyValueAllowChatParticipants(Cons_privacyValueAllowChatParticipants)
         case privacyValueAllowCloseFriends
         case privacyValueAllowContacts
         case privacyValueAllowPremium
-        case privacyValueAllowUsers(users: [Int64])
+        case privacyValueAllowUsers(Cons_privacyValueAllowUsers)
         case privacyValueDisallowAll
         case privacyValueDisallowBots
-        case privacyValueDisallowChatParticipants(chats: [Int64])
+        case privacyValueDisallowChatParticipants(Cons_privacyValueDisallowChatParticipants)
         case privacyValueDisallowContacts
-        case privacyValueDisallowUsers(users: [Int64])
+        case privacyValueDisallowUsers(Cons_privacyValueDisallowUsers)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -202,8 +226,22 @@ public extension Api {
 }
 public extension Api {
     indirect enum PublicForward: TypeConstructorDescription {
-        case publicForwardMessage(message: Api.Message)
-        case publicForwardStory(peer: Api.Peer, story: Api.StoryItem)
+        public class Cons_publicForwardMessage {
+            public var message: Api.Message
+            public init(message: Api.Message) {
+                self.message = message
+            }
+        }
+        public class Cons_publicForwardStory {
+            public var peer: Api.Peer
+            public var story: Api.StoryItem
+            public init(peer: Api.Peer, story: Api.StoryItem) {
+                self.peer = peer
+                self.story = story
+            }
+        }
+        case publicForwardMessage(Cons_publicForwardMessage)
+        case publicForwardStory(Cons_publicForwardStory)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -239,7 +277,19 @@ public extension Api {
 }
 public extension Api {
     enum QuickReply: TypeConstructorDescription {
-        case quickReply(shortcutId: Int32, shortcut: String, topMessage: Int32, count: Int32)
+        public class Cons_quickReply {
+            public var shortcutId: Int32
+            public var shortcut: String
+            public var topMessage: Int32
+            public var count: Int32
+            public init(shortcutId: Int32, shortcut: String, topMessage: Int32, count: Int32) {
+                self.shortcutId = shortcutId
+                self.shortcut = shortcut
+                self.topMessage = topMessage
+                self.count = count
+            }
+        }
+        case quickReply(Cons_quickReply)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -268,8 +318,20 @@ public extension Api {
 }
 public extension Api {
     enum Reaction: TypeConstructorDescription {
-        case reactionCustomEmoji(documentId: Int64)
-        case reactionEmoji(emoticon: String)
+        public class Cons_reactionCustomEmoji {
+            public var documentId: Int64
+            public init(documentId: Int64) {
+                self.documentId = documentId
+            }
+        }
+        public class Cons_reactionEmoji {
+            public var emoticon: String
+            public init(emoticon: String) {
+                self.emoticon = emoticon
+            }
+        }
+        case reactionCustomEmoji(Cons_reactionCustomEmoji)
+        case reactionEmoji(Cons_reactionEmoji)
         case reactionEmpty
         case reactionPaid
 

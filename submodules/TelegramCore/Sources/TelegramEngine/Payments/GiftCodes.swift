@@ -370,7 +370,8 @@ func _internal_launchPrepaidGiveaway(account: Account, peerId: EnginePeer.Id, pu
 extension PremiumGiftCodeOption {
     init(apiGiftCodeOption: Api.PremiumGiftCodeOption) {
         switch apiGiftCodeOption {
-        case let .premiumGiftCodeOption(_, users, months, storeProduct, storeQuantity, curreny, amount):
+        case let .premiumGiftCodeOption(premiumGiftCodeOptionData):
+            let (_, users, months, storeProduct, storeQuantity, curreny, amount) = (premiumGiftCodeOptionData.flags, premiumGiftCodeOptionData.users, premiumGiftCodeOptionData.months, premiumGiftCodeOptionData.storeProduct, premiumGiftCodeOptionData.storeQuantity, premiumGiftCodeOptionData.currency, premiumGiftCodeOptionData.amount)
             self.init(users: users, months: months, storeProductId: storeProduct, storeQuantity: storeQuantity ?? 1, currency: curreny, amount: amount)
         }
     }
@@ -405,12 +406,14 @@ public extension PremiumGiftCodeInfo {
 extension PrepaidGiveaway {
     init(apiPrepaidGiveaway: Api.PrepaidGiveaway) {
         switch apiPrepaidGiveaway {
-        case let .prepaidGiveaway(id, months, quantity, date):
+        case let .prepaidGiveaway(prepaidGiveawayData):
+            let (id, months, quantity, date) = (prepaidGiveawayData.id, prepaidGiveawayData.months, prepaidGiveawayData.quantity, prepaidGiveawayData.date)
             self.id = id
             self.prize = .premium(months: months)
             self.quantity = quantity
             self.date = date
-        case let .prepaidStarsGiveaway(id, stars, quantity, boosts, date):
+        case let .prepaidStarsGiveaway(prepaidStarsGiveawayData):
+            let (id, stars, quantity, boosts, date) = (prepaidStarsGiveawayData.id, prepaidStarsGiveawayData.stars, prepaidStarsGiveawayData.quantity, prepaidStarsGiveawayData.boosts, prepaidStarsGiveawayData.date)
             self.id = id
             self.prize = .stars(stars: stars, boosts: boosts)
             self.quantity = quantity
