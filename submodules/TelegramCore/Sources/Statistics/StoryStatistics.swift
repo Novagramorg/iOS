@@ -68,7 +68,8 @@ private func requestStoryStats(accountPeerId: PeerId, postbox: Postbox, network:
         
         return signal
         |> mapToSignal { result -> Signal<StoryStats?, MTRpcError> in
-            if case let .storyStats(apiInteractionsGraph, apiReactionsGraph) = result {
+            if case let .storyStats(storyStatsData) = result {
+                let (apiInteractionsGraph, apiReactionsGraph) = (storyStatsData.viewsGraph, storyStatsData.reactionsByEmotionGraph)
                 let interactionsGraph = StatsGraph(apiStatsGraph: apiInteractionsGraph)
                 var interactionsGraphDelta: Int64 = 86400
                 if case let .Loaded(_, data) = interactionsGraph {
@@ -294,7 +295,8 @@ private final class StoryStatsPublicForwardsContextImpl {
                             return ([], 0, nil)
                         }
                         switch result {
-                        case let .publicForwards(_, count, forwards, nextOffset, chats, users):
+                        case let .publicForwards(publicForwardsData):
+                            let (count, forwards, nextOffset, chats, users) = (publicForwardsData.count, publicForwardsData.forwards, publicForwardsData.nextOffset, publicForwardsData.chats, publicForwardsData.users)
                             var peers: [PeerId: Peer] = [:]
                             for user in users {
                                 if let user = TelegramUser.merge(transaction.getPeer(user.peerId) as? TelegramUser, rhs: user) {

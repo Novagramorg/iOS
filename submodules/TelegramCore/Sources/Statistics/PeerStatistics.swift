@@ -836,7 +836,8 @@ private func requestGroupStats(accountPeerId: PeerId, postbox: Postbox, network:
         return signal
         |> mapToSignal { result -> Signal<GroupStats?, MTRpcError> in
             return postbox.transaction { transaction -> GroupStats? in
-                if case let .megagroupStats(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, users) = result {
+                if case let .megagroupStats(megagroupStatsData) = result {
+                    let users = megagroupStatsData.users
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
                 }
                 return GroupStats(apiMegagroupStats: result)
@@ -1203,7 +1204,8 @@ extension ChannelStatsPostInteractions {
 extension ChannelStats {
     init(apiBroadcastStats: Api.stats.BroadcastStats, peerId: PeerId) {
         switch apiBroadcastStats {
-        case let .broadcastStats(period, followers, viewsPerPost, sharesPerPost, reactionsPerPost, viewsPerStory, sharesPerStory, reactionsPerStory, enabledNotifications, apiGrowthGraph, apiFollowersGraph, apiMuteGraph, apiTopHoursGraph, apiInteractionsGraph, apiInstantViewInteractionsGraph, apiViewsBySourceGraph, apiNewFollowersBySourceGraph, apiLanguagesGraph, apiReactionsByEmotionGraph, apiStoryInteractionsGraph, apiStoryReactionsByEmotionGraph, recentPostInteractions):
+        case let .broadcastStats(broadcastStatsData):
+            let (period, followers, viewsPerPost, sharesPerPost, reactionsPerPost, viewsPerStory, sharesPerStory, reactionsPerStory, enabledNotifications, apiGrowthGraph, apiFollowersGraph, apiMuteGraph, apiTopHoursGraph, apiInteractionsGraph, apiInstantViewInteractionsGraph, apiViewsBySourceGraph, apiNewFollowersBySourceGraph, apiLanguagesGraph, apiReactionsByEmotionGraph, apiStoryInteractionsGraph, apiStoryReactionsByEmotionGraph, recentPostInteractions) = (broadcastStatsData.period, broadcastStatsData.followers, broadcastStatsData.viewsPerPost, broadcastStatsData.sharesPerPost, broadcastStatsData.reactionsPerPost, broadcastStatsData.viewsPerStory, broadcastStatsData.sharesPerStory, broadcastStatsData.reactionsPerStory, broadcastStatsData.enabledNotifications, broadcastStatsData.growthGraph, broadcastStatsData.followersGraph, broadcastStatsData.muteGraph, broadcastStatsData.topHoursGraph, broadcastStatsData.interactionsGraph, broadcastStatsData.ivInteractionsGraph, broadcastStatsData.viewsBySourceGraph, broadcastStatsData.newFollowersBySourceGraph, broadcastStatsData.languagesGraph, broadcastStatsData.reactionsByEmotionGraph, broadcastStatsData.storyInteractionsGraph, broadcastStatsData.storyReactionsByEmotionGraph, broadcastStatsData.recentPostsInteractions)
             let growthGraph = StatsGraph(apiStatsGraph: apiGrowthGraph)
             let isEmpty = growthGraph.isEmpty
         
@@ -1267,9 +1269,10 @@ extension GroupStatsTopInviter {
 extension GroupStats {
     init(apiMegagroupStats: Api.stats.MegagroupStats) {
         switch apiMegagroupStats {
-            case let .megagroupStats(period, members, messages, viewers, posters, apiGrowthGraph, apiMembersGraph, apiNewMembersBySourceGraph, apiLanguagesGraph, apiMessagesGraph, apiActionsGraph, apiTopHoursGraph, apiTopWeekdaysGraph, topPosters, topAdmins, topInviters, _):
+            case let .megagroupStats(megagroupStatsData):
+                let (period, members, messages, viewers, posters, apiGrowthGraph, apiMembersGraph, apiNewMembersBySourceGraph, apiLanguagesGraph, apiMessagesGraph, apiActionsGraph, apiTopHoursGraph, apiTopWeekdaysGraph, topPosters, topAdmins, topInviters) = (megagroupStatsData.period, megagroupStatsData.members, megagroupStatsData.messages, megagroupStatsData.viewers, megagroupStatsData.posters, megagroupStatsData.growthGraph, megagroupStatsData.membersGraph, megagroupStatsData.newMembersBySourceGraph, megagroupStatsData.languagesGraph, megagroupStatsData.messagesGraph, megagroupStatsData.actionsGraph, megagroupStatsData.topHoursGraph, megagroupStatsData.weekdaysGraph, megagroupStatsData.topPosters, megagroupStatsData.topAdmins, megagroupStatsData.topInviters)
                 let growthGraph = StatsGraph(apiStatsGraph: apiGrowthGraph)
-                
+
                 self.init(period: StatsDateRange(apiStatsDateRangeDays: period), members: StatsValue(apiStatsAbsValueAndPrev: members), messages: StatsValue(apiStatsAbsValueAndPrev: messages), viewers: StatsValue(apiStatsAbsValueAndPrev: viewers), posters: StatsValue(apiStatsAbsValueAndPrev: posters), growthGraph: growthGraph, membersGraph: StatsGraph(apiStatsGraph: apiMembersGraph), newMembersBySourceGraph: StatsGraph(apiStatsGraph: apiNewMembersBySourceGraph), languagesGraph: StatsGraph(apiStatsGraph: apiLanguagesGraph), messagesGraph: StatsGraph(apiStatsGraph: apiMessagesGraph), actionsGraph: StatsGraph(apiStatsGraph: apiActionsGraph), topHoursGraph: StatsGraph(apiStatsGraph: apiTopHoursGraph), topWeekdaysGraph: StatsGraph(apiStatsGraph: apiTopWeekdaysGraph), topPosters: topPosters.map { GroupStatsTopPoster(apiStatsGroupTopPoster: $0) }, topAdmins: topAdmins.map { GroupStatsTopAdmin(apiStatsGroupTopAdmin: $0) }, topInviters: topInviters.map { GroupStatsTopInviter(apiStatsGroupTopInviter: $0) })
         }
     }

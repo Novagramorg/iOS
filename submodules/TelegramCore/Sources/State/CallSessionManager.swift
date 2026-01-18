@@ -1622,7 +1622,8 @@ private func acceptCallSession(accountPeerId: PeerId, postbox: Postbox, network:
             if let call = call {
                 return postbox.transaction { transaction -> AcceptCallResult in
                     switch call {
-                    case let .phoneCall(phoneCall, users):
+                    case let .phoneCall(phoneCallData):
+                        let (phoneCall, users) = (phoneCallData.phoneCall, phoneCallData.users)
                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: users))
                         
                         switch phoneCall {
@@ -1693,7 +1694,8 @@ private func requestCallSession(postbox: Postbox, network: Network, peerId: Peer
                 return network.request(Api.functions.phone.requestCall(flags: callFlags, userId: inputUser, randomId: Int32(bitPattern: arc4random()), gAHash: Buffer(data: gAHash), protocol: .phoneCallProtocol(.init(flags: (1 << 0) | (1 << 1), minLayer: minLayer, maxLayer: maxLayer, libraryVersions: versions))))
                 |> map { result -> RequestCallSessionResult in
                     switch result {
-                        case let .phoneCall(phoneCall, _):
+                        case let .phoneCall(phoneCallData):
+                            let (phoneCall, _) = (phoneCallData.phoneCall, phoneCallData.users)
                             switch phoneCall {
                                 case let .phoneCallRequested(phoneCallRequestedData):
                                     let (id, accessHash) = (phoneCallRequestedData.id, phoneCallRequestedData.accessHash)
@@ -1737,7 +1739,8 @@ private func confirmCallSession(network: Network, stableId: CallSessionStableId,
         |> map { result -> Api.PhoneCall? in
             if let result = result {
                 switch result {
-                    case let .phoneCall(phoneCall, _):
+                    case let .phoneCall(phoneCallData):
+                        let (phoneCall, _) = (phoneCallData.phoneCall, phoneCallData.users)
                         return phoneCall
                 }
             } else {

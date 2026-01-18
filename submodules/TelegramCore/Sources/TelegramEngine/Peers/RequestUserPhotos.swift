@@ -40,10 +40,12 @@ func _internal_requestPeerPhotos(accountPeerId: PeerId, postbox: Postbox, networ
                     let totalCount:Int
                     let photos: [Api.Photo]
                     switch result {
-                        case let .photos(photosValue, _):
+                        case let .photos(photosData):
+                            let (photosValue, _) = (photosData.photos, photosData.users)
                             photos = photosValue
                             totalCount = photos.count
-                        case let .photosSlice(count, photosValue, _):
+                        case let .photosSlice(photosSliceData):
+                            let (count, photosValue, _) = (photosSliceData.count, photosSliceData.photos, photosSliceData.users)
                             photos = photosValue
                             totalCount = Int(count)
                     }
