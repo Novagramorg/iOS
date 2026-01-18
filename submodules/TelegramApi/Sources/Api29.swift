@@ -456,7 +456,19 @@ public extension Api {
 }
 public extension Api {
     enum UserProfilePhoto: TypeConstructorDescription {
-        case userProfilePhoto(flags: Int32, photoId: Int64, strippedThumb: Buffer?, dcId: Int32)
+        public class Cons_userProfilePhoto {
+            public var flags: Int32
+            public var photoId: Int64
+            public var strippedThumb: Buffer?
+            public var dcId: Int32
+            public init(flags: Int32, photoId: Int64, strippedThumb: Buffer?, dcId: Int32) {
+                self.flags = flags
+                self.photoId = photoId
+                self.strippedThumb = strippedThumb
+                self.dcId = dcId
+            }
+        }
+        case userProfilePhoto(Cons_userProfilePhoto)
         case userProfilePhotoEmpty
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -493,12 +505,42 @@ public extension Api {
 }
 public extension Api {
     enum UserStatus: TypeConstructorDescription {
+        public class Cons_userStatusLastMonth {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
+        public class Cons_userStatusLastWeek {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
+        public class Cons_userStatusOffline {
+            public var wasOnline: Int32
+            public init(wasOnline: Int32) {
+                self.wasOnline = wasOnline
+            }
+        }
+        public class Cons_userStatusOnline {
+            public var expires: Int32
+            public init(expires: Int32) {
+                self.expires = expires
+            }
+        }
+        public class Cons_userStatusRecently {
+            public var flags: Int32
+            public init(flags: Int32) {
+                self.flags = flags
+            }
+        }
         case userStatusEmpty
-        case userStatusLastMonth(flags: Int32)
-        case userStatusLastWeek(flags: Int32)
-        case userStatusOffline(wasOnline: Int32)
-        case userStatusOnline(expires: Int32)
-        case userStatusRecently(flags: Int32)
+        case userStatusLastMonth(Cons_userStatusLastMonth)
+        case userStatusLastWeek(Cons_userStatusLastWeek)
+        case userStatusOffline(Cons_userStatusOffline)
+        case userStatusOnline(Cons_userStatusOnline)
+        case userStatusRecently(Cons_userStatusRecently)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -562,7 +604,15 @@ public extension Api {
 }
 public extension Api {
     enum Username: TypeConstructorDescription {
-        case username(flags: Int32, username: String)
+        public class Cons_username {
+            public var flags: Int32
+            public var username: String
+            public init(flags: Int32, username: String) {
+                self.flags = flags
+                self.username = username
+            }
+        }
+        case username(Cons_username)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -591,9 +641,43 @@ public extension Api {
 }
 public extension Api {
     enum VideoSize: TypeConstructorDescription {
-        case videoSize(flags: Int32, type: String, w: Int32, h: Int32, size: Int32, videoStartTs: Double?)
-        case videoSizeEmojiMarkup(emojiId: Int64, backgroundColors: [Int32])
-        case videoSizeStickerMarkup(stickerset: Api.InputStickerSet, stickerId: Int64, backgroundColors: [Int32])
+        public class Cons_videoSize {
+            public var flags: Int32
+            public var type: String
+            public var w: Int32
+            public var h: Int32
+            public var size: Int32
+            public var videoStartTs: Double?
+            public init(flags: Int32, type: String, w: Int32, h: Int32, size: Int32, videoStartTs: Double?) {
+                self.flags = flags
+                self.type = type
+                self.w = w
+                self.h = h
+                self.size = size
+                self.videoStartTs = videoStartTs
+            }
+        }
+        public class Cons_videoSizeEmojiMarkup {
+            public var emojiId: Int64
+            public var backgroundColors: [Int32]
+            public init(emojiId: Int64, backgroundColors: [Int32]) {
+                self.emojiId = emojiId
+                self.backgroundColors = backgroundColors
+            }
+        }
+        public class Cons_videoSizeStickerMarkup {
+            public var stickerset: Api.InputStickerSet
+            public var stickerId: Int64
+            public var backgroundColors: [Int32]
+            public init(stickerset: Api.InputStickerSet, stickerId: Int64, backgroundColors: [Int32]) {
+                self.stickerset = stickerset
+                self.stickerId = stickerId
+                self.backgroundColors = backgroundColors
+            }
+        }
+        case videoSize(Cons_videoSize)
+        case videoSizeEmojiMarkup(Cons_videoSizeEmojiMarkup)
+        case videoSizeStickerMarkup(Cons_videoSizeStickerMarkup)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -636,8 +720,34 @@ public extension Api {
 }
 public extension Api {
     enum WallPaper: TypeConstructorDescription {
-        case wallPaper(id: Int64, flags: Int32, accessHash: Int64, slug: String, document: Api.Document, settings: Api.WallPaperSettings?)
-        case wallPaperNoFile(id: Int64, flags: Int32, settings: Api.WallPaperSettings?)
+        public class Cons_wallPaper {
+            public var id: Int64
+            public var flags: Int32
+            public var accessHash: Int64
+            public var slug: String
+            public var document: Api.Document
+            public var settings: Api.WallPaperSettings?
+            public init(id: Int64, flags: Int32, accessHash: Int64, slug: String, document: Api.Document, settings: Api.WallPaperSettings?) {
+                self.id = id
+                self.flags = flags
+                self.accessHash = accessHash
+                self.slug = slug
+                self.document = document
+                self.settings = settings
+            }
+        }
+        public class Cons_wallPaperNoFile {
+            public var id: Int64
+            public var flags: Int32
+            public var settings: Api.WallPaperSettings?
+            public init(id: Int64, flags: Int32, settings: Api.WallPaperSettings?) {
+                self.id = id
+                self.flags = flags
+                self.settings = settings
+            }
+        }
+        case wallPaper(Cons_wallPaper)
+        case wallPaperNoFile(Cons_wallPaperNoFile)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -673,7 +783,27 @@ public extension Api {
 }
 public extension Api {
     enum WallPaperSettings: TypeConstructorDescription {
-        case wallPaperSettings(flags: Int32, backgroundColor: Int32?, secondBackgroundColor: Int32?, thirdBackgroundColor: Int32?, fourthBackgroundColor: Int32?, intensity: Int32?, rotation: Int32?, emoticon: String?)
+        public class Cons_wallPaperSettings {
+            public var flags: Int32
+            public var backgroundColor: Int32?
+            public var secondBackgroundColor: Int32?
+            public var thirdBackgroundColor: Int32?
+            public var fourthBackgroundColor: Int32?
+            public var intensity: Int32?
+            public var rotation: Int32?
+            public var emoticon: String?
+            public init(flags: Int32, backgroundColor: Int32?, secondBackgroundColor: Int32?, thirdBackgroundColor: Int32?, fourthBackgroundColor: Int32?, intensity: Int32?, rotation: Int32?, emoticon: String?) {
+                self.flags = flags
+                self.backgroundColor = backgroundColor
+                self.secondBackgroundColor = secondBackgroundColor
+                self.thirdBackgroundColor = thirdBackgroundColor
+                self.fourthBackgroundColor = fourthBackgroundColor
+                self.intensity = intensity
+                self.rotation = rotation
+                self.emoticon = emoticon
+            }
+        }
+        case wallPaperSettings(Cons_wallPaperSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -702,7 +832,29 @@ public extension Api {
 }
 public extension Api {
     enum WebAuthorization: TypeConstructorDescription {
-        case webAuthorization(hash: Int64, botId: Int64, domain: String, browser: String, platform: String, dateCreated: Int32, dateActive: Int32, ip: String, region: String)
+        public class Cons_webAuthorization {
+            public var hash: Int64
+            public var botId: Int64
+            public var domain: String
+            public var browser: String
+            public var platform: String
+            public var dateCreated: Int32
+            public var dateActive: Int32
+            public var ip: String
+            public var region: String
+            public init(hash: Int64, botId: Int64, domain: String, browser: String, platform: String, dateCreated: Int32, dateActive: Int32, ip: String, region: String) {
+                self.hash = hash
+                self.botId = botId
+                self.domain = domain
+                self.browser = browser
+                self.platform = platform
+                self.dateCreated = dateCreated
+                self.dateActive = dateActive
+                self.ip = ip
+                self.region = region
+            }
+        }
+        case webAuthorization(Cons_webAuthorization)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -731,8 +883,34 @@ public extension Api {
 }
 public extension Api {
     enum WebDocument: TypeConstructorDescription {
-        case webDocument(url: String, accessHash: Int64, size: Int32, mimeType: String, attributes: [Api.DocumentAttribute])
-        case webDocumentNoProxy(url: String, size: Int32, mimeType: String, attributes: [Api.DocumentAttribute])
+        public class Cons_webDocument {
+            public var url: String
+            public var accessHash: Int64
+            public var size: Int32
+            public var mimeType: String
+            public var attributes: [Api.DocumentAttribute]
+            public init(url: String, accessHash: Int64, size: Int32, mimeType: String, attributes: [Api.DocumentAttribute]) {
+                self.url = url
+                self.accessHash = accessHash
+                self.size = size
+                self.mimeType = mimeType
+                self.attributes = attributes
+            }
+        }
+        public class Cons_webDocumentNoProxy {
+            public var url: String
+            public var size: Int32
+            public var mimeType: String
+            public var attributes: [Api.DocumentAttribute]
+            public init(url: String, size: Int32, mimeType: String, attributes: [Api.DocumentAttribute]) {
+                self.url = url
+                self.size = size
+                self.mimeType = mimeType
+                self.attributes = attributes
+            }
+        }
+        case webDocument(Cons_webDocument)
+        case webDocumentNoProxy(Cons_webDocumentNoProxy)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -768,10 +946,82 @@ public extension Api {
 }
 public extension Api {
     enum WebPage: TypeConstructorDescription {
-        case webPage(flags: Int32, id: Int64, url: String, displayUrl: String, hash: Int32, type: String?, siteName: String?, title: String?, description: String?, photo: Api.Photo?, embedUrl: String?, embedType: String?, embedWidth: Int32?, embedHeight: Int32?, duration: Int32?, author: String?, document: Api.Document?, cachedPage: Api.Page?, attributes: [Api.WebPageAttribute]?)
-        case webPageEmpty(flags: Int32, id: Int64, url: String?)
-        case webPageNotModified(flags: Int32, cachedPageViews: Int32?)
-        case webPagePending(flags: Int32, id: Int64, url: String?, date: Int32)
+        public class Cons_webPage {
+            public var flags: Int32
+            public var id: Int64
+            public var url: String
+            public var displayUrl: String
+            public var hash: Int32
+            public var type: String?
+            public var siteName: String?
+            public var title: String?
+            public var description: String?
+            public var photo: Api.Photo?
+            public var embedUrl: String?
+            public var embedType: String?
+            public var embedWidth: Int32?
+            public var embedHeight: Int32?
+            public var duration: Int32?
+            public var author: String?
+            public var document: Api.Document?
+            public var cachedPage: Api.Page?
+            public var attributes: [Api.WebPageAttribute]?
+            public init(flags: Int32, id: Int64, url: String, displayUrl: String, hash: Int32, type: String?, siteName: String?, title: String?, description: String?, photo: Api.Photo?, embedUrl: String?, embedType: String?, embedWidth: Int32?, embedHeight: Int32?, duration: Int32?, author: String?, document: Api.Document?, cachedPage: Api.Page?, attributes: [Api.WebPageAttribute]?) {
+                self.flags = flags
+                self.id = id
+                self.url = url
+                self.displayUrl = displayUrl
+                self.hash = hash
+                self.type = type
+                self.siteName = siteName
+                self.title = title
+                self.description = description
+                self.photo = photo
+                self.embedUrl = embedUrl
+                self.embedType = embedType
+                self.embedWidth = embedWidth
+                self.embedHeight = embedHeight
+                self.duration = duration
+                self.author = author
+                self.document = document
+                self.cachedPage = cachedPage
+                self.attributes = attributes
+            }
+        }
+        public class Cons_webPageEmpty {
+            public var flags: Int32
+            public var id: Int64
+            public var url: String?
+            public init(flags: Int32, id: Int64, url: String?) {
+                self.flags = flags
+                self.id = id
+                self.url = url
+            }
+        }
+        public class Cons_webPageNotModified {
+            public var flags: Int32
+            public var cachedPageViews: Int32?
+            public init(flags: Int32, cachedPageViews: Int32?) {
+                self.flags = flags
+                self.cachedPageViews = cachedPageViews
+            }
+        }
+        public class Cons_webPagePending {
+            public var flags: Int32
+            public var id: Int64
+            public var url: String?
+            public var date: Int32
+            public init(flags: Int32, id: Int64, url: String?, date: Int32) {
+                self.flags = flags
+                self.id = id
+                self.url = url
+                self.date = date
+            }
+        }
+        case webPage(Cons_webPage)
+        case webPageEmpty(Cons_webPageEmpty)
+        case webPageNotModified(Cons_webPageNotModified)
+        case webPagePending(Cons_webPagePending)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

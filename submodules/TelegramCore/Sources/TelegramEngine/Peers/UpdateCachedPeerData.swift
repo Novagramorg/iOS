@@ -248,7 +248,8 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                             
                             if let additionalConnectedBots {
                                 switch additionalConnectedBots {
-                                case let .connectedBots(connectedBots, users):
+                                case let .connectedBots(connectedBotsData):
+                                    let (connectedBots, users) = (connectedBotsData.connectedBots, connectedBotsData.users)
                                     parsedPeers = parsedPeers.union(with: AccumulatedPeers(transaction: transaction, chats: [], users: users))
                                     
                                     if let apiBot = connectedBots.first {

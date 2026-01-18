@@ -219,7 +219,8 @@ func telegramMediaFileFromApiDocument(_ document: Api.Document, altDocuments: [A
             if let videoThumbs = videoThumbs {
                 for thumb in videoThumbs {
                     switch thumb {
-                    case let .videoSize(_, type, w, h, _, _):
+                    case let .videoSize(videoSizeData):
+                        let (_, type, w, h, _, _) = (videoSizeData.flags, videoSizeData.type, videoSizeData.w, videoSizeData.h, videoSizeData.size, videoSizeData.videoStartTs)
                         let resource: TelegramMediaResource
                         resource = CloudDocumentSizeMediaResource(datacenterId: dcId, documentId: id, accessHash: accessHash, sizeSpec: type, fileReference: fileReference.makeData())
                         

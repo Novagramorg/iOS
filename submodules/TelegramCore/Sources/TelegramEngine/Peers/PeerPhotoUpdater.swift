@@ -109,9 +109,9 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
         if let markup = markup {
             switch markup {
             case let .emoji(fileId, backgroundColors):
-                videoEmojiMarkup = .videoSizeEmojiMarkup(emojiId: fileId, backgroundColors: backgroundColors)
+                videoEmojiMarkup = .videoSizeEmojiMarkup(.init(emojiId: fileId, backgroundColors: backgroundColors))
             case let .sticker(packReference, fileId, backgroundColors):
-                videoEmojiMarkup = .videoSizeStickerMarkup(stickerset: packReference.apiInputStickerSet, stickerId: fileId, backgroundColors: backgroundColors)
+                videoEmojiMarkup = .videoSizeStickerMarkup(.init(stickerset: packReference.apiInputStickerSet, stickerId: fileId, backgroundColors: backgroundColors))
             }
         }
         
@@ -262,10 +262,11 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                                                     if let videoSizes = videoSizes {
                                                         for size in videoSizes {
                                                             switch size {
-                                                            case let .videoSize(_, type, w, h, size, videoStartTs):
+                                                            case let .videoSize(videoSizeData):
+                                                                let (_, type, w, h, size, videoStartTs) = (videoSizeData.flags, videoSizeData.type, videoSizeData.w, videoSizeData.h, videoSizeData.size, videoSizeData.videoStartTs)
                                                                 let resource: TelegramMediaResource
                                                                 resource = CloudPhotoSizeMediaResource(datacenterId: dcId, photoId: id, accessHash: accessHash, sizeSpec: type, size: Int64(size), fileReference: fileReference.makeData())
-                                                                
+
                                                                 videoRepresentations.append(TelegramMediaImage.VideoRepresentation(dimensions: PixelDimensions(width: w, height: h), resource: resource, startTimestamp: videoStartTs))
                                                             case .videoSizeEmojiMarkup, .videoSizeStickerMarkup:
                                                                 break

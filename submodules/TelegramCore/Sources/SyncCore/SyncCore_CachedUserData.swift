@@ -948,7 +948,8 @@ extension TelegramBusinessChatLinks.Link {
 extension TelegramBusinessChatLinks {
     static func fromApiLinks(apiLinks: Api.account.BusinessChatLinks) -> (result: TelegramBusinessChatLinks, users: [Api.User], chats: [Api.Chat]) {
         switch apiLinks {
-        case let .businessChatLinks(links, chats, users):
+        case let .businessChatLinks(businessChatLinksData):
+            let (links, chats, users) = (businessChatLinksData.links, businessChatLinksData.chats, businessChatLinksData.users)
             return (
                 TelegramBusinessChatLinks(links: links.map(Link.init(apiLink:))),
                 users,

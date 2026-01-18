@@ -51,7 +51,8 @@ func _internal_requestSimpleWebView(postbox: Postbox, network: Network, botId: P
         }
         |> mapToSignal { result -> Signal<RequestWebViewResult, RequestWebViewError> in
             switch result {
-            case let .webViewResultUrl(flags, queryId, url):
+            case let .webViewResultUrl(webViewResultUrlData):
+                let (flags, queryId, url) = (webViewResultUrlData.flags, webViewResultUrlData.queryId, webViewResultUrlData.url)
                 var resultFlags: RequestWebViewResult.Flags = []
                 if (flags & (1 << 1)) != 0 {
                     resultFlags.insert(.fullSize)
@@ -101,7 +102,8 @@ func _internal_requestMainWebView(postbox: Postbox, network: Network, peerId: Pe
         }
         |> mapToSignal { result -> Signal<RequestWebViewResult, RequestWebViewError> in
             switch result {
-            case let .webViewResultUrl(flags, queryId, url):
+            case let .webViewResultUrl(webViewResultUrlData):
+                let (flags, queryId, url) = (webViewResultUrlData.flags, webViewResultUrlData.queryId, webViewResultUrlData.url)
                 var resultFlags: RequestWebViewResult.Flags = []
                 if (flags & (1 << 1)) != 0 {
                     resultFlags.insert(.fullSize)
@@ -259,7 +261,8 @@ func _internal_requestWebView(postbox: Postbox, network: Network, stateManager: 
         }
         |> mapToSignal { result -> Signal<RequestWebViewResult, RequestWebViewError> in
             switch result {
-                case let .webViewResultUrl(webViewFlags, queryId, url):
+                case let .webViewResultUrl(webViewResultUrlData):
+                let (webViewFlags, queryId, url) = (webViewResultUrlData.flags, webViewResultUrlData.queryId, webViewResultUrlData.url)
                 var resultFlags: RequestWebViewResult.Flags = []
                 if (webViewFlags & (1 << 1)) != 0 {
                     resultFlags.insert(.fullSize)
@@ -273,7 +276,7 @@ func _internal_requestWebView(postbox: Postbox, network: Network, stateManager: 
                 } else {
                     keepAlive = nil
                 }
-                
+
                 return .single(RequestWebViewResult(flags: resultFlags, queryId: queryId, url: url, keepAliveSignal: keepAlive))
             }
         }
@@ -351,7 +354,8 @@ func _internal_requestAppWebView(postbox: Postbox, network: Network, stateManage
         }
         |> mapToSignal { result -> Signal<RequestWebViewResult, RequestWebViewError> in
             switch result {
-            case let .webViewResultUrl(flags, queryId, url):
+            case let .webViewResultUrl(webViewResultUrlData):
+                let (flags, queryId, url) = (webViewResultUrlData.flags, webViewResultUrlData.queryId, webViewResultUrlData.url)
                 var resultFlags: RequestWebViewResult.Flags = []
                 if (flags & (1 << 1)) != 0 {
                     resultFlags.insert(.fullSize)
