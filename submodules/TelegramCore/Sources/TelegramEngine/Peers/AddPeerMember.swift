@@ -71,7 +71,8 @@ func _internal_addGroupMember(account: Account, peerId: PeerId, memberId: PeerId
                     let updatesValue: Api.Updates
                     let missingInviteesValue: [Api.MissingInvitee]
                     switch result {
-                    case let .invitedUsers(updates, missingInvitees):
+                    case let .invitedUsers(invitedUsersData):
+                        let (updates, missingInvitees) = (invitedUsersData.updates, invitedUsersData.missingInvitees)
                         updatesValue = updates
                         missingInviteesValue = missingInvitees
                     }
@@ -189,18 +190,19 @@ func _internal_addChannelMember(account: Account, peerId: PeerId, memberId: Peer
                     |> mapToSignal { result -> Signal<(ChannelParticipant?, RenderedChannelParticipant), AddChannelMemberError> in
                         let updatesValue: Api.Updates
                         switch result {
-                        case let .invitedUsers(updates, missingInvitees):
+                        case let .invitedUsers(invitedUsersData):
+                            let (updates, missingInvitees) = (invitedUsersData.updates, invitedUsersData.missingInvitees)
                             if case let .missingInvitee(missingInviteeData) = missingInvitees.first {
                                 let flags = missingInviteeData.flags
                                 let _ = _internal_updateIsPremiumRequiredToContact(account: account, peerIds: [memberPeer.id]).startStandalone()
-                                
+
                                 return .fail(.restricted(TelegramForbiddenInvitePeer(
                                     peer: EnginePeer(memberPeer),
                                     canInviteWithPremium: (flags & (1 << 0)) != 0,
                                     premiumRequiredToContact: (flags & (1 << 1)) != 0
                                 )))
                             }
-                            
+
                             updatesValue = updates
                         }
                         
@@ -301,7 +303,8 @@ func _internal_addChannelMembers(account: Account, peerId: PeerId, memberIds: [P
                 let updatesValue: Api.Updates
                 let missingInviteesValue: [Api.MissingInvitee]
                 switch result {
-                case let .invitedUsers(updates, missingInvitees):
+                case let .invitedUsers(invitedUsersData):
+                    let (updates, missingInvitees) = (invitedUsersData.updates, invitedUsersData.missingInvitees)
                     updatesValue = updates
                     missingInviteesValue = missingInvitees
                 }

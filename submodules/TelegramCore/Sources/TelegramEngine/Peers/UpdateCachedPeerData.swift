@@ -90,7 +90,8 @@ func fetchAndUpdateSupplementalCachedPeerData(peerId rawPeerId: PeerId, accountP
                         
                         let peerStatusSettings: PeerStatusSettings
                         switch peerSettings {
-                        case let .peerSettings(settings, chats, users):
+                        case let .peerSettings(peerSettingsData):
+                            let (settings, chats, users) = (peerSettingsData.settings, peerSettingsData.chats, peerSettingsData.users)
                             peerStatusSettings = PeerStatusSettings(apiSettings: settings)
                             parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                         }

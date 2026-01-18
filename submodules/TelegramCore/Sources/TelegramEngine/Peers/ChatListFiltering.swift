@@ -844,7 +844,8 @@ private func loadAndStorePeerChatInfos(accountPeerId: PeerId, postbox: Postbox, 
             let parsedPeers: AccumulatedPeers
             
             switch result {
-            case let .peerDialogs(dialogs, messages, chats, users, _):
+            case let .peerDialogs(peerDialogsData):
+                let (dialogs, messages, chats, users, _) = (peerDialogsData.dialogs, peerDialogsData.messages, peerDialogsData.chats, peerDialogsData.users, peerDialogsData.state)
                 parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                 
                 var topMessageIds = Set<MessageId>()

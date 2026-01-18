@@ -152,7 +152,8 @@ func _internal_keepShortcutMessagesUpdated(account: Account) -> Signal<Never, No
             return account.postbox.transaction { transaction in
                 var state = transaction.getPreferencesEntry(key: PreferencesKeys.shortcutMessages())?.get(QuickReplyMessageShortcutsState.self) ?? QuickReplyMessageShortcutsState(shortcuts: [])
                 switch result {
-                case let .quickReplies(quickReplies, messages, chats, users):
+                case let .quickReplies(quickRepliesData):
+                    let (quickReplies, messages, chats, users) = (quickRepliesData.quickReplies, quickRepliesData.messages, quickRepliesData.chats, quickRepliesData.users)
                     let previousShortcuts = state.shortcuts
                     state.shortcuts.removeAll()
                     

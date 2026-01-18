@@ -254,11 +254,14 @@ func withResolvedAssociatedMessages<T>(postbox: Postbox, source: FetchMessageHis
                         signals.append(signal
                         |> map { result in
                             switch result {
-                                case let .messages(messages, _, chats, users):
+                                case let .messages(messagesData):
+                                    let (messages, _, chats, users) = (messagesData.messages, messagesData.topics, messagesData.chats, messagesData.users)
                                     return (peer, messages, chats, users)
-                                case let .messagesSlice(_, _, _, _, _, messages, _, chats, users):
+                                case let .messagesSlice(messagesSliceData):
+                                    let (messages, chats, users) = (messagesSliceData.messages, messagesSliceData.chats, messagesSliceData.users)
                                     return (peer, messages, chats, users)
-                                case let .channelMessages(_, _, _, _, messages, apiTopics, chats, users):
+                                case let .channelMessages(channelMessagesData):
+                                    let (messages, apiTopics, chats, users) = (channelMessagesData.messages, channelMessagesData.topics, channelMessagesData.chats, channelMessagesData.users)
                                     let _ = apiTopics
                                     return (peer, messages, chats, users)
                                 case .messagesNotModified:
@@ -285,11 +288,14 @@ func withResolvedAssociatedMessages<T>(postbox: Postbox, source: FetchMessageHis
                         signals.append(signal
                         |> map { result in
                             switch result {
-                                case let .messages(messages, _, chats, users):
+                                case let .messages(messagesData):
+                                    let (messages, _, chats, users) = (messagesData.messages, messagesData.topics, messagesData.chats, messagesData.users)
                                     return (peer, messages, chats, users)
-                                case let .messagesSlice(_, _, _, _, _, messages, _, chats, users):
+                                case let .messagesSlice(messagesSliceData):
+                                    let (messages, chats, users) = (messagesSliceData.messages, messagesSliceData.chats, messagesSliceData.users)
                                     return (peer, messages, chats, users)
-                                case let .channelMessages(_, _, _, _, messages, apiTopics, chats, users):
+                                case let .channelMessages(channelMessagesData):
+                                    let (messages, apiTopics, chats, users) = (channelMessagesData.messages, channelMessagesData.topics, channelMessagesData.chats, channelMessagesData.users)
                                     let _ = apiTopics
                                     return (peer, messages, chats, users)
                                 case .messagesNotModified:
@@ -919,15 +925,18 @@ func fetchMessageHistoryHole(accountPeerId: PeerId, source: FetchMessageHistoryH
                     let users: [Api.User]
                     var channelPts: Int32?
                     switch result {
-                        case let .messages(messages: apiMessages, _, chats: apiChats, users: apiUsers):
+                        case let .messages(messagesData):
+                            let (apiMessages, _, apiChats, apiUsers) = (messagesData.messages, messagesData.topics, messagesData.chats, messagesData.users)
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers
-                        case let .messagesSlice(_, _, _, _, _, messages: apiMessages, _, chats: apiChats, users: apiUsers):
+                        case let .messagesSlice(messagesSliceData):
+                            let (apiMessages, apiChats, apiUsers) = (messagesSliceData.messages, messagesSliceData.chats, messagesSliceData.users)
                             messages = apiMessages
                             chats = apiChats
                             users = apiUsers
-                        case let .channelMessages(_, pts, _, _, apiMessages, apiTopics, apiChats, apiUsers):
+                        case let .channelMessages(channelMessagesData):
+                            let (pts, apiMessages, apiTopics, apiChats, apiUsers) = (channelMessagesData.pts, channelMessagesData.messages, channelMessagesData.topics, channelMessagesData.chats, channelMessagesData.users)
                             messages = apiMessages
                             let _ = apiTopics
                             chats = apiChats
@@ -1217,15 +1226,18 @@ func fetchCallListHole(network: Network, postbox: Postbox, accountPeerId: PeerId
             let chats: [Api.Chat]
             let users: [Api.User]
             switch result {
-                case let .messages(messages: apiMessages, _, chats: apiChats, users: apiUsers):
+                case let .messages(messagesData):
+                    let (apiMessages, _, apiChats, apiUsers) = (messagesData.messages, messagesData.topics, messagesData.chats, messagesData.users)
                     messages = apiMessages
                     chats = apiChats
                     users = apiUsers
-                case let .messagesSlice(_, _, _, _, _, messages: apiMessages, _, chats: apiChats, users: apiUsers):
+                case let .messagesSlice(messagesSliceData):
+                    let (apiMessages, apiChats, apiUsers) = (messagesSliceData.messages, messagesSliceData.chats, messagesSliceData.users)
                     messages = apiMessages
                     chats = apiChats
                     users = apiUsers
-                case let .channelMessages(_, _, _, _, apiMessages, apiTopics, apiChats, apiUsers):
+                case let .channelMessages(channelMessagesData):
+                    let (apiMessages, apiTopics, apiChats, apiUsers) = (channelMessagesData.messages, channelMessagesData.topics, channelMessagesData.chats, channelMessagesData.users)
                     messages = apiMessages
                     let _ = apiTopics
                     chats = apiChats

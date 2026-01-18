@@ -88,7 +88,8 @@ private func synchronizeGroupMessageStats(postbox: Postbox, network: Network, gr
             return postbox.transaction { transaction in
                 if let result = result {
                     switch result {
-                    case let .peerDialogs(dialogs, _, _, _, _):
+                    case let .peerDialogs(peerDialogsData):
+                        let dialogs = peerDialogsData.dialogs
                         for dialog in dialogs {
                             switch dialog {
                                 case let .dialogFolder(dialogFolderData):

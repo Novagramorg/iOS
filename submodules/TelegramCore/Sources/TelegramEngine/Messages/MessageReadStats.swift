@@ -62,7 +62,8 @@ func _internal_messageReadStats(account: Account, id: MessageId) -> Signal<Messa
             let reactionCount: Signal<Int, NoError> = account.network.request(Api.functions.messages.getMessageReactionsList(flags: 0, peer: inputPeer, id: id.id, reaction: nil, offset: nil, limit: 1))
             |> map { result -> Int in
                 switch result {
-                case let .messageReactionsList(_, count, _, _, _, _):
+                case let .messageReactionsList(messageReactionsListData):
+                    let count = messageReactionsListData.count
                     return Int(count)
                 }
             }

@@ -2111,9 +2111,11 @@ final class FetchedForumThreads {
     
     convenience init(savedDialogs: Api.messages.SavedDialogs) {
         switch savedDialogs {
-        case let .savedDialogs(dialogs, messages, chats, users):
+        case let .savedDialogs(savedDialogsData):
+            let (dialogs, messages, chats, users) = (savedDialogsData.dialogs, savedDialogsData.messages, savedDialogsData.chats, savedDialogsData.users)
             self.init(items: dialogs.map(Item.savedDialog), totalCount: Int(dialogs.count), orderByDate: false, pts: nil, messages: messages, users: users, chats: chats)
-        case let .savedDialogsSlice(count, dialogs, messages, chats, users):
+        case let .savedDialogsSlice(savedDialogsSliceData):
+            let (count, dialogs, messages, chats, users) = (savedDialogsSliceData.count, savedDialogsSliceData.dialogs, savedDialogsSliceData.messages, savedDialogsSliceData.chats, savedDialogsSliceData.users)
             self.init(items: dialogs.map(Item.savedDialog), totalCount: Int(count), orderByDate: false, pts: nil, messages: messages, users: users, chats: chats)
         case .savedDialogsNotModified:
             self.init(items: [], totalCount: 0, orderByDate: false, pts: 0, messages: [], users: [], chats: [])
@@ -2817,13 +2819,16 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
                 if let signal = signal {
                     signals.append(signal |> map { result in
                         switch result {
-                            case let .messages(messages, apiTopics, chats, users):
+                            case let .messages(messagesData):
+                                let (messages, apiTopics, chats, users) = (messagesData.messages, messagesData.topics, messagesData.chats, messagesData.users)
                                 let _ = apiTopics
                                 return (messages, chats, users)
-                            case let .messagesSlice(_, _, _, _, _, messages, apiTopics, chats, users):
+                            case let .messagesSlice(messagesSliceData):
+                                let (messages, apiTopics, chats, users) = (messagesSliceData.messages, messagesSliceData.topics, messagesSliceData.chats, messagesSliceData.users)
                                 let _ = apiTopics
                                 return (messages, chats, users)
-                            case let .channelMessages(_, _, _, _, messages, apiTopics, chats, users):
+                            case let .channelMessages(channelMessagesData):
+                                let (messages, apiTopics, chats, users) = (channelMessagesData.messages, channelMessagesData.topics, channelMessagesData.chats, channelMessagesData.users)
                                 let _ = apiTopics
                                 return (messages, chats, users)
                             case .messagesNotModified:
@@ -2850,11 +2855,14 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
                 if let signal = signal {
                     signals.append(signal |> map { result in
                         switch result {
-                            case let .messages(messages, _, chats, users):
+                            case let .messages(messagesData):
+                                let (messages, chats, users) = (messagesData.messages, messagesData.chats, messagesData.users)
                                 return (messages, chats, users)
-                            case let .messagesSlice(_, _, _, _, _, messages, _, chats, users):
+                            case let .messagesSlice(messagesSliceData):
+                                let (messages, chats, users) = (messagesSliceData.messages, messagesSliceData.chats, messagesSliceData.users)
                                 return (messages, chats, users)
-                            case let .channelMessages(_, _, _, _, messages, apiTopics, chats, users):
+                            case let .channelMessages(channelMessagesData):
+                                let (messages, apiTopics, chats, users) = (channelMessagesData.messages, channelMessagesData.topics, channelMessagesData.chats, channelMessagesData.users)
                                 let _ = apiTopics
                                 return (messages, chats, users)
                             case .messagesNotModified:
@@ -2942,7 +2950,8 @@ private func resolveMissingPeerChatInfos(accountPeerId: PeerId, network: Network
             
             var updatedState = state
             switch result {
-                case let .peerDialogs(dialogs, messages, chats, users, _):
+                case let .peerDialogs(peerDialogsData):
+                    let (dialogs, messages, chats, users) = (peerDialogsData.dialogs, peerDialogsData.messages, peerDialogsData.chats, peerDialogsData.users)
                     updatedState.mergeChats(chats)
                     updatedState.mergeUsers(users)
                     
@@ -3188,7 +3197,8 @@ func resetChannels(accountPeerId: PeerId, postbox: Postbox, network: Network, pe
         
         if let result = result {
             switch result {
-                case let .peerDialogs(dialogs, messages, chats, users, _):
+                case let .peerDialogs(peerDialogsData):
+                    let (dialogs, messages, chats, users) = (peerDialogsData.dialogs, peerDialogsData.messages, peerDialogsData.chats, peerDialogsData.users)
                     dialogsChats.append(contentsOf: chats)
                     dialogsUsers.append(contentsOf: users)
                     

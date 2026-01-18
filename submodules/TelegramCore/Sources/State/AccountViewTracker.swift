@@ -101,17 +101,20 @@ private func fetchWebpage(account: Account, messageId: MessageId, threadId: Int6
                 let chats: [Api.Chat]
                 let users: [Api.User]
                 switch result {
-                    case let .messages(messages: apiMessages, topics: apiTopics, chats: apiChats, users: apiUsers):
+                    case let .messages(messagesData):
+                        let (apiMessages, apiTopics, apiChats, apiUsers) = (messagesData.messages, messagesData.topics, messagesData.chats, messagesData.users)
                         let _ = apiTopics
                         messages = apiMessages
                         chats = apiChats
                         users = apiUsers
-                    case let .messagesSlice(_, _, _, _, _, messages: apiMessages, topics: apiTopics, chats: apiChats, users: apiUsers):
+                    case let .messagesSlice(messagesSliceData):
+                        let (apiMessages, apiTopics, apiChats, apiUsers) = (messagesSliceData.messages, messagesSliceData.topics, messagesSliceData.chats, messagesSliceData.users)
                         let _ = apiTopics
                         messages = apiMessages
                         chats = apiChats
                         users = apiUsers
-                    case let .channelMessages(_, _, _, _, apiMessages, apiTopics, apiChats, apiUsers):
+                    case let .channelMessages(channelMessagesData):
+                        let (apiMessages, apiTopics, apiChats, apiUsers) = (channelMessagesData.messages, channelMessagesData.topics, channelMessagesData.chats, channelMessagesData.users)
                         messages = apiMessages
                         let _ = apiTopics
                         chats = apiChats
@@ -720,10 +723,11 @@ public final class AccountViewTracker {
                                 return .single(nil)
                             }
                             |> mapToSignal { result -> Signal<[MessageId: ViewCountContextState], NoError> in
-                                guard case let .messageViews(viewCounts, chats, users)? = result else {
+                                guard case let .messageViews(messageViewsData)? = result else {
                                     return .complete()
                                 }
-                                
+                                let (viewCounts, chats, users) = (messageViewsData.views, messageViewsData.chats, messageViewsData.users)
+
                                 return account.postbox.transaction { transaction -> [MessageId: ViewCountContextState] in
                                     var resultStates: [MessageId: ViewCountContextState] = [:]
                                     
@@ -1095,11 +1099,14 @@ public final class AccountViewTracker {
                             return signal
                             |> map { result -> (Peer, [Api.Message], [Api.Chat], [Api.User]) in
                                 switch result {
-                                    case let .messages(messages, _, chats, users):
+                                    case let .messages(messagesData):
+                                        let (messages, chats, users) = (messagesData.messages, messagesData.chats, messagesData.users)
                                         return (peer, messages, chats, users)
-                                    case let .messagesSlice(_, _, _, _, _, messages, _, chats, users):
+                                    case let .messagesSlice(messagesSliceData):
+                                        let (messages, chats, users) = (messagesSliceData.messages, messagesSliceData.chats, messagesSliceData.users)
                                         return (peer, messages, chats, users)
-                                    case let .channelMessages(_, _, _, _, messages, _, chats, users):
+                                    case let .channelMessages(channelMessagesData):
+                                        let (messages, chats, users) = (channelMessagesData.messages, channelMessagesData.chats, channelMessagesData.users)
                                         return (peer, messages, chats, users)
                                     case .messagesNotModified:
                                         return (peer, [], [], [])

@@ -907,7 +907,8 @@ public final class EngineMessageReactionListContext {
                 |> mapToSignal { result -> Signal<InternalState, NoError> in
                     return account.postbox.transaction { transaction -> InternalState in
                         switch result {
-                        case let .messageReactionsList(_, count, reactions, chats, users, nextOffset):
+                        case let .messageReactionsList(messageReactionsListData):
+                            let (count, reactions, chats, users, nextOffset) = (messageReactionsListData.count, messageReactionsListData.reactions, messageReactionsListData.chats, messageReactionsListData.users, messageReactionsListData.nextOffset)
                             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                             
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)

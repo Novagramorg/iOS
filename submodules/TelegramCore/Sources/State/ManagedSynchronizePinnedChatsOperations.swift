@@ -146,7 +146,8 @@ private func synchronizePinnedChats(transaction: Transaction, postbox: Postbox, 
             let parsedPeers: AccumulatedPeers
             
             switch dialogs {
-            case let .peerDialogs(dialogs, messages, chats, users, _):
+            case let .peerDialogs(peerDialogsData):
+                let (dialogs, messages, chats, users) = (peerDialogsData.dialogs, peerDialogsData.messages, peerDialogsData.chats, peerDialogsData.users)
                 parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                 
             loop: for dialog in dialogs {
