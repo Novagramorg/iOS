@@ -338,7 +338,8 @@ func _internal_createGroupCall(account: Account, peerId: PeerId, title: String?,
             var parsedCall: GroupCallInfo?
             loop: for update in result.allUpdates {
                 switch update {
-                case let .updateGroupCall(_, _, call):
+                case let .updateGroupCall(updateGroupCallData):
+                    let call = updateGroupCallData.call
                     parsedCall = GroupCallInfo(call)
                     break loop
                 default:
@@ -383,7 +384,8 @@ func _internal_startScheduledGroupCall(account: Account, peerId: PeerId, callId:
         var parsedCall: GroupCallInfo?
         loop: for update in result.allUpdates {
             switch update {
-            case let .updateGroupCall(_, _, call):
+            case let .updateGroupCall(updateGroupCallData):
+                let call = updateGroupCallData.call
                 parsedCall = GroupCallInfo(call)
                 break loop
             default:
@@ -440,7 +442,8 @@ func _internal_toggleScheduledGroupCallSubscription(account: Account, peerId: Pe
             var parsedCall: GroupCallInfo?
             loop: for update in result.allUpdates {
                 switch update {
-                case let .updateGroupCall(_, _, call):
+                case let .updateGroupCall(updateGroupCallData):
+                    let call = updateGroupCallData.call
                     parsedCall = GroupCallInfo(call)
                     break loop
                 default:
@@ -781,9 +784,10 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                     var maybeParsedClientParams: String?
                     loop: for update in updates.allUpdates {
                         switch update {
-                        case let .updateGroupCall(_, _, call):
+                        case let .updateGroupCall(updateGroupCallData):
+                            let call = updateGroupCallData.call
                             maybeParsedCall = GroupCallInfo(call)
-                            
+
                             switch call {
                             case let .groupCall(groupCallData):
                                 let (flags, _, _, _, title, _, recordStartDate, scheduleDate, _, unmutedVideoLimit, _, _, sendPaidMessagesStars, defaultSendAs) = (groupCallData.flags, groupCallData.id, groupCallData.accessHash, groupCallData.participantsCount, groupCallData.title, groupCallData.streamDcId, groupCallData.recordStartDate, groupCallData.scheduleDate, groupCallData.unmutedVideoCount, groupCallData.unmutedVideoLimit, groupCallData.version, groupCallData.inviteLink, groupCallData.sendPaidMessagesStars, groupCallData.defaultSendAs)
@@ -806,7 +810,8 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                             default:
                                 break
                             }
-                        case let .updateGroupCallConnection(_, params):
+                        case let .updateGroupCallConnection(updateGroupCallConnectionData):
+                            let params = updateGroupCallConnectionData.params
                             switch params {
                             case let .dataJSON(dataJSONData):
                                 let data = dataJSONData.data
@@ -863,7 +868,8 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                         
                         for update in updates.allUpdates {
                             switch update {
-                            case let .updateGroupCallParticipants(_, participants, _):
+                            case let .updateGroupCallParticipants(updateGroupCallParticipantsData):
+                                let participants = updateGroupCallParticipantsData.participants
                                 loop: for participant in participants {
                                     switch participant {
                                     case let .groupCallParticipant(groupCallParticipantData):
@@ -910,7 +916,8 @@ func _internal_joinGroupCall(account: Account, peerId: PeerId?, joinAs: PeerId?,
                                         }
                                     }
                                 }
-                            case let .updateGroupCallChainBlocks(_, subChainId, blocks, nextOffset):
+                            case let .updateGroupCallChainBlocks(updateGroupCallChainBlocksData):
+                                let (subChainId, blocks, nextOffset) = (updateGroupCallChainBlocksData.subChainId, updateGroupCallChainBlocksData.blocks, updateGroupCallChainBlocksData.nextOffset)
                                 if subChainId == 0 {
                                     e2eSubChain0State = (offset: Int(nextOffset), blocks: blocks.map { $0.makeData() })
                                 } else {
@@ -1049,7 +1056,8 @@ func _internal_joinGroupCallAsScreencast(account: Account, callId: Int64, access
         var maybeParsedClientParams: String?
         loop: for update in updates.allUpdates {
             switch update {
-            case let .updateGroupCallConnection(_, params):
+            case let .updateGroupCallConnection(updateGroupCallConnectionData):
+                let params = updateGroupCallConnectionData.params
                 switch params {
                 case let .dataJSON(dataJSONData):
                     let data = dataJSONData.data
@@ -2487,13 +2495,14 @@ public final class GroupCallParticipantsContext {
             guard let strongSelf = self else {
                 return
             }
-            
+
             if let updates = updates {
                 var stateUpdates: [GroupCallParticipantsContext.Update] = []
-                
+
                 loop: for update in updates.allUpdates {
                     switch update {
-                    case let .updateGroupCallParticipants(call, participants, version):
+                    case let .updateGroupCallParticipants(updateGroupCallParticipantsData):
+                        let (call, participants, version) = (updateGroupCallParticipantsData.call, updateGroupCallParticipantsData.participants, updateGroupCallParticipantsData.version)
                         switch call {
                         case let .inputGroupCall(inputGroupCallData):
                             let updateCallId = inputGroupCallData.id
@@ -2582,7 +2591,8 @@ public final class GroupCallParticipantsContext {
 
                 loop: for update in updates.allUpdates {
                     switch update {
-                    case let .updateGroupCallParticipants(call, participants, version):
+                    case let .updateGroupCallParticipants(updateGroupCallParticipantsData):
+                        let (call, participants, version) = (updateGroupCallParticipantsData.call, updateGroupCallParticipantsData.participants, updateGroupCallParticipantsData.version)
                         switch call {
                         case let .inputGroupCall(inputGroupCallData):
                             let updateCallId = inputGroupCallData.id
@@ -3331,7 +3341,8 @@ func _internal_createConferenceCall(postbox: Postbox, network: Network, accountP
     }
     |> mapToSignal { result in
         for update in result.allUpdates {
-            if case let .updateGroupCall(_, _, call) = update {
+            if case let .updateGroupCall(updateGroupCallData) = update {
+                let call = updateGroupCallData.call
                 return postbox.transaction { transaction -> Signal<EngineCreatedGroupCall, CreateConferenceCallError> in
                     guard let info = GroupCallInfo(call) else {
                         return .fail(.generic)
@@ -3411,7 +3422,8 @@ func _internal_pollConferenceCallBlockchain(network: Network, reference: Interna
         var nextOffset: Int?
         for update in result.allUpdates {
             switch update {
-            case let .updateGroupCallChainBlocks(_, updateSubChainId, updateBlocks, updateNextOffset):
+            case let .updateGroupCallChainBlocks(updateGroupCallChainBlocksData):
+                let (updateSubChainId, updateBlocks, updateNextOffset) = (updateGroupCallChainBlocksData.subChainId, updateGroupCallChainBlocksData.blocks, updateGroupCallChainBlocksData.nextOffset)
                 if updateSubChainId == Int32(subChainId) {
                     blocks.append(contentsOf: updateBlocks.map { $0.makeData() })
                     nextOffset = Int(updateNextOffset)
@@ -4368,10 +4380,10 @@ public final class GroupCallMessagesContext {
                         flags: flags,
                         call: self.reference.apiInputGroupCall,
                         randomId: randomId,
-                        message: .textWithEntities(
+                        message: .textWithEntities(.init(
                             text: text,
                             entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary())
-                        ),
+                        )),
                         allowPaidStars: paidStars,
                         sendAs: sendAs
                     )) |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
@@ -4380,7 +4392,8 @@ public final class GroupCallMessagesContext {
                         }
                         self.account.stateManager.addUpdates(updates)
                         for update in updates.allUpdates {
-                            if case let .updateMessageID(id, randomIdValue) = update {
+                            if case let .updateMessageID(updateMessageIDData) = update {
+                                let (id, randomIdValue) = (updateMessageIDData.id, updateMessageIDData.randomId)
                                 if randomIdValue == randomId {
                                     self.processedIds.insert(Int64(id))
                                     var state = self.state
@@ -4429,10 +4442,10 @@ public final class GroupCallMessagesContext {
                 flags: flags,
                 call: self.reference.apiInputGroupCall,
                 randomId: pendingSendStars.messageId,
-                message: .textWithEntities(
+                message: .textWithEntities(.init(
                     text: "",
                     entities: []
-                ),
+                )),
                 allowPaidStars: pendingSendStars.amount,
                 sendAs: sendAs
             )) |> deliverOn(self.queue)).startStrict(next: { [weak self] updates in
@@ -4441,7 +4454,8 @@ public final class GroupCallMessagesContext {
                 }
                 self.account.stateManager.addUpdates(updates)
                 for update in updates.allUpdates {
-                    if case let .updateMessageID(id, randomIdValue) = update {
+                    if case let .updateMessageID(updateMessageIDData) = update {
+                        let (id, randomIdValue) = (updateMessageIDData.id, updateMessageIDData.randomId)
                         if randomIdValue == pendingSendStars.messageId {
                             self.processedIds.insert(Int64(id))
                             var state = self.state

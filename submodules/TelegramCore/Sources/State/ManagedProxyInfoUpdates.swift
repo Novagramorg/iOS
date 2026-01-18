@@ -166,7 +166,8 @@ public final class ServerSuggestionInfo: Codable, Equatable {
 extension ServerSuggestionInfo.Item.Text {
     convenience init(_ apiText: Api.TextWithEntities) {
         switch apiText {
-        case let .textWithEntities(text, entities):
+        case let .textWithEntities(textWithEntitiesData):
+            let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
             self.init(string: text, entities: messageTextEntitiesFromApiEntities(entities))
         }
     }

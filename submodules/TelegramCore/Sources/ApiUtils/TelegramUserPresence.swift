@@ -26,7 +26,8 @@ extension TelegramUserPresence {
     
     convenience init?(apiUser: Api.User) {
         switch apiUser {
-            case let .user(_, _, _, _, _, _, _, _, _, status, _, _, _, _, _, _, _, _, _, _, _, _):
+            case let .user(userData):
+                let status = userData.status
                 if let status = status {
                     self.init(apiStatus: status)
                 } else {

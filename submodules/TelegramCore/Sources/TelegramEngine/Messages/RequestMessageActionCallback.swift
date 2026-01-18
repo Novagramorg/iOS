@@ -212,9 +212,11 @@ func _internal_requestMessageActionUrlAuth(account: Account, subject: MessageAct
         switch result {
             case .urlAuthResultDefault:
                 return .default
-            case let .urlAuthResultAccepted(url):
+            case let .urlAuthResultAccepted(urlAuthResultAcceptedData):
+                let url = urlAuthResultAcceptedData.url
                 return .accepted(url)
-            case let .urlAuthResultRequest(flags, bot, domain):
+            case let .urlAuthResultRequest(urlAuthResultRequestData):
+                let (flags, bot, domain) = (urlAuthResultRequestData.flags, urlAuthResultRequestData.bot, urlAuthResultRequestData.domain)
                 return .request(domain, TelegramUser(user: bot), (flags & (1 << 0)) != 0)
         }
     }
@@ -258,7 +260,8 @@ func _internal_acceptMessageActionUrlAuth(account: Account, subject: MessageActi
             return .default
         }
         switch result {
-            case let .urlAuthResultAccepted(url):
+            case let .urlAuthResultAccepted(urlAuthResultAcceptedData):
+                let url = urlAuthResultAcceptedData.url
                 return .accepted(url)
             default:
                 return .default

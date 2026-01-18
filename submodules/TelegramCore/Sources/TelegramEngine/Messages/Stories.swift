@@ -1155,7 +1155,8 @@ func _internal_beginStoryLivestream(account: Account, peerId: EnginePeer.Id, rtm
                 account.stateManager.addUpdates(updates)
 
                 for update in updates.allUpdates {
-                    if case let .updateStory(_, apiStory) = update, case .storyItem = apiStory {
+                    if case let .updateStory(updateStoryData) = update, case .storyItem = updateStoryData.story {
+                        let apiStory = updateStoryData.story
                         return account.postbox.transaction { transaction in
                             if let storedItem = Stories.StoredItem(apiStoryItem: apiStory, peerId: peerId, transaction: transaction), case let .item(item) = storedItem, let media = item.media {
                                 let mappedItem = EngineStoryItem(
@@ -1389,9 +1390,11 @@ func _internal_uploadStoryImpl(
                                 var id: Int32?
                                 if let updates = updates {
                                     for update in updates.allUpdates {
-                                        if case let .updateStory(_, story) = update {
+                                        if case let .updateStory(updateStoryData) = update {
+                                            let story = updateStoryData.story
                                             switch story {
-                                            case let .storyItem(_, idValue, _, fromId, _, _, _, _, media, _, _, _, _, _):
+                                            case let .storyItem(storyItemData):
+                                                let (idValue, fromId, media) = (storyItemData.id, storyItemData.fromId, storyItemData.media)
                                                 if let parsedStory = Stories.StoredItem(apiStoryItem: story, peerId: toPeerId, transaction: transaction) {
                                                     var items = transaction.getStoryItems(peerId: toPeerId)
                                                     var updatedItems: [Stories.Item] = []
@@ -1780,9 +1783,11 @@ func _internal_editStory(account: Account, peerId: PeerId, id: Int32, media: Eng
             |> mapToSignal { updates -> Signal<StoryUploadResult, NoError> in
                 if let updates = updates {
                     for update in updates.allUpdates {
-                        if case let .updateStory(_, story) = update {
+                        if case let .updateStory(updateStoryData) = update {
+                            let story = updateStoryData.story
                             switch story {
-                            case let .storyItem(_, _, _, _, _, _, _, _, media, _, _, _, _, _):
+                            case let .storyItem(storyItemData):
+                                let media = storyItemData.media
                                 let parsedMedia = textMediaAndExpirationTimerFromApiMedia(media, account.peerId).media
                                 if let parsedMedia = parsedMedia, let originalMedia = originalMedia {
                                     applyMediaResourceChanges(from: originalMedia, to: parsedMedia, postbox: account.postbox, force: false, skipPreviews: updatingCoverTime)
@@ -2147,11 +2152,14 @@ func _internal_updatePinnedToTopStories(account: Account, peerId: PeerId, ids: [
 extension Api.StoryItem {
     var id: Int32 {
         switch self {
-        case let .storyItem(_, id, _, _, _, _, _, _, _, _, _, _, _, _):
+        case let .storyItem(storyItemData):
+            let id = storyItemData.id
             return id
-        case let .storyItemDeleted(id):
+        case let .storyItemDeleted(storyItemDeletedData):
+            let id = storyItemDeletedData.id
             return id
-        case let .storyItemSkipped(_, id, _, _):
+        case let .storyItemSkipped(storyItemSkippedData):
+            let id = storyItemSkippedData.id
             return id
         }
     }
@@ -2160,7 +2168,8 @@ extension Api.StoryItem {
 extension Stories.Item.Views {
     init(apiViews: Api.StoryViews) {
         switch apiViews {
-        case let .storyViews(flags, viewsCount, forwardsCount, reactions, reactionsCount, recentViewers):
+        case let .storyViews(storyViewsData):
+            let (flags, viewsCount, forwardsCount, reactions, reactionsCount, recentViewers) = (storyViewsData.flags, storyViewsData.viewsCount, storyViewsData.forwardsCount, storyViewsData.reactions, storyViewsData.reactionsCount, storyViewsData.recentViewers)
             //storyViews#8d595cd6 flags:# has_viewers:flags.1?true views_count:int forwards_count:flags.2?int reactions:flags.3?Vector<ReactionCount> reactions_count:flags.4?int recent_viewers:flags.0?Vector<long> = StoryViews;
             let hasList = (flags & (1 << 1)) != 0
             var seenPeerIds: [PeerId] = []
@@ -2212,7 +2221,8 @@ extension Stories.Item.ForwardInfo {
 extension Stories.StoredItem {
     init?(apiStoryItem: Api.StoryItem, existingItem: Stories.Item? = nil, peerId: PeerId, transaction: Transaction) {
         switch apiStoryItem {
-        case let .storyItem(flags, id, date, fromId, forwardFrom, expireDate, caption, entities, media, mediaAreas, privacy, views, sentReaction, albums):
+        case let .storyItem(storyItemData):
+            let (flags, id, date, fromId, forwardFrom, expireDate, caption, entities, media, mediaAreas, privacy, views, sentReaction, albums) = (storyItemData.flags, storyItemData.id, storyItemData.date, storyItemData.fromId, storyItemData.fwdFrom, storyItemData.expireDate, storyItemData.caption, storyItemData.entities, storyItemData.media, storyItemData.mediaAreas, storyItemData.privacy, storyItemData.views, storyItemData.sentReaction, storyItemData.albums)
             var folderIds: [Int64]?
             if let albums {
                 folderIds = albums.map(Int64.init)
@@ -2340,7 +2350,8 @@ extension Stories.StoredItem {
             } else {
                 return nil
             }
-        case let .storyItemSkipped(flags, id, date, expireDate):
+        case let .storyItemSkipped(storyItemSkippedData):
+            let (flags, id, date, expireDate) = (storyItemSkippedData.flags, storyItemSkippedData.id, storyItemSkippedData.date, storyItemSkippedData.expireDate)
             let isCloseFriends = (flags & (1 << 8)) != 0
             let isLiveItem = (flags & (1 << 9)) != 0
             self = .placeholder(Stories.Placeholder(id: id, timestamp: date, expirationTimestamp: expireDate, isCloseFriends: isCloseFriends, isLiveItem: isLiveItem))
@@ -2653,7 +2664,8 @@ func _internal_refreshSeenStories(postbox: Postbox, network: Network) -> Signal<
         return postbox.transaction { transaction -> Void in
             for update in updates.allUpdates {
                 switch update {
-                case let .updateReadStories(peerIdValue, maxId):
+                case let .updateReadStories(updateReadStoriesData):
+                    let (peerIdValue, maxId) = (updateReadStoriesData.peer, updateReadStoriesData.maxId)
                     let peerId = peerIdValue.peerId
                     var update = false
                     if let value = transaction.getPeerStoryState(peerId: peerId) {

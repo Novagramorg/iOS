@@ -222,9 +222,11 @@ extension Api.Chat {
 extension Api.User {
     var peerId: PeerId {
         switch self {
-            case let .user(_, _, id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _):
+            case let .user(userData):
+                let id = userData.id
                 return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(id))
-            case let .userEmpty(id):
+            case let .userEmpty(userEmptyData):
+                let id = userEmptyData.id
                 return PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(id))
         }
     }
@@ -260,11 +262,14 @@ extension Api.Dialog {
 extension Api.Update {
     var rawMessageId: Int32? {
         switch self {
-            case let .updateMessageID(id, _):
+            case let .updateMessageID(updateMessageIDData):
+                let id = updateMessageIDData.id
                 return id
-            case let .updateNewMessage(message, _, _):
+            case let .updateNewMessage(updateNewMessageData):
+                let message = updateNewMessageData.message
                 return message.rawId
-            case let .updateNewChannelMessage(message, _, _):
+            case let .updateNewChannelMessage(updateNewChannelMessageData):
+                let message = updateNewChannelMessageData.message
                 return message.rawId
             default:
                 return nil
@@ -273,7 +278,8 @@ extension Api.Update {
     
     var updatedRawMessageId: (Int64, Int32)? {
         switch self {
-            case let .updateMessageID(id, randomId):
+            case let .updateMessageID(updateMessageIDData):
+                let (id, randomId) = (updateMessageIDData.id, updateMessageIDData.randomId)
                 return (randomId, id)
             default:
                 return nil
@@ -282,9 +288,11 @@ extension Api.Update {
     
     var messageId: MessageId? {
         switch self {
-            case let .updateNewMessage(message, _, _):
+            case let .updateNewMessage(updateNewMessageData):
+                let message = updateNewMessageData.message
                 return message.id()
-            case let .updateNewChannelMessage(message, _, _):
+            case let .updateNewChannelMessage(updateNewChannelMessageData):
+                let message = updateNewChannelMessageData.message
                 return message.id()
             default:
                 return nil
@@ -293,17 +301,23 @@ extension Api.Update {
     
     var message: Api.Message? {
         switch self {
-            case let .updateNewMessage(message, _, _):
+            case let .updateNewMessage(updateNewMessageData):
+                let message = updateNewMessageData.message
                 return message
-            case let .updateNewChannelMessage(message, _, _):
+            case let .updateNewChannelMessage(updateNewChannelMessageData):
+                let message = updateNewChannelMessageData.message
                 return message
-            case let .updateEditMessage(message, _, _):
+            case let .updateEditMessage(updateEditMessageData):
+                let message = updateEditMessageData.message
                 return message
-            case let .updateEditChannelMessage(message, _, _):
+            case let .updateEditChannelMessage(updateEditChannelMessageData):
+                let message = updateEditChannelMessageData.message
                 return message
-            case let .updateNewScheduledMessage(message):
+            case let .updateNewScheduledMessage(updateNewScheduledMessageData):
+                let message = updateNewScheduledMessageData.message
                 return message
-            case let .updateQuickReplyMessage(message):
+            case let .updateQuickReplyMessage(updateQuickReplyMessageData):
+                let message = updateQuickReplyMessageData.message
                 return message
             default:
                 return nil
@@ -312,19 +326,26 @@ extension Api.Update {
     
     var peerIds: [PeerId] {
         switch self {
-            case let .updateChannel(channelId):
+            case let .updateChannel(updateChannelData):
+                let channelId = updateChannelData.channelId
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]
-            case let .updateChat(chatId):
+            case let .updateChat(updateChatData):
+                let chatId = updateChatData.chatId
                 return [PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))]
-            case let .updateChannelTooLong(_, channelId, _):
+            case let .updateChannelTooLong(updateChannelTooLongData):
+                let channelId = updateChannelTooLongData.channelId
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]
-            case let .updateChatParticipantAdd(chatId, userId, inviterId, _, _):
+            case let .updateChatParticipantAdd(updateChatParticipantAddData):
+                let (chatId, userId, inviterId) = (updateChatParticipantAddData.chatId, updateChatParticipantAddData.userId, updateChatParticipantAddData.inviterId)
                 return [PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId)), PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(inviterId))]
-            case let .updateChatParticipantAdmin(chatId, userId, _, _):
+            case let .updateChatParticipantAdmin(updateChatParticipantAdminData):
+                let (chatId, userId) = (updateChatParticipantAdminData.chatId, updateChatParticipantAdminData.userId)
                 return [PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId)), PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))]
-            case let .updateChatParticipantDelete(chatId, userId, _):
+            case let .updateChatParticipantDelete(updateChatParticipantDeleteData):
+                let (chatId, userId) = (updateChatParticipantDeleteData.chatId, updateChatParticipantDeleteData.userId)
                 return [PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId)), PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))]
-            case let .updateChatParticipants(participants):
+            case let .updateChatParticipants(updateChatParticipantsData):
+                let participants = updateChatParticipantsData.participants
                 switch participants {
                     case let .chatParticipants(chatParticipantsData):
                         let chatId = chatParticipantsData.chatId
@@ -333,23 +354,32 @@ extension Api.Update {
                         let chatId = chatParticipantsForbiddenData.chatId
                         return [PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId))]
                 }
-            case let .updateDeleteChannelMessages(channelId, _, _, _):
+            case let .updateDeleteChannelMessages(updateDeleteChannelMessagesData):
+                let channelId = updateDeleteChannelMessagesData.channelId
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]
-            case let .updatePinnedChannelMessages(_, channelId, _, _, _):
+            case let .updatePinnedChannelMessages(updatePinnedChannelMessagesData):
+                let channelId = updatePinnedChannelMessagesData.channelId
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]
-            case let .updateNewChannelMessage(message, _, _):
+            case let .updateNewChannelMessage(updateNewChannelMessageData):
+                let message = updateNewChannelMessageData.message
                 return apiMessagePeerIds(message)
-            case let .updateEditChannelMessage(message, _, _):
+            case let .updateEditChannelMessage(updateEditChannelMessageData):
+                let message = updateEditChannelMessageData.message
                 return apiMessagePeerIds(message)
-            case let .updateChannelWebPage(channelId, _, _, _):
+            case let .updateChannelWebPage(updateChannelWebPageData):
+                let channelId = updateChannelWebPageData.channelId
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]
-            case let .updateNewMessage(message, _, _):
+            case let .updateNewMessage(updateNewMessageData):
+                let message = updateNewMessageData.message
                 return apiMessagePeerIds(message)
-            case let .updateEditMessage(message, _, _):
+            case let .updateEditMessage(updateEditMessageData):
+                let message = updateEditMessageData.message
                 return apiMessagePeerIds(message)
-            case let .updateReadChannelInbox(_, _, channelId, _, _, _):
+            case let .updateReadChannelInbox(updateReadChannelInboxData):
+                let channelId = updateReadChannelInboxData.channelId
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]
-            case let .updateNotifySettings(peer, _):
+            case let .updateNotifySettings(updateNotifySettingsData):
+                let peer = updateNotifySettingsData.peer
                 switch peer {
                     case let .notifyPeer(notifyPeerData):
                         let peer = notifyPeerData.peer
@@ -357,21 +387,27 @@ extension Api.Update {
                     default:
                         return []
                 }
-            case let .updateUserName(userId, _, _, _):
+            case let .updateUserName(updateUserNameData):
+                let userId = updateUserNameData.userId
                 return [PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))]
-            case let .updateUserPhone(userId, _):
+            case let .updateUserPhone(updateUserPhoneData):
+                let userId = updateUserPhoneData.userId
                 return [PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId))]
-            case let .updateServiceNotification(_, inboxDate, _, _, _, _):
+            case let .updateServiceNotification(updateServiceNotificationData):
+                let inboxDate = updateServiceNotificationData.inboxDate
                 if let _ = inboxDate {
                     return [PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(777000))]
                 } else {
                     return []
                 }
-        case let .updateDraftMessage(_, peer, _, _, _):
+            case let .updateDraftMessage(updateDraftMessageData):
+                let peer = updateDraftMessageData.peer
                 return [peer.peerId]
-            case let .updateNewScheduledMessage(message):
+            case let .updateNewScheduledMessage(updateNewScheduledMessageData):
+                let message = updateNewScheduledMessageData.message
                 return apiMessagePeerIds(message)
-            case let .updateQuickReplyMessage(message):
+            case let .updateQuickReplyMessage(updateQuickReplyMessageData):
+                let message = updateQuickReplyMessageData.message
                 return apiMessagePeerIds(message)
             default:
                 return []
@@ -380,15 +416,20 @@ extension Api.Update {
     
     var associatedMessageIds: (replyIds: ReferencedReplyMessageIds, generalIds: [MessageId])? {
         switch self {
-            case let .updateNewMessage(message, _, _):
+            case let .updateNewMessage(updateNewMessageData):
+                let message = updateNewMessageData.message
                 return apiMessageAssociatedMessageIds(message)
-            case let .updateNewChannelMessage(message, _, _):
+            case let .updateNewChannelMessage(updateNewChannelMessageData):
+                let message = updateNewChannelMessageData.message
                 return apiMessageAssociatedMessageIds(message)
-            case let .updateEditChannelMessage(message, _, _):
+            case let .updateEditChannelMessage(updateEditChannelMessageData):
+                let message = updateEditChannelMessageData.message
                 return apiMessageAssociatedMessageIds(message)
-            case let .updateNewScheduledMessage(message):
+            case let .updateNewScheduledMessage(updateNewScheduledMessageData):
+                let message = updateNewScheduledMessageData.message
                 return apiMessageAssociatedMessageIds(message)
-            case let .updateQuickReplyMessage(message):
+            case let .updateQuickReplyMessage(updateQuickReplyMessageData):
+                let message = updateQuickReplyMessageData.message
                 return apiMessageAssociatedMessageIds(message)
             default:
                 break
@@ -398,9 +439,11 @@ extension Api.Update {
     
     var channelPts: Int32? {
         switch self {
-            case let .updateNewChannelMessage(_, pts, _):
+            case let .updateNewChannelMessage(updateNewChannelMessageData):
+                let pts = updateNewChannelMessageData.pts
                 return pts
-            case let .updateEditChannelMessage(_, pts, _):
+            case let .updateEditChannelMessage(updateEditChannelMessageData):
+                let pts = updateEditChannelMessageData.pts
                 return pts
             default:
                 return nil
@@ -411,11 +454,14 @@ extension Api.Update {
 extension Api.Updates {
     var allUpdates: [Api.Update] {
         switch self {
-        case let .updates(updates, _, _, _, _):
+        case let .updates(updatesData):
+            let updates = updatesData.updates
             return updates
-        case let .updatesCombined(updates, _, _, _, _, _):
+        case let .updatesCombined(updatesCombinedData):
+            let updates = updatesCombinedData.updates
             return updates
-        case let .updateShort(update, _):
+        case let .updateShort(updateShortData):
+            let update = updateShortData.update
             return [update]
         default:
             return []
@@ -426,7 +472,8 @@ extension Api.Updates {
 extension Api.Updates {
     var rawMessageIds: [Int32] {
         switch self {
-            case let .updates(updates, _, _, _, _):
+            case let .updates(updatesData):
+                let updates = updatesData.updates
                 var result: [Int32] = []
                 for update in updates {
                     if let id = update.rawMessageId {
@@ -434,7 +481,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updatesCombined(updates, _, _, _, _, _):
+            case let .updatesCombined(updatesCombinedData):
+                let updates = updatesCombinedData.updates
                 var result: [Int32] = []
                 for update in updates {
                     if let id = update.rawMessageId {
@@ -442,26 +490,31 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updateShort(update, _):
+            case let .updateShort(updateShortData):
+                let update = updateShortData.update
                 if let id = update.rawMessageId {
                     return [id]
                 } else {
                     return []
                 }
-            case let .updateShortSentMessage(_, id, _, _, _, _, _, _):
+            case let .updateShortSentMessage(updateShortSentMessageData):
+                let id = updateShortSentMessageData.id
                 return [id]
             case .updatesTooLong:
                 return []
-            case let .updateShortMessage(_, id, _, _, _, _, _, _, _, _, _, _):
+            case let .updateShortMessage(updateShortMessageData):
+                let id = updateShortMessageData.id
                 return [id]
-            case let .updateShortChatMessage(_, id, _, _, _, _, _, _, _, _, _, _, _):
+            case let .updateShortChatMessage(updateShortChatMessageData):
+                let id = updateShortChatMessageData.id
                 return [id]
         }
     }
     
     var messageIds: [MessageId] {
         switch self {
-            case let .updates(updates, _, _, _, _):
+            case let .updates(updatesData):
+                let updates = updatesData.updates
                 var result: [MessageId] = []
                 for update in updates {
                     if let id = update.messageId {
@@ -469,7 +522,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updatesCombined(updates, _, _, _, _, _):
+            case let .updatesCombined(updatesCombinedData):
+                let updates = updatesCombinedData.updates
                 var result: [MessageId] = []
                 for update in updates {
                     if let id = update.messageId {
@@ -477,7 +531,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updateShort(update, _):
+            case let .updateShort(updateShortData):
+                let update = updateShortData.update
                 if let id = update.messageId {
                     return [id]
                 } else {
@@ -487,16 +542,19 @@ extension Api.Updates {
                 return []
             case .updatesTooLong:
                 return []
-            case let .updateShortMessage(_, id, userId, _, _, _, _, _, _, _, _, _):
+            case let .updateShortMessage(updateShortMessageData):
+                let (id, userId) = (updateShortMessageData.id, updateShortMessageData.userId)
                 return [MessageId(peerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(userId)), namespace: Namespaces.Message.Cloud, id: id)]
-            case let .updateShortChatMessage(_, id, _, chatId, _, _, _, _, _, _, _, _, _):
+            case let .updateShortChatMessage(updateShortChatMessageData):
+                let (id, chatId) = (updateShortChatMessageData.id, updateShortChatMessageData.chatId)
                 return [MessageId(peerId: PeerId(namespace: Namespaces.Peer.CloudGroup, id: PeerId.Id._internalFromInt64Value(chatId)), namespace: Namespaces.Message.Cloud, id: id)]
         }
     }
     
     var updatedRawMessageIds: [Int64: Int32] {
         switch self {
-            case let .updates(updates, _, _, _, _):
+            case let .updates(updatesData):
+                let updates = updatesData.updates
                 var result: [Int64: Int32] = [:]
                 for update in updates {
                     if let (randomId, id) = update.updatedRawMessageId {
@@ -504,7 +562,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updatesCombined(updates, _, _, _, _, _):
+            case let .updatesCombined(updatesCombinedData):
+                let updates = updatesCombinedData.updates
                 var result: [Int64: Int32] = [:]
                 for update in updates {
                     if let (randomId, id) = update.updatedRawMessageId {
@@ -512,7 +571,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updateShort(update, _):
+            case let .updateShort(updateShortData):
+                let update = updateShortData.update
                 if let (randomId, id) = update.updatedRawMessageId {
                     return [randomId: id]
                 } else {
@@ -533,18 +593,21 @@ extension Api.Updates {
 extension Api.Updates {
     var users: [Api.User] {
         switch self {
-            case let .updates(_, users, _, _, _):
+            case let .updates(updatesData):
+                let users = updatesData.users
                 return users
-            case let .updatesCombined(_, users, _, _, _, _):
+            case let .updatesCombined(updatesCombinedData):
+                let users = updatesCombinedData.users
                return users
             default:
                 return []
         }
     }
-    
+
     var messages: [Api.Message] {
         switch self {
-            case let .updates(updates, _, _, _, _):
+            case let .updates(updatesData):
+                let updates = updatesData.updates
                 var result: [Api.Message] = []
                 for update in updates {
                     if let message = update.message {
@@ -552,7 +615,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updatesCombined(updates, _, _, _, _, _):
+            case let .updatesCombined(updatesCombinedData):
+                let updates = updatesCombinedData.updates
                 var result: [Api.Message] = []
                 for update in updates {
                     if let message = update.message {
@@ -560,7 +624,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updateShort(update, _):
+            case let .updateShort(updateShortData):
+                let update = updateShortData.update
                 if let message = update.message {
                     return [message]
                 } else {
@@ -570,10 +635,11 @@ extension Api.Updates {
                 return []
         }
     }
-    
+
     var channelPts: Int32? {
         switch self {
-            case let .updates(updates, _, _, _, _):
+            case let .updates(updatesData):
+                let updates = updatesData.updates
                 var result: Int32?
                 for update in updates {
                     if let channelPts = update.channelPts {
@@ -583,7 +649,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updatesCombined(updates, _, _, _, _, _):
+            case let .updatesCombined(updatesCombinedData):
+                let updates = updatesCombinedData.updates
                 var result: Int32?
                 for update in updates {
                     if let channelPts = update.channelPts {
@@ -593,7 +660,8 @@ extension Api.Updates {
                     }
                 }
                 return result
-            case let .updateShort(update, _):
+            case let .updateShort(updateShortData):
+                let update = updateShortData.update
                 if let channelPts = update.channelPts {
                     return channelPts
                 } else {
@@ -608,13 +676,15 @@ extension Api.Updates {
 extension Api.Updates {
     var chats: [Api.Chat] {
         switch self {
-        case let .updates(_, _, chats, _, _):
+        case let .updates(updatesData):
+            let chats = updatesData.chats
             var result: [Api.Chat] = []
             for chat in chats {
                 result.append(chat)
             }
             return result
-        case let .updatesCombined(_, _, chats, _, _, _):
+        case let .updatesCombined(updatesCombinedData):
+            let chats = updatesCombinedData.chats
             var result: [Api.Chat] = []
             for chat in chats {
                 result.append(chat)

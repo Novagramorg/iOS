@@ -405,7 +405,8 @@ func _internal_getGiftAuctionAcquiredGifts(account: Account, giftId: Int64) -> S
                             var text: String?
                             var entities: [MessageTextEntity]?
                             switch message {
-                            case let .textWithEntities(textValue, entitiesValue):
+                            case let .textWithEntities(textWithEntitiesData):
+                                let (textValue, entitiesValue) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                                 text = textValue
                                 entities = messageTextEntitiesFromApiEntities(entitiesValue)
                             default:

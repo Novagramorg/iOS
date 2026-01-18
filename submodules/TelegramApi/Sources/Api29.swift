@@ -1,11 +1,127 @@
 public extension Api {
     indirect enum Updates: TypeConstructorDescription {
-        case updateShort(update: Api.Update, date: Int32)
-        case updateShortChatMessage(flags: Int32, id: Int32, fromId: Int64, chatId: Int64, message: String, pts: Int32, ptsCount: Int32, date: Int32, fwdFrom: Api.MessageFwdHeader?, viaBotId: Int64?, replyTo: Api.MessageReplyHeader?, entities: [Api.MessageEntity]?, ttlPeriod: Int32?)
-        case updateShortMessage(flags: Int32, id: Int32, userId: Int64, message: String, pts: Int32, ptsCount: Int32, date: Int32, fwdFrom: Api.MessageFwdHeader?, viaBotId: Int64?, replyTo: Api.MessageReplyHeader?, entities: [Api.MessageEntity]?, ttlPeriod: Int32?)
-        case updateShortSentMessage(flags: Int32, id: Int32, pts: Int32, ptsCount: Int32, date: Int32, media: Api.MessageMedia?, entities: [Api.MessageEntity]?, ttlPeriod: Int32?)
-        case updates(updates: [Api.Update], users: [Api.User], chats: [Api.Chat], date: Int32, seq: Int32)
-        case updatesCombined(updates: [Api.Update], users: [Api.User], chats: [Api.Chat], date: Int32, seqStart: Int32, seq: Int32)
+        public class Cons_updateShort {
+            public var update: Api.Update
+            public var date: Int32
+            public init(update: Api.Update, date: Int32) {
+                self.update = update
+                self.date = date
+            }
+        }
+        public class Cons_updateShortChatMessage {
+            public var flags: Int32
+            public var id: Int32
+            public var fromId: Int64
+            public var chatId: Int64
+            public var message: String
+            public var pts: Int32
+            public var ptsCount: Int32
+            public var date: Int32
+            public var fwdFrom: Api.MessageFwdHeader?
+            public var viaBotId: Int64?
+            public var replyTo: Api.MessageReplyHeader?
+            public var entities: [Api.MessageEntity]?
+            public var ttlPeriod: Int32?
+            public init(flags: Int32, id: Int32, fromId: Int64, chatId: Int64, message: String, pts: Int32, ptsCount: Int32, date: Int32, fwdFrom: Api.MessageFwdHeader?, viaBotId: Int64?, replyTo: Api.MessageReplyHeader?, entities: [Api.MessageEntity]?, ttlPeriod: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.fromId = fromId
+                self.chatId = chatId
+                self.message = message
+                self.pts = pts
+                self.ptsCount = ptsCount
+                self.date = date
+                self.fwdFrom = fwdFrom
+                self.viaBotId = viaBotId
+                self.replyTo = replyTo
+                self.entities = entities
+                self.ttlPeriod = ttlPeriod
+            }
+        }
+        public class Cons_updateShortMessage {
+            public var flags: Int32
+            public var id: Int32
+            public var userId: Int64
+            public var message: String
+            public var pts: Int32
+            public var ptsCount: Int32
+            public var date: Int32
+            public var fwdFrom: Api.MessageFwdHeader?
+            public var viaBotId: Int64?
+            public var replyTo: Api.MessageReplyHeader?
+            public var entities: [Api.MessageEntity]?
+            public var ttlPeriod: Int32?
+            public init(flags: Int32, id: Int32, userId: Int64, message: String, pts: Int32, ptsCount: Int32, date: Int32, fwdFrom: Api.MessageFwdHeader?, viaBotId: Int64?, replyTo: Api.MessageReplyHeader?, entities: [Api.MessageEntity]?, ttlPeriod: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.userId = userId
+                self.message = message
+                self.pts = pts
+                self.ptsCount = ptsCount
+                self.date = date
+                self.fwdFrom = fwdFrom
+                self.viaBotId = viaBotId
+                self.replyTo = replyTo
+                self.entities = entities
+                self.ttlPeriod = ttlPeriod
+            }
+        }
+        public class Cons_updateShortSentMessage {
+            public var flags: Int32
+            public var id: Int32
+            public var pts: Int32
+            public var ptsCount: Int32
+            public var date: Int32
+            public var media: Api.MessageMedia?
+            public var entities: [Api.MessageEntity]?
+            public var ttlPeriod: Int32?
+            public init(flags: Int32, id: Int32, pts: Int32, ptsCount: Int32, date: Int32, media: Api.MessageMedia?, entities: [Api.MessageEntity]?, ttlPeriod: Int32?) {
+                self.flags = flags
+                self.id = id
+                self.pts = pts
+                self.ptsCount = ptsCount
+                self.date = date
+                self.media = media
+                self.entities = entities
+                self.ttlPeriod = ttlPeriod
+            }
+        }
+        public class Cons_updates {
+            public var updates: [Api.Update]
+            public var users: [Api.User]
+            public var chats: [Api.Chat]
+            public var date: Int32
+            public var seq: Int32
+            public init(updates: [Api.Update], users: [Api.User], chats: [Api.Chat], date: Int32, seq: Int32) {
+                self.updates = updates
+                self.users = users
+                self.chats = chats
+                self.date = date
+                self.seq = seq
+            }
+        }
+        public class Cons_updatesCombined {
+            public var updates: [Api.Update]
+            public var users: [Api.User]
+            public var chats: [Api.Chat]
+            public var date: Int32
+            public var seqStart: Int32
+            public var seq: Int32
+            public init(updates: [Api.Update], users: [Api.User], chats: [Api.Chat], date: Int32, seqStart: Int32, seq: Int32) {
+                self.updates = updates
+                self.users = users
+                self.chats = chats
+                self.date = date
+                self.seqStart = seqStart
+                self.seq = seq
+            }
+        }
+        case updateShort(Cons_updateShort)
+        case updateShortChatMessage(Cons_updateShortChatMessage)
+        case updateShortMessage(Cons_updateShortMessage)
+        case updateShortSentMessage(Cons_updateShortSentMessage)
+        case updates(Cons_updates)
+        case updatesCombined(Cons_updatesCombined)
         case updatesTooLong
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -77,9 +193,25 @@ public extension Api {
 }
 public extension Api {
     enum UrlAuthResult: TypeConstructorDescription {
-        case urlAuthResultAccepted(url: String)
+        public class Cons_urlAuthResultAccepted {
+            public var url: String
+            public init(url: String) {
+                self.url = url
+            }
+        }
+        public class Cons_urlAuthResultRequest {
+            public var flags: Int32
+            public var bot: Api.User
+            public var domain: String
+            public init(flags: Int32, bot: Api.User, domain: String) {
+                self.flags = flags
+                self.bot = bot
+                self.domain = domain
+            }
+        }
+        case urlAuthResultAccepted(Cons_urlAuthResultAccepted)
         case urlAuthResultDefault
-        case urlAuthResultRequest(flags: Int32, bot: Api.User, domain: String)
+        case urlAuthResultRequest(Cons_urlAuthResultRequest)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -122,8 +254,62 @@ public extension Api {
 }
 public extension Api {
     enum User: TypeConstructorDescription {
-        case user(flags: Int32, flags2: Int32, id: Int64, accessHash: Int64?, firstName: String?, lastName: String?, username: String?, phone: String?, photo: Api.UserProfilePhoto?, status: Api.UserStatus?, botInfoVersion: Int32?, restrictionReason: [Api.RestrictionReason]?, botInlinePlaceholder: String?, langCode: String?, emojiStatus: Api.EmojiStatus?, usernames: [Api.Username]?, storiesMaxId: Api.RecentStory?, color: Api.PeerColor?, profileColor: Api.PeerColor?, botActiveUsers: Int32?, botVerificationIcon: Int64?, sendPaidMessagesStars: Int64?)
-        case userEmpty(id: Int64)
+        public class Cons_user {
+            public var flags: Int32
+            public var flags2: Int32
+            public var id: Int64
+            public var accessHash: Int64?
+            public var firstName: String?
+            public var lastName: String?
+            public var username: String?
+            public var phone: String?
+            public var photo: Api.UserProfilePhoto?
+            public var status: Api.UserStatus?
+            public var botInfoVersion: Int32?
+            public var restrictionReason: [Api.RestrictionReason]?
+            public var botInlinePlaceholder: String?
+            public var langCode: String?
+            public var emojiStatus: Api.EmojiStatus?
+            public var usernames: [Api.Username]?
+            public var storiesMaxId: Api.RecentStory?
+            public var color: Api.PeerColor?
+            public var profileColor: Api.PeerColor?
+            public var botActiveUsers: Int32?
+            public var botVerificationIcon: Int64?
+            public var sendPaidMessagesStars: Int64?
+            public init(flags: Int32, flags2: Int32, id: Int64, accessHash: Int64?, firstName: String?, lastName: String?, username: String?, phone: String?, photo: Api.UserProfilePhoto?, status: Api.UserStatus?, botInfoVersion: Int32?, restrictionReason: [Api.RestrictionReason]?, botInlinePlaceholder: String?, langCode: String?, emojiStatus: Api.EmojiStatus?, usernames: [Api.Username]?, storiesMaxId: Api.RecentStory?, color: Api.PeerColor?, profileColor: Api.PeerColor?, botActiveUsers: Int32?, botVerificationIcon: Int64?, sendPaidMessagesStars: Int64?) {
+                self.flags = flags
+                self.flags2 = flags2
+                self.id = id
+                self.accessHash = accessHash
+                self.firstName = firstName
+                self.lastName = lastName
+                self.username = username
+                self.phone = phone
+                self.photo = photo
+                self.status = status
+                self.botInfoVersion = botInfoVersion
+                self.restrictionReason = restrictionReason
+                self.botInlinePlaceholder = botInlinePlaceholder
+                self.langCode = langCode
+                self.emojiStatus = emojiStatus
+                self.usernames = usernames
+                self.storiesMaxId = storiesMaxId
+                self.color = color
+                self.profileColor = profileColor
+                self.botActiveUsers = botActiveUsers
+                self.botVerificationIcon = botVerificationIcon
+                self.sendPaidMessagesStars = sendPaidMessagesStars
+            }
+        }
+        public class Cons_userEmpty {
+            public var id: Int64
+            public init(id: Int64) {
+                self.id = id
+            }
+        }
+        case user(Cons_user)
+        case userEmpty(Cons_userEmpty)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG
@@ -159,7 +345,89 @@ public extension Api {
 }
 public extension Api {
     enum UserFull: TypeConstructorDescription {
-        case userFull(flags: Int32, flags2: Int32, id: Int64, about: String?, settings: Api.PeerSettings, personalPhoto: Api.Photo?, profilePhoto: Api.Photo?, fallbackPhoto: Api.Photo?, notifySettings: Api.PeerNotifySettings, botInfo: Api.BotInfo?, pinnedMsgId: Int32?, commonChatsCount: Int32, folderId: Int32?, ttlPeriod: Int32?, theme: Api.ChatTheme?, privateForwardName: String?, botGroupAdminRights: Api.ChatAdminRights?, botBroadcastAdminRights: Api.ChatAdminRights?, wallpaper: Api.WallPaper?, stories: Api.PeerStories?, businessWorkHours: Api.BusinessWorkHours?, businessLocation: Api.BusinessLocation?, businessGreetingMessage: Api.BusinessGreetingMessage?, businessAwayMessage: Api.BusinessAwayMessage?, businessIntro: Api.BusinessIntro?, birthday: Api.Birthday?, personalChannelId: Int64?, personalChannelMessage: Int32?, stargiftsCount: Int32?, starrefProgram: Api.StarRefProgram?, botVerification: Api.BotVerification?, sendPaidMessagesStars: Int64?, disallowedGifts: Api.DisallowedGiftsSettings?, starsRating: Api.StarsRating?, starsMyPendingRating: Api.StarsRating?, starsMyPendingRatingDate: Int32?, mainTab: Api.ProfileTab?, savedMusic: Api.Document?, note: Api.TextWithEntities?)
+        public class Cons_userFull {
+            public var flags: Int32
+            public var flags2: Int32
+            public var id: Int64
+            public var about: String?
+            public var settings: Api.PeerSettings
+            public var personalPhoto: Api.Photo?
+            public var profilePhoto: Api.Photo?
+            public var fallbackPhoto: Api.Photo?
+            public var notifySettings: Api.PeerNotifySettings
+            public var botInfo: Api.BotInfo?
+            public var pinnedMsgId: Int32?
+            public var commonChatsCount: Int32
+            public var folderId: Int32?
+            public var ttlPeriod: Int32?
+            public var theme: Api.ChatTheme?
+            public var privateForwardName: String?
+            public var botGroupAdminRights: Api.ChatAdminRights?
+            public var botBroadcastAdminRights: Api.ChatAdminRights?
+            public var wallpaper: Api.WallPaper?
+            public var stories: Api.PeerStories?
+            public var businessWorkHours: Api.BusinessWorkHours?
+            public var businessLocation: Api.BusinessLocation?
+            public var businessGreetingMessage: Api.BusinessGreetingMessage?
+            public var businessAwayMessage: Api.BusinessAwayMessage?
+            public var businessIntro: Api.BusinessIntro?
+            public var birthday: Api.Birthday?
+            public var personalChannelId: Int64?
+            public var personalChannelMessage: Int32?
+            public var stargiftsCount: Int32?
+            public var starrefProgram: Api.StarRefProgram?
+            public var botVerification: Api.BotVerification?
+            public var sendPaidMessagesStars: Int64?
+            public var disallowedGifts: Api.DisallowedGiftsSettings?
+            public var starsRating: Api.StarsRating?
+            public var starsMyPendingRating: Api.StarsRating?
+            public var starsMyPendingRatingDate: Int32?
+            public var mainTab: Api.ProfileTab?
+            public var savedMusic: Api.Document?
+            public var note: Api.TextWithEntities?
+            public init(flags: Int32, flags2: Int32, id: Int64, about: String?, settings: Api.PeerSettings, personalPhoto: Api.Photo?, profilePhoto: Api.Photo?, fallbackPhoto: Api.Photo?, notifySettings: Api.PeerNotifySettings, botInfo: Api.BotInfo?, pinnedMsgId: Int32?, commonChatsCount: Int32, folderId: Int32?, ttlPeriod: Int32?, theme: Api.ChatTheme?, privateForwardName: String?, botGroupAdminRights: Api.ChatAdminRights?, botBroadcastAdminRights: Api.ChatAdminRights?, wallpaper: Api.WallPaper?, stories: Api.PeerStories?, businessWorkHours: Api.BusinessWorkHours?, businessLocation: Api.BusinessLocation?, businessGreetingMessage: Api.BusinessGreetingMessage?, businessAwayMessage: Api.BusinessAwayMessage?, businessIntro: Api.BusinessIntro?, birthday: Api.Birthday?, personalChannelId: Int64?, personalChannelMessage: Int32?, stargiftsCount: Int32?, starrefProgram: Api.StarRefProgram?, botVerification: Api.BotVerification?, sendPaidMessagesStars: Int64?, disallowedGifts: Api.DisallowedGiftsSettings?, starsRating: Api.StarsRating?, starsMyPendingRating: Api.StarsRating?, starsMyPendingRatingDate: Int32?, mainTab: Api.ProfileTab?, savedMusic: Api.Document?, note: Api.TextWithEntities?) {
+                self.flags = flags
+                self.flags2 = flags2
+                self.id = id
+                self.about = about
+                self.settings = settings
+                self.personalPhoto = personalPhoto
+                self.profilePhoto = profilePhoto
+                self.fallbackPhoto = fallbackPhoto
+                self.notifySettings = notifySettings
+                self.botInfo = botInfo
+                self.pinnedMsgId = pinnedMsgId
+                self.commonChatsCount = commonChatsCount
+                self.folderId = folderId
+                self.ttlPeriod = ttlPeriod
+                self.theme = theme
+                self.privateForwardName = privateForwardName
+                self.botGroupAdminRights = botGroupAdminRights
+                self.botBroadcastAdminRights = botBroadcastAdminRights
+                self.wallpaper = wallpaper
+                self.stories = stories
+                self.businessWorkHours = businessWorkHours
+                self.businessLocation = businessLocation
+                self.businessGreetingMessage = businessGreetingMessage
+                self.businessAwayMessage = businessAwayMessage
+                self.businessIntro = businessIntro
+                self.birthday = birthday
+                self.personalChannelId = personalChannelId
+                self.personalChannelMessage = personalChannelMessage
+                self.stargiftsCount = stargiftsCount
+                self.starrefProgram = starrefProgram
+                self.botVerification = botVerification
+                self.sendPaidMessagesStars = sendPaidMessagesStars
+                self.disallowedGifts = disallowedGifts
+                self.starsRating = starsRating
+                self.starsMyPendingRating = starsMyPendingRating
+                self.starsMyPendingRatingDate = starsMyPendingRatingDate
+                self.mainTab = mainTab
+                self.savedMusic = savedMusic
+                self.note = note
+            }
+        }
+        case userFull(Cons_userFull)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             #if DEBUG

@@ -162,10 +162,12 @@ func _internal_managedRecentlyUsedInlineBots(postbox: Postbox, network: Network,
             var peersWithRating: [(PeerId, Double)] = []
             for category in categories {
                 switch category {
-                case let .topPeerCategoryPeers(_, _, topPeers):
+                case let .topPeerCategoryPeers(topPeerCategoryPeersData):
+                    let (_, _, topPeers) = (topPeerCategoryPeersData.category, topPeerCategoryPeersData.count, topPeerCategoryPeersData.peers)
                     for topPeer in topPeers {
                         switch topPeer {
-                        case let .topPeer(apiPeer, rating):
+                        case let .topPeer(topPeerData):
+                            let (apiPeer, rating) = (topPeerData.peer, topPeerData.rating)
                             peersWithRating.append((apiPeer.peerId, rating))
                         }
                     }

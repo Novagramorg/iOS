@@ -145,7 +145,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         let text: String?
         let entities: [MessageTextEntity]?
         switch message {
-        case let .textWithEntities(textValue, entitiesValue):
+        case let .textWithEntities(textWithEntitiesData):
+            let (textValue, entitiesValue) = (textWithEntitiesData.text, textWithEntitiesData.entities)
             text = textValue
             entities = messageTextEntitiesFromApiEntities(entitiesValue)
         default:
@@ -196,7 +197,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         let text: String?
         let entities: [MessageTextEntity]?
         switch message {
-        case let .textWithEntities(textValue, entitiesValue):
+        case let .textWithEntities(textWithEntitiesData):
+            let (textValue, entitiesValue) = (textWithEntitiesData.text, textWithEntitiesData.entities)
             text = textValue
             entities = messageTextEntitiesFromApiEntities(entitiesValue)
         default:
@@ -230,7 +232,8 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
         let text: String?
         let entities: [MessageTextEntity]?
         switch message {
-        case let .textWithEntities(textValue, entitiesValue):
+        case let .textWithEntities(textWithEntitiesData):
+            let (textValue, entitiesValue) = (textWithEntitiesData.text, textWithEntitiesData.entities)
             text = textValue
             entities = messageTextEntitiesFromApiEntities(entitiesValue)
         default:
