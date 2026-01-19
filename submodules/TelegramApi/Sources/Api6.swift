@@ -9,27 +9,33 @@ public extension Api {
         case disallowedGiftsSettings(Cons_disallowedGiftsSettings)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .disallowedGiftsSettings(let _data):
+                if boxed {
+                    buffer.appendInt32(1911715524)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .disallowedGiftsSettings(let _data):
+                return ("disallowedGiftsSettings", [("flags", _data.flags as Any)])
+            }
         }
 
         public static func parse_disallowedGiftsSettings(_ reader: BufferReader) -> DisallowedGiftsSettings? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.DisallowedGiftsSettings.disallowedGiftsSettings(Cons_disallowedGiftsSettings(flags: _1!))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -71,34 +77,118 @@ public extension Api {
         case documentEmpty(Cons_documentEmpty)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .document(let _data):
+                if boxed {
+                    buffer.appendInt32(-1881881384)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.id, buffer: buffer, boxed: false)
+                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
+                serializeBytes(_data.fileReference, buffer: buffer, boxed: false)
+                serializeInt32(_data.date, buffer: buffer, boxed: false)
+                serializeString(_data.mimeType, buffer: buffer, boxed: false)
+                serializeInt64(_data.size, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.thumbs!.count))
+                    for item in _data.thumbs! {
+                        item.serialize(buffer, true)
+                    }
+                }
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.videoThumbs!.count))
+                    for item in _data.videoThumbs! {
+                        item.serialize(buffer, true)
+                    }
+                }
+                serializeInt32(_data.dcId, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.attributes.count))
+                for item in _data.attributes {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .documentEmpty(let _data):
+                if boxed {
+                    buffer.appendInt32(922273905)
+                }
+                serializeInt64(_data.id, buffer: buffer, boxed: false)
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .document(let _data):
+                return ("document", [("flags", _data.flags as Any), ("id", _data.id as Any), ("accessHash", _data.accessHash as Any), ("fileReference", _data.fileReference as Any), ("date", _data.date as Any), ("mimeType", _data.mimeType as Any), ("size", _data.size as Any), ("thumbs", _data.thumbs as Any), ("videoThumbs", _data.videoThumbs as Any), ("dcId", _data.dcId as Any), ("attributes", _data.attributes as Any)])
+            case .documentEmpty(let _data):
+                return ("documentEmpty", [("id", _data.id as Any)])
+            }
         }
 
         public static func parse_document(_ reader: BufferReader) -> Document? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: Buffer?
+            _4 = parseBytes(reader)
+            var _5: Int32?
+            _5 = reader.readInt32()
+            var _6: String?
+            _6 = parseString(reader)
+            var _7: Int64?
+            _7 = reader.readInt64()
+            var _8: [Api.PhotoSize]?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                if let _ = reader.readInt32() {
+                    _8 = Api.parseVector(reader, elementSignature: 0, elementType: Api.PhotoSize.self)
+                }
+            }
+            var _9: [Api.VideoSize]?
+            if Int(_1!) & Int(1 << 1) != 0 {
+                if let _ = reader.readInt32() {
+                    _9 = Api.parseVector(reader, elementSignature: 0, elementType: Api.VideoSize.self)
+                }
+            }
+            var _10: Int32?
+            _10 = reader.readInt32()
+            var _11: [Api.DocumentAttribute]?
+            if let _ = reader.readInt32() {
+                _11 = Api.parseVector(reader, elementSignature: 0, elementType: Api.DocumentAttribute.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = _6 != nil
+            let _c7 = _7 != nil
+            let _c8 = (Int(_1!) & Int(1 << 0) == 0) || _8 != nil
+            let _c9 = (Int(_1!) & Int(1 << 1) == 0) || _9 != nil
+            let _c10 = _10 != nil
+            let _c11 = _11 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
+                return Api.Document.document(Cons_document(flags: _1!, id: _2!, accessHash: _3!, fileReference: _4!, date: _5!, mimeType: _6!, size: _7!, thumbs: _8, videoThumbs: _9, dcId: _10!, attributes: _11!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_documentEmpty(_ reader: BufferReader) -> Document? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int64?
+            _1 = reader.readInt64()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.Document.documentEmpty(Cons_documentEmpty(id: _1!))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -182,76 +272,246 @@ public extension Api {
         case documentAttributeVideo(Cons_documentAttributeVideo)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .documentAttributeAnimated:
+                if boxed {
+                    buffer.appendInt32(297109817)
+                }
+                break
+            case .documentAttributeAudio(let _data):
+                if boxed {
+                    buffer.appendInt32(-1739392570)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt32(_data.duration, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeString(_data.title!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    serializeString(_data.performer!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeBytes(_data.waveform!, buffer: buffer, boxed: false)
+                }
+                break
+            case .documentAttributeCustomEmoji(let _data):
+                if boxed {
+                    buffer.appendInt32(-48981863)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.alt, buffer: buffer, boxed: false)
+                _data.stickerset.serialize(buffer, true)
+                break
+            case .documentAttributeFilename(let _data):
+                if boxed {
+                    buffer.appendInt32(358154344)
+                }
+                serializeString(_data.fileName, buffer: buffer, boxed: false)
+                break
+            case .documentAttributeHasStickers:
+                if boxed {
+                    buffer.appendInt32(-1744710921)
+                }
+                break
+            case .documentAttributeImageSize(let _data):
+                if boxed {
+                    buffer.appendInt32(1815593308)
+                }
+                serializeInt32(_data.w, buffer: buffer, boxed: false)
+                serializeInt32(_data.h, buffer: buffer, boxed: false)
+                break
+            case .documentAttributeSticker(let _data):
+                if boxed {
+                    buffer.appendInt32(1662637586)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.alt, buffer: buffer, boxed: false)
+                _data.stickerset.serialize(buffer, true)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    _data.maskCoords!.serialize(buffer, true)
+                }
+                break
+            case .documentAttributeVideo(let _data):
+                if boxed {
+                    buffer.appendInt32(1137015880)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeDouble(_data.duration, buffer: buffer, boxed: false)
+                serializeInt32(_data.w, buffer: buffer, boxed: false)
+                serializeInt32(_data.h, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeInt32(_data.preloadPrefixSize!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    serializeDouble(_data.videoStartTs!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 5) != 0 {
+                    serializeString(_data.videoCodec!, buffer: buffer, boxed: false)
+                }
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .documentAttributeAnimated:
+                return ("documentAttributeAnimated", [])
+            case .documentAttributeAudio(let _data):
+                return ("documentAttributeAudio", [("flags", _data.flags as Any), ("duration", _data.duration as Any), ("title", _data.title as Any), ("performer", _data.performer as Any), ("waveform", _data.waveform as Any)])
+            case .documentAttributeCustomEmoji(let _data):
+                return ("documentAttributeCustomEmoji", [("flags", _data.flags as Any), ("alt", _data.alt as Any), ("stickerset", _data.stickerset as Any)])
+            case .documentAttributeFilename(let _data):
+                return ("documentAttributeFilename", [("fileName", _data.fileName as Any)])
+            case .documentAttributeHasStickers:
+                return ("documentAttributeHasStickers", [])
+            case .documentAttributeImageSize(let _data):
+                return ("documentAttributeImageSize", [("w", _data.w as Any), ("h", _data.h as Any)])
+            case .documentAttributeSticker(let _data):
+                return ("documentAttributeSticker", [("flags", _data.flags as Any), ("alt", _data.alt as Any), ("stickerset", _data.stickerset as Any), ("maskCoords", _data.maskCoords as Any)])
+            case .documentAttributeVideo(let _data):
+                return ("documentAttributeVideo", [("flags", _data.flags as Any), ("duration", _data.duration as Any), ("w", _data.w as Any), ("h", _data.h as Any), ("preloadPrefixSize", _data.preloadPrefixSize as Any), ("videoStartTs", _data.videoStartTs as Any), ("videoCodec", _data.videoCodec as Any)])
+            }
         }
 
         public static func parse_documentAttributeAnimated(_ reader: BufferReader) -> DocumentAttribute? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            return Api.DocumentAttribute.documentAttributeAnimated
         }
         public static func parse_documentAttributeAudio(_ reader: BufferReader) -> DocumentAttribute? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: String?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                _3 = parseString(reader)
+            }
+            var _4: String?
+            if Int(_1!) & Int(1 << 1) != 0 {
+                _4 = parseString(reader)
+            }
+            var _5: Buffer?
+            if Int(_1!) & Int(1 << 2) != 0 {
+                _5 = parseBytes(reader)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.DocumentAttribute.documentAttributeAudio(Cons_documentAttributeAudio(flags: _1!, duration: _2!, title: _3, performer: _4, waveform: _5))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_documentAttributeCustomEmoji(_ reader: BufferReader) -> DocumentAttribute? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: Api.InputStickerSet?
+            if let signature = reader.readInt32() {
+                _3 = Api.parse(reader, signature: signature) as? Api.InputStickerSet
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.DocumentAttribute.documentAttributeCustomEmoji(Cons_documentAttributeCustomEmoji(flags: _1!, alt: _2!, stickerset: _3!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_documentAttributeFilename(_ reader: BufferReader) -> DocumentAttribute? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.DocumentAttribute.documentAttributeFilename(Cons_documentAttributeFilename(fileName: _1!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_documentAttributeHasStickers(_ reader: BufferReader) -> DocumentAttribute? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            return Api.DocumentAttribute.documentAttributeHasStickers
         }
         public static func parse_documentAttributeImageSize(_ reader: BufferReader) -> DocumentAttribute? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.DocumentAttribute.documentAttributeImageSize(Cons_documentAttributeImageSize(w: _1!, h: _2!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_documentAttributeSticker(_ reader: BufferReader) -> DocumentAttribute? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: Api.InputStickerSet?
+            if let signature = reader.readInt32() {
+                _3 = Api.parse(reader, signature: signature) as? Api.InputStickerSet
+            }
+            var _4: Api.MaskCoords?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                if let signature = reader.readInt32() {
+                    _4 = Api.parse(reader, signature: signature) as? Api.MaskCoords
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.DocumentAttribute.documentAttributeSticker(Cons_documentAttributeSticker(flags: _1!, alt: _2!, stickerset: _3!, maskCoords: _4))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_documentAttributeVideo(_ reader: BufferReader) -> DocumentAttribute? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Double?
+            _2 = reader.readDouble()
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: Int32?
+            _4 = reader.readInt32()
+            var _5: Int32?
+            if Int(_1!) & Int(1 << 2) != 0 {
+                _5 = reader.readInt32()
+            }
+            var _6: Double?
+            if Int(_1!) & Int(1 << 4) != 0 {
+                _6 = reader.readDouble()
+            }
+            var _7: String?
+            if Int(_1!) & Int(1 << 5) != 0 {
+                _7 = parseString(reader)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
+            let _c6 = (Int(_1!) & Int(1 << 4) == 0) || _6 != nil
+            let _c7 = (Int(_1!) & Int(1 << 5) == 0) || _7 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.DocumentAttribute.documentAttributeVideo(Cons_documentAttributeVideo(flags: _1!, duration: _2!, w: _3!, h: _4!, preloadPrefixSize: _5, videoStartTs: _6, videoCodec: _7))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -289,34 +549,120 @@ public extension Api {
         case draftMessageEmpty(Cons_draftMessageEmpty)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .draftMessage(let _data):
+                if boxed {
+                    buffer.appendInt32(-1763006997)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    _data.replyTo!.serialize(buffer, true)
+                }
+                serializeString(_data.message, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 3) != 0 {
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(_data.entities!.count))
+                    for item in _data.entities! {
+                        item.serialize(buffer, true)
+                    }
+                }
+                if Int(_data.flags) & Int(1 << 5) != 0 {
+                    _data.media!.serialize(buffer, true)
+                }
+                serializeInt32(_data.date, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 7) != 0 {
+                    serializeInt64(_data.effect!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 8) != 0 {
+                    _data.suggestedPost!.serialize(buffer, true)
+                }
+                break
+            case .draftMessageEmpty(let _data):
+                if boxed {
+                    buffer.appendInt32(453805082)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeInt32(_data.date!, buffer: buffer, boxed: false)
+                }
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .draftMessage(let _data):
+                return ("draftMessage", [("flags", _data.flags as Any), ("replyTo", _data.replyTo as Any), ("message", _data.message as Any), ("entities", _data.entities as Any), ("media", _data.media as Any), ("date", _data.date as Any), ("effect", _data.effect as Any), ("suggestedPost", _data.suggestedPost as Any)])
+            case .draftMessageEmpty(let _data):
+                return ("draftMessageEmpty", [("flags", _data.flags as Any), ("date", _data.date as Any)])
+            }
         }
 
         public static func parse_draftMessage(_ reader: BufferReader) -> DraftMessage? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.InputReplyTo?
+            if Int(_1!) & Int(1 << 4) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.InputReplyTo
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: [Api.MessageEntity]?
+            if Int(_1!) & Int(1 << 3) != 0 {
+                if let _ = reader.readInt32() {
+                    _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.MessageEntity.self)
+                }
+            }
+            var _5: Api.InputMedia?
+            if Int(_1!) & Int(1 << 5) != 0 {
+                if let signature = reader.readInt32() {
+                    _5 = Api.parse(reader, signature: signature) as? Api.InputMedia
+                }
+            }
+            var _6: Int32?
+            _6 = reader.readInt32()
+            var _7: Int64?
+            if Int(_1!) & Int(1 << 7) != 0 {
+                _7 = reader.readInt64()
+            }
+            var _8: Api.SuggestedPost?
+            if Int(_1!) & Int(1 << 8) != 0 {
+                if let signature = reader.readInt32() {
+                    _8 = Api.parse(reader, signature: signature) as? Api.SuggestedPost
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = (Int(_1!) & Int(1 << 4) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
+            let _c5 = (Int(_1!) & Int(1 << 5) == 0) || _5 != nil
+            let _c6 = _6 != nil
+            let _c7 = (Int(_1!) & Int(1 << 7) == 0) || _7 != nil
+            let _c8 = (Int(_1!) & Int(1 << 8) == 0) || _8 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.DraftMessage.draftMessage(Cons_draftMessage(flags: _1!, replyTo: _2, message: _3!, entities: _4, media: _5, date: _6!, effect: _7, suggestedPost: _8))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_draftMessageEmpty(_ reader: BufferReader) -> DraftMessage? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                _2 = reader.readInt32()
+            }
+            let _c1 = _1 != nil
+            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
+            if _c1 && _c2 {
+                return Api.DraftMessage.draftMessageEmpty(Cons_draftMessageEmpty(flags: _1!, date: _2))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -345,41 +691,71 @@ public extension Api {
         case emailVerificationGoogle(Cons_emailVerificationGoogle)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emailVerificationApple(let _data):
+                if boxed {
+                    buffer.appendInt32(-1764723459)
+                }
+                serializeString(_data.token, buffer: buffer, boxed: false)
+                break
+            case .emailVerificationCode(let _data):
+                if boxed {
+                    buffer.appendInt32(-1842457175)
+                }
+                serializeString(_data.code, buffer: buffer, boxed: false)
+                break
+            case .emailVerificationGoogle(let _data):
+                if boxed {
+                    buffer.appendInt32(-611279166)
+                }
+                serializeString(_data.token, buffer: buffer, boxed: false)
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emailVerificationApple(let _data):
+                return ("emailVerificationApple", [("token", _data.token as Any)])
+            case .emailVerificationCode(let _data):
+                return ("emailVerificationCode", [("code", _data.code as Any)])
+            case .emailVerificationGoogle(let _data):
+                return ("emailVerificationGoogle", [("token", _data.token as Any)])
+            }
         }
 
         public static func parse_emailVerificationApple(_ reader: BufferReader) -> EmailVerification? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.EmailVerification.emailVerificationApple(Cons_emailVerificationApple(token: _1!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emailVerificationCode(_ reader: BufferReader) -> EmailVerification? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.EmailVerification.emailVerificationCode(Cons_emailVerificationCode(code: _1!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emailVerificationGoogle(_ reader: BufferReader) -> EmailVerification? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.EmailVerification.emailVerificationGoogle(Cons_emailVerificationGoogle(token: _1!))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -398,41 +774,57 @@ public extension Api {
         case emailVerifyPurposePassport
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emailVerifyPurposeLoginChange:
+                if boxed {
+                    buffer.appendInt32(1383932651)
+                }
+                break
+            case .emailVerifyPurposeLoginSetup(let _data):
+                if boxed {
+                    buffer.appendInt32(1128644211)
+                }
+                serializeString(_data.phoneNumber, buffer: buffer, boxed: false)
+                serializeString(_data.phoneCodeHash, buffer: buffer, boxed: false)
+                break
+            case .emailVerifyPurposePassport:
+                if boxed {
+                    buffer.appendInt32(-1141565819)
+                }
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emailVerifyPurposeLoginChange:
+                return ("emailVerifyPurposeLoginChange", [])
+            case .emailVerifyPurposeLoginSetup(let _data):
+                return ("emailVerifyPurposeLoginSetup", [("phoneNumber", _data.phoneNumber as Any), ("phoneCodeHash", _data.phoneCodeHash as Any)])
+            case .emailVerifyPurposePassport:
+                return ("emailVerifyPurposePassport", [])
+            }
         }
 
         public static func parse_emailVerifyPurposeLoginChange(_ reader: BufferReader) -> EmailVerifyPurpose? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            return Api.EmailVerifyPurpose.emailVerifyPurposeLoginChange
         }
         public static func parse_emailVerifyPurposeLoginSetup(_ reader: BufferReader) -> EmailVerifyPurpose? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: String?
+            _2 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.EmailVerifyPurpose.emailVerifyPurposeLoginSetup(Cons_emailVerifyPurposeLoginSetup(phoneNumber: _1!, phoneCodeHash: _2!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emailVerifyPurposePassport(_ reader: BufferReader) -> EmailVerifyPurpose? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            return Api.EmailVerifyPurpose.emailVerifyPurposePassport
         }
     }
 }
@@ -471,41 +863,103 @@ public extension Api {
         case emojiGroupPremium(Cons_emojiGroupPremium)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiGroup(let _data):
+                if boxed {
+                    buffer.appendInt32(2056961449)
+                }
+                serializeString(_data.title, buffer: buffer, boxed: false)
+                serializeInt64(_data.iconEmojiId, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.emoticons.count))
+                for item in _data.emoticons {
+                    serializeString(item, buffer: buffer, boxed: false)
+                }
+                break
+            case .emojiGroupGreeting(let _data):
+                if boxed {
+                    buffer.appendInt32(-2133693241)
+                }
+                serializeString(_data.title, buffer: buffer, boxed: false)
+                serializeInt64(_data.iconEmojiId, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.emoticons.count))
+                for item in _data.emoticons {
+                    serializeString(item, buffer: buffer, boxed: false)
+                }
+                break
+            case .emojiGroupPremium(let _data):
+                if boxed {
+                    buffer.appendInt32(154914612)
+                }
+                serializeString(_data.title, buffer: buffer, boxed: false)
+                serializeInt64(_data.iconEmojiId, buffer: buffer, boxed: false)
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiGroup(let _data):
+                return ("emojiGroup", [("title", _data.title as Any), ("iconEmojiId", _data.iconEmojiId as Any), ("emoticons", _data.emoticons as Any)])
+            case .emojiGroupGreeting(let _data):
+                return ("emojiGroupGreeting", [("title", _data.title as Any), ("iconEmojiId", _data.iconEmojiId as Any), ("emoticons", _data.emoticons as Any)])
+            case .emojiGroupPremium(let _data):
+                return ("emojiGroupPremium", [("title", _data.title as Any), ("iconEmojiId", _data.iconEmojiId as Any)])
+            }
         }
 
         public static func parse_emojiGroup(_ reader: BufferReader) -> EmojiGroup? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: [String]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.EmojiGroup.emojiGroup(Cons_emojiGroup(title: _1!, iconEmojiId: _2!, emoticons: _3!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emojiGroupGreeting(_ reader: BufferReader) -> EmojiGroup? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: [String]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.EmojiGroup.emojiGroupGreeting(Cons_emojiGroupGreeting(title: _1!, iconEmojiId: _2!, emoticons: _3!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emojiGroupPremium(_ reader: BufferReader) -> EmojiGroup? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: Int64?
+            _2 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.EmojiGroup.emojiGroupPremium(Cons_emojiGroupPremium(title: _1!, iconEmojiId: _2!))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -531,34 +985,72 @@ public extension Api {
         case emojiKeywordDeleted(Cons_emojiKeywordDeleted)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiKeyword(let _data):
+                if boxed {
+                    buffer.appendInt32(-709641735)
+                }
+                serializeString(_data.keyword, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.emoticons.count))
+                for item in _data.emoticons {
+                    serializeString(item, buffer: buffer, boxed: false)
+                }
+                break
+            case .emojiKeywordDeleted(let _data):
+                if boxed {
+                    buffer.appendInt32(594408994)
+                }
+                serializeString(_data.keyword, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.emoticons.count))
+                for item in _data.emoticons {
+                    serializeString(item, buffer: buffer, boxed: false)
+                }
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiKeyword(let _data):
+                return ("emojiKeyword", [("keyword", _data.keyword as Any), ("emoticons", _data.emoticons as Any)])
+            case .emojiKeywordDeleted(let _data):
+                return ("emojiKeywordDeleted", [("keyword", _data.keyword as Any), ("emoticons", _data.emoticons as Any)])
+            }
         }
 
         public static func parse_emojiKeyword(_ reader: BufferReader) -> EmojiKeyword? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: [String]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.EmojiKeyword.emojiKeyword(Cons_emojiKeyword(keyword: _1!, emoticons: _2!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emojiKeywordDeleted(_ reader: BufferReader) -> EmojiKeyword? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: [String]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.EmojiKeyword.emojiKeywordDeleted(Cons_emojiKeywordDeleted(keyword: _1!, emoticons: _2!))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -579,27 +1071,51 @@ public extension Api {
         case emojiKeywordsDifference(Cons_emojiKeywordsDifference)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiKeywordsDifference(let _data):
+                if boxed {
+                    buffer.appendInt32(1556570557)
+                }
+                serializeString(_data.langCode, buffer: buffer, boxed: false)
+                serializeInt32(_data.fromVersion, buffer: buffer, boxed: false)
+                serializeInt32(_data.version, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.keywords.count))
+                for item in _data.keywords {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiKeywordsDifference(let _data):
+                return ("emojiKeywordsDifference", [("langCode", _data.langCode as Any), ("fromVersion", _data.fromVersion as Any), ("version", _data.version as Any), ("keywords", _data.keywords as Any)])
+            }
         }
 
         public static func parse_emojiKeywordsDifference(_ reader: BufferReader) -> EmojiKeywordsDifference? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Int32?
+            _3 = reader.readInt32()
+            var _4: [Api.EmojiKeyword]?
+            if let _ = reader.readInt32() {
+                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.EmojiKeyword.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.EmojiKeywordsDifference.emojiKeywordsDifference(Cons_emojiKeywordsDifference(langCode: _1!, fromVersion: _2!, version: _3!, keywords: _4!))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -614,27 +1130,33 @@ public extension Api {
         case emojiLanguage(Cons_emojiLanguage)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiLanguage(let _data):
+                if boxed {
+                    buffer.appendInt32(-1275374751)
+                }
+                serializeString(_data.langCode, buffer: buffer, boxed: false)
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiLanguage(let _data):
+                return ("emojiLanguage", [("langCode", _data.langCode as Any)])
+            }
         }
 
         public static func parse_emojiLanguage(_ reader: BufferReader) -> EmojiLanguage? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.EmojiLanguage.emojiLanguage(Cons_emojiLanguage(langCode: _1!))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
@@ -652,34 +1174,53 @@ public extension Api {
         case emojiListNotModified
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiList(let _data):
+                if boxed {
+                    buffer.appendInt32(2048790993)
+                }
+                serializeInt64(_data.hash, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.documentId.count))
+                for item in _data.documentId {
+                    serializeInt64(item, buffer: buffer, boxed: false)
+                }
+                break
+            case .emojiListNotModified:
+                if boxed {
+                    buffer.appendInt32(1209970170)
+                }
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiList(let _data):
+                return ("emojiList", [("hash", _data.hash as Any), ("documentId", _data.documentId as Any)])
+            case .emojiListNotModified:
+                return ("emojiListNotModified", [])
+            }
         }
 
         public static func parse_emojiList(_ reader: BufferReader) -> EmojiList? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Int64]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 570911930, elementType: Int64.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.EmojiList.emojiList(Cons_emojiList(hash: _1!, documentId: _2!))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emojiListNotModified(_ reader: BufferReader) -> EmojiList? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            return Api.EmojiList.emojiListNotModified
         }
     }
 }
@@ -737,48 +1278,149 @@ public extension Api {
         case inputEmojiStatusCollectible(Cons_inputEmojiStatusCollectible)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiStatus(let _data):
+                if boxed {
+                    buffer.appendInt32(-402717046)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.documentId, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeInt32(_data.until!, buffer: buffer, boxed: false)
+                }
+                break
+            case .emojiStatusCollectible(let _data):
+                if boxed {
+                    buffer.appendInt32(1904500795)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.collectibleId, buffer: buffer, boxed: false)
+                serializeInt64(_data.documentId, buffer: buffer, boxed: false)
+                serializeString(_data.title, buffer: buffer, boxed: false)
+                serializeString(_data.slug, buffer: buffer, boxed: false)
+                serializeInt64(_data.patternDocumentId, buffer: buffer, boxed: false)
+                serializeInt32(_data.centerColor, buffer: buffer, boxed: false)
+                serializeInt32(_data.edgeColor, buffer: buffer, boxed: false)
+                serializeInt32(_data.patternColor, buffer: buffer, boxed: false)
+                serializeInt32(_data.textColor, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeInt32(_data.until!, buffer: buffer, boxed: false)
+                }
+                break
+            case .emojiStatusEmpty:
+                if boxed {
+                    buffer.appendInt32(769727150)
+                }
+                break
+            case .inputEmojiStatusCollectible(let _data):
+                if boxed {
+                    buffer.appendInt32(118758847)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.collectibleId, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeInt32(_data.until!, buffer: buffer, boxed: false)
+                }
+                break
+            }
         }
 
         public func descriptionFields() -> (String, [(String, Any)]) {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            switch self {
+            case .emojiStatus(let _data):
+                return ("emojiStatus", [("flags", _data.flags as Any), ("documentId", _data.documentId as Any), ("until", _data.until as Any)])
+            case .emojiStatusCollectible(let _data):
+                return ("emojiStatusCollectible", [("flags", _data.flags as Any), ("collectibleId", _data.collectibleId as Any), ("documentId", _data.documentId as Any), ("title", _data.title as Any), ("slug", _data.slug as Any), ("patternDocumentId", _data.patternDocumentId as Any), ("centerColor", _data.centerColor as Any), ("edgeColor", _data.edgeColor as Any), ("patternColor", _data.patternColor as Any), ("textColor", _data.textColor as Any), ("until", _data.until as Any)])
+            case .emojiStatusEmpty:
+                return ("emojiStatusEmpty", [])
+            case .inputEmojiStatusCollectible(let _data):
+                return ("inputEmojiStatusCollectible", [("flags", _data.flags as Any), ("collectibleId", _data.collectibleId as Any), ("until", _data.until as Any)])
+            }
         }
 
         public static func parse_emojiStatus(_ reader: BufferReader) -> EmojiStatus? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                _3 = reader.readInt32()
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.EmojiStatus.emojiStatus(Cons_emojiStatus(flags: _1!, documentId: _2!, until: _3))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emojiStatusCollectible(_ reader: BufferReader) -> EmojiStatus? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: String?
+            _4 = parseString(reader)
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Int64?
+            _6 = reader.readInt64()
+            var _7: Int32?
+            _7 = reader.readInt32()
+            var _8: Int32?
+            _8 = reader.readInt32()
+            var _9: Int32?
+            _9 = reader.readInt32()
+            var _10: Int32?
+            _10 = reader.readInt32()
+            var _11: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                _11 = reader.readInt32()
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = _6 != nil
+            let _c7 = _7 != nil
+            let _c8 = _8 != nil
+            let _c9 = _9 != nil
+            let _c10 = _10 != nil
+            let _c11 = (Int(_1!) & Int(1 << 0) == 0) || _11 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
+                return Api.EmojiStatus.emojiStatusCollectible(Cons_emojiStatusCollectible(flags: _1!, collectibleId: _2!, documentId: _3!, title: _4!, slug: _5!, patternDocumentId: _6!, centerColor: _7!, edgeColor: _8!, patternColor: _9!, textColor: _10!, until: _11))
+            }
+            else {
+                return nil
+            }
         }
         public static func parse_emojiStatusEmpty(_ reader: BufferReader) -> EmojiStatus? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            return Api.EmojiStatus.emojiStatusEmpty
         }
         public static func parse_inputEmojiStatusCollectible(_ reader: BufferReader) -> EmojiStatus? {
-            #if DEBUG
-            preconditionFailure()
-            #else
-            error
-            #endif
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int32?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                _3 = reader.readInt32()
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.EmojiStatus.inputEmojiStatusCollectible(Cons_inputEmojiStatusCollectible(flags: _1!, collectibleId: _2!, until: _3))
+            }
+            else {
+                return nil
+            }
         }
     }
 }
