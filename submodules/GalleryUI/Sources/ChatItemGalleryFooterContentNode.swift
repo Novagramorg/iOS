@@ -367,7 +367,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.scrollWrapperNode = CaptionScrollWrapperNode()
         self.scrollWrapperNode.layer.allowsGroupOpacity = true
         self.scrollWrapperNode.clipsToBounds = true
-        self.scrollWrapperEffect = VariableBlurEffect(layer: self.scrollWrapperNode.layer, isTransparent: true, maxBlurRadius: 3.0)
+        self.scrollWrapperEffect = VariableBlurEffect(layer: self.scrollWrapperNode.layer, isTransparent: true, maxBlurRadius: 1.0)
         self.scrollWrapperNode.backgroundColor = .clear
         self.scrollWrapperNode.isOpaque = false
         

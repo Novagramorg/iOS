@@ -1637,6 +1637,8 @@ private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
             } else {
                 transition.setAlpha(view: self.backgroundContainer, alpha: 1.0)
             }
+        } else {
+            transition.setAlpha(view: self.backgroundContainer, alpha: 0.0)
         }
         
         var buttonPosition: CGPoint
