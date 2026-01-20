@@ -1936,8 +1936,7 @@ public extension Api {
             public var canResellAt: Int32?
             public var dropOriginalDetailsStars: Int64?
             public var canCraftAt: Int32?
-            public var craftChancePermille: Int32?
-            public init(flags: Int32, gift: Api.StarGift, canExportAt: Int32?, transferStars: Int64?, fromId: Api.Peer?, peer: Api.Peer?, savedId: Int64?, resaleAmount: Api.StarsAmount?, canTransferAt: Int32?, canResellAt: Int32?, dropOriginalDetailsStars: Int64?, canCraftAt: Int32?, craftChancePermille: Int32?) {
+            public init(flags: Int32, gift: Api.StarGift, canExportAt: Int32?, transferStars: Int64?, fromId: Api.Peer?, peer: Api.Peer?, savedId: Int64?, resaleAmount: Api.StarsAmount?, canTransferAt: Int32?, canResellAt: Int32?, dropOriginalDetailsStars: Int64?, canCraftAt: Int32?) {
                 self.flags = flags
                 self.gift = gift
                 self.canExportAt = canExportAt
@@ -1950,7 +1949,6 @@ public extension Api {
                 self.canResellAt = canResellAt
                 self.dropOriginalDetailsStars = dropOriginalDetailsStars
                 self.canCraftAt = canCraftAt
-                self.craftChancePermille = craftChancePermille
             }
         }
         public class Cons_messageActionSuggestBirthday {
@@ -2089,7 +2087,6 @@ public extension Api {
         case messageActionSetChatWallPaper(Cons_messageActionSetChatWallPaper)
         case messageActionSetMessagesTTL(Cons_messageActionSetMessagesTTL)
         case messageActionStarGift(Cons_messageActionStarGift)
-        case messageActionStarGiftCraftFail
         case messageActionStarGiftPurchaseOffer(Cons_messageActionStarGiftPurchaseOffer)
         case messageActionStarGiftPurchaseOfferDeclined(Cons_messageActionStarGiftPurchaseOfferDeclined)
         case messageActionStarGiftUnique(Cons_messageActionStarGiftUnique)
@@ -2571,11 +2568,6 @@ public extension Api {
                     serializeInt32(_data.giftNum!, buffer: buffer, boxed: false)
                 }
                 break
-            case .messageActionStarGiftCraftFail:
-                if boxed {
-                    buffer.appendInt32(1148220972)
-                }
-                break
             case .messageActionStarGiftPurchaseOffer(let _data):
                 if boxed {
                     buffer.appendInt32(2000845012)
@@ -2595,7 +2587,7 @@ public extension Api {
                 break
             case .messageActionStarGiftUnique(let _data):
                 if boxed {
-                    buffer.appendInt32(1736693086)
+                    buffer.appendInt32(-423422686)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 _data.gift.serialize(buffer, true)
@@ -2628,9 +2620,6 @@ public extension Api {
                 }
                 if Int(_data.flags) & Int(1 << 15) != 0 {
                     serializeInt32(_data.canCraftAt!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 15) != 0 {
-                    serializeInt32(_data.craftChancePermille!, buffer: buffer, boxed: false)
                 }
                 break
             case .messageActionSuggestBirthday(let _data):
@@ -2836,14 +2825,12 @@ public extension Api {
                 return ("messageActionSetMessagesTTL", [("flags", _data.flags as Any), ("period", _data.period as Any), ("autoSettingFrom", _data.autoSettingFrom as Any)])
             case .messageActionStarGift(let _data):
                 return ("messageActionStarGift", [("flags", _data.flags as Any), ("gift", _data.gift as Any), ("message", _data.message as Any), ("convertStars", _data.convertStars as Any), ("upgradeMsgId", _data.upgradeMsgId as Any), ("upgradeStars", _data.upgradeStars as Any), ("fromId", _data.fromId as Any), ("peer", _data.peer as Any), ("savedId", _data.savedId as Any), ("prepaidUpgradeHash", _data.prepaidUpgradeHash as Any), ("giftMsgId", _data.giftMsgId as Any), ("toId", _data.toId as Any), ("giftNum", _data.giftNum as Any)])
-            case .messageActionStarGiftCraftFail:
-                return ("messageActionStarGiftCraftFail", [])
             case .messageActionStarGiftPurchaseOffer(let _data):
                 return ("messageActionStarGiftPurchaseOffer", [("flags", _data.flags as Any), ("gift", _data.gift as Any), ("price", _data.price as Any), ("expiresAt", _data.expiresAt as Any)])
             case .messageActionStarGiftPurchaseOfferDeclined(let _data):
                 return ("messageActionStarGiftPurchaseOfferDeclined", [("flags", _data.flags as Any), ("gift", _data.gift as Any), ("price", _data.price as Any)])
             case .messageActionStarGiftUnique(let _data):
-                return ("messageActionStarGiftUnique", [("flags", _data.flags as Any), ("gift", _data.gift as Any), ("canExportAt", _data.canExportAt as Any), ("transferStars", _data.transferStars as Any), ("fromId", _data.fromId as Any), ("peer", _data.peer as Any), ("savedId", _data.savedId as Any), ("resaleAmount", _data.resaleAmount as Any), ("canTransferAt", _data.canTransferAt as Any), ("canResellAt", _data.canResellAt as Any), ("dropOriginalDetailsStars", _data.dropOriginalDetailsStars as Any), ("canCraftAt", _data.canCraftAt as Any), ("craftChancePermille", _data.craftChancePermille as Any)])
+                return ("messageActionStarGiftUnique", [("flags", _data.flags as Any), ("gift", _data.gift as Any), ("canExportAt", _data.canExportAt as Any), ("transferStars", _data.transferStars as Any), ("fromId", _data.fromId as Any), ("peer", _data.peer as Any), ("savedId", _data.savedId as Any), ("resaleAmount", _data.resaleAmount as Any), ("canTransferAt", _data.canTransferAt as Any), ("canResellAt", _data.canResellAt as Any), ("dropOriginalDetailsStars", _data.dropOriginalDetailsStars as Any), ("canCraftAt", _data.canCraftAt as Any)])
             case .messageActionSuggestBirthday(let _data):
                 return ("messageActionSuggestBirthday", [("birthday", _data.birthday as Any)])
             case .messageActionSuggestProfilePhoto(let _data):
@@ -3716,9 +3703,6 @@ public extension Api {
                 return nil
             }
         }
-        public static func parse_messageActionStarGiftCraftFail(_ reader: BufferReader) -> MessageAction? {
-            return Api.MessageAction.messageActionStarGiftCraftFail
-        }
         public static func parse_messageActionStarGiftPurchaseOffer(_ reader: BufferReader) -> MessageAction? {
             var _1: Int32?
             _1 = reader.readInt32()
@@ -3817,10 +3801,6 @@ public extension Api {
             if Int(_1!) & Int(1 << 15) != 0 {
                 _12 = reader.readInt32()
             }
-            var _13: Int32?
-            if Int(_1!) & Int(1 << 15) != 0 {
-                _13 = reader.readInt32()
-            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = (Int(_1!) & Int(1 << 3) == 0) || _3 != nil
@@ -3833,9 +3813,8 @@ public extension Api {
             let _c10 = (Int(_1!) & Int(1 << 10) == 0) || _10 != nil
             let _c11 = (Int(_1!) & Int(1 << 12) == 0) || _11 != nil
             let _c12 = (Int(_1!) & Int(1 << 15) == 0) || _12 != nil
-            let _c13 = (Int(_1!) & Int(1 << 15) == 0) || _13 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 {
-                return Api.MessageAction.messageActionStarGiftUnique(Cons_messageActionStarGiftUnique(flags: _1!, gift: _2!, canExportAt: _3, transferStars: _4, fromId: _5, peer: _6, savedId: _7, resaleAmount: _8, canTransferAt: _9, canResellAt: _10, dropOriginalDetailsStars: _11, canCraftAt: _12, craftChancePermille: _13))
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 {
+                return Api.MessageAction.messageActionStarGiftUnique(Cons_messageActionStarGiftUnique(flags: _1!, gift: _2!, canExportAt: _3, transferStars: _4, fromId: _5, peer: _6, savedId: _7, resaleAmount: _8, canTransferAt: _9, canResellAt: _10, dropOriginalDetailsStars: _11, canCraftAt: _12))
             }
             else {
                 return nil

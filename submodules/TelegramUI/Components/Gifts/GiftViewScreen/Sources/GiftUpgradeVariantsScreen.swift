@@ -29,6 +29,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
     
     let context: AccountContext
     let gift: StarGift
+    let onlyCrafted: Bool
     let attributes: [StarGift.UniqueGift.Attribute]
     let selectedAttributes: [StarGift.UniqueGift.Attribute]?
     let focusedAttribute: StarGift.UniqueGift.Attribute?
@@ -36,12 +37,14 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
     init(
         context: AccountContext,
         gift: StarGift,
+        onlyCrafted: Bool,
         attributes: [StarGift.UniqueGift.Attribute],
         selectedAttributes: [StarGift.UniqueGift.Attribute]?,
         focusedAttribute: StarGift.UniqueGift.Attribute?
     ) {
         self.context = context
         self.gift = gift
+        self.onlyCrafted = onlyCrafted
         self.attributes = attributes
         self.selectedAttributes = selectedAttributes
         self.focusedAttribute = focusedAttribute
@@ -323,12 +326,15 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
         }
         
         private var effectiveGifts: [[StarGift.UniqueGift.Attribute]] = []
-        private func updateEffectiveGifts(attributes: [StarGift.UniqueGift.Attribute]) {
+        private func updateEffectiveGifts(attributes: [StarGift.UniqueGift.Attribute], onlyCrafted: Bool) {
             var effectiveGifts: [[StarGift.UniqueGift.Attribute]] = []
             switch self.selectedSection {
             case .models:
                 let models = Array(attributes.filter({ attribute in
-                    if case .model = attribute {
+                    if case let .model(_, _, _, crafted) = attribute {
+                        if onlyCrafted && !crafted {
+                            return false
+                        }
                         return true
                     } else {
                         return false
@@ -407,7 +413,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                 
                 var itemId = ""
                 var title = ""
-                var rarity: Int32 = 0
+                var rarity: StarGift.UniqueGift.Attribute.Rarity?
                 
                 var modelAttribute: StarGift.UniqueGift.Attribute?
                 var backdropAttribute: StarGift.UniqueGift.Attribute?
@@ -429,7 +435,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                         itemId += "\(file.fileId.id)"
                         if self.selectedSection == .models {
                             title = name
-                            rarity = rarityValue.permilleValue
+                            rarity = rarityValue
                             modelAttribute = attribute
                             
                             if case let .model(_, selectedFile, _, _) = self.selectedModel {
@@ -442,7 +448,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                         itemId += "\(id)"
                         if self.selectedSection == .backdrops {
                             title = name
-                            rarity = rarityValue.permilleValue
+                            rarity = rarityValue
                             backdropAttribute = attribute
                             
                             if case let .backdrop(_, selectedId, _, _, _, _, _) = self.selectedBackdrop {
@@ -455,7 +461,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                         itemId += "\(file.fileId.id)"
                         if self.selectedSection == .symbols {
                             title = name
-                            rarity = rarityValue.permilleValue
+                            rarity = rarityValue
                             symbolAttribute = attribute
                             
                             if case let .pattern(_, selectedFile, _) = self.selectedSymbol {
@@ -603,8 +609,11 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                 var symbolCount: Int32 = 0
                 for attribute in component.attributes {
                     switch attribute {
-                    case .model:
-                        modelCount += 1
+                    case let .model(_, _, _, crafted):
+                        if component.onlyCrafted && !crafted {
+                        } else {
+                            modelCount += 1
+                        }
                     case .backdrop:
                         backdropCount += 1
                     case .pattern:
@@ -618,7 +627,10 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                 self.symbolCount = symbolCount
                 
                 let randomModels = Array(component.attributes.filter({ attribute in
-                    if case .model = attribute {
+                    if case let .model(_, _, _, crafted) = attribute {
+                        if component.onlyCrafted && !crafted {
+                            return false
+                        }
                         return true
                     } else {
                         return false
@@ -672,7 +684,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                     }
                 }
                 
-                self.updateEffectiveGifts(attributes: component.attributes)
+                self.updateEffectiveGifts(attributes: component.attributes, onlyCrafted: component.onlyCrafted)
             }
             
             self.component = component
@@ -899,7 +911,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                         self.selectedSection = id
                         self.isPlaying = false
                         
-                        self.updateEffectiveGifts(attributes: component.attributes)
+                        self.updateEffectiveGifts(attributes: component.attributes, onlyCrafted: component.onlyCrafted)
                         self.state?.updated(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)))
                     })),
                 environment: {},
@@ -924,7 +936,12 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
             let itemCount: Int32
             switch self.selectedSection {
             case .models:
-                descriptionText = environment.strings.Gift_Variants_CollectionInfo(environment.strings.Gift_Variants_CollectionInfo_Model(self.modelCount)).string
+                //TODO:localize
+                if component.onlyCrafted {
+                    descriptionText = environment.strings.Gift_Variants_CollectionInfo("**\(self.modelCount)** craftable models").string
+                } else {
+                    descriptionText = environment.strings.Gift_Variants_CollectionInfo(environment.strings.Gift_Variants_CollectionInfo_Model(self.modelCount)).string
+                }
                 itemCount = self.modelCount
             case .backdrops:
                 descriptionText = environment.strings.Gift_Variants_CollectionInfo(environment.strings.Gift_Variants_CollectionInfo_Backdrop(self.backdropCount)).string
@@ -1139,6 +1156,7 @@ public class GiftUpgradeVariantsScreen: ViewControllerComponentContainer {
     public init(
         context: AccountContext,
         gift: StarGift,
+        onlyCrafted: Bool = false,
         attributes: [StarGift.UniqueGift.Attribute],
         selectedAttributes: [StarGift.UniqueGift.Attribute]?,
         focusedAttribute: StarGift.UniqueGift.Attribute?
@@ -1148,6 +1166,7 @@ public class GiftUpgradeVariantsScreen: ViewControllerComponentContainer {
         super.init(context: context, component: GiftUpgradeVariantsScreenComponent(
             context: context,
             gift: gift,
+            onlyCrafted: onlyCrafted,
             attributes: attributes,
             selectedAttributes: selectedAttributes,
             focusedAttribute: focusedAttribute
@@ -1266,26 +1285,30 @@ private final class AttributeInfoComponent: Component {
             self.background.frame = backgroundFrame
             transition.setBackgroundColor(layer: self.background, color: component.backgroundColor)
             
+            func formatPercentage(_ value: Float) -> String {
+                return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%"
+            }
+            
             let title: String
             let subtitle: String
-            let rarity: Int32
+            let rarity: StarGift.UniqueGift.Attribute.Rarity?
             switch component.attribute {
             case let .model(name, _, rarityValue, _):
                 title = name
                 subtitle = component.strings.Gift_Variants_Model
-                rarity = rarityValue.permilleValue
+                rarity = rarityValue
             case let .backdrop(name, _, _, _, _, _, rarityValue):
                 title = name
                 subtitle = component.strings.Gift_Variants_Backdrop
-                rarity = rarityValue.permilleValue
+                rarity = rarityValue
             case let .pattern(name, _, rarityValue):
                 title = name
                 subtitle = component.strings.Gift_Variants_Symbol
-                rarity = rarityValue.permilleValue
+                rarity = rarityValue
             default:
                 title = ""
                 subtitle = ""
-                rarity = 0
+                rarity = nil
             }
                     
             let titleSize = self.title.update(
@@ -1328,20 +1351,41 @@ private final class AttributeInfoComponent: Component {
                 transition.setFrame(view: subtitleView, frame: subtitleFrame)
             }
             
-            func formatPercentage(_ value: Float) -> String {
-                return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "")
+            var badgeString = ""
+            if let rarity {
+                //TODO:localize
+                switch rarity {
+                case let .permille(value):
+                    badgeString = formatPercentage(Float(value) * 0.1)
+                case .epic:
+                    badgeString = "epic"
+                case .legendary:
+                    badgeString = "legendary"
+                case .rare:
+                    badgeString = "rare"
+                }
             }
-            let percentage = Float(rarity) * 0.1
+            
+            var badgeItems: [AnimatedTextComponent.Item] = []
+            if badgeString.contains("%") {
+                var clippedRarity = badgeString
+                clippedRarity.removeLast()
+                badgeItems = [
+                    AnimatedTextComponent.Item(id: "value", content: .text(clippedRarity)),
+                    AnimatedTextComponent.Item(id: "percent", content: .text("%")),
+                ]
+            } else {
+                badgeItems = [
+                    AnimatedTextComponent.Item(id: "rarity", content: .text(badgeString))
+                ]
+            }
             
             let badgeSize = self.badge.update(
                 transition: .spring(duration: 0.2),
                 component: AnyComponent(AnimatedTextComponent(
                     font: Font.with(size: 12.0, weight: .semibold, traits: .monospacedNumbers),
                     color: UIColor.white,
-                    items: [
-                        AnimatedTextComponent.Item(id: "value", content: .text(formatPercentage(percentage))),
-                        AnimatedTextComponent.Item(id: "percent", content: .text("%")),
-                    ],
+                    items: badgeItems,
                     noDelay: true,
                     blur: true
                 )),

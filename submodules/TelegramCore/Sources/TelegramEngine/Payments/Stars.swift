@@ -1658,7 +1658,7 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
                                         case .giftCode, .stars, .starsGift, .starsChatSubscription, .starGift, .starGiftUpgrade, .starGiftTransfer, .premiumGift, .starGiftResale, .starGiftPrepaidUpgrade, .starGiftDropOriginalDetails, .starGiftAuctionBid:
                                             receiptMessageId = nil
                                         }
-                                    } else if case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, isRefunded, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt, craftChancePermille) = action.action, case let .Id(messageId) = message.id {
+                                    } else if case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, isRefunded, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt) = action.action, case let .Id(messageId) = message.id {
                                         let reference: StarGiftReference
                                         if let peerId, let savedId {
                                             reference = .peer(peerId: peerId, id: savedId)
@@ -1688,8 +1688,7 @@ func _internal_sendStarsPaymentForm(account: Account, formId: Int64, source: Bot
                                             dropOriginalDetailsStars: dropOriginalDetailsStars,
                                             number: nil,
                                             isRefunded: isRefunded,
-                                            canCraftAt: canCraftAt,
-                                            craftChancePermille: craftChancePermille
+                                            canCraftAt: canCraftAt
                                         )
                                     }
                                 }

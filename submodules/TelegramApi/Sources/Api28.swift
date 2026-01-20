@@ -1,65 +1,4 @@
 public extension Api {
-    enum TopPeerCategoryPeers: TypeConstructorDescription {
-        public class Cons_topPeerCategoryPeers {
-            public var category: Api.TopPeerCategory
-            public var count: Int32
-            public var peers: [Api.TopPeer]
-            public init(category: Api.TopPeerCategory, count: Int32, peers: [Api.TopPeer]) {
-                self.category = category
-                self.count = count
-                self.peers = peers
-            }
-        }
-        case topPeerCategoryPeers(Cons_topPeerCategoryPeers)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .topPeerCategoryPeers(let _data):
-                if boxed {
-                    buffer.appendInt32(-75283823)
-                }
-                _data.category.serialize(buffer, true)
-                serializeInt32(_data.count, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.peers.count))
-                for item in _data.peers {
-                    item.serialize(buffer, true)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .topPeerCategoryPeers(let _data):
-                return ("topPeerCategoryPeers", [("category", _data.category as Any), ("count", _data.count as Any), ("peers", _data.peers as Any)])
-            }
-        }
-
-        public static func parse_topPeerCategoryPeers(_ reader: BufferReader) -> TopPeerCategoryPeers? {
-            var _1: Api.TopPeerCategory?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.TopPeerCategory
-            }
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: [Api.TopPeer]?
-            if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.TopPeer.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.TopPeerCategoryPeers.topPeerCategoryPeers(Cons_topPeerCategoryPeers(category: _1!, count: _2!, peers: _3!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
     indirect enum Update: TypeConstructorDescription {
         public class Cons_updateBotBusinessConnect {
             public var connection: Api.BotBusinessConnection
@@ -1573,6 +1512,7 @@ public extension Api {
         case updateSmsJob(Cons_updateSmsJob)
         case updateStarGiftAuctionState(Cons_updateStarGiftAuctionState)
         case updateStarGiftAuctionUserState(Cons_updateStarGiftAuctionUserState)
+        case updateStarGiftCraftFail
         case updateStarsBalance(Cons_updateStarsBalance)
         case updateStarsRevenueStatus(Cons_updateStarsRevenueStatus)
         case updateStickerSets(Cons_updateStickerSets)
@@ -2866,6 +2806,11 @@ public extension Api {
                 serializeInt64(_data.giftId, buffer: buffer, boxed: false)
                 _data.userState.serialize(buffer, true)
                 break
+            case .updateStarGiftCraftFail:
+                if boxed {
+                    buffer.appendInt32(-1408818108)
+                }
+                break
             case .updateStarsBalance(let _data):
                 if boxed {
                     buffer.appendInt32(1317053305)
@@ -3270,6 +3215,8 @@ public extension Api {
                 return ("updateStarGiftAuctionState", [("giftId", _data.giftId as Any), ("state", _data.state as Any)])
             case .updateStarGiftAuctionUserState(let _data):
                 return ("updateStarGiftAuctionUserState", [("giftId", _data.giftId as Any), ("userState", _data.userState as Any)])
+            case .updateStarGiftCraftFail:
+                return ("updateStarGiftCraftFail", [])
             case .updateStarsBalance(let _data):
                 return ("updateStarsBalance", [("balance", _data.balance as Any)])
             case .updateStarsRevenueStatus(let _data):
@@ -5833,6 +5780,9 @@ public extension Api {
             else {
                 return nil
             }
+        }
+        public static func parse_updateStarGiftCraftFail(_ reader: BufferReader) -> Update? {
+            return Api.Update.updateStarGiftCraftFail
         }
         public static func parse_updateStarsBalance(_ reader: BufferReader) -> Update? {
             var _1: Api.StarsAmount?
