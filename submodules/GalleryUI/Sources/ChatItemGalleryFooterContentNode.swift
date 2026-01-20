@@ -31,6 +31,10 @@ import TranslateUI
 import TelegramNotices
 import SolidRoundedButtonNode
 import UrlHandling
+import GlassControls
+import ComponentFlow
+import ComponentDisplayAdapters
+import EdgeEffect
 
 private let deleteImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/MessageSelectionTrash"), color: .white)
 private let actionImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/MessageSelectionForward"), color: .white)
@@ -132,14 +136,11 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     private var dateTimeFormat: PresentationDateTimeFormat
     
     private let contentNode: ASDisplayNode
-    private let deleteButton: UIButton
-    private let fullscreenButton: UIButton
-    private let actionButton: UIButton
-    private let editButton: UIButton
     private let maskNode: ASDisplayNode
     private let textSelectionKnobContainer: UIView
     private let textSelectionKnobSurface: UIView
     private let scrollWrapperNode: CaptionScrollWrapperNode
+    private let scrollWrapperEffect: VariableBlurEffect
     private let scrollNode: ASScrollNode
 
     private let textNode: ImmediateTextNodeWithEntities
@@ -147,6 +148,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     private var dustNode: InvisibleInkDustNode?
     private var buttonNode: SolidRoundedButtonNode?
     private var buttonIconNode: ASImageNode?
+    private let buttonPanel = ComponentView<Empty>()
     
     private var textSelectionNode: TextSelectionNode?
     
@@ -174,6 +176,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     private var videoFramePreviewNode: (ASImageNode, ImmediateTextNode)?
     
     private var validLayout: (CGSize, LayoutMetrics, CGFloat, CGFloat, CGFloat, CGFloat)?
+    private var buttonsState: (displayDeleteButton: Bool, displayFullscreenButton: Bool, displayActionButton: Bool, displayEditButton: Bool)?
     
     private var codeHighlightState: (id: EngineMessage.Id, specs: [CachedMessageSyntaxHighlight.Spec], disposable: Disposable)?
     
@@ -357,21 +360,16 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         
         self.contentNode = ASDisplayNode()
         
-        self.deleteButton = UIButton()
-        self.fullscreenButton = UIButton()
-        self.actionButton = UIButton()
-        self.editButton = UIButton()
-        
-        self.deleteButton.setImage(deleteImage, for: [.normal])
-        self.actionButton.setImage(actionImage, for: [.normal])
-        self.editButton.setImage(editImage, for: [.normal])
-        
         self.textSelectionKnobContainer = UIView()
         self.textSelectionKnobSurface = UIView()
         self.textSelectionKnobContainer.addSubview(self.textSelectionKnobSurface)
         
         self.scrollWrapperNode = CaptionScrollWrapperNode()
+        self.scrollWrapperNode.layer.allowsGroupOpacity = true
         self.scrollWrapperNode.clipsToBounds = true
+        self.scrollWrapperEffect = VariableBlurEffect(layer: self.scrollWrapperNode.layer, isTransparent: true, maxBlurRadius: 3.0)
+        self.scrollWrapperNode.backgroundColor = .clear
+        self.scrollWrapperNode.isOpaque = false
         
         self.scrollNode = ASScrollNode()
         self.scrollNode.clipsToBounds = false
@@ -604,10 +602,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         
         self.textSelectionNode = textSelectionNode
         
-        self.contentNode.view.addSubview(self.deleteButton)
-        self.contentNode.view.addSubview(self.fullscreenButton)
-        self.contentNode.view.addSubview(self.actionButton)
-        self.contentNode.view.addSubview(self.editButton)
         self.contentNode.addSubnode(self.scrollWrapperNode)
         self.scrollWrapperNode.addSubnode(self.scrollNode)
         self.contentNode.view.addSubview(self.textSelectionKnobContainer)
@@ -626,7 +620,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.contentNode.addSubnode(self.statusNode)
         self.contentNode.addSubnode(self.statusButtonNode)
         
-        self.deleteButton.addTarget(self, action: #selector(self.deleteButtonPressed), for: [.touchUpInside])
+        /*self.deleteButton.addTarget(self, action: #selector(self.deleteButtonPressed), for: [.touchUpInside])
         self.deleteButton.accessibilityTraits = [.button]
         self.deleteButton.accessibilityLabel = presentationData.strings.Gallery_VoiceOver_Delete
         
@@ -640,7 +634,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         
         self.editButton.addTarget(self, action: #selector(self.editButtonPressed), for: [.touchUpInside])
         self.editButton.accessibilityTraits = [.button]
-        self.editButton.accessibilityLabel = presentationData.strings.Gallery_VoiceOver_Edit
+        self.editButton.accessibilityLabel = presentationData.strings.Gallery_VoiceOver_Edit*/
         
         self.backwardButton.addTarget(self, action: #selector(self.backwardButtonPressed), forControlEvents: .touchUpInside)
         self.forwardButton.addTarget(self, action: #selector(self.forwardButtonPressed), forControlEvents: .touchUpInside)
@@ -812,6 +806,15 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             dateText = nil
         }
         
+        if origin == nil {
+            self.buttonsState = (
+                displayDeleteButton: false,
+                displayFullscreenButton: false,
+                displayActionButton: false,
+                displayEditButton: false
+            )
+        }
+        
         if self.currentMessageText != caption || self.currentAuthorNameText != titleText || self.currentDateText != dateText {
             self.currentMessageText = caption
             self.currentAuthorNameText = titleText
@@ -841,13 +844,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             self.dateNode.accessibilityLabel = self.dateNode.attributedText?.string
             
             self.requestLayout?(.immediate)
-        }
-        
-        if origin == nil {
-            self.editButton.isHidden = true
-            self.deleteButton.isHidden = true
-            self.fullscreenButton.isHidden = true
-            self.editButton.isHidden = true
         }
     }
     
@@ -1044,8 +1040,13 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             dateText = ""
             canEdit = false
         }
+        
+        var displayDeleteButton = false
+        var displayFullscreenButton = false
+        var displayActionButton = false
+        var displayEditButton = false
                         
-        if self.currentMessageText != messageText || canDelete != !self.deleteButton.isHidden || canFullscreen != !self.fullscreenButton.isHidden || canShare != !self.actionButton.isHidden || canEdit != !self.editButton.isHidden || self.currentAuthorNameText != authorNameText || self.currentDateText != dateText {
+        do {
             self.currentMessageText = messageText
             
             if messageText.length == 0 {
@@ -1069,15 +1070,13 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             self.dateNode.accessibilityLabel = self.dateNode.attributedText?.string
             
             if canFullscreen {
-                self.fullscreenButton.isHidden = false
-                self.deleteButton.isHidden = true
+                displayFullscreenButton = true
             } else {
-                self.deleteButton.isHidden = !canDelete
-                self.fullscreenButton.isHidden = true
+                displayDeleteButton = canDelete
             }
 
-            self.actionButton.isHidden = !canShare
-            self.editButton.isHidden = !canEdit
+            displayActionButton = canShare
+            displayEditButton = canEdit
             
             if let adAttribute = message.adAttribute {
                 if self.buttonNode == nil {
@@ -1102,6 +1101,13 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             } else if let buttonNode = self.buttonNode {
                 buttonNode.removeFromSupernode()
             }
+            
+            self.buttonsState = (
+                displayDeleteButton: displayDeleteButton,
+                displayFullscreenButton: displayFullscreenButton,
+                displayActionButton: displayActionButton,
+                displayEditButton: displayEditButton
+            )
             
             self.requestLayout?(.immediate)
         }
@@ -1175,16 +1181,10 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.validLayout = (size, metrics, leftInset, rightInset, bottomInset, contentInset)
         
         let width = size.width
-        var bottomInset = bottomInset
-        if !bottomInset.isZero && bottomInset < 30.0 {
-            bottomInset -= 7.0
-        }
-        var panelHeight = 44.0 + bottomInset
+        var panelHeight = 54.0 + bottomInset
         panelHeight += contentInset
         
         let isLandscape = size.width > size.height
-
-        self.fullscreenButton.setImage(isLandscape ? fullscreenOffImage : fullscreenOnImage, for: [.normal])
 
         let displayCaption: Bool
         if case .compact = metrics.widthClass {
@@ -1193,17 +1193,22 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             displayCaption = !self.textNode.isHidden
         }
         
-        if metrics.isTablet {
-            self.fullscreenButton.isHidden = true
+        var buttonPanelInsets = UIEdgeInsets()
+        buttonPanelInsets.left = 8.0
+        buttonPanelInsets.right = 8.0
+        buttonPanelInsets.bottom = bottomInset + 8.0
+        if bottomInset <= 32.0 {
+            buttonPanelInsets.left += 18.0
+            buttonPanelInsets.right += 18.0
         }
         
         if !self.textNode.isHidden {
             var textFrame = CGRect()
             var visibleTextHeight: CGFloat = 0.0
             
-            let sideInset: CGFloat = 8.0 + leftInset
+            let sideInset: CGFloat = 16.0 + leftInset
             let topInset: CGFloat = 8.0
-            let textBottomInset: CGFloat = 8.0
+            let textBottomInset: CGFloat = 8.0 + 14.0
             
             let constrainSize = CGSize(width: width - sideInset * 2.0, height: CGFloat.greatestFiniteMagnitude)
             let textSize = self.textNode.updateLayout(constrainSize)
@@ -1233,26 +1238,52 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                     maxTextOffset -= 44.0
                 }
                 textOffset = min(maxTextOffset, self.scrollNode.view.contentOffset.y)
+                let originalPanelHeight = panelHeight
                 panelHeight = max(0.0, panelHeight + visibleTextPanelHeight + textOffset)
                 
                 if self.scrollNode.view.isScrollEnabled {
-                    if self.scrollWrapperNode.layer.mask == nil, let maskImage = captionMaskImage {
-                        let maskLayer = CALayer()
-                        maskLayer.contents = maskImage.cgImage
-                        maskLayer.contentsScale = maskImage.scale
-                        maskLayer.contentsCenter = CGRect(x: 0.0, y: 0.0, width: 1.0, height: (maskImage.size.height - 16.0) / maskImage.size.height)
-                        self.scrollWrapperNode.layer.mask = maskLayer
+                    if self.scrollWrapperNode.view.mask == nil {
+                        self.scrollWrapperNode.layer.rasterizationScale = UIScreenScale
+                        let maskView = UIImageView()
                         
+                        let height: CGFloat = 70.0
+                        let baseGradientAlpha: CGFloat = 1.0
+                        let numSteps = 8
+                        let firstStep = 0
+                        let firstLocation = 0.0
+                        let colors = (0 ..< numSteps).map { i -> UIColor in
+                            if i < firstStep {
+                                return UIColor(white: 1.0, alpha: 1.0)
+                            } else {
+                                let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
+                                let value: CGFloat = 1.0 - bezierPoint(0.42, 0.0, 0.58, 1.0, step)
+                                return UIColor(white: 0.0, alpha: baseGradientAlpha * value)
+                            }
+                        }
+                        let locations = (0 ..< numSteps).map { i -> CGFloat in
+                            if i < firstStep {
+                                return 0.0
+                            } else {
+                                let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
+                                return (firstLocation + (1.0 - firstLocation) * step)
+                            }
+                        }
+                        
+                        maskView.image = generateGradientImage(size: CGSize(width: 8.0, height: height), colors: colors, locations: locations)!.stretchableImage(withLeftCapWidth: 0, topCapHeight: 1)
+                        
+                        //maskView.image = EdgeEffectView.generateEdgeGradient(baseHeight: originalPanelHeight + 20.0, isInverted: false)
+                        self.scrollWrapperNode.view.mask = maskView
                     }
                 } else {
-                    self.scrollWrapperNode.layer.mask = nil
+                    self.scrollWrapperNode.view.mask = nil
                 }
                 
-                let scrollWrapperNodeFrame = CGRect(x: 0.0, y: 0.0, width: width, height: max(0.0, visibleTextPanelHeight + textOffset))
+                let scrollWrapperNodeFrame = CGRect(x: 0.0, y: 0.0, width: width, height: max(0.0, visibleTextPanelHeight + textOffset + originalPanelHeight - 14.0))
                 if self.scrollWrapperNode.frame != scrollWrapperNodeFrame {
                     self.scrollWrapperNode.frame = scrollWrapperNodeFrame
-                    self.scrollWrapperNode.layer.mask?.frame = self.scrollWrapperNode.bounds
-                    self.scrollWrapperNode.layer.mask?.removeAllAnimations()
+                    self.scrollWrapperNode.view.mask?.frame = self.scrollWrapperNode.bounds
+                    self.scrollWrapperNode.view.mask?.layer.removeAllAnimations()
+                    self.scrollWrapperEffect.update(size: scrollWrapperNodeFrame.size, constantHeight: 80.0, placement: VariableBlurEffect.Placement(position: .bottom, extendsInwards: true), gradient: EdgeEffectView.generateEdgeGradientData(baseHeight: 80.0), transition: transition)
                 }
                 
                 if let buttonNode = self.buttonNode {
@@ -1294,11 +1325,11 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 panelHeight += 34.0
             }
             
-            var scrubberY: CGFloat = 8.0
+            var scrubberY: CGFloat = 0.0
             if self.textNode.isHidden || !displayCaption {
                 panelHeight += 8.0
             } else {
-                scrubberY = panelHeight - bottomInset - 44.0 - 44.0
+                scrubberY = panelHeight - buttonPanelInsets.bottom - 44.0 - 44.0 - 8.0
                 if contentInset > 0.0 {
                     scrubberY -= contentInset
                 }
@@ -1308,49 +1339,118 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 panelHeight -= 44.0
             }
             
-            let scrubberFrame = CGRect(origin: CGPoint(x: leftInset, y: scrubberY), size: CGSize(width: width - leftInset - rightInset, height: 34.0))
-            scrubberView.updateLayout(size: size, leftInset: leftInset, rightInset: rightInset, transition: .immediate)
+            let scrubberFrame = CGRect(origin: CGPoint(x: leftInset + 4.0, y: scrubberY), size: CGSize(width: width - (leftInset + 4.0) * 2.0, height: 34.0))
+            scrubberView.updateLayout(size: size, leftInset: leftInset + 4.0, rightInset: rightInset, transition: .immediate)
             transition.updateBounds(layer: scrubberView.layer, bounds: CGRect(origin: CGPoint(), size: scrubberFrame.size))
             transition.updatePosition(layer: scrubberView.layer, position: CGPoint(x: scrubberFrame.midX, y: scrubberFrame.midY))
         }
         transition.updateAlpha(node: self.scrollWrapperNode, alpha: displayCaption ? 1.0 : 0.0)
         
-        self.actionButton.frame = CGRect(origin: CGPoint(x: leftInset, y: panelHeight - bottomInset - 44.0), size: CGSize(width: 44.0, height: 44.0))
+        var leftControlItems: [GlassControlGroupComponent.Item] = []
+        var rightControlItems: [GlassControlGroupComponent.Item] = []
         
-        let deleteFrame = CGRect(origin: CGPoint(x: width - 44.0 - rightInset, y: panelHeight - bottomInset - 44.0), size: CGSize(width: 44.0, height: 44.0))
-        var editFrame = CGRect(origin: CGPoint(x: width - 44.0 - 50.0 - rightInset, y: panelHeight - bottomInset - 44.0), size: CGSize(width: 44.0, height: 44.0))
-        if self.deleteButton.isHidden && self.fullscreenButton.isHidden {
-            editFrame = deleteFrame
+        if let buttonsState = self.buttonsState {
+            if buttonsState.displayActionButton {
+                leftControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("forward"),
+                    content: .icon("Chat/Input/Accessory Panels/MessageSelectionForward"),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.actionButtonPressed()
+                    }
+                ))
+            }
+            if buttonsState.displayEditButton {
+                rightControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("edit"),
+                    content: .icon("Media Gallery/Draw"),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.editButtonPressed()
+                    }
+                ))
+            }
+            if buttonsState.displayFullscreenButton && !metrics.isTablet {
+                rightControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("fullscreen"),
+                    content: .icon(isLandscape ? "Chat/Context Menu/Collapse" : "Chat/Context Menu/Expand"),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.fullscreenButtonPressed()
+                    }
+                ))
+            }
+            if buttonsState.displayDeleteButton {
+                rightControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("delete"),
+                    content: .icon("Chat/Input/Accessory Panels/MessageSelectionTrash"),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.deleteButtonPressed()
+                    }
+                ))
+            }
         }
-        self.deleteButton.frame = deleteFrame
-        self.fullscreenButton.frame = deleteFrame
-        self.editButton.frame = editFrame
+        
+        let buttonPanelSize = self.buttonPanel.update(
+            transition: ComponentTransition(transition),
+            component: AnyComponent(GlassControlPanelComponent(
+                theme: defaultDarkColorPresentationTheme,
+                leftItem: GlassControlPanelComponent.Item(
+                    items: leftControlItems,
+                    background: .panel
+                ),
+                centralItem: nil,
+                rightItem: GlassControlPanelComponent.Item(
+                    items: rightControlItems,
+                    background: .panel
+                ),
+                centerAlignmentIfPossible: true
+            )),
+            environment: {},
+            containerSize: CGSize(width: size.width - buttonPanelInsets.left - buttonPanelInsets.right, height: 44.0)
+        )
+        let buttonPanelFrame = CGRect(origin: CGPoint(x: buttonPanelInsets.left, y: panelHeight - buttonPanelInsets.bottom - buttonPanelSize.height), size: buttonPanelSize)
+        if let buttonPanelView = self.buttonPanel.view {
+            if buttonPanelView.superview == nil {
+                self.contentNode.view.insertSubview(buttonPanelView, belowSubview: self.authorNameNode.view)
+            }
+            ComponentTransition(transition).setFrame(view: buttonPanelView, frame: buttonPanelFrame)
+        }
 
         if let image = self.backwardButton.backgroundIconNode.image {
-            self.backwardButton.frame = CGRect(origin: CGPoint(x: floor((width - image.size.width) / 2.0) - 66.0, y: panelHeight - bottomInset - 44.0 + 7.0), size: image.size)
+            self.backwardButton.frame = CGRect(origin: CGPoint(x: floor((width - image.size.width) / 2.0) - 66.0, y: panelHeight - buttonPanelInsets.bottom - 44.0 + floorToScreenPixels((44.0 - image.size.height) * 0.5)), size: image.size)
         }
         if let image = self.forwardButton.backgroundIconNode.image {
-            self.forwardButton.frame = CGRect(origin: CGPoint(x: floor((width - image.size.width) / 2.0) + 66.0, y: panelHeight - bottomInset - 44.0 + 7.0), size: image.size)
+            self.forwardButton.frame = CGRect(origin: CGPoint(x: floor((width - image.size.width) / 2.0) + 66.0, y: panelHeight - buttonPanelInsets.bottom - 44.0 + floorToScreenPixels((44.0 - image.size.height) * 0.5)), size: image.size)
         }
         
-        self.playbackControlButton.frame = CGRect(origin: CGPoint(x: floor((width - 44.0) / 2.0), y: panelHeight - bottomInset - 44.0 - 2.0), size: CGSize(width: 44.0, height: 44.0))
-        self.playPauseIconNode.frame = self.playbackControlButton.bounds.offsetBy(dx: 2.0, dy: 2.0)
+        self.playbackControlButton.frame = CGRect(origin: CGPoint(x: floor((width - 44.0) / 2.0), y: panelHeight - buttonPanelInsets.bottom - 44.0 + floorToScreenPixels((44.0 - 44.0) * 0.5)), size: CGSize(width: 44.0, height: 44.0))
+        self.playPauseIconNode.frame = self.playbackControlButton.bounds.offsetBy(dx: 2.0, dy: -2.0)
         
         let statusSize = CGSize(width: 28.0, height: 28.0)
         transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: floor((width - statusSize.width) / 2.0), y: panelHeight - bottomInset - statusSize.height - 8.0), size: statusSize))
         
         self.statusButtonNode.frame = CGRect(origin: CGPoint(x: floor((width - 44.0) / 2.0), y: panelHeight - bottomInset - 44.0), size: CGSize(width: 44.0, height: 44.0))
         
-        let buttonsSideInset: CGFloat = !self.editButton.isHidden ? 88.0 : 44.0
-        let authorNameSize = self.authorNameNode.measure(CGSize(width: width - buttonsSideInset * 2.0 - 8.0 * 2.0 - leftInset - rightInset, height: CGFloat.greatestFiniteMagnitude))
+        let buttonsSideInset: CGFloat = 44.0 * CGFloat(max(leftControlItems.count, rightControlItems.count))
+        let authorNameSize = self.authorNameNode.measure(CGSize(width: width - buttonsSideInset * 2.0 - 8.0 * 2.0 - buttonPanelInsets.left - buttonPanelInsets.right, height: CGFloat.greatestFiniteMagnitude))
         let dateSize = self.dateNode.measure(CGSize(width: width - buttonsSideInset * 2.0 - 8.0 * 2.0, height: CGFloat.greatestFiniteMagnitude))
         
         if authorNameSize.height.isZero {
-            self.dateNode.frame = CGRect(origin: CGPoint(x: floor((width - dateSize.width) / 2.0), y: panelHeight - bottomInset - 44.0 + floor((44.0 - dateSize.height) / 2.0)), size: dateSize)
+            self.dateNode.frame = CGRect(origin: CGPoint(x: floor((width - dateSize.width) / 2.0), y: panelHeight - buttonPanelInsets.bottom - 44.0 + floor((44.0 - dateSize.height) / 2.0)), size: dateSize)
         } else {
             let labelsSpacing: CGFloat = 0.0
-            self.authorNameNode.frame = CGRect(origin: CGPoint(x: floor((width - authorNameSize.width) / 2.0), y: panelHeight - bottomInset - 44.0 + floor((44.0 - dateSize.height - authorNameSize.height - labelsSpacing) / 2.0)), size: authorNameSize)
-            self.dateNode.frame = CGRect(origin: CGPoint(x: floor((width - dateSize.width) / 2.0), y: panelHeight - bottomInset - 44.0 + floor((44.0 - dateSize.height - authorNameSize.height - labelsSpacing) / 2.0) + authorNameSize.height + labelsSpacing), size: dateSize)
+            self.authorNameNode.frame = CGRect(origin: CGPoint(x: floor((width - authorNameSize.width) / 2.0), y: panelHeight - buttonPanelInsets.bottom - 44.0 + floor((44.0 - dateSize.height - authorNameSize.height - labelsSpacing) / 2.0)), size: authorNameSize)
+            self.dateNode.frame = CGRect(origin: CGPoint(x: floor((width - dateSize.width) / 2.0), y: panelHeight - buttonPanelInsets.bottom - 44.0 + floor((44.0 - dateSize.height - authorNameSize.height - labelsSpacing) / 2.0) + authorNameSize.height + labelsSpacing), size: dateSize)
         }
         
         if let (videoFramePreviewNode, videoFrameTextNode) = self.videoFramePreviewNode {
@@ -1365,7 +1465,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             if size.width > size.height {
                 scrubberInset = 58.0
             } else {
-                scrubberInset = 13.0
+                scrubberInset = 14.0 + 8.0
             }
             
             let imageSize = intrinsicImageSize.aspectFitted(fitSize)
@@ -1403,10 +1503,10 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.scrollWrapperNode.alpha = 1.0
         self.dateNode.alpha = 1.0
         self.authorNameNode.alpha = 1.0
-        self.deleteButton.alpha = 1.0
-        self.fullscreenButton.alpha = 1.0
-        self.actionButton.alpha = 1.0
-        self.editButton.alpha = 1.0
+        if let buttonPanelView = self.buttonPanel.view {
+            buttonPanelView.alpha = 1.0
+        }
+        
         self.backwardButton.alpha = self.hasSeekControls ? 1.0 : 0.0
         self.forwardButton.alpha = self.hasSeekControls ? 1.0 : 0.0
         self.statusNode.alpha = 1.0
@@ -1432,10 +1532,11 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.scrollWrapperNode.alpha = 0.0
         self.dateNode.alpha = 0.0
         self.authorNameNode.alpha = 0.0
-        self.deleteButton.alpha = 0.0
-        self.fullscreenButton.alpha = 0.0
-        self.actionButton.alpha = 0.0
-        self.editButton.alpha = 0.0
+        
+        if let buttonPanelView = self.buttonPanel.view {
+            buttonPanelView.alpha = 0.0
+        }
+        
         self.backwardButton.alpha = 0.0
         self.forwardButton.alpha = 0.0
         self.statusNode.alpha = 0.0

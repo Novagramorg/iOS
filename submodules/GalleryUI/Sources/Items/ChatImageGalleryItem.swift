@@ -25,6 +25,9 @@ import Pasteboard
 import AdUI
 import AdsInfoScreen
 import AdsReportScreen
+import GlassBackgroundComponent
+import ComponentFlow
+import ComponentDisplayAdapters
 
 enum ChatMediaGalleryThumbnail: Equatable {
     case image(ImageMediaReference)
@@ -756,7 +759,13 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         guard let controller = self.baseNavigationController()?.topViewController as? ViewController else {
             return
         }
-        let contextController = makeContextController(presentationData: self.presentationData.withUpdated(theme: defaultDarkColorPresentationTheme), source: .reference(HeaderContextReferenceContentSource(controller: controller, sourceNode: self.moreBarButton.referenceNode, actionsOnTop: false)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+        
+        var sourceView = self.moreBarButton.referenceNode.view
+        if let value = self.galleryController()?.navigationBar?.navigationButtonContextContainer(sourceView: sourceView) {
+            sourceView = value
+        }
+        
+        let contextController = makeContextController(presentationData: self.presentationData.withUpdated(theme: defaultDarkColorPresentationTheme), source: .reference(HeaderContextReferenceContentSource(controller: controller, sourceView: sourceView, actionsOnTop: false)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
         controller.presentInGlobalOverlay(contextController)
     }
     
@@ -1544,11 +1553,9 @@ private class RecognizedContentContainer: ASDisplayNode {
 
 
 private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
-    private let backgroundNode: ASImageNode
-    private let selectedBackgroundNode: ASImageNode
-    private let iconNode: ASImageNode
-    private let selectedIconNode: ASImageNode
-    private let buttonNode: HighlightTrackingButtonNode
+    private let backgroundContainer: GlassBackgroundContainerView
+    private let backgroundView: GlassBackgroundView
+    private let iconView: UIImageView
     
     var action: ((Bool) -> Void)?
     private var appeared = false
@@ -1556,128 +1563,111 @@ private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
     private var validLayout: (CGSize, LayoutMetrics, UIEdgeInsets)?
     private var interfaceIsHidden: Bool = false
     
+    private var isSelected: Bool = false
+    
     init(theme: PresentationTheme) {
-        self.backgroundNode = ASImageNode()
-        self.backgroundNode.displaysAsynchronously = false
+        self.backgroundContainer = GlassBackgroundContainerView()
+        self.backgroundView = GlassBackgroundView()
+        self.iconView = UIImageView()
         
-        self.selectedBackgroundNode = ASImageNode()
-        self.selectedBackgroundNode.displaysAsynchronously = false
-        self.selectedBackgroundNode.isHidden = true
-        self.selectedBackgroundNode.image = generateFilledCircleImage(diameter: 32.0, color: .white)
-        
-        self.buttonNode = HighlightTrackingButtonNode()
-        self.buttonNode.alpha = 0.0
-        
-        self.iconNode = ASImageNode()
-        self.iconNode.displaysAsynchronously = false
-        self.iconNode.image = generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/LiveTextIcon"), color: .white)
-        self.iconNode.contentMode = .center
-        
-        self.selectedIconNode = ASImageNode()
-        self.selectedIconNode.displaysAsynchronously = false
-        self.selectedIconNode.image = generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/LiveTextIcon"), color: .black)
-        self.selectedIconNode.contentMode = .center
-        self.selectedIconNode.isHidden = true
+        self.iconView.image = generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/LiveTextIcon"), color: .white)?.withRenderingMode(.alwaysTemplate)
+        self.iconView.contentMode = .center
         
         super.init()
-                
-        self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
-        self.addSubnode(self.buttonNode)
-        self.buttonNode.addSubnode(self.backgroundNode)
-        self.buttonNode.addSubnode(self.selectedBackgroundNode)
-        self.buttonNode.addSubnode(self.iconNode)
-        self.buttonNode.addSubnode(self.selectedIconNode)
         
-        self.buttonNode.highligthedChanged = { [weak self] highlighted in
-            if let strongSelf = self {
-                if highlighted {
-                    strongSelf.iconNode.layer.removeAnimation(forKey: "opacity")
-                    strongSelf.iconNode.alpha = 0.4
-                } else {
-                    strongSelf.iconNode.alpha = 1.0
-                    strongSelf.iconNode.layer.animateAlpha(from: 0.4, to: 1.0, duration: 0.2)
-                }
-            }
-        }
+        self.backgroundContainer.contentView.addSubview(self.backgroundView)
+        self.backgroundView.contentView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.onTapGesture(_:))))
+        
+        self.view.addSubview(self.backgroundContainer)
+        self.backgroundView.contentView.addSubview(self.iconView)
     }
     
-    @objc private func buttonPressed() {
-        let newValue = !self.buttonNode.isSelected
-        self.buttonNode.isSelected = newValue
-        self.selectedBackgroundNode.isHidden = !newValue
-        self.selectedIconNode.isHidden = !newValue
-        
-        if !newValue && !self.interfaceIsHidden, let (size, metrics, insets) = self.validLayout {
-            self.updateLayout(size: size, metrics: metrics, insets: insets, isHidden: self.interfaceIsHidden, transition: .animated(duration: 0.3, curve: .easeInOut))
-        }
-        
-        self.action?(newValue)
-        
-        if self.interfaceIsHidden && !newValue {
-            let transition = ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut)
-            transition.updateAlpha(node: self.buttonNode, alpha: 0.0)
+    @objc private func onTapGesture(_ recognizer: UITapGestureRecognizer) {
+        if case .ended = recognizer.state {
+            let newValue = !self.isSelected
+            self.isSelected = newValue
+            
+            if !newValue && !self.interfaceIsHidden, let (size, metrics, insets) = self.validLayout {
+                self.updateLayout(size: size, metrics: metrics, insets: insets, isHidden: self.interfaceIsHidden, transition: .animated(duration: 0.3, curve: .easeInOut))
+            }
+            
+            self.action?(newValue)
+            
+            if self.interfaceIsHidden && !newValue {
+                let transition = ComponentTransition.easeInOut(duration: 0.2)
+                transition.setAlpha(view: self.backgroundContainer, alpha: 0.0)
+            }
         }
     }
     
     func transitionIn() {
-        guard self.buttonNode.alpha.isZero else {
+        guard self.backgroundContainer.alpha.isZero else {
             return
         }
         self.appeared = true
-        self.buttonNode.alpha = 1.0
-        self.buttonNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+        ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 1.0)
     }
     
     override func updateLayout(size: CGSize, metrics: LayoutMetrics, insets: UIEdgeInsets, isHidden: Bool, transition: ContainedViewLayoutTransition) {
+        let transition = ComponentTransition(transition)
+        
         self.validLayout = (size, metrics, insets)
         
         self.interfaceIsHidden = isHidden
         
-        let buttonSize = CGSize(width: 32.0, height: 32.0)
-        self.backgroundNode.frame = CGRect(origin: CGPoint(x: 12.0, y: 12.0), size: buttonSize)
-        self.selectedBackgroundNode.frame = CGRect(origin: CGPoint(x: 12.0, y: 12.0), size: buttonSize)
-        self.iconNode.frame = CGRect(origin: CGPoint(x: 12.0, y: 12.0), size: buttonSize)
-        self.selectedIconNode.frame = CGRect(origin: CGPoint(x: 12.0, y: 12.0), size: buttonSize)
+        let buttonSize = CGSize(width: 44.0, height: 44.0)
+        
+        self.backgroundContainer.update(size: buttonSize, isDark: true, transition: transition)
+        
+        self.backgroundView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: buttonSize)
+        let tintColor: GlassBackgroundView.TintColor
+        if self.isSelected {
+            tintColor = .init(kind: .custom, color: UIColor(white: 1.0, alpha: 1.0))
+        } else {
+            tintColor = .init(kind: .panel, color: UIColor(white: 0.0, alpha: 0.6))
+        }
+        self.backgroundView.update(size: buttonSize, cornerRadius: buttonSize.height * 0.5, isDark: true, tintColor: tintColor, isInteractive: true, transition: transition)
+        
+        self.iconView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: buttonSize)
+        transition.setTintColor(view: self.iconView, color: self.isSelected ? .black : .white)
         
         if self.appeared {
-            if !self.buttonNode.isSelected && isHidden {
-                transition.updateAlpha(node: self.buttonNode, alpha: 0.0)
+            if !self.isSelected && isHidden {
+                transition.setAlpha(view: self.backgroundContainer, alpha: 0.0)
             } else {
-                transition.updateAlpha(node: self.buttonNode, alpha: 1.0)
+                transition.setAlpha(view: self.backgroundContainer, alpha: 1.0)
             }
         }
         
         var buttonPosition: CGPoint
-        if isHidden && !self.buttonNode.isSelected {
-            buttonPosition = CGPoint(x: size.width - insets.right - buttonSize.width - 59.0, y: -50.0)
+        if isHidden && !self.isSelected {
+            buttonPosition = CGPoint(x: size.width - insets.right - buttonSize.width - 66.0 - 10.0, y: -52.0)
         } else {
-            buttonPosition = CGPoint(x: size.width - insets.right - buttonSize.width - (self.buttonNode.isSelected ? 24.0 : 59.0), y: insets.top - 58.0)
+            buttonPosition = CGPoint(x: size.width - insets.right - buttonSize.width - (self.isSelected ? 24.0 : 70.0), y: insets.top - 50.0)
         }
         
-        transition.updateFrame(node: self.buttonNode, frame: CGRect(origin: buttonPosition, size: CGSize(width: buttonSize.width + 24.0, height: buttonSize.height + 24.0)))
+        transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: buttonPosition, size: buttonSize))
     }
     
     override func animateIn(previousContentNode: GalleryOverlayContentNode?, transition: ContainedViewLayoutTransition) {
-        guard self.appeared && (!self.interfaceIsHidden || self.buttonNode.isSelected) else {
+        guard self.appeared && (!self.interfaceIsHidden || self.isSelected) else {
             return
         }
-        self.buttonNode.alpha = 1.0
         if let previousContentNode = previousContentNode as? ImageRecognitionOverlayContentNode, previousContentNode.appeared {
-            
+            self.backgroundContainer.alpha = 1.0
         } else {
-            self.buttonNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+            self.backgroundContainer.alpha = 0.0
+            ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 1.0)
         }
     }
     
     override func animateOut(nextContentNode: GalleryOverlayContentNode?, transition: ContainedViewLayoutTransition, completion: @escaping () -> Void) {
-        let previousAlpha = self.buttonNode.alpha
-        self.buttonNode.alpha = 0.0
-        self.buttonNode.layer.animateAlpha(from: previousAlpha, to: 0.0, duration: 0.2)
+        ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 0.0)
         completion()
     }
     
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        if self.buttonNode.alpha > 0.0 && self.buttonNode.frame.contains(point) {
+        if self.backgroundContainer.alpha > 0.0 && self.backgroundContainer.frame.contains(point) {
             return true
         } else {
             return false
