@@ -1638,6 +1638,10 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             dismissedFloatingTopicsPanel = floatingTopicsPanel
         }
         
+        if floatingTopicsPanelInsets.top != 0.0 {
+            floatingTopicsPanelInsets.top += 8.0
+        }
+        
         var isSidebarOpen = false
         if let floatingTopicsPanel = self.floatingTopicsPanel {
             isSidebarOpen = floatingTopicsPanel.component.location == .side
@@ -2330,7 +2334,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             overlayNavigationBar.updateLayout(size: barFrame.size, transition: transition)
         }
         
-        var listInsets = UIEdgeInsets(top: containerInsets.bottom + contentBottomInset, left: containerInsets.right, bottom: containerInsets.top + 6.0, right: containerInsets.left)
+        var listInsets = UIEdgeInsets(top: containerInsets.bottom + contentBottomInset, left: containerInsets.right, bottom: containerInsets.top, right: containerInsets.left)
         let listScrollIndicatorInsets = UIEdgeInsets(top: containerInsets.bottom + inputPanelsHeight, left: containerInsets.right, bottom: containerInsets.top, right: containerInsets.left)
         
         var childContentInsets: UIEdgeInsets = containerInsets

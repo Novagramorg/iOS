@@ -3560,6 +3560,15 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
         if self.item.action == nil {
             return false
         }
+        if self.item.isEdit {
+            return false
+        }
+        if self.item.message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+            if let stats = self.currentStats, stats.peers.isEmpty {
+            } else {
+                return false
+            }
+        }
         var reactionCount = 0
         for reaction in mergedMessageReactionsAndPeers(accountPeerId: self.item.context.account.peerId, accountPeer: nil, message: self.item.message).reactions {
             reactionCount += Int(reaction.count)

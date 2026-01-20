@@ -653,6 +653,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
         
         if case .glass = presentationData.theme.style {
             let edgeEffectView = EdgeEffectView()
+            edgeEffectView.isUserInteractionEnabled = false
             self.edgeEffectView = edgeEffectView
             self.view.addSubview(edgeEffectView)
             

@@ -140,11 +140,11 @@ public func internalDocumentItemSupportsMimeType(_ type: String, fileName: Strin
     return false
 }
 
-private let textFont = Font.regular(16.0)
-private let boldFont = Font.bold(16.0)
-private let italicFont = Font.italic(16.0)
-private let boldItalicFont = Font.semiboldItalic(16.0)
-private let fixedFont = UIFont(name: "Menlo-Regular", size: 15.0) ?? textFont
+private let textFont = Font.regular(17.0)
+private let boldFont = Font.bold(17.0)
+private let italicFont = Font.italic(17.0)
+private let boldItalicFont = Font.semiboldItalic(17.0)
+private let fixedFont = UIFont(name: "Menlo-Regular", size: 17.0) ?? textFont
 
 public func galleryCaptionStringWithAppliedEntities(context: AccountContext, text: String, entities: [MessageTextEntity], message: Message?, cachedMessageSyntaxHighlight: CachedMessageSyntaxHighlight? = nil) -> NSAttributedString {
     var baseQuoteSecondaryTintColor: UIColor?
@@ -576,8 +576,7 @@ private func galleryEntriesForMessageHistoryEntries(_ entries: [MessageHistoryEn
 }
 
 public class GalleryController: ViewController, StandalonePresentableController, KeyShortcutResponder, GalleryControllerProtocol {
-    public static let darkNavigationTheme = NavigationBarTheme(overallDarkAppearance: true, buttonColor: .white, disabledButtonColor: UIColor(rgb: 0x525252), primaryTextColor: .white, backgroundColor: UIColor(white: 0.0, alpha: 0.6), enableBackgroundBlur: false, separatorColor: UIColor(white: 0.0, alpha: 0.8), badgeBackgroundColor: .clear, badgeStrokeColor: .clear, badgeTextColor: .clear)
-    public static let lightNavigationTheme = NavigationBarTheme(overallDarkAppearance: false, buttonColor: UIColor(rgb: 0x0088ff), disabledButtonColor: UIColor(rgb: 0xd0d0d0), primaryTextColor: .black, backgroundColor: UIColor(red: 0.968626451, green: 0.968626451, blue: 0.968626451, alpha: 1.0), enableBackgroundBlur: false, separatorColor: UIColor(red: 0.6953125, green: 0.6953125, blue: 0.6953125, alpha: 1.0), badgeBackgroundColor: .clear, badgeStrokeColor: .clear, badgeTextColor: .clear)
+    public static let darkNavigationTheme = NavigationBarTheme(overallDarkAppearance: true, buttonColor: .white, disabledButtonColor: UIColor(rgb: 0x525252), primaryTextColor: .white, backgroundColor: UIColor(white: 0.0, alpha: 0.6), enableBackgroundBlur: false, separatorColor: UIColor(white: 0.0, alpha: 0.8), badgeBackgroundColor: .clear, badgeStrokeColor: .clear, badgeTextColor: .clear, edgeEffectColor: .black, style: .glass)
     
     private var galleryNode: GalleryControllerNode {
         return self.displayNode as! GalleryControllerNode
