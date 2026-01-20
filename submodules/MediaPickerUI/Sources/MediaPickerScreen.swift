@@ -2609,7 +2609,14 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             }
         }
         
-        if let moreButton = self.rightButton {
+        if moreIsVisible, case .glass = self.style {
+            let moreButton: ComponentView<Empty>
+            if let current = self.rightButton {
+                moreButton = current
+            } else {
+                moreButton = ComponentView<Empty>()
+                self.rightButton = moreButton
+            }
             let moreButtonSize = moreButton.update(
                 transition: buttonTransition,
                 component: AnyComponent(GlassBarButtonComponent(
@@ -2638,18 +2645,28 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             if let view = moreButton.view {
                 if view.superview == nil {
                     self.view.addSubview(view)
+                    if transition.isAnimated {
+                        let transition = ComponentTransition(transition)
+                        transition.animateAlpha(view: view, from: 0.0, to: 1.0)
+                        transition.animateScale(view: view, from: 0.1, to: 1.0)
+                    }
                 }
                 view.bounds = CGRect(origin: .zero, size: moreButtonFrame.size)
                 view.center = moreButtonFrame.center
             }
-        }
-        
-        if let moreButtonView = self.rightButton?.view {
-            transition.updateAlpha(layer: moreButtonView.layer, alpha: moreIsVisible ? 1.0 : 0.0)
-            transition.updateTransformScale(layer: moreButtonView.layer, scale: moreIsVisible ? 1.0 : 0.1)
-        } else {
-            transition.updateAlpha(node: self.moreButtonNode.iconNode, alpha: moreIsVisible ? 1.0 : 0.0)
-            transition.updateTransformScale(node: self.moreButtonNode.iconNode, scale: moreIsVisible ? 1.0 : 0.1)
+        } else if let moreButton = self.rightButton {
+            self.rightButton = nil
+            if let view = moreButton.view {
+                if transition.isAnimated {
+                    let transition = ComponentTransition(transition)
+                    view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                        view.removeFromSuperview()
+                    })
+                    transition.animateScale(view: view, from: 1.0, to: 0.1)
+                } else {
+                    view.removeFromSuperview()
+                }
+            }
         }
         
         if case .assets(_, .story) = self.subject {

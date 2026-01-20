@@ -1,43 +1,38 @@
 public extension Api.account {
     enum SavedMusicIds: TypeConstructorDescription {
-        public class Cons_savedMusicIds {
-            public var ids: [Int64]
-            public init(ids: [Int64]) {
-                self.ids = ids
-            }
-        }
-        case savedMusicIds(Cons_savedMusicIds)
+        case savedMusicIds(ids: [Int64])
         case savedMusicIdsNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .savedMusicIds(let _data):
-                if boxed {
-                    buffer.appendInt32(-1718786506)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.ids.count))
-                for item in _data.ids {
-                    serializeInt64(item, buffer: buffer, boxed: false)
-                }
-                break
-            case .savedMusicIdsNotModified:
-                if boxed {
-                    buffer.appendInt32(1338514798)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .savedMusicIds(let _data):
-                return ("savedMusicIds", [("ids", _data.ids as Any)])
-            case .savedMusicIdsNotModified:
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .savedMusicIds(let ids):
+                    if boxed {
+                        buffer.appendInt32(-1718786506)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(ids.count))
+                    for item in ids {
+                        serializeInt64(item, buffer: buffer, boxed: false)
+                    }
+                    break
+                case .savedMusicIdsNotModified:
+                    if boxed {
+                        buffer.appendInt32(1338514798)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .savedMusicIds(let ids):
+                return ("savedMusicIds", [("ids", ids as Any)])
+                case .savedMusicIdsNotModified:
                 return ("savedMusicIdsNotModified", [])
-            }
-        }
-
+    }
+    }
+    
         public static func parse_savedMusicIds(_ reader: BufferReader) -> SavedMusicIds? {
             var _1: [Int64]?
             if let _ = reader.readInt32() {
@@ -45,7 +40,7 @@ public extension Api.account {
             }
             let _c1 = _1 != nil
             if _c1 {
-                return Api.account.SavedMusicIds.savedMusicIds(Cons_savedMusicIds(ids: _1!))
+                return Api.account.SavedMusicIds.savedMusicIds(ids: _1!)
             }
             else {
                 return nil
@@ -54,44 +49,40 @@ public extension Api.account {
         public static func parse_savedMusicIdsNotModified(_ reader: BufferReader) -> SavedMusicIds? {
             return Api.account.SavedMusicIds.savedMusicIdsNotModified
         }
+    
     }
 }
 public extension Api.account {
     enum SavedRingtone: TypeConstructorDescription {
-        public class Cons_savedRingtoneConverted {
-            public var document: Api.Document
-            public init(document: Api.Document) {
-                self.document = document
-            }
-        }
         case savedRingtone
-        case savedRingtoneConverted(Cons_savedRingtoneConverted)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .savedRingtone:
-                if boxed {
-                    buffer.appendInt32(-1222230163)
-                }
-                break
-            case .savedRingtoneConverted(let _data):
-                if boxed {
-                    buffer.appendInt32(523271863)
-                }
-                _data.document.serialize(buffer, true)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .savedRingtone:
+        case savedRingtoneConverted(document: Api.Document)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .savedRingtone:
+                    if boxed {
+                        buffer.appendInt32(-1222230163)
+                    }
+                    
+                    break
+                case .savedRingtoneConverted(let document):
+                    if boxed {
+                        buffer.appendInt32(523271863)
+                    }
+                    document.serialize(buffer, true)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .savedRingtone:
                 return ("savedRingtone", [])
-            case .savedRingtoneConverted(let _data):
-                return ("savedRingtoneConverted", [("document", _data.document as Any)])
-            }
-        }
-
+                case .savedRingtoneConverted(let document):
+                return ("savedRingtoneConverted", [("document", document as Any)])
+    }
+    }
+    
         public static func parse_savedRingtone(_ reader: BufferReader) -> SavedRingtone? {
             return Api.account.SavedRingtone.savedRingtone
         }
@@ -102,57 +93,51 @@ public extension Api.account {
             }
             let _c1 = _1 != nil
             if _c1 {
-                return Api.account.SavedRingtone.savedRingtoneConverted(Cons_savedRingtoneConverted(document: _1!))
+                return Api.account.SavedRingtone.savedRingtoneConverted(document: _1!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.account {
     enum SavedRingtones: TypeConstructorDescription {
-        public class Cons_savedRingtones {
-            public var hash: Int64
-            public var ringtones: [Api.Document]
-            public init(hash: Int64, ringtones: [Api.Document]) {
-                self.hash = hash
-                self.ringtones = ringtones
-            }
-        }
-        case savedRingtones(Cons_savedRingtones)
+        case savedRingtones(hash: Int64, ringtones: [Api.Document])
         case savedRingtonesNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .savedRingtones(let _data):
-                if boxed {
-                    buffer.appendInt32(-1041683259)
-                }
-                serializeInt64(_data.hash, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.ringtones.count))
-                for item in _data.ringtones {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .savedRingtonesNotModified:
-                if boxed {
-                    buffer.appendInt32(-67704655)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .savedRingtones(let _data):
-                return ("savedRingtones", [("hash", _data.hash as Any), ("ringtones", _data.ringtones as Any)])
-            case .savedRingtonesNotModified:
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .savedRingtones(let hash, let ringtones):
+                    if boxed {
+                        buffer.appendInt32(-1041683259)
+                    }
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(ringtones.count))
+                    for item in ringtones {
+                        item.serialize(buffer, true)
+                    }
+                    break
+                case .savedRingtonesNotModified:
+                    if boxed {
+                        buffer.appendInt32(-67704655)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .savedRingtones(let hash, let ringtones):
+                return ("savedRingtones", [("hash", hash as Any), ("ringtones", ringtones as Any)])
+                case .savedRingtonesNotModified:
                 return ("savedRingtonesNotModified", [])
-            }
-        }
-
+    }
+    }
+    
         public static func parse_savedRingtones(_ reader: BufferReader) -> SavedRingtones? {
             var _1: Int64?
             _1 = reader.readInt64()
@@ -163,7 +148,7 @@ public extension Api.account {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.account.SavedRingtones.savedRingtones(Cons_savedRingtones(hash: _1!, ringtones: _2!))
+                return Api.account.SavedRingtones.savedRingtones(hash: _1!, ringtones: _2!)
             }
             else {
                 return nil
@@ -172,39 +157,32 @@ public extension Api.account {
         public static func parse_savedRingtonesNotModified(_ reader: BufferReader) -> SavedRingtones? {
             return Api.account.SavedRingtones.savedRingtonesNotModified
         }
+    
     }
 }
 public extension Api.account {
     enum SentEmailCode: TypeConstructorDescription {
-        public class Cons_sentEmailCode {
-            public var emailPattern: String
-            public var length: Int32
-            public init(emailPattern: String, length: Int32) {
-                self.emailPattern = emailPattern
-                self.length = length
-            }
-        }
-        case sentEmailCode(Cons_sentEmailCode)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .sentEmailCode(let _data):
-                if boxed {
-                    buffer.appendInt32(-2128640689)
-                }
-                serializeString(_data.emailPattern, buffer: buffer, boxed: false)
-                serializeInt32(_data.length, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .sentEmailCode(let _data):
-                return ("sentEmailCode", [("emailPattern", _data.emailPattern as Any), ("length", _data.length as Any)])
-            }
-        }
-
+        case sentEmailCode(emailPattern: String, length: Int32)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .sentEmailCode(let emailPattern, let length):
+                    if boxed {
+                        buffer.appendInt32(-2128640689)
+                    }
+                    serializeString(emailPattern, buffer: buffer, boxed: false)
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .sentEmailCode(let emailPattern, let length):
+                return ("sentEmailCode", [("emailPattern", emailPattern as Any), ("length", length as Any)])
+    }
+    }
+    
         public static func parse_sentEmailCode(_ reader: BufferReader) -> SentEmailCode? {
             var _1: String?
             _1 = parseString(reader)
@@ -213,98 +191,87 @@ public extension Api.account {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.account.SentEmailCode.sentEmailCode(Cons_sentEmailCode(emailPattern: _1!, length: _2!))
+                return Api.account.SentEmailCode.sentEmailCode(emailPattern: _1!, length: _2!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.account {
     enum Takeout: TypeConstructorDescription {
-        public class Cons_takeout {
-            public var id: Int64
-            public init(id: Int64) {
-                self.id = id
-            }
-        }
-        case takeout(Cons_takeout)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .takeout(let _data):
-                if boxed {
-                    buffer.appendInt32(1304052993)
-                }
-                serializeInt64(_data.id, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .takeout(let _data):
-                return ("takeout", [("id", _data.id as Any)])
-            }
-        }
-
+        case takeout(id: Int64)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .takeout(let id):
+                    if boxed {
+                        buffer.appendInt32(1304052993)
+                    }
+                    serializeInt64(id, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .takeout(let id):
+                return ("takeout", [("id", id as Any)])
+    }
+    }
+    
         public static func parse_takeout(_ reader: BufferReader) -> Takeout? {
             var _1: Int64?
             _1 = reader.readInt64()
             let _c1 = _1 != nil
             if _c1 {
-                return Api.account.Takeout.takeout(Cons_takeout(id: _1!))
+                return Api.account.Takeout.takeout(id: _1!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.account {
     enum Themes: TypeConstructorDescription {
-        public class Cons_themes {
-            public var hash: Int64
-            public var themes: [Api.Theme]
-            public init(hash: Int64, themes: [Api.Theme]) {
-                self.hash = hash
-                self.themes = themes
-            }
-        }
-        case themes(Cons_themes)
+        case themes(hash: Int64, themes: [Api.Theme])
         case themesNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .themes(let _data):
-                if boxed {
-                    buffer.appendInt32(-1707242387)
-                }
-                serializeInt64(_data.hash, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.themes.count))
-                for item in _data.themes {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .themesNotModified:
-                if boxed {
-                    buffer.appendInt32(-199313886)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .themes(let _data):
-                return ("themes", [("hash", _data.hash as Any), ("themes", _data.themes as Any)])
-            case .themesNotModified:
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .themes(let hash, let themes):
+                    if boxed {
+                        buffer.appendInt32(-1707242387)
+                    }
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(themes.count))
+                    for item in themes {
+                        item.serialize(buffer, true)
+                    }
+                    break
+                case .themesNotModified:
+                    if boxed {
+                        buffer.appendInt32(-199313886)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .themes(let hash, let themes):
+                return ("themes", [("hash", hash as Any), ("themes", themes as Any)])
+                case .themesNotModified:
                 return ("themesNotModified", [])
-            }
-        }
-
+    }
+    }
+    
         public static func parse_themes(_ reader: BufferReader) -> Themes? {
             var _1: Int64?
             _1 = reader.readInt64()
@@ -315,7 +282,7 @@ public extension Api.account {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.account.Themes.themes(Cons_themes(hash: _1!, themes: _2!))
+                return Api.account.Themes.themes(hash: _1!, themes: _2!)
             }
             else {
                 return nil
@@ -324,39 +291,32 @@ public extension Api.account {
         public static func parse_themesNotModified(_ reader: BufferReader) -> Themes? {
             return Api.account.Themes.themesNotModified
         }
+    
     }
 }
 public extension Api.account {
     enum TmpPassword: TypeConstructorDescription {
-        public class Cons_tmpPassword {
-            public var tmpPassword: Buffer
-            public var validUntil: Int32
-            public init(tmpPassword: Buffer, validUntil: Int32) {
-                self.tmpPassword = tmpPassword
-                self.validUntil = validUntil
-            }
-        }
-        case tmpPassword(Cons_tmpPassword)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .tmpPassword(let _data):
-                if boxed {
-                    buffer.appendInt32(-614138572)
-                }
-                serializeBytes(_data.tmpPassword, buffer: buffer, boxed: false)
-                serializeInt32(_data.validUntil, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .tmpPassword(let _data):
-                return ("tmpPassword", [("tmpPassword", _data.tmpPassword as Any), ("validUntil", _data.validUntil as Any)])
-            }
-        }
-
+        case tmpPassword(tmpPassword: Buffer, validUntil: Int32)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .tmpPassword(let tmpPassword, let validUntil):
+                    if boxed {
+                        buffer.appendInt32(-614138572)
+                    }
+                    serializeBytes(tmpPassword, buffer: buffer, boxed: false)
+                    serializeInt32(validUntil, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .tmpPassword(let tmpPassword, let validUntil):
+                return ("tmpPassword", [("tmpPassword", tmpPassword as Any), ("validUntil", validUntil as Any)])
+    }
+    }
+    
         public static func parse_tmpPassword(_ reader: BufferReader) -> TmpPassword? {
             var _1: Buffer?
             _1 = parseBytes(reader)
@@ -365,57 +325,51 @@ public extension Api.account {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.account.TmpPassword.tmpPassword(Cons_tmpPassword(tmpPassword: _1!, validUntil: _2!))
+                return Api.account.TmpPassword.tmpPassword(tmpPassword: _1!, validUntil: _2!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.account {
     enum WallPapers: TypeConstructorDescription {
-        public class Cons_wallPapers {
-            public var hash: Int64
-            public var wallpapers: [Api.WallPaper]
-            public init(hash: Int64, wallpapers: [Api.WallPaper]) {
-                self.hash = hash
-                self.wallpapers = wallpapers
-            }
-        }
-        case wallPapers(Cons_wallPapers)
+        case wallPapers(hash: Int64, wallpapers: [Api.WallPaper])
         case wallPapersNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .wallPapers(let _data):
-                if boxed {
-                    buffer.appendInt32(-842824308)
-                }
-                serializeInt64(_data.hash, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.wallpapers.count))
-                for item in _data.wallpapers {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .wallPapersNotModified:
-                if boxed {
-                    buffer.appendInt32(471437699)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .wallPapers(let _data):
-                return ("wallPapers", [("hash", _data.hash as Any), ("wallpapers", _data.wallpapers as Any)])
-            case .wallPapersNotModified:
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .wallPapers(let hash, let wallpapers):
+                    if boxed {
+                        buffer.appendInt32(-842824308)
+                    }
+                    serializeInt64(hash, buffer: buffer, boxed: false)
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(wallpapers.count))
+                    for item in wallpapers {
+                        item.serialize(buffer, true)
+                    }
+                    break
+                case .wallPapersNotModified:
+                    if boxed {
+                        buffer.appendInt32(471437699)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .wallPapers(let hash, let wallpapers):
+                return ("wallPapers", [("hash", hash as Any), ("wallpapers", wallpapers as Any)])
+                case .wallPapersNotModified:
                 return ("wallPapersNotModified", [])
-            }
-        }
-
+    }
+    }
+    
         public static func parse_wallPapers(_ reader: BufferReader) -> WallPapers? {
             var _1: Int64?
             _1 = reader.readInt64()
@@ -426,7 +380,7 @@ public extension Api.account {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.account.WallPapers.wallPapers(Cons_wallPapers(hash: _1!, wallpapers: _2!))
+                return Api.account.WallPapers.wallPapers(hash: _1!, wallpapers: _2!)
             }
             else {
                 return nil
@@ -435,47 +389,40 @@ public extension Api.account {
         public static func parse_wallPapersNotModified(_ reader: BufferReader) -> WallPapers? {
             return Api.account.WallPapers.wallPapersNotModified
         }
+    
     }
 }
 public extension Api.account {
     enum WebAuthorizations: TypeConstructorDescription {
-        public class Cons_webAuthorizations {
-            public var authorizations: [Api.WebAuthorization]
-            public var users: [Api.User]
-            public init(authorizations: [Api.WebAuthorization], users: [Api.User]) {
-                self.authorizations = authorizations
-                self.users = users
-            }
-        }
-        case webAuthorizations(Cons_webAuthorizations)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .webAuthorizations(let _data):
-                if boxed {
-                    buffer.appendInt32(-313079300)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.authorizations.count))
-                for item in _data.authorizations {
-                    item.serialize(buffer, true)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.users.count))
-                for item in _data.users {
-                    item.serialize(buffer, true)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .webAuthorizations(let _data):
-                return ("webAuthorizations", [("authorizations", _data.authorizations as Any), ("users", _data.users as Any)])
-            }
-        }
-
+        case webAuthorizations(authorizations: [Api.WebAuthorization], users: [Api.User])
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .webAuthorizations(let authorizations, let users):
+                    if boxed {
+                        buffer.appendInt32(-313079300)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(authorizations.count))
+                    for item in authorizations {
+                        item.serialize(buffer, true)
+                    }
+                    buffer.appendInt32(481674261)
+                    buffer.appendInt32(Int32(users.count))
+                    for item in users {
+                        item.serialize(buffer, true)
+                    }
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .webAuthorizations(let authorizations, let users):
+                return ("webAuthorizations", [("authorizations", authorizations as Any), ("users", users as Any)])
+    }
+    }
+    
         public static func parse_webAuthorizations(_ reader: BufferReader) -> WebAuthorizations? {
             var _1: [Api.WebAuthorization]?
             if let _ = reader.readInt32() {
@@ -488,95 +435,60 @@ public extension Api.account {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.account.WebAuthorizations.webAuthorizations(Cons_webAuthorizations(authorizations: _1!, users: _2!))
+                return Api.account.WebAuthorizations.webAuthorizations(authorizations: _1!, users: _2!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.auth {
     enum Authorization: TypeConstructorDescription {
-        public class Cons_authorization {
-            public var flags: Int32
-            public var otherwiseReloginDays: Int32?
-            public var tmpSessions: Int32?
-            public var futureAuthToken: Buffer?
-            public var user: Api.User
-            public init(flags: Int32, otherwiseReloginDays: Int32?, tmpSessions: Int32?, futureAuthToken: Buffer?, user: Api.User) {
-                self.flags = flags
-                self.otherwiseReloginDays = otherwiseReloginDays
-                self.tmpSessions = tmpSessions
-                self.futureAuthToken = futureAuthToken
-                self.user = user
-            }
-        }
-        public class Cons_authorizationSignUpRequired {
-            public var flags: Int32
-            public var termsOfService: Api.help.TermsOfService?
-            public init(flags: Int32, termsOfService: Api.help.TermsOfService?) {
-                self.flags = flags
-                self.termsOfService = termsOfService
-            }
-        }
-        case authorization(Cons_authorization)
-        case authorizationSignUpRequired(Cons_authorizationSignUpRequired)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .authorization(let _data):
-                if boxed {
-                    buffer.appendInt32(782418132)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 1) != 0 {
-                    serializeInt32(_data.otherwiseReloginDays!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeInt32(_data.tmpSessions!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 2) != 0 {
-                    serializeBytes(_data.futureAuthToken!, buffer: buffer, boxed: false)
-                }
-                _data.user.serialize(buffer, true)
-                break
-            case .authorizationSignUpRequired(let _data):
-                if boxed {
-                    buffer.appendInt32(1148485274)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    _data.termsOfService!.serialize(buffer, true)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .authorization(let _data):
-                return ("authorization", [("flags", _data.flags as Any), ("otherwiseReloginDays", _data.otherwiseReloginDays as Any), ("tmpSessions", _data.tmpSessions as Any), ("futureAuthToken", _data.futureAuthToken as Any), ("user", _data.user as Any)])
-            case .authorizationSignUpRequired(let _data):
-                return ("authorizationSignUpRequired", [("flags", _data.flags as Any), ("termsOfService", _data.termsOfService as Any)])
-            }
-        }
-
+        case authorization(flags: Int32, otherwiseReloginDays: Int32?, tmpSessions: Int32?, futureAuthToken: Buffer?, user: Api.User)
+        case authorizationSignUpRequired(flags: Int32, termsOfService: Api.help.TermsOfService?)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .authorization(let flags, let otherwiseReloginDays, let tmpSessions, let futureAuthToken, let user):
+                    if boxed {
+                        buffer.appendInt32(782418132)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 1) != 0 {serializeInt32(otherwiseReloginDays!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 0) != 0 {serializeInt32(tmpSessions!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 2) != 0 {serializeBytes(futureAuthToken!, buffer: buffer, boxed: false)}
+                    user.serialize(buffer, true)
+                    break
+                case .authorizationSignUpRequired(let flags, let termsOfService):
+                    if boxed {
+                        buffer.appendInt32(1148485274)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {termsOfService!.serialize(buffer, true)}
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .authorization(let flags, let otherwiseReloginDays, let tmpSessions, let futureAuthToken, let user):
+                return ("authorization", [("flags", flags as Any), ("otherwiseReloginDays", otherwiseReloginDays as Any), ("tmpSessions", tmpSessions as Any), ("futureAuthToken", futureAuthToken as Any), ("user", user as Any)])
+                case .authorizationSignUpRequired(let flags, let termsOfService):
+                return ("authorizationSignUpRequired", [("flags", flags as Any), ("termsOfService", termsOfService as Any)])
+    }
+    }
+    
         public static func parse_authorization(_ reader: BufferReader) -> Authorization? {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
-                _2 = reader.readInt32()
-            }
+            if Int(_1!) & Int(1 << 1) != 0 {_2 = reader.readInt32() }
             var _3: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                _3 = reader.readInt32()
-            }
+            if Int(_1!) & Int(1 << 0) != 0 {_3 = reader.readInt32() }
             var _4: Buffer?
-            if Int(_1!) & Int(1 << 2) != 0 {
-                _4 = parseBytes(reader)
-            }
+            if Int(_1!) & Int(1 << 2) != 0 {_4 = parseBytes(reader) }
             var _5: Api.User?
             if let signature = reader.readInt32() {
                 _5 = Api.parse(reader, signature: signature) as? Api.User
@@ -587,7 +499,7 @@ public extension Api.auth {
             let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
             let _c5 = _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.auth.Authorization.authorization(Cons_authorization(flags: _1!, otherwiseReloginDays: _2, tmpSessions: _3, futureAuthToken: _4, user: _5!))
+                return Api.auth.Authorization.authorization(flags: _1!, otherwiseReloginDays: _2, tmpSessions: _3, futureAuthToken: _4, user: _5!)
             }
             else {
                 return nil
@@ -597,20 +509,19 @@ public extension Api.auth {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: Api.help.TermsOfService?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                if let signature = reader.readInt32() {
-                    _2 = Api.parse(reader, signature: signature) as? Api.help.TermsOfService
-                }
-            }
+            if Int(_1!) & Int(1 << 0) != 0 {if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.help.TermsOfService
+            } }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             if _c1 && _c2 {
-                return Api.auth.Authorization.authorizationSignUpRequired(Cons_authorizationSignUpRequired(flags: _1!, termsOfService: _2))
+                return Api.auth.Authorization.authorizationSignUpRequired(flags: _1!, termsOfService: _2)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.auth {
@@ -620,52 +531,57 @@ public extension Api.auth {
         case codeTypeFragmentSms
         case codeTypeMissedCall
         case codeTypeSms
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .codeTypeCall:
-                if boxed {
-                    buffer.appendInt32(1948046307)
-                }
-                break
-            case .codeTypeFlashCall:
-                if boxed {
-                    buffer.appendInt32(577556219)
-                }
-                break
-            case .codeTypeFragmentSms:
-                if boxed {
-                    buffer.appendInt32(116234636)
-                }
-                break
-            case .codeTypeMissedCall:
-                if boxed {
-                    buffer.appendInt32(-702884114)
-                }
-                break
-            case .codeTypeSms:
-                if boxed {
-                    buffer.appendInt32(1923290508)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .codeTypeCall:
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .codeTypeCall:
+                    if boxed {
+                        buffer.appendInt32(1948046307)
+                    }
+                    
+                    break
+                case .codeTypeFlashCall:
+                    if boxed {
+                        buffer.appendInt32(577556219)
+                    }
+                    
+                    break
+                case .codeTypeFragmentSms:
+                    if boxed {
+                        buffer.appendInt32(116234636)
+                    }
+                    
+                    break
+                case .codeTypeMissedCall:
+                    if boxed {
+                        buffer.appendInt32(-702884114)
+                    }
+                    
+                    break
+                case .codeTypeSms:
+                    if boxed {
+                        buffer.appendInt32(1923290508)
+                    }
+                    
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .codeTypeCall:
                 return ("codeTypeCall", [])
-            case .codeTypeFlashCall:
+                case .codeTypeFlashCall:
                 return ("codeTypeFlashCall", [])
-            case .codeTypeFragmentSms:
+                case .codeTypeFragmentSms:
                 return ("codeTypeFragmentSms", [])
-            case .codeTypeMissedCall:
+                case .codeTypeMissedCall:
                 return ("codeTypeMissedCall", [])
-            case .codeTypeSms:
+                case .codeTypeSms:
                 return ("codeTypeSms", [])
-            }
-        }
-
+    }
+    }
+    
         public static func parse_codeTypeCall(_ reader: BufferReader) -> CodeType? {
             return Api.auth.CodeType.codeTypeCall
         }
@@ -681,39 +597,32 @@ public extension Api.auth {
         public static func parse_codeTypeSms(_ reader: BufferReader) -> CodeType? {
             return Api.auth.CodeType.codeTypeSms
         }
+    
     }
 }
 public extension Api.auth {
     enum ExportedAuthorization: TypeConstructorDescription {
-        public class Cons_exportedAuthorization {
-            public var id: Int64
-            public var bytes: Buffer
-            public init(id: Int64, bytes: Buffer) {
-                self.id = id
-                self.bytes = bytes
-            }
-        }
-        case exportedAuthorization(Cons_exportedAuthorization)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .exportedAuthorization(let _data):
-                if boxed {
-                    buffer.appendInt32(-1271602504)
-                }
-                serializeInt64(_data.id, buffer: buffer, boxed: false)
-                serializeBytes(_data.bytes, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .exportedAuthorization(let _data):
-                return ("exportedAuthorization", [("id", _data.id as Any), ("bytes", _data.bytes as Any)])
-            }
-        }
-
+        case exportedAuthorization(id: Int64, bytes: Buffer)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .exportedAuthorization(let id, let bytes):
+                    if boxed {
+                        buffer.appendInt32(-1271602504)
+                    }
+                    serializeInt64(id, buffer: buffer, boxed: false)
+                    serializeBytes(bytes, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .exportedAuthorization(let id, let bytes):
+                return ("exportedAuthorization", [("id", id as Any), ("bytes", bytes as Any)])
+    }
+    }
+    
         public static func parse_exportedAuthorization(_ reader: BufferReader) -> ExportedAuthorization? {
             var _1: Int64?
             _1 = reader.readInt64()
@@ -722,129 +631,97 @@ public extension Api.auth {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.auth.ExportedAuthorization.exportedAuthorization(Cons_exportedAuthorization(id: _1!, bytes: _2!))
+                return Api.auth.ExportedAuthorization.exportedAuthorization(id: _1!, bytes: _2!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.auth {
     enum LoggedOut: TypeConstructorDescription {
-        public class Cons_loggedOut {
-            public var flags: Int32
-            public var futureAuthToken: Buffer?
-            public init(flags: Int32, futureAuthToken: Buffer?) {
-                self.flags = flags
-                self.futureAuthToken = futureAuthToken
-            }
-        }
-        case loggedOut(Cons_loggedOut)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .loggedOut(let _data):
-                if boxed {
-                    buffer.appendInt32(-1012759713)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeBytes(_data.futureAuthToken!, buffer: buffer, boxed: false)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .loggedOut(let _data):
-                return ("loggedOut", [("flags", _data.flags as Any), ("futureAuthToken", _data.futureAuthToken as Any)])
-            }
-        }
-
+        case loggedOut(flags: Int32, futureAuthToken: Buffer?)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .loggedOut(let flags, let futureAuthToken):
+                    if boxed {
+                        buffer.appendInt32(-1012759713)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeBytes(futureAuthToken!, buffer: buffer, boxed: false)}
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .loggedOut(let flags, let futureAuthToken):
+                return ("loggedOut", [("flags", flags as Any), ("futureAuthToken", futureAuthToken as Any)])
+    }
+    }
+    
         public static func parse_loggedOut(_ reader: BufferReader) -> LoggedOut? {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: Buffer?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                _2 = parseBytes(reader)
-            }
+            if Int(_1!) & Int(1 << 0) != 0 {_2 = parseBytes(reader) }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             if _c1 && _c2 {
-                return Api.auth.LoggedOut.loggedOut(Cons_loggedOut(flags: _1!, futureAuthToken: _2))
+                return Api.auth.LoggedOut.loggedOut(flags: _1!, futureAuthToken: _2)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.auth {
     enum LoginToken: TypeConstructorDescription {
-        public class Cons_loginToken {
-            public var expires: Int32
-            public var token: Buffer
-            public init(expires: Int32, token: Buffer) {
-                self.expires = expires
-                self.token = token
-            }
-        }
-        public class Cons_loginTokenMigrateTo {
-            public var dcId: Int32
-            public var token: Buffer
-            public init(dcId: Int32, token: Buffer) {
-                self.dcId = dcId
-                self.token = token
-            }
-        }
-        public class Cons_loginTokenSuccess {
-            public var authorization: Api.auth.Authorization
-            public init(authorization: Api.auth.Authorization) {
-                self.authorization = authorization
-            }
-        }
-        case loginToken(Cons_loginToken)
-        case loginTokenMigrateTo(Cons_loginTokenMigrateTo)
-        case loginTokenSuccess(Cons_loginTokenSuccess)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .loginToken(let _data):
-                if boxed {
-                    buffer.appendInt32(1654593920)
-                }
-                serializeInt32(_data.expires, buffer: buffer, boxed: false)
-                serializeBytes(_data.token, buffer: buffer, boxed: false)
-                break
-            case .loginTokenMigrateTo(let _data):
-                if boxed {
-                    buffer.appendInt32(110008598)
-                }
-                serializeInt32(_data.dcId, buffer: buffer, boxed: false)
-                serializeBytes(_data.token, buffer: buffer, boxed: false)
-                break
-            case .loginTokenSuccess(let _data):
-                if boxed {
-                    buffer.appendInt32(957176926)
-                }
-                _data.authorization.serialize(buffer, true)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .loginToken(let _data):
-                return ("loginToken", [("expires", _data.expires as Any), ("token", _data.token as Any)])
-            case .loginTokenMigrateTo(let _data):
-                return ("loginTokenMigrateTo", [("dcId", _data.dcId as Any), ("token", _data.token as Any)])
-            case .loginTokenSuccess(let _data):
-                return ("loginTokenSuccess", [("authorization", _data.authorization as Any)])
-            }
-        }
-
+        case loginToken(expires: Int32, token: Buffer)
+        case loginTokenMigrateTo(dcId: Int32, token: Buffer)
+        case loginTokenSuccess(authorization: Api.auth.Authorization)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .loginToken(let expires, let token):
+                    if boxed {
+                        buffer.appendInt32(1654593920)
+                    }
+                    serializeInt32(expires, buffer: buffer, boxed: false)
+                    serializeBytes(token, buffer: buffer, boxed: false)
+                    break
+                case .loginTokenMigrateTo(let dcId, let token):
+                    if boxed {
+                        buffer.appendInt32(110008598)
+                    }
+                    serializeInt32(dcId, buffer: buffer, boxed: false)
+                    serializeBytes(token, buffer: buffer, boxed: false)
+                    break
+                case .loginTokenSuccess(let authorization):
+                    if boxed {
+                        buffer.appendInt32(957176926)
+                    }
+                    authorization.serialize(buffer, true)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .loginToken(let expires, let token):
+                return ("loginToken", [("expires", expires as Any), ("token", token as Any)])
+                case .loginTokenMigrateTo(let dcId, let token):
+                return ("loginTokenMigrateTo", [("dcId", dcId as Any), ("token", token as Any)])
+                case .loginTokenSuccess(let authorization):
+                return ("loginTokenSuccess", [("authorization", authorization as Any)])
+    }
+    }
+    
         public static func parse_loginToken(_ reader: BufferReader) -> LoginToken? {
             var _1: Int32?
             _1 = reader.readInt32()
@@ -853,7 +730,7 @@ public extension Api.auth {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.auth.LoginToken.loginToken(Cons_loginToken(expires: _1!, token: _2!))
+                return Api.auth.LoginToken.loginToken(expires: _1!, token: _2!)
             }
             else {
                 return nil
@@ -867,7 +744,7 @@ public extension Api.auth {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.auth.LoginToken.loginTokenMigrateTo(Cons_loginTokenMigrateTo(dcId: _1!, token: _2!))
+                return Api.auth.LoginToken.loginTokenMigrateTo(dcId: _1!, token: _2!)
             }
             else {
                 return nil
@@ -880,42 +757,37 @@ public extension Api.auth {
             }
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.LoginToken.loginTokenSuccess(Cons_loginTokenSuccess(authorization: _1!))
+                return Api.auth.LoginToken.loginTokenSuccess(authorization: _1!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.auth {
     enum PasskeyLoginOptions: TypeConstructorDescription {
-        public class Cons_passkeyLoginOptions {
-            public var options: Api.DataJSON
-            public init(options: Api.DataJSON) {
-                self.options = options
-            }
-        }
-        case passkeyLoginOptions(Cons_passkeyLoginOptions)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .passkeyLoginOptions(let _data):
-                if boxed {
-                    buffer.appendInt32(-503089271)
-                }
-                _data.options.serialize(buffer, true)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .passkeyLoginOptions(let _data):
-                return ("passkeyLoginOptions", [("options", _data.options as Any)])
-            }
-        }
-
+        case passkeyLoginOptions(options: Api.DataJSON)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .passkeyLoginOptions(let options):
+                    if boxed {
+                        buffer.appendInt32(-503089271)
+                    }
+                    options.serialize(buffer, true)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .passkeyLoginOptions(let options):
+                return ("passkeyLoginOptions", [("options", options as Any)])
+    }
+    }
+    
         public static func parse_passkeyLoginOptions(_ reader: BufferReader) -> PasskeyLoginOptions? {
             var _1: Api.DataJSON?
             if let signature = reader.readInt32() {
@@ -923,144 +795,100 @@ public extension Api.auth {
             }
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.PasskeyLoginOptions.passkeyLoginOptions(Cons_passkeyLoginOptions(options: _1!))
+                return Api.auth.PasskeyLoginOptions.passkeyLoginOptions(options: _1!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.auth {
     enum PasswordRecovery: TypeConstructorDescription {
-        public class Cons_passwordRecovery {
-            public var emailPattern: String
-            public init(emailPattern: String) {
-                self.emailPattern = emailPattern
-            }
-        }
-        case passwordRecovery(Cons_passwordRecovery)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .passwordRecovery(let _data):
-                if boxed {
-                    buffer.appendInt32(326715557)
-                }
-                serializeString(_data.emailPattern, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .passwordRecovery(let _data):
-                return ("passwordRecovery", [("emailPattern", _data.emailPattern as Any)])
-            }
-        }
-
+        case passwordRecovery(emailPattern: String)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .passwordRecovery(let emailPattern):
+                    if boxed {
+                        buffer.appendInt32(326715557)
+                    }
+                    serializeString(emailPattern, buffer: buffer, boxed: false)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .passwordRecovery(let emailPattern):
+                return ("passwordRecovery", [("emailPattern", emailPattern as Any)])
+    }
+    }
+    
         public static func parse_passwordRecovery(_ reader: BufferReader) -> PasswordRecovery? {
             var _1: String?
             _1 = parseString(reader)
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.PasswordRecovery.passwordRecovery(Cons_passwordRecovery(emailPattern: _1!))
+                return Api.auth.PasswordRecovery.passwordRecovery(emailPattern: _1!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.auth {
     enum SentCode: TypeConstructorDescription {
-        public class Cons_sentCode {
-            public var flags: Int32
-            public var type: Api.auth.SentCodeType
-            public var phoneCodeHash: String
-            public var nextType: Api.auth.CodeType?
-            public var timeout: Int32?
-            public init(flags: Int32, type: Api.auth.SentCodeType, phoneCodeHash: String, nextType: Api.auth.CodeType?, timeout: Int32?) {
-                self.flags = flags
-                self.type = type
-                self.phoneCodeHash = phoneCodeHash
-                self.nextType = nextType
-                self.timeout = timeout
-            }
-        }
-        public class Cons_sentCodePaymentRequired {
-            public var storeProduct: String
-            public var phoneCodeHash: String
-            public var supportEmailAddress: String
-            public var supportEmailSubject: String
-            public var currency: String
-            public var amount: Int64
-            public init(storeProduct: String, phoneCodeHash: String, supportEmailAddress: String, supportEmailSubject: String, currency: String, amount: Int64) {
-                self.storeProduct = storeProduct
-                self.phoneCodeHash = phoneCodeHash
-                self.supportEmailAddress = supportEmailAddress
-                self.supportEmailSubject = supportEmailSubject
-                self.currency = currency
-                self.amount = amount
-            }
-        }
-        public class Cons_sentCodeSuccess {
-            public var authorization: Api.auth.Authorization
-            public init(authorization: Api.auth.Authorization) {
-                self.authorization = authorization
-            }
-        }
-        case sentCode(Cons_sentCode)
-        case sentCodePaymentRequired(Cons_sentCodePaymentRequired)
-        case sentCodeSuccess(Cons_sentCodeSuccess)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .sentCode(let _data):
-                if boxed {
-                    buffer.appendInt32(1577067778)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                _data.type.serialize(buffer, true)
-                serializeString(_data.phoneCodeHash, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 1) != 0 {
-                    _data.nextType!.serialize(buffer, true)
-                }
-                if Int(_data.flags) & Int(1 << 2) != 0 {
-                    serializeInt32(_data.timeout!, buffer: buffer, boxed: false)
-                }
-                break
-            case .sentCodePaymentRequired(let _data):
-                if boxed {
-                    buffer.appendInt32(-527082948)
-                }
-                serializeString(_data.storeProduct, buffer: buffer, boxed: false)
-                serializeString(_data.phoneCodeHash, buffer: buffer, boxed: false)
-                serializeString(_data.supportEmailAddress, buffer: buffer, boxed: false)
-                serializeString(_data.supportEmailSubject, buffer: buffer, boxed: false)
-                serializeString(_data.currency, buffer: buffer, boxed: false)
-                serializeInt64(_data.amount, buffer: buffer, boxed: false)
-                break
-            case .sentCodeSuccess(let _data):
-                if boxed {
-                    buffer.appendInt32(596704836)
-                }
-                _data.authorization.serialize(buffer, true)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .sentCode(let _data):
-                return ("sentCode", [("flags", _data.flags as Any), ("type", _data.type as Any), ("phoneCodeHash", _data.phoneCodeHash as Any), ("nextType", _data.nextType as Any), ("timeout", _data.timeout as Any)])
-            case .sentCodePaymentRequired(let _data):
-                return ("sentCodePaymentRequired", [("storeProduct", _data.storeProduct as Any), ("phoneCodeHash", _data.phoneCodeHash as Any), ("supportEmailAddress", _data.supportEmailAddress as Any), ("supportEmailSubject", _data.supportEmailSubject as Any), ("currency", _data.currency as Any), ("amount", _data.amount as Any)])
-            case .sentCodeSuccess(let _data):
-                return ("sentCodeSuccess", [("authorization", _data.authorization as Any)])
-            }
-        }
-
+        case sentCode(flags: Int32, type: Api.auth.SentCodeType, phoneCodeHash: String, nextType: Api.auth.CodeType?, timeout: Int32?)
+        case sentCodePaymentRequired(storeProduct: String, phoneCodeHash: String, supportEmailAddress: String, supportEmailSubject: String, currency: String, amount: Int64)
+        case sentCodeSuccess(authorization: Api.auth.Authorization)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .sentCode(let flags, let type, let phoneCodeHash, let nextType, let timeout):
+                    if boxed {
+                        buffer.appendInt32(1577067778)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    type.serialize(buffer, true)
+                    serializeString(phoneCodeHash, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 1) != 0 {nextType!.serialize(buffer, true)}
+                    if Int(flags) & Int(1 << 2) != 0 {serializeInt32(timeout!, buffer: buffer, boxed: false)}
+                    break
+                case .sentCodePaymentRequired(let storeProduct, let phoneCodeHash, let supportEmailAddress, let supportEmailSubject, let currency, let amount):
+                    if boxed {
+                        buffer.appendInt32(-527082948)
+                    }
+                    serializeString(storeProduct, buffer: buffer, boxed: false)
+                    serializeString(phoneCodeHash, buffer: buffer, boxed: false)
+                    serializeString(supportEmailAddress, buffer: buffer, boxed: false)
+                    serializeString(supportEmailSubject, buffer: buffer, boxed: false)
+                    serializeString(currency, buffer: buffer, boxed: false)
+                    serializeInt64(amount, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeSuccess(let authorization):
+                    if boxed {
+                        buffer.appendInt32(596704836)
+                    }
+                    authorization.serialize(buffer, true)
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .sentCode(let flags, let type, let phoneCodeHash, let nextType, let timeout):
+                return ("sentCode", [("flags", flags as Any), ("type", type as Any), ("phoneCodeHash", phoneCodeHash as Any), ("nextType", nextType as Any), ("timeout", timeout as Any)])
+                case .sentCodePaymentRequired(let storeProduct, let phoneCodeHash, let supportEmailAddress, let supportEmailSubject, let currency, let amount):
+                return ("sentCodePaymentRequired", [("storeProduct", storeProduct as Any), ("phoneCodeHash", phoneCodeHash as Any), ("supportEmailAddress", supportEmailAddress as Any), ("supportEmailSubject", supportEmailSubject as Any), ("currency", currency as Any), ("amount", amount as Any)])
+                case .sentCodeSuccess(let authorization):
+                return ("sentCodeSuccess", [("authorization", authorization as Any)])
+    }
+    }
+    
         public static func parse_sentCode(_ reader: BufferReader) -> SentCode? {
             var _1: Int32?
             _1 = reader.readInt32()
@@ -1071,22 +899,18 @@ public extension Api.auth {
             var _3: String?
             _3 = parseString(reader)
             var _4: Api.auth.CodeType?
-            if Int(_1!) & Int(1 << 1) != 0 {
-                if let signature = reader.readInt32() {
-                    _4 = Api.parse(reader, signature: signature) as? Api.auth.CodeType
-                }
-            }
+            if Int(_1!) & Int(1 << 1) != 0 {if let signature = reader.readInt32() {
+                _4 = Api.parse(reader, signature: signature) as? Api.auth.CodeType
+            } }
             var _5: Int32?
-            if Int(_1!) & Int(1 << 2) != 0 {
-                _5 = reader.readInt32()
-            }
+            if Int(_1!) & Int(1 << 2) != 0 {_5 = reader.readInt32() }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.auth.SentCode.sentCode(Cons_sentCode(flags: _1!, type: _2!, phoneCodeHash: _3!, nextType: _4, timeout: _5))
+                return Api.auth.SentCode.sentCode(flags: _1!, type: _2!, phoneCodeHash: _3!, nextType: _4, timeout: _5)
             }
             else {
                 return nil
@@ -1112,7 +936,7 @@ public extension Api.auth {
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
-                return Api.auth.SentCode.sentCodePaymentRequired(Cons_sentCodePaymentRequired(storeProduct: _1!, phoneCodeHash: _2!, supportEmailAddress: _3!, supportEmailSubject: _4!, currency: _5!, amount: _6!))
+                return Api.auth.SentCode.sentCodePaymentRequired(storeProduct: _1!, phoneCodeHash: _2!, supportEmailAddress: _3!, supportEmailSubject: _4!, currency: _5!, amount: _6!)
             }
             else {
                 return nil
@@ -1125,258 +949,147 @@ public extension Api.auth {
             }
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.SentCode.sentCodeSuccess(Cons_sentCodeSuccess(authorization: _1!))
+                return Api.auth.SentCode.sentCodeSuccess(authorization: _1!)
             }
             else {
                 return nil
             }
         }
+    
     }
 }
 public extension Api.auth {
     enum SentCodeType: TypeConstructorDescription {
-        public class Cons_sentCodeTypeApp {
-            public var length: Int32
-            public init(length: Int32) {
-                self.length = length
-            }
-        }
-        public class Cons_sentCodeTypeCall {
-            public var length: Int32
-            public init(length: Int32) {
-                self.length = length
-            }
-        }
-        public class Cons_sentCodeTypeEmailCode {
-            public var flags: Int32
-            public var emailPattern: String
-            public var length: Int32
-            public var resetAvailablePeriod: Int32?
-            public var resetPendingDate: Int32?
-            public init(flags: Int32, emailPattern: String, length: Int32, resetAvailablePeriod: Int32?, resetPendingDate: Int32?) {
-                self.flags = flags
-                self.emailPattern = emailPattern
-                self.length = length
-                self.resetAvailablePeriod = resetAvailablePeriod
-                self.resetPendingDate = resetPendingDate
-            }
-        }
-        public class Cons_sentCodeTypeFirebaseSms {
-            public var flags: Int32
-            public var nonce: Buffer?
-            public var playIntegrityProjectId: Int64?
-            public var playIntegrityNonce: Buffer?
-            public var receipt: String?
-            public var pushTimeout: Int32?
-            public var length: Int32
-            public init(flags: Int32, nonce: Buffer?, playIntegrityProjectId: Int64?, playIntegrityNonce: Buffer?, receipt: String?, pushTimeout: Int32?, length: Int32) {
-                self.flags = flags
-                self.nonce = nonce
-                self.playIntegrityProjectId = playIntegrityProjectId
-                self.playIntegrityNonce = playIntegrityNonce
-                self.receipt = receipt
-                self.pushTimeout = pushTimeout
-                self.length = length
-            }
-        }
-        public class Cons_sentCodeTypeFlashCall {
-            public var pattern: String
-            public init(pattern: String) {
-                self.pattern = pattern
-            }
-        }
-        public class Cons_sentCodeTypeFragmentSms {
-            public var url: String
-            public var length: Int32
-            public init(url: String, length: Int32) {
-                self.url = url
-                self.length = length
-            }
-        }
-        public class Cons_sentCodeTypeMissedCall {
-            public var prefix: String
-            public var length: Int32
-            public init(prefix: String, length: Int32) {
-                self.prefix = prefix
-                self.length = length
-            }
-        }
-        public class Cons_sentCodeTypeSetUpEmailRequired {
-            public var flags: Int32
-            public init(flags: Int32) {
-                self.flags = flags
-            }
-        }
-        public class Cons_sentCodeTypeSms {
-            public var length: Int32
-            public init(length: Int32) {
-                self.length = length
-            }
-        }
-        public class Cons_sentCodeTypeSmsPhrase {
-            public var flags: Int32
-            public var beginning: String?
-            public init(flags: Int32, beginning: String?) {
-                self.flags = flags
-                self.beginning = beginning
-            }
-        }
-        public class Cons_sentCodeTypeSmsWord {
-            public var flags: Int32
-            public var beginning: String?
-            public init(flags: Int32, beginning: String?) {
-                self.flags = flags
-                self.beginning = beginning
-            }
-        }
-        case sentCodeTypeApp(Cons_sentCodeTypeApp)
-        case sentCodeTypeCall(Cons_sentCodeTypeCall)
-        case sentCodeTypeEmailCode(Cons_sentCodeTypeEmailCode)
-        case sentCodeTypeFirebaseSms(Cons_sentCodeTypeFirebaseSms)
-        case sentCodeTypeFlashCall(Cons_sentCodeTypeFlashCall)
-        case sentCodeTypeFragmentSms(Cons_sentCodeTypeFragmentSms)
-        case sentCodeTypeMissedCall(Cons_sentCodeTypeMissedCall)
-        case sentCodeTypeSetUpEmailRequired(Cons_sentCodeTypeSetUpEmailRequired)
-        case sentCodeTypeSms(Cons_sentCodeTypeSms)
-        case sentCodeTypeSmsPhrase(Cons_sentCodeTypeSmsPhrase)
-        case sentCodeTypeSmsWord(Cons_sentCodeTypeSmsWord)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .sentCodeTypeApp(let _data):
-                if boxed {
-                    buffer.appendInt32(1035688326)
-                }
-                serializeInt32(_data.length, buffer: buffer, boxed: false)
-                break
-            case .sentCodeTypeCall(let _data):
-                if boxed {
-                    buffer.appendInt32(1398007207)
-                }
-                serializeInt32(_data.length, buffer: buffer, boxed: false)
-                break
-            case .sentCodeTypeEmailCode(let _data):
-                if boxed {
-                    buffer.appendInt32(-196020837)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeString(_data.emailPattern, buffer: buffer, boxed: false)
-                serializeInt32(_data.length, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 3) != 0 {
-                    serializeInt32(_data.resetAvailablePeriod!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 4) != 0 {
-                    serializeInt32(_data.resetPendingDate!, buffer: buffer, boxed: false)
-                }
-                break
-            case .sentCodeTypeFirebaseSms(let _data):
-                if boxed {
-                    buffer.appendInt32(10475318)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeBytes(_data.nonce!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 2) != 0 {
-                    serializeInt64(_data.playIntegrityProjectId!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 2) != 0 {
-                    serializeBytes(_data.playIntegrityNonce!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 1) != 0 {
-                    serializeString(_data.receipt!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 1) != 0 {
-                    serializeInt32(_data.pushTimeout!, buffer: buffer, boxed: false)
-                }
-                serializeInt32(_data.length, buffer: buffer, boxed: false)
-                break
-            case .sentCodeTypeFlashCall(let _data):
-                if boxed {
-                    buffer.appendInt32(-1425815847)
-                }
-                serializeString(_data.pattern, buffer: buffer, boxed: false)
-                break
-            case .sentCodeTypeFragmentSms(let _data):
-                if boxed {
-                    buffer.appendInt32(-648651719)
-                }
-                serializeString(_data.url, buffer: buffer, boxed: false)
-                serializeInt32(_data.length, buffer: buffer, boxed: false)
-                break
-            case .sentCodeTypeMissedCall(let _data):
-                if boxed {
-                    buffer.appendInt32(-2113903484)
-                }
-                serializeString(_data.prefix, buffer: buffer, boxed: false)
-                serializeInt32(_data.length, buffer: buffer, boxed: false)
-                break
-            case .sentCodeTypeSetUpEmailRequired(let _data):
-                if boxed {
-                    buffer.appendInt32(-1521934870)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                break
-            case .sentCodeTypeSms(let _data):
-                if boxed {
-                    buffer.appendInt32(-1073693790)
-                }
-                serializeInt32(_data.length, buffer: buffer, boxed: false)
-                break
-            case .sentCodeTypeSmsPhrase(let _data):
-                if boxed {
-                    buffer.appendInt32(-1284008785)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeString(_data.beginning!, buffer: buffer, boxed: false)
-                }
-                break
-            case .sentCodeTypeSmsWord(let _data):
-                if boxed {
-                    buffer.appendInt32(-1542017919)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeString(_data.beginning!, buffer: buffer, boxed: false)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .sentCodeTypeApp(let _data):
-                return ("sentCodeTypeApp", [("length", _data.length as Any)])
-            case .sentCodeTypeCall(let _data):
-                return ("sentCodeTypeCall", [("length", _data.length as Any)])
-            case .sentCodeTypeEmailCode(let _data):
-                return ("sentCodeTypeEmailCode", [("flags", _data.flags as Any), ("emailPattern", _data.emailPattern as Any), ("length", _data.length as Any), ("resetAvailablePeriod", _data.resetAvailablePeriod as Any), ("resetPendingDate", _data.resetPendingDate as Any)])
-            case .sentCodeTypeFirebaseSms(let _data):
-                return ("sentCodeTypeFirebaseSms", [("flags", _data.flags as Any), ("nonce", _data.nonce as Any), ("playIntegrityProjectId", _data.playIntegrityProjectId as Any), ("playIntegrityNonce", _data.playIntegrityNonce as Any), ("receipt", _data.receipt as Any), ("pushTimeout", _data.pushTimeout as Any), ("length", _data.length as Any)])
-            case .sentCodeTypeFlashCall(let _data):
-                return ("sentCodeTypeFlashCall", [("pattern", _data.pattern as Any)])
-            case .sentCodeTypeFragmentSms(let _data):
-                return ("sentCodeTypeFragmentSms", [("url", _data.url as Any), ("length", _data.length as Any)])
-            case .sentCodeTypeMissedCall(let _data):
-                return ("sentCodeTypeMissedCall", [("prefix", _data.prefix as Any), ("length", _data.length as Any)])
-            case .sentCodeTypeSetUpEmailRequired(let _data):
-                return ("sentCodeTypeSetUpEmailRequired", [("flags", _data.flags as Any)])
-            case .sentCodeTypeSms(let _data):
-                return ("sentCodeTypeSms", [("length", _data.length as Any)])
-            case .sentCodeTypeSmsPhrase(let _data):
-                return ("sentCodeTypeSmsPhrase", [("flags", _data.flags as Any), ("beginning", _data.beginning as Any)])
-            case .sentCodeTypeSmsWord(let _data):
-                return ("sentCodeTypeSmsWord", [("flags", _data.flags as Any), ("beginning", _data.beginning as Any)])
-            }
-        }
-
+        case sentCodeTypeApp(length: Int32)
+        case sentCodeTypeCall(length: Int32)
+        case sentCodeTypeEmailCode(flags: Int32, emailPattern: String, length: Int32, resetAvailablePeriod: Int32?, resetPendingDate: Int32?)
+        case sentCodeTypeFirebaseSms(flags: Int32, nonce: Buffer?, playIntegrityProjectId: Int64?, playIntegrityNonce: Buffer?, receipt: String?, pushTimeout: Int32?, length: Int32)
+        case sentCodeTypeFlashCall(pattern: String)
+        case sentCodeTypeFragmentSms(url: String, length: Int32)
+        case sentCodeTypeMissedCall(prefix: String, length: Int32)
+        case sentCodeTypeSetUpEmailRequired(flags: Int32)
+        case sentCodeTypeSms(length: Int32)
+        case sentCodeTypeSmsPhrase(flags: Int32, beginning: String?)
+        case sentCodeTypeSmsWord(flags: Int32, beginning: String?)
+    
+    public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+    switch self {
+                case .sentCodeTypeApp(let length):
+                    if boxed {
+                        buffer.appendInt32(1035688326)
+                    }
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeTypeCall(let length):
+                    if boxed {
+                        buffer.appendInt32(1398007207)
+                    }
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeTypeEmailCode(let flags, let emailPattern, let length, let resetAvailablePeriod, let resetPendingDate):
+                    if boxed {
+                        buffer.appendInt32(-196020837)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    serializeString(emailPattern, buffer: buffer, boxed: false)
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 3) != 0 {serializeInt32(resetAvailablePeriod!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 4) != 0 {serializeInt32(resetPendingDate!, buffer: buffer, boxed: false)}
+                    break
+                case .sentCodeTypeFirebaseSms(let flags, let nonce, let playIntegrityProjectId, let playIntegrityNonce, let receipt, let pushTimeout, let length):
+                    if boxed {
+                        buffer.appendInt32(10475318)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeBytes(nonce!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 2) != 0 {serializeInt64(playIntegrityProjectId!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 2) != 0 {serializeBytes(playIntegrityNonce!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 1) != 0 {serializeString(receipt!, buffer: buffer, boxed: false)}
+                    if Int(flags) & Int(1 << 1) != 0 {serializeInt32(pushTimeout!, buffer: buffer, boxed: false)}
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeTypeFlashCall(let pattern):
+                    if boxed {
+                        buffer.appendInt32(-1425815847)
+                    }
+                    serializeString(pattern, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeTypeFragmentSms(let url, let length):
+                    if boxed {
+                        buffer.appendInt32(-648651719)
+                    }
+                    serializeString(url, buffer: buffer, boxed: false)
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeTypeMissedCall(let prefix, let length):
+                    if boxed {
+                        buffer.appendInt32(-2113903484)
+                    }
+                    serializeString(prefix, buffer: buffer, boxed: false)
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeTypeSetUpEmailRequired(let flags):
+                    if boxed {
+                        buffer.appendInt32(-1521934870)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeTypeSms(let length):
+                    if boxed {
+                        buffer.appendInt32(-1073693790)
+                    }
+                    serializeInt32(length, buffer: buffer, boxed: false)
+                    break
+                case .sentCodeTypeSmsPhrase(let flags, let beginning):
+                    if boxed {
+                        buffer.appendInt32(-1284008785)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeString(beginning!, buffer: buffer, boxed: false)}
+                    break
+                case .sentCodeTypeSmsWord(let flags, let beginning):
+                    if boxed {
+                        buffer.appendInt32(-1542017919)
+                    }
+                    serializeInt32(flags, buffer: buffer, boxed: false)
+                    if Int(flags) & Int(1 << 0) != 0 {serializeString(beginning!, buffer: buffer, boxed: false)}
+                    break
+    }
+    }
+    
+    public func descriptionFields() -> (String, [(String, Any)]) {
+        switch self {
+                case .sentCodeTypeApp(let length):
+                return ("sentCodeTypeApp", [("length", length as Any)])
+                case .sentCodeTypeCall(let length):
+                return ("sentCodeTypeCall", [("length", length as Any)])
+                case .sentCodeTypeEmailCode(let flags, let emailPattern, let length, let resetAvailablePeriod, let resetPendingDate):
+                return ("sentCodeTypeEmailCode", [("flags", flags as Any), ("emailPattern", emailPattern as Any), ("length", length as Any), ("resetAvailablePeriod", resetAvailablePeriod as Any), ("resetPendingDate", resetPendingDate as Any)])
+                case .sentCodeTypeFirebaseSms(let flags, let nonce, let playIntegrityProjectId, let playIntegrityNonce, let receipt, let pushTimeout, let length):
+                return ("sentCodeTypeFirebaseSms", [("flags", flags as Any), ("nonce", nonce as Any), ("playIntegrityProjectId", playIntegrityProjectId as Any), ("playIntegrityNonce", playIntegrityNonce as Any), ("receipt", receipt as Any), ("pushTimeout", pushTimeout as Any), ("length", length as Any)])
+                case .sentCodeTypeFlashCall(let pattern):
+                return ("sentCodeTypeFlashCall", [("pattern", pattern as Any)])
+                case .sentCodeTypeFragmentSms(let url, let length):
+                return ("sentCodeTypeFragmentSms", [("url", url as Any), ("length", length as Any)])
+                case .sentCodeTypeMissedCall(let prefix, let length):
+                return ("sentCodeTypeMissedCall", [("prefix", prefix as Any), ("length", length as Any)])
+                case .sentCodeTypeSetUpEmailRequired(let flags):
+                return ("sentCodeTypeSetUpEmailRequired", [("flags", flags as Any)])
+                case .sentCodeTypeSms(let length):
+                return ("sentCodeTypeSms", [("length", length as Any)])
+                case .sentCodeTypeSmsPhrase(let flags, let beginning):
+                return ("sentCodeTypeSmsPhrase", [("flags", flags as Any), ("beginning", beginning as Any)])
+                case .sentCodeTypeSmsWord(let flags, let beginning):
+                return ("sentCodeTypeSmsWord", [("flags", flags as Any), ("beginning", beginning as Any)])
+    }
+    }
+    
         public static func parse_sentCodeTypeApp(_ reader: BufferReader) -> SentCodeType? {
             var _1: Int32?
             _1 = reader.readInt32()
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.SentCodeType.sentCodeTypeApp(Cons_sentCodeTypeApp(length: _1!))
+                return Api.auth.SentCodeType.sentCodeTypeApp(length: _1!)
             }
             else {
                 return nil
@@ -1387,7 +1100,7 @@ public extension Api.auth {
             _1 = reader.readInt32()
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.SentCodeType.sentCodeTypeCall(Cons_sentCodeTypeCall(length: _1!))
+                return Api.auth.SentCodeType.sentCodeTypeCall(length: _1!)
             }
             else {
                 return nil
@@ -1401,20 +1114,16 @@ public extension Api.auth {
             var _3: Int32?
             _3 = reader.readInt32()
             var _4: Int32?
-            if Int(_1!) & Int(1 << 3) != 0 {
-                _4 = reader.readInt32()
-            }
+            if Int(_1!) & Int(1 << 3) != 0 {_4 = reader.readInt32() }
             var _5: Int32?
-            if Int(_1!) & Int(1 << 4) != 0 {
-                _5 = reader.readInt32()
-            }
+            if Int(_1!) & Int(1 << 4) != 0 {_5 = reader.readInt32() }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
             let _c5 = (Int(_1!) & Int(1 << 4) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.auth.SentCodeType.sentCodeTypeEmailCode(Cons_sentCodeTypeEmailCode(flags: _1!, emailPattern: _2!, length: _3!, resetAvailablePeriod: _4, resetPendingDate: _5))
+                return Api.auth.SentCodeType.sentCodeTypeEmailCode(flags: _1!, emailPattern: _2!, length: _3!, resetAvailablePeriod: _4, resetPendingDate: _5)
             }
             else {
                 return nil
@@ -1424,25 +1133,15 @@ public extension Api.auth {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: Buffer?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                _2 = parseBytes(reader)
-            }
+            if Int(_1!) & Int(1 << 0) != 0 {_2 = parseBytes(reader) }
             var _3: Int64?
-            if Int(_1!) & Int(1 << 2) != 0 {
-                _3 = reader.readInt64()
-            }
+            if Int(_1!) & Int(1 << 2) != 0 {_3 = reader.readInt64() }
             var _4: Buffer?
-            if Int(_1!) & Int(1 << 2) != 0 {
-                _4 = parseBytes(reader)
-            }
+            if Int(_1!) & Int(1 << 2) != 0 {_4 = parseBytes(reader) }
             var _5: String?
-            if Int(_1!) & Int(1 << 1) != 0 {
-                _5 = parseString(reader)
-            }
+            if Int(_1!) & Int(1 << 1) != 0 {_5 = parseString(reader) }
             var _6: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
-                _6 = reader.readInt32()
-            }
+            if Int(_1!) & Int(1 << 1) != 0 {_6 = reader.readInt32() }
             var _7: Int32?
             _7 = reader.readInt32()
             let _c1 = _1 != nil
@@ -1453,7 +1152,7 @@ public extension Api.auth {
             let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
             let _c7 = _7 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
-                return Api.auth.SentCodeType.sentCodeTypeFirebaseSms(Cons_sentCodeTypeFirebaseSms(flags: _1!, nonce: _2, playIntegrityProjectId: _3, playIntegrityNonce: _4, receipt: _5, pushTimeout: _6, length: _7!))
+                return Api.auth.SentCodeType.sentCodeTypeFirebaseSms(flags: _1!, nonce: _2, playIntegrityProjectId: _3, playIntegrityNonce: _4, receipt: _5, pushTimeout: _6, length: _7!)
             }
             else {
                 return nil
@@ -1464,7 +1163,7 @@ public extension Api.auth {
             _1 = parseString(reader)
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.SentCodeType.sentCodeTypeFlashCall(Cons_sentCodeTypeFlashCall(pattern: _1!))
+                return Api.auth.SentCodeType.sentCodeTypeFlashCall(pattern: _1!)
             }
             else {
                 return nil
@@ -1478,7 +1177,7 @@ public extension Api.auth {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.auth.SentCodeType.sentCodeTypeFragmentSms(Cons_sentCodeTypeFragmentSms(url: _1!, length: _2!))
+                return Api.auth.SentCodeType.sentCodeTypeFragmentSms(url: _1!, length: _2!)
             }
             else {
                 return nil
@@ -1492,7 +1191,7 @@ public extension Api.auth {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             if _c1 && _c2 {
-                return Api.auth.SentCodeType.sentCodeTypeMissedCall(Cons_sentCodeTypeMissedCall(prefix: _1!, length: _2!))
+                return Api.auth.SentCodeType.sentCodeTypeMissedCall(prefix: _1!, length: _2!)
             }
             else {
                 return nil
@@ -1503,7 +1202,7 @@ public extension Api.auth {
             _1 = reader.readInt32()
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.SentCodeType.sentCodeTypeSetUpEmailRequired(Cons_sentCodeTypeSetUpEmailRequired(flags: _1!))
+                return Api.auth.SentCodeType.sentCodeTypeSetUpEmailRequired(flags: _1!)
             }
             else {
                 return nil
@@ -1514,7 +1213,7 @@ public extension Api.auth {
             _1 = reader.readInt32()
             let _c1 = _1 != nil
             if _c1 {
-                return Api.auth.SentCodeType.sentCodeTypeSms(Cons_sentCodeTypeSms(length: _1!))
+                return Api.auth.SentCodeType.sentCodeTypeSms(length: _1!)
             }
             else {
                 return nil
@@ -1524,13 +1223,11 @@ public extension Api.auth {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                _2 = parseString(reader)
-            }
+            if Int(_1!) & Int(1 << 0) != 0 {_2 = parseString(reader) }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             if _c1 && _c2 {
-                return Api.auth.SentCodeType.sentCodeTypeSmsPhrase(Cons_sentCodeTypeSmsPhrase(flags: _1!, beginning: _2))
+                return Api.auth.SentCodeType.sentCodeTypeSmsPhrase(flags: _1!, beginning: _2)
             }
             else {
                 return nil
@@ -1540,17 +1237,16 @@ public extension Api.auth {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                _2 = parseString(reader)
-            }
+            if Int(_1!) & Int(1 << 0) != 0 {_2 = parseString(reader) }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
             if _c1 && _c2 {
-                return Api.auth.SentCodeType.sentCodeTypeSmsWord(Cons_sentCodeTypeSmsWord(flags: _1!, beginning: _2))
+                return Api.auth.SentCodeType.sentCodeTypeSmsWord(flags: _1!, beginning: _2)
             }
             else {
                 return nil
             }
         }
+    
     }
 }

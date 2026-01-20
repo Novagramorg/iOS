@@ -612,6 +612,10 @@ public extension TelegramEngine {
             }
             |> ignoreValues
         }
+        
+        public func getFutureCreatorAfterLeave(peerId: EnginePeer.Id) -> Signal<EnginePeer?, NoError> {
+            return _internal_getFutureCreatorAfterLeave(account: self.account, peerId: peerId)
+        }
 
         public func terminateSecretChat(peerId: PeerId, requestRemoteHistoryRemoval: Bool) -> Signal<Never, NoError> {
             return self.account.postbox.transaction { transaction -> Void in
