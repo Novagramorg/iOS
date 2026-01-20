@@ -1255,12 +1255,8 @@ extension StarGift {
                 upgradeVariantsCount: upgradeVariantsCount,
                 background: background
             ))
-<<<<<<< Updated upstream
         case let .starGiftUnique(starGiftUniqueData):
-            let (apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, apiResellAmount, releasedBy, valueAmount, valueCurrency, valueUsdAmount, themePeer, peerColor, hostPeerId, minOfferStars) = (starGiftUniqueData.flags, starGiftUniqueData.id, starGiftUniqueData.giftId, starGiftUniqueData.title, starGiftUniqueData.slug, starGiftUniqueData.num, starGiftUniqueData.ownerId, starGiftUniqueData.ownerName, starGiftUniqueData.ownerAddress, starGiftUniqueData.attributes, starGiftUniqueData.availabilityIssued, starGiftUniqueData.availabilityTotal, starGiftUniqueData.giftAddress, starGiftUniqueData.resellAmount, starGiftUniqueData.releasedBy, starGiftUniqueData.valueAmount, starGiftUniqueData.valueCurrency, starGiftUniqueData.valueUsdAmount, starGiftUniqueData.themePeer, starGiftUniqueData.peerColor, starGiftUniqueData.hostId, starGiftUniqueData.offerMinStars)
-=======
-        case let .starGiftUnique(apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, resellAmounts, releasedBy, valueAmount, valueCurrency, valueUsdAmount, themePeer, peerColor, hostPeerId, minOfferStars, craftChancePermille):
->>>>>>> Stashed changes
+            let (apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, apiResellAmount, releasedBy, valueAmount, valueCurrency, valueUsdAmount, themePeer, peerColor, hostPeerId, minOfferStars, craftChancePermille) = (starGiftUniqueData.flags, starGiftUniqueData.id, starGiftUniqueData.giftId, starGiftUniqueData.title, starGiftUniqueData.slug, starGiftUniqueData.num, starGiftUniqueData.ownerId, starGiftUniqueData.ownerName, starGiftUniqueData.ownerAddress, starGiftUniqueData.attributes, starGiftUniqueData.availabilityIssued, starGiftUniqueData.availabilityTotal, starGiftUniqueData.giftAddress, starGiftUniqueData.resellAmount, starGiftUniqueData.releasedBy, starGiftUniqueData.valueAmount, starGiftUniqueData.valueCurrency, starGiftUniqueData.valueUsdAmount, starGiftUniqueData.themePeer, starGiftUniqueData.peerColor, starGiftUniqueData.hostId, starGiftUniqueData.offerMinStars, starGiftUniqueData.craftChancePermille)
             let owner: StarGift.UniqueGift.Owner
             if let ownerAddress {
                 owner = .address(ownerAddress)
@@ -3434,12 +3430,8 @@ func _internal_craftStarGift(account: Account, references: [StarGiftReference]) 
 extension ProfileGiftsContext.State.StarGift {
     init?(apiSavedStarGift: Api.SavedStarGift, peerId: EnginePeer.Id, transaction: Transaction) {
         switch apiSavedStarGift {
-<<<<<<< Updated upstream
         case let .savedStarGift(savedStarGiftData):
-            let (flags, fromId, date, apiGift, message, msgId, savedId, convertStars, upgradeStars, canExportDate, transferStars, canTransferAt, canResaleAt, collectionIds, prepaidUpgradeHash, dropOriginalDetailsStars, number, canCraftAt, craftChancePermille) = (savedStarGiftData.flags, savedStarGiftData.fromId, savedStarGiftData.date, savedStarGiftData.gift, savedStarGiftData.message, savedStarGiftData.msgId, savedStarGiftData.savedId, savedStarGiftData.convertStars, savedStarGiftData.upgradeStars, savedStarGiftData.canExportAt, savedStarGiftData.transferStars, savedStarGiftData.canTransferAt, savedStarGiftData.canResellAt, savedStarGiftData.collectionId, savedStarGiftData.prepaidUpgradeHash, savedStarGiftData.dropOriginalDetailsStars, savedStarGiftData.giftNum, savedStarGiftData.canCraftAt, savedStarGiftData.craftChancePermille)
-=======
-        case let .savedStarGift(flags, fromId, date, apiGift, message, msgId, savedId, convertStars, upgradeStars, canExportDate, transferStars, canTransferAt, canResaleAt, collectionIds, prepaidUpgradeHash, dropOriginalDetailsStars, number, canCraftAt):
->>>>>>> Stashed changes
+            let (flags, fromId, date, apiGift, message, msgId, savedId, convertStars, upgradeStars, canExportDate, transferStars, canTransferAt, canResaleAt, collectionIds, prepaidUpgradeHash, dropOriginalDetailsStars, number, canCraftAt) = (savedStarGiftData.flags, savedStarGiftData.fromId, savedStarGiftData.date, savedStarGiftData.gift, savedStarGiftData.message, savedStarGiftData.msgId, savedStarGiftData.savedId, savedStarGiftData.convertStars, savedStarGiftData.upgradeStars, savedStarGiftData.canExportAt, savedStarGiftData.transferStars, savedStarGiftData.canTransferAt, savedStarGiftData.canResellAt, savedStarGiftData.collectionId, savedStarGiftData.prepaidUpgradeHash, savedStarGiftData.dropOriginalDetailsStars, savedStarGiftData.giftNum, savedStarGiftData.canCraftAt)
             guard let gift = StarGift(apiStarGift: apiGift) else {
                 return nil
             }
