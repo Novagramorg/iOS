@@ -778,7 +778,8 @@ final class UserAppearanceScreenComponent: Component {
                                 themePeerId: nil,
                                 peerColor: nil,
                                 hostPeerId: nil,
-                                minOfferStars: nil
+                                minOfferStars: nil,
+                                craftChancePermille: nil
                             )
                             signal = component.context.engine.accountData.setStarGiftStatus(starGift: gift, expirationDate: emojiStatus.expirationDate)
                         } else {

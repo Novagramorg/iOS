@@ -30,7 +30,7 @@ public final class GiftItemComponent: Component {
         case starGift(gift: StarGift.Gift, price: String)
         case uniqueGift(gift: StarGift.UniqueGift, price: String?)
         case auction(gift: StarGift.Gift, endTime: Int32)
-        case preview(attributes: [StarGift.UniqueGift.Attribute], rarity: Int32)
+        case preview(attributes: [StarGift.UniqueGift.Attribute], rarity: StarGift.UniqueGift.Attribute.Rarity?)
     }
     
     public struct Ribbon: Equatable {
@@ -170,6 +170,7 @@ public final class GiftItemComponent: Component {
     let isPlaceholder: Bool
     let animateChanges: Bool
     let mode: Mode
+    let cornerRadius: CGFloat?
     let action: (() -> Void)?
     let contextAction: ((UIView, ContextGesture) -> Void)?
     
@@ -196,6 +197,7 @@ public final class GiftItemComponent: Component {
         isPlaceholder: Bool = false,
         animateChanges: Bool = false,
         mode: Mode = .generic,
+        cornerRadius: CGFloat? = nil,
         action: (() -> Void)? = nil,
         contextAction: ((UIView, ContextGesture) -> Void)? = nil
     ) {
@@ -221,6 +223,7 @@ public final class GiftItemComponent: Component {
         self.isPlaceholder = isPlaceholder
         self.animateChanges = animateChanges
         self.mode = mode
+        self.cornerRadius = cornerRadius
         self.action = action
         self.contextAction = contextAction
     }
@@ -290,6 +293,9 @@ public final class GiftItemComponent: Component {
             return false
         }
         if lhs.mode != rhs.mode {
+            return false
+        }
+        if lhs.cornerRadius != rhs.cornerRadius {
             return false
         }
         if (lhs.contextAction == nil) != (rhs.contextAction == nil) {
@@ -392,7 +398,7 @@ public final class GiftItemComponent: Component {
             
             var size: CGSize
             let iconSize: CGSize
-            let cornerRadius: CGFloat
+            var cornerRadius: CGFloat
             switch component.mode {
             case .generic:
                 size = CGSize(width: availableSize.width, height: component.title != nil ? 178.0 : 154.0)
@@ -418,7 +424,12 @@ public final class GiftItemComponent: Component {
             case .grid:
                 size = CGSize(width: availableSize.width, height: availableSize.width)
                 iconSize = CGSize(width: floor(size.width * 0.7), height: floor(size.width * 0.7))
-                cornerRadius = 10.0
+                switch component.style {
+                case .glass:
+                    cornerRadius = 16.0
+                case .legacy:
+                    cornerRadius = 10.0
+                }
             case .preview:
                 size = availableSize
                 iconSize = CGSize(width: floor(size.width * 0.6), height: floor(size.width * 0.6))
@@ -447,6 +458,10 @@ public final class GiftItemComponent: Component {
             var backgroundSize = size
             if case .grid = component.mode {
                 backgroundSize = CGSize(width: backgroundSize.width - 4.0, height: backgroundSize.height - 4.0)
+            }
+            
+            if let forcedCornerRadius = component.cornerRadius {
+                cornerRadius = forcedCornerRadius
             }
             
             self.backgroundLayer.cornerRadius = cornerRadius
@@ -733,7 +748,7 @@ public final class GiftItemComponent: Component {
                 }
             }
             
-            if case .upgradePreview = component.mode, case let .preview(attributes, rarity) = component.subject {
+            if case .upgradePreview = component.mode, case let .preview(attributes, rarity) = component.subject, let rarity {
                 let isColored = attributes.count > 1
                 if let title = component.title {
                     let titleSize = self.title.update(
@@ -759,12 +774,24 @@ public final class GiftItemComponent: Component {
                 func formatPercentage(_ value: Float) -> String {
                     return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%"
                 }
-                let percentage = Float(rarity) * 0.1
+                
+                //TODO:localize
+                let badgeString: String
+                switch rarity {
+                case let .permille(value):
+                    badgeString = formatPercentage(Float(value) * 0.1)
+                case .epic:
+                    badgeString = "epic"
+                case .legendary:
+                    badgeString = "legendary"
+                case .rare:
+                    badgeString = "rare"
+                }
                 
                 let badgeTextSize = self.badgeText.update(
                     transition: .spring(duration: 0.2),
                     component: AnyComponent(
-                        MultilineTextComponent(text: .plain(NSAttributedString(string: formatPercentage(percentage), font: Font.with(size: 11.0, weight: .medium, traits: .monospacedNumbers), textColor: isColored ? .white : component.theme.list.itemSecondaryTextColor)))
+                        MultilineTextComponent(text: .plain(NSAttributedString(string: badgeString, font: Font.with(size: 11.0, weight: .medium, traits: .monospacedNumbers), textColor: isColored ? .white : component.theme.list.itemSecondaryTextColor)))
                     ),
                     environment: {},
                     containerSize: availableSize
@@ -1345,7 +1372,13 @@ public final class GiftItemComponent: Component {
                 let lineWidth: CGFloat = 2.0
                 let selectionFrame = backgroundFrame.insetBy(dx: 2.0, dy: 2.0)
                 
-                var cornerRadius: CGFloat = 6.0
+                var cornerRadius: CGFloat
+                switch component.style {
+                case .glass:
+                    cornerRadius = 14.0
+                case .legacy:
+                    cornerRadius = 6.0
+                }
                 if case .upgradePreview = component.mode {
                     cornerRadius = 13.0
                 }
