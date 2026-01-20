@@ -1,77 +1,4 @@
 public extension Api {
-    enum StarsAmount: TypeConstructorDescription {
-        public class Cons_starsAmount {
-            public var amount: Int64
-            public var nanos: Int32
-            public init(amount: Int64, nanos: Int32) {
-                self.amount = amount
-                self.nanos = nanos
-            }
-        }
-        public class Cons_starsTonAmount {
-            public var amount: Int64
-            public init(amount: Int64) {
-                self.amount = amount
-            }
-        }
-        case starsAmount(Cons_starsAmount)
-        case starsTonAmount(Cons_starsTonAmount)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .starsAmount(let _data):
-                if boxed {
-                    buffer.appendInt32(-1145654109)
-                }
-                serializeInt64(_data.amount, buffer: buffer, boxed: false)
-                serializeInt32(_data.nanos, buffer: buffer, boxed: false)
-                break
-            case .starsTonAmount(let _data):
-                if boxed {
-                    buffer.appendInt32(1957618656)
-                }
-                serializeInt64(_data.amount, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .starsAmount(let _data):
-                return ("starsAmount", [("amount", _data.amount as Any), ("nanos", _data.nanos as Any)])
-            case .starsTonAmount(let _data):
-                return ("starsTonAmount", [("amount", _data.amount as Any)])
-            }
-        }
-
-        public static func parse_starsAmount(_ reader: BufferReader) -> StarsAmount? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Int32?
-            _2 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.StarsAmount.starsAmount(Cons_starsAmount(amount: _1!, nanos: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_starsTonAmount(_ reader: BufferReader) -> StarsAmount? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.StarsAmount.starsTonAmount(Cons_starsTonAmount(amount: _1!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
     enum StarsGiftOption: TypeConstructorDescription {
         public class Cons_starsGiftOption {
             public var flags: Int32
@@ -1728,6 +1655,189 @@ public extension Api {
             let _c12 = _12 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 {
                 return Api.StickerSet.stickerSet(Cons_stickerSet(flags: _1!, installedDate: _2, id: _3!, accessHash: _4!, title: _5!, shortName: _6!, thumbs: _7, thumbDcId: _8, thumbVersion: _9, thumbDocumentId: _10, count: _11!, hash: _12!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum StickerSetCovered: TypeConstructorDescription {
+        public class Cons_stickerSetCovered {
+            public var set: Api.StickerSet
+            public var cover: Api.Document
+            public init(set: Api.StickerSet, cover: Api.Document) {
+                self.set = set
+                self.cover = cover
+            }
+        }
+        public class Cons_stickerSetFullCovered {
+            public var set: Api.StickerSet
+            public var packs: [Api.StickerPack]
+            public var keywords: [Api.StickerKeyword]
+            public var documents: [Api.Document]
+            public init(set: Api.StickerSet, packs: [Api.StickerPack], keywords: [Api.StickerKeyword], documents: [Api.Document]) {
+                self.set = set
+                self.packs = packs
+                self.keywords = keywords
+                self.documents = documents
+            }
+        }
+        public class Cons_stickerSetMultiCovered {
+            public var set: Api.StickerSet
+            public var covers: [Api.Document]
+            public init(set: Api.StickerSet, covers: [Api.Document]) {
+                self.set = set
+                self.covers = covers
+            }
+        }
+        public class Cons_stickerSetNoCovered {
+            public var set: Api.StickerSet
+            public init(set: Api.StickerSet) {
+                self.set = set
+            }
+        }
+        case stickerSetCovered(Cons_stickerSetCovered)
+        case stickerSetFullCovered(Cons_stickerSetFullCovered)
+        case stickerSetMultiCovered(Cons_stickerSetMultiCovered)
+        case stickerSetNoCovered(Cons_stickerSetNoCovered)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .stickerSetCovered(let _data):
+                if boxed {
+                    buffer.appendInt32(1678812626)
+                }
+                _data.set.serialize(buffer, true)
+                _data.cover.serialize(buffer, true)
+                break
+            case .stickerSetFullCovered(let _data):
+                if boxed {
+                    buffer.appendInt32(1087454222)
+                }
+                _data.set.serialize(buffer, true)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.packs.count))
+                for item in _data.packs {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.keywords.count))
+                for item in _data.keywords {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.documents.count))
+                for item in _data.documents {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .stickerSetMultiCovered(let _data):
+                if boxed {
+                    buffer.appendInt32(872932635)
+                }
+                _data.set.serialize(buffer, true)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.covers.count))
+                for item in _data.covers {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .stickerSetNoCovered(let _data):
+                if boxed {
+                    buffer.appendInt32(2008112412)
+                }
+                _data.set.serialize(buffer, true)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            switch self {
+            case .stickerSetCovered(let _data):
+                return ("stickerSetCovered", [("set", _data.set as Any), ("cover", _data.cover as Any)])
+            case .stickerSetFullCovered(let _data):
+                return ("stickerSetFullCovered", [("set", _data.set as Any), ("packs", _data.packs as Any), ("keywords", _data.keywords as Any), ("documents", _data.documents as Any)])
+            case .stickerSetMultiCovered(let _data):
+                return ("stickerSetMultiCovered", [("set", _data.set as Any), ("covers", _data.covers as Any)])
+            case .stickerSetNoCovered(let _data):
+                return ("stickerSetNoCovered", [("set", _data.set as Any)])
+            }
+        }
+
+        public static func parse_stickerSetCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            var _2: Api.Document?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Document
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.StickerSetCovered.stickerSetCovered(Cons_stickerSetCovered(set: _1!, cover: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_stickerSetFullCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            var _2: [Api.StickerPack]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StickerPack.self)
+            }
+            var _3: [Api.StickerKeyword]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StickerKeyword.self)
+            }
+            var _4: [Api.Document]?
+            if let _ = reader.readInt32() {
+                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.StickerSetCovered.stickerSetFullCovered(Cons_stickerSetFullCovered(set: _1!, packs: _2!, keywords: _3!, documents: _4!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_stickerSetMultiCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            var _2: [Api.Document]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.StickerSetCovered.stickerSetMultiCovered(Cons_stickerSetMultiCovered(set: _1!, covers: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_stickerSetNoCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.StickerSetCovered.stickerSetNoCovered(Cons_stickerSetNoCovered(set: _1!))
             }
             else {
                 return nil

@@ -815,8 +815,7 @@ public extension Api {
             public var dropOriginalDetailsStars: Int64?
             public var giftNum: Int32?
             public var canCraftAt: Int32?
-            public var craftChancePermille: Int32?
-            public init(flags: Int32, fromId: Api.Peer?, date: Int32, gift: Api.StarGift, message: Api.TextWithEntities?, msgId: Int32?, savedId: Int64?, convertStars: Int64?, upgradeStars: Int64?, canExportAt: Int32?, transferStars: Int64?, canTransferAt: Int32?, canResellAt: Int32?, collectionId: [Int32]?, prepaidUpgradeHash: String?, dropOriginalDetailsStars: Int64?, giftNum: Int32?, canCraftAt: Int32?, craftChancePermille: Int32?) {
+            public init(flags: Int32, fromId: Api.Peer?, date: Int32, gift: Api.StarGift, message: Api.TextWithEntities?, msgId: Int32?, savedId: Int64?, convertStars: Int64?, upgradeStars: Int64?, canExportAt: Int32?, transferStars: Int64?, canTransferAt: Int32?, canResellAt: Int32?, collectionId: [Int32]?, prepaidUpgradeHash: String?, dropOriginalDetailsStars: Int64?, giftNum: Int32?, canCraftAt: Int32?) {
                 self.flags = flags
                 self.fromId = fromId
                 self.date = date
@@ -835,7 +834,6 @@ public extension Api {
                 self.dropOriginalDetailsStars = dropOriginalDetailsStars
                 self.giftNum = giftNum
                 self.canCraftAt = canCraftAt
-                self.craftChancePermille = craftChancePermille
             }
         }
         case savedStarGift(Cons_savedStarGift)
@@ -844,7 +842,7 @@ public extension Api {
             switch self {
             case .savedStarGift(let _data):
                 if boxed {
-                    buffer.appendInt32(949728281)
+                    buffer.appendInt32(1105150972)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 if Int(_data.flags) & Int(1 << 1) != 0 {
@@ -898,9 +896,6 @@ public extension Api {
                 if Int(_data.flags) & Int(1 << 20) != 0 {
                     serializeInt32(_data.canCraftAt!, buffer: buffer, boxed: false)
                 }
-                if Int(_data.flags) & Int(1 << 20) != 0 {
-                    serializeInt32(_data.craftChancePermille!, buffer: buffer, boxed: false)
-                }
                 break
             }
         }
@@ -908,7 +903,7 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, Any)]) {
             switch self {
             case .savedStarGift(let _data):
-                return ("savedStarGift", [("flags", _data.flags as Any), ("fromId", _data.fromId as Any), ("date", _data.date as Any), ("gift", _data.gift as Any), ("message", _data.message as Any), ("msgId", _data.msgId as Any), ("savedId", _data.savedId as Any), ("convertStars", _data.convertStars as Any), ("upgradeStars", _data.upgradeStars as Any), ("canExportAt", _data.canExportAt as Any), ("transferStars", _data.transferStars as Any), ("canTransferAt", _data.canTransferAt as Any), ("canResellAt", _data.canResellAt as Any), ("collectionId", _data.collectionId as Any), ("prepaidUpgradeHash", _data.prepaidUpgradeHash as Any), ("dropOriginalDetailsStars", _data.dropOriginalDetailsStars as Any), ("giftNum", _data.giftNum as Any), ("canCraftAt", _data.canCraftAt as Any), ("craftChancePermille", _data.craftChancePermille as Any)])
+                return ("savedStarGift", [("flags", _data.flags as Any), ("fromId", _data.fromId as Any), ("date", _data.date as Any), ("gift", _data.gift as Any), ("message", _data.message as Any), ("msgId", _data.msgId as Any), ("savedId", _data.savedId as Any), ("convertStars", _data.convertStars as Any), ("upgradeStars", _data.upgradeStars as Any), ("canExportAt", _data.canExportAt as Any), ("transferStars", _data.transferStars as Any), ("canTransferAt", _data.canTransferAt as Any), ("canResellAt", _data.canResellAt as Any), ("collectionId", _data.collectionId as Any), ("prepaidUpgradeHash", _data.prepaidUpgradeHash as Any), ("dropOriginalDetailsStars", _data.dropOriginalDetailsStars as Any), ("giftNum", _data.giftNum as Any), ("canCraftAt", _data.canCraftAt as Any)])
             }
         }
 
@@ -987,10 +982,6 @@ public extension Api {
             if Int(_1!) & Int(1 << 20) != 0 {
                 _18 = reader.readInt32()
             }
-            var _19: Int32?
-            if Int(_1!) & Int(1 << 20) != 0 {
-                _19 = reader.readInt32()
-            }
             let _c1 = _1 != nil
             let _c2 = (Int(_1!) & Int(1 << 1) == 0) || _2 != nil
             let _c3 = _3 != nil
@@ -1009,9 +1000,8 @@ public extension Api {
             let _c16 = (Int(_1!) & Int(1 << 18) == 0) || _16 != nil
             let _c17 = (Int(_1!) & Int(1 << 19) == 0) || _17 != nil
             let _c18 = (Int(_1!) & Int(1 << 20) == 0) || _18 != nil
-            let _c19 = (Int(_1!) & Int(1 << 20) == 0) || _19 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 {
-                return Api.SavedStarGift.savedStarGift(Cons_savedStarGift(flags: _1!, fromId: _2, date: _3!, gift: _4!, message: _5, msgId: _6, savedId: _7, convertStars: _8, upgradeStars: _9, canExportAt: _10, transferStars: _11, canTransferAt: _12, canResellAt: _13, collectionId: _14, prepaidUpgradeHash: _15, dropOriginalDetailsStars: _16, giftNum: _17, canCraftAt: _18, craftChancePermille: _19))
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 {
+                return Api.SavedStarGift.savedStarGift(Cons_savedStarGift(flags: _1!, fromId: _2, date: _3!, gift: _4!, message: _5, msgId: _6, savedId: _7, convertStars: _8, upgradeStars: _9, canExportAt: _10, transferStars: _11, canTransferAt: _12, canResellAt: _13, collectionId: _14, prepaidUpgradeHash: _15, dropOriginalDetailsStars: _16, giftNum: _17, canCraftAt: _18))
             }
             else {
                 return nil
