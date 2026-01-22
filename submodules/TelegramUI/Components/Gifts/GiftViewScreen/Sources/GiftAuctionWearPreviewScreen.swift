@@ -387,7 +387,7 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                     context: component.context,
                     theme: theme,
                     strings: strings,
-                    subject: .preview(attributes: attributes, rarity: 0),
+                    subject: .preview(attributes: attributes, rarity: nil),
                     ribbon: GiftItemComponent.Ribbon(text: strings.Gift_WearPreview_Upgraded, color: ribbonColor),
                     animateChanges: true,
                     mode: .thumbnail
