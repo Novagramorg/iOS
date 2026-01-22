@@ -291,7 +291,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         fileprivate var avatarEditorPreviewView: AvatarEditorPreviewView?
         
         private var cameraActivateAreaNode: AccessibilityAreaNode
-        private var placeholderNode: MediaPickerPlaceholderNode?
+        fileprivate var placeholderNode: MediaPickerPlaceholderNode?
         private var manageNode: MediaPickerManageNode?
         private var scrollingArea: SparseItemGridScrollingArea
         private var isFastScrolling = false
@@ -317,6 +317,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
         private var fastScrollContentOffset = ValuePromise<CGPoint>(ignoreRepeated: true)
         private var fastScrollDisposable: Disposable?
                 
+        fileprivate var currentContentOffset: GridNodeVisibleContentOffset?
         fileprivate var scrolledToTop = true
         fileprivate var scrolledExactlyToTop = true
         fileprivate var isSwitchingAssetGroup = false
@@ -453,33 +454,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 guard let self else {
                     return
                 }
+                self.currentContentOffset = offset
                 self.updateNavigation(transition: .immediate)
-                
-                var scrolledToTop = false
-                var scrolledExactlyToTop = false
-                if case let .known(contentOffset) = offset {
-                    if contentOffset < 30.0 {
-                        scrolledToTop = true
-                    }
-                    if contentOffset < 5.0 {
-                        scrolledExactlyToTop = true
-                    }
-                }
-                
-                var updated = false
-                var transition: ContainedViewLayoutTransition = .animated(duration: 0.5, curve: .easeInOut)
-                if self.scrolledToTop != scrolledToTop {
-                    self.scrolledToTop = scrolledToTop
-                    updated = true
-                }
-                if self.scrolledExactlyToTop != scrolledExactlyToTop {
-                    self.scrolledExactlyToTop = scrolledExactlyToTop
-                    updated = true
-                    transition = .animated(duration: 0.25, curve: .easeInOut)
-                }
-                if updated {
-                    self.controller?.updateNavigationButtons(transition: transition)
-                }
+                self.updateTopEdgeEffect()
             }
             
             self.hiddenMediaDisposable = (self.hiddenMediaId.get()
@@ -768,6 +745,41 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 #endif
             } else {
                 self.containerNode.clipsToBounds = true
+            }
+        }
+        
+        func updateTopEdgeEffect() {
+            guard let offset = self.currentContentOffset else {
+                return
+            }
+            var scrolledToTop = false
+            var scrolledExactlyToTop = false
+            if case let .known(contentOffset) = offset {
+                if contentOffset < 30.0 {
+                    scrolledToTop = true
+                }
+                if contentOffset < 5.0 {
+                    scrolledExactlyToTop = true
+                }
+            }
+            if self.placeholderNode != nil {
+                scrolledToTop = true
+                scrolledExactlyToTop = true
+            }
+            
+            var updated = false
+            var transition: ContainedViewLayoutTransition = .animated(duration: 0.5, curve: .easeInOut)
+            if self.scrolledToTop != scrolledToTop {
+                self.scrolledToTop = scrolledToTop
+                updated = true
+            }
+            if self.scrolledExactlyToTop != scrolledExactlyToTop {
+                self.scrolledExactlyToTop = scrolledExactlyToTop
+                updated = true
+                transition = .animated(duration: 0.25, curve: .easeInOut)
+            }
+            if updated {
+                self.controller?.updateNavigationButtons(transition: transition)
             }
         }
         
@@ -1685,6 +1697,8 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                         self.placeholderNode = placeholderNode
                         
                         placeholderTransition = .immediate
+                        
+                        self.updateTopEdgeEffect()
                     }
                     placeholderNode.update(layout: layout, theme: self.presentationData.theme, strings: self.presentationData.strings, hasCamera: false, transition: placeholderTransition)
                     placeholderTransition.updateFrame(node: placeholderNode, frame: innerBounds)
@@ -1849,6 +1863,8 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             }
                         
             if case let .noAccess(cameraAccess) = self.state {
+                self.controller?.titleView.isEnabled = false
+                
                 var hasCamera = cameraAccess == .authorized
                 var story = false
                 if let subject = self.controller?.subject {
@@ -1885,6 +1901,8 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     placeholderTransition = .immediate
                     
                     self.updateNavigation(transition: .immediate)
+                    
+                    self.updateTopEdgeEffect()
                 }
                 placeholderNode.update(layout: layout, theme: self.presentationData.theme, strings: self.presentationData.strings, hasCamera: hasCamera, transition: placeholderTransition)
                 placeholderTransition.updateFrame(node: placeholderNode, frame: innerBounds)
@@ -2514,7 +2532,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             moreIsVisible = true
         } else {
             let title: String
-            let isEnabled: Bool
+            var isEnabled: Bool
             if self.controllerNode.currentDisplayMode == .selected {
                 title = "" // self.presentationData.strings.Attachment_SelectedMedia(count)
                 isEnabled = false
@@ -2522,7 +2540,12 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                 title = self.selectedCollectionValue?.localizedTitle ?? self.presentationData.strings.MediaPicker_Recents
                 isEnabled = true
             }
-            self.titleView.updateTitle(title: title, isEnabled: isEnabled, animated: true)
+            var titleIsEnabled = isEnabled
+            if self.controllerNode.placeholderNode != nil {
+                titleIsEnabled = false
+            }
+            
+            self.titleView.updateTitle(title: title, isEnabled: titleIsEnabled, animated: true)
             self.cancelButtonNode.setState(isEnabled ? .cancel : .back, animated: true)
             isBack = !isEnabled
             

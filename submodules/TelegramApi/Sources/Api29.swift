@@ -541,8 +541,10 @@ public extension Api {
 public extension Api {
     enum UrlAuthResult: TypeConstructorDescription {
         public class Cons_urlAuthResultAccepted {
-            public var url: String
-            public init(url: String) {
+            public var flags: Int32
+            public var url: String?
+            public init(flags: Int32, url: String?) {
+                self.flags = flags
                 self.url = url
             }
         }
@@ -550,10 +552,18 @@ public extension Api {
             public var flags: Int32
             public var bot: Api.User
             public var domain: String
-            public init(flags: Int32, bot: Api.User, domain: String) {
+            public var browser: String?
+            public var platform: String?
+            public var ip: String?
+            public var region: String?
+            public init(flags: Int32, bot: Api.User, domain: String, browser: String?, platform: String?, ip: String?, region: String?) {
                 self.flags = flags
                 self.bot = bot
                 self.domain = domain
+                self.browser = browser
+                self.platform = platform
+                self.ip = ip
+                self.region = region
             }
         }
         case urlAuthResultAccepted(Cons_urlAuthResultAccepted)
@@ -564,9 +574,12 @@ public extension Api {
             switch self {
             case .urlAuthResultAccepted(let _data):
                 if boxed {
-                    buffer.appendInt32(-1886646706)
+                    buffer.appendInt32(1648005024)
                 }
-                serializeString(_data.url, buffer: buffer, boxed: false)
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeString(_data.url!, buffer: buffer, boxed: false)
+                }
                 break
             case .urlAuthResultDefault:
                 if boxed {
@@ -575,11 +588,23 @@ public extension Api {
                 break
             case .urlAuthResultRequest(let _data):
                 if boxed {
-                    buffer.appendInt32(-1831650802)
+                    buffer.appendInt32(855293722)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 _data.bot.serialize(buffer, true)
                 serializeString(_data.domain, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeString(_data.browser!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeString(_data.platform!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeString(_data.ip!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeString(_data.region!, buffer: buffer, boxed: false)
+                }
                 break
             }
         }
@@ -587,20 +612,25 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, Any)]) {
             switch self {
             case .urlAuthResultAccepted(let _data):
-                return ("urlAuthResultAccepted", [("url", _data.url as Any)])
+                return ("urlAuthResultAccepted", [("flags", _data.flags as Any), ("url", _data.url as Any)])
             case .urlAuthResultDefault:
                 return ("urlAuthResultDefault", [])
             case .urlAuthResultRequest(let _data):
-                return ("urlAuthResultRequest", [("flags", _data.flags as Any), ("bot", _data.bot as Any), ("domain", _data.domain as Any)])
+                return ("urlAuthResultRequest", [("flags", _data.flags as Any), ("bot", _data.bot as Any), ("domain", _data.domain as Any), ("browser", _data.browser as Any), ("platform", _data.platform as Any), ("ip", _data.ip as Any), ("region", _data.region as Any)])
             }
         }
 
         public static func parse_urlAuthResultAccepted(_ reader: BufferReader) -> UrlAuthResult? {
-            var _1: String?
-            _1 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                _2 = parseString(reader)
+            }
             let _c1 = _1 != nil
-            if _c1 {
-                return Api.UrlAuthResult.urlAuthResultAccepted(Cons_urlAuthResultAccepted(url: _1!))
+            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
+            if _c1 && _c2 {
+                return Api.UrlAuthResult.urlAuthResultAccepted(Cons_urlAuthResultAccepted(flags: _1!, url: _2))
             }
             else {
                 return nil
@@ -618,11 +648,31 @@ public extension Api {
             }
             var _3: String?
             _3 = parseString(reader)
+            var _4: String?
+            if Int(_1!) & Int(1 << 2) != 0 {
+                _4 = parseString(reader)
+            }
+            var _5: String?
+            if Int(_1!) & Int(1 << 2) != 0 {
+                _5 = parseString(reader)
+            }
+            var _6: String?
+            if Int(_1!) & Int(1 << 2) != 0 {
+                _6 = parseString(reader)
+            }
+            var _7: String?
+            if Int(_1!) & Int(1 << 2) != 0 {
+                _7 = parseString(reader)
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.UrlAuthResult.urlAuthResultRequest(Cons_urlAuthResultRequest(flags: _1!, bot: _2!, domain: _3!))
+            let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
+            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
+            let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
+            let _c7 = (Int(_1!) & Int(1 << 2) == 0) || _7 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.UrlAuthResult.urlAuthResultRequest(Cons_urlAuthResultRequest(flags: _1!, bot: _2!, domain: _3!, browser: _4, platform: _5, ip: _6, region: _7))
             }
             else {
                 return nil
