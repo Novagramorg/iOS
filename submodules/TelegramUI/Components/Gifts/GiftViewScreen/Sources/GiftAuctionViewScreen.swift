@@ -544,6 +544,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             var isUpcoming = false
             var isEnded = false
             var tableItems: [TableComponent.Item] = []
+            
             if let auctionState = state.giftAuctionState, case let .generic(gift) = component.auctionContext.gift {
                 startTime = auctionState.startDate
                 endTime = auctionState.endDate
@@ -1019,13 +1020,13 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                 var variant3: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
                 if !state.previewModels.isEmpty {
                     if state.previewModels.count > 0 {
-                        variant1 = .preview(attributes: [state.previewModels[0]], rarity: 0)
+                        variant1 = .preview(attributes: [state.previewModels[0]], rarity: nil)
                     }
                     if state.previewModels.count > 1 {
-                        variant2 = .preview(attributes: [state.previewModels[1]], rarity: 0)
+                        variant2 = .preview(attributes: [state.previewModels[1]], rarity: nil)
                     }
                     if state.previewModels.count > 2 {
-                        variant3 = .preview(attributes: [state.previewModels[2]], rarity: 0)
+                        variant3 = .preview(attributes: [state.previewModels[2]], rarity: nil)
                     }
                 }
                 
@@ -1082,7 +1083,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         guard let state, let attributes = state.giftUpgradeAttributes else {
                             return
                         }
-                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsScreen(context: component.context, gift: .generic(gift), attributes: attributes, selectedAttributes: nil, focusedAttribute: nil)
+                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsScreen(context: component.context, gift: .generic(gift), onlyCrafted: false, attributes: attributes, selectedAttributes: nil, focusedAttribute: nil)
                         environment.controller()?.push(variantsController)
                     }, animateScale: false),
                     availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),

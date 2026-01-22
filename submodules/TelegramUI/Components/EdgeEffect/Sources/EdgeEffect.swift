@@ -78,7 +78,7 @@ public class EdgeEffectView: UIView {
         }
     }
     
-    public static func generateEdgeGradientData(baseHeight: CGFloat) -> VariableBlurView.Gradient {
+    public static func generateEdgeGradientData(baseHeight: CGFloat) -> VariableBlurEffect.Gradient {
         let gradientColors: [CGFloat] = [
             0.8470588235294118,
             0.8431372549019608,
@@ -267,14 +267,14 @@ public class EdgeEffectView: UIView {
             1.0,
         ]
         
-        return VariableBlurView.Gradient(
+        return VariableBlurEffect.Gradient(
             height: baseHeight,
             alpha: gradientColors.map { $0 / gradientColorNorm },
             positions: gradientLocations
         )
     }
     
-    public static func generateEdgeGradient(baseHeight: CGFloat, isInverted: Bool) -> UIImage {
+    public static func generateEdgeGradient(baseHeight: CGFloat, isInverted: Bool, extendsInwards: Bool = false) -> UIImage {
         let gradientColors: [CGFloat] = [
             0.8470588235294118,
             0.8431372549019608,
@@ -463,12 +463,18 @@ public class EdgeEffectView: UIView {
             1.0,
         ]
         
+        var resizingInverted = isInverted
+        if extendsInwards {
+            resizingInverted = false
+        }
+        let _ = resizingInverted
+        
         return generateGradientImage(
             size: CGSize(width: 1.0, height: baseHeight),
             colors: gradientColors.map { UIColor(white: 0.0, alpha: $0 / gradientColorNorm) },
             locations: gradientLocations,
             isInverted: isInverted
-        )!.resizableImage(withCapInsets: UIEdgeInsets(top: isInverted ? baseHeight : 0.0, left: 0.0, bottom: isInverted ? 0.0 : baseHeight, right: 0.0), resizingMode: .stretch)
+        )!.resizableImage(withCapInsets: UIEdgeInsets(top: resizingInverted ? baseHeight : 0.0, left: 0.0, bottom: resizingInverted ? 0.0 : baseHeight, right: 0.0), resizingMode: .stretch)
     }
 }
 
@@ -535,17 +541,17 @@ public final class EdgeEffectComponent: Component {
     }
 }
 
-public final class VariableBlurView: UIView {
+public final class VariableBlurEffect {
     private struct Params: Equatable {
         let size: CGSize
         let constantHeight: CGFloat
-        let isInverted: Bool
+        let placement: Placement
         let gradient: Gradient
         
-        init(size: CGSize, constantHeight: CGFloat, isInverted: Bool, gradient: Gradient) {
+        init(size: CGSize, constantHeight: CGFloat, placement: Placement, gradient: Gradient) {
             self.size = size
             self.constantHeight = constantHeight
-            self.isInverted = isInverted
+            self.placement = placement
             self.gradient = gradient
         }
     }
@@ -578,154 +584,59 @@ public final class VariableBlurView: UIView {
         }
     }
     
-    public let maxBlurRadius: CGFloat
+    public struct Placement: Equatable {
+        public enum Position {
+            case top
+            case bottom
+        }
+        
+        public let position: Position
+        public let extendsInwards: Bool
+        
+        public init(position: Position, extendsInwards: Bool) {
+            self.position = position
+            self.extendsInwards = extendsInwards
+        }
+    }
     
-    private let effectLayerDelegate: SimpleLayerDelegate
-    private var mainEffectLayer: CALayer?
-    private var additionalEffectLayer: CALayer?
+    private let layer: CALayer
+    private let isTransparent: Bool
+    private let maxBlurRadius: CGFloat
     
     private var params: Params?
     private var gradientImage: UIImage?
-    private var isAnimating: Bool = false
     
-    private let imageSubview: UIImageView
+    private let imageSubview: UIImageView?
     
-    public init(maxBlurRadius: CGFloat = 20.0) {
+    public init(layer: CALayer, isTransparent: Bool = false, maxBlurRadius: CGFloat = 20.0) {
+        self.layer = layer
+        self.isTransparent = isTransparent
         self.maxBlurRadius = maxBlurRadius
         
-        self.effectLayerDelegate = SimpleLayerDelegate()
-        
-        self.mainEffectLayer = createBackdropLayer()
         if #available(iOS 26.0, *) {
-            if let mainEffectLayer = self.mainEffectLayer, let variableBlur = CALayer.variableBlur() {
+            let imageSubview = UIImageView()
+            self.imageSubview = imageSubview
+            imageSubview.layer.name = "mask_source"
+            
+            if let variableBlur = CALayer.variableBlur() {
                 variableBlur.setValue(self.maxBlurRadius, forKey: "inputRadius")
                 variableBlur.setValue("mask_source", forKey: "inputSourceSublayerName")
-                variableBlur.setValue(true, forKey: "inputNormalizeEdges")
-                mainEffectLayer.filters = [variableBlur]
-                
-                /*#if DEBUG
-                if let classValue = NSClassFromString("CAFilter") as AnyObject as? NSObjectProtocol {
-                    let makeSelector = NSSelectorFromString("filterWithName:")
-                    let filter = classValue.perform(makeSelector, with: "colorMatrix").takeUnretainedValue() as? NSObject
-                    
-                    if let filter {
-                        /// Builds a 4x5 (RGBA) color matrix (20 floats, row-major).
-                        /// Applies: Desaturate(s) then TintToward(t, k) in linear RGB.
-                        /// - s: saturation in [0,1] (1 = unchanged, 0 = grayscale)
-                        /// - k: tint strength in [0,1] (0 = none, 1 = fully "brightness->tint" mapping)
-                        /// - t: tint color (linear RGB). Doesn't have to be normalized, but should be non-negative.
-                        /// - bias: optional constant "cast" added in the bias column, scaled by tint color.
-                        let makeDesatTintMatrix: (Float32, Float32, (Float32, Float32, Float32), Float32) -> [Float32] = { s, k, t, bias in
-                            // Rec.709 luma weights (good default for linear RGB)
-                            let wr: Float32 = 0.2126
-                            let wg: Float32 = 0.7152
-                            let wb: Float32 = 0.0722
-
-                            let (tr, tg, tb) = t
-
-                            // --- D = desaturation matrix ---
-                            let a = 1 - s
-
-                            let D00 = wr * a + s, D01 = wg * a,     D02 = wb * a
-                            let D10 = wr * a,     D11 = wg * a + s, D12 = wb * a
-                            let D20 = wr * a,     D21 = wg * a,     D22 = wb * a + s
-
-                            // --- T = outer(t, w): maps luma to tinted RGB (preserves luma per weights) ---
-                            let T00 = tr * wr, T01 = tr * wg, T02 = tr * wb
-                            let T10 = tg * wr, T11 = tg * wg, T12 = tg * wb
-                            let T20 = tb * wr, T21 = tb * wg, T22 = tb * wb
-
-                            // --- A = (1-k)I + kT ---
-                            let ik = 1 - k
-
-                            let A00 = ik + k * T00, A01 =      k * T01, A02 =      k * T02
-                            let A10 =      k * T10, A11 = ik + k * T11, A12 =      k * T12
-                            let A20 =      k * T20, A21 =      k * T21, A22 = ik + k * T22
-
-                            // --- M = A * D (3x3 multiply) ---
-                            let M00 = A00 * D00 + A01 * D10 + A02 * D20
-                            let M01 = A00 * D01 + A01 * D11 + A02 * D21
-                            let M02 = A00 * D02 + A01 * D12 + A02 * D22
-
-                            let M10 = A10 * D00 + A11 * D10 + A12 * D20
-                            let M11 = A10 * D01 + A11 * D11 + A12 * D21
-                            let M12 = A10 * D02 + A11 * D12 + A12 * D22
-
-                            let M20 = A20 * D00 + A21 * D10 + A22 * D20
-                            let M21 = A20 * D01 + A21 * D11 + A22 * D21
-                            let M22 = A20 * D02 + A21 * D12 + A22 * D22
-
-                            // Optional constant cast in bias column
-                            let bR = bias * tr
-                            let bG = bias * tg
-                            let bB = bias * tb
-
-                            // 4x5 row-major, alpha passthrough:
-                            return [
-                                M00, M01, M02, 0, bR,
-                                M10, M11, M12, 0, bG,
-                                M20, M21, M22, 0, bB,
-                                0,   0,   0,   1, 0
-                            ]
-                        }
-                        
-                        var matrix: [Float32] = makeDesatTintMatrix(
-                            0.1,                // more desaturated
-                            0.1,                 // moderate tinting
-                            (0.0, 1.0, 0.0),     // warm tint target
-                            0.0               // set e.g. 0.03 for a gentle warm cast
-                        )
-                        filter.setValue(NSValue(bytes: &matrix, objCType: "{CAColorMatrix=ffffffffffffffffffff}"), forKey: "inputColorMatrix")
-                        mainEffectLayer.filters = [variableBlur, filter]
-                    }
+                if isTransparent {
+                    variableBlur.setValue(true, forKey: "inputNormalizeEdgesTransparent")
+                } else {
+                    variableBlur.setValue(true, forKey: "inputNormalizeEdges")
                 }
-                #endif*/
+                self.layer.filters = [variableBlur]
             }
+            
+            self.layer.addSublayer(imageSubview.layer)
         } else {
-            self.additionalEffectLayer = createBackdropLayer()
+            self.imageSubview = nil
         }
-        
-        self.imageSubview = UIImageView()
-        self.imageSubview.layer.name = "mask_source"
-        
-        super.init(frame: CGRect())
-        
-        let groupName = "group-\(UInt32.random(in: 0 ... UInt32.max))"
-
-        if let mainEffectLayer = self.mainEffectLayer {
-            mainEffectLayer.delegate = self.effectLayerDelegate
-            mainEffectLayer.setValue(0.5, forKey: "scale")
-            mainEffectLayer.setValue(groupName, forKey: "groupName")
-            
-            self.layer.addSublayer(mainEffectLayer)
-            if #available(iOS 26.0, *) {
-                mainEffectLayer.addSublayer(self.imageSubview.layer)
-            }
-        }
-        
-        if let additionalEffectLayer = self.additionalEffectLayer {
-            self.layer.addSublayer(additionalEffectLayer)
-            
-            additionalEffectLayer.delegate = self.effectLayerDelegate
-            additionalEffectLayer.setValue(0.5, forKey: "scale")
-            
-            if let blurFilter = CALayer.blur() {
-                blurFilter.setValue(true, forKey: "inputNormalizeEdges")
-                blurFilter.setValue((maxBlurRadius * 2.0) as NSNumber, forKey: "inputRadius")
-                additionalEffectLayer.filters = [blurFilter]
-            }
-        }
-    }
-
-    required public init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
     }
     
     private func updateLegacyEffect() {
         guard let params = self.params else {
-            return
-        }
-        guard let mainEffectLayer = self.mainEffectLayer else {
             return
         }
         guard let variableBlur = CALayer.variableBlur() else {
@@ -735,7 +646,12 @@ public final class VariableBlurView: UIView {
             return
         }
         variableBlur.setValue(self.maxBlurRadius, forKey: "inputRadius")
-        variableBlur.setValue(true, forKey: "inputNormalizeEdges")
+        
+        if self.isTransparent {
+            variableBlur.setValue(true, forKey: "inputNormalizeEdgesTransparent")
+        } else {
+            variableBlur.setValue(true, forKey: "inputNormalizeEdges")
+        }
         
         let image: UIImage? = generateImage(CGSize(width: 1.0, height: min(800.0, params.size.height)), rotatedContext: { size, context in
             UIGraphicsPushContext(context)
@@ -748,7 +664,10 @@ public final class VariableBlurView: UIView {
             let mainEffectFrame: CGRect
             let additionalEffectFrame: CGRect
             
-            if params.isInverted {
+            if params.placement.extendsInwards {
+                mainEffectFrame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height))
+                additionalEffectFrame = CGRect()
+            } else if params.placement.position == .bottom {
                 mainEffectFrame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: params.constantHeight))
                 additionalEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: params.constantHeight), size: CGSize(width: size.width, height: max(0.0, size.height - params.constantHeight)))
             } else {
@@ -766,11 +685,11 @@ public final class VariableBlurView: UIView {
             variableBlur.setValue(cgImage, forKey: "inputMaskImage")
         }
         
-        mainEffectLayer.filters = [variableBlur]
+        self.layer.filters = [variableBlur]
     }
     
-    public func update(size: CGSize, constantHeight: CGFloat, isInverted: Bool, gradient: Gradient, transition: ContainedViewLayoutTransition) {
-        let params = Params(size: size, constantHeight: constantHeight, isInverted: isInverted, gradient: gradient)
+    public func update(size: CGSize, constantHeight: CGFloat, placement: Placement, gradient: Gradient, transition: ContainedViewLayoutTransition) {
+        let params = Params(size: size, constantHeight: constantHeight, placement: placement, gradient: gradient)
         if params == self.params {
             return
         }
@@ -779,30 +698,83 @@ public final class VariableBlurView: UIView {
         let isHeightUpdated = gradient.height != self.params?.gradient.height || size.height != self.params?.size.height
         
         if isGradientUpdated {
-            self.gradientImage = EdgeEffectView.generateEdgeGradient(baseHeight: max(1.0, params.gradient.height), isInverted: params.isInverted)
+            if params.placement.extendsInwards {
+                let baseHeight = max(1.0, params.gradient.height)
+                let resizingInverted = params.placement.position != .bottom
+                self.gradientImage = generateImage(CGSize(width: 1.0, height: baseHeight), opaque: false, rotatedContext: { size, context in
+                    let bounds = CGRect(origin: CGPoint(), size: size)
+                    context.clear(bounds)
+                    
+                    let gradientColors = [UIColor.white.withAlphaComponent(1.0).cgColor, UIColor.white.withAlphaComponent(0.0).cgColor] as CFArray
+                    
+                    var locations: [CGFloat] = [0.0, 1.0]
+                    let colorSpace = CGColorSpaceCreateDeviceRGB()
+                    let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors, locations: &locations)!
+
+                    if params.placement.position == .bottom {
+                        context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: size.height), end: CGPoint(x: 0.0, y: 0.0), options: CGGradientDrawingOptions())
+                    } else {
+                        context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
+                    }
+                })?.resizableImage(withCapInsets: UIEdgeInsets(top: resizingInverted ? baseHeight : 0.0, left: 0.0, bottom: resizingInverted ? 0.0 : baseHeight, right: 0.0), resizingMode: .stretch)
+            } else {
+                self.gradientImage = EdgeEffectView.generateEdgeGradient(baseHeight: max(1.0, params.gradient.height), isInverted: params.placement.position == .bottom, extendsInwards: params.placement.extendsInwards)
+            }
         }
         
         self.params = params
         
-        guard let mainEffectLayer = self.mainEffectLayer else {
-            return
-        }
-        
         let transition = ComponentTransition(transition)
         
-        if #available(iOS 26.0, *) {
+        if let imageSubview = self.imageSubview {
             if isGradientUpdated {
-                self.imageSubview.image = self.gradientImage
+                imageSubview.image = self.gradientImage
             }
-            transition.setFrame(layer: mainEffectLayer, frame: CGRect(origin: CGPoint(), size: size))
-            transition.setFrame(view: self.imageSubview, frame: CGRect(origin: CGPoint(), size: size))
+            transition.setFrame(layer: self.layer, frame: CGRect(origin: CGPoint(), size: size))
+            transition.setFrame(view: imageSubview, frame: CGRect(origin: CGPoint(), size: size))
         } else {
             if isHeightUpdated || isGradientUpdated {
                 self.updateLegacyEffect()
-                transition.setFrame(layer: mainEffectLayer, frame: CGRect(origin: CGPoint(), size: size))
+                transition.setFrame(layer: self.layer, frame: CGRect(origin: CGPoint(), size: size))
             } else {
-                transition.setFrame(layer: mainEffectLayer, frame: CGRect(origin: CGPoint(), size: size))
+                transition.setFrame(layer: self.layer, frame: CGRect(origin: CGPoint(), size: size))
             }
         }
+    }
+}
+
+public final class VariableBlurView: UIView {
+    public let maxBlurRadius: CGFloat
+    
+    private var effect: VariableBlurEffect?
+    private let effectLayerDelegate: SimpleLayerDelegate
+    private var mainEffectLayer: CALayer?
+    
+    public init(maxBlurRadius: CGFloat = 20.0) {
+        self.maxBlurRadius = maxBlurRadius
+        
+        self.effectLayerDelegate = SimpleLayerDelegate()
+        
+        self.mainEffectLayer = createBackdropLayer()
+        if let mainEffectLayer = self.mainEffectLayer {
+            self.effect = VariableBlurEffect(layer: mainEffectLayer, maxBlurRadius: maxBlurRadius)
+        }
+        
+        super.init(frame: CGRect())
+
+        if let mainEffectLayer = self.mainEffectLayer {
+            mainEffectLayer.delegate = self.effectLayerDelegate
+            mainEffectLayer.setValue(0.5, forKey: "scale")
+            
+            self.layer.addSublayer(mainEffectLayer)
+        }
+    }
+
+    required public init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    public func update(size: CGSize, constantHeight: CGFloat, isInverted: Bool, gradient: VariableBlurEffect.Gradient, transition: ContainedViewLayoutTransition) {
+        self.effect?.update(size: size, constantHeight: constantHeight, placement: VariableBlurEffect.Placement(position: isInverted ? .bottom : .top, extendsInwards: false), gradient: gradient, transition: transition)
     }
 }

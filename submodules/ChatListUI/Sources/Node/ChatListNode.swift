@@ -3259,8 +3259,12 @@ public final class ChatListNode: ListView {
                                 default:
                                     continue
                                 }
-                                if case let .index(index) = transition.chatListView.filteredEntries[entryCount - 1 - i].sortIndex, case let .chatList(chatListIndex) = index, chatListIndex.pinningIndex != nil {
-                                    pinnedOverscroll = true
+                                if case let .index(index) = transition.chatListView.filteredEntries[entryCount - 1 - i].sortIndex {
+                                    if case let .chatList(chatListIndex) = index, chatListIndex.pinningIndex != nil {
+                                        pinnedOverscroll = true
+                                    } else if case let .forum(pinnedIndex, _, _, _, _) = index, case .index = pinnedIndex {
+                                        pinnedOverscroll = true
+                                    }
                                 }
                             }
                         }

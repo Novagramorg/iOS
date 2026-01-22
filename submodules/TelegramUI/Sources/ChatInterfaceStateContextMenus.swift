@@ -3369,7 +3369,11 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
                 }
             }
         } else {
-            self.textNode.attributedText = NSAttributedString(string: " ", font: textFont, textColor: self.presentationData.theme.contextMenu.primaryColor)
+            var actualFont = textFont
+            if self.item.message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+                actualFont = Font.regular(floor(self.presentationData.listsFontSize.baseDisplaySize * 0.8))
+            }
+            self.textNode.attributedText = NSAttributedString(string: " ", font: actualFont, textColor: self.presentationData.theme.contextMenu.primaryColor)
         }
 
         let textSize = self.textNode.updateLayout(CGSize(width: calculatedWidth - sideInset - rightTextInset - iconSize.width - 4.0, height: .greatestFiniteMagnitude))
@@ -3559,6 +3563,15 @@ private final class ChatReadReportContextItemNode: ASDisplayNode, ContextMenuCus
     var isActionEnabled: Bool {
         if self.item.action == nil {
             return false
+        }
+        if self.item.isEdit {
+            return false
+        }
+        if self.item.message.id.peerId.namespace == Namespaces.Peer.CloudUser {
+            if let stats = self.currentStats, stats.peers.isEmpty {
+            } else {
+                return false
+            }
         }
         var reactionCount = 0
         for reaction in mergedMessageReactionsAndPeers(accountPeerId: self.item.context.account.peerId, accountPeer: nil, message: self.item.message).reactions {
