@@ -2847,8 +2847,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         switch result {
                             case .default:
                                 strongSelf.openUrl(defaultUrl, concealed: false, skipUrlAuth: true)
-                            case let .request(domain, bot, requestWriteAccess):
-                                let controller = chatMessageActionUrlAuthController(context: strongSelf.context, defaultUrl: defaultUrl, domain: domain, bot: bot, requestWriteAccess: requestWriteAccess, displayName: EnginePeer(peer).displayTitle(strings: strongSelf.presentationData.strings, displayOrder: strongSelf.presentationData.nameDisplayOrder), open: { [weak self] authorize, allowWriteAccess in
+                            case let .request(domain, bot, _, flags):
+                                let controller = chatMessageActionUrlAuthController(context: strongSelf.context, defaultUrl: defaultUrl, domain: domain, bot: bot, requestWriteAccess: flags.contains(.requestWriteAccess), displayName: EnginePeer(peer).displayTitle(strings: strongSelf.presentationData.strings, displayOrder: strongSelf.presentationData.nameDisplayOrder), open: { [weak self] authorize, allowWriteAccess in
                                     if let strongSelf = self {
                                         if authorize {
                                             strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, {
@@ -2869,7 +2869,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                                 }
                                             })
                                             
-                                            strongSelf.messageActionUrlAuthDisposable.set(((strongSelf.context.engine.messages.acceptMessageActionUrlAuth(subject: subject, allowWriteAccess: allowWriteAccess) |> afterDisposed {
+                                            strongSelf.messageActionUrlAuthDisposable.set(((strongSelf.context.engine.messages.acceptMessageActionUrlAuth(subject: subject, allowWriteAccess: allowWriteAccess, sharePhoneNumber: false) |> afterDisposed {
                                                 Queue.mainQueue().async {
                                                     if let strongSelf = self {
                                                         strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, {
@@ -2895,7 +2895,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                                 if let strongSelf = self {
                                                     switch result {
                                                         case let .accepted(url):
-                                                            strongSelf.openUrl(url, concealed: false, skipUrlAuth: true)
+                                                            if let url {
+                                                                strongSelf.openUrl(url, concealed: false, skipUrlAuth: true)
+                                                            }
                                                         default:
                                                             strongSelf.openUrl(defaultUrl, concealed: false, skipUrlAuth: true)
                                                     }
@@ -2909,7 +2911,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                 strongSelf.chatDisplayNode.dismissInput()
                                 strongSelf.present(controller, in: .window(.root))
                             case let .accepted(url):
-                                strongSelf.openUrl(url, concealed: false, forceExternal: true, skipUrlAuth: true)
+                                if let url {
+                                    strongSelf.openUrl(url, concealed: false, forceExternal: true, skipUrlAuth: true)
+                                }
                         }
                     }
                 }))
