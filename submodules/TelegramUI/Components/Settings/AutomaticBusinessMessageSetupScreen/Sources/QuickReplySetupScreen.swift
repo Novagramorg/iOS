@@ -1075,6 +1075,8 @@ final class QuickReplySetupScreenComponent: Component {
                             timingFunction = kCAMediaTimingFunctionSpring
                         case .custom:
                             timingFunction = kCAMediaTimingFunctionSpring
+                        case .bounce:
+                            timingFunction = kCAMediaTimingFunctionSpring
                         }
                         
                         searchBarNode.animateIn(from: placeholderNode, duration: duration, timingFunction: timingFunction)

@@ -1385,6 +1385,7 @@ private final class ItemSelectionRecognizer: UIGestureRecognizer {
 public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, ContextControllerActionsStackNode {
     final class NavigationContainer: ASDisplayNode, ASGestureRecognizerDelegate {
         let backgroundContainer: GlassBackgroundContainerView
+        let backgroundContainerInset: CGFloat
         let backgroundView: GlassBackgroundView
         var sourceExtractableContainer: ContextExtractableContainer?
         let contentContainer: UIView
@@ -1409,6 +1410,8 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
             self.contentContainer = UIView()
             self.contentContainer.clipsToBounds = true
             self.backgroundView.contentView.addSubview(self.contentContainer)
+            
+            self.backgroundContainerInset = 32.0
             
             super.init()
             
@@ -1466,11 +1469,12 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
             }
         }
         
-        func animateIn(fromExtractableContainer extractableContainer: ContextExtractableContainer) {
-            let transition: ComponentTransition = .spring(duration: 0.42)
+        func animateIn(fromExtractableContainer extractableContainer: ContextExtractableContainer, transition: ComponentTransition) {
+            let normalState = extractableContainer.normalState
+            let sourceSize = normalState.size
+            let normalCornerRadius: CGFloat = normalState.cornerRadius
             
-            let normalSize = extractableContainer.extractableContentView.bounds.size
-            let normalCornerRadius: CGFloat = min(normalSize.width, normalSize.height) * 0.5
+            let currentSize = self.contentContainer.bounds.size
             
             self.sourceExtractableContainer = extractableContainer
             self.backgroundView.isHidden = true
@@ -1485,34 +1489,50 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
             }
             
             self.sourceExtractableContainer = nil
-            self.contentContainer.frame = CGRect(origin: CGPoint(), size: normalSize)
+            self.contentContainer.frame = CGRect(origin: CGPoint(), size: sourceSize)
             self.contentContainer.layer.cornerRadius = normalCornerRadius
             
-            transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: self.backgroundContainer.bounds.size))
+            extractableContainer.extractableContentView.frame = CGRect(origin: CGPoint(x: (currentSize.width - sourceSize.width) * 0.5, y: (currentSize.height - sourceSize.height) * 0.5), size: sourceSize).offsetBy(dx: self.backgroundContainerInset, dy: self.backgroundContainerInset)
+            transition.setFrame(view: extractableContainer.extractableContentView, frame: CGRect(origin: CGPoint(x: self.backgroundContainerInset, y: self.backgroundContainerInset), size: currentSize))
+            transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: currentSize))
             transition.setCornerRadius(layer: self.contentContainer.layer, cornerRadius: 30.0)
             self.contentContainer.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
             
-            extractableContainer.updateState(state: .extracted(size: normalSize, cornerRadius: normalCornerRadius, state: .animatedOut), transition: .immediate)
-            extractableContainer.updateState(state: .extracted(size: self.backgroundContainer.bounds.size, cornerRadius: 30.0, state: .animatedIn), transition: transition.containedViewLayoutTransition)
+            extractableContainer.updateState(state: .extracted(size: sourceSize, cornerRadius: normalCornerRadius, state: .animatedOut), transition: .transition(.immediate), completion: nil)
+            let mappedTransition: ContextExtractableContainer.Transition
+            if case let .curve(duration, curve) = transition.animation, case let .bounce(stiffness, damping) = curve {
+                mappedTransition = .spring(duration: duration, stiffness: stiffness, damping: damping)
+            } else {
+                mappedTransition = .transition(transition.containedViewLayoutTransition)
+            }
+            extractableContainer.updateState(state: .extracted(size: currentSize, cornerRadius: 30.0, state: .animatedIn), transition: mappedTransition, completion: nil)
         }
         
-        func animateOut(toExtractableContainer extractableContainer: ContextExtractableContainer, transition: ContainedViewLayoutTransition) {
-            let transition = ComponentTransition(transition)
+        func animateOut(toExtractableContainer extractableContainer: ContextExtractableContainer, transition: ComponentTransition) {
+            let normalState = extractableContainer.normalState
+            let normalSize = normalState.size
+            let normalCornerRadius: CGFloat = normalState.cornerRadius
             
-            let normalSize = extractableContainer.extractableContentView.bounds.size
-            let normalCornerRadius: CGFloat = min(normalSize.width, normalSize.height) * 0.5
+            let currentSize = self.contentContainer.bounds.size
+            
+            transition.setFrame(view: extractableContainer.extractableContentView, frame: CGRect(origin: CGPoint(x: self.backgroundContainerInset, y: self.backgroundContainerInset), size: normalSize).offsetBy(dx: (currentSize.width - normalSize.width) * 0.5, dy: (currentSize.height - normalSize.height) * 0.5))
             
             transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: normalSize))
-            transition.attachAnimation(view: self.contentContainer, id: "animateOut", completion: { [weak extractableContainer] _ in
-                guard let extractableContainer else {
-                    return
-                }
-                extractableContainer.addSubview(extractableContainer.extractableContentView)
-            })
             transition.setCornerRadius(layer: self.contentContainer.layer, cornerRadius: normalCornerRadius)
             transition.setAlpha(view: self.contentContainer, alpha: 0.0)
             
-            extractableContainer.updateState(state: .normal, transition: transition.containedViewLayoutTransition)
+            let mappedTransition: ContextExtractableContainer.Transition
+            if case let .curve(duration, curve) = transition.animation, case let .bounce(stiffness, damping) = curve {
+                mappedTransition = .spring(duration: duration, stiffness: stiffness, damping: damping)
+            } else {
+                mappedTransition = .transition(transition.containedViewLayoutTransition)
+            }
+            extractableContainer.updateState(state: .extracted(size: normalSize, cornerRadius: normalCornerRadius, state: .animatedOut), transition: mappedTransition, completion: nil)
+        }
+        
+        func didAnimateOut(toExtractableContainer extractableContainer: ContextExtractableContainer) {
+            extractableContainer.addSubview(extractableContainer.extractableContentView)
+            extractableContainer.updateState(state: .normal, transition: .transition(.immediate), completion: nil)
         }
         
         func update(presentationData: PresentationData, presentation: Presentation, size: CGSize, transition: ContainedViewLayoutTransition) {
@@ -1520,34 +1540,21 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
             
             transition.setFrame(view: self.contentContainer, frame: CGRect(origin: CGPoint(), size: size))
             
-            var backgroundContainerSize = size
-            if !transition.animation.isImmediate && (size.width < self.backgroundContainer.bounds.width || size.height < self.backgroundContainer.bounds.height) {
-                backgroundContainerSize = CGSize(
-                    width: max(self.backgroundContainer.bounds.width, size.width),
-                    height: max(self.backgroundContainer.bounds.height, size.height)
-                )
-            }
+            let backgroundContainerFrame = CGRect(origin: CGPoint(), size: size).insetBy(dx: -self.backgroundContainerInset, dy: -self.backgroundContainerInset)
             
-            if self.backgroundContainer.bounds.size != size {
-                self.backgroundContainer.update(size: backgroundContainerSize, isDark: presentationData.theme.overallDarkAppearance, transition: transition)
-                
-                let isDark = presentationData.theme.overallDarkAppearance
-                transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: CGPoint(), size: size), completion: { [weak self] completed in
-                    guard let self, completed else {
-                        return
-                    }
-                    self.backgroundContainer.update(size: self.backgroundContainer.bounds.size, isDark: isDark, transition: .immediate)
-                })
+            if self.backgroundContainer.bounds.size != backgroundContainerFrame.size {
+                self.backgroundContainer.update(size: backgroundContainerFrame.size, isDark: presentationData.theme.overallDarkAppearance, transition: transition)
+                transition.setFrame(view: self.backgroundContainer, frame: backgroundContainerFrame)
             }
             
             transition.setCornerRadius(layer: self.contentContainer.layer, cornerRadius: min(30.0, size.height * 0.5))
             
-            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
+            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: self.backgroundContainerInset, y: self.backgroundContainerInset), size: size))
             self.backgroundView.update(size: size, cornerRadius: min(30.0, size.height * 0.5), isDark: presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
             
             if let sourceExtractableContainer = self.sourceExtractableContainer {
                 transition.setFrame(view: sourceExtractableContainer.extractableContentView, frame: CGRect(origin: CGPoint(), size: size))
-                sourceExtractableContainer.updateState(state: .extracted(size: size, cornerRadius: min(30.0, size.height * 0.5), state: .animatedIn), transition: transition.containedViewLayoutTransition)
+                sourceExtractableContainer.updateState(state: .extracted(size: size, cornerRadius: min(30.0, size.height * 0.5), state: .animatedIn), transition: .transition(transition.containedViewLayoutTransition), completion: nil)
             }
         }
     }
@@ -2185,11 +2192,15 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
         }
     }
     
-    func animateIn(fromExtractableContainer extractableContainer: ContextExtractableContainer) {
-        self.navigationContainer.animateIn(fromExtractableContainer: extractableContainer)
+    func animateIn(fromExtractableContainer extractableContainer: ContextExtractableContainer, transition: ComponentTransition) {
+        self.navigationContainer.animateIn(fromExtractableContainer: extractableContainer, transition: transition)
     }
     
-    func animateOut(toExtractableContainer extractableContainer: ContextExtractableContainer, transition: ContainedViewLayoutTransition) {
+    func animateOut(toExtractableContainer extractableContainer: ContextExtractableContainer, transition: ComponentTransition) {
         self.navigationContainer.animateOut(toExtractableContainer: extractableContainer, transition: transition)
+    }
+    
+    func didAnimateOut(toExtractableContainer extractableContainer: ContextExtractableContainer) {
+        self.navigationContainer.didAnimateOut(toExtractableContainer: extractableContainer)
     }
 }

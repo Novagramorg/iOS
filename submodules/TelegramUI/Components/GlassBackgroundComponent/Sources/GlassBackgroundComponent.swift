@@ -250,6 +250,7 @@ public class GlassBackgroundView: UIView {
     public struct TintColor: Equatable {
         public enum Kind {
             case panel
+            case clear
             case custom
         }
         
@@ -411,12 +412,10 @@ public class GlassBackgroundView: UIView {
         }
         return nil
     }
-        
-    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
-        self.update(size: size, shape: .roundedRect(cornerRadius: cornerRadius), isDark: isDark, tintColor: tintColor, isInteractive: isInteractive, isVisible: isVisible, transition: transition)
-    }
     
-    public func update(size: CGSize, shape: Shape, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
+    public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
+        let shape: Shape = .roundedRect(cornerRadius: cornerRadius)
+        
         if let nativeView = self.nativeView, let nativeViewClippingContext = self.nativeViewClippingContext, (nativeView.bounds.size != size || nativeViewClippingContext.shape != shape) {
             
             nativeViewClippingContext.update(shape: shape, size: size, transition: transition)
@@ -515,6 +514,8 @@ public class GlassBackgroundView: UIView {
                     } else {
                         fillColor = UIColor(white: 1.0, alpha: 0.7)
                     }
+                case .clear:
+                    fillColor = UIColor(white: 1.0, alpha: 0.0)
                 case .custom:
                     fillColor = tintColor.color
                 }
@@ -526,15 +527,20 @@ public class GlassBackgroundView: UIView {
                         var glassEffect: UIGlassEffect?
                         
                         if isVisible {
-                            let glassEffectValue = UIGlassEffect(style: .regular)
+                            let glassEffectValue: UIGlassEffect
                             switch tintColor.kind {
                             case .panel:
+                                glassEffectValue = UIGlassEffect(style: .regular)
                                 if isDark {
                                     glassEffectValue.tintColor = UIColor(white: 1.0, alpha: 0.025)
                                 } else {
                                     glassEffectValue.tintColor = UIColor(white: 1.0, alpha: 0.1)
                                 }
                             case .custom:
+                                glassEffectValue = UIGlassEffect(style: .regular)
+                                glassEffectValue.tintColor = tintColor.color
+                            case .clear:
+                                glassEffectValue = UIGlassEffect(style: .clear)
                                 glassEffectValue.tintColor = tintColor.color
                             }
                             glassEffectValue.isInteractive = params.isInteractive
@@ -1113,6 +1119,19 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
         return self.normalContentView
     }
     
+    public var normalState: NormalState {
+        guard let normalParams = self.normalParams else {
+            return NormalState(
+                size: CGSize(),
+                cornerRadius: 0.0
+            )
+        }
+        return NormalState(
+            size: normalParams.size,
+            cornerRadius: normalParams.cornerRadius
+        )
+    }
+    
     private let glassView: GlassBackgroundView
     
     private var state: State = .normal
@@ -1161,24 +1180,36 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
         self.normalParams = normalParams
         
         if case .normal = self.state {
-            self.applyState(transition: transition)
+            self.applyState(transition: .transition(transition.containedViewLayoutTransition), completion: nil)
         }
     }
     
-    public func updateState(state: State, transition: ContainedViewLayoutTransition) {
+    public func updateState(state: State, transition: Transition, completion: ((Bool) -> Void)?) {
         self.state = state
-        self.applyState(transition: ComponentTransition(transition))
+        self.applyState(transition: transition, completion: completion)
     }
     
-    private func applyState(transition: ComponentTransition) {
+    private func applyState(transition: Transition, completion: ((Bool) -> Void)?) {
         guard let normalParams = self.normalParams else {
+            completion?(true)
             return
         }
+        
+        let mappedTransition: ComponentTransition
+        switch transition {
+        case let .transition(transition):
+            mappedTransition = ComponentTransition(transition)
+        case let .spring(duration, stiffness, damping):
+            mappedTransition = ComponentTransition(animation: .curve(duration: duration, curve: .bounce(stiffness: stiffness, damping: damping)))
+        }
+        
         switch self.state {
         case .normal:
-            transition.setAlpha(view: self.normalContentView, alpha: 1.0)
-            transition.setFrame(view: self.extractableContentView, frame: CGRect(origin: CGPoint(), size: normalParams.size))
-            transition.setFrame(view: self.normalContentView, frame: CGRect(origin: CGPoint(), size: normalParams.size))
+            mappedTransition.setAlpha(view: self.normalContentView, alpha: 1.0)
+            mappedTransition.setFrame(view: self.extractableContentView, frame: CGRect(origin: CGPoint(), size: normalParams.size))
+            mappedTransition.setFrame(view: self.normalContentView, frame: CGRect(origin: CGPoint(), size: normalParams.size), completion: { completed in
+                completion?(completed)
+            })
             
             self.glassView.update(
                 size: normalParams.size,
@@ -1187,12 +1218,14 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
                 tintColor: normalParams.tintColor,
                 isInteractive: normalParams.isInteractive,
                 isVisible: normalParams.isVisible,
-                transition: transition
+                transition: mappedTransition,
             )
         case let .extracted(size, cornerRadius, extractionState):
             switch extractionState {
             case .animatedOut:
-                transition.setAlpha(view: self.normalContentView, alpha: 1.0)
+                mappedTransition.setAlpha(view: self.normalContentView, alpha: 1.0, completion: { completed in
+                    completion?(completed)
+                })
                 
                 self.glassView.update(
                     size: normalParams.size,
@@ -1201,10 +1234,12 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
                     tintColor: normalParams.tintColor,
                     isInteractive: normalParams.isInteractive,
                     isVisible: normalParams.isVisible,
-                    transition: transition
+                    transition: mappedTransition
                 )
             case .animatedIn:
-                transition.setAlpha(view: self.normalContentView, alpha: 0.0)
+                mappedTransition.setAlpha(view: self.normalContentView, alpha: 0.0, completion: { completed in
+                    completion?(completed)
+                })
                 
                 self.glassView.update(
                     size: size,
@@ -1213,7 +1248,7 @@ public final class GlassContextExtractableContainer: UIView, ContextExtractableC
                     tintColor: normalParams.tintColor,
                     isInteractive: normalParams.isInteractive,
                     isVisible: normalParams.isVisible,
-                    transition: transition
+                    transition: mappedTransition
                 )
             }
         }

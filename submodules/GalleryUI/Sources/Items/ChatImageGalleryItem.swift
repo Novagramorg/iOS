@@ -175,25 +175,24 @@ class ChatImageGalleryItem: GalleryItem {
             }
         }
         
+        var title: String?
         if let _ = message.adAttribute {
-            node._title.set(.single(self.presentationData.strings.Gallery_Ad))
+            title = self.presentationData.strings.Gallery_Ad
         } else if let location = self.location {
-            node._title.set(.single(self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string))
+            title = self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string
         }
                 
-        if self.displayInfoOnTop {
-            node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId)
-        }
+        node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId, title: title)
         
         return node
     }
     
     func updateNode(node: GalleryItemNode, synchronous: Bool) {
         if let node = node as? ChatImageGalleryItemNode, let location = self.location {
-            node._title.set(.single(self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string))
+            let title = self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string
         
             if self.displayInfoOnTop {
-                node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId)
+                node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId, title: title)
             }
             node.setMessage(self.message, displayInfo: !self.displayInfoOnTop, translateToLanguage: self.translateToLanguage, peerIsCopyProtected: self.peerIsCopyProtected, isSecret: self.isSecret)
         }
