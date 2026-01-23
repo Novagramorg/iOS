@@ -169,9 +169,27 @@ func _internal_requestMessageActionCallback(account: Account, messageId: Message
 }
 
 public enum MessageActionUrlAuthResult {
+    public struct Flags: OptionSet {
+        public var rawValue: Int32
+        
+        public init(rawValue: Int32) {
+            self.rawValue = rawValue
+        }
+        
+        public static let requestWriteAccess = Flags(rawValue: 1 << 0)
+        public static let requestPhoneNumber = Flags(rawValue: 1 << 1)
+    }
+    
+    public struct ClientData {
+        public let browser: String
+        public let platform: String
+        public let ip: String
+        public let region: String
+    }
+    
     case `default`
-    case accepted(String)
-    case request(String, Peer, Bool)
+    case accepted(url: String?)
+    case request(domain: String, bot: Peer, clientData: ClientData?, flags: Flags)
 }
 
 public enum MessageActionUrlSubject {
@@ -215,18 +233,32 @@ func _internal_requestMessageActionUrlAuth(account: Account, subject: MessageAct
                 return .default
             case let .urlAuthResultAccepted(urlAuthResultAcceptedData):
                 let url = urlAuthResultAcceptedData.url
-                return .accepted(url)
+                return .accepted(url: url)
             case let .urlAuthResultRequest(urlAuthResultRequestData):
-                let (flags, bot, domain) = (urlAuthResultRequestData.flags, urlAuthResultRequestData.bot, urlAuthResultRequestData.domain)
-                return .request(domain, TelegramUser(user: bot), (flags & (1 << 0)) != 0)
+                let (apiFlags, bot, domain) = (urlAuthResultRequestData.flags, urlAuthResultRequestData.bot, urlAuthResultRequestData.domain)
+                var clientData: MessageActionUrlAuthResult.ClientData?
+                if let browser = urlAuthResultRequestData.browser, let platform = urlAuthResultRequestData.platform, let ip = urlAuthResultRequestData.ip, let region = urlAuthResultRequestData.region {
+                    clientData = MessageActionUrlAuthResult.ClientData(browser: browser, platform: platform, ip: ip, region: region)
+                }
+                var flags: MessageActionUrlAuthResult.Flags = []
+                if (apiFlags & (1 << 0)) != 0 {
+                    flags.insert(.requestWriteAccess)
+                }
+                if (apiFlags & (1 << 1)) != 0 {
+                    flags.insert(.requestPhoneNumber)
+                }
+                return .request(domain: domain, bot: TelegramUser(user: bot), clientData: clientData, flags: flags)
         }
     }
 }
 
-func _internal_acceptMessageActionUrlAuth(account: Account, subject: MessageActionUrlSubject, allowWriteAccess: Bool) -> Signal<MessageActionUrlAuthResult, NoError> {
+func _internal_acceptMessageActionUrlAuth(account: Account, subject: MessageActionUrlSubject, allowWriteAccess: Bool, sharePhoneNumber: Bool) -> Signal<MessageActionUrlAuthResult, NoError> {
     var flags: Int32 = 0
     if allowWriteAccess {
         flags |= Int32(1 << 0)
+    }
+    if sharePhoneNumber {
+        flags |= Int32(1 << 3)
     }
     
     let request: Signal<Api.UrlAuthResult?, MTRpcError>
@@ -263,7 +295,7 @@ func _internal_acceptMessageActionUrlAuth(account: Account, subject: MessageActi
         switch result {
             case let .urlAuthResultAccepted(urlAuthResultAcceptedData):
                 let url = urlAuthResultAcceptedData.url
-                return .accepted(url)
+                return .accepted(url: url)
             default:
                 return .default
         }
