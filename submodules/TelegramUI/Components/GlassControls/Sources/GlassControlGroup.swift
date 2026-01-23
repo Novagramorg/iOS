@@ -76,10 +76,20 @@ public final class GlassControlGroupComponent: Component {
         }
         return true
     }
+    
+    private struct ItemId: Hashable {
+        let id: AnyHashable
+        let contentId: AnyHashable
+        
+        init(id: AnyHashable, contentId: AnyHashable) {
+            self.id = id
+            self.contentId = contentId
+        }
+    }
 
     public final class View: UIView {
         private let backgroundView: GlassBackgroundView
-        private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
+        private var itemViews: [ItemId: ComponentView<Empty>] = [:]
         
         private var component: GlassControlGroupComponent?
         private weak var state: EmptyComponentState?
@@ -97,7 +107,12 @@ public final class GlassControlGroupComponent: Component {
         }
 
         public func itemView(id: AnyHashable) -> UIView? {
-            return self.itemViews[id]?.view
+            for (itemId, itemView) in self.itemViews {
+                if itemId.id == id {
+                    return itemView.view
+                }
+            }
+            return nil
         }
         
         func update(component: GlassControlGroupComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -105,16 +120,6 @@ public final class GlassControlGroupComponent: Component {
             
             self.component = component
             self.state = state
-            
-            struct ItemId: Hashable {
-                var id: AnyHashable
-                var contentId: AnyHashable
-                
-                init(id: AnyHashable, contentId: AnyHashable) {
-                    self.id = id
-                    self.contentId = contentId
-                }
-            }
             
             var contentsWidth: CGFloat = 0.0
             var validIds: [AnyHashable] = []
@@ -196,7 +201,7 @@ public final class GlassControlGroupComponent: Component {
                 contentsWidth += itemSize.width
             }
             
-            var removeIds: [AnyHashable] = []
+            var removeIds: [ItemId] = []
             for (id, itemView) in self.itemViews {
                 if !validIds.contains(id) {
                     removeIds.append(id)

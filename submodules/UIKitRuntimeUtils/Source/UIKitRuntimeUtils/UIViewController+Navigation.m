@@ -4,7 +4,7 @@
 #import <objc/runtime.h>
 
 #import "NSWeakReference.h"
-
+#import <UIKitRuntimeUtils/UIKitUtils.h>
 
 @interface UIViewControllerPresentingProxy : UIViewController
 
@@ -113,7 +113,29 @@ static bool notyfyingShiftState = false;
 
 @end
 
+@implementation CALayerSpringParametersOverrideParameters
+
+- (instancetype _Nonnull)initWithStiffness:(CGFloat)stiffness damping:(CGFloat)damping duration:(double)duration; {
+    self = [super init];
+    if (self != nil) {
+        _stiffness = stiffness;
+        _damping = damping;
+        _duration = duration;
+    }
+    return self;
+}
+
+@end
+
 @implementation CALayerSpringParametersOverride
+
+- (instancetype _Nonnull)initWithParameters:(CALayerSpringParametersOverrideParameters * _Nullable)parameters {
+    self = [super init];
+    if (self != nil) {
+        _parameters = parameters;
+    }
+    return self;
+}
 
 @end
 
@@ -145,30 +167,65 @@ static NSMutableArray<CALayerSpringParametersOverride *> *currentSpringParameter
     if (currentSpringParametersOverrideStack().count != 0 && [anim isKindOfClass:[CASpringAnimation class]]) {
         CALayerSpringParametersOverride *overrideData = [currentSpringParametersOverrideStack() lastObject];
         if (overrideData) {
-            bool isNativeGlass = false;
-            if (@available(iOS 26.0, *)) {
-                isNativeGlass = true;
-            }
-            if (isNativeGlass && ABS(anim.duration - 0.3832) <= 0.0001) {
-            } else if (ABS(anim.duration - 0.5) <= 0.0001) {
-            } else {
+            if (overrideData.parameters) {
                 CABasicAnimation *sourceAnimation = (CABasicAnimation *)anim;
                 
-                CABasicAnimation *animation = [CABasicAnimation animationWithKeyPath:sourceAnimation.keyPath];
+                CASpringAnimation *animation = makeSpringBounceAnimationImpl(sourceAnimation.keyPath, 0.0, overrideData.parameters.damping);
+                
+                animation.stiffness = overrideData.parameters.stiffness;
                 animation.fromValue = sourceAnimation.fromValue;
                 animation.toValue = sourceAnimation.toValue;
                 animation.byValue = sourceAnimation.byValue;
                 animation.additive = sourceAnimation.additive;
-                animation.duration = sourceAnimation.duration;
-                animation.timingFunction = [[CAMediaTimingFunction alloc] initWithControlPoints:0.380 :0.700 :0.125 :1.000];
                 animation.removedOnCompletion = sourceAnimation.isRemovedOnCompletion;
                 animation.fillMode = sourceAnimation.fillMode;
-                animation.speed = sourceAnimation.speed;
                 animation.beginTime = sourceAnimation.beginTime;
                 animation.timeOffset = sourceAnimation.timeOffset;
                 animation.repeatCount = sourceAnimation.repeatCount;
                 animation.autoreverses = sourceAnimation.autoreverses;
+                
+                float k = animationDurationFactorImpl();
+                __unused float speed = 1.0f;
+                if (k != 0.0 && k != 1.0) {
+                    speed = 1.0f / k;
+                }
+                animation.speed = sourceAnimation.speed * (float)(animation.duration / overrideData.parameters.duration);
+                
                 updatedAnimation = animation;
+            } else {
+                bool isNativeGlass = false;
+                if (@available(iOS 26.0, *)) {
+                    isNativeGlass = true;
+                }
+                if (isNativeGlass && ABS(anim.duration - 0.3832) <= 0.0001) {
+                } else if (ABS(anim.duration - 0.5) <= 0.0001) {
+                } else {
+                    CABasicAnimation *sourceAnimation = (CABasicAnimation *)anim;
+                    
+                    CABasicAnimation *animation = [CABasicAnimation animationWithKeyPath:sourceAnimation.keyPath];
+                    animation.fromValue = sourceAnimation.fromValue;
+                    animation.toValue = sourceAnimation.toValue;
+                    animation.byValue = sourceAnimation.byValue;
+                    animation.additive = sourceAnimation.additive;
+                    animation.duration = sourceAnimation.duration;
+                    animation.timingFunction = [[CAMediaTimingFunction alloc] initWithControlPoints:0.380 :0.700 :0.125 :1.000];
+                    animation.removedOnCompletion = sourceAnimation.isRemovedOnCompletion;
+                    animation.fillMode = sourceAnimation.fillMode;
+                    animation.speed = sourceAnimation.speed;
+                    animation.beginTime = sourceAnimation.beginTime;
+                    animation.timeOffset = sourceAnimation.timeOffset;
+                    animation.repeatCount = sourceAnimation.repeatCount;
+                    animation.autoreverses = sourceAnimation.autoreverses;
+                    
+                    float k = animationDurationFactorImpl();
+                    float speed = 1.0f;
+                    if (k != 0.0 && k != 1.0) {
+                        speed = 1.0f / k;
+                    }
+                    animation.speed = speed * sourceAnimation.speed;
+                    
+                    updatedAnimation = animation;
+                }
             }
         }
     }

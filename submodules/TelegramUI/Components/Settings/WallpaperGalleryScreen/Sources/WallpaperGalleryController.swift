@@ -445,6 +445,8 @@ public class WallpaperGalleryController: ViewController {
         }, editMedia: { _ in
         }, controller: { [weak self] in
             return self
+        }, currentItemNode: { [weak self] in
+            return self?.galleryNode.pager.centralItemNode()
         })
         self.displayNode = WallpaperGalleryControllerNode(context: self.context, controllerInteraction: controllerInteraction, pageGap: 0.0, disableTapNavigation: true)
         self.displayNodeDidLoad()

@@ -450,7 +450,13 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
                 
                 switch scrubberHandle {
                     case .none:
-                        break
+                    let handleNode = ASImageNode()
+                    handleNode.isLayerBacked = true
+                    handleNodeImpl = handleNode
+                    
+                    let handleNodeContainer = MediaPlayerScrubbingNodeButton()
+                    handleNodeContainer.addSubnode(handleNode)
+                    handleNodeContainerImpl = handleNodeContainer
                     case .line:
                         let handleNode = ASImageNode()
                         handleNode.image = generateHandleBackground(color: foregroundColor)
@@ -934,7 +940,7 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
                             
                             if i == node.chapterNodes.count - 1 {
                                 let startPosition = endPosition + lineWidth
-                                chapterNode.frame = CGRect(x: startPosition, y: 0.0, width: backgroundFrame.size.width - startPosition, height: backgroundFrame.size.height)
+                                chapterNode.frame = CGRect(x: startPosition, y: 0.0, width: max(0.0, backgroundFrame.size.width - startPosition), height: backgroundFrame.size.height)
                             }
                         }
                     } else {

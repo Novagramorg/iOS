@@ -26,7 +26,21 @@ typedef NS_OPTIONS(NSUInteger, UIResponderDisableAutomaticKeyboardHandling) {
 
 @end
 
+@interface CALayerSpringParametersOverrideParameters : NSObject
+
+@property (nonatomic, readonly) CGFloat stiffness;
+@property (nonatomic, readonly) CGFloat damping;
+@property (nonatomic, readonly) double duration;
+
+- (instancetype _Nonnull)initWithStiffness:(CGFloat)stiffness damping:(CGFloat)damping duration:(double)duration;
+
+@end
+
 @interface CALayerSpringParametersOverride : NSObject
+
+@property (nonatomic, strong, readonly) CALayerSpringParametersOverrideParameters * _Nullable parameters;
+
+- (instancetype _Nonnull)initWithParameters:(CALayerSpringParametersOverrideParameters * _Nullable)parameters;
 
 @end
 
