@@ -975,7 +975,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             leftButtonsBackgroundTransition.setBounds(view: leftButtonsBackgroundView.background, bounds: CGRect(origin: CGPoint(), size: leftButtonsBackgroundFrame.size))
             leftButtonsBackgroundTransition.setFrame(view: leftButtonsBackgroundView.container, frame: CGRect(origin: CGPoint(), size: leftButtonsBackgroundFrame.size))
             ComponentTransition(transition).setAlpha(view: leftButtonsBackgroundView.background, alpha: leftButtonsWidth == 0.0 ? 0.0 : 1.0)
-            leftButtonsBackgroundView.background.update(size: leftButtonsBackgroundFrame.size, cornerRadius: leftButtonsBackgroundFrame.height * 0.5, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, isVisible: leftButtonsWidth != 0.0, transition: leftButtonsBackgroundTransition)
+            leftButtonsBackgroundView.background.update(size: leftButtonsBackgroundFrame.size, cornerRadius: leftButtonsBackgroundFrame.height * 0.5, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: self.presentationData.theme.glassStyle == .clear ? .clear : .panel), isInteractive: true, isVisible: leftButtonsWidth != 0.0, transition: leftButtonsBackgroundTransition)
         }
         
         if let rightButtonsBackgroundView = self.rightButtonsBackgroundView {
@@ -1002,7 +1002,7 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
                 }
                 
                 rightButtonsBackgroundView.background.isHidden = false
-                rightButtonsBackgroundView.background.update(size: rightButtonsBackgroundFrame.size, cornerRadius: rightButtonsBackgroundFrame.height * 0.5, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: rightButtonsBackgroundTransition)
+                rightButtonsBackgroundView.background.update(size: rightButtonsBackgroundFrame.size, cornerRadius: rightButtonsBackgroundFrame.height * 0.5, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: self.presentationData.theme.glassStyle == .clear ? .clear : .panel), isInteractive: true, transition: rightButtonsBackgroundTransition)
             } else {
                 rightButtonsBackgroundView.background.isHidden = true
             }

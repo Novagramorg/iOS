@@ -963,7 +963,7 @@ final class GiftStoreScreenComponent: Component {
                 let balanceBackgroundFrame = CGRect(origin: CGPoint(x: availableSize.width - environment.safeInsets.right - 16.0 - balanceBackgroundSize.width, y: environment.navigationHeight - 60.0 + 2.0 + floor((60.0 - 44.0) * 0.5)), size: balanceBackgroundSize)
                 
                 transition.setFrame(view: self.balanceBackgroundView, frame: balanceBackgroundFrame)
-                self.balanceBackgroundView.update(size: balanceBackgroundFrame.size, cornerRadius: balanceBackgroundFrame.height * 0.5, isDark: environment.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: environment.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), transition: transition)
+                self.balanceBackgroundView.update(size: balanceBackgroundFrame.size, cornerRadius: balanceBackgroundFrame.height * 0.5, isDark: environment.theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: transition)
                 
                 balanceTitleView.center = CGPoint(x: balanceBackgroundFrame.width - balanceSideInset - balanceTitleSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height / 2.0)
                 balanceTitleView.bounds = CGRect(origin: .zero, size: balanceTitleSize)

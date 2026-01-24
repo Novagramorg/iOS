@@ -1244,6 +1244,7 @@ final class MediaEditorScreenComponent: Component {
                 let presentationInterfaceState = ChatPresentationInterfaceState(
                     chatWallpaper: .builtin(WallpaperSettings()),
                     theme: presentationData.theme,
+                    preferredGlassType: .default,
                     strings: presentationData.strings,
                     dateTimeFormat: presentationData.dateTimeFormat,
                     nameDisplayOrder: presentationData.nameDisplayOrder,

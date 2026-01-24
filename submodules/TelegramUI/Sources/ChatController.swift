@@ -691,7 +691,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.stickerSettings = ChatInterfaceStickerSettings()
         
-        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: mode, chatLocation: chatLocation, subject: subject, peerNearbyData: peerNearbyData, greetingData: context.prefetchManager?.preloadedGreetingSticker, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
+        self.presentationInterfaceState = ChatPresentationInterfaceState(chatWallpaper: self.presentationData.chatWallpaper, theme: self.presentationData.theme, preferredGlassType: .default, strings: self.presentationData.strings, dateTimeFormat: self.presentationData.dateTimeFormat, nameDisplayOrder: self.presentationData.nameDisplayOrder, limitsConfiguration: context.currentLimitsConfiguration.with { $0 }, fontSize: self.presentationData.chatFontSize, bubbleCorners: self.presentationData.chatBubbleCorners, accountPeerId: context.account.peerId, mode: mode, chatLocation: chatLocation, subject: subject, peerNearbyData: peerNearbyData, greetingData: context.prefetchManager?.preloadedGreetingSticker, pendingUnpinnedAllMessages: false, activeGroupCallInfo: nil, hasActiveGroupCall: false, threadData: nil, isGeneralThreadClosed: nil, replyMessage: nil, accountPeerColor: nil, businessIntro: nil)
         
         if case let .customChatContents(customChatContents) = subject {
             switch customChatContents.kind {
@@ -715,7 +715,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         case .inline, .standard(.embedded):
             navigationBarPresentationData = nil
         default:
-            navigationBarPresentationData = NavigationBarPresentationData(presentationData: self.presentationData, hideBackground: false, hideBadge: false, style: .glass)
+            navigationBarPresentationData = NavigationBarPresentationData(presentationData: self.presentationData, hideBackground: false, hideBadge: false, style: .glass, glassStyle: .default)
         }
         
         self.moreBarButton = MoreHeaderButton(color: self.presentationData.theme.chat.inputPanel.panelControlColor)
@@ -733,11 +733,22 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         
         self.ready.set(.never())
         
-        self.chatBackgroundNode.isDarkUpdated = { [weak self] in
+        self.chatBackgroundNode.contentStatsUpdated = { [weak self] in
             guard let self else {
                 return
             }
             self.updateStatusBarPresentation(animated: false)
+            
+            var preferredGlassType: ChatPresentationInterfaceState.GlassType = self.chatBackgroundNode.contentStats?.isSaturated == true ? .clear : .default
+            if !self.presentationData.theme.overallDarkAppearance {
+                preferredGlassType = .default
+            }
+            if self.presentationInterfaceState.preferredGlassType != preferredGlassType {
+                self.updateChatPresentationInterfaceState(transition: .immediate, interactive: false, { state in
+                    return state.updatedPreferredGlassType(preferredGlassType)
+                })
+                self.updateNavigationBarPresentation()
+            }
         }
         
         self.scrollToTop = { [weak self] in
@@ -6324,8 +6335,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 case .embedded:
                     self.statusBar.statusBarStyle = .Ignore
                 default:
-                    if let isDark = self.chatDisplayNode.backgroundNode.isDark {
-                        if isDark {
+                    if let contentStats = self.chatDisplayNode.backgroundNode.contentStats {
+                        if contentStats.isDark {
                             self.statusBar.statusBarStyle = .White
                         } else {
                             self.statusBar.statusBarStyle = .Black
@@ -6348,10 +6359,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.navigationItem.backBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Back, style: .plain, target: nil, action: nil)
         self.updateStatusBarPresentation()
         self.updateNavigationBarPresentation()
+        var preferredGlassType: ChatPresentationInterfaceState.GlassType = self.chatBackgroundNode.contentStats?.isSaturated == true ? .clear : .default
+        if !self.presentationData.theme.overallDarkAppearance {
+            preferredGlassType = .default
+        }
         self.updateChatPresentationInterfaceState(animated: false, interactive: false, { state in
             var state = state
             state = state.updatedPresentationReady(self.didSetPresentationData)
             state = state.updatedTheme(self.presentationData.theme)
+            state = state.updatedPreferredGlassType(preferredGlassType)
             state = state.updatedStrings(self.presentationData.strings)
             state = state.updatedDateTimeFormat(self.presentationData.dateTimeFormat)
             state = state.updatedChatWallpaper(self.presentationData.chatWallpaper)
@@ -6368,10 +6384,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         let presentationTheme: PresentationTheme
         if let forcedNavigationBarTheme = self.forcedNavigationBarTheme {
             presentationTheme = forcedNavigationBarTheme
-            navigationBarTheme = NavigationBarTheme(rootControllerTheme: forcedNavigationBarTheme, hideBackground: false, hideBadge: true, edgeEffectColor: .clear, style: .glass)
+            navigationBarTheme = NavigationBarTheme(rootControllerTheme: forcedNavigationBarTheme, hideBackground: false, hideBadge: true, edgeEffectColor: .clear, style: .glass, glassStyle: self.presentationInterfaceState.preferredGlassType == .clear ? .clear : .default)
         } else {
             presentationTheme = self.presentationData.theme
-            navigationBarTheme = NavigationBarTheme(rootControllerTheme: self.presentationData.theme, hideBackground: false, hideBadge: false, edgeEffectColor: .clear, style: .glass)
+            navigationBarTheme = NavigationBarTheme(rootControllerTheme: self.presentationData.theme, hideBackground: false, hideBadge: false, edgeEffectColor: .clear, style: .glass, glassStyle: self.presentationInterfaceState.preferredGlassType == .clear ? .clear : .default)
         }
         
         self.navigationBar?.updatePresentationData(NavigationBarPresentationData(theme: navigationBarTheme, strings: NavigationBarStrings(presentationStrings: self.presentationData.strings)), transition: .immediate)
@@ -7499,11 +7515,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.updateChatPresentationInterfaceState(transition: animated ? .animated(duration: 0.4, curve: .spring) : .immediate, interactive: interactive, saveInterfaceState: saveInterfaceState, f, completion: completion)
     }
     
-    func updateChatPresentationInterfaceState(transition: ContainedViewLayoutTransition, interactive: Bool, saveInterfaceState: Bool = false, _ f: (ChatPresentationInterfaceState) -> ChatPresentationInterfaceState, completion: @escaping (ContainedViewLayoutTransition) -> Void = { _ in }) {
+    func updateChatPresentationInterfaceState(transition: ContainedViewLayoutTransition, interactive: Bool, force: Bool = false, saveInterfaceState: Bool = false, _ f: (ChatPresentationInterfaceState) -> ChatPresentationInterfaceState, completion: @escaping (ContainedViewLayoutTransition) -> Void = { _ in }) {
         updateChatPresentationInterfaceStateImpl(
             selfController: self,
             transition: transition,
             interactive: interactive,
+            force: force,
             saveInterfaceState: saveInterfaceState,
             f,
             completion: completion

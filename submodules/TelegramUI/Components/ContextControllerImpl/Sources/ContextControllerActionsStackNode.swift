@@ -1550,7 +1550,7 @@ public final class ContextControllerActionsStackNodeImpl: ASDisplayNode, Context
             transition.setCornerRadius(layer: self.contentContainer.layer, cornerRadius: min(30.0, size.height * 0.5))
             
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: self.backgroundContainerInset, y: self.backgroundContainerInset), size: size))
-            self.backgroundView.update(size: size, cornerRadius: min(30.0, size.height * 0.5), isDark: presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+            self.backgroundView.update(size: size, cornerRadius: min(30.0, size.height * 0.5), isDark: presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
             
             if let sourceExtractableContainer = self.sourceExtractableContainer {
                 transition.setFrame(view: sourceExtractableContainer.extractableContentView, frame: CGRect(origin: CGPoint(), size: size))

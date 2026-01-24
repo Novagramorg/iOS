@@ -159,7 +159,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         self.backgroundContainer.update(size: size, isDark: self.theme.overallDarkAppearance, transition: transition)
         
         transition.setFrame(view: self.backgroundView, frame: backgroundFrame)
-        self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+        self.backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
 
         if self.iconView.image == nil {
             self.iconView.image = UIImage(bundleImageName: "Navigation/Search")?.withRenderingMode(.alwaysTemplate)
@@ -222,7 +222,7 @@ public final class ChatSearchNavigationContentNode: NavigationBarContentNode {
         self.close.icon.tintColor = self.theme.chat.inputPanel.panelControlColor
         
         transition.setFrame(view: self.close.background, frame: closeFrame)
-        self.close.background.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+        self.close.background.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: self.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
         
         return size
     }

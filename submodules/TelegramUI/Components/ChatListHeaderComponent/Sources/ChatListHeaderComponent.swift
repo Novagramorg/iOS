@@ -1117,7 +1117,7 @@ public final class ChatListHeaderComponent: Component {
                 }
                 let leftButtonsContainerFrame = CGRect(origin: CGPoint(x: component.sideInset, y: 0.0), size: CGSize(width: max(44.0, leftButtonsEffectiveWidth), height: 44.0))
                 leftButtonsBackgroundContainerTransition.setFrame(view: leftButtonsBackgroundContainer, frame: leftButtonsContainerFrame)
-                leftButtonsBackgroundContainer.update(size: leftButtonsContainerFrame.size, cornerRadius: leftButtonsContainerFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: component.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: leftButtonsBackgroundContainerTransition)
+                leftButtonsBackgroundContainer.update(size: leftButtonsContainerFrame.size, cornerRadius: leftButtonsContainerFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: leftButtonsBackgroundContainerTransition)
                 leftButtonsBackgroundContainerTransition.setFrame(view: self.leftButtonsContainer, frame: CGRect(origin: CGPoint(), size: leftButtonsContainerFrame.size)) 
             } else {
                 if let leftButtonsBackgroundContainer = self.leftButtonsBackgroundContainer {
@@ -1143,16 +1143,16 @@ public final class ChatListHeaderComponent: Component {
                     self.addSubview(rightButtonsBackgroundContainer)
                     rightButtonsBackgroundContainer.contentView.addSubview(self.rightButtonsContainer)
                     
-                    rightButtonsBackgroundContainer.update(size: rightButtonsContainerFrame.size, cornerRadius: rightButtonsContainerFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: component.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, isVisible: false, transition: .immediate)
+                    rightButtonsBackgroundContainer.update(size: rightButtonsContainerFrame.size, cornerRadius: rightButtonsContainerFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, isVisible: false, transition: .immediate)
                 }
                 rightButtonsBackgroundContainerTransition.setFrame(view: rightButtonsBackgroundContainer, frame: rightButtonsContainerFrame)
-                rightButtonsBackgroundContainer.update(size: rightButtonsContainerFrame.size, cornerRadius: rightButtonsContainerFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: component.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+                rightButtonsBackgroundContainer.update(size: rightButtonsContainerFrame.size, cornerRadius: rightButtonsContainerFrame.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
                 rightButtonsBackgroundContainerTransition.setFrame(view: self.rightButtonsContainer, frame: CGRect(origin: CGPoint(), size: rightButtonsContainerFrame.size))
             } else {
                 if let rightButtonsBackgroundContainer = self.rightButtonsBackgroundContainer {
                     self.rightButtonsBackgroundContainer = nil
                     
-                    rightButtonsBackgroundContainer.update(size: rightButtonsBackgroundContainer.bounds.size, cornerRadius: rightButtonsBackgroundContainer.bounds.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: component.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, isVisible: false, transition: transition)
+                    rightButtonsBackgroundContainer.update(size: rightButtonsBackgroundContainer.bounds.size, cornerRadius: rightButtonsBackgroundContainer.bounds.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, isVisible: false, transition: transition)
                     transition.attachAnimation(view: rightButtonsBackgroundContainer, id: "remove", completion: { [weak rightButtonsBackgroundContainer] _ in
                         rightButtonsBackgroundContainer?.removeFromSuperview()
                     })

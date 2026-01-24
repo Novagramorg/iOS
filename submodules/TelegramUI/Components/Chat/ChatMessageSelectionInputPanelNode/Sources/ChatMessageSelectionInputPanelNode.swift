@@ -172,7 +172,7 @@ private final class GlassButtonView: UIView {
         transition.setFrame(view: self.button, frame: CGRect(origin: CGPoint(), size: params.size))
         
         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: params.size))
-        self.backgroundView.update(size: params.size, cornerRadius: min(params.size.width, params.size.height) * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: params.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: isEnabled, transition: transition)
+        self.backgroundView.update(size: params.size, cornerRadius: min(params.size.width, params.size.height) * 0.5, isDark: params.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: isEnabled, transition: transition)
         
         self.iconView.alpha = isEnabled ? 1.0 : 0.5
         self.iconView.tintMask.alpha = self.iconView.alpha

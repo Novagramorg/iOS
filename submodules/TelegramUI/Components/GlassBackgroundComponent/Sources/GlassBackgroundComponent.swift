@@ -248,19 +248,22 @@ public class GlassBackgroundView: UIView {
     }
     
     public struct TintColor: Equatable {
-        public enum Kind {
+        public enum CustomStyle {
+            case `default`
+            case clear
+        }
+        
+        public enum Kind: Equatable {
             case panel
             case clear
-            case custom
+            case custom(style: CustomStyle, color: UIColor)
         }
         
         public let kind: Kind
-        public let color: UIColor
         public let innerColor: UIColor?
         
-        public init(kind: Kind, color: UIColor, innerColor: UIColor? = nil) {
+        public init(kind: Kind, innerColor: UIColor? = nil) {
             self.kind = kind
-            self.color = color
             self.innerColor = innerColor
         }
     }
@@ -516,8 +519,8 @@ public class GlassBackgroundView: UIView {
                     }
                 case .clear:
                     fillColor = UIColor(white: 1.0, alpha: 0.0)
-                case .custom:
-                    fillColor = tintColor.color
+                case let .custom(_, color):
+                    fillColor = color
                 }
                 foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: outerCornerRadius * 2.0, height: outerCornerRadius * 2.0), inset: shadowInset, isDark: isDark, fillColor: fillColor)
                 transition.setAlpha(view: foregroundView, alpha: isVisible ? 1.0 : 0.0)
@@ -530,18 +533,29 @@ public class GlassBackgroundView: UIView {
                             let glassEffectValue: UIGlassEffect
                             switch tintColor.kind {
                             case .panel:
-                                glassEffectValue = UIGlassEffect(style: .regular)
                                 if isDark {
+                                    glassEffectValue = UIGlassEffect(style: .regular)
                                     glassEffectValue.tintColor = UIColor(white: 1.0, alpha: 0.025)
                                 } else {
+                                    glassEffectValue = UIGlassEffect(style: .regular)
                                     glassEffectValue.tintColor = UIColor(white: 1.0, alpha: 0.1)
                                 }
-                            case .custom:
-                                glassEffectValue = UIGlassEffect(style: .regular)
-                                glassEffectValue.tintColor = tintColor.color
+                            case let .custom(style, color):
+                                switch style {
+                                case .default:
+                                    glassEffectValue = UIGlassEffect(style: .regular)
+                                    glassEffectValue.tintColor = color
+                                case .clear:
+                                    glassEffectValue = UIGlassEffect(style: .clear)
+                                    glassEffectValue.tintColor = color
+                                }
                             case .clear:
                                 glassEffectValue = UIGlassEffect(style: .clear)
-                                glassEffectValue.tintColor = tintColor.color
+                                if isDark {
+                                    glassEffectValue.tintColor = UIColor(white: 0.0, alpha: 0.22)
+                                } else {
+                                    glassEffectValue.tintColor = nil
+                                }
                             }
                             glassEffectValue.isInteractive = params.isInteractive
                             glassEffect = glassEffectValue

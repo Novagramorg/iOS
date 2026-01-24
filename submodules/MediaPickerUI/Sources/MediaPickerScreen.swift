@@ -1753,7 +1753,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             self.scrollingArea.frame = innerBounds
             
             if let backgroundView = self.backgroundView {
-                backgroundView.update(size: bounds.size, cornerRadius: 0.0, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .custom, color: self.presentationData.theme.list.plainBackgroundColor), transition: ComponentTransition(transition))
+                backgroundView.update(size: bounds.size, cornerRadius: 0.0, isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .custom(style: .default, color: self.presentationData.theme.list.plainBackgroundColor)), transition: ComponentTransition(transition))
                 transition.updateFrame(view: backgroundView, frame: innerBounds)
             } else {
                 transition.updateFrame(node: self.backgroundNode, frame: innerBounds)
@@ -4179,7 +4179,7 @@ private class SelectedButtonNode: ASDisplayNode {
         self.containerView.frame = backgroundFrame
         if let backgroundView = self.backgroundView {
             backgroundView.frame = backgroundFrame
-            backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.size.height * 0.5, isDark: false, tintColor: .init(kind: .custom, color: self.theme.list.itemCheckColors.fillColor), isInteractive: true, transition: .immediate)
+            backgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.size.height * 0.5, isDark: false, tintColor: .init(kind: .custom(style: .default, color: self.theme.list.itemCheckColors.fillColor)), isInteractive: true, transition: .immediate)
         }
         if let background = self.background {
             background.frame = backgroundFrame

@@ -157,23 +157,24 @@ public final class VideoPlaybackControlsComponent: Component {
             self.backgroundContainer.update(size: size, isDark: true, transition: transition)
             
             let areSideButtonsVisible = component.isVisible && component.displaySeekControls
+            let buttonsTintColor: GlassBackgroundView.TintColor = .init(kind: .custom(style: .clear, color: UIColor(white: 0.0, alpha: 0.2)))
             
             transition.setFrame(view: self.leftButtonBackgroundView, frame: leftButtonFrame)
-            self.leftButtonBackgroundView.update(size: leftButtonFrame.size, cornerRadius: leftButtonFrame.height * 0.5, isDark: true, tintColor: .init(kind: .clear, color: .clear), isInteractive: true, isVisible: areSideButtonsVisible, transition: transition)
+            self.leftButtonBackgroundView.update(size: leftButtonFrame.size, cornerRadius: leftButtonFrame.height * 0.5, isDark: true, tintColor: buttonsTintColor, isInteractive: true, isVisible: areSideButtonsVisible, transition: transition)
             transition.setFrame(view: self.leftIconView, frame: CGRect(origin: CGPoint(), size: leftButtonFrame.size))
             self.leftIconView.update(size: leftButtonFrame.size)
             transition.setAlpha(view: self.leftIconView, alpha: areSideButtonsVisible ? 1.0 : 0.0)
             transition.setBlur(layer: self.leftIconView.layer, radius: areSideButtonsVisible ? 0.0 : 10.0)
             
             transition.setFrame(view: self.rightButtonBackgroundView, frame: rightButtonFrame)
-            self.rightButtonBackgroundView.update(size: rightButtonFrame.size, cornerRadius: rightButtonFrame.height * 0.5, isDark: true, tintColor: .init(kind: .clear, color: .clear), isInteractive: true, isVisible: areSideButtonsVisible, transition: transition)
+            self.rightButtonBackgroundView.update(size: rightButtonFrame.size, cornerRadius: rightButtonFrame.height * 0.5, isDark: true, tintColor: buttonsTintColor, isInteractive: true, isVisible: areSideButtonsVisible, transition: transition)
             transition.setFrame(view: self.rightIconView, frame: CGRect(origin: CGPoint(), size: rightButtonFrame.size))
             self.rightIconView.update(size: rightButtonFrame.size)
             transition.setAlpha(view: self.rightIconView, alpha: areSideButtonsVisible ? 1.0 : 0.0)
             transition.setBlur(layer: self.rightIconView.layer, radius: areSideButtonsVisible ? 0.0 : 10.0)
             
             transition.setFrame(view: self.centerButtonBackgroundView, frame: centerButtonFrame)
-            self.centerButtonBackgroundView.update(size: centerButtonFrame.size, cornerRadius: centerButtonFrame.height * 0.5, isDark: true, tintColor: .init(kind: .clear, color: .clear), isInteractive: true, isVisible: component.isVisible, transition: transition)
+            self.centerButtonBackgroundView.update(size: centerButtonFrame.size, cornerRadius: centerButtonFrame.height * 0.5, isDark: true, tintColor: buttonsTintColor, isInteractive: true, isVisible: component.isVisible, transition: transition)
             
             let centerButtonIconNode: PlayPauseIconNode
             let centerIconFactor: CGFloat = 0.9

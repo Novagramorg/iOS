@@ -408,7 +408,7 @@ final class ChatVideoGalleryItemScrubberView: UIView {
         self.backgroundContainer.update(size: size, isDark: true, transition: transition)
         
         transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
-        self.backgroundView.update(size: size, cornerRadius: min(44.0 * 0.5, size.height * 0.5), isDark: true, tintColor: .init(kind: .panel, color: UIColor(white: 0.0, alpha: 0.6)), transition: transition)
+        self.backgroundView.update(size: size, cornerRadius: min(44.0 * 0.5, size.height * 0.5), isDark: true, tintColor: .init(kind: .panel), transition: transition)
     }
     
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {

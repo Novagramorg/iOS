@@ -251,9 +251,9 @@ final class ReactionContextBackgroundNode: ASDisplayNode {
             transition.updateFrame(view: glassBackgroundView.view, frame: CGRect(origin: CGPoint(), size: glassBackgroundFrame.size), beginWithCurrentState: true)
             let glassTintColor: GlassBackgroundView.TintColor
             if let glass = self.glass, glass.isTinted {
-                glassTintColor = .init(kind: .custom, color: UIColor(rgb: 0x25272e, alpha: 0.72))
+                glassTintColor = .init(kind: .custom(style: .default, color: UIColor(rgb: 0x25272e, alpha: 0.72)))
             } else {
-                glassTintColor = .init(kind: .panel, color: defaultDarkPresentationTheme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
+                glassTintColor = .init(kind: .panel)
             }
             glassBackgroundView.container.update(size: glassBackgroundFrame.size, isDark: true, transition: ComponentTransition(transition))
             glassBackgroundView.view.update(size: glassBackgroundFrame.size, cornerRadius: 23.0, isDark: true, tintColor: glassTintColor, transition: ComponentTransition(transition))

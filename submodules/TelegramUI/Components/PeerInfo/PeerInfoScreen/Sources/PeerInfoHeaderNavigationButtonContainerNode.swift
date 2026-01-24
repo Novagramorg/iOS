@@ -352,10 +352,10 @@ final class PeerInfoHeaderNavigationButtonContainerNode: SparseNode {
         let tintColor: GlassBackgroundView.TintColor
         let tintIsDark: Bool
         if self.isOverColoredContents {
-            tintColor = .init(kind: .custom, color: self.backgroundContentColor)
+            tintColor = .init(kind: .custom(style: .default, color: self.backgroundContentColor))
             tintIsDark = presentationData.theme.overallDarkAppearance
         } else {
-            tintColor = .init(kind: .panel, color: UIColor(white: presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6))
+            tintColor = .init(kind: .panel)
             tintIsDark = presentationData.theme.overallDarkAppearance
         }
         

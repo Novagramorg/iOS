@@ -1139,7 +1139,7 @@ private final class MenuComponent: Component {
                 componentTransition.setFrame(view: view, frame: CGRect(origin: .zero, size: componentSize))
             }
             
-            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 30.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), transition: transition)
+            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 30.0, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: transition)
             self.backgroundView.frame = backgroundFrame
             
             self.containerView.frame = CGRect(origin: .zero, size: availableSize)
