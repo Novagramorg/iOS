@@ -47,10 +47,12 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
     }
     
     private var theme: PresentationTheme
+    private var preferClearGlass: Bool
     private let type: ChatHistoryNavigationButtonType
     
-    init(theme: PresentationTheme, backgroundNode: WallpaperBackgroundNode, type: ChatHistoryNavigationButtonType) {
+    init(theme: PresentationTheme, preferClearGlass: Bool, backgroundNode: WallpaperBackgroundNode, type: ChatHistoryNavigationButtonType) {
         self.theme = theme
+        self.preferClearGlass = preferClearGlass
         self.type = type
         
         self.containerNode = ContextExtractedContentContainingNode()
@@ -95,7 +97,7 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
         self.containerNode.contentNode.view.addSubview(self.backgroundView)
 
         self.backgroundView.frame = CGRect(origin: CGPoint(), size: size)
-        self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: .immediate)
+        self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: self.preferClearGlass ? .clear : .panel), isInteractive: true, transition: .immediate)
         self.imageView.tintColor = theme.chat.inputPanel.panelControlColor
 
         self.backgroundView.contentView.addSubview(self.imageView)
@@ -107,11 +109,12 @@ class ChatHistoryNavigationButtonNode: ContextControllerSourceNode {
         self.frame = CGRect(origin: CGPoint(), size: size)
     }
     
-    func updateTheme(theme: PresentationTheme, backgroundNode: WallpaperBackgroundNode) {
-        if self.theme !== theme {
+    func updateTheme(theme: PresentationTheme, preferClearGlass: Bool, backgroundNode: WallpaperBackgroundNode) {
+        if self.theme !== theme || self.preferClearGlass != preferClearGlass {
             self.theme = theme
+            self.preferClearGlass = preferClearGlass
 
-            self.backgroundView.update(size: self.backgroundView.bounds.size, cornerRadius: self.backgroundView.bounds.size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: .immediate)
+            self.backgroundView.update(size: self.backgroundView.bounds.size, cornerRadius: self.backgroundView.bounds.size.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: self.preferClearGlass ? .clear : .panel), transition: .immediate)
             self.imageView.tintColor = theme.chat.inputPanel.panelControlColor
             
             switch self.type {
