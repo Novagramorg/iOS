@@ -552,7 +552,7 @@ public class GlassBackgroundView: UIView {
                             case .clear:
                                 glassEffectValue = UIGlassEffect(style: .clear)
                                 if isDark {
-                                    glassEffectValue.tintColor = UIColor(white: 0.0, alpha: 0.22)
+                                    glassEffectValue.tintColor = UIColor(white: 0.0, alpha: 0.28)
                                 } else {
                                     glassEffectValue.tintColor = nil
                                 }
