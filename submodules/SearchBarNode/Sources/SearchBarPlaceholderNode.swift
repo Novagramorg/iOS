@@ -309,7 +309,7 @@ public final class SearchBarPlaceholderContentView: UIView {
             ComponentTransition(transition).setAlpha(view: glassBackgroundView, alpha: backgroundAlpha)
             let isDark = params.backgroundColor.hsb.b < 0.5
             if params.isActive {
-                glassBackgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel, color: UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: ComponentTransition(transition))
+                glassBackgroundView.update(size: backgroundFrame.size, cornerRadius: backgroundFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel), isInteractive: true, transition: ComponentTransition(transition))
             }
             
             if params.isActive {
@@ -352,7 +352,7 @@ public final class SearchBarPlaceholderContentView: UIView {
                     
                     close.background.frame = closeFrame.offsetBy(dx: closeFrame.width + 40.0, dy: 0.0)
                     let isDark = params.backgroundColor.hsb.b < 0.5
-                    close.background.update(size: close.background.bounds.size, cornerRadius: close.background.bounds.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel, color: UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: .immediate)
+                    close.background.update(size: close.background.bounds.size, cornerRadius: close.background.bounds.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel), isInteractive: true, transition: .immediate)
                     ComponentTransition.immediate.setScale(view: close.background, scale: 0.001)
                 }
                 
@@ -367,7 +367,7 @@ public final class SearchBarPlaceholderContentView: UIView {
                 }
                 
                 let isDark = params.backgroundColor.hsb.b < 0.5
-                close.background.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel, color: UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: closeTransition)
+                close.background.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel), isInteractive: true, transition: closeTransition)
             } else {
                 let transition = ComponentTransition(transition)
                 
@@ -378,7 +378,7 @@ public final class SearchBarPlaceholderContentView: UIView {
                     transition.setPosition(view: closeBackground, position: closeFrame.center)
                     transition.setBounds(view: closeBackground, bounds: CGRect(origin: CGPoint(), size: closeFrame.size))
                     let isDark = params.backgroundColor.hsb.b < 0.5
-                    closeBackground.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel, color: UIColor(white: isDark ? 0.0 : 1.0, alpha: 0.6)), isInteractive: true, transition: transition)
+                    closeBackground.update(size: closeFrame.size, cornerRadius: closeFrame.height * 0.5, isDark: isDark, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
                     transition.setScale(view: closeBackground, scale: 0.001, completion: { [weak closeBackground] _ in
                         closeBackground?.removeFromSuperview()
                     })

@@ -7203,6 +7203,7 @@ private final class ChatListLocationContext {
             self.chatTitleComponent = ChatTitleComponent(
                 context: self.context,
                 theme: presentationData.theme,
+                preferClearGlass: false,
                 strings: presentationData.strings,
                 dateTimeFormat: presentationData.dateTimeFormat,
                 nameDisplayOrder: presentationData.nameDisplayOrder,
@@ -7219,6 +7220,7 @@ private final class ChatListLocationContext {
             self.chatTitleComponent = ChatTitleComponent(
                 context: self.context,
                 theme: presentationData.theme,
+                preferClearGlass: false,
                 strings: presentationData.strings,
                 dateTimeFormat: presentationData.dateTimeFormat,
                 nameDisplayOrder: presentationData.nameDisplayOrder,

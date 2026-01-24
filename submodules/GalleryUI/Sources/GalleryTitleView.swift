@@ -104,7 +104,7 @@ final class GalleryTitleView: UIView, NavigationBarTitleView {
             self.titleBackgroundContainer.update(size: titleBackgroundSize, isDark: true, transition: transition)
             
             transition.setFrame(view: self.titleBackground, frame: CGRect(origin: CGPoint(), size: titleBackgroundSize))
-            self.titleBackground.update(size: titleBackgroundSize, cornerRadius: titleBackgroundSize.height * 0.5, isDark: true, tintColor: .init(kind: .panel, color: UIColor(white: 0.0, alpha: 0.6)), transition: transition)
+            self.titleBackground.update(size: titleBackgroundSize, cornerRadius: titleBackgroundSize.height * 0.5, isDark: true, tintColor: .init(kind: .panel), transition: transition)
             
             self.titleBackgroundContainer.isHidden = !(self.titleString != nil && self.titleString != "")
         }

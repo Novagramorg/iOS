@@ -527,12 +527,37 @@ static void registerEffectViewOverrides(void) {
 #pragma clang diagnostic pop
 }
 
+/*static void dumpViews(UIView *view, NSString *indent) {
+    NSLog(@"%@%@", indent, [view debugDescription]);
+    NSString *nextIndent = [indent stringByAppendingString:@"-"];
+    
+    if ([view isKindOfClass:[UIVisualEffectView class]]) {
+        UIVisualEffectView *effectView = (UIVisualEffectView *)view;
+        if (@available(iOS 26.0, *)) {
+            if ([effectView.effect isKindOfClass:[UIGlassEffect class]]) {
+                UIGlassEffect *effect = (UIGlassEffect *)effectView.effect;
+                NSObject *glass = [effect valueForKey:@"glass"];
+                NSLog(@"glass %@", glass.debugDescription);
+            }
+        }
+    }
+    
+    for (UIView *subview in view.subviews) {
+        dumpViews(subview, nextIndent);
+    }
+}*/
+
 - (UIWindow * _Nullable)internalGetKeyboard {
     Class windowClass = NSClassFromString(@"UIRemoteKeyboardWindow");
     if (!windowClass) {
         return nil;
     }
     UIWindow *result = [(id<UIRemoteKeyboardWindowProtocol>)windowClass remoteKeyboardWindowForScreen:[UIScreen mainScreen] create:false];
+    
+    if (result) {
+        //dumpViews(result, @"");
+    }
+    
     return result;
 }
 

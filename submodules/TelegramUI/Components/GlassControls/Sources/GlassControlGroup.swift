@@ -221,9 +221,9 @@ public final class GlassControlGroupComponent: Component {
             let tintColor: GlassBackgroundView.TintColor
             switch component.background {
             case .panel:
-                tintColor = .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
+                tintColor = .init(kind: .panel)
             case .activeTint:
-                tintColor = .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7), innerColor: component.theme.list.itemCheckColors.fillColor)
+                tintColor = .init(kind: .panel, innerColor: component.theme.list.itemCheckColors.fillColor)
             }
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
             isInteractive = true

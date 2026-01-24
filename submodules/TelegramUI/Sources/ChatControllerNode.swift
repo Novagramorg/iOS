@@ -1105,8 +1105,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     statusBar.updateStatusBarStyle(.White, animated: true)
                 } else {
                     let statusBarStyle: StatusBarStyle
-                    if let isDark = self.backgroundNode.isDark {
-                        if isDark {
+                    if let contentStats = self.backgroundNode.contentStats {
+                        if contentStats.isDark {
                             statusBarStyle = .White
                         } else {
                             statusBarStyle = .Black
@@ -1594,6 +1594,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 transition: headerPanelsTransition,
                 component: AnyComponent(HeaderPanelContainerComponent(
                     theme: self.chatPresentationInterfaceState.theme,
+                    preferClearGlass: self.chatPresentationInterfaceState.preferredGlassType == .clear,
                     tabs: nil,
                     panels: headerPanels
                 )),

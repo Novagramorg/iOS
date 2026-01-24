@@ -1621,9 +1621,9 @@ private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
         self.backgroundView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: buttonSize)
         let tintColor: GlassBackgroundView.TintColor
         if self.isSelected {
-            tintColor = .init(kind: .custom, color: UIColor(white: 1.0, alpha: 1.0))
+            tintColor = .init(kind: .custom(style: .default, color: UIColor(white: 1.0, alpha: 1.0)))
         } else {
-            tintColor = .init(kind: .panel, color: UIColor(white: 0.0, alpha: 0.6))
+            tintColor = .init(kind: .panel)
         }
         self.backgroundView.update(size: buttonSize, cornerRadius: buttonSize.height * 0.5, isDark: true, tintColor: tintColor, isInteractive: true, transition: transition)
         
