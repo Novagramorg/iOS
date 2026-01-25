@@ -1428,8 +1428,6 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
                         break
                     case .theme:
                         break
-                    case .settings:
-                        break
                     case .premiumOffer:
                         break
                     case .starsTopup:
@@ -1464,6 +1462,8 @@ final class ChatRecentActionsControllerNode: ViewControllerTracingNode {
                     case .auction:
                         break
                     case .sendGift:
+                        break
+                    case .chats, .contacts, .compose, .postStory, .settings, .unknownDeepLink, .oauth:
                         break
                 }
             }

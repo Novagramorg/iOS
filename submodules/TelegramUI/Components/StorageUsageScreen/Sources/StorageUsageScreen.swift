@@ -90,6 +90,13 @@ private final class SignpostContextImpl: SignpostContext {
 
 #endif
 
+public enum StorageUsageEntryTag {
+    case edit
+    case autoRemove
+    case clearCache
+    case maxCache
+}
+
 private extension StorageUsageScreenComponent.Category {
     init(_ category: StorageUsageStats.CategoryKey) {
         switch category {
@@ -3317,7 +3324,7 @@ public final class StorageUsageScreen: ViewControllerComponentContainer {
     
     fileprivate var childCompleted: ((@escaping () -> Void) -> Void)?
     
-    public init(context: AccountContext, makeStorageUsageExceptionsScreen: @escaping (CacheStorageSettings.PeerStorageCategory) -> ViewController?, peer: EnginePeer? = nil) {
+    public init(context: AccountContext, makeStorageUsageExceptionsScreen: @escaping (CacheStorageSettings.PeerStorageCategory) -> ViewController?, peer: EnginePeer? = nil, focusOnItemTag: StorageUsageEntryTag? = nil) {
         self.context = context
         
         self.overNavigationContainer = SparseContainerView()

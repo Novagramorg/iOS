@@ -44,6 +44,8 @@ import ChatMessagePaymentAlertController
 import TableComponent
 import PeerTableCellComponent
 import AvatarComponent
+import GlassControls
+import GlassBarButtonComponent
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -76,6 +78,7 @@ private final class GiftViewSheetContent: CombinedComponent {
     }
     
     final class State: ComponentState {
+        let controlButtonsTag = GenericComponentViewTag()
         let modelButtonTag = GenericComponentViewTag()
         let backdropButtonTag = GenericComponentViewTag()
         let symbolButtonTag = GenericComponentViewTag()
@@ -1094,6 +1097,48 @@ private final class GiftViewSheetContent: CombinedComponent {
             controller.present(alertController, in: .window(.root))
         }
         
+        func craftGift() {
+            guard let arguments = self.subject.arguments, let controller = self.getController() as? GiftViewScreen, case let .unique(gift) = arguments.gift else {
+                return
+            }
+            
+            guard gift.hostPeerId == nil else {
+                self.presentActionLockedForHostedGift(gift: gift)
+                return
+            }
+            
+            controller.dismissAllTooltips()
+            
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            
+            let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+            if let canCraftDate = arguments.canCraftDate, currentTime < canCraftDate {
+                let dateString = stringForFullDate(timestamp: canCraftDate, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat)
+                //TODO:localize
+                let alertController = textAlertController(
+                    context: self.context,
+                    title: "Try Later",
+                    text: "You will be able to craft this gift on \(dateString).",
+                    actions: [
+                        TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
+                    ],
+                    parseMarkdown: true
+                )
+                controller.present(alertController, in: .window(.root))
+                return
+            }
+            
+            if let navigationController = controller.navigationController as? NavigationController {
+                controller.dismissAnimated()
+                
+                let craftScreen = self.context.sharedContext.makeGiftCraftScreen(
+                    context: self.context,
+                    gift: gift
+                )
+                navigationController.pushViewController(craftScreen)
+            }
+        }
+        
         func transferGift() {
             guard let arguments = self.subject.arguments, let controller = self.getController() as? GiftViewScreen, case let .unique(gift) = arguments.gift, let reference = arguments.reference, let transferStars = arguments.transferStars else {
                 return
@@ -1403,7 +1448,15 @@ private final class GiftViewSheetContent: CombinedComponent {
             controller.present(tooltipController, in: .current)
         }
         
-        func openMore(node: ASDisplayNode, gesture: ContextGesture?) {
+        func openMore() {
+            guard let controller = self.getController() as? GiftViewScreen else {
+                return
+            }
+            guard let controlsView = controller.node.hostView.findTaggedView(tag: self.controlButtonsTag) as? GlassControlPanelComponent.View, let rightItemView = controlsView.rightItemView, let sourceView = rightItemView.itemView(id: AnyHashable("more")) else {
+                return
+            }
+            
+            
             guard let arguments = self.subject.arguments, case let .unique(gift) = arguments.gift else {
                 return
             }
@@ -1443,7 +1496,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         })
                     })))
                 }
-                
+                                
                 if case let .unique(gift) = arguments.gift, let resellAmount = gift.resellAmounts?.first, resellAmount.amount.value > 0 {
                     if arguments.reference != nil || gift.owner.peerId == context.account.peerId {
                         items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_View_Context_ChangePrice, icon: { theme in
@@ -1507,7 +1560,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         })))
                     }
                 }
-                
+                                
                 if let _ = arguments.resellAmounts, case let .uniqueGift(uniqueGift, recipientPeerId) = subject, let _ = recipientPeerId {
                     items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_View_Context_ViewInProfile, icon: { theme in
                         return generateTintedImage(image: UIImage(bundleImageName: "Peer Info/ShowIcon"), color: theme.contextMenu.primaryColor)
@@ -1530,7 +1583,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     })))
                 }
                 
-                let contextController = makeContextController(presentationData: presentationData, source: .reference(GiftViewContextReferenceContentSource(controller: controller, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+                let contextController = makeContextController(presentationData: presentationData, source: .reference(GiftViewContextReferenceContentSource(controller: controller, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), gesture: nil)
                 controller.presentInGlobalOverlay(contextController)
             })
         }
@@ -1677,17 +1730,15 @@ private final class GiftViewSheetContent: CombinedComponent {
         }
         
         func commitBuy(acceptedPrice: CurrencyAmount? = nil, skipConfirmation: Bool = false) {
-            guard case let .unique(uniqueGift) = self.subject.arguments?.gift else {
+            guard case let .unique(uniqueGift) = self.subject.arguments?.gift, let controller = self.getController() as? GiftViewScreen else {
                 return
             }
-        
+            
             let context = self.context
-            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            let giftTitle = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: presentationData.dateTimeFormat))"
             
             if let resellTooEarlyTimestamp = self.resellTooEarlyTimestamp {
-                guard let controller = self.getController() else {
-                    return
-                }
                 let dateString = stringForFullDate(timestamp: resellTooEarlyTimestamp, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat)
                 let alertController = textAlertController(
                     context: context,
@@ -1702,287 +1753,103 @@ private final class GiftViewSheetContent: CombinedComponent {
                 return
             }
             
-            let giftTitle = "\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: presentationData.dateTimeFormat))"
-            let recipientPeerId = self.recipientPeerId ?? self.context.account.peerId
-                        
-            let action: (CurrencyAmount.Currency) -> Void = { currency in
-                guard let resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == currency }) else {
-                    guard let controller = self.getController() as? GiftViewScreen else {
-                        return
-                    }
-                    let alertController = textAlertController(context: context, title: nil, text: presentationData.strings.Gift_Buy_ErrorUnknown, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})], parseMarkdown: true)
-                    controller.present(alertController, in: .window(.root))
-                    return
-                }
-                
-                let proceed: () -> Void = {
-                    guard let controller = self.getController() as? GiftViewScreen else {
-                        return
-                    }
-                    
-                    self.inProgress = true
-                    self.updated()
-                    
-                    let buyGiftImpl: ((String, EnginePeer.Id, CurrencyAmount?) -> Signal<Never, BuyStarGiftError>)
-                    if let buyGift = controller.buyGift {
-                        buyGiftImpl = { slug, peerId, price in
-                            return buyGift(slug, peerId, price)
-                        }
-                    } else {
-                        buyGiftImpl = { slug, peerId, price in
-                            return self.context.engine.payments.buyStarGift(slug: slug, peerId: peerId, price: price)
-                        }
-                    }
-                    
-                    let finalPrice = acceptedPrice ?? resellAmount
-                    self.buyDisposable = (buyGiftImpl(uniqueGift.slug, recipientPeerId, finalPrice)
-                    |> deliverOnMainQueue).start(
-                        error: { [weak self] error in
-                            guard let self, let controller = self.getController() else {
-                                return
-                            }
-                            
-                            self.inProgress = false
-                            self.updated()
-                            
-                            HapticFeedback().error()
-                            
-                            switch error {
-                            case .serverProvided:
-                                return
-                            case let .priceChanged(newPrice):
-                                let errorTitle = presentationData.strings.Gift_Buy_ErrorPriceChanged_Title
-                                let originalPriceString: String
-                                switch resellAmount.currency {
-                                case .stars:
-                                    originalPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(clamping: resellAmount.amount.value))
-                                case .ton:
-                                    originalPriceString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil) + " TON"
-                                }
-                                
-                                let newPriceString: String
-                                let buttonText: String
-                                switch newPrice.currency {
-                                case .stars:
-                                    newPriceString = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text_Stars(Int32(clamping: newPrice.amount.value))
-                                    buttonText = presentationData.strings.Gift_Buy_Confirm_BuyFor(Int32(newPrice.amount.value))
-                                case .ton:
-                                    let tonValueString = formatTonAmountText(newPrice.amount.value, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: nil)
-                                    newPriceString = tonValueString + " TON"
-                                    buttonText = presentationData.strings.Gift_Buy_Confirm_BuyForTon(tonValueString).string
-                                }
-                                let errorText = presentationData.strings.Gift_Buy_ErrorPriceChanged_Text(originalPriceString, newPriceString).string
-                                
-                                let alertController = textAlertController(
-                                    context: context,
-                                    title: errorTitle,
-                                    text: errorText,
-                                    actions: [
-                                        TextAlertAction(type: .defaultAction, title: buttonText, action: { [weak self] in
-                                            guard let self else {
-                                                return
-                                            }
-                                            self.commitBuy(acceptedPrice: newPrice, skipConfirmation: true)
-                                        }),
-                                        TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {
-                                        })
-                                    ],
-                                    actionLayout: .vertical,
-                                    parseMarkdown: true
-                                )
-                                controller.present(alertController, in: .window(.root))
-                            default:
-                                let alertController = textAlertController(context: context, title: nil, text: presentationData.strings.Gift_Buy_ErrorUnknown, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})], parseMarkdown: true)
-                                controller.present(alertController, in: .window(.root))
-                            }
-                        },
-                        completed: { [weak self] in
-                            guard let self, let controller = self.getController() as? GiftViewScreen else {
-                                return
-                            }
-                            self.inProgress = false
-                            
-                            var animationFile: TelegramMediaFile?
-                            for attribute in uniqueGift.attributes {
-                                if case let .model(_, file, _, _) = attribute {
-                                    animationFile = file
-                                    break
-                                }
-                            }
-                            
-                            if let navigationController = controller.navigationController as? NavigationController {
-                                if recipientPeerId == self.context.account.peerId {
-                                    controller.dismissAnimated()
-                                    
-                                    navigationController.view.addSubview(ConfettiView(frame: navigationController.view.bounds))
-                                    
-                                    Queue.mainQueue().after(0.5, {
-                                        if let lastController = navigationController.viewControllers.last as? ViewController, let animationFile {
-                                            let resultController = UndoOverlayController(
-                                                presentationData: presentationData,
-                                                content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_SuccessYou_Title, text: presentationData.strings.Gift_View_Resale_SuccessYou_Text(giftTitle).string, undoText: nil, customAction: nil),
-                                                elevatedLayout: !(lastController is ChatController),
-                                                action: {  _ in
-                                                    return true
-                                                }
-                                            )
-                                            lastController.present(resultController, in: .current)
-                                        }
-                                    })
-                                } else {
-                                    var controllers = Array(navigationController.viewControllers.prefix(1))
-                                    let chatController = self.context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: recipientPeerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
-                                    chatController.hintPlayNextOutgoingGift()
-                                    controllers.append(chatController)
-                                    navigationController.setViewControllers(controllers, animated: true)
-                                    
-                                    Queue.mainQueue().after(0.5, {
-                                        let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: recipientPeerId))
-                                        |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
-                                            if let peer, let lastController = navigationController?.viewControllers.last as? ViewController, let animationFile {
-                                                let resultController = UndoOverlayController(
-                                                    presentationData: presentationData,
-                                                    content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_Success_Title, text: presentationData.strings.Gift_View_Resale_Success_Text(peer.compactDisplayTitle).string, undoText: nil, customAction: nil),
-                                                    elevatedLayout: !(lastController is ChatController),
-                                                    action: {  _ in
-                                                        return true
-                                                    }
-                                                )
-                                                lastController.present(resultController, in: .current)
-                                            }
-                                        })
-                                    })
-                                }
-                            }
-                        
-                            self.updated(transition: .spring(duration: 0.4))
-                        
-                            Queue.mainQueue().after(2.5) {
-                                switch finalPrice.currency {
-                                case .stars:
-                                    context.starsContext?.load(force: true)
-                                case .ton:
-                                    context.tonContext?.load(force: true)
-                                }
-                            }
-                        }
-                    )
-                }
-                
-                
-                if let _ = self.buyForm {
-                    if resellAmount.currency == .stars, let starsContext = context.starsContext, let starsState = context.starsContext?.currentState, starsState.balance < resellAmount.amount {
-                        if self.starsTopUpOptions.isEmpty {
-                            self.inProgress = true
-                            self.updated()
-                        }
-                        let _ = (self.starsTopUpOptionsPromise.get()
-                         |> filter { $0 != nil }
-                         |> take(1)
-                         |> deliverOnMainQueue).startStandalone(next: { [weak self] options in
-                            guard let self, let controller = self.getController() else {
-                                return
-                            }
-                            let purchaseController = context.sharedContext.makeStarsPurchaseScreen(
-                                context: context,
-                                starsContext: starsContext,
-                                options: options ?? [],
-                                purpose: .buyStarGift(requiredStars: resellAmount.amount.value),
-                                targetPeerId: nil,
-                                customTheme: nil,
-                                completion: { [weak self, weak starsContext] stars in
-                                    guard let self, let starsContext else {
-                                        return
-                                    }
-                                    self.inProgress = true
-                                    self.updated()
-                                    
-                                    starsContext.add(balance: StarsAmount(value: stars, nanos: 0))
-                                    let _ = (starsContext.onUpdate
-                                    |> deliverOnMainQueue).start(next: { [weak self] in
-                                        guard let self else {
-                                            return
-                                        }
-                                        Queue.mainQueue().after(0.1, { [weak self] in
-                                            guard let self, let starsContext = self.context.starsContext, let starsState = starsContext.currentState else {
-                                                return
-                                            }
-                                            if starsState.balance < resellAmount.amount {
-                                                self.inProgress = false
-                                                self.updated()
-                                                
-                                                self.commitBuy(skipConfirmation: true)
-                                            } else {
-                                                proceed()
-                                            }
-                                        });
-                                    })
-                                }
-                            )
-                            controller.push(purchaseController)
-                        })
-                    } else if resellAmount.currency == .ton, let tonState = context.tonContext?.currentState, tonState.balance < resellAmount.amount {
-                        guard let controller = self.getController() else {
-                            return
-                        }
-                        let needed = resellAmount.amount - tonState.balance
-                        var fragmentUrl = "https://fragment.com/ads/topup"
-                        if let data = self.context.currentAppConfiguration.with({ $0 }).data, let value = data["ton_topup_url"] as? String {
-                            fragmentUrl = value
-                        }
-                        controller.push(BalanceNeededScreen(
-                            context: self.context,
-                            amount: needed,
-                            buttonAction: { [weak self] in
-                                guard let self else {
-                                    return
-                                }
-                                self.context.sharedContext.applicationBindings.openUrl(fragmentUrl)
-                            }
-                        ))
-                    } else {
-                        proceed()
-                    }
-                } else {
-                    guard let controller = self.getController() else {
-                        return
-                    }
-                    let alertController = textAlertController(context: context, title: nil, text: presentationData.strings.Gift_Buy_ErrorUnknown, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})], parseMarkdown: true)
-                    controller.present(alertController, in: .window(.root))
-                }
+            guard let _ = self.buyForm else {
+                let alertController = textAlertController(
+                    context: context,
+                    title: nil,
+                    text: presentationData.strings.Gift_Buy_ErrorUnknown,
+                    actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})],
+                    parseMarkdown: true
+                )
+                controller.present(alertController, in: .window(.root))
+                return
             }
             
-            if skipConfirmation {
-                action(acceptedPrice?.currency ?? .stars)
-            } else {
-                let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: recipientPeerId))
-                |> deliverOnMainQueue).start(next: { [weak self] peer in
-                    guard let self, let peer else {
+            let recipientPeerId = self.recipientPeerId ?? self.context.account.peerId
+            buyStarGiftImpl(
+                context: self.context,
+                recipientPeerId: recipientPeerId,
+                uniqueGift: uniqueGift,
+                showAttributes: false,
+                acceptedPrice: acceptedPrice,
+                skipConfirmation: skipConfirmation,
+                starsTopUpOptions: self.starsTopUpOptionsPromise.get(),
+                buyGift: controller.buyGift,
+                getController: self.getController,
+                updateProgress: { [weak self] progress in
+                    guard let self else {
                         return
                     }
-                    if let controller = self.getController() as? GiftViewScreen {
-                        let alertController = giftPurchaseAlertController(
-                            context: self.context,
-                            gift: uniqueGift,
-                            peer: peer,
-                            navigationController: controller.navigationController as? NavigationController,
-                            commit: { currency in
-                                action(currency)
-                            },
-                            dismissed: { [weak controller] in
-                                if let balanceView = controller?.balanceOverlay.view {
-                                    balanceView.isHidden = false
-                                }
-                            }
-                        )
-                        controller.present(alertController, in: .window(.root))
-                        
-                        if let balanceView = controller.balanceOverlay.view {
-                            balanceView.isHidden = true
+                    self.inProgress = progress
+                    self.updated()
+                },
+                updateIsBalanceVisible: { [weak controller] isVisible in
+                    guard let controller else {
+                        return
+                    }
+                    if let balanceView = controller.balanceOverlay.view {
+                        balanceView.isHidden = !isVisible
+                    }
+                },
+                completion: { [weak controller] in
+                    guard let controller else {
+                        return
+                    }
+                    
+                    var animationFile: TelegramMediaFile?
+                    for attribute in uniqueGift.attributes {
+                        if case let .model(_, file, _, _) = attribute {
+                            animationFile = file
+                            break
                         }
                     }
-                })
-            }
+                    
+                    if let navigationController = controller.navigationController as? NavigationController {
+                        if recipientPeerId == context.account.peerId {
+                            controller.dismissAnimated()
+                            
+                            navigationController.view.addSubview(ConfettiView(frame: navigationController.view.bounds))
+                            
+                            Queue.mainQueue().after(0.5, {
+                                if let lastController = navigationController.viewControllers.last as? ViewController, let animationFile {
+                                    let resultController = UndoOverlayController(
+                                        presentationData: presentationData,
+                                        content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_SuccessYou_Title, text: presentationData.strings.Gift_View_Resale_SuccessYou_Text(giftTitle).string, undoText: nil, customAction: nil),
+                                        elevatedLayout: !(lastController is ChatController),
+                                        action: {  _ in
+                                            return true
+                                        }
+                                    )
+                                    lastController.present(resultController, in: .current)
+                                }
+                            })
+                        } else {
+                            var controllers = Array(navigationController.viewControllers.prefix(1))
+                            let chatController = context.sharedContext.makeChatController(context: context, chatLocation: .peer(id: recipientPeerId), subject: nil, botStart: nil, mode: .standard(.default), params: nil)
+                            chatController.hintPlayNextOutgoingGift()
+                            controllers.append(chatController)
+                            navigationController.setViewControllers(controllers, animated: true)
+                            
+                            Queue.mainQueue().after(0.5, {
+                                let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: recipientPeerId))
+                                |> deliverOnMainQueue).start(next: { [weak navigationController] peer in
+                                    if let peer, let lastController = navigationController?.viewControllers.last as? ViewController, let animationFile {
+                                        let resultController = UndoOverlayController(
+                                            presentationData: presentationData,
+                                            content: .sticker(context: context, file: animationFile, loop: false, title: presentationData.strings.Gift_View_Resale_Success_Title, text: presentationData.strings.Gift_View_Resale_Success_Text(peer.compactDisplayTitle).string, undoText: nil, customAction: nil),
+                                            elevatedLayout: !(lastController is ChatController),
+                                            action: {  _ in
+                                                return true
+                                            }
+                                        )
+                                        lastController.present(resultController, in: .current)
+                                    }
+                                })
+                            })
+                        }
+                    }
+                }
+            )
         }
         
         func skipAnimation() {
@@ -2522,7 +2389,7 @@ private final class GiftViewSheetContent: CombinedComponent {
     static var body: Body {
         let priceButton = Child(PlainButtonComponent.self)
         
-        let buttons = Child(ButtonsComponent.self)
+        let buttons = Child(GlassControlPanelComponent.self)
         let animation = Child(GiftCompositionComponent.self)
         let title = Child(MultilineTextComponent.self)
         let subtitle = Child(MultilineTextComponent.self)
@@ -2549,7 +2416,7 @@ private final class GiftViewSheetContent: CombinedComponent {
         let upgradeNextButton = Child(PlainButtonComponent.self)
         
         let upgradeTitle = Child(MultilineTextComponent.self)
-        let upgradeDescription = Child(PlainButtonComponent.self)
+        let upgradeDescription = Child(GlassBarButtonComponent.self)
         let upgradePerks = Child(List<Empty>.self)
         let upgradeKeepName = Child(PlainButtonComponent.self)
         let upgradePriceButton = Child(PlainButtonComponent.self)
@@ -2708,40 +2575,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                 showWearPreview = true
             }
             
-            let buttons = buttons.update(
-                component: ButtonsComponent(
-                    theme: theme,
-                    isOverlay: showUpgradePreview || uniqueGift != nil,
-                    showMoreButton: uniqueGift != nil && !showWearPreview,
-                    closePressed: { [weak state] in
-                        guard let state else {
-                            return
-                        }
-                        if state.inWearPreview {
-                            if let controller = controller() as? GiftViewScreen {
-                                controller.dismissAllTooltips()
-                            }
-                            state.inWearPreview = false
-                            state.updated(transition: .spring(duration: 0.4))
-                        } else if state.inUpgradePreview {
-                            state.cancelUpgradePreview()
-                        } else {
-                            state.dismiss(animated: true)
-                        }
-                    },
-                    morePressed: { [weak state] node, gesture in
-                        if state?.testUpgradeAnimation == true {
-                            state?.requestUpgradePreview()
-                            return
-                        }
-                        
-                        state?.openMore(node: node, gesture: gesture)
-                    }
-                ),
-                availableSize: CGSize(width: 30.0, height: 30.0),
-                transition: context.transition
-            )
-                                                            
             var originY: CGFloat = 0.0
                         
             let headerHeight: CGFloat
@@ -3089,62 +2922,62 @@ private final class GiftViewSheetContent: CombinedComponent {
                         .position(CGPoint(x: -10000.0, y: -10000.0))
                     )
                     
+                    let variantsButtonSize = CGSize(width: variantsMeasureDescription.size.width + 87.0, height: 24.0)
+                                        
                     let upgradeDescription = upgradeDescription.update(
-                        component: PlainButtonComponent(
-                            content: AnyComponent(
-                                ZStack([
-                                    AnyComponentWithIdentity(id: "background", component: AnyComponent(
-                                        FilledRoundedRectangleComponent(color: buttonColor, cornerRadius: .minEdge, smoothCorners: false)
+                        component: GlassBarButtonComponent(
+                            size: variantsButtonSize,
+                            backgroundColor: buttonColor,
+                            isDark: true,
+                            state: .tintedGlass,
+                            component: AnyComponentWithIdentity(id: "content", component: AnyComponent(
+                                HStack([
+                                    AnyComponentWithIdentity(id: "icon1", component: AnyComponent(
+                                        GiftItemComponent(
+                                            context: component.context,
+                                            theme: theme,
+                                            strings: strings,
+                                            peer: nil,
+                                            subject: variant1,
+                                            isPlaceholder: false,
+                                            mode: .tableIcon
+                                        )
                                     )),
-                                    AnyComponentWithIdentity(id: "label", component: AnyComponent(HStack([
-                                        AnyComponentWithIdentity(id: "icon1", component: AnyComponent(
-                                            GiftItemComponent(
-                                                context: component.context,
-                                                theme: theme,
-                                                strings: strings,
-                                                peer: nil,
-                                                subject: variant1,
-                                                isPlaceholder: false,
-                                                mode: .tableIcon
-                                            )
-                                        )),
-                                        AnyComponentWithIdentity(id: "icon2", component: AnyComponent(
-                                            GiftItemComponent(
-                                                context: component.context,
-                                                theme: theme,
-                                                strings: strings,
-                                                peer: nil,
-                                                subject: variant2,
-                                                isPlaceholder: false,
-                                                mode: .tableIcon
-                                            )
-                                        )),
-                                        AnyComponentWithIdentity(id: "icon3", component: AnyComponent(
-                                            GiftItemComponent(
-                                                context: component.context,
-                                                theme: theme,
-                                                strings: strings,
-                                                peer: nil,
-                                                subject: variant3,
-                                                isPlaceholder: false,
-                                                mode: .tableIcon
-                                            )
-                                        )),
-                                        AnyComponentWithIdentity(id: "text", component: AnyComponent(
-                                            MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_ViewAllVariants, font: Font.semibold(13.0), textColor: .white)))
-                                        )),
-                                        AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
-                                            BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: .white)
-                                        ))
-                                    ], spacing: 3.0)))
-                                ])
-                            ),
-                            action: { [weak state] in
+                                    AnyComponentWithIdentity(id: "icon2", component: AnyComponent(
+                                        GiftItemComponent(
+                                            context: component.context,
+                                            theme: theme,
+                                            strings: strings,
+                                            peer: nil,
+                                            subject: variant2,
+                                            isPlaceholder: false,
+                                            mode: .tableIcon
+                                        )
+                                    )),
+                                    AnyComponentWithIdentity(id: "icon3", component: AnyComponent(
+                                        GiftItemComponent(
+                                            context: component.context,
+                                            theme: theme,
+                                            strings: strings,
+                                            peer: nil,
+                                            subject: variant3,
+                                            isPlaceholder: false,
+                                            mode: .tableIcon
+                                        )
+                                    )),
+                                    AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                        MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_ViewAllVariants, font: Font.semibold(13.0), textColor: .white)))
+                                    )),
+                                    AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                        BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: .white)
+                                    ))
+                                ], spacing: 3.0)
+                            )),
+                            action: { [weak state] _ in
                                 state?.openUpgradeVariants()
-                            },
-                            animateScale: false
+                            }
                         ),
-                        availableSize: CGSize(width: variantsMeasureDescription.size.width + 87.0, height: 24.0),
+                        availableSize: variantsButtonSize,
                         transition: context.transition
                     )
                   
@@ -3288,7 +3121,15 @@ private final class GiftViewSheetContent: CombinedComponent {
                 var hasDescriptionButton = false
                 if let uniqueGift {
                     titleString = uniqueGift.title
-                    descriptionText = "\(strings.Gift_Unique_Collectible) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))"
+                    var isCrafted = false
+                    for attribute in uniqueGift.attributes {
+                        if case let .model(_, _, _, crafted) = attribute {
+                            isCrafted = crafted
+                        }
+                    }
+                    //TODO:localize
+                    let prefix: String = isCrafted ? "Crafted Collectible" : strings.Gift_Unique_Collectible
+                    descriptionText = "\(prefix) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))"
                     
                     if let releasedBy = uniqueGift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
                         descriptionText = strings.Gift_Unique_CollectibleBy("#\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))", "[@\(addressName)]()").string
@@ -3649,6 +3490,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                         )
                         context.add(hiddenText
                             .position(CGPoint(x: context.availableSize.width / 2.0, y: originY))
+                            .appear(.default(alpha: true))
+                            .disappear(.default(alpha: true))
                         )
                         
                         originY += hiddenText.size.height
@@ -4254,7 +4097,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                                 var badgeColor: UIColor = theme.list.itemAccentColor
                                 switch rarity {
                                 case let .permille(value):
-                                    badgeString = formatPercentage(Float(value) * 0.1)
+                                    if value == 0 {
+                                        badgeString = "<\(formatPercentage(0.1))"
+                                    } else {
+                                        badgeString = formatPercentage(Float(value) * 0.1)
+                                    }
                                 case .epic:
                                     badgeString = "epic"
                                     badgeColor = UIColor(rgb: 0xaf52de)
@@ -5275,8 +5122,92 @@ private final class GiftViewSheetContent: CombinedComponent {
                 originY += upgradePriceButton.size.height
             }
             
+            var buttonsBackground: GlassControlGroupComponent.Background = .panel
+            if let uniqueGift, let backdropAttribute = uniqueGift.attributes.first(where: { attribute in
+                if case .backdrop = attribute {
+                    return true
+                } else {
+                    return false
+                }
+            }), case let .backdrop(_, _, innerColor, _, _, _, _) = backdropAttribute {
+                buttonsBackground = .color(UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05))
+            } else if showUpgradePreview, let previewPatternColor = giftCompositionExternalState.previewPatternColor {
+                buttonsBackground = .color(previewPatternColor.withMultipliedBrightnessBy(1.05))
+            }
+            
+            var isBackButton = false
+            if state.inWearPreview || state.inUpgradePreview {
+                isBackButton = true
+            }
+            var leftControlItems: [GlassControlGroupComponent.Item] = []
+            leftControlItems.append(GlassControlGroupComponent.Item(
+                id: AnyHashable("close"),
+                content: .icon(isBackButton ? "Navigation/Back" : "Navigation/Close"),
+                action: { [weak state] in
+                    guard let state else {
+                        return
+                    }
+                    if state.inWearPreview {
+                        if let controller = controller() as? GiftViewScreen {
+                            controller.dismissAllTooltips()
+                        }
+                        state.inWearPreview = false
+                        state.updated(transition: .spring(duration: 0.4))
+                    } else if state.inUpgradePreview {
+                        state.cancelUpgradePreview()
+                    } else {
+                        state.dismiss(animated: true)
+                    }
+                }
+            ))
+            
+            var rightControlItems: [GlassControlGroupComponent.Item] = []
+            if uniqueGift != nil && !showWearPreview {
+                if let _ = component.subject.arguments?.canCraftDate {
+                    rightControlItems.append(GlassControlGroupComponent.Item(
+                        id: AnyHashable("craft"),
+                        content: .icon("Premium/Craft"),
+                        action: { [weak state] in
+                            guard let state else {
+                                return
+                            }
+                            state.craftGift()
+                        }
+                    ))
+                }
+
+                rightControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("more"),
+                    content: .animation("anim_morewide"),
+                    action: { [weak state] in
+                        guard let state else {
+                            return
+                        }
+                        state.openMore()
+                    }
+                ))
+            }
+            
+            let buttons = buttons.update(
+                component: GlassControlPanelComponent(
+                    theme: theme,
+                    leftItem: GlassControlPanelComponent.Item(
+                        items: leftControlItems,
+                        background: buttonsBackground
+                    ),
+                    centralItem: nil,
+                    rightItem: rightControlItems.isEmpty ? nil : GlassControlPanelComponent.Item(
+                        items: rightControlItems,
+                        background: buttonsBackground
+                    ),
+                    centerAlignmentIfPossible: true,
+                    tag: state.controlButtonsTag
+                ),
+                availableSize: CGSize(width: context.availableSize.width - 16.0 * 2.0, height: 44.0),
+                transition: context.transition
+            )
             context.add(buttons
-                .position(CGPoint(x: context.availableSize.width - environment.safeInsets.left - 16.0 - buttons.size.width / 2.0, y: 31.0))
+                .position(CGPoint(x: context.availableSize.width / 2.0, y: 16.0 + buttons.size.height / 2.0))
             )
             
             let effectiveBottomInset: CGFloat = environment.metrics.isTablet ? 0.0 : environment.safeInsets.bottom
@@ -6107,15 +6038,15 @@ private struct GiftConfiguration {
 
 private final class GiftViewContextReferenceContentSource: ContextReferenceContentSource {
     private let controller: ViewController
-    private let sourceNode: ASDisplayNode
+    private let sourceView: UIView
     
-    init(controller: ViewController, sourceNode: ASDisplayNode) {
+    init(controller: ViewController, sourceView: UIView) {
         self.controller = controller
-        self.sourceNode = sourceNode
+        self.sourceView = sourceView
     }
     
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
-        return ContextControllerReferenceViewInfo(referenceView: self.sourceNode.view, contentAreaInScreenSpace: UIScreen.main.bounds)
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }
 

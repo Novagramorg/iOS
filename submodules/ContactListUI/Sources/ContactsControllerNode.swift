@@ -551,7 +551,7 @@ private final class ContactContextExtractedContentSource: ContextExtractedConten
     }
 }
 
-private func presentContactAccessPicker(context: AccountContext) {
+public func presentContactAccessPicker(context: AccountContext) {
     if #available(iOS 18.0, *), let rootViewController = context.sharedContext.mainWindow?.viewController?.view.window?.rootViewController {
         var dismissImpl: (() -> Void)?
         let pickerView = ContactAccessPickerHostingView(completionHandler: { [weak rootViewController] ids in

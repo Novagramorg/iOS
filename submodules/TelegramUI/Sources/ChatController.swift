@@ -2866,10 +2866,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                                 return $0.updatedTitlePanelContext {
                                                     if !$0.contains(where: {
                                                         switch $0 {
-                                                            case .requestInProgress:
-                                                                return true
-                                                            default:
-                                                                return false
+                                                        case .requestInProgress:
+                                                            return true
+                                                        default:
+                                                            return false
                                                         }
                                                     }) {
                                                         var updatedContexts = $0
@@ -2887,10 +2887,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                                             return $0.updatedTitlePanelContext {
                                                                 if let index = $0.firstIndex(where: {
                                                                     switch $0 {
-                                                                        case .requestInProgress:
-                                                                            return true
-                                                                        default:
-                                                                            return false
+                                                                    case .requestInProgress:
+                                                                        return true
+                                                                    default:
+                                                                        return false
                                                                     }
                                                                 }) {
                                                                     var updatedContexts = $0
@@ -2905,12 +2905,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                             }) |> deliverOnMainQueue).startStrict(next: { [weak self] result in
                                                 if let strongSelf = self {
                                                     switch result {
-                                                        case let .accepted(url):
-                                                            if let url {
-                                                                strongSelf.openUrl(url, concealed: false, skipUrlAuth: true)
-                                                            }
-                                                        default:
-                                                            strongSelf.openUrl(defaultUrl, concealed: false, skipUrlAuth: true)
+                                                    case let .accepted(url):
+                                                        if let url {
+                                                            strongSelf.openUrl(url, concealed: false, skipUrlAuth: true)
+                                                        }
+                                                    default:
+                                                        strongSelf.openUrl(defaultUrl, concealed: false, skipUrlAuth: true)
                                                     }
                                                 }
                                             }))

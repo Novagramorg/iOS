@@ -167,15 +167,15 @@ private final class ChatScheduleTimeSheetContentComponent: Component {
             var contentHeight: CGFloat = 0.0
             contentHeight += 30.0
                         
-            let barButtonSize = CGSize(width: 40.0, height: 40.0)
+            let barButtonSize = CGSize(width: 44.0, height: 44.0)
             let cancelSize = self.cancel.update(
                 transition: transition,
                 component: AnyComponent(
                     GlassBarButtonComponent(
                         size: barButtonSize,
-                        backgroundColor: environment.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                        backgroundColor: nil,
                         isDark: environment.theme.overallDarkAppearance,
-                        state: .generic,
+                        state: .glass,
                         component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                             BundleIconComponent(
                                 name: "Navigation/Close",

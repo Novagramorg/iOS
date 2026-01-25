@@ -36,19 +36,22 @@ public final class GlassControlPanelComponent: Component {
     public let rightItem: Item?
     public let centralItem: Item?
     public let centerAlignmentIfPossible: Bool
+    public let tag: AnyObject?
 
     public init(
         theme: PresentationTheme,
         leftItem: Item?,
         centralItem: Item?,
         rightItem: Item?,
-        centerAlignmentIfPossible: Bool = false
+        centerAlignmentIfPossible: Bool = false,
+        tag: AnyObject? = nil
     ) {
         self.theme = theme
         self.leftItem = leftItem
         self.centralItem = centralItem
         self.rightItem = rightItem
         self.centerAlignmentIfPossible = centerAlignmentIfPossible
+        self.tag = tag
     }
 
     public static func ==(lhs: GlassControlPanelComponent, rhs: GlassControlPanelComponent) -> Bool {
@@ -67,10 +70,23 @@ public final class GlassControlPanelComponent: Component {
         if lhs.centerAlignmentIfPossible != rhs.centerAlignmentIfPossible {
             return false
         }
+        if lhs.tag !== rhs.tag {
+            return false
+        }
         return true
     }
 
-    public final class View: UIView {
+    public final class View: UIView, ComponentTaggedView {
+        public func matches(tag: Any) -> Bool {
+            if let component = self.component, let componentTag = component.tag {
+                let tag = tag as AnyObject
+                if componentTag === tag {
+                    return true
+                }
+            }
+            return false
+        }
+        
         private let glassContainerView: GlassBackgroundContainerView
         
         private var leftItemComponent: ComponentView<Empty>?

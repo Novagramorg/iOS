@@ -95,6 +95,7 @@ import PasskeysScreen
 import GiftDemoScreen
 import ChatTextLinkEditUI
 import CocoonInfoScreen
+import GiftCraftScreen
 
 private final class AccountUserInterfaceInUseContext {
     let subscribers = Bag<(Bool) -> Void>()
@@ -3881,6 +3882,10 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     public func makeGiftAuctionWearPreviewScreen(context: AccountContext, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?, attributes: [StarGift.UniqueGift.Attribute], completion: @escaping () -> Void) -> ViewController {
         return GiftAuctionWearPreviewScreen(context: context, auctionContext: auctionContext, attributes: attributes, completion: completion)
+    }
+    
+    public func makeGiftCraftScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController {
+        return GiftCraftScreen(context: context, gift: gift)
     }
     
     public func makeGiftDemoScreen(context: AccountContext) -> ViewController {

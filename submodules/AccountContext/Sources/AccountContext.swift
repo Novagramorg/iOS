@@ -185,16 +185,6 @@ public enum WallpaperUrlParameter {
     case gradient([UInt32], Int32?)
 }
 
-public enum ResolvedUrlSettingsSection {
-    case theme
-    case devices
-    case autoremoveMessages
-    case twoStepAuth
-    case enableLog
-    case phonePrivacy
-    case loginEmail
-}
-
 public struct ResolvedBotChoosePeerTypes: OptionSet {
     public var rawValue: UInt32
     
@@ -315,13 +305,12 @@ public enum ResolvedUrl {
     case share(url: String?, text: String?, to: String?)
     case wallpaper(WallpaperUrlParameter)
     case theme(String)
-    case settings(ResolvedUrlSettingsSection)
     case joinVoiceChat(PeerId, String?)
     case importStickers
     case startAttach(peerId: PeerId, payload: String?, choose: ResolvedBotChoosePeerTypes?)
     case invoice(slug: String, invoice: TelegramMediaInvoice?)
     case premiumOffer(reference: String?)
-    case starsTopup(amount: Int64, purpose: String?)
+    case starsTopup(amount: Int64?, purpose: String?)
     case chatFolder(slug: String)
     case story(peerId: PeerId, id: Int32)
     case boost(peerId: PeerId?, status: ChannelBoostStatus?, myBoostStatus: MyBoostStatus?)
@@ -336,6 +325,53 @@ public enum ResolvedUrl {
     case storyFolder(peerId: PeerId, id: Int64)
     case giftCollection(peerId: PeerId, id: Int64)
     case sendGift(peerId: PeerId?)
+    case unknownDeepLink(path: String)
+    case oauth(url: String)
+    
+    public enum ChatsSection {
+        case search
+        case edit
+        case emojiStatus
+    }
+    case chats(ChatsSection?)
+    
+    public enum ComposeSection {
+        case group
+        case channel
+        case contact
+    }
+    case compose(ComposeSection?)
+    
+    public enum PostStorySection {
+        case photo
+        case video
+        case live
+    }
+    case postStory(PostStorySection?)
+    
+    public enum ContactsSection {
+        case search
+        case sort
+        case new
+        case invite
+        case manage
+    }
+    case contacts(ContactsSection?)
+    
+    public enum SettingsSection {
+        public enum Legacy {
+            case theme
+            case devices
+            case autoremoveMessages
+            case enableLog
+            case phonePrivacy
+            case loginEmail
+        }
+        
+        case legacy(Legacy)
+        case path(String)
+    }
+    case settings(SettingsSection)
 }
 
 public enum ResolveUrlResult {
@@ -972,18 +1008,30 @@ public protocol MediaEditorScreenResult {
     var target: Stories.PendingTarget { get }
 }
 
+public enum StoryCameraMode {
+    case photo
+    case video
+    case live
+}
+
 public protocol TelegramRootControllerInterface: NavigationController {
     @discardableResult
-    func openStoryCamera(customTarget: Stories.PendingTarget?, resumeLiveStream: Bool, transitionIn: StoryCameraTransitionIn?, transitionedIn: @escaping () -> Void, transitionOut: @escaping (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut?) -> StoryCameraTransitionInCoordinator?
+    func openStoryCamera(mode: StoryCameraMode, customTarget: Stories.PendingTarget?, resumeLiveStream: Bool, transitionIn: StoryCameraTransitionIn?, transitionedIn: @escaping () -> Void, transitionOut: @escaping (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut?) -> StoryCameraTransitionInCoordinator?
     func proceedWithStoryUpload(target: Stories.PendingTarget, results: [MediaEditorScreenResult], existingMedia: EngineMedia?, forwardInfo: Stories.PendingForwardInfo?, externalState: MediaEditorTransitionOutExternalState, commit: @escaping (@escaping () -> Void) -> Void)
     
     func getContactsController() -> ViewController?
     func getChatsController() -> ViewController?
+    func getSettingsController() -> ViewController?
+    
     func getPrivacySettings() -> Promise<AccountPrivacySettings?>?
-    func openSettings()
+    func getTwoStepAuthData() -> Promise<TwoStepAuthData?>?
+        
+    func openContacts()
+    func openSettings(edit: Bool)
     func openBirthdaySetup()
     func openPhotoSetup(completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?)
     func openAvatars()
+    func startNewCall()
 }
 
 public protocol QuickReplySetupScreenInitialData: AnyObject {
@@ -1185,6 +1233,7 @@ public enum ChannelMembersSearchControllerMode {
     case promote
     case ban
     case inviteToCall
+    case ownershipTransfer
 }
 
 public enum ChannelMembersSearchFilter {
@@ -1412,6 +1461,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeGiftOfferScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, gift: StarGift.UniqueGift, peer: EnginePeer, amount: CurrencyAmount, commit: @escaping () -> Void) -> ViewController
     func makeGiftUpgradeVariantsScreen(context: AccountContext, gift: StarGift, onlyCrafted: Bool, attributes: [StarGift.UniqueGift.Attribute], selectedAttributes: [StarGift.UniqueGift.Attribute]?, focusedAttribute: StarGift.UniqueGift.Attribute?) -> ViewController
     func makeGiftAuctionWearPreviewScreen(context: AccountContext, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?, attributes: [StarGift.UniqueGift.Attribute], completion: @escaping () -> Void) -> ViewController
+    func makeGiftCraftScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController
     func makeGiftDemoScreen(context: AccountContext) -> ViewController
     func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController
     func makeContentReportScreen(context: AccountContext, subject: ReportContentSubject, forceDark: Bool, present: @escaping (ViewController) -> Void, completion: @escaping () -> Void, requestSelectMessages: ((String, Data, String?) -> Void)?)

@@ -443,6 +443,10 @@ public final class ChatListHeaderComponent: Component {
             alphaTransition.setAlpha(view: self.rightButtonsContainer, alpha: pow(fraction, 2.0))
         }
         
+        func openEmojiStatusSetup() {
+            self.chatListTitleView?.openEmojiStatusSetup()
+        }
+        
         func update(context: AccountContext, theme: PresentationTheme, strings: PresentationStrings, content: Content, displayBackButton: Bool, sideInset: CGFloat, sideContentWidth: CGFloat, sideContentFraction: CGFloat, size: CGSize, transition: ComponentTransition) {
             let alphaTransition: ComponentTransition = transition.animation.isImmediate ? .immediate : .easeInOut(duration: 0.3)
 
@@ -813,6 +817,14 @@ public final class ChatListHeaderComponent: Component {
         }
         
         private func updateContentStoryOffsets(transition: ComponentTransition) {
+        }
+        
+        func openEmojiStatusSetup() {
+            if let storyPeerListView = self.storyPeerList?.view as? StoryPeerListComponent.View {
+                storyPeerListView.openEmojiStatusSetup()
+            } else {
+                self.primaryContentView?.openEmojiStatusSetup()
+            }
         }
         
         func update(component: ChatListHeaderComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
