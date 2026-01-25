@@ -23,9 +23,13 @@ import MultiAnimationRenderer
 import Pasteboard
 import StickerPackEditTitleController
 import EntityKeyboard
-//import CameraScreen
 import ComponentFlow
 import EmojiStatusComponent
+import EdgeEffect
+import GlassBarButtonComponent
+import BundleIconComponent
+import LottieComponent
+import ButtonComponent
 
 private let maxStickersCount = 120
 
@@ -143,18 +147,20 @@ private final class StickerPackContainer: ASDisplayNode {
     private let previewIconFile: TelegramMediaFile?
     private var mainPreviewIcon: ComponentView<Empty>?
     private let gridNode: GridNode
-    private let actionAreaBackgroundNode: NavigationBackgroundNode
-    private let actionAreaSeparatorNode: ASDisplayNode
     private let buttonNode: HighlightableButtonNode
-    private let titleBackgroundnode: NavigationBackgroundNode
     private let titleNode: ImmediateTextNode
     private var titlePlaceholderNode: ShimmerEffectNode?
     private let titleContainer: ASDisplayNode
-    private let titleSeparatorNode: ASDisplayNode
     
     private let topContainerNode: ASDisplayNode
-    private let cancelButtonNode: HighlightableButtonNode
-    private let moreButtonNode: MoreButtonNode
+    private let bottomContainerNode: ASDisplayNode
+    
+    private let topEdgeEffectView = EdgeEffectView()
+    private let bottomEdgeEffectView = EdgeEffectView()
+    private let button = ComponentView<Empty>()
+    private let cancelButton = ComponentView<Empty>()
+    private let moreButton = ComponentView<Empty>()
+    private let moreButtonPlayOnce = ActionSlot<Void>()
     
     private(set) var validLayout: (ContainerViewLayout, CGRect, CGFloat, UIEdgeInsets)?
     
@@ -175,6 +181,8 @@ private final class StickerPackContainer: ASDisplayNode {
     var isReady: Signal<Bool, NoError> {
         return self.isReadyValue.get()
     }
+    
+    private var itemCount: Int32 = 0
     
     var expandProgress: CGFloat = 0.0
     var expandScrollProgress: CGFloat = 0.0
@@ -225,7 +233,7 @@ private final class StickerPackContainer: ASDisplayNode {
         self.backgroundNode = ASImageNode()
         self.backgroundNode.displaysAsynchronously = true
         self.backgroundNode.displayWithoutProcessing = true
-        self.backgroundNode.image = generateStretchableFilledCircleImage(diameter: 20.0, color: self.presentationData.theme.actionSheet.opaqueItemBackgroundColor)
+        self.backgroundNode.image = generateStretchableFilledCircleImage(diameter: 76.0, color: self.presentationData.theme.actionSheet.opaqueItemBackgroundColor)
         
         self.previewIconFile = previewIconFile
         if self.previewIconFile != nil {
@@ -235,14 +243,9 @@ private final class StickerPackContainer: ASDisplayNode {
         self.gridNode = GridNode()
         self.gridNode.scrollView.alwaysBounceVertical = true
         self.gridNode.scrollView.showsVerticalScrollIndicator = false
-        
-        self.titleBackgroundnode = NavigationBackgroundNode(color: self.presentationData.theme.rootController.navigationBar.blurredBackgroundColor)
-        
-        self.actionAreaBackgroundNode = NavigationBackgroundNode(color: self.presentationData.theme.rootController.tabBar.backgroundColor)
-        
-        self.actionAreaSeparatorNode = ASDisplayNode()
-        self.actionAreaSeparatorNode.backgroundColor = self.presentationData.theme.rootController.tabBar.separatorColor
-        
+                
+        self.bottomContainerNode = ASDisplayNode()
+                
         self.buttonNode = HighlightableButtonNode()
         self.titleNode = ImmediateTextNode()
         self.titleNode.textAlignment = .center
@@ -261,13 +264,7 @@ private final class StickerPackContainer: ASDisplayNode {
         }
         
         self.titleContainer = ASDisplayNode()
-        self.titleSeparatorNode = ASDisplayNode()
-        self.titleSeparatorNode.backgroundColor = self.presentationData.theme.rootController.navigationBar.separatorColor
-        
         self.topContainerNode = ASDisplayNode()
-        self.cancelButtonNode = HighlightableButtonNode()
-        self.moreButtonNode = MoreButtonNode(theme: self.presentationData.theme)
-        self.moreButtonNode.iconNode.enqueueState(.more, animated: false)
         
         var addStickerPackImpl: ((StickerPackCollectionInfo, [StickerPackItem]) -> Void)?
         var removeStickerPackImpl: ((StickerPackCollectionInfo) -> Void)?
@@ -290,18 +287,13 @@ private final class StickerPackContainer: ASDisplayNode {
         
         self.addSubnode(self.backgroundNode)
         self.addSubnode(self.gridNode)
-        self.addSubnode(self.actionAreaBackgroundNode)
-        self.addSubnode(self.actionAreaSeparatorNode)
-        self.addSubnode(self.buttonNode)
         
         self.titleContainer.addSubnode(self.titleNode)
         self.addSubnode(self.titleContainer)
-        self.addSubnode(self.titleSeparatorNode)
         
         self.addSubnode(self.topContainerNode)
-        self.topContainerNode.addSubnode(self.cancelButtonNode)
-        self.topContainerNode.addSubnode(self.moreButtonNode)
-                
+        self.addSubnode(self.bottomContainerNode)
+    
         self.gridNode.presentationLayoutUpdated = { [weak self] presentationLayout, transition in
             self?.gridPresentationLayoutUpdated(presentationLayout, transition: transition)
         }
@@ -329,14 +321,7 @@ private final class StickerPackContainer: ASDisplayNode {
                 }
             }
         }
-        
-        self.gridNode.visibleContentOffsetChanged = { [weak self] _ in
-            guard let strongSelf = self else {
-                return
-            }
-            strongSelf.updateButtonBackgroundAlpha()
-        }
-        
+                
         self.gridNode.interactiveScrollingWillBeEnded = { [weak self] contentOffset, velocity, targetOffset -> CGPoint in
             guard let strongSelf = self, !strongSelf.isDismissed else {
                 return targetOffset
@@ -431,27 +416,27 @@ private final class StickerPackContainer: ASDisplayNode {
             strongSelf.updateStickerPackContents(contents, hasPremium: hasPremium)
         })
         
-        self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
-        self.buttonNode.highligthedChanged = { [weak self] highlighted in
-            if let strongSelf = self {
-                if highlighted {
-                    strongSelf.buttonNode.layer.removeAnimation(forKey: "opacity")
-                    strongSelf.buttonNode.alpha = 0.8
-                } else {
-                    strongSelf.buttonNode.alpha = 1.0
-                    strongSelf.buttonNode.layer.animateAlpha(from: 0.8, to: 1.0, duration: 0.3)
-                }
-            }
-        }
+//        self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
+//        self.buttonNode.highligthedChanged = { [weak self] highlighted in
+//            if let strongSelf = self {
+//                if highlighted {
+//                    strongSelf.buttonNode.layer.removeAnimation(forKey: "opacity")
+//                    strongSelf.buttonNode.alpha = 0.8
+//                } else {
+//                    strongSelf.buttonNode.alpha = 1.0
+//                    strongSelf.buttonNode.layer.animateAlpha(from: 0.8, to: 1.0, duration: 0.3)
+//                }
+//            }
+//        }
         
-        self.cancelButtonNode.setTitle(self.presentationData.strings.Common_Cancel, with: Font.regular(17.0), with: self.presentationData.theme.actionSheet.controlAccentColor, for: .normal)
-        self.cancelButtonNode.addTarget(self, action: #selector(self.cancelPressed), forControlEvents: .touchUpInside)
+        //self.cancelButtonNode.setTitle(self.presentationData.strings.Common_Cancel, with: Font.regular(17.0), with: self.presentationData.theme.actionSheet.controlAccentColor, for: .normal)
+        //self.cancelButtonNode.addTarget(self, action: #selector(self.cancelPressed), forControlEvents: .touchUpInside)
         
-        self.moreButtonNode.action = { [weak self] _, gesture in
-            if let strongSelf = self {
-                strongSelf.morePressed(node: strongSelf.moreButtonNode.contextSourceNode, gesture: gesture)
-            }
-        }
+//        self.moreButtonNode.action = { [weak self] _, gesture in
+//            if let strongSelf = self {
+//                strongSelf.morePressed(node: strongSelf.moreButtonNode.contextSourceNode, gesture: gesture)
+//            }
+//        }
         
         self.titleNode.linkHighlightColor = self.presentationData.theme.actionSheet.controlAccentColor.withAlphaComponent(0.2)
         
@@ -510,7 +495,7 @@ private final class StickerPackContainer: ASDisplayNode {
     private var reorderingGestureRecognizer: ReorderingGestureRecognizer?
     override func didLoad() {
         super.didLoad()
-        
+                
         let peekGestureRecognizer = PeekControllerGestureRecognizer(contentAtPoint: { [weak self] point -> Signal<(UIView, CGRect, PeekControllerContent)?, NoError>? in
             if let strongSelf = self {
                 if let itemNode = strongSelf.gridNode.itemNodeAtPoint(point) as? StickerPackPreviewGridItemNode, let item = itemNode.stickerPackItem {
@@ -690,6 +675,9 @@ private final class StickerPackContainer: ASDisplayNode {
         reorderingGestureRecognizer.isEnabled = self.isEditing
         self.reorderingGestureRecognizer = reorderingGestureRecognizer
         self.gridNode.view.addGestureRecognizer(reorderingGestureRecognizer)
+        
+        self.topContainerNode.view.addSubview(self.topEdgeEffectView)
+        self.bottomContainerNode.view.addSubview(self.bottomEdgeEffectView)
     }
     
     private func hideMainPreviewIcon() {
@@ -1005,15 +993,7 @@ private final class StickerPackContainer: ASDisplayNode {
     func updatePresentationData(_ presentationData: PresentationData) {
         self.presentationData = presentationData
         
-        self.backgroundNode.image = generateStretchableFilledCircleImage(diameter: 20.0, color: self.presentationData.theme.actionSheet.opaqueItemBackgroundColor)
-        
-        self.titleBackgroundnode.updateColor(color: self.presentationData.theme.rootController.navigationBar.blurredBackgroundColor, transition: .immediate)
-        self.actionAreaBackgroundNode.updateColor(color: self.presentationData.theme.rootController.tabBar.backgroundColor, transition: .immediate)
-        self.actionAreaSeparatorNode.backgroundColor = self.presentationData.theme.rootController.tabBar.separatorColor
-        self.titleSeparatorNode.backgroundColor = self.presentationData.theme.rootController.navigationBar.separatorColor
-        
-        self.cancelButtonNode.setTitle(self.presentationData.strings.Common_Cancel, with: Font.regular(17.0), with: self.presentationData.theme.actionSheet.controlAccentColor, for: .normal)
-        self.moreButtonNode.theme = self.presentationData.theme
+        self.backgroundNode.image = generateStretchableFilledCircleImage(diameter: 76.0, color: self.presentationData.theme.actionSheet.opaqueItemBackgroundColor)
         
         self.titleNode.linkHighlightColor = self.presentationData.theme.actionSheet.controlAccentColor.withAlphaComponent(0.5)
         
@@ -1056,7 +1036,7 @@ private final class StickerPackContainer: ASDisplayNode {
         self.titleNode.attributedText = stringWithAppliedEntities(title, entities: entities, baseColor: self.presentationData.theme.actionSheet.primaryTextColor, linkColor: self.presentationData.theme.actionSheet.controlAccentColor, baseFont: titleFont, linkFont: titleFont, boldFont: titleFont, italicFont: titleFont, boldItalicFont: titleFont, fixedFont: titleFont, blockQuoteFont: titleFont, message: nil)
         
         if let (layout, _, _, _) = self.validLayout {
-            let _ = self.titleNode.updateLayout(CGSize(width: layout.size.width - max(12.0, self.cancelButtonNode.frame.width) * 2.0 - 40.0, height: .greatestFiniteMagnitude))
+            let _ = self.titleNode.updateLayout(CGSize(width: layout.size.width - 44.0 * 2.0 - 40.0, height: .greatestFiniteMagnitude))
             self.updateLayout(layout: layout, transition: .immediate)
         }
     }
@@ -1084,7 +1064,6 @@ private final class StickerPackContainer: ASDisplayNode {
     private func updateIsEditing(_ isEditing: Bool) {
         self.isEditing = isEditing
         self.updateEntries(reload: true)
-        self.updateButton()
         self.peekGestureRecognizer?.longPressEnabled = !isEditing
         self.reorderingGestureRecognizer?.isEnabled = isEditing
         if let (layout, _, _, _) = self.validLayout {
@@ -1096,7 +1075,7 @@ private final class StickerPackContainer: ASDisplayNode {
         }
     }
     
-    @objc private func morePressed(node: ContextReferenceContentNode, gesture: ContextGesture?) {
+    @objc private func morePressed(view: UIView, gesture: ContextGesture?) {
         guard let controller = self.controller else {
             return
         }
@@ -1228,7 +1207,13 @@ private final class StickerPackContainer: ASDisplayNode {
             })))
         }
         
-        let contextController = makeContextController(presentationData: self.presentationData, source: .reference(StickerPackContextReferenceContentSource(controller: controller, sourceNode: node)), items: .single(ContextController.Items(content: .list(items))), gesture: gesture)
+        let contextController = makeContextController(
+            presentationData: presentationData,
+            source: .reference(StickerPackContextReferenceContentSource(controller: controller, sourceView: view)),
+            items: .single(ContextController.Items(content: .list(items))),
+            recognizer: nil,
+            gesture: gesture
+        )
         self.presentInGlobalOverlay(contextController, nil)
     }
     
@@ -1562,104 +1547,6 @@ private final class StickerPackContainer: ASDisplayNode {
         }
     }
     
-    private func updateButtonBackgroundAlpha() {
-        let offset = self.gridNode.visibleContentOffset()
-        
-        let backgroundAlpha: CGFloat
-        switch offset {
-            case .known:
-                let topPosition = self.view.convert(self.topContainerNode.frame, to: self.view).minY
-                let bottomPosition = self.actionAreaBackgroundNode.view.convert(self.actionAreaBackgroundNode.bounds, to: self.view).minY
-                let bottomEdgePosition = topPosition + self.topContainerNode.frame.height + self.gridNode.scrollView.contentSize.height
-                let bottomOffset = bottomPosition - bottomEdgePosition
-
-                backgroundAlpha = min(10.0, max(0.0, -1.0 * bottomOffset)) / 10.0
-            case .unknown, .none:
-                backgroundAlpha = 1.0
-        }
-        
-        let transition: ContainedViewLayoutTransition
-        var delay: Double = 0.0
-        if backgroundAlpha >= self.actionAreaBackgroundNode.alpha || abs(backgroundAlpha - self.actionAreaBackgroundNode.alpha) < 0.01 {
-            transition = .immediate
-        } else {
-            transition = .animated(duration: 0.2, curve: .linear)
-            if abs(backgroundAlpha - self.actionAreaBackgroundNode.alpha) > 0.9 {
-                delay = 0.2
-            }
-        }
-        transition.updateAlpha(node: self.actionAreaBackgroundNode, alpha: backgroundAlpha, delay: delay)
-        transition.updateAlpha(node: self.actionAreaSeparatorNode, alpha: backgroundAlpha, delay: delay)
-    }
-    
-    private func updateButton(count: Int32 = 0) {
-        if let currentContents = self.currentContents, currentContents.count == 1, let content = currentContents.first, case let .result(info, _, installed) = content {
-            if installed {
-                let text: String
-                if info.flags.contains(.isCreator) && !info.flags.contains(.isEmoji) {
-                    if self.isEditing {
-                        var updated = false
-                        if let current = self.buttonNode.attributedTitle(for: .normal)?.string, !current.isEmpty && current != self.presentationData.strings.Common_Done {
-                            updated = true
-                        }
-                        
-                        if updated, let snapshotView = self.buttonNode.view.snapshotView(afterScreenUpdates: false) {
-                            snapshotView.frame = self.buttonNode.view.frame
-                            self.buttonNode.view.superview?.insertSubview(snapshotView, belowSubview: self.buttonNode.view)
-                            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak snapshotView] _ in
-                                snapshotView?.removeFromSuperview()
-                            })
-                            self.buttonNode.view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                        }
-                        
-                        self.buttonNode.setTitle(self.presentationData.strings.Common_Done, with: Font.semibold(17.0), with: self.presentationData.theme.list.itemCheckColors.foregroundColor, for: .normal)
-                        self.buttonNode.setBackgroundImage(generateStretchableFilledCircleImage(radius: 11, color: self.presentationData.theme.list.itemCheckColors.fillColor), for: [])
-                    } else {
-                        let buttonTitle = self.presentationData.strings.StickerPack_EditStickers
-                        var updated = false
-                        if let current = self.buttonNode.attributedTitle(for: .normal)?.string, !current.isEmpty && current != buttonTitle {
-                            updated = true
-                        }
-                        
-                        if updated, let snapshotView = self.buttonNode.view.snapshotView(afterScreenUpdates: false) {
-                            snapshotView.frame = self.buttonNode.view.frame
-                            self.buttonNode.view.superview?.insertSubview(snapshotView, belowSubview: self.buttonNode.view)
-                            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak snapshotView] _ in
-                                snapshotView?.removeFromSuperview()
-                            })
-                            self.buttonNode.view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                        }
-                        
-                        text = buttonTitle
-                        self.buttonNode.setTitle(text, with: Font.regular(17.0), with: self.presentationData.theme.list.itemAccentColor, for: .normal)
-                        self.buttonNode.setBackgroundImage(nil, for: [])
-                    }
-                } else {
-                    if info.id.namespace == Namespaces.ItemCollection.CloudStickerPacks {
-                        text = self.presentationData.strings.StickerPack_RemoveStickerCount(count)
-                    } else if info.id.namespace == Namespaces.ItemCollection.CloudEmojiPacks {
-                        text = self.presentationData.strings.StickerPack_RemoveEmojiCount(count)
-                    } else {
-                        text = self.presentationData.strings.StickerPack_RemoveMaskCount(count)
-                    }
-                    self.buttonNode.setTitle(text, with: Font.regular(17.0), with: self.presentationData.theme.list.itemDestructiveColor, for: .normal)
-                    self.buttonNode.setBackgroundImage(nil, for: [])
-                }
-            } else {
-                let text: String
-                if info.id.namespace == Namespaces.ItemCollection.CloudStickerPacks {
-                    text = self.presentationData.strings.StickerPack_AddStickerCount(count)
-                } else if info.id.namespace == Namespaces.ItemCollection.CloudEmojiPacks {
-                    text = self.presentationData.strings.StickerPack_AddEmojiCount(count)
-                } else {
-                    text = self.presentationData.strings.StickerPack_AddMaskCount(count)
-                }
-                self.buttonNode.setTitle(text, with: Font.semibold(17.0), with: self.presentationData.theme.list.itemCheckColors.foregroundColor, for: .normal)
-                self.buttonNode.setBackgroundImage(generateStretchableFilledCircleImage(radius: 11, color: self.presentationData.theme.list.itemCheckColors.fillColor), for: [])
-            }
-        }
-    }
-    
     private func updateStickerPackContents(_ contents: [LoadedStickerPack], hasPremium: Bool) {
         self.currentContents = contents
         self.didReceiveStickerPackResult = true
@@ -1864,7 +1751,8 @@ private final class StickerPackContainer: ASDisplayNode {
                     } else {
                         count = Int32(entries.count)
                     }
-                    self.updateButton(count: count)
+                    self.itemCount = count
+                    updateLayout = true
                 }
                 
                 if info.flags.contains(.isCreator) && !info.flags.contains(.isEmoji) && entries.count < maxStickersCount {
@@ -2032,43 +1920,15 @@ private final class StickerPackContainer: ASDisplayNode {
             insets.top += 10.0
         }
         
-        var buttonHeight: CGFloat = 50.0
-        var actionAreaTopInset: CGFloat = 8.0
-        var actionAreaBottomInset: CGFloat = 16.0
-        if let _ = self.controller?.mainActionTitle {
-            
-        } else {
-            if !self.currentStickerPacks.isEmpty {
-                var installedCount = 0
-                for (_, _, isInstalled) in self.currentStickerPacks {
-                    if isInstalled {
-                        installedCount += 1
-                    }
-                }
-                if installedCount == self.currentStickerPacks.count {
-                    buttonHeight = 42.0
-                    actionAreaTopInset = 1.0
-                    actionAreaBottomInset = 2.0
-                }
-            }
-            if let (info, _, isInstalled) = self.currentStickerPack, isInstalled, (!info.flags.contains(.isCreator) || info.flags.contains(.isEmoji)) {
-                buttonHeight = 42.0
-                actionAreaTopInset = 1.0
-                actionAreaBottomInset = 2.0
-            }
-        }
+        let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: layout.intrinsicInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
+        let titleAreaInset: CGFloat = 76.0
+        let buttonHeight: CGFloat = 52.0
+        let buttonSideInset: CGFloat = 30.0
+        let actionAreaHeight: CGFloat = buttonHeight + buttonInsets.bottom
         
-        let buttonSideInset: CGFloat = 16.0
-        let titleAreaInset: CGFloat = 56.0
-        
-        var actionAreaHeight: CGFloat = buttonHeight
-        actionAreaHeight += insets.bottom + actionAreaBottomInset
-        
-        transition.updateFrame(node: self.buttonNode, frame: CGRect(origin: CGPoint(x: layout.safeInsets.left + buttonSideInset, y: layout.size.height - actionAreaHeight + actionAreaTopInset), size: CGSize(width: layout.size.width - buttonSideInset * 2.0 - layout.safeInsets.left - layout.safeInsets.right, height: buttonHeight)))
+        transition.updateFrame(node: self.buttonNode, frame: CGRect(origin: CGPoint(x: layout.safeInsets.left + buttonSideInset, y: layout.size.height - actionAreaHeight), size: CGSize(width: layout.size.width - buttonSideInset * 2.0 - layout.safeInsets.left - layout.safeInsets.right, height: buttonHeight)))
 
-        transition.updateFrame(node: self.actionAreaBackgroundNode, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - actionAreaHeight), size: CGSize(width: layout.size.width, height: actionAreaHeight)))
-        self.actionAreaBackgroundNode.update(size: CGSize(width: layout.size.width, height: actionAreaHeight), transition: .immediate)
-        transition.updateFrame(node: self.actionAreaSeparatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - actionAreaHeight), size: CGSize(width: layout.size.width, height: UIScreenPixel)))
+        transition.updateFrame(node: self.bottomContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - actionAreaHeight), size: CGSize(width: layout.size.width, height: 90.0)))
         
         let gridFrame = CGRect(origin: CGPoint(x: 0.0, y: insets.top + titleAreaInset), size: CGSize(width: layout.size.width, height: layout.size.height - insets.top - titleAreaInset))
         
@@ -2131,17 +1991,171 @@ private final class StickerPackContainer: ASDisplayNode {
             titlePlaceholderNode.updateAbsoluteRect(titlePlaceholderNode.frame.offsetBy(dx: self.titleContainer.frame.minX, dy: self.titleContainer.frame.minY - gridInsets.top - gridFrame.minY), within: gridFrame.size)
         }
         
-        let cancelSize = self.cancelButtonNode.measure(CGSize(width: layout.size.width, height: .greatestFiniteMagnitude))
-        self.cancelButtonNode.frame = CGRect(origin: CGPoint(x: layout.safeInsets.left + 16.0, y: 18.0), size: cancelSize)
+        //let cancelSize = self.cancelButtonNode.measure(CGSize(width: layout.size.width, height: .greatestFiniteMagnitude))
+        //self.cancelButtonNode.frame = CGRect(origin: CGPoint(x: layout.safeInsets.left + 16.0, y: 18.0), size: cancelSize)
         
-        let titleSize = self.titleNode.updateLayout(CGSize(width: layout.size.width - cancelSize.width * 2.0 - 40.0, height: .greatestFiniteMagnitude))
+        let titleSize = self.titleNode.updateLayout(CGSize(width: layout.size.width - 44.0 * 2.0 - 40.0, height: .greatestFiniteMagnitude))
         self.titleNode.frame = CGRect(origin: CGPoint(x: floor((-titleSize.width) / 2.0), y: floor((-titleSize.height) / 2.0)), size: titleSize)
         
-        self.moreButtonNode.frame = CGRect(origin: CGPoint(x: layout.size.width - layout.safeInsets.right - 46.0, y: 5.0), size: CGSize(width: 44.0, height: 44.0))
+        //self.moreButtonNode.frame = CGRect(origin: CGPoint(x: layout.size.width - layout.safeInsets.right - 46.0, y: 5.0), size: CGSize(width: 44.0, height: 44.0))
                 
         
-        transition.updateAlpha(node: self.cancelButtonNode, alpha: self.isEditing ? 0.0 : 1.0)
-        transition.updateAlpha(node: self.moreButtonNode, alpha: self.isEditing ? 0.0 : 1.0)
+        //transition.updateAlpha(node: self.cancelButtonNode, alpha: self.isEditing ? 0.0 : 1.0)
+        //transition.updateAlpha(node: self.moreButtonNode, alpha: self.isEditing ? 0.0 : 1.0)
+        
+        
+        let cancelButtonSize = self.cancelButton.update(
+            transition: .immediate,
+            component: AnyComponent(GlassBarButtonComponent(
+                size: CGSize(width: 44.0, height: 44.0),
+                backgroundColor: nil,
+                isDark: false,
+                state: .glass,
+                component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
+                    BundleIconComponent(
+                        name: "Navigation/Close",
+                        tintColor: self.presentationData.theme.chat.inputPanel.panelControlColor
+                    )
+                )),
+                action: { [weak self] _ in
+                    guard let self else {
+                        return
+                    }
+                    self.cancelPressed()
+                }
+            )),
+            environment: {},
+            containerSize: CGSize(width: 44.0, height: 44.0),
+        )
+        let cancelButtonFrame = CGRect(origin: CGPoint(x: 16.0, y: 16.0), size: cancelButtonSize)
+        if let cancelButtonView = self.cancelButton.view {
+            if cancelButtonView.superview == nil {
+                self.topContainerNode.view.addSubview(cancelButtonView)
+            }
+            transition.updateFrame(view: cancelButtonView, frame: cancelButtonFrame)
+            transition.updateAlpha(layer: cancelButtonView.layer, alpha: self.isEditing ? 0.0 : 1.0)
+        }
+        
+        let moreButtonSize = self.moreButton.update(
+            transition: .immediate,
+            component: AnyComponent(GlassBarButtonComponent(
+                size: CGSize(width: 44.0, height: 44.0),
+                backgroundColor: nil,
+                isDark: false,
+                state: .glass,
+                component: AnyComponentWithIdentity(id: "more", component: AnyComponent(
+                    LottieComponent(
+                        content: LottieComponent.AppBundleContent(
+                            name: "anim_morewide"
+                        ),
+                        color: self.presentationData.theme.chat.inputPanel.panelControlColor,
+                        size: CGSize(width: 34.0, height: 34.0),
+                        playOnce: self.moreButtonPlayOnce
+                    )
+                )),
+                action: { [weak self] view in
+                    guard let self else {
+                        return
+                    }
+                    self.morePressed(view: view, gesture: nil)
+                    self.moreButtonPlayOnce.invoke(Void())
+                }
+            )),
+            environment: {},
+            containerSize: CGSize(width: 44.0, height: 44.0),
+        )
+        let moreButtonFrame = CGRect(origin: CGPoint(x: layout.size.width - 16.0 - moreButtonSize.width, y: 16.0), size: moreButtonSize)
+        if let moreButtonView = self.moreButton.view {
+            if moreButtonView.superview == nil {
+                self.topContainerNode.view.addSubview(moreButtonView)
+            }
+            transition.updateFrame(view: moreButtonView, frame: moreButtonFrame)
+            transition.updateAlpha(layer: moreButtonView.layer, alpha: self.isEditing ? 0.0 : 1.0)
+        }
+        
+        var buttonTitle: String = ""
+        var buttonForegroundColor = self.presentationData.theme.list.itemCheckColors.foregroundColor
+        var buttonBackgroundColor = self.presentationData.theme.list.itemCheckColors.fillColor
+        
+        if let currentContents = self.currentContents, currentContents.count == 1, let content = currentContents.first, case let .result(info, _, installed) = content {
+            if installed {
+                if info.flags.contains(.isCreator) && !info.flags.contains(.isEmoji) {
+                    if self.isEditing {
+                        var updated = false
+                        if let current = self.buttonNode.attributedTitle(for: .normal)?.string, !current.isEmpty && current != self.presentationData.strings.Common_Done {
+                            updated = true
+                        }
+                        
+                        if updated, let snapshotView = self.buttonNode.view.snapshotView(afterScreenUpdates: false) {
+                            snapshotView.frame = self.buttonNode.view.frame
+                            self.buttonNode.view.superview?.insertSubview(snapshotView, belowSubview: self.buttonNode.view)
+                            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak snapshotView] _ in
+                                snapshotView?.removeFromSuperview()
+                            })
+                            self.buttonNode.view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                        }
+                        
+                        buttonTitle = self.presentationData.strings.Common_Done
+                    } else {
+                        buttonTitle = self.presentationData.strings.StickerPack_EditStickers
+                        buttonBackgroundColor = self.presentationData.theme.list.plainBackgroundColor
+                        buttonBackgroundColor = self.presentationData.theme.list.itemAccentColor
+                    }
+                } else {
+                    if info.id.namespace == Namespaces.ItemCollection.CloudStickerPacks {
+                        buttonTitle = self.presentationData.strings.StickerPack_RemoveStickerCount(self.itemCount)
+                    } else if info.id.namespace == Namespaces.ItemCollection.CloudEmojiPacks {
+                        buttonTitle = self.presentationData.strings.StickerPack_RemoveEmojiCount(self.itemCount)
+                    } else {
+                        buttonTitle = self.presentationData.strings.StickerPack_RemoveMaskCount(self.itemCount)
+                    }
+                    buttonBackgroundColor = self.presentationData.theme.list.plainBackgroundColor
+                    buttonForegroundColor = self.presentationData.theme.list.itemDestructiveColor
+                }
+            } else {
+                if info.id.namespace == Namespaces.ItemCollection.CloudStickerPacks {
+                    buttonTitle = self.presentationData.strings.StickerPack_AddStickerCount(self.itemCount)
+                } else if info.id.namespace == Namespaces.ItemCollection.CloudEmojiPacks {
+                    buttonTitle = self.presentationData.strings.StickerPack_AddEmojiCount(self.itemCount)
+                } else {
+                    buttonTitle = self.presentationData.strings.StickerPack_AddMaskCount(self.itemCount)
+                }
+            }
+        }
+        
+        let buttonSize = self.button.update(
+            transition: .immediate,
+            component: AnyComponent(
+                ButtonComponent(
+                    background: ButtonComponent.Background(
+                        style: .glass,
+                        color: buttonBackgroundColor,
+                        foreground: buttonForegroundColor,
+                        pressedColor: buttonBackgroundColor.withMultipliedAlpha(0.9)
+                    ),
+                    content: AnyComponentWithIdentity(
+                        id: AnyHashable(0),
+                        component: AnyComponent(Text(text: buttonTitle, font: Font.semibold(17.0), color: buttonForegroundColor))
+                    ),
+                    action: { [weak self] in
+                        self?.buttonPressed()
+                    }
+                )
+            ),
+            environment: {},
+            containerSize: CGSize(width: layout.size.width - buttonInsets.left - buttonInsets.right, height: 52.0)
+        )
+        let buttonFrame = CGRect(origin: CGPoint(x: buttonInsets.left, y: 0.0), size: buttonSize)
+        if let buttonView = self.button.view {
+            if buttonView.superview == nil {
+                self.bottomContainerNode.view.addSubview(buttonView)
+            }
+            buttonView.frame = buttonFrame
+        }
+        
+        let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: actionAreaHeight - 90.0), size: CGSize(width: layout.size.width, height: 90.0))
+        transition.updateFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
+        self.bottomEdgeEffectView.update(content: self.presentationData.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 0.65, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: ComponentTransition(transition))
         
         if firstTime {
             while !self.enqueuedTransactions.isEmpty {
@@ -2194,7 +2208,6 @@ private final class StickerPackContainer: ASDisplayNode {
         if !transition.isAnimated {
             self.backgroundNode.layer.removeAllAnimations()
             self.titleContainer.layer.removeAllAnimations()
-            self.titleSeparatorNode.layer.removeAllAnimations()
         }
         
         var backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: max(minBackgroundY, unclippedBackgroundY)), size: CGSize(width: layout.size.width, height: layout.size.height))
@@ -2203,7 +2216,7 @@ private final class StickerPackContainer: ASDisplayNode {
             backgroundFrame.origin.y = min(0.0, backgroundFrame.origin.y)
             titleContainerFrame = CGRect(origin: CGPoint(x: backgroundFrame.minX + floor((backgroundFrame.width) / 2.0), y: floor((56.0) / 2.0)), size: CGSize())
         } else {
-            titleContainerFrame = CGRect(origin: CGPoint(x: backgroundFrame.minX + floor((backgroundFrame.width) / 2.0), y: backgroundFrame.minY + floor((56.0) / 2.0)), size: CGSize())
+            titleContainerFrame = CGRect(origin: CGPoint(x: backgroundFrame.minX + floor((backgroundFrame.width) / 2.0), y: backgroundFrame.minY + floor((56.0) / 2.0) + 10.0), size: CGSize())
         }
         transition.updateFrame(node: self.backgroundNode, frame: backgroundFrame)
         
@@ -2239,14 +2252,8 @@ private final class StickerPackContainer: ASDisplayNode {
         }
         
         transition.updateFrame(node: self.titleContainer, frame: titleContainerFrame)
-        transition.updateFrame(node: self.titleSeparatorNode, frame: CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY + 56.0 - UIScreenPixel), size: CGSize(width: backgroundFrame.width, height: UIScreenPixel)))
-        transition.updateFrame(node: self.titleBackgroundnode, frame: CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: CGSize(width: backgroundFrame.width, height: 56.0)))
-        self.titleBackgroundnode.update(size: CGSize(width: layout.size.width, height: 56.0), transition: .immediate)
         
-        transition.updateFrame(node: self.topContainerNode, frame: CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: CGSize(width: backgroundFrame.width, height: 56.0)))
-        
-        let transition = ContainedViewLayoutTransition.animated(duration: 0.2, curve: .easeInOut)
-        transition.updateAlpha(node: self.titleSeparatorNode, alpha: unclippedBackgroundY < minBackgroundY ? 1.0 : 0.0)
+        transition.updateFrame(node: self.topContainerNode, frame: CGRect(origin: CGPoint(x: backgroundFrame.minX, y: backgroundFrame.minY), size: CGSize(width: backgroundFrame.width, height: 76.0)))
     }
     
     private func enqueueTransaction(_ transaction: StickerPackPreviewGridTransaction) {
@@ -2423,7 +2430,7 @@ private final class StickerPackScreenNode: ViewControllerTracingNode {
         let containerInsets: UIEdgeInsets
         if case .regular = layout.metrics.widthClass {
             self.dimNode.backgroundColor = UIColor(white: 0.0, alpha: 0.01)
-            self.containerContainingNode.cornerRadius = 10.0
+            self.containerContainingNode.cornerRadius = 38.0
             
             let size = CGSize(width: 390.0, height: min(560.0, layout.size.height - 60.0))
             var contentRect: CGRect
@@ -2476,8 +2483,15 @@ private final class StickerPackScreenNode: ViewControllerTracingNode {
         let shadowFrame = containerContainingFrame.insetBy(dx: -60.0, dy: -60.0)
         transition.updateFrame(node: self.shadowNode, frame: shadowFrame)
         
-        let expandProgress: CGFloat = 1.0
-        let scaledInset: CGFloat = 12.0
+        let expandProgress: CGFloat
+        if case .regular = layout.metrics.widthClass {
+            expandProgress = 1.0
+        } else if let selectedContainer = self.containers[self.selectedStickerPackIndex] {
+            expandProgress = selectedContainer.expandProgress
+        } else {
+            expandProgress = 0.0
+        }
+        let scaledInset: CGFloat = 6.0
         let scaledDistance: CGFloat = 4.0
         let minScale = (layout.size.width - scaledInset * 2.0) / layout.size.width
         let containerScale = expandProgress * 1.0 + (1.0 - expandProgress) * minScale
@@ -3101,15 +3115,15 @@ public func StickerPackScreen(
 
 private final class StickerPackContextReferenceContentSource: ContextReferenceContentSource {
     private let controller: ViewController
-    private let sourceNode: ContextReferenceContentNode
+    private let sourceView: UIView
     
-    init(controller: ViewController, sourceNode: ContextReferenceContentNode) {
+    init(controller: ViewController, sourceView: UIView) {
         self.controller = controller
-        self.sourceNode = sourceNode
+        self.sourceView = sourceView
     }
     
     func transitionInfo() -> ContextControllerReferenceViewInfo? {
-        return ContextControllerReferenceViewInfo(referenceView: self.sourceNode.view, contentAreaInScreenSpace: UIScreen.main.bounds)
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }
 

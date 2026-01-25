@@ -144,7 +144,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     private var didSuggestLoginEmailSetup = false
     private var didSuggestLoginPasskeySetup = false
     
-    private var presentationData: PresentationData
+    private(set) var presentationData: PresentationData
     private let presentationDataValue = Promise<PresentationData>()
     private var presentationDataDisposable: Disposable?
     
@@ -3029,7 +3029,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
         
         if let rootController = self.context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface {
-            let coordinator = rootController.openStoryCamera(customTarget: nil, resumeLiveStream: hasLiveStream, transitionIn: cameraTransitionIn, transitionedIn: {}, transitionOut: self.storyCameraTransitionOut())
+            let coordinator = rootController.openStoryCamera(mode: .photo, customTarget: nil, resumeLiveStream: hasLiveStream, transitionIn: cameraTransitionIn, transitionedIn: {}, transitionOut: self.storyCameraTransitionOut())
             coordinator?.animateIn()
         }
     }
@@ -3511,7 +3511,17 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         super.navigationStackConfigurationUpdated(next: next)
     }
     
-    @objc fileprivate func editPressed() {
+    public func activateEdit() {
+        self.editPressed()
+    }
+    
+    public func openEmojiStatusSetup() {
+        if let navigationBarView = self.chatListDisplayNode.navigationBarView.view as? ChatListNavigationBar.View {
+            navigationBarView.openEmojiStatusSetup()
+        }
+    }
+    
+    @objc func editPressed() {
         if self.secondaryContext == nil {
             if case .chatList(.root) = self.chatListDisplayNode.effectiveContainerNode.location {
                 self.effectiveContext?.leftButton = AnyComponentWithIdentity(id: "done", component: AnyComponent(NavigationButtonComponent(
@@ -5874,10 +5884,33 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 })
             ], parseMarkdown: true), in: .window(.root))
         } else {
-            completion(true)
-            self.schedulePeerChatRemoval(peer: peer, type: .forLocalPeer, deleteGloballyIfPossible: deleteGloballyIfPossible, completion: {
-                removed()
-            })
+            let proceed = {
+                completion(true)
+                self.schedulePeerChatRemoval(peer: peer, type: .forLocalPeer, deleteGloballyIfPossible: deleteGloballyIfPossible, completion: {
+                    removed()
+                })
+            }
+            if case let .channel(channel) = peer.peer, channel.flags.contains(.isCreator) {
+                let _ = (self.context.engine.peers.getFutureCreatorAfterLeave(peerId: channel.id)
+                |> deliverOnMainQueue).start(next: { [weak self] nextCreator in
+                    guard let self else {
+                        return
+                    }
+                    if let nextCreator, let peer = peer.peer {
+                        self.presentLeaveChannelConfirmation(peer: peer, nextCreator: nextCreator, completion: { commit in
+                            if commit {
+                                proceed()
+                            } else {
+                                completion(false)
+                            }
+                        })
+                    } else {
+                        proceed()
+                    }
+                })
+            } else {
+                proceed()
+            }
         }
     }
     
@@ -6425,7 +6458,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         if let current = self.storyCameraTransitionInCoordinator {
             coordinator = current
         } else {
-            coordinator = rootController.openStoryCamera(customTarget: nil, resumeLiveStream: false, transitionIn: nil, transitionedIn: {}, transitionOut: { [weak self] target, _ in
+            coordinator = rootController.openStoryCamera(mode: .photo, customTarget: nil, resumeLiveStream: false, transitionIn: nil, transitionedIn: {}, transitionOut: { [weak self] target, _ in
                 guard let self, let target else {
                     return nil
                 }

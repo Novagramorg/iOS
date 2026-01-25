@@ -311,7 +311,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     let twoStepAuthData = Promise<TwoStepAuthData?>(nil)
     let supportPeerDisposable = MetaDisposable()
     let tipsPeerDisposable = MetaDisposable()
+    
     let cachedFaq = Promise<ResolvedUrl?>(nil)
+    private var didSetCachedFaq = false
     
     weak var copyProtectionTooltipController: TooltipController?
     weak var emojiStatusSelectionController: ViewController?
@@ -1590,35 +1592,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         strongSelf.controller?.push(controller)
                     }
                 } else {
-                    (strongSelf.controller?.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.3, curve: .linear))
-                    strongSelf.state = strongSelf.state.withIsEditing(true)
-                    var updateOnCompletion = false
-                    if strongSelf.headerNode.isAvatarExpanded {
-                        updateOnCompletion = true
-                        strongSelf.headerNode.skipCollapseCompletion = true
-                        strongSelf.headerNode.avatarListNode.avatarContainerNode.canAttachVideo = false
-                        strongSelf.headerNode.editingContentNode.avatarNode.canAttachVideo = false
-                        strongSelf.headerNode.avatarListNode.listContainerNode.isCollapsing = true
-                        strongSelf.headerNode.updateIsAvatarExpanded(false, transition: .immediate)
-                        strongSelf.updateNavigationExpansionPresentation(isExpanded: false, animated: true)
-                    }
-                    if let (layout, navigationHeight) = strongSelf.validLayout {
-                        strongSelf.scrollNode.view.setContentOffset(CGPoint(), animated: false)
-                        strongSelf.containerLayoutUpdated(layout: layout, navigationHeight: navigationHeight, transition: .immediate, additive: false)
-                    }
-                    UIView.transition(with: strongSelf.view, duration: 0.3, options: [.transitionCrossDissolve], animations: {
-                    }, completion: { _ in
-                        if updateOnCompletion {
-                            strongSelf.headerNode.skipCollapseCompletion = false
-                            strongSelf.headerNode.avatarListNode.listContainerNode.isCollapsing = false
-                            strongSelf.headerNode.avatarListNode.avatarContainerNode.canAttachVideo = true
-                            strongSelf.headerNode.editingContentNode.avatarNode.canAttachVideo = true
-                            strongSelf.headerNode.editingContentNode.avatarNode.reset()
-                            if let (layout, navigationHeight) = strongSelf.validLayout {
-                                strongSelf.containerLayoutUpdated(layout: layout, navigationHeight: navigationHeight, transition: .immediate, additive: false)
-                            }
-                        }
-                    })
+                    strongSelf.activateEdit()
                 }
             case .done, .cancel:
                 strongSelf.view.endEditing(true)
@@ -2095,9 +2069,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             |> map { data -> Bool in
                 return data?.hasSecretValues ?? false
             }
-            
-            self.cachedFaq.set(.single(nil) |> then(cachedFaqInstantPage(context: self.context) |> map(Optional.init)))
-            
+                        
             screenData = peerInfoScreenSettingsData(context: context, peerId: peerId, accountsAndPeers: self.accountsAndPeers.get(), activeSessionsContextAndCount: self.activeSessionsContextAndCount.get(), notificationExceptions: self.notificationExceptions.get(), privacySettings: self.privacySettings.get(), archivedStickerPacks: self.archivedPacks.get(), hasPassport: hasPassport, starsContext: starsContext, tonContext: tonContext)
             
             
@@ -2645,6 +2617,38 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
         
     var canAttachVideo: Bool?
+    
+    func activateEdit() {
+        (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(true, transition: .animated(duration: 0.3, curve: .linear))
+        self.state = self.state.withIsEditing(true)
+        var updateOnCompletion = false
+        if self.headerNode.isAvatarExpanded {
+            updateOnCompletion = true
+            self.headerNode.skipCollapseCompletion = true
+            self.headerNode.avatarListNode.avatarContainerNode.canAttachVideo = false
+            self.headerNode.editingContentNode.avatarNode.canAttachVideo = false
+            self.headerNode.avatarListNode.listContainerNode.isCollapsing = true
+            self.headerNode.updateIsAvatarExpanded(false, transition: .immediate)
+            self.updateNavigationExpansionPresentation(isExpanded: false, animated: true)
+        }
+        if let (layout, navigationHeight) = self.validLayout {
+            self.scrollNode.view.setContentOffset(CGPoint(), animated: false)
+            self.containerLayoutUpdated(layout: layout, navigationHeight: navigationHeight, transition: .immediate, additive: false)
+        }
+        UIView.transition(with: self.view, duration: 0.3, options: [.transitionCrossDissolve], animations: {
+        }, completion: { _ in
+            if updateOnCompletion {
+                self.headerNode.skipCollapseCompletion = false
+                self.headerNode.avatarListNode.listContainerNode.isCollapsing = false
+                self.headerNode.avatarListNode.avatarContainerNode.canAttachVideo = true
+                self.headerNode.editingContentNode.avatarNode.canAttachVideo = true
+                self.headerNode.editingContentNode.avatarNode.reset()
+                if let (layout, navigationHeight) = self.validLayout {
+                    self.containerLayoutUpdated(layout: layout, navigationHeight: navigationHeight, transition: .immediate, additive: false)
+                }
+            }
+        })
+    }
     
     private func updateData(_ data: PeerInfoScreenData) {
         let previousData = self.data
@@ -4661,7 +4665,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     }
                     
                     if let rootController = self.context.sharedContext.mainWindow?.viewController as? TelegramRootControllerInterface {
-                        let coordinator = rootController.openStoryCamera(customTarget: self.peerId == self.context.account.peerId ? nil : .peer(self.peerId), resumeLiveStream: false, transitionIn: cameraTransitionIn, transitionedIn: {}, transitionOut: self.storyCameraTransitionOut())
+                        let coordinator = rootController.openStoryCamera(mode: .photo, customTarget: self.peerId == self.context.account.peerId ? nil : .peer(self.peerId), resumeLiveStream: false, transitionIn: cameraTransitionIn, transitionedIn: {}, transitionOut: self.storyCameraTransitionOut())
                         coordinator?.animateIn()
                     }
                 case .channelBoostRequired:
@@ -4800,35 +4804,88 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.headerNode.navigationButtonContainer.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
         
         if self.isSettings {
+            if !self.didSetCachedFaq {
+                self.cachedFaq.set(.single(nil) |> then(cachedFaqInstantPage(context: self.context) |> map(Optional.init)))
+                self.didSetCachedFaq = true
+            }
+            
             if let settings = self.data?.globalSettings {
-                self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .navigation, placeholder: self.presentationData.strings.Settings_Search, hasBackground: true, hasSeparator: true, contentNode: SettingsSearchContainerNode(context: self.context, openResult: { [weak self] result in
-                    if let strongSelf = self, let navigationController = strongSelf.controller?.navigationController as? NavigationController {
-                        result.present(strongSelf.context, navigationController, { [weak self] mode, controller in
-                            if let strongSelf = self {
-                                switch mode {
-                                    case .push:
-                                        if let controller = controller {
-                                            strongSelf.controller?.push(controller)
+                self.searchDisplayController = SearchDisplayController(
+                    presentationData: self.presentationData,
+                    mode: .navigation,
+                    placeholder: self.presentationData.strings.Settings_Search,
+                    hasBackground: true,
+                    hasSeparator: true,
+                    contentNode: SettingsSearchContainerNode(
+                        context: self.context,
+                        openResult: { [weak self] result in
+                            if let strongSelf = self, let navigationController = strongSelf.controller?.navigationController as? NavigationController {
+                                result.present(strongSelf.context, navigationController, { [weak self] mode, controller in
+                                    if let strongSelf = self {
+                                        switch mode {
+                                            case .push:
+                                                if let controller = controller {
+                                                    strongSelf.controller?.push(controller)
+                                                }
+                                            case .modal:
+                                                if let controller = controller {
+                                                    strongSelf.controller?.present(controller, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet, completion: { [weak self] in
+                                                        self?.deactivateSearch()
+                                                    }))
+                                                }
+                                            case .immediate:
+                                                if let controller = controller {
+                                                    strongSelf.controller?.present(controller, in: .window(.root), with: nil)
+                                                }
+                                            case .dismiss:
+                                                strongSelf.deactivateSearch()
                                         }
-                                    case .modal:
-                                        if let controller = controller {
-                                            strongSelf.controller?.present(controller, in: .window(.root), with: ViewControllerPresentationArguments(presentationAnimation: .modalSheet, completion: { [weak self] in
-                                                self?.deactivateSearch()
-                                            }))
-                                        }
-                                    case .immediate:
-                                        if let controller = controller {
-                                            strongSelf.controller?.present(controller, in: .window(.root), with: nil)
-                                        }
-                                    case .dismiss:
-                                        strongSelf.deactivateSearch()
-                                }
+                                    }
+                                })
                             }
-                        })
-                    }
-                }, resolvedFaqUrl: self.cachedFaq.get(), exceptionsList: .single(settings.notificationExceptions), archivedStickerPacks: .single(settings.archivedStickerPacks), privacySettings: .single(settings.privacySettings), hasTwoStepAuth: self.hasTwoStepAuth.get(), twoStepAuthData: self.twoStepAccessConfiguration.get(), activeSessionsContext: self.activeSessionsContextAndCount.get() |> map { $0?.0 }, webSessionsContext: self.activeSessionsContextAndCount.get() |> map { $0?.2 }), cancel: { [weak self] in
-                    self?.deactivateSearch()
-                }, searchBarIsExternal: true)
+                        },
+                        openContextMenu: { item, sourceNode, rect, gesture in
+                            let link = "tg://settings/\(item.id)"
+                            let items: [ContextMenuItem] = [
+                                .action( ContextMenuActionItem(
+                                    text: "Copy Link",
+                                    icon: { theme in
+                                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Link"), color: theme.contextMenu.primaryColor)
+                                    },
+                                    action: { [weak self] _, f in
+                                        f(.default)
+                                        
+                                        UIPasteboard.general.string = link
+                                        guard let self else {
+                                            return
+                                        }
+                                        self.controller?.present(UndoOverlayController(presentationData: presentationData, content: .linkCopied(title: nil, text: self.presentationData.strings.Conversation_LinkCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+                                    }
+                                ))
+                            ]
+                            let contextController = makeContextController(
+                                presentationData: self.presentationData,
+                                source: .extracted(PeerInfoContextExtractedContentSource(sourceNode: sourceNode)),
+                                items: .single(ContextController.Items(content: .list(items))),
+                                recognizer: nil,
+                                gesture: gesture as? ContextGesture
+                            )
+                            self.context.sharedContext.mainWindow?.presentInGlobalOverlay(contextController)
+                        },
+                        resolvedFaqUrl: self.cachedFaq.get(),
+                        exceptionsList: .single(settings.notificationExceptions),
+                        archivedStickerPacks: .single(settings.archivedStickerPacks),
+                        privacySettings: .single(settings.privacySettings),
+                        hasTwoStepAuth: self.hasTwoStepAuth.get(),
+                        twoStepAuthData: self.twoStepAccessConfiguration.get(),
+                        activeSessionsContext: self.activeSessionsContextAndCount.get() |> map { $0?.0 },
+                        webSessionsContext: self.activeSessionsContextAndCount.get() |> map { $0?.2 }
+                    ),
+                    cancel: { [weak self] in
+                        self?.deactivateSearch()
+                    },
+                    searchBarIsExternal: true
+                )
             }
         } else if let currentPaneKey = self.paneContainerNode.currentPaneKey, case .members = currentPaneKey {
             self.searchDisplayController = SearchDisplayController(presentationData: self.presentationData, mode: .navigation, placeholder: self.presentationData.strings.Common_Search, hasBackground: true, hasSeparator: true, contentNode: ChannelMembersSearchContainerNode(context: self.context, forceTheme: nil, peerId: self.peerId, mode: .searchMembers, filters: [], searchContext: self.groupMembersSearchContext, openPeer: { [weak self] peer, participant in
@@ -4971,6 +5028,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         }
         self.searchDisplayController = nil
         searchDisplayController.deactivate(placeholder: nil)
+        
+        controller.dismissAllTooltips()
         
         if self.isSettings {
             (self.controller?.parent as? TabBarController)?.updateIsTabBarHidden(false, transition: .animated(duration: 0.4, curve: .spring))
@@ -6215,6 +6274,10 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         return self.controllerNode.privacySettings
     }
     
+    public var twoStepAuthData: Promise<TwoStepAuthData?> {
+        return self.controllerNode.twoStepAuthData
+    }
+    
     override public var customNavigationData: CustomViewControllerNavigationData? {
         get {
             if !self.isSettings {
@@ -6657,7 +6720,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         }
     }
     
-    private func dismissAllTooltips() {
+    fileprivate func dismissAllTooltips() {
         self.window?.forEachController({ controller in
             if let controller = controller as? UndoOverlayController, !controller.keepOnParentDismissal {
                 controller.dismissWithCommitAction()
@@ -6686,6 +6749,10 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             self.controllerNode.emojiStatusSelectionController = nil
             emojiStatusSelectionController.dismiss()
         }
+    }
+    
+    public func activateEdit() {
+        self.controllerNode.activateEdit()
     }
     
     public func openAvatarSetup(completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?) {
@@ -6963,6 +7030,10 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
                 )
             ]
         }
+    }
+    
+    public func openEmojiStatusSetup() {
+        self.controllerNode.openSettings(section: .emojiStatus)
     }
     
     public func openBirthdaySetup() {

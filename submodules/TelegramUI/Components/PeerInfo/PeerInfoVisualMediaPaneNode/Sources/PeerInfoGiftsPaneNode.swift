@@ -24,6 +24,7 @@ import PeerInfoPaneNode
 import GiftItemComponent
 import PlainButtonComponent
 import GiftViewScreen
+import GiftUnpinScreen
 import ButtonComponent
 import UndoUI
 import CheckComponent
