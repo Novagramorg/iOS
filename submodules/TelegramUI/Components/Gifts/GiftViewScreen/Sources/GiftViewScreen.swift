@@ -4431,7 +4431,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                             transition: context.transition
                         )
                         context.add(priceButton
-                            .position(CGPoint(x: environment.safeInsets.left + 16.0 + priceButton.size.width / 2.0, y: 31.0))
+                            .position(CGPoint(x: environment.safeInsets.left + 16.0 + priceButton.size.width / 2.0, y: 76.0 + priceButton.size.height / 2.0))
                             .appear(.default(scale: true, alpha: true))
                             .disappear(.default(scale: true, alpha: true))
                         )

@@ -415,29 +415,7 @@ private final class StickerPackContainer: ASDisplayNode {
             }
             strongSelf.updateStickerPackContents(contents, hasPremium: hasPremium)
         })
-        
-//        self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
-//        self.buttonNode.highligthedChanged = { [weak self] highlighted in
-//            if let strongSelf = self {
-//                if highlighted {
-//                    strongSelf.buttonNode.layer.removeAnimation(forKey: "opacity")
-//                    strongSelf.buttonNode.alpha = 0.8
-//                } else {
-//                    strongSelf.buttonNode.alpha = 1.0
-//                    strongSelf.buttonNode.layer.animateAlpha(from: 0.8, to: 1.0, duration: 0.3)
-//                }
-//            }
-//        }
-        
-        //self.cancelButtonNode.setTitle(self.presentationData.strings.Common_Cancel, with: Font.regular(17.0), with: self.presentationData.theme.actionSheet.controlAccentColor, for: .normal)
-        //self.cancelButtonNode.addTarget(self, action: #selector(self.cancelPressed), forControlEvents: .touchUpInside)
-        
-//        self.moreButtonNode.action = { [weak self] _, gesture in
-//            if let strongSelf = self {
-//                strongSelf.morePressed(node: strongSelf.moreButtonNode.contextSourceNode, gesture: gesture)
-//            }
-//        }
-        
+                
         self.titleNode.linkHighlightColor = self.presentationData.theme.actionSheet.controlAccentColor.withAlphaComponent(0.2)
         
         addStickerPackImpl = { [weak self] info, items in
@@ -1613,29 +1591,12 @@ private final class StickerPackContainer: ASDisplayNode {
                     index += 1
                 }
                 self.currentStickerPacks = currentStickerPacks
-                
-                if installedCount == contents.count {
-                    let text = self.presentationData.strings.StickerPack_RemoveEmojiPacksCount(Int32(contents.count))
-                    self.buttonNode.setTitle(text, with: Font.regular(17.0), with: self.presentationData.theme.list.itemDestructiveColor, for: .normal)
-                    self.buttonNode.setBackgroundImage(nil, for: [])
-                } else {
-                    let text = self.presentationData.strings.StickerPack_AddEmojiPacksCount(Int32(contents.count - installedCount))
-                    self.buttonNode.setTitle(text, with: Font.semibold(17.0), with: self.presentationData.theme.list.itemCheckColors.foregroundColor, for: .normal)
-                    let roundedAccentBackground = generateImage(CGSize(width: 22.0, height: 22.0), rotatedContext: { size, context in
-                        context.clear(CGRect(origin: CGPoint(), size: size))
-                        context.setFillColor(self.presentationData.theme.list.itemCheckColors.fillColor.cgColor)
-                        context.fillEllipse(in: CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height)))
-                    })?.stretchableImage(withLeftCapWidth: 11, topCapHeight: 11)
-                    self.buttonNode.setBackgroundImage(roundedAccentBackground, for: [])
-                }
             }
         } else if let contents = contents.first {
             switch contents {
             case .fetching:
                 self.onLoading()
                 entries = []
-                self.buttonNode.setTitle(self.presentationData.strings.Channel_NotificationLoading, with: Font.semibold(17.0), with: self.presentationData.theme.list.itemDisabledTextColor, for: .normal)
-                self.buttonNode.setBackgroundImage(nil, for: [])
                 
                 for _ in 0 ..< 16 {
                     var stableId: Int?
@@ -1991,25 +1952,15 @@ private final class StickerPackContainer: ASDisplayNode {
             titlePlaceholderNode.updateAbsoluteRect(titlePlaceholderNode.frame.offsetBy(dx: self.titleContainer.frame.minX, dy: self.titleContainer.frame.minY - gridInsets.top - gridFrame.minY), within: gridFrame.size)
         }
         
-        //let cancelSize = self.cancelButtonNode.measure(CGSize(width: layout.size.width, height: .greatestFiniteMagnitude))
-        //self.cancelButtonNode.frame = CGRect(origin: CGPoint(x: layout.safeInsets.left + 16.0, y: 18.0), size: cancelSize)
-        
         let titleSize = self.titleNode.updateLayout(CGSize(width: layout.size.width - 44.0 * 2.0 - 40.0, height: .greatestFiniteMagnitude))
         self.titleNode.frame = CGRect(origin: CGPoint(x: floor((-titleSize.width) / 2.0), y: floor((-titleSize.height) / 2.0)), size: titleSize)
-        
-        //self.moreButtonNode.frame = CGRect(origin: CGPoint(x: layout.size.width - layout.safeInsets.right - 46.0, y: 5.0), size: CGSize(width: 44.0, height: 44.0))
                 
-        
-        //transition.updateAlpha(node: self.cancelButtonNode, alpha: self.isEditing ? 0.0 : 1.0)
-        //transition.updateAlpha(node: self.moreButtonNode, alpha: self.isEditing ? 0.0 : 1.0)
-        
-        
         let cancelButtonSize = self.cancelButton.update(
             transition: .immediate,
             component: AnyComponent(GlassBarButtonComponent(
                 size: CGSize(width: 44.0, height: 44.0),
                 backgroundColor: nil,
-                isDark: false,
+                isDark: self.presentationData.theme.overallDarkAppearance,
                 state: .glass,
                 component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                     BundleIconComponent(
@@ -2041,7 +1992,7 @@ private final class StickerPackContainer: ASDisplayNode {
             component: AnyComponent(GlassBarButtonComponent(
                 size: CGSize(width: 44.0, height: 44.0),
                 backgroundColor: nil,
-                isDark: false,
+                isDark: self.presentationData.theme.overallDarkAppearance,
                 state: .glass,
                 component: AnyComponentWithIdentity(id: "more", component: AnyComponent(
                     LottieComponent(
@@ -2074,53 +2025,60 @@ private final class StickerPackContainer: ASDisplayNode {
         }
         
         var buttonTitle: String = ""
-        var buttonForegroundColor = self.presentationData.theme.list.itemCheckColors.foregroundColor
         var buttonBackgroundColor = self.presentationData.theme.list.itemCheckColors.fillColor
+        var buttonForegroundColor = self.presentationData.theme.list.itemCheckColors.foregroundColor
+        var buttonHasProgress = false
         
-        if let currentContents = self.currentContents, currentContents.count == 1, let content = currentContents.first, case let .result(info, _, installed) = content {
-            if installed {
-                if info.flags.contains(.isCreator) && !info.flags.contains(.isEmoji) {
-                    if self.isEditing {
-                        var updated = false
-                        if let current = self.buttonNode.attributedTitle(for: .normal)?.string, !current.isEmpty && current != self.presentationData.strings.Common_Done {
-                            updated = true
+        if let currentContents = self.currentContents {
+            if currentContents.count == 1, let content = currentContents.first, case let .result(info, _, installed) = content {
+                if installed {
+                    if info.flags.contains(.isCreator) && !info.flags.contains(.isEmoji) {
+                        if self.isEditing {
+                            buttonTitle = self.presentationData.strings.Common_Done
+                        } else {
+                            buttonTitle = self.presentationData.strings.StickerPack_EditStickers
+                            buttonBackgroundColor = self.presentationData.theme.list.itemAccentColor.withAlphaComponent(0.0)
+                            buttonForegroundColor = self.presentationData.theme.list.itemAccentColor
                         }
-                        
-                        if updated, let snapshotView = self.buttonNode.view.snapshotView(afterScreenUpdates: false) {
-                            snapshotView.frame = self.buttonNode.view.frame
-                            self.buttonNode.view.superview?.insertSubview(snapshotView, belowSubview: self.buttonNode.view)
-                            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak snapshotView] _ in
-                                snapshotView?.removeFromSuperview()
-                            })
-                            self.buttonNode.view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
-                        }
-                        
-                        buttonTitle = self.presentationData.strings.Common_Done
                     } else {
-                        buttonTitle = self.presentationData.strings.StickerPack_EditStickers
-                        buttonBackgroundColor = self.presentationData.theme.list.plainBackgroundColor
-                        buttonBackgroundColor = self.presentationData.theme.list.itemAccentColor
+                        if info.id.namespace == Namespaces.ItemCollection.CloudStickerPacks {
+                            buttonTitle = self.presentationData.strings.StickerPack_RemoveStickerCount(self.itemCount)
+                        } else if info.id.namespace == Namespaces.ItemCollection.CloudEmojiPacks {
+                            buttonTitle = self.presentationData.strings.StickerPack_RemoveEmojiCount(self.itemCount)
+                        } else {
+                            buttonTitle = self.presentationData.strings.StickerPack_RemoveMaskCount(self.itemCount)
+                        }
+                        buttonBackgroundColor = self.presentationData.theme.list.plainBackgroundColor.withAlphaComponent(0.0)
+                        buttonForegroundColor = self.presentationData.theme.list.itemDestructiveColor
                     }
                 } else {
                     if info.id.namespace == Namespaces.ItemCollection.CloudStickerPacks {
-                        buttonTitle = self.presentationData.strings.StickerPack_RemoveStickerCount(self.itemCount)
+                        buttonTitle = self.presentationData.strings.StickerPack_AddStickerCount(self.itemCount)
                     } else if info.id.namespace == Namespaces.ItemCollection.CloudEmojiPacks {
-                        buttonTitle = self.presentationData.strings.StickerPack_RemoveEmojiCount(self.itemCount)
+                        buttonTitle = self.presentationData.strings.StickerPack_AddEmojiCount(self.itemCount)
                     } else {
-                        buttonTitle = self.presentationData.strings.StickerPack_RemoveMaskCount(self.itemCount)
+                        buttonTitle = self.presentationData.strings.StickerPack_AddMaskCount(self.itemCount)
                     }
-                    buttonBackgroundColor = self.presentationData.theme.list.plainBackgroundColor
-                    buttonForegroundColor = self.presentationData.theme.list.itemDestructiveColor
                 }
             } else {
-                if info.id.namespace == Namespaces.ItemCollection.CloudStickerPacks {
-                    buttonTitle = self.presentationData.strings.StickerPack_AddStickerCount(self.itemCount)
-                } else if info.id.namespace == Namespaces.ItemCollection.CloudEmojiPacks {
-                    buttonTitle = self.presentationData.strings.StickerPack_AddEmojiCount(self.itemCount)
+                var installedCount = 0
+                for content in currentContents {
+                    if case let .result(_, _, isInstalled) = content {
+                        if isInstalled {
+                            installedCount += 1
+                        }
+                    }
+                }
+                if installedCount == currentContents.count {
+                    buttonTitle = self.presentationData.strings.StickerPack_RemoveEmojiPacksCount(Int32(currentContents.count))
+                    buttonBackgroundColor = self.presentationData.theme.list.plainBackgroundColor.withAlphaComponent(0.0)
+                    buttonForegroundColor = self.presentationData.theme.list.itemDestructiveColor
                 } else {
-                    buttonTitle = self.presentationData.strings.StickerPack_AddMaskCount(self.itemCount)
+                    buttonTitle = self.presentationData.strings.StickerPack_AddEmojiPacksCount(Int32(currentContents.count - installedCount))
                 }
             }
+        } else {
+            buttonHasProgress = true
         }
         
         let buttonSize = self.button.update(
@@ -2128,7 +2086,7 @@ private final class StickerPackContainer: ASDisplayNode {
             component: AnyComponent(
                 ButtonComponent(
                     background: ButtonComponent.Background(
-                        style: .glass,
+                        style: .actualGlass,
                         color: buttonBackgroundColor,
                         foreground: buttonForegroundColor,
                         pressedColor: buttonBackgroundColor.withMultipliedAlpha(0.9)
@@ -2137,6 +2095,7 @@ private final class StickerPackContainer: ASDisplayNode {
                         id: AnyHashable(0),
                         component: AnyComponent(Text(text: buttonTitle, font: Font.semibold(17.0), color: buttonForegroundColor))
                     ),
+                    displaysProgress: buttonHasProgress,
                     action: { [weak self] in
                         self?.buttonPressed()
                     }
@@ -2468,36 +2427,51 @@ private final class StickerPackScreenNode: ViewControllerTracingNode {
             if self.shadowNode.image == nil {
                 self.shadowNode.image = generateShadowImage()
             }
-        } else {
-            self.containerContainingNode.cornerRadius = 0.0
             
+            transition.updateFrameAsPositionAndBounds(node: self.containerContainingNode, frame: containerContainingFrame)
+        } else {
+            let topOffsetFraction: CGFloat
+            if case .regular = layout.metrics.widthClass {
+                topOffsetFraction = 1.0
+            } else if let selectedContainer = self.containers[self.selectedStickerPackIndex] {
+                topOffsetFraction = selectedContainer.expandProgress
+            } else {
+                topOffsetFraction = 0.0
+            }
+                        
             self.dimNode.backgroundColor = UIColor(white: 0.0, alpha: 0.25)
             containerContainingFrame = CGRect(origin: CGPoint(), size: layout.size)
             containerInsets = layout.intrinsicInsets
             
             self.arrowNode.isHidden = true
             self.shadowNode.alpha = 0.0
+            
+            transition.updateFrameAsPositionAndBounds(node: self.containerContainingNode, frame: containerContainingFrame)
+            
+            
+            let minScale: CGFloat = (layout.size.width - 6.0 * 2.0) / layout.size.width
+            let minScaledTranslation: CGFloat = (layout.size.height - layout.size.height * minScale) * 0.5 - 6.0
+            let minScaledCornerRadius: CGFloat = layout.deviceMetrics.screenCornerRadius
+            
+            let scale = minScale * (1.0 - topOffsetFraction) + 1.0 * topOffsetFraction
+            let scaledTranslation = minScaledTranslation * (1.0 - topOffsetFraction)
+            let scaledCornerRadius = minScaledCornerRadius * (1.0 - topOffsetFraction) + layout.deviceMetrics.screenCornerRadius * topOffsetFraction
+            
+            var containerTransform = CATransform3DIdentity
+            containerTransform = CATransform3DTranslate(containerTransform, 0.0, scaledTranslation, 0.0)
+            containerTransform = CATransform3DScale(containerTransform, scale, scale, scale)
+            transition.updateTransform(layer: self.containerContainingNode.layer, transform: containerTransform)
+            transition.updateCornerRadius(node: self.containerContainingNode, cornerRadius: scaledCornerRadius)
         }
-        transition.updateFrame(node: self.containerContainingNode, frame: containerContainingFrame)
         
         let shadowFrame = containerContainingFrame.insetBy(dx: -60.0, dy: -60.0)
         transition.updateFrame(node: self.shadowNode, frame: shadowFrame)
         
-        let expandProgress: CGFloat
-        if case .regular = layout.metrics.widthClass {
-            expandProgress = 1.0
-        } else if let selectedContainer = self.containers[self.selectedStickerPackIndex] {
-            expandProgress = selectedContainer.expandProgress
-        } else {
-            expandProgress = 0.0
-        }
-        let scaledInset: CGFloat = 6.0
+
+        let expandProgress: CGFloat = 1.0
+        let scaledInset: CGFloat = 12.0
         let scaledDistance: CGFloat = 4.0
-        let minScale = (layout.size.width - scaledInset * 2.0) / layout.size.width
-        let containerScale = expandProgress * 1.0 + (1.0 - expandProgress) * minScale
-        
-        let containerVerticalOffset: CGFloat = (1.0 - expandProgress) * scaledInset * 2.0
-                
+
         let i = 0
         let indexOffset = i - self.selectedStickerPackIndex
         var scaledOffset: CGFloat = 0.0
@@ -2578,9 +2552,9 @@ private final class StickerPackScreenNode: ViewControllerTracingNode {
                 self.containers[i] = container
             }
             
-            let containerFrame = CGRect(origin: CGPoint(x: CGFloat(indexOffset) * containerContainingFrame.size.width + self.relativeToSelectedStickerPackTransition + scaledOffset, y: containerVerticalOffset), size: containerContainingFrame.size)
+            let containerFrame = CGRect(origin: CGPoint(x: CGFloat(indexOffset) * containerContainingFrame.size.width + self.relativeToSelectedStickerPackTransition + scaledOffset, y: 0.0), size: containerContainingFrame.size)
             containerTransition.updateFrame(node: container, frame: containerFrame, beginWithCurrentState: true)
-            containerTransition.updateSublayerTransformScaleAndOffset(node: container, scale: containerScale, offset: CGPoint(), beginWithCurrentState: true)
+            //containerTransition.updateSublayerTransformScaleAndOffset(node: container, scale: containerScale, offset: CGPoint(), beginWithCurrentState: true)
             var containerLayout = layout
             containerLayout.size = containerFrame.size
             containerLayout.intrinsicInsets = containerInsets

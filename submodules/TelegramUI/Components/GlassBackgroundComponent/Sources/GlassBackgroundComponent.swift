@@ -261,10 +261,12 @@ public class GlassBackgroundView: UIView {
         
         public let kind: Kind
         public let innerColor: UIColor?
+        public let innerInset: CGFloat
         
-        public init(kind: Kind, innerColor: UIColor? = nil) {
+        public init(kind: Kind, innerColor: UIColor? = nil, innerInset: CGFloat = 3.0) {
             self.kind = kind
             self.innerColor = innerColor
+            self.innerInset = innerInset
         }
     }
     
@@ -444,7 +446,7 @@ public class GlassBackgroundView: UIView {
         let shadowInset: CGFloat = 32.0
         
         if let innerColor = tintColor.innerColor {
-            let innerBackgroundFrame = CGRect(origin: CGPoint(), size: size).insetBy(dx: 3.0, dy: 3.0)
+            let innerBackgroundFrame = CGRect(origin: CGPoint(), size: size).insetBy(dx: tintColor.innerInset, dy: tintColor.innerInset)
             let innerBackgroundRadius = min(innerBackgroundFrame.width, innerBackgroundFrame.height) * 0.5
             
             let innerBackgroundView: UIView
