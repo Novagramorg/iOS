@@ -674,6 +674,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                     context: reactionItems.context,
                     animationCache: reactionItems.animationCache,
                     presentationData: presentationData,
+                    //style: .glass(isTinted: false),
                     items: reactionItems.reactionItems,
                     selectedItems: reactionItems.selectedReactionItems,
                     title: reactionItems.reactionsTitle,
@@ -1058,12 +1059,17 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             
             transition.updateFrame(node: self.contentRectDebugNode, frame: contentRect, beginWithCurrentState: true)
             
+            var totalActionsHeight: CGFloat = actionsSize.height
+            if additionalActionsSize.height != 0.0 {
+                totalActionsHeight += 10.0 + additionalActionsSize.height
+            }
+            
             var actionsFrame: CGRect
             if let contextExtractableContainer {
                 let _ = contextExtractableContainer
                 actionsFrame = CGRect(origin: CGPoint(x: actionsSideInset, y: contentRect.minY), size: actionsSize)
             } else if case let .reference(source) = self.source, let actionsPosition = source.transitionInfo()?.actionsPosition, case .top = actionsPosition {
-                actionsFrame = CGRect(origin: CGPoint(x: actionsSideInset, y: contentRect.minY - contentActionsSpacing - actionsSize.height), size: actionsSize)
+                actionsFrame = CGRect(origin: CGPoint(x: actionsSideInset, y: contentRect.minY - contentActionsSpacing - totalActionsHeight), size: actionsSize)
             } else {
                 actionsFrame = CGRect(origin: CGPoint(x: actionsSideInset, y: contentRect.maxY + contentActionsSpacing), size: actionsSize)
             }
