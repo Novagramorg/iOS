@@ -304,7 +304,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             edgeEffectFrame.origin.y -= navigationBarHeight
         }
         transition.updateFrame(view: self.headerEdgeEffectView, frame: edgeEffectFrame)
-        self.headerEdgeEffectView.update(content: .black, alpha: 0.6, rect: edgeEffectFrame, edge: .top, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: ComponentTransition(transition))
+        self.headerEdgeEffectView.update(content: .black, alpha: 0.65, rect: edgeEffectFrame, edge: .top, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: ComponentTransition(transition))
         transition.updateAlpha(layer: self.headerEdgeEffectView.layer, alpha: self.areControlsHidden ? 0.0 : 1.0)
         
         if let navigationBar = self.navigationBar {
