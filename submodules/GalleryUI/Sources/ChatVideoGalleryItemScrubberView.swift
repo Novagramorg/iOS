@@ -506,5 +506,6 @@ final class ChatVideoGalleryItemScrubberView: UIView {
         }
         
         ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 0.0)
+        ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.scrubberNode.view, alpha: 0.0)
     }
 }
