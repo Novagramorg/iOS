@@ -547,11 +547,12 @@ private final class AlertScreenComponent: Component {
             self.containerView.update(size: availableSize, isDark: environment.theme.overallDarkAppearance, transition: transition)
             
             var availableHeight = availableSize.height
+            availableHeight -= environment.statusBarHeight
             if component.configuration.allowInputInset, environment.inputHeight > 0.0 {
                 availableHeight -= environment.inputHeight
             }
                         
-            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - alertSize.width) / 2.0), y: floorToScreenPixels((availableHeight - alertSize.height) / 2.0)), size: alertSize))
+            transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - alertSize.width) / 2.0), y: environment.statusBarHeight +  floorToScreenPixels((availableHeight - alertSize.height) / 2.0)), size: alertSize))
             self.backgroundView.update(size: alertSize, cornerRadius: 35.0, isDark: environment.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
             
             return availableSize

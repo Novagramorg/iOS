@@ -157,8 +157,16 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         return self.chatListController
     }
     
+    public func getSettingsController() -> ViewController? {
+        return self.accountSettingsController
+    }
+    
     public func getPrivacySettings() -> Promise<AccountPrivacySettings?>? {
         return self.accountSettingsController?.privacySettings
+    }
+    
+    public func getTwoStepAuthData() -> Promise<TwoStepAuthData?>? {
+        return self.accountSettingsController?.twoStepAuthData
     }
     
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
@@ -301,7 +309,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     }
     
     @discardableResult
-    public func openStoryCamera(customTarget: Stories.PendingTarget?, resumeLiveStream: Bool, transitionIn: StoryCameraTransitionIn?, transitionedIn: @escaping () -> Void, transitionOut: @escaping (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut?) -> StoryCameraTransitionInCoordinator? {
+    public func openStoryCamera(mode: StoryCameraMode, customTarget: Stories.PendingTarget?, resumeLiveStream: Bool, transitionIn: StoryCameraTransitionIn?, transitionedIn: @escaping () -> Void, transitionOut: @escaping (Stories.PendingTarget?, Bool) -> StoryCameraTransitionOut?) -> StoryCameraTransitionInCoordinator? {
         guard let controller = self.viewControllers.last as? ViewController else {
             return nil
         }
@@ -327,6 +335,16 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             }
         }
         
+        let cameraMode: CameraScreenImpl.CameraMode
+        switch mode {
+        case .photo:
+            cameraMode = .photo
+        case .video:
+            cameraMode = .video
+        case .live:
+            cameraMode = .live
+        }
+        
         var presentImpl: ((ViewController) -> Void)?
         var returnToCameraImpl: (() -> Void)?
         var dismissCameraImpl: (() -> Void)?
@@ -334,6 +352,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         let cameraController = CameraScreenImpl(
             context: context,
             mode: .story,
+            cameraMode: cameraMode,
             customTarget: mediaEditorCustomTarget,
             resumeLiveStream: resumeLiveStream,
             transitionIn: transitionIn.flatMap {
@@ -759,7 +778,31 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         }
     }
     
-    public func openSettings() {
+    public func openChats() {
+        guard let rootTabController = self.rootTabController else {
+            return
+        }
+        
+        self.popToRoot(animated: false)
+    
+        if let index = rootTabController.controllers.firstIndex(where: { $0 is ChatListController }) {
+            rootTabController.selectedIndex = index
+        }
+    }
+    
+    public func openContacts() {
+        guard let rootTabController = self.rootTabController else {
+            return
+        }
+        
+        self.popToRoot(animated: false)
+    
+        if let index = rootTabController.controllers.firstIndex(where: { $0 is ContactsController }) {
+            rootTabController.selectedIndex = index
+        }
+    }
+        
+    public func openSettings(edit: Bool) {
         guard let rootTabController = self.rootTabController else {
             return
         }
@@ -768,6 +811,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     
         if let index = rootTabController.controllers.firstIndex(where: { $0 is PeerInfoScreenImpl }) {
             rootTabController.selectedIndex = index
+        }
+        
+        if edit {
+            self.accountSettingsController?.activateEdit()
         }
     }
     
@@ -784,6 +831,10 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             self.rootTabController?.updateControllerLayout(controller: accountSettingsController)
             accountSettingsController.openAvatars()
         }
+    }
+    
+    public func startNewCall() {
+        self.callListController?.tabBarActivateSearch()
     }
 }
 

@@ -3186,6 +3186,12 @@ private final class CraftGiftsContextImpl {
         return _internal_craftStarGift(account: self.account, references: references)
     }
 
+    func addGift(gift: ProfileGiftsContext.State.StarGift) {
+        self.gifts.insert(gift, at: 0)
+        self.count = self.count + 1
+        self.pushState()
+    }
+    
     func removeGifts(references: [StarGiftReference]) {
         let referencesSet = Set(references)
         self.gifts.removeAll { gift in
@@ -3316,6 +3322,12 @@ public final class CraftGiftsContext {
     public func reload() {
         self.impl.with { impl in
             impl.reload()
+        }
+    }
+    
+    public func addGift(gift: ProfileGiftsContext.State.StarGift) {
+        self.impl.with { impl in
+            impl.addGift(gift: gift)
         }
     }
 
@@ -3838,6 +3850,7 @@ private final class ResaleGiftsContextImpl {
     private let queue: Queue
     private let account: Account
     private let giftId: Int64
+    private let forCrafting: Bool
     
     private let disposable = MetaDisposable()
     
@@ -3861,11 +3874,13 @@ private final class ResaleGiftsContextImpl {
     init(
         queue: Queue,
         account: Account,
-        giftId: Int64
+        giftId: Int64,
+        forCrafting: Bool
     ) {
         self.queue = queue
         self.account = account
         self.giftId = giftId
+        self.forCrafting = forCrafting
         
         self.loadMore()
     }
@@ -3898,6 +3913,10 @@ private final class ResaleGiftsContextImpl {
             }
             
             var flags: Int32 = 0
+            if self.forCrafting {
+                flags |= (1 << 4)
+            }
+            
             switch sorting {
             case .date:
                 break
@@ -4169,11 +4188,12 @@ public final class ResaleGiftsContext {
     
     public init(
         account: Account,
-        giftId: Int64
+        giftId: Int64,
+        forCrafting: Bool
     ) {
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return ResaleGiftsContextImpl(queue: queue, account: account, giftId: giftId)
+            return ResaleGiftsContextImpl(queue: queue, account: account, giftId: giftId, forCrafting: forCrafting)
         })
     }
     

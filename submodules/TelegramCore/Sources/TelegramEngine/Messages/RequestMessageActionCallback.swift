@@ -185,6 +185,13 @@ public enum MessageActionUrlAuthResult {
         public let platform: String
         public let ip: String
         public let region: String
+        
+        public init(browser: String, platform: String, ip: String, region: String) {
+            self.browser = browser
+            self.platform = platform
+            self.ip = ip
+            self.region = region
+        }
     }
     
     case `default`
