@@ -575,7 +575,7 @@ public class ContactsController: ViewController {
         }
     }
     
-    @objc private func sortPressed() {
+    @objc public func sortPressed() {
         self.sortButton.contextAction?(self.sortButton.containerNode, nil)
     }
     

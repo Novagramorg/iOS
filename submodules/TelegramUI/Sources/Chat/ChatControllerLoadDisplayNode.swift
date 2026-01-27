@@ -388,24 +388,7 @@ extension ChatControllerImpl {
             transition = .immediate
         }
         
-        if let chatTitleContent = contentData.state.chatTitleContent {
-            var titleTransition = ComponentTransition(transition)
-            if case .messageOptions = self.subject {
-                titleTransition = titleTransition.withAnimation(.none)
-            }
-            self.chatTitleView?.update(
-                context: self.context,
-                theme: self.presentationData.theme,
-                wallpaper: self.presentationInterfaceState.chatWallpaper,
-                strings: self.presentationData.strings,
-                dateTimeFormat: self.presentationData.dateTimeFormat,
-                nameDisplayOrder: self.presentationData.nameDisplayOrder,
-                content: chatTitleContent,
-                transition: titleTransition
-            )
-        }
-        
-        self.updateChatPresentationInterfaceState(transition: transition, interactive: false, { presentationInterfaceState in
+        self.updateChatPresentationInterfaceState(transition: transition, interactive: false, force: true, { presentationInterfaceState in
             var presentationInterfaceState = presentationInterfaceState
             presentationInterfaceState = presentationInterfaceState.updatedPeer({ _ in
                 return contentData.state.renderedPeer

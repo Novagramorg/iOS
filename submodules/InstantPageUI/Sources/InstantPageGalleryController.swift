@@ -376,6 +376,8 @@ public class InstantPageGalleryController: ViewController, StandalonePresentable
         }, editMedia: { _ in
         }, controller: { [weak self] in
             return self
+        }, currentItemNode: { [weak self] in
+            return self?.galleryNode.pager.centralItemNode()
         })
         self.displayNode = GalleryControllerNode(context: self.context,controllerInteraction: controllerInteraction)
         self.displayNodeDidLoad()

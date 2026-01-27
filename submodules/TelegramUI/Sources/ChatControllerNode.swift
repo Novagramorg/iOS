@@ -763,7 +763,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self.plainInputSeparatorAlpha = nil
         }
         
-        self.navigateButtons = ChatHistoryNavigationButtons(theme: self.chatPresentationInterfaceState.theme, dateTimeFormat: self.chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode, isChatRotated: historyNodeRotated)
+        self.navigateButtons = ChatHistoryNavigationButtons(theme: self.chatPresentationInterfaceState.theme, preferClearGlass: self.chatPresentationInterfaceState.preferredGlassType == .clear, dateTimeFormat: self.chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode, isChatRotated: historyNodeRotated)
         self.navigateButtons.accessibilityElementsHidden = true
         
         super.init()
@@ -1105,8 +1105,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     statusBar.updateStatusBarStyle(.White, animated: true)
                 } else {
                     let statusBarStyle: StatusBarStyle
-                    if let isDark = self.backgroundNode.isDark {
-                        if isDark {
+                    if let contentStats = self.backgroundNode.contentStats {
+                        if contentStats.isDark {
                             statusBarStyle = .White
                         } else {
                             statusBarStyle = .Black
@@ -1594,6 +1594,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 transition: headerPanelsTransition,
                 component: AnyComponent(HeaderPanelContainerComponent(
                     theme: self.chatPresentationInterfaceState.theme,
+                    preferClearGlass: self.chatPresentationInterfaceState.preferredGlassType == .clear,
                     tabs: nil,
                     panels: headerPanels
                 )),
@@ -3468,7 +3469,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let updateInputTextState = self.chatPresentationInterfaceState.interfaceState.effectiveInputState != chatPresentationInterfaceState.interfaceState.effectiveInputState
             self.chatPresentationInterfaceState = chatPresentationInterfaceState
             
-            self.navigateButtons.update(theme: chatPresentationInterfaceState.theme, dateTimeFormat: chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode)
+            self.navigateButtons.update(theme: chatPresentationInterfaceState.theme, preferClearGlass: chatPresentationInterfaceState.preferredGlassType == .clear, dateTimeFormat: chatPresentationInterfaceState.dateTimeFormat, backgroundNode: self.backgroundNode)
             
             if themeUpdated {
                 if case let .color(color) = self.chatPresentationInterfaceState.chatWallpaper, UIColor(rgb: color).isEqual(self.chatPresentationInterfaceState.theme.chat.inputPanel.panelBackgroundColorNoWallpaper) {

@@ -600,7 +600,7 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
             background.container.update(size: size, isDark: self.presentationData.theme.overallDarkAppearance, transition: transition)
             transition.setFrame(view: background.container, frame: CGRect(origin: CGPoint(), size: size))
             
-            background.background.update(size: size, cornerRadius: min(30.0, size.height * 0.5), isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: UIColor(white: self.presentationData.theme.overallDarkAppearance ? 0.0 : 1.0, alpha: 0.6)), transition: transition)
+            background.background.update(size: size, cornerRadius: min(30.0, size.height * 0.5), isDark: self.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: transition)
             transition.setFrame(view: background.background, frame: CGRect(origin: CGPoint(), size: size))
         }
     }

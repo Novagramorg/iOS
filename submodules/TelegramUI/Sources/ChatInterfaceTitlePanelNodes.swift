@@ -256,6 +256,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
         return ChatFloatingTopicsPanel(
             context: context,
             theme: chatPresentationInterfaceState.theme,
+            preferClearGlass: chatPresentationInterfaceState.preferredGlassType == .clear,
             strings: chatPresentationInterfaceState.strings,
             location: topicListDisplayModeOnTheSide ? .side : .top,
             peerId: peerId,
@@ -282,6 +283,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
         return ChatFloatingTopicsPanel(
             context: context,
             theme: chatPresentationInterfaceState.theme,
+            preferClearGlass: chatPresentationInterfaceState.preferredGlassType == .clear,
             strings: chatPresentationInterfaceState.strings,
             location: topicListDisplayModeOnTheSide ? .side : .top,
             peerId: peerId,
@@ -308,6 +310,7 @@ func floatingTopicsPanelForChatPresentationInterfaceState(_ chatPresentationInte
         return ChatFloatingTopicsPanel(
             context: context,
             theme: chatPresentationInterfaceState.theme,
+            preferClearGlass: chatPresentationInterfaceState.preferredGlassType == .clear,
             strings: chatPresentationInterfaceState.strings,
             location: topicListDisplayModeOnTheSide ? .side : .top,
             peerId: peerId,

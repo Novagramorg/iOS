@@ -133,11 +133,12 @@ public final class GalleryFooterNode: ASDisplayNode {
         }
         
         var edgeEffectFrame = backgroundFrame
-        let edgeEffectHeight: CGFloat = 46.0
-        edgeEffectFrame.origin.y -= edgeEffectHeight
-        edgeEffectFrame.size.height += edgeEffectHeight
+        let edgeEffectHeight: CGFloat = 120.0
+        let edgeEffectOffset: CGFloat = 70.0
+        edgeEffectFrame.origin.y -= edgeEffectOffset
+        edgeEffectFrame.size.height += edgeEffectOffset
         edgeEffectTransition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-        self.edgeEffectView.update(content: .black, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(90.0, edgeEffectFrame.height), transition: edgeEffectTransition)
+        self.edgeEffectView.update(content: .black, alpha: 0.35, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: edgeEffectTransition)
         
         let contentTransition = ContainedViewLayoutTransition.animated(duration: 0.4, curve: .spring)
         if let overlayContentNode = self.currentOverlayContentNode {

@@ -15,11 +15,14 @@ import TelegramCallsUI
 import AttachmentUI
 import WebUI
 import LegacyChatHeaderPanelComponent
+import ComponentFlow
+import ComponentDisplayAdapters
 
 func updateChatPresentationInterfaceStateImpl(
     selfController: ChatControllerImpl,
     transition: ContainedViewLayoutTransition,
     interactive: Bool,
+    force: Bool,
     saveInterfaceState: Bool,
     _ f: (ChatPresentationInterfaceState) -> ChatPresentationInterfaceState,
     completion externalCompletion: @escaping (ContainedViewLayoutTransition) -> Void
@@ -604,6 +607,24 @@ func updateChatPresentationInterfaceStateImpl(
         } else {
             selfController.customNavigationPanelNode = nil
         }
+    }
+    
+    if let chatTitleContent = selfController.contentData?.state.chatTitleContent {
+        var titleTransition = ComponentTransition(transition)
+        if case .messageOptions = selfController.subject {
+            titleTransition = titleTransition.withAnimation(.none)
+        }
+        selfController.chatTitleView?.update(
+            context: selfController.context,
+            theme: selfController.presentationData.theme,
+            preferClearGlass: selfController.presentationInterfaceState.preferredGlassType == .clear,
+            wallpaper: selfController.presentationInterfaceState.chatWallpaper,
+            strings: selfController.presentationData.strings,
+            dateTimeFormat: selfController.presentationData.dateTimeFormat,
+            nameDisplayOrder: selfController.presentationData.nameDisplayOrder,
+            content: chatTitleContent,
+            transition: titleTransition
+        )
     }
     
     selfController.stateUpdated?(transition)
