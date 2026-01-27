@@ -623,15 +623,12 @@ public func recentSessionsController(context: AccountContext, activeSessionsCont
     
     let removeSessionImpl: (Int64, @escaping () -> Void) -> Void = { sessionId, completion in
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let controller = ActionSheetController(presentationData: presentationData)
-        let dismissAction: () -> Void = { [weak controller] in
-            controller?.dismissAnimated()
-        }
-        controller.setItemGroups([
-            ActionSheetItemGroup(items: [
-                ActionSheetTextItem(title: presentationData.strings.AuthSessions_TerminateSessionText),
-                ActionSheetButtonItem(title: presentationData.strings.AuthSessions_TerminateSession, color: .destructive, action: {
-                    dismissAction()
+        let controller = textAlertController(
+            context: context,
+            title: nil,
+            text: presentationData.strings.AuthSessions_TerminateSessionText,
+            actions: [
+                TextAlertAction(type: .defaultDestructiveAction, title: presentationData.strings.AuthSessions_TerminateSession, action: {
                     completion()
                     
                     updateState {
@@ -649,11 +646,12 @@ public func recentSessionsController(context: AccountContext, activeSessionsCont
                         }
                         context.sharedContext.updateNotificationTokensRegistration()
                     }))
-                })
-            ]),
-            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, action: { dismissAction() })])
-        ])
-        presentControllerImpl?(controller, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                }),
+                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})
+            ],
+            actionLayout: .vertical
+        )
+        presentControllerImpl?(controller, nil)
     }
     
     let removeWebSessionImpl: (Int64) -> Void = { sessionId in
@@ -690,16 +688,12 @@ public func recentSessionsController(context: AccountContext, activeSessionsCont
         removeSessionImpl(sessionId, {})
     }, terminateOtherSessions: {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let controller = ActionSheetController(presentationData: presentationData)
-        let dismissAction: () -> Void = { [weak controller] in
-            controller?.dismissAnimated()
-        }
-        controller.setItemGroups([
-            ActionSheetItemGroup(items: [
-                ActionSheetTextItem(title: presentationData.strings.AuthSessions_TerminateOtherSessionsText),
-                ActionSheetButtonItem(title: presentationData.strings.AuthSessions_TerminateOtherSessions, color: .destructive, action: {
-                    dismissAction()
-                    
+        let controller = textAlertController(
+            context: context,
+            title: nil,
+            text: presentationData.strings.AuthSessions_TerminateOtherSessionsText,
+            actions: [
+                TextAlertAction(type: .defaultDestructiveAction, title: presentationData.strings.AuthSessions_TerminateOtherSessions, action: {
                     updateState {
                         return $0.withUpdatedTerminatingOtherSessions(true)
                     }
@@ -715,11 +709,12 @@ public func recentSessionsController(context: AccountContext, activeSessionsCont
                         }
                         context.sharedContext.updateNotificationTokensRegistration()
                     }))
-                })
-            ]),
-            ActionSheetItemGroup(items: [ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, action: { dismissAction() })])
-            ])
-        presentControllerImpl?(controller, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                }),
+                TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {})
+            ],
+            actionLayout: .vertical
+        )
+        presentControllerImpl?(controller, nil)
     }, openSession: { session in
         let controller = RecentSessionScreen(context: context, subject: .session(session), updateAcceptSecretChats: { value in
             updateSessionDisposable.set(activeSessionsContext.updateSessionAcceptsSecretChats(session, accepts: value).start())

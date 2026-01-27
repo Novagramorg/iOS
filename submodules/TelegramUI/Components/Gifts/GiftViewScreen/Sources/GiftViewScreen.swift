@@ -748,7 +748,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         let updatedAttributes = uniqueGift.attributes.filter { $0.attributeType != .originalInfo }
                         self.subject = .profileGift(peerId, gift.withGift(.unique(uniqueGift.withAttributes(updatedAttributes))))
                     case let .message(message):
-                        if let action = message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, isRefunded, isPrepaidUpgrade, peerId, senderId, savedId, resaleAmount, canTransferDate, canResaleDate, _, assigned, fromOffer, canCraftAt) = action.action, case let .unique(uniqueGift) = gift {
+                        if let action = message.media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, isRefunded, isPrepaidUpgrade, peerId, senderId, savedId, resaleAmount, canTransferDate, canResaleDate, _, assigned, fromOffer, canCraftAt, isCrafted) = action.action, case let .unique(uniqueGift) = gift {
                             let updatedAttributes = uniqueGift.attributes.filter { $0.attributeType != .originalInfo }
                             let updatedMedia: [Media] = [
                                 TelegramMediaAction(
@@ -770,7 +770,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         dropOriginalDetailsStars: nil,
                                         assigned: assigned,
                                         fromOffer: fromOffer,
-                                        canCraftAt: canCraftAt
+                                        canCraftAt: canCraftAt,
+                                        isCrafted: isCrafted
                                     )
                                 )
                             ]
@@ -2909,8 +2910,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                     }
 
                     var buttonColor: UIColor = UIColor.white.withAlphaComponent(0.16)
-                    if let previewPatternColor = giftCompositionExternalState.previewPatternColor {
-                        buttonColor = previewPatternColor
+                    if let backgroundColor = giftCompositionExternalState.backgroundColor {
+                        buttonColor = backgroundColor.mixedWith(.white, alpha: 0.2)
                     }
                     
                     let variantsMeasureDescription = variantsMeasureDescription.update(
@@ -5129,10 +5130,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 } else {
                     return false
                 }
-            }), case let .backdrop(_, _, innerColor, _, _, _, _) = backdropAttribute {
-                buttonsBackground = .color(UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05))
-            } else if showUpgradePreview, let previewPatternColor = giftCompositionExternalState.previewPatternColor {
-                buttonsBackground = .color(previewPatternColor.withMultipliedBrightnessBy(1.05))
+            }), case let .backdrop(_, _, _, outerColor, _, _, _) = backdropAttribute {
+                buttonsBackground = .color(UIColor(rgb: UInt32(bitPattern: outerColor)).mixedWith(.white, alpha: 0.2))
+            } else if showUpgradePreview, let backgroundColor = giftCompositionExternalState.backgroundColor {
+                buttonsBackground = .color(backgroundColor.mixedWith(.white, alpha: 0.2))
             }
             
             var isBackButton = false
@@ -5449,7 +5450,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                         
                         let fromPeerId = senderId ?? message.author?.id
                         return (message.id.peerId, fromPeerId, message.author?.debugDisplayTitle, message.author?.compactDisplayTitle, message.id, reference, message.flags.contains(.Incoming), gift, message.timestamp, convertStars, text, entities, nameHidden, savedToProfile, nil, converted, upgraded, isRefunded, canUpgrade, upgradeStars, nil, nil, nil, upgradeMessageId, nil, nil, prepaidUpgradeHash, upgradeSeparate, nil, toPeerId, number, nil)
-                    case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftDate):
+                    case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, _, _, peerId, senderId, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftDate, _):
                         var reference: StarGiftReference
                         if let peerId, let savedId {
                             reference = .peer(peerId: peerId, id: savedId)

@@ -24,6 +24,7 @@ swift_library(
         "//submodules/AccountContext",
         "//submodules/AppBundle",
         "//submodules/ItemListUI",
+        "//submodules/ContextUI",
         "//submodules/TelegramStringFormatting",
         "//submodules/PresentationDataUtils",
         "//submodules/Components/SheetComponent",

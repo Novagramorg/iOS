@@ -289,9 +289,9 @@ private final class StickerPackContainer: ASDisplayNode {
         self.addSubnode(self.gridNode)
         
         self.titleContainer.addSubnode(self.titleNode)
+        self.addSubnode(self.topContainerNode)
         self.addSubnode(self.titleContainer)
         
-        self.addSubnode(self.topContainerNode)
         self.addSubnode(self.bottomContainerNode)
     
         self.gridNode.presentationLayoutUpdated = { [weak self] presentationLayout, transition in
@@ -654,6 +654,13 @@ private final class StickerPackContainer: ASDisplayNode {
         self.reorderingGestureRecognizer = reorderingGestureRecognizer
         self.gridNode.view.addGestureRecognizer(reorderingGestureRecognizer)
         
+        self.gridNode.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        self.gridNode.clipsToBounds = true
+        self.gridNode.layer.cornerRadius = 40.0
+        
+        self.topEdgeEffectView.clipsToBounds = true
+        self.topEdgeEffectView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        self.topEdgeEffectView.layer.cornerRadius = 40.0
         self.topContainerNode.view.addSubview(self.topEdgeEffectView)
         self.bottomContainerNode.view.addSubview(self.bottomEdgeEffectView)
     }
@@ -1891,7 +1898,7 @@ private final class StickerPackContainer: ASDisplayNode {
 
         transition.updateFrame(node: self.bottomContainerNode, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - actionAreaHeight), size: CGSize(width: layout.size.width, height: 90.0)))
         
-        let gridFrame = CGRect(origin: CGPoint(x: 0.0, y: insets.top + titleAreaInset), size: CGSize(width: layout.size.width, height: layout.size.height - insets.top - titleAreaInset))
+        let gridFrame = CGRect(origin: CGPoint(x: 0.0, y: insets.top), size: CGSize(width: layout.size.width, height: layout.size.height - insets.top))
         
         let itemsPerRow = 5
         let fillingWidth = horizontalContainerFillingSizeForLayout(layout: layout, sideInset: 0.0)
@@ -1923,12 +1930,13 @@ private final class StickerPackContainer: ASDisplayNode {
         
         let initialRevealedRowCount: CGFloat = 4.5
         
-        let topInset: CGFloat
+        var topInset: CGFloat
         if case .regular = layout.metrics.widthClass {
-            topInset = 0.0
+            topInset = titleAreaInset
         } else {
             topInset = insets.top + max(0.0, layout.size.height - floor(initialRevealedRowCount * itemWidth) - insets.top - actionAreaHeight - titleAreaInset)
         }
+        
         let additionalGridBottomInset = max(0.0, gridFrame.size.height - actionAreaHeight - contentHeight)
         let gridInsets = UIEdgeInsets(top: topInset, left: gridLeftInset, bottom: actionAreaHeight + additionalGridBottomInset, right: layout.size.width - fillingWidth - gridLeftInset)
         
@@ -2112,6 +2120,10 @@ private final class StickerPackContainer: ASDisplayNode {
             buttonView.frame = buttonFrame
         }
         
+        let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: 90.0))
+        transition.updateFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
+        self.topEdgeEffectView.update(content: self.presentationData.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 0.65, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
+        
         let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: actionAreaHeight - 90.0), size: CGSize(width: layout.size.width, height: 90.0))
         transition.updateFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
         self.bottomEdgeEffectView.update(content: self.presentationData.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 0.65, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: ComponentTransition(transition))
@@ -2133,7 +2145,7 @@ private final class StickerPackContainer: ASDisplayNode {
             return
         }
         
-        let minBackgroundY = gridFrame.minY - titleAreaInset
+        let minBackgroundY = gridFrame.minY
         let unclippedBackgroundY = gridFrame.minY - presentationLayout.contentOffset.y - titleAreaInset
         
         let offsetFromInitialPosition = presentationLayout.contentOffset.y + gridInsets.top
@@ -2173,7 +2185,7 @@ private final class StickerPackContainer: ASDisplayNode {
         var titleContainerFrame: CGRect
         if case .regular = layout.metrics.widthClass {
             backgroundFrame.origin.y = min(0.0, backgroundFrame.origin.y)
-            titleContainerFrame = CGRect(origin: CGPoint(x: backgroundFrame.minX + floor((backgroundFrame.width) / 2.0), y: floor((56.0) / 2.0)), size: CGSize())
+            titleContainerFrame = CGRect(origin: CGPoint(x: backgroundFrame.minX + floor((backgroundFrame.width) / 2.0), y: floor((56.0) / 2.0) + 10.0), size: CGSize())
         } else {
             titleContainerFrame = CGRect(origin: CGPoint(x: backgroundFrame.minX + floor((backgroundFrame.width) / 2.0), y: backgroundFrame.minY + floor((56.0) / 2.0) + 10.0), size: CGSize())
         }
@@ -3103,12 +3115,12 @@ private final class StickerPackContextReferenceContentSource: ContextReferenceCo
 
 
 private func generateShadowImage() -> UIImage? {
-    return generateImage(CGSize(width: 140.0, height: 140.0), rotatedContext: { size, context in
+    return generateImage(CGSize(width: 220.0, height: 220.0), rotatedContext: { size, context in
         context.clear(CGRect(origin: CGPoint(), size: size))
         
         context.saveGState()
         context.setShadow(offset: CGSize(), blur: 60.0, color: UIColor(white: 0.0, alpha: 0.4).cgColor)
-        let path = UIBezierPath(roundedRect: CGRect(x: 60.0, y: 60.0, width: 20.0, height: 20.0), cornerRadius: 10.0).cgPath
+        let path = UIBezierPath(roundedRect: CGRect(x: 60.0, y: 60.0, width: 100.0, height: 100.0), cornerRadius: 40.0).cgPath
         context.addPath(path)
         context.fillPath()
         
@@ -3117,7 +3129,7 @@ private func generateShadowImage() -> UIImage? {
         context.setBlendMode(.clear)
         context.addPath(path)
         context.fillPath()
-    })?.stretchableImage(withLeftCapWidth: 70, topCapHeight: 70)
+    })?.stretchableImage(withLeftCapWidth: 110, topCapHeight: 110)
 }
 
 private func generateArrowImage(color: UIColor) -> UIImage? {
@@ -3288,38 +3300,6 @@ private class ReorderingGestureRecognizer: UIGestureRecognizer {
             }
         }
     }
-}
-
-private func generateShadowImage(corners: CACornerMask, radius: CGFloat) -> UIImage? {
-    return generateImage(CGSize(width: 120.0, height: 120), rotatedContext: { size, context in
-        context.clear(CGRect(origin: CGPoint(), size: size))
-        
-//        context.saveGState()
-        context.setShadow(offset: CGSize(), blur: 28.0, color: UIColor(white: 0.0, alpha: 0.4).cgColor)
-
-        var rectCorners: UIRectCorner = []
-        if corners.contains(.layerMinXMinYCorner) {
-            rectCorners.insert(.topLeft)
-        }
-        if corners.contains(.layerMaxXMinYCorner) {
-            rectCorners.insert(.topRight)
-        }
-        if corners.contains(.layerMinXMaxYCorner) {
-            rectCorners.insert(.bottomLeft)
-        }
-        if corners.contains(.layerMaxXMaxYCorner) {
-            rectCorners.insert(.bottomRight)
-        }
-        
-        let path = UIBezierPath(roundedRect: CGRect(x: 30.0, y: 30.0, width: 60.0, height: 60.0), byRoundingCorners: rectCorners, cornerRadii: CGSize(width: radius, height: radius)).cgPath
-        context.addPath(path)
-        context.fillPath()
-//        context.restoreGState()
-        
-//        context.setBlendMode(.clear)
-//        context.addPath(path)
-//        context.fillPath()
-    })?.stretchableImage(withLeftCapWidth: 60, topCapHeight: 60)
 }
 
 private final class CopyView: UIView {

@@ -51,6 +51,8 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
         private let context: AccountContext
         private let subject: MessageActionUrlAuthResult
         
+        var peer: EnginePeer?
+        
         fileprivate var inProgress = false
         var allowWrite = true
         weak var controller: ViewController?
@@ -58,8 +60,17 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
         init(context: AccountContext, subject: MessageActionUrlAuthResult) {
             self.context = context
             self.subject = subject
-            
+                        
             super.init()
+            
+            let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+            |> deliverOnMainQueue).start(next: { [weak self] peer in
+                guard let self, let peer else {
+                    return
+                }
+                self.peer = peer
+                self.updated()
+            })
         }
         
         func displayPhoneNumberConfirmation(commit: @escaping (Bool) -> Void) {
@@ -99,13 +110,12 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
     
     static var body: Body {
         let closeButton = Child(GlassBarButtonComponent.self)
+        let peerButton = Child(AvatarComponent.self)
         let avatar = Child(AvatarComponent.self)
         let title = Child(MultilineTextComponent.self)
         let description = Child(MultilineTextComponent.self)
-        
         let clientSection = Child(ListSectionComponent.self)
         let optionsSection = Child(ListSectionComponent.self)
-        
         let cancelButton = Child(ButtonComponent.self)
         let doneButton = Child(ButtonComponent.self)
         
@@ -147,6 +157,24 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                 availableSize: CGSize(width: 44.0, height: 44.0),
                 transition: .immediate
             )
+            context.add(closeButton
+                .position(CGPoint(x: 16.0 + closeButton.size.width / 2.0, y: 16.0 + closeButton.size.height / 2.0))
+            )
+            
+            if let peer = state.peer {
+                let peerButton = peerButton.update(
+                    component: AvatarComponent(
+                        context: component.context,
+                        theme: environment.theme,
+                        peer: peer
+                    ),
+                    availableSize: CGSize(width: 44.0, height: 44.0),
+                    transition: .immediate
+                )
+                context.add(peerButton
+                    .position(CGPoint(x: context.availableSize.width - 16.0 - peerButton.size.width / 2.0, y: 16.0 + peerButton.size.height / 2.0))
+                )
+            }
             
             var contentHeight: CGFloat = 32.0
             let avatar = avatar.update(
@@ -320,7 +348,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
             contentHeight += clientSection.size.height
             
             if flags.contains(.requestWriteAccess) {
-                contentHeight += 22.0
+                contentHeight += 38.0
                 
                 var optionsSectionItems: [AnyComponentWithIdentity<Empty>] = []
                 optionsSectionItems.append(AnyComponentWithIdentity(id: "allowWrite", component: AnyComponent(ListActionItemComponent(
@@ -441,10 +469,6 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
             contentHeight += doneButton.size.height
             contentHeight += buttonInsets.bottom
           
-            context.add(closeButton
-                .position(CGPoint(x: 16.0 + closeButton.size.width / 2.0, y: 16.0 + closeButton.size.height / 2.0))
-            )
-
             return CGSize(width: context.availableSize.width, height: contentHeight)
         }
     }

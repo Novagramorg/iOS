@@ -255,6 +255,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public let currentMediaDisplaySettings: Atomic<MediaDisplaySettings>
     private var mediaDisplaySettingsDisposable: Disposable?
     
+    public let currentChatSettings: Atomic<ChatSettings>
+    private var chatSettingsDisposable: Disposable?
+    
     public let currentStickerSettings: Atomic<StickerSettings>
     private var stickerSettingsDisposable: Disposable?
     
@@ -339,6 +342,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         self.currentMediaDisplaySettings = Atomic(value: initialPresentationDataAndSettings.mediaDisplaySettings)
         self.currentStickerSettings = Atomic(value: initialPresentationDataAndSettings.stickerSettings)
         self.currentInAppNotificationSettings = Atomic(value: initialPresentationDataAndSettings.inAppNotificationSettings)
+        self.currentChatSettings = Atomic(value: initialPresentationDataAndSettings.chatSettings)
         
         if automaticEnergyUsageShouldBeOnNow(settings: self.currentAutomaticMediaDownloadSettings) {
             self.energyUsageSettings = EnergyUsageSettings.powerSavingDefault
@@ -481,6 +485,15 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             if let strongSelf = self {
                 if let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.stickerSettings]?.get(StickerSettings.self) {
                     let _ = strongSelf.currentStickerSettings.swap(settings)
+                }
+            }
+        })
+        
+        self.chatSettingsDisposable = (self.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.chatSettings])
+        |> deliverOnMainQueue).start(next: { [weak self] sharedData in
+            if let strongSelf = self {
+                if let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.chatSettings]?.get(ChatSettings.self) {
+                    let _ = strongSelf.currentChatSettings.swap(settings)
                 }
             }
         })
@@ -1078,6 +1091,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         self.inAppNotificationSettingsDisposable?.dispose()
         self.mediaInputSettingsDisposable?.dispose()
         self.mediaDisplaySettingsDisposable?.dispose()
+        self.chatSettingsDisposable?.dispose()
+        self.stickerSettingsDisposable?.dispose()
         self.callDisposable?.dispose()
         self.groupCallDisposable?.dispose()
         self.callStateDisposable?.dispose()
