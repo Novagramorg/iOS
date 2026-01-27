@@ -15669,3 +15669,7 @@ Error: %8$@";
 
 "Conversation.Summary.Limit.Title" = "AI Summary";
 "Conversation.Summary.Limit.Text" = "Summarize large messages with AI – unlimited with Telegram Premium.";
+
+"Appearance.SendWithCmdEnter" = "Send Messages with ⌘+Enter";
+
+"Notification.StarsGift.Crafted" = "You crafted a new unique collectible";

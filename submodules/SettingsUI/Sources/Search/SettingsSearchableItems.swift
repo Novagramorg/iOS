@@ -30,6 +30,7 @@ import ContextUI
 import QuickReactionSetupController
 import AvatarEditorScreen
 import PeerSelectionScreen
+import DeviceModel
 
 enum SettingsSearchableItemIcon {
     case profile
@@ -3895,7 +3896,7 @@ private func appearanceSearchableItems(context: AccountContext) -> [SettingsSear
         present(.push, themeSettingsController(context: context, focusOnItemTag: itemTag))
     }
     
-    return [
+    var items: [SettingsSearchableItem] = [
         SettingsSearchableItem(
             id: "appearance",
             title: strings.Settings_Appearance,
@@ -4094,14 +4095,31 @@ private func appearanceSearchableItems(context: AccountContext) -> [SettingsSear
         ),
         SettingsSearchableItem(
             id: "appearance/tap-for-next-media",
+            title: strings.Appearance_ShowNextMediaOnTap,
             icon: icon,
             breadcrumbs: [strings.Settings_Appearance],
             isVisible: false,
             present: { context, _, present in
                 presentAppearanceSettings(context, present, .tapForNextMedia)
             }
-        ),
+        )
     ]
+    
+    if DeviceModel.current.isIpad {
+        items.append(
+            SettingsSearchableItem(
+                id: "appearance/send-with-cmd-enter",
+                title: strings.Appearance_SendWithCmdEnter,
+                icon: icon,
+                breadcrumbs: [strings.Settings_Appearance],
+                isVisible: false,
+                present: { context, _, present in
+                    presentAppearanceSettings(context, present, .sendWithCmdEnter)
+                }
+            )
+        )
+    }
+    return items
 }
 
 private func languageSearchableItems(context: AccountContext, localizations: [LocalizationInfo]) -> [SettingsSearchableItem] {

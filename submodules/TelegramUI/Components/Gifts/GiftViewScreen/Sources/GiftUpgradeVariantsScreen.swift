@@ -739,7 +739,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                     return false
                 }
             }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
-                buttonColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05)
+                buttonColor = UIColor(rgb: UInt32(bitPattern: outerColor)).mixedWith(.white, alpha: 0.2)
                 
                 badgeColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05)
                 let outer = UIColor(rgb: UInt32(bitPattern: outerColor))

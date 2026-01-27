@@ -379,6 +379,7 @@ final class SelectGiftPageContent: Component {
                         starsContext: component.context.starsContext!,
                         peerId: component.context.account.peerId,
                         gift: component.genericGift,
+                        isPlain: true,
                         confirmPurchaseImmediately: true,
                         starsTopUpOptions: component.starsTopUpOptions,
                         scrollToTop: {},
@@ -530,9 +531,9 @@ private final class SheetContainerComponent: CombinedComponent {
                             backgroundColor: nil,
                             isDark: theme.overallDarkAppearance,
                             state: .glass,
-                            component: AnyComponentWithIdentity(id: "back", component: AnyComponent(
+                            component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                                 BundleIconComponent(
-                                    name: "Navigation/Back",
+                                    name: "Navigation/Close",
                                     tintColor: theme.chat.inputPanel.panelControlColor
                                 )
                             )),
