@@ -142,19 +142,21 @@ public final class VideoPlaybackControlsComponent: Component {
             
             self.isUserInteractionEnabled = component.isVisible
             
+            let containerInset: CGFloat = 32.0
+            
             let size = CGSize(width: component.layoutParams.sideButtonSize * 2.0 + component.layoutParams.centerButtonSize + component.layoutParams.spacing * 2.0, height: component.layoutParams.centerButtonSize)
             
-            let leftButtonFrame = CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((size.height - component.layoutParams.sideButtonSize) * 0.5)), size: CGSize(width: component.layoutParams.sideButtonSize, height: component.layoutParams.sideButtonSize))
-            let centerButtonFrame = CGRect(origin: CGPoint(x: component.layoutParams.sideButtonSize + component.layoutParams.spacing, y: floorToScreenPixels((size.height - component.layoutParams.centerButtonSize) * 0.5)), size: CGSize(width: component.layoutParams.centerButtonSize, height: component.layoutParams.centerButtonSize))
-            let rightButtonFrame = CGRect(origin: CGPoint(x: size.width - component.layoutParams.sideButtonSize, y: floorToScreenPixels((size.height - component.layoutParams.sideButtonSize) * 0.5)), size: CGSize(width: component.layoutParams.sideButtonSize, height: component.layoutParams.sideButtonSize))
+            let leftButtonFrame = CGRect(origin: CGPoint(x: 0.0, y: floorToScreenPixels((size.height - component.layoutParams.sideButtonSize) * 0.5)), size: CGSize(width: component.layoutParams.sideButtonSize, height: component.layoutParams.sideButtonSize)).offsetBy(dx: containerInset, dy: containerInset)
+            let centerButtonFrame = CGRect(origin: CGPoint(x: component.layoutParams.sideButtonSize + component.layoutParams.spacing, y: floorToScreenPixels((size.height - component.layoutParams.centerButtonSize) * 0.5)), size: CGSize(width: component.layoutParams.centerButtonSize, height: component.layoutParams.centerButtonSize)).offsetBy(dx: containerInset, dy: containerInset)
+            let rightButtonFrame = CGRect(origin: CGPoint(x: size.width - component.layoutParams.sideButtonSize, y: floorToScreenPixels((size.height - component.layoutParams.sideButtonSize) * 0.5)), size: CGSize(width: component.layoutParams.sideButtonSize, height: component.layoutParams.sideButtonSize)).offsetBy(dx: containerInset, dy: containerInset)
             
             if isVisibleChanged && !transition.animation.isImmediate {
                 self.backgroundContainer.isHidden = true
                 self.backgroundContainer.isHidden = false
             }
             
-            transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: CGPoint(), size: size))
-            self.backgroundContainer.update(size: size, isDark: true, transition: transition)
+            transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: CGPoint(), size: size).insetBy(dx: -containerInset, dy: -containerInset))
+            self.backgroundContainer.update(size: CGSize(width: size.width + containerInset * 2.0, height: size.height + containerInset * 2.0), isDark: true, transition: transition)
             
             let areSideButtonsVisible = component.isVisible && component.displaySeekControls
             let buttonsTintColor: GlassBackgroundView.TintColor = .init(kind: .custom(style: .clear, color: UIColor(white: 0.0, alpha: 0.2)))

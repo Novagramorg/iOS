@@ -10,9 +10,38 @@ import MultilineTextComponent
 
 public final class GlassControlGroupComponent: Component {
     public final class Item: Equatable {
-        public enum Content: Hashable {
+        public enum Content: Equatable {
             case icon(String)
             case text(String)
+            case customIcon(id: AnyHashable, component: AnyComponent<Empty>)
+            
+            enum Id: Hashable {
+                case icon(String)
+                case text(String)
+                case customIcon(AnyHashable)
+            }
+            
+            var id: Id {
+                switch self {
+                case let .icon(icon):
+                    return .icon(icon)
+                case let .text(text):
+                    return .text(text)
+                case let .customIcon(id, _):
+                    return .customIcon(id)
+                }
+            }
+            
+            public func hash(into hasher: inout Hasher) {
+                switch self {
+                case let .icon(icon):
+                    icon.hash(into: &hasher)
+                case let .text(text):
+                    text.hash(into: &hasher)
+                case let .customIcon(id, _):
+                    id.hash(into: &hasher)
+                }
+            }
         }
         
         public let id: AnyHashable
@@ -125,7 +154,7 @@ public final class GlassControlGroupComponent: Component {
             var validIds: [AnyHashable] = []
             var isInteractive = false
             for item in component.items {
-                let itemId = ItemId(id: item.id, contentId: item.content)
+                let itemId = ItemId(id: item.id, contentId: item.content.id)
                 
                 validIds.append(itemId)
                 
@@ -157,6 +186,8 @@ public final class GlassControlGroupComponent: Component {
                     ))
                     itemInsets.left = 10.0
                     itemInsets.right = itemInsets.left
+                case let .customIcon(_, customIcon):
+                    content = customIcon
                 }
                 
                 var minItemWidth: CGFloat = availableSize.height

@@ -8,6 +8,7 @@ import ComponentDisplayAdapters
 
 public final class GalleryFooterNode: ASDisplayNode {
     private let edgeEffectView: EdgeEffectView
+    private var contentsFrame = CGRect()
     
     private var currentThumbnailPanelHeight: CGFloat?
     private var currentFooterContentNode: GalleryFooterContentNode?
@@ -20,6 +21,7 @@ public final class GalleryFooterNode: ASDisplayNode {
         self.controllerInteraction = controllerInteraction
         
         self.edgeEffectView = EdgeEffectView()
+        self.edgeEffectView.isUserInteractionEnabled = false
         
         super.init()
         
@@ -29,7 +31,8 @@ public final class GalleryFooterNode: ASDisplayNode {
     private var visibilityAlpha: CGFloat = 1.0
     public func setVisibilityAlpha(_ alpha: CGFloat, animated: Bool) {
         self.visibilityAlpha = alpha
-        self.edgeEffectView.alpha = alpha
+        let transition: ComponentTransition = animated ? .easeInOut(duration: 0.2) : .immediate
+        transition.setAlpha(view: self.edgeEffectView, alpha: alpha)
         self.currentFooterContentNode?.setVisibilityAlpha(alpha, animated: true)
         self.currentOverlayContentNode?.setVisibilityAlpha(alpha)
     }
@@ -132,13 +135,15 @@ public final class GalleryFooterNode: ASDisplayNode {
             backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - backgroundHeight + verticalOffset), size: CGSize(width: layout.size.width, height: backgroundHeight))
         }
         
+        self.contentsFrame = backgroundFrame
+        
         var edgeEffectFrame = backgroundFrame
         let edgeEffectHeight: CGFloat = 120.0
         let edgeEffectOffset: CGFloat = 70.0
         edgeEffectFrame.origin.y -= edgeEffectOffset
         edgeEffectFrame.size.height += edgeEffectOffset
         edgeEffectTransition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-        self.edgeEffectView.update(content: .black, alpha: 0.35, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: edgeEffectTransition)
+        self.edgeEffectView.update(content: .black, alpha: 0.6, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: edgeEffectTransition)
         
         let contentTransition = ContainedViewLayoutTransition.animated(duration: 0.4, curve: .spring)
         if let overlayContentNode = self.currentOverlayContentNode {
@@ -171,7 +176,7 @@ public final class GalleryFooterNode: ASDisplayNode {
         if let overlayResult = self.currentOverlayContentNode?.hitTest(point, with: event) {
             return overlayResult
         }
-        if !self.edgeEffectView.frame.contains(point) || self.visibilityAlpha < 1.0 {
+        if !self.contentsFrame.contains(point) || self.visibilityAlpha < 1.0 {
             return nil
         }
         let result = super.hitTest(point, with: event)
