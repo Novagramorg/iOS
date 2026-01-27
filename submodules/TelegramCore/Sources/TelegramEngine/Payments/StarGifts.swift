@@ -480,6 +480,9 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 public var badgeText: String {
                     switch self {
                     case let .permille(value):
+                        if value == 0 {
+                            return "<0.1%"
+                        }
                         let percent = Double(value) / 10.0
                         if percent.truncatingRemainder(dividingBy: 1) == 0 {
                             return "\(Int(percent))%"
