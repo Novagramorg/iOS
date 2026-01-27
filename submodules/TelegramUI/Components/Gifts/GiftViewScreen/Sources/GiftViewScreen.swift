@@ -5165,16 +5165,27 @@ private final class GiftViewSheetContent: CombinedComponent {
             var rightControlItems: [GlassControlGroupComponent.Item] = []
             if uniqueGift != nil && !showWearPreview {
                 if let _ = component.subject.arguments?.canCraftDate {
-                    rightControlItems.append(GlassControlGroupComponent.Item(
-                        id: AnyHashable("craft"),
-                        content: .icon("Premium/Craft"),
-                        action: { [weak state] in
-                            guard let state else {
-                                return
-                            }
-                            state.craftGift()
+                    var canCraft = false
+                    if let data = component.context.currentAppConfiguration.with({ $0 }).data {
+                        if let _ = data["ios_enable_crafting"] {
+                            canCraft = true
+                        } else if let isDev = data["dev"] as? Double, isDev == 1.0 {
+                            canCraft = true
                         }
-                    ))
+                    }
+                    
+                    if canCraft {
+                        rightControlItems.append(GlassControlGroupComponent.Item(
+                            id: AnyHashable("craft"),
+                            content: .icon("Premium/Craft"),
+                            action: { [weak state] in
+                                guard let state else {
+                                    return
+                                }
+                                state.craftGift()
+                            }
+                        ))
+                    }
                 }
 
                 rightControlItems.append(GlassControlGroupComponent.Item(

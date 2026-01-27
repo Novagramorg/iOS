@@ -11,10 +11,31 @@ import LottieComponent
 
 public final class GlassControlGroupComponent: Component {
     public final class Item: Equatable {
-        public enum Content: Hashable {
+        public enum Content: Equatable {
             case icon(String)
             case text(String)
             case animation(String)
+            case customIcon(id: AnyHashable, component: AnyComponent<Empty>)
+            
+            enum Id: Hashable {
+                case icon(String)
+                case text(String)
+                case animation(String)
+                case customIcon(AnyHashable)
+            }
+            
+            var id: Id {
+                switch self {
+                case let .icon(icon):
+                    return .icon(icon)
+                case let .text(text):
+                    return .text(text)
+                case let .animation(animation):
+                    return .animation(animation)
+                case let .customIcon(id, _):
+                    return .customIcon(id)
+                }
+            }
         }
         
         public let id: AnyHashable
@@ -143,7 +164,7 @@ public final class GlassControlGroupComponent: Component {
             var validIds: [AnyHashable] = []
             var isInteractive = false
             for item in component.items {
-                let itemId = ItemId(id: item.id, contentId: item.content)
+                let itemId = ItemId(id: item.id, contentId: item.content.id)
                 
                 validIds.append(itemId)
                 
@@ -160,7 +181,7 @@ public final class GlassControlGroupComponent: Component {
                 if item.action != nil {
                     isInteractive = true
                 }
-                                
+                
                 let content: AnyComponent<Empty>
                 var itemInsets = UIEdgeInsets()
                 switch item.content {
@@ -189,6 +210,8 @@ public final class GlassControlGroupComponent: Component {
                         size: CGSize(width: 32.0, height: 32.0),
                         playOnce: playOnce
                     ))
+                case let .customIcon(_, customIcon):
+                    content = customIcon
                 }
                 
                 var minItemWidth: CGFloat = availableSize.height

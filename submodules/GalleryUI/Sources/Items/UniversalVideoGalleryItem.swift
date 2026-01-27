@@ -611,226 +611,6 @@ final class MoreHeaderButton: HighlightableButtonNode {
     }
 }
 
-final class SettingsHeaderButton: HighlightableButtonNode {
-    let referenceNode: ContextReferenceContentNode
-    let containerNode: ContextControllerSourceNode
-    
-    private let iconLayer: RasterizedCompositionMonochromeLayer
-    
-    private let gearsLayer: RasterizedCompositionImageLayer
-    private let dotLayer: RasterizedCompositionImageLayer
-    
-    private var speedBadge: ComponentView<Empty>?
-    private var qualityBadge: ComponentView<Empty>?
-    
-    private var speedBadgeText: String?
-    private var qualityBadgeText: String?
-    
-    private let badgeFont: UIFont
-    
-    private var isMenuOpen: Bool = false
-
-    var contextAction: ((ASDisplayNode, ContextGesture?) -> Void)?
-
-    private let wide: Bool
-
-    init(wide: Bool = false) {
-        self.wide = wide
-
-        self.referenceNode = ContextReferenceContentNode()
-        self.containerNode = ContextControllerSourceNode()
-        self.containerNode.animateScale = false
-        
-        self.iconLayer = RasterizedCompositionMonochromeLayer()
-        //self.iconLayer.backgroundColor = UIColor.green.cgColor
-        
-        self.gearsLayer = RasterizedCompositionImageLayer()
-        self.gearsLayer.image = generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/NavigationSettingsNoDot"), color: .white)
-        
-        self.dotLayer = RasterizedCompositionImageLayer()
-        self.dotLayer.image = generateFilledCircleImage(diameter: 4.0, color: .white)
-        
-        self.iconLayer.contentsLayer.addSublayer(self.gearsLayer)
-        self.iconLayer.contentsLayer.addSublayer(self.dotLayer)
-        
-        self.badgeFont = Font.with(size: 8.0, design: .round, weight: .bold)
-
-        super.init()
-
-        self.containerNode.addSubnode(self.referenceNode)
-        self.referenceNode.layer.addSublayer(self.iconLayer)
-        self.addSubnode(self.containerNode)
-
-        self.containerNode.shouldBegin = { [weak self] location in
-            guard let strongSelf = self, let _ = strongSelf.contextAction else {
-                return false
-            }
-            return true
-        }
-        self.containerNode.activated = { [weak self] gesture, _ in
-            guard let strongSelf = self else {
-                return
-            }
-            strongSelf.contextAction?(strongSelf.containerNode, gesture)
-        }
-
-        self.containerNode.frame = CGRect(origin: CGPoint(), size: CGSize(width: 44.0, height: 44.0))
-        self.referenceNode.frame = self.containerNode.bounds
-        
-        if let image = self.gearsLayer.image {
-            let iconInnerInsets = UIEdgeInsets(top: 4.0, left: 8.0, bottom: 4.0, right: 6.0)
-            let iconSize = CGSize(width: image.size.width + iconInnerInsets.left + iconInnerInsets.right, height: image.size.height + iconInnerInsets.top + iconInnerInsets.bottom)
-            let iconFrame = CGRect(origin: CGPoint(x: floor((self.containerNode.bounds.width - iconSize.width) / 2.0), y: floor((self.containerNode.bounds.height - iconSize.height) / 2.0)), size: iconSize)
-            self.iconLayer.position = iconFrame.center
-            self.iconLayer.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
-            
-            self.iconLayer.contentsLayer.position = CGRect(origin: CGPoint(), size: iconFrame.size).center
-            self.iconLayer.contentsLayer.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
-            
-            self.iconLayer.maskedLayer.position = CGRect(origin: CGPoint(), size: iconFrame.size).center
-            self.iconLayer.maskedLayer.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
-            self.iconLayer.maskedLayer.backgroundColor = UIColor.white.cgColor
-            
-            let gearsFrame = CGRect(origin: CGPoint(x: floor((iconSize.width - image.size.width) * 0.5), y: floor((iconSize.height - image.size.height) * 0.5)), size: image.size)
-            self.gearsLayer.position = gearsFrame.center
-            self.gearsLayer.bounds = CGRect(origin: CGPoint(), size: gearsFrame.size)
-            
-            if let dotImage = self.dotLayer.image {
-                let dotFrame = CGRect(origin: CGPoint(x: gearsFrame.minX + floorToScreenPixels((gearsFrame.width - dotImage.size.width) * 0.5), y: gearsFrame.minY + floorToScreenPixels((gearsFrame.height - dotImage.size.height) * 0.5)), size: dotImage.size)
-                self.dotLayer.position = dotFrame.center
-                self.dotLayer.bounds = CGRect(origin: CGPoint(), size: dotFrame.size)
-            }
-        }
-    }
-
-    override func didLoad() {
-        super.didLoad()
-        self.view.isOpaque = false
-    }
-
-    override func calculateSizeThatFits(_ constrainedSize: CGSize) -> CGSize {
-        return CGSize(width: 44.0, height: 44.0)
-    }
-
-    func onLayout() {
-    }
-    
-    func setIsMenuOpen(isMenuOpen: Bool) {
-        if self.isMenuOpen == isMenuOpen {
-            return
-        }
-        self.isMenuOpen = isMenuOpen
-        
-        let rotationTransition: ContainedViewLayoutTransition = .animated(duration: 0.35, curve: .spring)
-        rotationTransition.updateTransform(layer: self.gearsLayer, transform: CGAffineTransformMakeRotation(isMenuOpen ? (CGFloat.pi * 2.0 / 6.0) : 0.0))
-        self.gearsLayer.animateScale(from: 1.0, to: 1.07, duration: 0.1, removeOnCompletion: false, completion: { [weak self] finished in
-            guard let self, finished else {
-                return
-            }
-            self.gearsLayer.animateScale(from: 1.07, to: 1.0, duration: 0.1, removeOnCompletion: true)
-        })
-        
-        self.dotLayer.animateScale(from: 1.0, to: 0.8, duration: 0.1, removeOnCompletion: false, completion: { [weak self] finished in
-            guard let self, finished else {
-                return
-            }
-            self.dotLayer.animateScale(from: 0.8, to: 1.0, duration: 0.1, removeOnCompletion: true)
-        })
-    }
-    
-    func setBadges(speed: String?, quality: String?, transition: ComponentTransition) {
-        if self.speedBadgeText == speed && self.qualityBadgeText == quality {
-            return
-        }
-        self.speedBadgeText = speed
-        self.qualityBadgeText = quality
-        
-        if let badgeText = speed {
-            var badgeTransition = transition
-            let speedBadge: ComponentView<Empty>
-            if let current = self.speedBadge {
-                speedBadge = current
-            } else {
-                speedBadge = ComponentView()
-                self.speedBadge = speedBadge
-                badgeTransition = badgeTransition.withAnimation(.none)
-            }
-            let badgeSize = speedBadge.update(
-                transition: badgeTransition,
-                component: AnyComponent(BadgeComponent(
-                    text: badgeText,
-                    font: self.badgeFont,
-                    cornerRadius: .custom(3.0),
-                    insets: UIEdgeInsets(top: 1.33, left: 1.66, bottom: 1.33, right: 1.66),
-                    outerInsets: UIEdgeInsets(top: 1.0, left: 1.0, bottom: 1.0, right: 1.0)
-                )),
-                environment: {},
-                containerSize: CGSize(width: 100.0, height: 100.0)
-            )
-            if let speedBadgeView = speedBadge.view {
-                if speedBadgeView.layer.superlayer == nil {
-                    self.iconLayer.contentsLayer.addSublayer(speedBadgeView.layer)
-                    
-                    transition.animateAlpha(layer: speedBadgeView.layer, from: 0.0, to: 1.0)
-                    transition.animateScale(layer: speedBadgeView.layer, from: 0.001, to: 1.0)
-                }
-                badgeTransition.setFrame(layer: speedBadgeView.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: badgeSize))
-            }
-        } else if let speedBadge = self.speedBadge {
-            self.speedBadge = nil
-            if let speedBadgeView = speedBadge.view {
-                let speedBadgeLayer = speedBadgeView.layer
-                transition.setAlpha(layer: speedBadgeLayer, alpha: 0.0, completion: { [weak speedBadgeLayer] _ in
-                    speedBadgeLayer?.removeFromSuperlayer()
-                })
-                transition.setScale(layer: speedBadgeLayer, scale: 0.001)
-            }
-        }
-        
-        if let badgeText = quality {
-            var badgeTransition = transition
-            let qualityBadge: ComponentView<Empty>
-            if let current = self.qualityBadge {
-                qualityBadge = current
-            } else {
-                qualityBadge = ComponentView()
-                self.qualityBadge = qualityBadge
-                badgeTransition = badgeTransition.withAnimation(.none)
-            }
-            let badgeSize = qualityBadge.update(
-                transition: badgeTransition,
-                component: AnyComponent(BadgeComponent(
-                    text: badgeText,
-                    font: self.badgeFont,
-                    cornerRadius: .custom(3.0),
-                    insets: UIEdgeInsets(top: 1.33, left: 1.66, bottom: 1.33, right: 1.66),
-                    outerInsets: UIEdgeInsets(top: 1.0, left: 1.0, bottom: 1.0, right: 1.0)
-                )),
-                environment: {},
-                containerSize: CGSize(width: 100.0, height: 100.0)
-            )
-            if let qualityBadgeView = qualityBadge.view {
-                if qualityBadgeView.layer.superlayer == nil {
-                    self.iconLayer.contentsLayer.addSublayer(qualityBadgeView.layer)
-                    
-                    transition.animateAlpha(layer: qualityBadgeView.layer, from: 0.0, to: 1.0)
-                    transition.animateScale(layer: qualityBadgeView.layer, from: 0.001, to: 1.0)
-                }
-                badgeTransition.setFrame(layer: qualityBadgeView.layer, frame: CGRect(origin: CGPoint(x: self.iconLayer.bounds.width - badgeSize.width, y: self.iconLayer.bounds.height - badgeSize.height), size: badgeSize))
-            }
-        } else if let qualityBadge = self.qualityBadge {
-            self.qualityBadge = nil
-            if let qualityBadgeView = qualityBadge.view {
-                let qualityBadgeLayer = qualityBadgeView.layer
-                transition.setAlpha(layer: qualityBadgeLayer, alpha: 0.0, completion: { [weak qualityBadgeLayer] _ in
-                    qualityBadgeLayer?.removeFromSuperlayer()
-                })
-                transition.setScale(layer: qualityBadgeLayer, scale: 0.001)
-            }
-        }
-    }
-}
-
 @available(iOS 15.0, *)
 private final class NativePictureInPictureContentImpl: NSObject, AVPictureInPictureControllerDelegate {
     private final class PlaybackDelegate: NSObject, AVPictureInPictureSampleBufferPlaybackDelegate {
@@ -1113,8 +893,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private var moreBarButtonRate: Double = 1.0
     private var moreBarButtonRateTimestamp: Double?
     
-    private let settingsBarButton: SettingsHeaderButton
-    
     private var videoNode: UniversalVideoNode?
     private var videoNodeUserInteractionEnabled: Bool = false
     private var videoFramePreview: FramePreview?
@@ -1139,7 +917,8 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private var dismissOnOrientationChange = false
     private var keepSoundOnDismiss = false
     private var hasPictureInPicture = false
-    private var hasSettingsButton = false
+    private var displayStickersButton: Bool = false
+    private var settingsButtonState: ChatItemGalleryFooterContentNode.SettingsButtonState?
 
     private var pictureInPictureButton: UIBarButtonItem?
     
@@ -1155,7 +934,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     private let statusDisposable = MetaDisposable()
     
     private let moreButtonStateDisposable = MetaDisposable()
-    private let settingsButtonStateDisposable = MetaDisposable()
     private let mediaPlaybackStateDisposable = MetaDisposable()
     
     private let fetchDisposable = MetaDisposable()
@@ -1215,9 +993,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         self.moreBarButton.isUserInteractionEnabled = true
         self.moreBarButton.setContent(.more(optionsCircleImage(dark: false)))
         
-        self.settingsBarButton = SettingsHeaderButton()
-        self.settingsBarButton.isUserInteractionEnabled = true
-        
         super.init()
 
         self.clipsToBounds = true
@@ -1247,7 +1022,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         }
         
         self.moreBarButton.addTarget(self, action: #selector(self.moreButtonPressed), forControlEvents: .touchUpInside)
-        //self.settingsBarButton.addTarget(self, action: #selector(self.settingsButtonPressed), forControlEvents: .touchUpInside)
         
         self.footerContentNode.interacting = { [weak self] value in
             self?.isInteractingPromise.set(value)
@@ -1255,8 +1029,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 
         self.statusButtonNode.addSubnode(self.statusNode)
         self.statusButtonNode.addTarget(self, action: #selector(self.statusButtonPressed), forControlEvents: .touchUpInside)
-        
-        //self.addSubnode(self.statusButtonNode)
         
         self.footerContentNode.playbackControl = { [weak self] in
             if let strongSelf = self {
@@ -1391,7 +1163,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     deinit {
         self.statusDisposable.dispose()
         self.moreButtonStateDisposable.dispose()
-        self.settingsButtonStateDisposable.dispose()
         self.mediaPlaybackStateDisposable.dispose()
         self.scrubbingFrameDisposable?.dispose()
         self.hideControlsDisposable?.dispose()
@@ -1864,15 +1635,27 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                     }
                 }
 
-                self.settingsBarButton.setBadges(speed: rateString, quality: qualityString, transition: .spring(duration: 0.35))
-            }))
-            
-            self.settingsButtonStateDisposable.set((self.isShowingSettingsMenuPromise.get()
-            |> deliverOnMainQueue).start(next: { [weak self] isShowingSettingsMenu in
-                guard let self else {
-                    return
+                if self.settingsButtonState != nil {
+                    let settingsButtonState = ChatItemGalleryFooterContentNode.SettingsButtonState(
+                        speed: rateString,
+                        quality: qualityString
+                    )
+                    if self.settingsButtonState != settingsButtonState {
+                        self.settingsButtonState = settingsButtonState
+                        if let validLayout = self.validLayout {
+                            if let contentInfo = item.contentInfo {
+                                switch contentInfo {
+                                    case let .message(message, _):
+                                    self.footerContentNode.setMessage(message, displayInfo: !item.displayInfoOnTop, peerIsCopyProtected: item.peerIsCopyProtected, displayPictureInPictureButton: self.hasPictureInPicture, settingsButtonState: self.settingsButtonState, displayStickersButton: self.displayStickersButton, animated: true)
+                                    case let .webPage(webPage, media, _):
+                                        self.footerContentNode.setWebPage(webPage, media: media)
+                                }
+                            }
+                            
+                            self.containerLayoutUpdated(validLayout.layout, navigationBarHeight: validLayout.navigationBarHeight, transition: .animated(duration: 0.4, curve: .spring))
+                        }
+                    }
                 }
-                self.settingsBarButton.setIsMenuOpen(isMenuOpen: isShowingSettingsMenu)
             }))
             
             self.statusDisposable.set((combineLatest(queue: .mainQueue(), videoNode.status, mediaFileStatus)
@@ -1936,11 +1719,13 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                                         isPaused = false
                                     }
                                 } else if strongSelf.actionAtEnd == .stop {
-                                    strongSelf.isPlayingPromise.set(false)
-                                    strongSelf.isPlaying = false
-                                    if strongSelf.isCentral == true {
-                                        if !item.isSecret && !strongSelf.playOnDismiss {
-                                            strongSelf.updateControlsVisibility(true)
+                                    if strongSelf.isPlaying {
+                                        strongSelf.isPlayingPromise.set(false)
+                                        strongSelf.isPlaying = false
+                                        if strongSelf.isCentral == true {
+                                            if !item.isSecret && !strongSelf.playOnDismiss {
+                                                strongSelf.updateControlsVisibility(true)
+                                            }
                                         }
                                     }
                                 }
@@ -2030,9 +1815,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                         
             var barButtonItems: [UIBarButtonItem] = []
             if hasLinkedStickers {
-                let rightBarButtonItem = UIBarButtonItem(image: generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/Stickers"), color: .white), style: .plain, target: self, action: #selector(self.openStickersButtonPressed))
-                rightBarButtonItem.accessibilityLabel = self.presentationData.strings.Gallery_VoiceOver_Stickers
-                barButtonItems.append(rightBarButtonItem)
+                self.displayStickersButton = true
             }
             
             if forceEnablePiP || (!isAnimated && !disablePlayerControls && !disablePictureInPicture) {
@@ -2080,9 +1863,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 }
                 
                 if !isAnimated && !disablePlayerControls {
-                    /*let settingsMenuItem = UIBarButtonItem(customDisplayNode: self.settingsBarButton)!
-                    settingsMenuItem.accessibilityLabel = self.presentationData.strings.Settings_Title
-                    barButtonItems.append(settingsMenuItem)*/
                     hasSettingsButton = true
                 }
                 
@@ -2093,7 +1873,12 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
                 }
             }
 
-            self.hasSettingsButton = hasSettingsButton
+            if hasSettingsButton {
+                self.settingsButtonState = ChatItemGalleryFooterContentNode.SettingsButtonState(
+                    speed: nil,
+                    quality: nil
+                )
+            }
             self._rightBarButtonItems.set(.single(barButtonItems))
         
             videoNode.playbackCompleted = { [weak self, weak videoNode] in
@@ -2148,7 +1933,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             switch contentInfo {
                 case let .message(message, _):
                     isAd = message.adAttribute != nil
-                    self.footerContentNode.setMessage(message, displayInfo: !item.displayInfoOnTop, peerIsCopyProtected: item.peerIsCopyProtected, displayPictureInPictureButton: self.hasPictureInPicture, displaySettingsButton: self.hasSettingsButton)
+                    self.footerContentNode.setMessage(message, displayInfo: !item.displayInfoOnTop, peerIsCopyProtected: item.peerIsCopyProtected, displayPictureInPictureButton: self.hasPictureInPicture, settingsButtonState: self.settingsButtonState, displayStickersButton: self.displayStickersButton)
                 case let .webPage(webPage, media, _):
                     self.footerContentNode.setWebPage(webPage, media: media)
             }
@@ -3111,7 +2896,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             switch contentInfo {
             case let .message(message, _):
                 isAd = message.adAttribute != nil
-                self.footerContentNode.setMessage(message, displayInfo: !item.displayInfoOnTop, peerIsCopyProtected: item.peerIsCopyProtected, displayPictureInPictureButton: self.hasPictureInPicture, displaySettingsButton: self.hasSettingsButton)
+                self.footerContentNode.setMessage(message, displayInfo: !item.displayInfoOnTop, peerIsCopyProtected: item.peerIsCopyProtected, displayPictureInPictureButton: self.hasPictureInPicture, settingsButtonState: self.settingsButtonState, displayStickersButton: self.displayStickersButton)
             case let .webPage(webPage, media, _):
                 self.footerContentNode.setWebPage(webPage, media: media)
             }
