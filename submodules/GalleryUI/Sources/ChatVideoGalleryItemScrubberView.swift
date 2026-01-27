@@ -467,6 +467,9 @@ final class ChatVideoGalleryItemScrubberView: UIView {
         
         self.backgroundContainer.alpha = 0.0
         ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 1.0)
+        
+        self.scrubberNode.alpha = 0.0
+        ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.scrubberNode.view, alpha: 1.0)
     }
     
     func animateOut(to scrubberTransition: GalleryItemScrubberTransition?, transition: ContainedViewLayoutTransition) {
