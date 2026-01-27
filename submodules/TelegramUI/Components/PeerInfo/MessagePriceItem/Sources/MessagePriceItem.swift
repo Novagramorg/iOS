@@ -30,8 +30,9 @@ public final class MessagePriceItem: Equatable, ListViewItem, ItemListItem, List
     let updated: (Int64, Bool) -> Void
     let openSetCustom: (() -> Void)?
     let openPremiumInfo: (() -> Void)?
+    public let tag: ItemListItemTag?
     
-    public init(theme: PresentationTheme, strings: PresentationStrings, systemStyle: ItemListSystemStyle = .legacy, isEnabled: Bool, minValue: Int64, maxValue: Int64, value: Int64, price: String, sectionId: ItemListSectionId, updated: @escaping (Int64, Bool) -> Void, openSetCustom: (() -> Void)? = nil, openPremiumInfo: (() -> Void)? = nil) {
+    public init(theme: PresentationTheme, strings: PresentationStrings, systemStyle: ItemListSystemStyle = .legacy, isEnabled: Bool, minValue: Int64, maxValue: Int64, value: Int64, price: String, sectionId: ItemListSectionId, updated: @escaping (Int64, Bool) -> Void, openSetCustom: (() -> Void)? = nil, openPremiumInfo: (() -> Void)? = nil, tag: ItemListItemTag? = nil) {
         self.theme = theme
         self.strings = strings
         self.systemStyle = systemStyle
@@ -44,6 +45,7 @@ public final class MessagePriceItem: Equatable, ListViewItem, ItemListItem, List
         self.updated = updated
         self.openSetCustom = openSetCustom
         self.openPremiumInfo = openPremiumInfo
+        self.tag = tag
     }
     
     public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
@@ -84,7 +86,6 @@ public final class MessagePriceItem: Equatable, ListViewItem, ItemListItem, List
     }
     
     public static func ==(lhs: MessagePriceItem, rhs: MessagePriceItem) -> Bool {
-        
         if lhs.theme !== rhs.theme {
             return false
         }
@@ -114,7 +115,7 @@ public final class MessagePriceItem: Equatable, ListViewItem, ItemListItem, List
     }
 }
 
-private class MessagePriceItemNode: ListViewItemNode {
+private class MessagePriceItemNode: ListViewItemNode, ItemListItemNode {
     private struct Amount: Equatable {
         private let sliderSteps: [Int]
         private let minRealValue: Int
@@ -215,6 +216,10 @@ private class MessagePriceItemNode: ListViewItemNode {
     
     private var item: MessagePriceItem?
     private var layoutParams: ListViewItemLayoutParams?
+    
+    public var tag: ItemListItemTag? {
+        return self.item?.tag
+    }
     
     init() {
         self.backgroundNode = ASDisplayNode()

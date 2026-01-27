@@ -592,7 +592,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
             transition.updateFrame(view: self.giftButtonIconView, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: giftButtonFrame.size)))
         }
         transition.updateFrame(view: self.giftButton, frame: CGRect(origin: CGPoint(), size: giftButtonFrame.size))
-        self.giftButtonBackgroundView.update(size: giftButtonFrame.size, cornerRadius: giftButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: ComponentTransition(transition))
+        self.giftButtonBackgroundView.update(size: giftButtonFrame.size, cornerRadius: giftButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: ComponentTransition(transition))
         
         let helpButtonFrame = CGRect(x: width - rightInset - 8.0 - 40.0, y: floor((panelHeight - 40.0) * 0.5), width: 40.0, height: 40.0)
         transition.updateFrame(view: self.helpButtonBackgroundView, frame: helpButtonFrame)
@@ -600,7 +600,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
             transition.updateFrame(view: self.helpButtonIconView, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: helpButtonFrame.size)))
         }
         transition.updateFrame(view: self.helpButton, frame: CGRect(origin: CGPoint(), size: helpButtonFrame.size))
-        self.helpButtonBackgroundView.update(size: helpButtonFrame.size, cornerRadius: helpButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: ComponentTransition(transition))
+        self.helpButtonBackgroundView.update(size: helpButtonFrame.size, cornerRadius: helpButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: ComponentTransition(transition))
         
         let suggestedPostButtonFrame = CGRect(x: leftInset + 8.0, y: floor((panelHeight - 40.0) * 0.5), width: 40.0, height: 40.0)
         transition.updateFrame(view: self.suggestedPostButtonBackgroundView, frame: suggestedPostButtonFrame)
@@ -608,7 +608,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
             transition.updateFrame(view: self.suggestedPostButtonIconView, frame: image.size.centered(in: CGRect(origin: CGPoint(), size: suggestedPostButtonFrame.size)))
         }
         transition.updateFrame(view: self.suggestedPostButton, frame: CGRect(origin: CGPoint(), size: suggestedPostButtonFrame.size))
-        self.suggestedPostButtonBackgroundView.update(size: suggestedPostButtonFrame.size, cornerRadius: suggestedPostButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: ComponentTransition(transition))*/
+        self.suggestedPostButtonBackgroundView.update(size: suggestedPostButtonFrame.size, cornerRadius: suggestedPostButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: ComponentTransition(transition))*/
         
         return panelHeight
     }

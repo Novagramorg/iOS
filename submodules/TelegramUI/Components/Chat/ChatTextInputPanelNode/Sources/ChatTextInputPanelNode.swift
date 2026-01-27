@@ -1421,6 +1421,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let previousAdditionalSideInsets = self.validLayout?.4
         self.validLayout = (width, leftInset, rightInset, bottomInset, additionalSideInsets, maxHeight, maxOverlayHeight, metrics, isSecondary, isMediaInputExpanded)
         
+        let defaultGlassTintColor: GlassBackgroundView.TintColor
+        if case .clear = interfaceState.preferredGlassType {
+            defaultGlassTintColor = .init(kind: .clear)
+        } else {
+            defaultGlassTintColor = .init(kind: .panel)
+        }
+        
         var leftInset = leftInset
         var rightInset = rightInset
         
@@ -2365,7 +2372,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let menuButtonFrame = CGRect(x: leftInset + 8.0, y: menuButtonOriginY, width: menuButtonExpanded ? menuButtonWidth : menuCollapsedButtonWidth, height: menuButtonHeight)
         transition.updateFrameAsPositionAndBounds(node: self.menuButton, frame: menuButtonFrame)
         transition.updateFrame(view: self.menuButtonBackgroundView, frame: CGRect(origin: CGPoint(), size: menuButtonFrame.size))
-        self.menuButtonBackgroundView.update(size: menuButtonFrame.size, cornerRadius: menuButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7), innerColor: interfaceState.theme.chat.inputPanel.actionControlFillColor), transition: ComponentTransition(transition))
+        self.menuButtonBackgroundView.update(size: menuButtonFrame.size, cornerRadius: menuButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, transition: ComponentTransition(transition))
         transition.updateFrame(node: self.menuButtonClippingNode, frame: CGRect(origin: CGPoint(x: 19.0, y: 0.0), size: CGSize(width: menuButtonWidth - 19.0, height: menuButtonFrame.height)))
         var menuButtonTitleTransition = transition
         if buttonTitleUpdated {
@@ -2887,7 +2894,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.updateCounterTextNode(backgroundSize: textInputContainerBackgroundFrame.size, transition: transition)
         
         let textInputContainerBackgroundTransition = ComponentTransition(transition)
-        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: textInputContainerBackgroundTransition)
+        self.textInputContainerBackgroundView.update(size: textInputContainerBackgroundFrame.size, cornerRadius: floor(minimalInputHeight * 0.5), isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: true, transition: textInputContainerBackgroundTransition)
         
         transition.updateFrame(layer: self.textInputBackgroundNode.layer, frame: textInputContainerBackgroundFrame)
         transition.updateAlpha(node: self.textInputBackgroundNode, alpha: audioRecordingItemsAlpha)
@@ -3277,7 +3284,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         let attachmentButtonFrame = CGRect(origin: CGPoint(x: attachmentButtonX, y: textInputFrame.maxY - 40.0), size: CGSize(width: 40.0, height: 40.0))
         attachmentButtonX += 40.0 + 6.0
-        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)), isInteractive: true, transition: ComponentTransition(transition))
+        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: true, transition: ComponentTransition(transition))
         
         transition.updateFrame(layer: self.attachmentButtonBackground.layer, frame: attachmentButtonFrame)
         transition.updateFrame(layer: self.attachmentButton.layer, frame: CGRect(origin: CGPoint(), size: attachmentButtonFrame.size))

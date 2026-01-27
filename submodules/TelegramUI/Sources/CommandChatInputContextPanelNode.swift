@@ -504,7 +504,7 @@ final class CommandChatInputContextPanelNode: ChatInputContextPanelNode {
             size: self.backgroundView.bounds.size,
             cornerRadius: 20.0,
             isDark: interfaceState.theme.overallDarkAppearance,
-            tintColor: .init(kind: .panel, color: interfaceState.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7)),
+            tintColor: .init(kind: .panel),
             transition: ComponentTransition(transition)
         )
         

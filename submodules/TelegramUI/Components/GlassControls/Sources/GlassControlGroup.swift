@@ -7,12 +7,14 @@ import GlassBackgroundComponent
 import PlainButtonComponent
 import BundleIconComponent
 import MultilineTextComponent
+import LottieComponent
 
 public final class GlassControlGroupComponent: Component {
     public final class Item: Equatable {
         public enum Content: Hashable {
             case icon(String)
             case text(String)
+            case animation(String)
         }
         
         public let id: AnyHashable
@@ -39,9 +41,10 @@ public final class GlassControlGroupComponent: Component {
         }
     }
 
-    public enum Background {
+    public enum Background: Equatable {
         case panel
         case activeTint
+        case color(UIColor)
     }
 
     public let theme: PresentationTheme
@@ -76,10 +79,21 @@ public final class GlassControlGroupComponent: Component {
         }
         return true
     }
+    
+    private struct ItemId: Hashable {
+        let id: AnyHashable
+        let contentId: AnyHashable
+        
+        init(id: AnyHashable, contentId: AnyHashable) {
+            self.id = id
+            self.contentId = contentId
+        }
+    }
 
     public final class View: UIView {
         private let backgroundView: GlassBackgroundView
-        private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
+        private var itemViews: [ItemId: ComponentView<Empty>] = [:]
+        private var animations: [ItemId: ActionSlot<Void>] = [:]
         
         private var component: GlassControlGroupComponent?
         private weak var state: EmptyComponentState?
@@ -97,7 +111,12 @@ public final class GlassControlGroupComponent: Component {
         }
 
         public func itemView(id: AnyHashable) -> UIView? {
-            return self.itemViews[id]?.view
+            for (itemId, itemView) in self.itemViews {
+                if itemId.id == id {
+                    return itemView.view
+                }
+            }
+            return nil
         }
         
         func update(component: GlassControlGroupComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -106,14 +125,18 @@ public final class GlassControlGroupComponent: Component {
             self.component = component
             self.state = state
             
-            struct ItemId: Hashable {
-                var id: AnyHashable
-                var contentId: AnyHashable
-                
-                init(id: AnyHashable, contentId: AnyHashable) {
-                    self.id = id
-                    self.contentId = contentId
-                }
+            let foregroundColor: UIColor
+            let tintColor: GlassBackgroundView.TintColor
+            switch component.background {
+            case .panel:
+                foregroundColor = component.theme.chat.inputPanel.panelControlColor
+                tintColor = .init(kind: .panel)
+            case .activeTint:
+                foregroundColor = component.theme.list.itemCheckColors.foregroundColor
+                tintColor = .init(kind: .panel, innerColor: component.theme.list.itemCheckColors.fillColor)
+            case let .color(color):
+                foregroundColor = .white
+                tintColor = .init(kind: .custom(style: .default, color: color))
             }
             
             var contentsWidth: CGFloat = 0.0
@@ -137,21 +160,35 @@ public final class GlassControlGroupComponent: Component {
                 if item.action != nil {
                     isInteractive = true
                 }
-                
+                                
                 let content: AnyComponent<Empty>
                 var itemInsets = UIEdgeInsets()
                 switch item.content {
                 case let .icon(name):
                     content = AnyComponent(BundleIconComponent(
                         name: name,
-                        tintColor: component.background == .activeTint ? component.theme.list.itemCheckColors.foregroundColor :  component.theme.chat.inputPanel.panelControlColor
+                        tintColor: foregroundColor
                     ))
                 case let .text(string):
                     content = AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: string, font: Font.medium(17.0), textColor: component.background == .activeTint ? component.theme.list.itemCheckColors.foregroundColor :  component.theme.chat.inputPanel.panelControlColor))
+                        text: .plain(NSAttributedString(string: string, font: Font.medium(17.0), textColor: foregroundColor))
                     ))
                     itemInsets.left = 10.0
                     itemInsets.right = itemInsets.left
+                case let .animation(name):
+                    let playOnce: ActionSlot<Void>
+                    if let current = self.animations[itemId] {
+                        playOnce = current
+                    } else {
+                        playOnce = ActionSlot()
+                        self.animations[itemId] = playOnce
+                    }
+                    content = AnyComponent(LottieComponent(
+                        content: LottieComponent.AppBundleContent(name: name),
+                        color: foregroundColor,
+                        size: CGSize(width: 32.0, height: 32.0),
+                        playOnce: playOnce
+                    ))
                 }
                 
                 var minItemWidth: CGFloat = availableSize.height
@@ -165,8 +202,12 @@ public final class GlassControlGroupComponent: Component {
                         content: content,
                         minSize: CGSize(width: minItemWidth, height: availableSize.height),
                         contentInsets: itemInsets,
-                        action: {
+                        action: { [weak self] in
                             item.action?()
+                            
+                            if case .animation = item.content {
+                                self?.animations[itemId]?.invoke(Void())
+                            }
                         },
                         isEnabled: item.action != nil,
                         animateAlpha: false,
@@ -196,7 +237,7 @@ public final class GlassControlGroupComponent: Component {
                 contentsWidth += itemSize.width
             }
             
-            var removeIds: [AnyHashable] = []
+            var removeIds: [ItemId] = []
             for (id, itemView) in self.itemViews {
                 if !validIds.contains(id) {
                     removeIds.append(id)
@@ -206,6 +247,7 @@ public final class GlassControlGroupComponent: Component {
                         })
                         alphaTransition.animateBlur(layer: itemComponentView.layer, fromRadius: 0.0, toRadius: 8.0, removeOnCompletion: false)
                     }
+                    self.animations[id] = nil
                 }
             }
             for id in removeIds {
@@ -213,13 +255,6 @@ public final class GlassControlGroupComponent: Component {
             }
             
             let size = CGSize(width: contentsWidth, height: availableSize.height)
-            let tintColor: GlassBackgroundView.TintColor
-            switch component.background {
-            case .panel:
-                tintColor = .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
-            case .activeTint:
-                tintColor = .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7), innerColor: component.theme.list.itemCheckColors.fillColor)
-            }
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
             isInteractive = true
             self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: tintColor, isInteractive: isInteractive, transition: transition)

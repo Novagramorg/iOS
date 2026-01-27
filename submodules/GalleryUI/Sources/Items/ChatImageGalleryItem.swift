@@ -175,25 +175,24 @@ class ChatImageGalleryItem: GalleryItem {
             }
         }
         
+        var title: String?
         if let _ = message.adAttribute {
-            node._title.set(.single(self.presentationData.strings.Gallery_Ad))
+            title = self.presentationData.strings.Gallery_Ad
         } else if let location = self.location {
-            node._title.set(.single(self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string))
+            title = self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string
         }
                 
-        if self.displayInfoOnTop {
-            node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId)
-        }
+        node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId, title: title)
         
         return node
     }
     
     func updateNode(node: GalleryItemNode, synchronous: Bool) {
         if let node = node as? ChatImageGalleryItemNode, let location = self.location {
-            node._title.set(.single(self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string))
+            let title = self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string
         
             if self.displayInfoOnTop {
-                node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId)
+                node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId, title: title)
             }
             node.setMessage(self.message, displayInfo: !self.displayInfoOnTop, translateToLanguage: self.translateToLanguage, peerIsCopyProtected: self.peerIsCopyProtected, isSecret: self.isSecret)
         }
@@ -1622,9 +1621,9 @@ private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
         self.backgroundView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: buttonSize)
         let tintColor: GlassBackgroundView.TintColor
         if self.isSelected {
-            tintColor = .init(kind: .custom, color: UIColor(white: 1.0, alpha: 1.0))
+            tintColor = .init(kind: .custom(style: .default, color: UIColor(white: 1.0, alpha: 1.0)))
         } else {
-            tintColor = .init(kind: .panel, color: UIColor(white: 0.0, alpha: 0.6))
+            tintColor = .init(kind: .panel)
         }
         self.backgroundView.update(size: buttonSize, cornerRadius: buttonSize.height * 0.5, isDark: true, tintColor: tintColor, isInteractive: true, transition: transition)
         

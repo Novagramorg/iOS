@@ -104,12 +104,12 @@ public struct ApplicationSpecificItemCacheCollectionId {
 private enum ApplicationSpecificOrderedItemListCollectionIdValues: Int32 {
     case webSearchRecentQueries = 0
     case wallpaperSearchRecentQueries = 1
-    case settingsSearchRecentItems = 2
     case localThemes = 3
     case storyDrafts = 4
     case storySources = 5
     case hashtagSearchRecentQueries = 6
     case browserRecentlyVisited = 7
+    case settingsSearchRecentItems = 8
 }
 
 public struct ApplicationSpecificOrderedItemListCollectionId {

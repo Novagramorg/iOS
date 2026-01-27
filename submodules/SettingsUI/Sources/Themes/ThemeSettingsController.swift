@@ -84,6 +84,8 @@ public enum ThemeSettingsEntryTag: ItemListItemTag {
     case powerSaving
     case stickersAndEmoji
     case animations
+    case tapForNextMedia
+    case nightMode
     
     public func isEqual(to other: ItemListItemTag) -> Bool {
         if let other = other as? ThemeSettingsEntryTag, self == other {
@@ -318,7 +320,7 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
             case let .autoNight(_, title, value, enabled):
                 return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, enabled: enabled, sectionId: self.section, style: .blocks, updated: { value in
                     arguments.toggleNightTheme(value)
-                }, tag: nil)
+                }, tag: ThemeSettingsEntryTag.nightMode)
             case let .autoNightTheme(_, text, value):
                 return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: nil, title: text, label: value, labelStyle: .text, sectionId: self.section, style: .blocks, disclosureStyle: .arrow, action: {
                     arguments.openAutoNightTheme()
@@ -352,7 +354,7 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
             case let .showNextMediaOnTap(_, title, value):
                 return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, sectionId: self.section, style: .blocks, updated: { value in
                     arguments.toggleShowNextMediaOnTap(value)
-                }, tag: ThemeSettingsEntryTag.animations)
+                }, tag: ThemeSettingsEntryTag.tapForNextMedia)
             case let .showNextMediaOnTapInfo(_, text):
                 return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
@@ -1309,6 +1311,21 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
             presentCrossfadeControllerImpl?(true)
         })
     }
+    
+    if let focusOnItemTag {
+        var didFocusOnItem = false
+        controller.afterTransactionCompleted = { [weak controller] in
+            if !didFocusOnItem, let controller {
+                controller.forEachItemNode { itemNode in
+                    if let itemNode = itemNode as? ItemListItemNode, let tag = itemNode.tag, tag.isEqual(to: focusOnItemTag) {
+                        didFocusOnItem = true
+                        itemNode.displayHighlight()
+                    }
+                }
+            }
+        }
+    }
+    
     return controller
 }
 

@@ -1345,14 +1345,15 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             }
             
             if let contextExtractableContainer {
-                let transition: ContainedViewLayoutTransition = .animated(duration: duration, curve: .spring)
+                let positionTransition = ComponentTransition(animation: .curve(duration: 0.4, curve: .bounce(stiffness: 900.0, damping: 95.0)))
+                let transition = ComponentTransition(animation: .curve(duration: 0.5, curve: .bounce(stiffness: 900.0, damping: 95.0)))
                 
-                transition.animatePositionAdditive(layer: self.actionsContainerNode.layer, offset: CGPoint(
-                    x: contextExtractableContainer.sourceRect.minX - self.actionsContainerNode.frame.minX,
-                    y: contextExtractableContainer.sourceRect.minY - self.actionsContainerNode.frame.minY
-                ))
+                positionTransition.animatePosition(layer: self.actionsContainerNode.layer, from: CGPoint(
+                    x: contextExtractableContainer.sourceRect.midX - self.actionsContainerNode.frame.midX,
+                    y: contextExtractableContainer.sourceRect.midY - self.actionsContainerNode.frame.midY
+                ), to: CGPoint(), additive: true)
                 
-                self.actionsStackNode.animateIn(fromExtractableContainer: contextExtractableContainer.container)
+                self.actionsStackNode.animateIn(fromExtractableContainer: contextExtractableContainer.container, transition: transition)
             } else {
                 self.actionsContainerNode.layer.animateAlpha(from: 0.0, to: self.actionsContainerNode.alpha, duration: 0.05)
                 self.actionsContainerNode.layer.animateSpring(
@@ -1701,13 +1702,21 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             }
             
             if let contextExtractableContainer {
-                let transition: ContainedViewLayoutTransition = .animated(duration: duration, curve: .easeInOut)
+                let positionTransition = ComponentTransition(animation: .curve(duration: 0.5, curve: .bounce(stiffness: 900.0, damping: 95.0)))
+                let transition = ComponentTransition(animation: .curve(duration: 0.12, curve: .easeInOut))
                 
-                transition.updateFrame(node: self.actionsContainerNode, frame: CGRect(origin: CGPoint(x: contextExtractableContainer.sourceRect.minX, y: contextExtractableContainer.sourceRect.minY), size: self.actionsContainerNode.bounds.size))
-                ComponentTransition(transition).attachAnimation(view: self.actionsContainerNode.view, id: "animateOut", completion: { _ in
+                let contextExtractableContainerView = contextExtractableContainer.container
+                
+                positionTransition.setPosition(view: self.actionsContainerNode.view, position: CGPoint(x: contextExtractableContainer.sourceRect.midX, y: contextExtractableContainer.sourceRect.midY), completion: {  _ in
                     if completeWithActionStack {
                         restoreOverlayViews.forEach({ $0() })
                         completion()
+                    }
+                })
+                
+                positionTransition.attachAnimation(view: self.actionsContainerNode.view, id: "animateOut", completion: { [weak self, weak contextExtractableContainerView] _ in
+                    if let self, let contextExtractableContainerView {
+                        self.actionsStackNode.didAnimateOut(toExtractableContainer: contextExtractableContainerView)
                     }
                 })
                 

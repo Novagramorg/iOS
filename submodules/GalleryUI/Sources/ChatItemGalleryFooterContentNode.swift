@@ -155,8 +155,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     private let animationCache: AnimationCache
     private let animationRenderer: MultiAnimationRenderer
     
-    private let authorNameNode: ASTextNode
-    private let dateNode: ASTextNode
     private let backwardButton: PlaybackButtonNode
     private let forwardButton: PlaybackButtonNode
     private let playbackControlButton: HighlightableButtonNode
@@ -166,8 +164,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     private let statusNode: RadialStatusNode
     
     private var currentMessageText: NSAttributedString?
-    private var currentAuthorNameText: String?
-    private var currentDateText: String?
     
     private var currentMessage: Message?
     private var currentWebPageAndMedia: (TelegramMediaWebpage, Media)?
@@ -176,7 +172,14 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     private var videoFramePreviewNode: (ASImageNode, ImmediateTextNode)?
     
     private var validLayout: (CGSize, LayoutMetrics, CGFloat, CGFloat, CGFloat, CGFloat)?
-    private var buttonsState: (displayDeleteButton: Bool, displayFullscreenButton: Bool, displayActionButton: Bool, displayEditButton: Bool)?
+    private var buttonsState: (
+        displayDeleteButton: Bool,
+        displayFullscreenButton: Bool,
+        displayActionButton: Bool,
+        displayEditButton: Bool,
+        displayPictureInPictureButton: Bool,
+        displaySettingsButton: Bool
+    )?
     
     private var codeHighlightState: (id: EngineMessage.Id, specs: [CachedMessageSyntaxHighlight.Spec], disposable: Disposable)?
     
@@ -212,16 +215,12 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             if self.content != oldValue {
                 switch self.content {
                     case .info:
-                        self.authorNameNode.isHidden = false
-                        self.dateNode.isHidden = false
                         self.hasSeekControls = false
                         self.playbackControlButton.isHidden = true
                         self.statusButtonNode.isHidden = true
                         self.statusNode.isHidden = true
                     case let .fetch(status, seekable):
                         self.currentIsPaused = true
-                        self.authorNameNode.isHidden = true
-                        self.dateNode.isHidden = true
                         self.hasSeekControls = seekable && !self.isAd
                     
                         if status == .Local && !self.isAd {
@@ -262,8 +261,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                         self.statusButtonNode.isUserInteractionEnabled = statusState != .none
                     case let .playback(paused, seekable):
                         self.currentIsPaused = paused
-                        self.authorNameNode.isHidden = true
-                        self.dateNode.isHidden = true
                         
                         if !self.isAd {
                             self.playbackControlButton.isHidden = false
@@ -380,16 +377,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.textNode.maximumNumberOfLines = 0
         self.textNode.linkHighlightColor = UIColor(rgb: 0x5ac8fa, alpha: 0.2)
         self.textNode.displaySpoilerEffect = false
-        
-        self.authorNameNode = ASTextNode()
-        self.authorNameNode.maximumNumberOfLines = 1
-        self.authorNameNode.isUserInteractionEnabled = false
-        self.authorNameNode.displaysAsynchronously = false
-    
-        self.dateNode = ASTextNode()
-        self.dateNode.maximumNumberOfLines = 1
-        self.dateNode.isUserInteractionEnabled = false
-        self.dateNode.displaysAsynchronously = false
         
         self.backwardButton = PlaybackButtonNode()
         self.backwardButton.alpha = 0.0
@@ -609,12 +596,9 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.scrollNode.addSubnode(self.textNode)
         self.scrollNode.addSubnode(textSelectionNode)
         
-        self.contentNode.addSubnode(self.authorNameNode)
-        self.contentNode.addSubnode(self.dateNode)
-        
-        self.contentNode.addSubnode(self.backwardButton)
-        self.contentNode.addSubnode(self.forwardButton)
-        self.contentNode.addSubnode(self.playbackControlButton)
+        //self.contentNode.addSubnode(self.backwardButton)
+        //self.contentNode.addSubnode(self.forwardButton)
+        //self.contentNode.addSubnode(self.playbackControlButton)
         self.playbackControlButton.addSubnode(self.playPauseIconNode)
         
         self.contentNode.addSubnode(self.statusNode)
@@ -795,7 +779,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     
     func setup(origin: GalleryItemOriginData?, caption: NSAttributedString, isAd: Bool = false) {
         var titleText = origin?.title
-        var dateText = origin?.timestamp.flatMap { humanReadableStringForTimestamp(strings: self.strings, dateTimeFormat: self.dateTimeFormat, timestamp: $0).string }
         
         let caption = caption.mutableCopy() as! NSMutableAttributedString
         if isAd {
@@ -803,7 +786,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 caption.insert(NSAttributedString(string: titleText + "\n", font: Font.semibold(17.0), textColor: .white), at: 0)
             }
             titleText = nil
-            dateText = nil
         }
         
         if origin == nil {
@@ -811,14 +793,14 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 displayDeleteButton: false,
                 displayFullscreenButton: false,
                 displayActionButton: false,
-                displayEditButton: false
+                displayEditButton: false,
+                displayPictureInPictureButton: false,
+                displaySettingsButton: false
             )
         }
         
-        if self.currentMessageText != caption || self.currentAuthorNameText != titleText || self.currentDateText != dateText {
+        if self.currentMessageText != caption {
             self.currentMessageText = caption
-            self.currentAuthorNameText = titleText
-            self.currentDateText = dateText
             
             if caption.length == 0 {
                 self.textNode.isHidden = true
@@ -829,25 +811,11 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             }
             self.textSelectionNode?.isHidden = self.textNode.isHidden
             
-            if let titleText = titleText {
-                self.authorNameNode.attributedText = NSAttributedString(string: titleText, font: titleFont, textColor: .white)
-            } else {
-                self.authorNameNode.attributedText = nil
-            }
-            self.authorNameNode.accessibilityLabel = self.authorNameNode.attributedText?.string
-            
-            if let dateText = dateText {
-                self.dateNode.attributedText = NSAttributedString(string: dateText, font: dateFont, textColor: .white)
-            } else {
-                self.dateNode.attributedText = nil
-            }
-            self.dateNode.accessibilityLabel = self.dateNode.attributedText?.string
-            
             self.requestLayout?(.immediate)
         }
     }
     
-    func setMessage(_ message: Message, displayInfo: Bool = true, translateToLanguage: String? = nil, peerIsCopyProtected: Bool = false) {
+    func setMessage(_ message: Message, displayInfo: Bool = true, translateToLanguage: String? = nil, peerIsCopyProtected: Bool = false, displayPictureInPictureButton: Bool = false, displaySettingsButton: Bool = false) {
         self.currentMessage = message
         
         var displayInfo = displayInfo
@@ -959,8 +927,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             authorNameText = EnginePeer(peer).displayTitle(strings: self.strings, displayOrder: self.nameOrder)
         }
         
-        var dateText = humanReadableStringForTimestamp(strings: self.strings, dateTimeFormat: self.dateTimeFormat, timestamp: message.timestamp).string
-
         var messageText = NSMutableAttributedString(string: "")
         var hasCaption = false
         var mediaDuration: Double?
@@ -1036,8 +1002,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         }
         
         if !displayInfo {
-            authorNameText = ""
-            dateText = ""
             canEdit = false
         }
         
@@ -1059,21 +1023,10 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             
             self.textSelectionNode?.isHidden = self.textNode.isHidden
             
-            if let authorNameText = authorNameText {
-                self.authorNameNode.attributedText = NSAttributedString(string: authorNameText, font: titleFont, textColor: .white)
-            } else {
-                self.authorNameNode.attributedText = nil
-            }
-            self.authorNameNode.accessibilityLabel = self.authorNameNode.attributedText?.string
-           
-            self.dateNode.attributedText = NSAttributedString(string: dateText, font: dateFont, textColor: .white)
-            self.dateNode.accessibilityLabel = self.dateNode.attributedText?.string
-            
             if canFullscreen {
                 displayFullscreenButton = true
-            } else {
-                displayDeleteButton = canDelete
             }
+            displayDeleteButton = canDelete
 
             displayActionButton = canShare
             displayEditButton = canEdit
@@ -1106,7 +1059,9 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 displayDeleteButton: displayDeleteButton,
                 displayFullscreenButton: displayFullscreenButton,
                 displayActionButton: displayActionButton,
-                displayEditButton: displayEditButton
+                displayEditButton: displayEditButton,
+                displayPictureInPictureButton: displayPictureInPictureButton,
+                displaySettingsButton: displaySettingsButton
             )
             
             self.requestLayout?(.immediate)
@@ -1329,7 +1284,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             if self.textNode.isHidden || !displayCaption {
                 panelHeight += 8.0
             } else {
-                scrubberY = panelHeight - buttonPanelInsets.bottom - 44.0 - 44.0 - 8.0
+                scrubberY = panelHeight - buttonPanelInsets.bottom - 44.0 - 44.0 - 10.0
                 if contentInset > 0.0 {
                     scrubberY -= contentInset
                 }
@@ -1339,8 +1294,8 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 panelHeight -= 44.0
             }
             
-            let scrubberFrame = CGRect(origin: CGPoint(x: leftInset + 4.0, y: scrubberY), size: CGSize(width: width - (leftInset + 4.0) * 2.0, height: 34.0))
-            scrubberView.updateLayout(size: size, leftInset: leftInset + 4.0, rightInset: rightInset, transition: .immediate)
+            let scrubberFrame = CGRect(origin: CGPoint(x: buttonPanelInsets.left, y: scrubberY), size: CGSize(width: width - buttonPanelInsets.left - buttonPanelInsets.right, height: 44.0))
+            scrubberView.updateLayout(size: scrubberFrame.size, leftInset: 0.0, rightInset: 0.0, transition: .immediate)
             transition.updateBounds(layer: scrubberView.layer, bounds: CGRect(origin: CGPoint(), size: scrubberFrame.size))
             transition.updatePosition(layer: scrubberView.layer, position: CGPoint(x: scrubberFrame.midX, y: scrubberFrame.midY))
         }
@@ -1348,6 +1303,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         
         var leftControlItems: [GlassControlGroupComponent.Item] = []
         var rightControlItems: [GlassControlGroupComponent.Item] = []
+        var centerControlItems: [GlassControlGroupComponent.Item] = []
         
         if let buttonsState = self.buttonsState {
             if buttonsState.displayActionButton {
@@ -1362,8 +1318,35 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                     }
                 ))
             }
+            if buttonsState.displayPictureInPictureButton {
+                centerControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("pip"),
+                    content: .icon("Media Gallery/PictureInPictureButton"),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.pipButtonPressed()
+                    }
+                ))
+            }
+            if buttonsState.displaySettingsButton {
+                centerControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("settings"),
+                    content: .icon("Chat/Context Menu/Settings"),
+                    action: { [weak self] in
+                        guard let self, let buttonPanelView = self.buttonPanel.view as? GlassControlPanelComponent.View, let centerItemView = buttonPanelView.centerItemView else {
+                            return
+                        }
+                        guard let itemView = centerItemView.itemView(id: AnyHashable("settings")) else {
+                            return
+                        }
+                        self.settingsButtonPressed(sourceView: itemView)
+                    }
+                ))
+            }
             if buttonsState.displayEditButton {
-                rightControlItems.append(GlassControlGroupComponent.Item(
+                centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("edit"),
                     content: .icon("Media Gallery/Draw"),
                     action: { [weak self] in
@@ -1375,7 +1358,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 ))
             }
             if buttonsState.displayFullscreenButton && !metrics.isTablet {
-                rightControlItems.append(GlassControlGroupComponent.Item(
+                centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("fullscreen"),
                     content: .icon(isLandscape ? "Chat/Context Menu/Collapse" : "Chat/Context Menu/Expand"),
                     action: { [weak self] in
@@ -1408,7 +1391,10 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                     items: leftControlItems,
                     background: .panel
                 ),
-                centralItem: nil,
+                centralItem: GlassControlPanelComponent.Item(
+                    items: centerControlItems,
+                    background: .panel
+                ),
                 rightItem: GlassControlPanelComponent.Item(
                     items: rightControlItems,
                     background: .panel
@@ -1421,7 +1407,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         let buttonPanelFrame = CGRect(origin: CGPoint(x: buttonPanelInsets.left, y: panelHeight - buttonPanelInsets.bottom - buttonPanelSize.height), size: buttonPanelSize)
         if let buttonPanelView = self.buttonPanel.view {
             if buttonPanelView.superview == nil {
-                self.contentNode.view.insertSubview(buttonPanelView, belowSubview: self.authorNameNode.view)
+                self.contentNode.view.addSubview(buttonPanelView)
             }
             ComponentTransition(transition).setFrame(view: buttonPanelView, frame: buttonPanelFrame)
         }
@@ -1440,18 +1426,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         transition.updateFrame(node: self.statusNode, frame: CGRect(origin: CGPoint(x: floor((width - statusSize.width) / 2.0), y: panelHeight - bottomInset - statusSize.height - 8.0), size: statusSize))
         
         self.statusButtonNode.frame = CGRect(origin: CGPoint(x: floor((width - 44.0) / 2.0), y: panelHeight - bottomInset - 44.0), size: CGSize(width: 44.0, height: 44.0))
-        
-        let buttonsSideInset: CGFloat = 44.0 * CGFloat(max(leftControlItems.count, rightControlItems.count))
-        let authorNameSize = self.authorNameNode.measure(CGSize(width: width - buttonsSideInset * 2.0 - 8.0 * 2.0 - buttonPanelInsets.left - buttonPanelInsets.right, height: CGFloat.greatestFiniteMagnitude))
-        let dateSize = self.dateNode.measure(CGSize(width: width - buttonsSideInset * 2.0 - 8.0 * 2.0, height: CGFloat.greatestFiniteMagnitude))
-        
-        if authorNameSize.height.isZero {
-            self.dateNode.frame = CGRect(origin: CGPoint(x: floor((width - dateSize.width) / 2.0), y: panelHeight - buttonPanelInsets.bottom - 44.0 + floor((44.0 - dateSize.height) / 2.0)), size: dateSize)
-        } else {
-            let labelsSpacing: CGFloat = 0.0
-            self.authorNameNode.frame = CGRect(origin: CGPoint(x: floor((width - authorNameSize.width) / 2.0), y: panelHeight - buttonPanelInsets.bottom - 44.0 + floor((44.0 - dateSize.height - authorNameSize.height - labelsSpacing) / 2.0)), size: authorNameSize)
-            self.dateNode.frame = CGRect(origin: CGPoint(x: floor((width - dateSize.width) / 2.0), y: panelHeight - buttonPanelInsets.bottom - 44.0 + floor((44.0 - dateSize.height - authorNameSize.height - labelsSpacing) / 2.0) + authorNameSize.height + labelsSpacing), size: dateSize)
-        }
         
         if let (videoFramePreviewNode, videoFrameTextNode) = self.videoFramePreviewNode {
             let intrinsicImageSize = videoFramePreviewNode.image?.size ?? CGSize(width: 320.0, height: 240.0)
@@ -1501,8 +1475,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         }
         transition.animatePositionAdditive(node: self.scrollWrapperNode, offset: CGPoint(x: 0.0, y: self.bounds.height - fromHeight))
         self.scrollWrapperNode.alpha = 1.0
-        self.dateNode.alpha = 1.0
-        self.authorNameNode.alpha = 1.0
         if let buttonPanelView = self.buttonPanel.view {
             buttonPanelView.alpha = 1.0
         }
@@ -1530,8 +1502,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         }
         transition.updateFrame(node: self.scrollWrapperNode, frame: self.scrollWrapperNode.frame.offsetBy(dx: 0.0, dy: self.bounds.height - toHeight))
         self.scrollWrapperNode.alpha = 0.0
-        self.dateNode.alpha = 0.0
-        self.authorNameNode.alpha = 0.0
         
         if let buttonPanelView = self.buttonPanel.view {
             buttonPanelView.alpha = 0.0
@@ -2154,6 +2124,20 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             return
         }
         self.controllerInteraction?.editMedia(message.id)
+    }
+    
+    private func pipButtonPressed() {
+        guard let currentItemNode = self.controllerInteraction?.currentItemNode() as? UniversalVideoGalleryItemNode else {
+            return
+        }
+        currentItemNode.pictureInPictureButtonPressed()
+    }
+    
+    private func settingsButtonPressed(sourceView: UIView) {
+        guard let currentItemNode = self.controllerInteraction?.currentItemNode() as? UniversalVideoGalleryItemNode else {
+            return
+        }
+        currentItemNode.settingsButtonPressed(sourceView: sourceView)
     }
     
     @objc func playbackControlPressed() {

@@ -2653,6 +2653,7 @@ public final class EntityInputView: UIInputView, AttachmentTextInputPanelInputVi
         let presentationInterfaceState = ChatPresentationInterfaceState(
             chatWallpaper: .builtin(WallpaperSettings()),
             theme: self.presentationData.theme,
+            preferredGlassType: .default,
             strings: self.presentationData.strings,
             dateTimeFormat: self.presentationData.dateTimeFormat,
             nameDisplayOrder: self.presentationData.nameDisplayOrder,

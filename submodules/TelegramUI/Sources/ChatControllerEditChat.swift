@@ -52,6 +52,7 @@ extension ChatControllerImpl {
                             self.chatTitleView?.update(
                                 context: self.context,
                                 theme: self.presentationData.theme,
+                                preferClearGlass: self.presentationInterfaceState.preferredGlassType == .clear,
                                 wallpaper: self.presentationInterfaceState.chatWallpaper,
                                 strings: self.presentationData.strings,
                                 dateTimeFormat: self.presentationData.dateTimeFormat,
@@ -104,6 +105,7 @@ extension ChatControllerImpl {
                     self.chatTitleView?.update(
                         context: self.context,
                         theme: self.presentationData.theme,
+                        preferClearGlass: self.presentationInterfaceState.preferredGlassType == .clear,
                         wallpaper: self.presentationInterfaceState.chatWallpaper,
                         strings: self.presentationData.strings,
                         dateTimeFormat: self.presentationData.dateTimeFormat,

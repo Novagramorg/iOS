@@ -1929,12 +1929,12 @@ public final class ChatSideTopicsPanel: Component {
                         size: backgroundFrame.size,
                         cornerRadius: 20.0,
                         isDark: component.theme.overallDarkAppearance,
-                        tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
+                        tintColor: .init(kind: .panel)
                     )),
                     environment: {},
                     containerSize: backgroundFrame.size
                 )
-                
+
                 if let backgroundView = background.view {
                     if backgroundView.superview == nil {
                         self.insertSubview(backgroundView, at: 0)
@@ -1956,7 +1956,7 @@ public final class ChatSideTopicsPanel: Component {
                         size: backgroundFrame.size,
                         cornerRadius: 20.0,
                         isDark: component.theme.overallDarkAppearance,
-                        tintColor: .init(kind: .panel, color: component.theme.chat.inputPanel.inputBackgroundColor.withMultipliedAlpha(0.7))
+                        tintColor: .init(kind: .panel)
                     )),
                     environment: {},
                     containerSize: backgroundFrame.size

@@ -6,6 +6,9 @@ import Postbox
 import SwipeToDismissGesture
 import AccountContext
 import UndoUI
+import EdgeEffect
+import ComponentFlow
+import ComponentDisplayAdapters
 
 open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGestureRecognizerDelegate {
     public enum CustomDismissType {
@@ -22,6 +25,9 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             
         }
     }
+    
+    private let headerEdgeEffectView: EdgeEffectView
+    
     public let footerNode: GalleryFooterNode
     public var currentThumbnailContainerNode: GalleryThumbnailContainerNode?
     public var overlayNode: ASDisplayNode?
@@ -67,6 +73,8 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
             self.scrollView.contentInsetAdjustmentBehavior = .never
         }
+        
+        self.headerEdgeEffectView = EdgeEffectView()
 
         self.pager = GalleryPagerNode(pageGap: pageGap, disableTapNavigation: disableTapNavigation)
         self.footerNode = GalleryFooterNode(controllerInteraction: controllerInteraction)
@@ -287,19 +295,42 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         
         transition.updateFrame(node: self.footerNode, frame: CGRect(origin: CGPoint(), size: layout.size))
         
+        var edgeEffectFrame = CGRect(origin: CGPoint(), size: CGSize(width: layout.size.width, height: navigationBarHeight))
+        let edgeEffectHeight: CGFloat = 120.0
+        let edgeEffectOffset: CGFloat = 70.0
+        edgeEffectFrame.size.height += edgeEffectOffset
+        if self.areControlsHidden {
+            edgeEffectFrame.origin.y -= navigationBarHeight
+        }
+        transition.updateFrame(view: self.headerEdgeEffectView, frame: edgeEffectFrame)
+        self.headerEdgeEffectView.update(content: .black, alpha: 0.35, rect: edgeEffectFrame, edge: .top, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: ComponentTransition(transition))
+        transition.updateAlpha(layer: self.headerEdgeEffectView.layer, alpha: self.areControlsHidden ? 0.0 : 1.0)
+        
         if let navigationBar = self.navigationBar {
             transition.updateFrame(node: navigationBar, frame: CGRect(origin: CGPoint(x: 0.0, y: self.areControlsHidden ? -navigationBarHeight : 0.0), size: CGSize(width: layout.size.width, height: navigationBarHeight)))
             if self.footerNode.supernode == nil {
                 self.addSubnode(self.footerNode)
             }
+            if self.headerEdgeEffectView.superview == nil {
+                self.view.insertSubview(self.headerEdgeEffectView, belowSubview: navigationBar.view)
+            }
         }
             
         var thumbnailPanelHeight: CGFloat = 0.0
         if let currentThumbnailContainerNode = self.currentThumbnailContainerNode {
-            let panelHeight: CGFloat = 52.0
-            thumbnailPanelHeight = panelHeight
+            let panelHeight: CGFloat = 30.0
+            thumbnailPanelHeight = panelHeight + 22.0
             
-            let thumbnailsFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - 40.0 - panelHeight + 4.0 - layout.intrinsicInsets.bottom + (self.areControlsHidden ? 106.0 : 0.0)), size: CGSize(width: layout.size.width, height: panelHeight - 4.0))
+            var buttonPanelInsets = UIEdgeInsets()
+            buttonPanelInsets.left = 8.0
+            buttonPanelInsets.right = 8.0
+            buttonPanelInsets.bottom = layout.intrinsicInsets.bottom + 8.0
+            if buttonPanelInsets.bottom <= 32.0 {
+                buttonPanelInsets.left += 18.0
+                buttonPanelInsets.right += 18.0
+            }
+            
+            let thumbnailsFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - 60.0 - panelHeight - buttonPanelInsets.bottom + (self.areControlsHidden ? 106.0 : 0.0)), size: CGSize(width: layout.size.width, height: panelHeight))
             transition.updateFrame(node: currentThumbnailContainerNode, frame: thumbnailsFrame)
             currentThumbnailContainerNode.updateLayout(size: thumbnailsFrame.size, transition: transition)
             
@@ -371,6 +402,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         self.statusBar?.alpha = 0.0
         self.navigationBar?.alpha = 0.0
         self.footerNode.alpha = 0.0
+        self.headerEdgeEffectView.alpha = 0.0
         self.currentThumbnailContainerNode?.alpha = 0.0
         
         self.backgroundNode.layer.animate(from: backgroundColor.withAlphaComponent(0.0).cgColor, to: backgroundColor.cgColor, keyPath: "backgroundColor", timingFunction: CAMediaTimingFunctionName.linear.rawValue, duration: 0.15)
@@ -386,6 +418,8 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         if !self.areControlsHidden {
             self.footerNode.alpha = 1.0
             self.footerNode.animateIn(transition: .animated(duration: 0.15, curve: .linear))
+            
+            ComponentTransition.easeInOut(duration: 0.15).setAlpha(view: self.headerEdgeEffectView, alpha: 1.0)
         }
         
         if animateContent {
@@ -426,6 +460,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             interfaceAnimationCompleted = true
             intermediateCompletion()
         })
+        ComponentTransition.easeInOut(duration: 0.1).setAlpha(view: self.headerEdgeEffectView, alpha: 0.0)
         
         self.footerNode.animateOut(transition: .animated(duration: 0.1, curve: .easeInOut))
         
