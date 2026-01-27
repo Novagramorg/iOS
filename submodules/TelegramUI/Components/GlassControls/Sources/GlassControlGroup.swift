@@ -14,6 +14,7 @@ public final class GlassControlGroupComponent: Component {
         public enum Content: Equatable {
             case icon(String)
             case text(String)
+            case animation(String)
             case customIcon(id: AnyHashable, component: AnyComponent<Empty>)
             
             enum Id: Hashable {
@@ -29,19 +30,10 @@ public final class GlassControlGroupComponent: Component {
                     return .icon(icon)
                 case let .text(text):
                     return .text(text)
+                case let .animation(animation):
+                    return .animation(animation)
                 case let .customIcon(id, _):
                     return .customIcon(id)
-                }
-            }
-            
-            public func hash(into hasher: inout Hasher) {
-                switch self {
-                case let .icon(icon):
-                    icon.hash(into: &hasher)
-                case let .text(text):
-                    text.hash(into: &hasher)
-                case let .customIcon(id, _):
-                    id.hash(into: &hasher)
                 }
             }
         }
