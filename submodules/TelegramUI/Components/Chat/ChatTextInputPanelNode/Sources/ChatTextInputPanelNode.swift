@@ -2520,7 +2520,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             case let .audio(recorder, isLocked):
                 let hadAudioRecorder = self.mediaActionButtons.micButton.audioRecorder != nil
                 if !hadAudioRecorder, isLocked {
-                    self.mediaActionButtons.micButton.lock()
+                    DispatchQueue.main.async { [weak self] in
+                        self?.mediaActionButtons.micButton.lock()
+                    }
                 }
                 self.mediaActionButtons.micButton.audioRecorder = recorder
                 audioRecordingTimeNode.audioRecorder = recorder

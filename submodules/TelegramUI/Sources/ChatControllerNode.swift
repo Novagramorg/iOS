@@ -2256,6 +2256,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if let value = self.backgroundNode.makeEdgeEffectNode() {
                     bottomBackgroundEdgeEffectNode = value
                     self.bottomBackgroundEdgeEffectNode = value
+                    value.isUserInteractionEnabled = false
                     self.historyNodeContainer.view.superview?.insertSubview(value.view, aboveSubview: self.historyNodeContainer.view)
                 }
             }
@@ -2466,6 +2467,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if let value = self.backgroundNode.makeEdgeEffectNode() {
                     topBackgroundEdgeEffectNode = value
                     self.topBackgroundEdgeEffectNode = value
+                    value.isUserInteractionEnabled = false
                     self.historyNodeContainer.view.superview?.insertSubview(value.view, aboveSubview: self.historyNodeContainer.view)
                 }
             }

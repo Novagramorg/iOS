@@ -591,11 +591,11 @@ public final class VariableBlurEffect {
         }
         
         public let position: Position
-        public let extendsInwards: Bool
+        public let inwardsExtension: CGFloat?
         
-        public init(position: Position, extendsInwards: Bool) {
+        public init(position: Position, inwardsExtension: CGFloat?) {
             self.position = position
-            self.extendsInwards = extendsInwards
+            self.inwardsExtension = inwardsExtension
         }
     }
     
@@ -664,7 +664,7 @@ public final class VariableBlurEffect {
             let mainEffectFrame: CGRect
             let additionalEffectFrame: CGRect
             
-            if params.placement.extendsInwards {
+            if params.placement.inwardsExtension != nil {
                 mainEffectFrame = CGRect(origin: CGPoint(), size: CGSize(width: size.width, height: size.height))
                 additionalEffectFrame = CGRect()
             } else if params.placement.position == .bottom {
@@ -698,8 +698,8 @@ public final class VariableBlurEffect {
         let isHeightUpdated = gradient.height != self.params?.gradient.height || size.height != self.params?.size.height
         
         if isGradientUpdated {
-            if params.placement.extendsInwards {
-                let baseHeight = max(1.0, params.gradient.height)
+            if let inwardsExtension = params.placement.inwardsExtension {
+                let baseHeight = max(1.0, params.gradient.height + inwardsExtension)
                 let resizingInverted = params.placement.position != .bottom
                 self.gradientImage = generateImage(CGSize(width: 1.0, height: baseHeight), opaque: false, rotatedContext: { size, context in
                     let bounds = CGRect(origin: CGPoint(), size: size)
@@ -712,13 +712,17 @@ public final class VariableBlurEffect {
                     let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors, locations: &locations)!
 
                     if params.placement.position == .bottom {
-                        context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: size.height), end: CGPoint(x: 0.0, y: 0.0), options: CGGradientDrawingOptions())
+                        context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: max(0.0, size.height - inwardsExtension)), end: CGPoint(x: 0.0, y: 0.0), options: CGGradientDrawingOptions())
+                        if inwardsExtension > 0.0 {
+                            context.setFillColor(UIColor.white.cgColor)
+                            context.fill(CGRect(origin: CGPoint(x: 0.0, y: size.height - inwardsExtension), size: CGSize(width: size.width, height: inwardsExtension)))
+                        }
                     } else {
                         context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
                     }
                 })?.resizableImage(withCapInsets: UIEdgeInsets(top: resizingInverted ? baseHeight : 0.0, left: 0.0, bottom: resizingInverted ? 0.0 : baseHeight, right: 0.0), resizingMode: .stretch)
             } else {
-                self.gradientImage = EdgeEffectView.generateEdgeGradient(baseHeight: max(1.0, params.gradient.height), isInverted: params.placement.position == .bottom, extendsInwards: params.placement.extendsInwards)
+                self.gradientImage = EdgeEffectView.generateEdgeGradient(baseHeight: max(1.0, params.gradient.height), isInverted: params.placement.position == .bottom, extendsInwards: params.placement.inwardsExtension != nil)
             }
         }
         
@@ -775,6 +779,62 @@ public final class VariableBlurView: UIView {
     }
     
     public func update(size: CGSize, constantHeight: CGFloat, isInverted: Bool, gradient: VariableBlurEffect.Gradient, transition: ContainedViewLayoutTransition) {
-        self.effect?.update(size: size, constantHeight: constantHeight, placement: VariableBlurEffect.Placement(position: isInverted ? .bottom : .top, extendsInwards: false), gradient: gradient, transition: transition)
+        self.effect?.update(size: size, constantHeight: constantHeight, placement: VariableBlurEffect.Placement(position: isInverted ? .bottom : .top, inwardsExtension: nil), gradient: gradient, transition: transition)
+    }
+}
+
+public final class EdgeMaskView: UIView {
+    private struct MaskParams: Equatable {
+        let gradientHeight: CGFloat
+        let extensionHeight: CGFloat
+        
+        init(gradientHeight: CGFloat, extensionHeight: CGFloat) {
+            self.gradientHeight = gradientHeight
+            self.extensionHeight = extensionHeight
+        }
+    }
+    
+    private let imageView: UIImageView
+    
+    private var maskParams: MaskParams?
+    
+    override public init(frame: CGRect) {
+        self.imageView = UIImageView()
+        
+        super.init(frame: frame)
+        
+        self.addSubview(self.imageView)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    public func update(size: CGSize, color: UIColor, gradientHeight: CGFloat, extensionHeight: CGFloat, transition: ComponentTransition) {
+        let maskParams = MaskParams(gradientHeight: gradientHeight, extensionHeight: extensionHeight)
+        if maskParams != self.maskParams {
+            self.maskParams = maskParams
+            
+            let baseHeight = max(1.0, maskParams.gradientHeight + maskParams.extensionHeight)
+            let resizingInverted = !"".isEmpty
+            self.imageView.image = generateImage(CGSize(width: 1.0, height: baseHeight), opaque: false, rotatedContext: { size, context in
+                let bounds = CGRect(origin: CGPoint(), size: size)
+                context.clear(bounds)
+                
+                let gradientColors = [UIColor.white.withAlphaComponent(1.0).cgColor, UIColor.white.withAlphaComponent(0.0).cgColor] as CFArray
+                
+                var locations: [CGFloat] = [0.0, 1.0]
+                let colorSpace = CGColorSpaceCreateDeviceRGB()
+                let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors, locations: &locations)!
+
+                if "".isEmpty {
+                    context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height - maskParams.extensionHeight), options: CGGradientDrawingOptions())
+                } else {
+                    context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
+                }
+            })?.resizableImage(withCapInsets: UIEdgeInsets(top: resizingInverted ? baseHeight : 0.0, left: 0.0, bottom: resizingInverted ? 0.0 : baseHeight, right: 0.0), resizingMode: .stretch).withRenderingMode(.alwaysTemplate)
+        }
+        self.imageView.tintColor = color
+        transition.setFrame(view: self.imageView, frame: CGRect(origin: CGPoint(), size: size))
     }
 }

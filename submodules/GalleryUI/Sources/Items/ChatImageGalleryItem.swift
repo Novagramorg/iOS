@@ -232,6 +232,7 @@ class ChatImageGalleryItem: GalleryItem {
 final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
     private let context: AccountContext
     private var message: Message?
+    private var displayInfo: Bool = false
     private var translateToLanguage: String?
     private var peerIsCopyProtected: Bool = false
     private var isSecret: Bool = false
@@ -241,6 +242,9 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
     private var recognizedContentNode: RecognizedContentContainer?
     
     private let recognitionOverlayContentNode: ImageRecognitionOverlayContentNode
+    
+    private var displayTextRecognitionButton: Bool = false
+    private var displayStickersButton: Bool = false
     
     private let moreBarButton: MoreHeaderButton
     
@@ -445,6 +449,11 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
                     strongSelf.imageNode.addSubnode(recognizedContentNode)
                     strongSelf.recognizedContentNode = recognizedContentNode
                     strongSelf.recognitionOverlayContentNode.transitionIn()
+                    
+                    if !strongSelf.displayTextRecognitionButton {
+                        strongSelf.displayTextRecognitionButton = true
+                        strongSelf.updateFooter(animated: true)
+                    }
                 }
             }
         }))
@@ -452,11 +461,19 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
     
     fileprivate func setMessage(_ message: Message, displayInfo: Bool, translateToLanguage: String?, peerIsCopyProtected: Bool, isSecret: Bool) {
         self.message = message
+        self.displayInfo = displayInfo
         self.translateToLanguage = translateToLanguage
         self.peerIsCopyProtected = peerIsCopyProtected
         self.isSecret = isSecret
         self.imageNode.captureProtected = message.id.peerId.namespace == Namespaces.Peer.SecretChat || message.isCopyProtected() || peerIsCopyProtected || isSecret || message.paidContent != nil
-        self.footerContentNode.setMessage(message, displayInfo: displayInfo, translateToLanguage: translateToLanguage, peerIsCopyProtected: peerIsCopyProtected)
+        self.updateFooter(animated: false)
+    }
+    
+    private func updateFooter(animated: Bool) {
+        guard let message = self.message else {
+            return
+        }
+        self.footerContentNode.setMessage(message, displayInfo: self.displayInfo, translateToLanguage: self.translateToLanguage, peerIsCopyProtected: self.peerIsCopyProtected, displayTextRecognitionButton: self.displayTextRecognitionButton, displayStickersButton: self.displayStickersButton, animated: animated)
     }
     
     fileprivate func setImage(userLocation: MediaResourceUserLocation, imageReference: ImageMediaReference) {
@@ -497,9 +514,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
             
             var barButtonItems: [UIBarButtonItem] = []
             if imageReference.media.flags.contains(.hasStickers) {
-                let rightBarButtonItem = UIBarButtonItem(image: generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/Stickers"), color: .white), style: .plain, target: self, action: #selector(self.openStickersButtonPressed))
-                rightBarButtonItem.accessibilityLabel = self.presentationData.strings.Gallery_VoiceOver_Stickers
-                barButtonItems.append(rightBarButtonItem)
+                self.displayStickersButton = true
             }
             if self.message != nil {
                 let moreMenuItem = UIBarButtonItem(customDisplayNode: self.moreBarButton)!
@@ -509,6 +524,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
             self._rightBarButtonItems.set(.single(barButtonItems))
         }
         self.contextAndMedia = (self.context, imageReference.abstract)
+        self.updateFooter(animated: false)
     }
     
     private func updateImageFromFile(path: String) {
@@ -768,11 +784,16 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         controller.presentInGlobalOverlay(contextController)
     }
     
+    func textRecognitionButtonPressed() {
+        self.recognitionOverlayContentNode.isSelected = true
+        self.recognitionOverlayContentNode.action?(true)
+    }
+    
     @objc func openStickersButtonPressed() {
         guard let (context, media) = self.contextAndMedia else {
             return
         }
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let presentationData = context.sharedContext.currentPresentationData.with({ $0 }).withUpdated(theme: defaultDarkColorPresentationTheme)
         let topController = (self.baseNavigationController()?.topViewController as? ViewController)
         let progressSignal = Signal<Never, NoError> { subscriber in
             let controller = OverlayStatusController(theme: presentationData.theme, type: .loading(cancelled: nil))
@@ -800,7 +821,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
             }
             let baseNavigationController = strongSelf.baseNavigationController()
             baseNavigationController?.view.endEditing(true)
-            let controller = StickerPackScreen(context: context, mainStickerPack: packs[0], stickerPacks: packs, sendSticker: nil, actionPerformed: { actions in
+            let controller = StickerPackScreen(context: context, updatedPresentationData: (initial: presentationData, signal: .single(presentationData)), mainStickerPack: packs[0], stickerPacks: packs, sendSticker: nil, actionPerformed: { actions in
                 if let (info, items, action) = actions.first {
                     let animateInAsReplacement = false
                     switch action {
@@ -1562,7 +1583,7 @@ private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
     private var validLayout: (CGSize, LayoutMetrics, UIEdgeInsets)?
     private var interfaceIsHidden: Bool = false
     
-    private var isSelected: Bool = false
+    var isSelected: Bool = false
     
     init(theme: PresentationTheme) {
         self.backgroundContainer = GlassBackgroundContainerView()
@@ -1619,33 +1640,24 @@ private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
         self.backgroundContainer.update(size: buttonSize, isDark: true, transition: transition)
         
         self.backgroundView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: buttonSize)
-        let tintColor: GlassBackgroundView.TintColor
-        if self.isSelected {
-            tintColor = .init(kind: .custom(style: .default, color: UIColor(white: 1.0, alpha: 1.0)))
-        } else {
-            tintColor = .init(kind: .panel)
-        }
+        let tintColor: GlassBackgroundView.TintColor = .init(kind: .custom(style: .default, color: UIColor(white: 1.0, alpha: 1.0)))
         self.backgroundView.update(size: buttonSize, cornerRadius: buttonSize.height * 0.5, isDark: true, tintColor: tintColor, isInteractive: true, transition: transition)
         
         self.iconView.frame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: buttonSize)
-        transition.setTintColor(view: self.iconView, color: self.isSelected ? .black : .white)
+        transition.setTintColor(view: self.iconView, color: .black)
         
         if self.appeared {
             if !self.isSelected && isHidden {
                 transition.setAlpha(view: self.backgroundContainer, alpha: 0.0)
             } else {
-                transition.setAlpha(view: self.backgroundContainer, alpha: 1.0)
+                transition.setAlpha(view: self.backgroundContainer, alpha: self.isSelected ? 1.0 : 0.0)
             }
         } else {
             transition.setAlpha(view: self.backgroundContainer, alpha: 0.0)
         }
         
         var buttonPosition: CGPoint
-        if isHidden && !self.isSelected {
-            buttonPosition = CGPoint(x: size.width - insets.right - buttonSize.width - 66.0 - 10.0, y: -52.0)
-        } else {
-            buttonPosition = CGPoint(x: size.width - insets.right - buttonSize.width - (self.isSelected ? 24.0 : 70.0), y: insets.top - 50.0)
-        }
+        buttonPosition = CGPoint(x: size.width - insets.right - buttonSize.width - 16.0, y: insets.top - 50.0)
         
         transition.setFrame(view: self.backgroundContainer, frame: CGRect(origin: buttonPosition, size: buttonSize))
     }

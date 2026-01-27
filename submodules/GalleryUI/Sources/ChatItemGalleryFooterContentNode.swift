@@ -35,6 +35,8 @@ import GlassControls
 import ComponentFlow
 import ComponentDisplayAdapters
 import EdgeEffect
+import RasterizedCompositionComponent
+import BadgeComponent
 
 private let deleteImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/MessageSelectionTrash"), color: .white)
 private let actionImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Input/Accessory Panels/MessageSelectionForward"), color: .white)
@@ -44,25 +46,6 @@ private let backwardImage = generateTintedImage(image:  UIImage(bundleImageName:
 private let forwardImage = generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/ForwardButton"), color: .white)
 
 private let cloudFetchIcon = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/FileCloudFetch"), color: UIColor.white)
-
-private let fullscreenOnImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Expand"), color: .white)
-private let fullscreenOffImage = generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Collapse"), color: .white)
-
-private let captionMaskImage = generateImage(CGSize(width: 1.0, height: 17.0), opaque: false, rotatedContext: { size, context in
-    let bounds = CGRect(origin: CGPoint(), size: size)
-    context.clear(bounds)
-    
-    let gradientColors = [UIColor.white.withAlphaComponent(1.0).cgColor, UIColor.white.withAlphaComponent(0.0).cgColor] as CFArray
-    
-    var locations: [CGFloat] = [0.0, 1.0]
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors, locations: &locations)!
-
-    context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: 17.0), options: CGGradientDrawingOptions())
-})
-
-private let titleFont = Font.medium(15.0)
-private let dateFont = Font.regular(14.0)
 
 enum ChatItemGalleryFooterContent: Equatable {
     case info
@@ -128,6 +111,26 @@ class CaptionScrollWrapperNode: ASDisplayNode {
 }
 
 final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScrollViewDelegate {
+    public final class SettingsButtonState: Equatable {
+        public let speed: String?
+        public let quality: String?
+        
+        public init(speed: String?, quality: String?) {
+            self.speed = speed
+            self.quality = quality
+        }
+        
+        public static func ==(lhs: SettingsButtonState, rhs: SettingsButtonState) -> Bool {
+            if lhs.speed != rhs.speed {
+                return false
+            }
+            if lhs.quality != rhs.quality {
+                return false
+            }
+            return true
+        }
+    }
+    
     private let context: AccountContext
     private var presentationData: PresentationData
     private var theme: PresentationTheme
@@ -140,6 +143,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     private let textSelectionKnobContainer: UIView
     private let textSelectionKnobSurface: UIView
     private let scrollWrapperNode: CaptionScrollWrapperNode
+    private let scrollWrapperMask: EdgeMaskView
     private let scrollWrapperEffect: VariableBlurEffect
     private let scrollNode: ASScrollNode
 
@@ -178,7 +182,9 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         displayActionButton: Bool,
         displayEditButton: Bool,
         displayPictureInPictureButton: Bool,
-        displaySettingsButton: Bool
+        settingsButtonState: SettingsButtonState?,
+        displayTextRecognitionButton: Bool,
+        displayStickersButton: Bool
     )?
     
     private var codeHighlightState: (id: EngineMessage.Id, specs: [CachedMessageSyntaxHighlight.Spec], disposable: Disposable)?
@@ -304,7 +310,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         }
         didSet {
              if let scrubberView = self.scrubberView {
-                scrubberView.setCollapsed(self.visibilityAlpha < 1.0, animated: false)
                 self.view.addSubview(scrubberView)
                 scrubberView.updateScrubbingVisual = { [weak self] value in
                     guard let strongSelf = self else {
@@ -338,8 +343,16 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
     
     override func setVisibilityAlpha(_ alpha: CGFloat, animated: Bool) {
         self.visibilityAlpha = alpha
-        self.contentNode.alpha = alpha
-        self.scrubberView?.setCollapsed(alpha < 1.0, animated: animated)
+        
+        let transition: ComponentTransition = animated ? .easeInOut(duration: 0.2) : .immediate
+        transition.animateView {
+            self.contentNode.alpha = alpha
+        }
+        //transition.setAlpha(view: self.contentNode.view, alpha: alpha)
+        
+        if let validLayout = self.validLayout {
+            let _ = self.updateLayout(size: validLayout.0, metrics: validLayout.1, leftInset: validLayout.2, rightInset: validLayout.3, bottomInset: validLayout.4, contentInset: validLayout.5, transition: animated ? .animated(duration: 0.4, curve: .spring) : .immediate)
+        }
     }
     
     private var hasExpandedCaptionPromise = ValuePromise<Bool>(false)
@@ -367,6 +380,9 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.scrollWrapperEffect = VariableBlurEffect(layer: self.scrollWrapperNode.layer, isTransparent: true, maxBlurRadius: 1.0)
         self.scrollWrapperNode.backgroundColor = .clear
         self.scrollWrapperNode.isOpaque = false
+        
+        self.scrollWrapperMask = EdgeMaskView()
+        //self.scrollWrapperNode.view.addSubview(self.scrollWrapperMask)
         
         self.scrollNode = ASScrollNode()
         self.scrollNode.clipsToBounds = false
@@ -795,7 +811,9 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 displayActionButton: false,
                 displayEditButton: false,
                 displayPictureInPictureButton: false,
-                displaySettingsButton: false
+                settingsButtonState: nil,
+                displayTextRecognitionButton: false,
+                displayStickersButton: false
             )
         }
         
@@ -815,7 +833,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         }
     }
     
-    func setMessage(_ message: Message, displayInfo: Bool = true, translateToLanguage: String? = nil, peerIsCopyProtected: Bool = false, displayPictureInPictureButton: Bool = false, displaySettingsButton: Bool = false) {
+    func setMessage(_ message: Message, displayInfo: Bool = true, translateToLanguage: String? = nil, peerIsCopyProtected: Bool = false, displayPictureInPictureButton: Bool = false, settingsButtonState: SettingsButtonState? = nil, displayTextRecognitionButton: Bool = false, displayStickersButton: Bool = false, animated: Bool = false) {
         self.currentMessage = message
         
         var displayInfo = displayInfo
@@ -1061,10 +1079,12 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 displayActionButton: displayActionButton,
                 displayEditButton: displayEditButton,
                 displayPictureInPictureButton: displayPictureInPictureButton,
-                displaySettingsButton: displaySettingsButton
+                settingsButtonState: settingsButtonState,
+                displayTextRecognitionButton: displayTextRecognitionButton,
+                displayStickersButton: displayStickersButton
             )
             
-            self.requestLayout?(.immediate)
+            self.requestLayout?(animated ? .animated(duration: 0.4, curve: .spring) : .immediate)
         }
     }
     
@@ -1169,6 +1189,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             let textSize = self.textNode.updateLayout(constrainSize)
             
             var textOffset: CGFloat = 0.0
+            var additionalTextHeight: CGFloat = 0.0
             if displayCaption {
                 visibleTextHeight = textSize.height
                 if visibleTextHeight > 100.0 {
@@ -1190,7 +1211,9 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 
                 var maxTextOffset: CGFloat = size.height - bottomInset - 238.0 - UIScreenPixel
                 if let _ = self.scrubberView {
-                    maxTextOffset -= 44.0
+                    //maxTextOffset -= 100.0
+                    maxTextOffset += 0.0
+                    additionalTextHeight += 44.0
                 }
                 textOffset = min(maxTextOffset, self.scrollNode.view.contentOffset.y)
                 let originalPanelHeight = panelHeight
@@ -1198,47 +1221,22 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                 
                 if self.scrollNode.view.isScrollEnabled {
                     if self.scrollWrapperNode.view.mask == nil {
-                        self.scrollWrapperNode.layer.rasterizationScale = UIScreenScale
-                        let maskView = UIImageView()
-                        
-                        let height: CGFloat = 70.0
-                        let baseGradientAlpha: CGFloat = 1.0
-                        let numSteps = 8
-                        let firstStep = 0
-                        let firstLocation = 0.0
-                        let colors = (0 ..< numSteps).map { i -> UIColor in
-                            if i < firstStep {
-                                return UIColor(white: 1.0, alpha: 1.0)
-                            } else {
-                                let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
-                                let value: CGFloat = 1.0 - bezierPoint(0.42, 0.0, 0.58, 1.0, step)
-                                return UIColor(white: 0.0, alpha: baseGradientAlpha * value)
-                            }
-                        }
-                        let locations = (0 ..< numSteps).map { i -> CGFloat in
-                            if i < firstStep {
-                                return 0.0
-                            } else {
-                                let step: CGFloat = CGFloat(i - firstStep) / CGFloat(numSteps - firstStep - 1)
-                                return (firstLocation + (1.0 - firstLocation) * step)
-                            }
-                        }
-                        
-                        maskView.image = generateGradientImage(size: CGSize(width: 8.0, height: height), colors: colors, locations: locations)!.stretchableImage(withLeftCapWidth: 0, topCapHeight: 1)
-                        
-                        //maskView.image = EdgeEffectView.generateEdgeGradient(baseHeight: originalPanelHeight + 20.0, isInverted: false)
-                        self.scrollWrapperNode.view.mask = maskView
+                        self.scrollWrapperNode.view.mask = self.scrollWrapperMask
                     }
                 } else {
                     self.scrollWrapperNode.view.mask = nil
                 }
                 
-                let scrollWrapperNodeFrame = CGRect(x: 0.0, y: 0.0, width: width, height: max(0.0, visibleTextPanelHeight + textOffset + originalPanelHeight - 14.0))
+                let scrollWrapperNodeFrame = CGRect(x: 0.0, y: 0.0, width: width, height: max(0.0, visibleTextPanelHeight + textOffset + originalPanelHeight - 14.0 + additionalTextHeight))
                 if self.scrollWrapperNode.frame != scrollWrapperNodeFrame {
                     self.scrollWrapperNode.frame = scrollWrapperNodeFrame
-                    self.scrollWrapperNode.view.mask?.frame = self.scrollWrapperNode.bounds
-                    self.scrollWrapperNode.view.mask?.layer.removeAllAnimations()
-                    self.scrollWrapperEffect.update(size: scrollWrapperNodeFrame.size, constantHeight: 80.0, placement: VariableBlurEffect.Placement(position: .bottom, extendsInwards: true), gradient: EdgeEffectView.generateEdgeGradientData(baseHeight: 80.0), transition: transition)
+                    do {
+                        let mask = self.scrollWrapperMask
+                        mask.update(size: self.scrollWrapperNode.bounds.size, color: UIColor.blue, gradientHeight: 90.0 + additionalTextHeight + contentInset, extensionHeight: 0.0, transition: ComponentTransition(transition))
+                        mask.frame = self.scrollWrapperNode.bounds
+                        mask.layer.removeAllAnimations()
+                    }
+                    self.scrollWrapperEffect.update(size: CGSize(width: scrollWrapperNodeFrame.width, height: scrollWrapperNodeFrame.height), constantHeight: 90.0, placement: VariableBlurEffect.Placement(position: .bottom, inwardsExtension: additionalTextHeight + contentInset), gradient: EdgeEffectView.generateEdgeGradientData(baseHeight: 90.0), transition: transition)
                 }
                 
                 if let buttonNode = self.buttonNode {
@@ -1295,7 +1293,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             }
             
             let scrubberFrame = CGRect(origin: CGPoint(x: buttonPanelInsets.left, y: scrubberY), size: CGSize(width: width - buttonPanelInsets.left - buttonPanelInsets.right, height: 44.0))
-            scrubberView.updateLayout(size: scrubberFrame.size, leftInset: 0.0, rightInset: 0.0, transition: .immediate)
+            scrubberView.updateLayout(size: scrubberFrame.size, leftInset: 0.0, rightInset: 0.0, isCollapsed: self.visibilityAlpha < 1.0, transition: transition)
             transition.updateBounds(layer: scrubberView.layer, bounds: CGRect(origin: CGPoint(), size: scrubberFrame.size))
             transition.updatePosition(layer: scrubberView.layer, position: CGPoint(x: scrubberFrame.midX, y: scrubberFrame.midY))
         }
@@ -1330,10 +1328,14 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                     }
                 ))
             }
-            if buttonsState.displaySettingsButton {
+            if let settingsButtonState = buttonsState.settingsButtonState {
                 centerControlItems.append(GlassControlGroupComponent.Item(
                     id: AnyHashable("settings"),
-                    content: .icon("Chat/Context Menu/Settings"),
+                    content: .customIcon(id: AnyHashable("settings"), component: AnyComponent(SettingsNavigationIconComponent(
+                        speed: settingsButtonState.speed,
+                        quality: settingsButtonState.quality,
+                        isOpen: false
+                    ))),
                     action: { [weak self] in
                         guard let self, let buttonPanelView = self.buttonPanel.view as? GlassControlPanelComponent.View, let centerItemView = buttonPanelView.centerItemView else {
                             return
@@ -1354,6 +1356,30 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
                             return
                         }
                         self.editButtonPressed()
+                    }
+                ))
+            }
+            if buttonsState.displayTextRecognitionButton {
+                centerControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("textRecognition"),
+                    content: .icon("Media Gallery/LiveTextIcon"),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.textRecognitionButtonPressed()
+                    }
+                ))
+            }
+            if buttonsState.displayStickersButton {
+                centerControlItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("stickers"),
+                    content: .icon("Media Gallery/Stickers"),
+                    action: { [weak self] in
+                        guard let self else {
+                            return
+                        }
+                        self.stickersButtonPressed()
                     }
                 ))
             }
@@ -2126,6 +2152,21 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.controllerInteraction?.editMedia(message.id)
     }
     
+    private func textRecognitionButtonPressed() {
+        guard let currentItemNode = self.controllerInteraction?.currentItemNode() as? ChatImageGalleryItemNode else {
+            return
+        }
+        currentItemNode.textRecognitionButtonPressed()
+    }
+    
+    private func stickersButtonPressed() {
+        if let currentItemNode = self.controllerInteraction?.currentItemNode() as? ChatImageGalleryItemNode {
+            currentItemNode.openStickersButtonPressed()
+        } else if let currentItemNode = self.controllerInteraction?.currentItemNode() as? UniversalVideoGalleryItemNode {
+            currentItemNode.openStickersButtonPressed()
+        }
+    }
+    
     private func pipButtonPressed() {
         guard let currentItemNode = self.controllerInteraction?.currentItemNode() as? UniversalVideoGalleryItemNode else {
             return
@@ -2331,5 +2372,227 @@ private final class PlaybackButtonNode: HighlightTrackingButtonNode {
         let size = self.bounds.size
         let textSize = self.textNode.updateLayout(size)
         self.textNode.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - textSize.width) / 2.0), y: floorToScreenPixels((size.height - textSize.height) / 2.0) + UIScreenPixel), size: textSize)
+    }
+}
+
+final class SettingsNavigationIconComponent: Component {
+    let speed: String?
+    let quality: String?
+    let isOpen: Bool
+    
+    init(speed: String?, quality: String?, isOpen: Bool) {
+        self.speed = speed
+        self.quality = quality
+        self.isOpen = isOpen
+    }
+    
+    static func ==(lhs: SettingsNavigationIconComponent, rhs: SettingsNavigationIconComponent) -> Bool {
+        if lhs.speed != rhs.speed {
+            return false
+        }
+        if lhs.quality != rhs.quality {
+            return false
+        }
+        if lhs.isOpen != rhs.isOpen {
+            return false
+        }
+        return true
+    }
+    
+    final class View: UIView {
+        private let iconLayer: RasterizedCompositionMonochromeLayer
+        
+        private let gearsLayer: RasterizedCompositionImageLayer
+        private let dotLayer: RasterizedCompositionImageLayer
+        
+        private var speedBadge: ComponentView<Empty>?
+        private var qualityBadge: ComponentView<Empty>?
+        
+        private var speedBadgeText: String?
+        private var qualityBadgeText: String?
+        
+        private let badgeFont: UIFont
+        
+        private var isMenuOpen: Bool = false
+        
+        override init(frame: CGRect) {
+            self.iconLayer = RasterizedCompositionMonochromeLayer()
+            
+            self.gearsLayer = RasterizedCompositionImageLayer()
+            self.gearsLayer.image = generateTintedImage(image: UIImage(bundleImageName: "Media Gallery/NavigationSettingsNoDot"), color: .white)
+            
+            self.dotLayer = RasterizedCompositionImageLayer()
+            self.dotLayer.image = generateFilledCircleImage(diameter: 4.0, color: .white)
+            
+            self.iconLayer.contentsLayer.addSublayer(self.gearsLayer)
+            self.iconLayer.contentsLayer.addSublayer(self.dotLayer)
+            
+            self.badgeFont = Font.with(size: 8.0, design: .round, weight: .bold)
+            
+            super.init(frame: frame)
+            
+            self.layer.addSublayer(self.iconLayer)
+            
+            let size = CGSize(width: 44.0, height: 44.0)
+            
+            if let image = self.gearsLayer.image {
+                let iconInnerInsets = UIEdgeInsets(top: 4.0, left: 8.0, bottom: 4.0, right: 6.0)
+                let iconSize = CGSize(width: image.size.width + iconInnerInsets.left + iconInnerInsets.right, height: image.size.height + iconInnerInsets.top + iconInnerInsets.bottom)
+                let iconFrame = CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: floor((size.height - iconSize.height) / 2.0)), size: iconSize)
+                self.iconLayer.position = iconFrame.center
+                self.iconLayer.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
+                
+                self.iconLayer.contentsLayer.position = CGRect(origin: CGPoint(), size: iconFrame.size).center
+                self.iconLayer.contentsLayer.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
+                
+                self.iconLayer.maskedLayer.position = CGRect(origin: CGPoint(), size: iconFrame.size).center
+                self.iconLayer.maskedLayer.bounds = CGRect(origin: CGPoint(), size: iconFrame.size)
+                self.iconLayer.maskedLayer.backgroundColor = UIColor.white.cgColor
+                
+                let gearsFrame = CGRect(origin: CGPoint(x: floor((iconSize.width - image.size.width) * 0.5), y: floor((iconSize.height - image.size.height) * 0.5)), size: image.size)
+                self.gearsLayer.position = gearsFrame.center
+                self.gearsLayer.bounds = CGRect(origin: CGPoint(), size: gearsFrame.size)
+                
+                if let dotImage = self.dotLayer.image {
+                    let dotFrame = CGRect(origin: CGPoint(x: gearsFrame.minX + floorToScreenPixels((gearsFrame.width - dotImage.size.width) * 0.5), y: gearsFrame.minY + floorToScreenPixels((gearsFrame.height - dotImage.size.height) * 0.5)), size: dotImage.size)
+                    self.dotLayer.position = dotFrame.center
+                    self.dotLayer.bounds = CGRect(origin: CGPoint(), size: dotFrame.size)
+                }
+            }
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        func setIsMenuOpen(isMenuOpen: Bool) {
+            if self.isMenuOpen == isMenuOpen {
+                return
+            }
+            self.isMenuOpen = isMenuOpen
+            
+            let rotationTransition: ContainedViewLayoutTransition = .animated(duration: 0.35, curve: .spring)
+            rotationTransition.updateTransform(layer: self.gearsLayer, transform: CGAffineTransformMakeRotation(isMenuOpen ? (CGFloat.pi * 2.0 / 6.0) : 0.0))
+            self.gearsLayer.animateScale(from: 1.0, to: 1.07, duration: 0.1, removeOnCompletion: false, completion: { [weak self] finished in
+                guard let self, finished else {
+                    return
+                }
+                self.gearsLayer.animateScale(from: 1.07, to: 1.0, duration: 0.1, removeOnCompletion: true)
+            })
+            
+            self.dotLayer.animateScale(from: 1.0, to: 0.8, duration: 0.1, removeOnCompletion: false, completion: { [weak self] finished in
+                guard let self, finished else {
+                    return
+                }
+                self.dotLayer.animateScale(from: 0.8, to: 1.0, duration: 0.1, removeOnCompletion: true)
+            })
+        }
+        
+        func setBadges(speed: String?, quality: String?, transition: ComponentTransition) {
+            if self.speedBadgeText == speed && self.qualityBadgeText == quality {
+                return
+            }
+            self.speedBadgeText = speed
+            self.qualityBadgeText = quality
+            
+            if let badgeText = speed {
+                var badgeTransition = transition
+                let speedBadge: ComponentView<Empty>
+                if let current = self.speedBadge {
+                    speedBadge = current
+                } else {
+                    speedBadge = ComponentView()
+                    self.speedBadge = speedBadge
+                    badgeTransition = badgeTransition.withAnimation(.none)
+                }
+                let badgeSize = speedBadge.update(
+                    transition: badgeTransition,
+                    component: AnyComponent(BadgeComponent(
+                        text: badgeText,
+                        font: self.badgeFont,
+                        cornerRadius: .custom(3.0),
+                        insets: UIEdgeInsets(top: 1.33, left: 1.66, bottom: 1.33, right: 1.66),
+                        outerInsets: UIEdgeInsets(top: 1.0, left: 1.0, bottom: 1.0, right: 1.0)
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 100.0, height: 100.0)
+                )
+                if let speedBadgeView = speedBadge.view {
+                    if speedBadgeView.layer.superlayer == nil {
+                        self.iconLayer.contentsLayer.addSublayer(speedBadgeView.layer)
+                        
+                        transition.animateAlpha(layer: speedBadgeView.layer, from: 0.0, to: 1.0)
+                        transition.animateScale(layer: speedBadgeView.layer, from: 0.001, to: 1.0)
+                    }
+                    badgeTransition.setFrame(layer: speedBadgeView.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: badgeSize))
+                }
+            } else if let speedBadge = self.speedBadge {
+                self.speedBadge = nil
+                if let speedBadgeView = speedBadge.view {
+                    let speedBadgeLayer = speedBadgeView.layer
+                    transition.setAlpha(layer: speedBadgeLayer, alpha: 0.0, completion: { [weak speedBadgeLayer] _ in
+                        speedBadgeLayer?.removeFromSuperlayer()
+                    })
+                    transition.setScale(layer: speedBadgeLayer, scale: 0.001)
+                }
+            }
+            
+            if let badgeText = quality {
+                var badgeTransition = transition
+                let qualityBadge: ComponentView<Empty>
+                if let current = self.qualityBadge {
+                    qualityBadge = current
+                } else {
+                    qualityBadge = ComponentView()
+                    self.qualityBadge = qualityBadge
+                    badgeTransition = badgeTransition.withAnimation(.none)
+                }
+                let badgeSize = qualityBadge.update(
+                    transition: badgeTransition,
+                    component: AnyComponent(BadgeComponent(
+                        text: badgeText,
+                        font: self.badgeFont,
+                        cornerRadius: .custom(3.0),
+                        insets: UIEdgeInsets(top: 1.33, left: 1.66, bottom: 1.33, right: 1.66),
+                        outerInsets: UIEdgeInsets(top: 1.0, left: 1.0, bottom: 1.0, right: 1.0)
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: 100.0, height: 100.0)
+                )
+                if let qualityBadgeView = qualityBadge.view {
+                    if qualityBadgeView.layer.superlayer == nil {
+                        self.iconLayer.contentsLayer.addSublayer(qualityBadgeView.layer)
+                        
+                        transition.animateAlpha(layer: qualityBadgeView.layer, from: 0.0, to: 1.0)
+                        transition.animateScale(layer: qualityBadgeView.layer, from: 0.001, to: 1.0)
+                    }
+                    badgeTransition.setFrame(layer: qualityBadgeView.layer, frame: CGRect(origin: CGPoint(x: self.iconLayer.bounds.width - badgeSize.width, y: self.iconLayer.bounds.height - badgeSize.height), size: badgeSize))
+                }
+            } else if let qualityBadge = self.qualityBadge {
+                self.qualityBadge = nil
+                if let qualityBadgeView = qualityBadge.view {
+                    let qualityBadgeLayer = qualityBadgeView.layer
+                    transition.setAlpha(layer: qualityBadgeLayer, alpha: 0.0, completion: { [weak qualityBadgeLayer] _ in
+                        qualityBadgeLayer?.removeFromSuperlayer()
+                    })
+                    transition.setScale(layer: qualityBadgeLayer, scale: 0.001)
+                }
+            }
+        }
+        
+        func update(component: SettingsNavigationIconComponent, availableSize: CGSize, state: State, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.setBadges(speed: component.speed, quality: component.quality, transition: transition)
+            self.setIsMenuOpen(isMenuOpen: component.isOpen)
+            
+            return CGSize(width: 44.0, height: 44.0)
+        }
+    }
+    
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+    
+    func update(view: View, availableSize: CGSize, state: State, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
