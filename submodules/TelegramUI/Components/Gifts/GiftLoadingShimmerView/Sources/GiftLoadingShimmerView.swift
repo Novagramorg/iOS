@@ -181,7 +181,7 @@ public final class GiftLoadingShimmerView: UIView {
                             y: 39.0 + 13.0 + CGFloat(rowIndex) * (itemSize.height + optionSpacing)
                         )
                         context.addPath(CGPath(roundedRect: CGRect(origin: itemOrigin, size: itemSize),
-                                               cornerWidth: 10.0, cornerHeight: 10.0, transform: nil))
+                                               cornerWidth: 16.0, cornerHeight: 16.0, transform: nil))
                     }
                     currentY += itemSize.height
                     rowIndex += 1

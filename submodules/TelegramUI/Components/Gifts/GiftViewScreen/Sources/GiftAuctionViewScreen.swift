@@ -1219,7 +1219,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             
             let closeButton = closeButton.update(
                 component: GlassBarButtonComponent(
-                    size: CGSize(width: 40.0, height: 40.0),
+                    size: CGSize(width: 44.0, height: 44.0),
                     backgroundColor: buttonColor,
                     isDark: false,
                     state: .tintedGlass,
@@ -1236,7 +1236,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         state.dismiss(animated: true)
                     }
                 ),
-                availableSize: CGSize(width: 40.0, height: 40.0),
+                availableSize: CGSize(width: 44.0, height: 44.0),
                 transition: context.transition
             )
             context.add(closeButton
@@ -1245,7 +1245,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
             
             let moreButton = moreButton.update(
                 component: GlassBarButtonComponent(
-                    size: CGSize(width: 40.0, height: 40.0),
+                    size: CGSize(width: 44.0, height: 44.0),
                     backgroundColor: buttonColor,
                     isDark: false,
                     state: .tintedGlass,
@@ -1267,7 +1267,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         moreButtonPlayOnce.invoke(Void())
                     }
                 ),
-                availableSize: CGSize(width: 40.0, height: 40.0),
+                availableSize: CGSize(width: 44.0, height: 44.0),
                 transition: context.transition
             )
             context.add(moreButton

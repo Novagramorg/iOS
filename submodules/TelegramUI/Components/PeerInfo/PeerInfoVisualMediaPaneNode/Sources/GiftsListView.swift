@@ -540,6 +540,7 @@ final class GiftsListView: UIView {
                     component: AnyComponent(
                         GiftItemComponent(
                             context: self.context,
+                            style: .glass,
                             theme: params.presentationData.theme,
                             strings: params.presentationData.strings,
                             peer: peer,

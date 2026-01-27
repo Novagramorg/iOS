@@ -12,6 +12,20 @@ import AccountContext
 import TelegramIntents
 import AccountUtils
 
+public enum IntentsEntryTag: ItemListItemTag, Equatable {
+    case suggested
+    case suggestBy
+    case reset
+
+    public func isEqual(to other: ItemListItemTag) -> Bool {
+        if let other = other as? IntentsEntryTag, self == other {
+            return true
+        } else {
+            return false
+        }
+    }
+}
+
 private final class IntentsSettingsControllerArguments {
     let context: AccountContext
     let updateSettings: (@escaping (IntentsSettings) -> IntentsSettings) -> Void
@@ -197,7 +211,7 @@ private enum IntentsSettingsControllerEntry: ItemListNodeEntry {
             case let .contacts(_, text, value):
                 return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, enableInteractiveChanges: true, enabled: true, sectionId: self.section, style: .blocks, updated: { value in
                     arguments.updateSettings { $0.withUpdatedContacts(value) }
-                })
+                }, tag: IntentsEntryTag.suggested)
             case let .savedMessages(_, text, value):
                 return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: text, value: value, enableInteractiveChanges: true, enabled: true, sectionId: self.section, style: .blocks, updated: { value in
                     arguments.updateSettings { $0.withUpdatedSavedMessages(value) }
@@ -217,7 +231,7 @@ private enum IntentsSettingsControllerEntry: ItemListNodeEntry {
             case let .suggestAll(_, text, value):
                 return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: text, style: .left, checked: value, zeroSeparatorInsets: false, sectionId: self.section, action: {
                     arguments.updateSettings { $0.withUpdatedOnlyShared(false) }
-                })
+                }, tag: IntentsEntryTag.suggestBy)
             case let .suggestOnlyShared(_, text, value):
                 return ItemListCheckboxItem(presentationData: presentationData, systemStyle: .glass, title: text, style: .left, checked: value, zeroSeparatorInsets: false, sectionId: self.section, action: {
                     arguments.updateSettings { $0.withUpdatedOnlyShared(true) }
@@ -226,7 +240,7 @@ private enum IntentsSettingsControllerEntry: ItemListNodeEntry {
             case let .resetAll(_, text):
                 return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: text, kind: .destructive, alignment: .natural, sectionId: self.section, style: .blocks, action: {
                     arguments.resetAll()
-                })
+                }, tag: IntentsEntryTag.reset)
         }
     }
 }
@@ -261,7 +275,7 @@ private func intentsSettingsControllerEntries(context: AccountContext, presentat
     return entries
 }
 
-public func intentsSettingsController(context: AccountContext) -> ViewController {
+public func intentsSettingsController(context: AccountContext, focusOnItemTag: IntentsEntryTag? = nil) -> ViewController {
     var presentControllerImpl: ((ViewController) -> Void)?
 
     let arguments = IntentsSettingsControllerArguments(context: context, updateSettings: { f in
@@ -317,5 +331,20 @@ public func intentsSettingsController(context: AccountContext) -> ViewController
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))
     }
+    
+    if let focusOnItemTag {
+        var didFocusOnItem = false
+        controller.afterTransactionCompleted = { [weak controller] in
+            if !didFocusOnItem, let controller {
+                controller.forEachItemNode { itemNode in
+                    if let itemNode = itemNode as? ItemListItemNode, let tag = itemNode.tag, tag.isEqual(to: focusOnItemTag) {
+                        didFocusOnItem = true
+                        itemNode.displayHighlight()
+                    }
+                }
+            }
+        }
+    }
+    
     return controller
 }

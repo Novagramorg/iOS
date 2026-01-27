@@ -615,6 +615,12 @@ public final class ChatListNavigationBar: Component {
             }
         }
         
+        public func openEmojiStatusSetup() {
+            if let headerContentView = self.headerContent.view as? ChatListHeaderComponent.View {
+                headerContentView.openEmojiStatusSetup()
+            }
+        }
+        
         public func updateStoryUploadProgress(storyUploadProgress: [EnginePeer.Id: Float]) {
             guard let component = self.component else {
                 return

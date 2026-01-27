@@ -1356,7 +1356,11 @@ private final class AttributeInfoComponent: Component {
                 //TODO:localize
                 switch rarity {
                 case let .permille(value):
-                    badgeString = formatPercentage(Float(value) * 0.1)
+                    if value == 0 {
+                        badgeString = "<\(formatPercentage(0.1))"
+                    } else {
+                        badgeString = formatPercentage(Float(value) * 0.1)
+                    }
                 case .epic:
                     badgeString = "epic"
                 case .legendary:

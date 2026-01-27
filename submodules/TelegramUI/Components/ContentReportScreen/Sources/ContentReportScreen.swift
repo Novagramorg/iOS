@@ -519,13 +519,13 @@ private final class SheetContent: CombinedComponent {
             contentSize.height += navigation.size.height
             
             let isBack = items.count > 1
-            let barButtonSize = CGSize(width: 40.0, height: 40.0)
+            let barButtonSize = CGSize(width: 44.0, height: 44.0)
             let backButton = backButton.update(
                 component: GlassBarButtonComponent(
                     size: barButtonSize,
-                    backgroundColor: environment.theme.rootController.navigationBar.glassBarButtonBackgroundColor,
+                    backgroundColor: nil,
                     isDark: environment.theme.overallDarkAppearance,
-                    state: .generic,
+                    state: .glass,
                     component: AnyComponentWithIdentity(id: isBack ? "back" : "close", component: AnyComponent(
                         BundleIconComponent(
                             name: isBack ? "Navigation/Back" : "Navigation/Close",

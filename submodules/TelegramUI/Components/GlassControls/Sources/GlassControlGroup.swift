@@ -7,6 +7,7 @@ import GlassBackgroundComponent
 import PlainButtonComponent
 import BundleIconComponent
 import MultilineTextComponent
+import LottieComponent
 
 public final class GlassControlGroupComponent: Component {
     public final class Item: Equatable {
@@ -18,6 +19,7 @@ public final class GlassControlGroupComponent: Component {
             enum Id: Hashable {
                 case icon(String)
                 case text(String)
+                case animation(String)
                 case customIcon(AnyHashable)
             }
             
@@ -68,9 +70,10 @@ public final class GlassControlGroupComponent: Component {
         }
     }
 
-    public enum Background {
+    public enum Background: Equatable {
         case panel
         case activeTint
+        case color(UIColor)
     }
 
     public let theme: PresentationTheme
@@ -119,6 +122,7 @@ public final class GlassControlGroupComponent: Component {
     public final class View: UIView {
         private let backgroundView: GlassBackgroundView
         private var itemViews: [ItemId: ComponentView<Empty>] = [:]
+        private var animations: [ItemId: ActionSlot<Void>] = [:]
         
         private var component: GlassControlGroupComponent?
         private weak var state: EmptyComponentState?
@@ -150,6 +154,20 @@ public final class GlassControlGroupComponent: Component {
             self.component = component
             self.state = state
             
+            let foregroundColor: UIColor
+            let tintColor: GlassBackgroundView.TintColor
+            switch component.background {
+            case .panel:
+                foregroundColor = component.theme.chat.inputPanel.panelControlColor
+                tintColor = .init(kind: .panel)
+            case .activeTint:
+                foregroundColor = component.theme.list.itemCheckColors.foregroundColor
+                tintColor = .init(kind: .panel, innerColor: component.theme.list.itemCheckColors.fillColor)
+            case let .color(color):
+                foregroundColor = .white
+                tintColor = .init(kind: .custom(style: .default, color: color))
+            }
+            
             var contentsWidth: CGFloat = 0.0
             var validIds: [AnyHashable] = []
             var isInteractive = false
@@ -178,14 +196,28 @@ public final class GlassControlGroupComponent: Component {
                 case let .icon(name):
                     content = AnyComponent(BundleIconComponent(
                         name: name,
-                        tintColor: component.background == .activeTint ? component.theme.list.itemCheckColors.foregroundColor :  component.theme.chat.inputPanel.panelControlColor
+                        tintColor: foregroundColor
                     ))
                 case let .text(string):
                     content = AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: string, font: Font.medium(17.0), textColor: component.background == .activeTint ? component.theme.list.itemCheckColors.foregroundColor :  component.theme.chat.inputPanel.panelControlColor))
+                        text: .plain(NSAttributedString(string: string, font: Font.medium(17.0), textColor: foregroundColor))
                     ))
                     itemInsets.left = 10.0
                     itemInsets.right = itemInsets.left
+                case let .animation(name):
+                    let playOnce: ActionSlot<Void>
+                    if let current = self.animations[itemId] {
+                        playOnce = current
+                    } else {
+                        playOnce = ActionSlot()
+                        self.animations[itemId] = playOnce
+                    }
+                    content = AnyComponent(LottieComponent(
+                        content: LottieComponent.AppBundleContent(name: name),
+                        color: foregroundColor,
+                        size: CGSize(width: 32.0, height: 32.0),
+                        playOnce: playOnce
+                    ))
                 case let .customIcon(_, customIcon):
                     content = customIcon
                 }
@@ -201,8 +233,12 @@ public final class GlassControlGroupComponent: Component {
                         content: content,
                         minSize: CGSize(width: minItemWidth, height: availableSize.height),
                         contentInsets: itemInsets,
-                        action: {
+                        action: { [weak self] in
                             item.action?()
+                            
+                            if case .animation = item.content {
+                                self?.animations[itemId]?.invoke(Void())
+                            }
                         },
                         isEnabled: item.action != nil,
                         animateAlpha: false,
@@ -242,6 +278,7 @@ public final class GlassControlGroupComponent: Component {
                         })
                         alphaTransition.animateBlur(layer: itemComponentView.layer, fromRadius: 0.0, toRadius: 8.0, removeOnCompletion: false)
                     }
+                    self.animations[id] = nil
                 }
             }
             for id in removeIds {
@@ -249,13 +286,6 @@ public final class GlassControlGroupComponent: Component {
             }
             
             let size = CGSize(width: contentsWidth, height: availableSize.height)
-            let tintColor: GlassBackgroundView.TintColor
-            switch component.background {
-            case .panel:
-                tintColor = .init(kind: .panel)
-            case .activeTint:
-                tintColor = .init(kind: .panel, innerColor: component.theme.list.itemCheckColors.fillColor)
-            }
             transition.setFrame(view: self.backgroundView, frame: CGRect(origin: CGPoint(), size: size))
             isInteractive = true
             self.backgroundView.update(size: size, cornerRadius: size.height * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: tintColor, isInteractive: isInteractive, transition: transition)
