@@ -239,7 +239,7 @@ private final class CraftGiftPageContent: Component {
                 let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsScreen(
                     context: component.context,
                     gift: .generic(gift),
-                    onlyCrafted: true,
+                    crafted: true,
                     attributes: attributes,
                     selectedAttributes: nil,
                     focusedAttribute: nil
