@@ -166,9 +166,7 @@ private final class CraftGiftPageContent: Component {
         private let infoTitle = ComponentView<Empty>()
         private let infoDescription = ComponentView<Empty>()
         private var infoList = ComponentView<Empty>()
-        
-        private var actionButton = ComponentView<Empty>()
-                        
+                                
         private var craftState: CraftGiftsContext.State?
         private var craftStateDisposable: Disposable?
         
@@ -338,6 +336,7 @@ private final class CraftGiftPageContent: Component {
                     }
                     self.starGiftsMap = starGiftsMap
                     component.externalState.starGiftsMap = starGiftsMap
+                    self.state?.updated()
                 }))
             }
             
@@ -1616,8 +1615,16 @@ private final class SheetContainerComponent: CombinedComponent {
                                     tintColor: .white
                                 )
                             )),
-                            action: { _ in
-                                dismiss(true)
+                            action: { [weak state] _ in
+                                guard let state else {
+                                    return
+                                }
+                                if state.displayInfo {
+                                    state.displayInfo = false
+                                    state.updated(transition: .spring(duration: 0.3))
+                                } else {
+                                    dismiss(true)
+                                }
                             }
                         )
                     ),

@@ -466,6 +466,9 @@ public final class ButtonComponent: Component {
             
             super.init(frame: frame)
             
+            self.button.isExclusiveTouch = true
+            self.layer.rasterizationScale = UIScreenScale
+            
             self.addSubview(self.containerView)
             self.addSubview(self.button)
             
@@ -477,12 +480,24 @@ public final class ButtonComponent: Component {
                     case .glass:
                         let transition = ComponentTransition(animation: .curve(duration: highlighted ? 0.25 : 0.35, curve: .spring))
                         if highlighted {
+                            self.layer.shouldRasterize = true
+                            
                             let highlightedColor = component.background.color.withMultiplied(hue: 1.0, saturation: 0.77, brightness: 1.01)
                             transition.setBackgroundColor(view: self.containerView, color: highlightedColor)
-                            transition.setScale(view: self.containerView, scale: 1.05)
+                            transition.setScale(view: self.containerView, scale: 1.05, completion: { finished in
+                                if finished {
+                                    self.layer.shouldRasterize = false
+                                }
+                            })
                         } else {
+                            self.layer.shouldRasterize = true
+                            
                             transition.setBackgroundColor(view: self.containerView, color: component.background.color)
-                            transition.setScale(view: self.containerView, scale: 1.0)
+                            transition.setScale(view: self.containerView, scale: 1.0, completion: { finished in
+                                if finished {
+                                    self.layer.shouldRasterize = false
+                                }
+                            })
                         }
                     case .legacy:
                         if highlighted {

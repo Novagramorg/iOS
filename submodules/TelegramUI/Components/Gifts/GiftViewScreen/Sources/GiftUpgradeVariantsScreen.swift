@@ -202,6 +202,8 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
             self.containerView.addSubview(self.navigationBarContainer)
             
             self.dimView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.dimTapGesture(_:))))
+            
+            self.alpha = 0.0
         }
         
         required init?(coder: NSCoder) {
@@ -271,6 +273,7 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
         }
         
         func animateIn() {
+            self.alpha = 1.0
             self.dimView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.3)
             let animateOffset: CGFloat = self.bounds.height - self.backgroundLayer.frame.minY
             self.scrollContentClippingView.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
@@ -1061,6 +1064,13 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                             self.previewTimerTick()
                         }
                         self.state?.updated(transition: .easeInOut(duration: 0.25))
+                        
+                        if let buttonView = self.playbackButton.view {
+                            buttonView.isUserInteractionEnabled = false
+                            Queue.mainQueue().after(0.3, {
+                                buttonView.isUserInteractionEnabled = true
+                            })
+                        }
                     }
                 )),
                 environment: {},
@@ -1194,7 +1204,9 @@ public class GiftUpgradeVariantsScreen: ViewControllerComponentContainer {
             self.didPlayAppearAnimation = true
             
             if let componentView = self.node.hostView.componentView as? GiftUpgradeVariantsScreenComponent.View {
-                componentView.animateIn()
+                Queue.mainQueue().justDispatch {
+                    componentView.animateIn()
+                }
             }
         }
     }
