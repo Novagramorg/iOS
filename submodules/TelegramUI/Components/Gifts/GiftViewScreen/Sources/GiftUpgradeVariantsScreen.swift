@@ -1364,6 +1364,7 @@ private final class AttributeInfoComponent: Component {
             }
             
             var badgeString = ""
+            var badgeColor = component.badgeColor
             if let rarity {
                 switch rarity {
                 case let .permille(value):
@@ -1374,10 +1375,16 @@ private final class AttributeInfoComponent: Component {
                     }
                 case .epic:
                     badgeString = component.strings.Gift_Attribute_Epic
+                    badgeColor = UIColor(rgb: 0xaf52de)
                 case .legendary:
                     badgeString = component.strings.Gift_Attribute_Legendary
+                    badgeColor = UIColor(rgb: 0xd57e32)
                 case .rare:
                     badgeString = component.strings.Gift_Attribute_Rare
+                    badgeColor = UIColor(rgb: 0x25a3b9)
+                case .uncommon:
+                    badgeString = component.strings.Gift_Attribute_Uncommon
+                    badgeColor = UIColor(rgb: 0x22b447)
                 }
             }
             
@@ -1417,8 +1424,7 @@ private final class AttributeInfoComponent: Component {
             
             let badgeBackgroundFrame = badgeFrame.insetBy(dx: -5.5, dy: -2.0)
             transition.setFrame(layer: self.badgeBackground, frame: badgeBackgroundFrame)
-            transition.setBackgroundColor(layer: self.badgeBackground, color: component.badgeColor)
-            
+            transition.setBackgroundColor(layer: self.badgeBackground, color: badgeColor)
             
             return availableSize
         }

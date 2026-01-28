@@ -460,12 +460,13 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 case rare
                 case epic
                 case legendary
+                case uncommon
 
                 public var permilleValue: Int32 {
                     switch self {
                     case let .permille(value):
                         return value
-                    case .rare, .epic, .legendary:
+                    case .rare, .epic, .legendary, .uncommon:
                         return 0
                     }
                 }
@@ -501,6 +502,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         return .epic
                     case 3:
                         return .legendary
+                    case 4:
+                        return .uncommon
                     default:
                         let permille = try container.decodeIfPresent(Int32.self, forKey: .rarity) ?? 0
                         return .permille(permille)
@@ -555,6 +558,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         return .epic
                     case 3:
                         return .legendary
+                    case 4:
+                        return .uncommon
                     default:
                         let permille = decoder.decodeInt32ForKey(CodingKeys.rarity.rawValue, orElse: 0)
                         return .permille(permille)
@@ -614,6 +619,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         try container.encode(Int32(2), forKey: .rarityType)
                     case .legendary:
                         try container.encode(Int32(3), forKey: .rarityType)
+                    case .uncommon:
+                        try container.encode(Int32(4), forKey: .rarityType)
                     }
                 }
 
@@ -660,6 +667,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         encoder.encodeInt32(2, forKey: CodingKeys.rarityType.rawValue)
                     case .legendary:
                         encoder.encodeInt32(3, forKey: CodingKeys.rarityType.rawValue)
+                    case .uncommon:
+                        encoder.encodeInt32(4, forKey: CodingKeys.rarityType.rawValue)
                     }
                 }
 
@@ -3503,6 +3512,8 @@ extension StarGift.UniqueGift.Attribute {
                 return .epic
             case .starGiftAttributeRarityLegendary:
                 return .legendary
+            case .starGiftAttributeRarityUncommon:
+                return .uncommon
             }
         }
 
