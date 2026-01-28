@@ -1405,15 +1405,26 @@ private final class GiftViewSheetContent: CombinedComponent {
         
         
         func openUpgradeVariants(attribute: StarGift.UniqueGift.Attribute? = nil) {
-            guard let controller = self.getController() as? GiftViewScreen, let arguments = self.subject.arguments else {
+            guard let controller = self.getController() as? GiftViewScreen else {
                 return
             }
+            
+            var gift: StarGift?
             var selectedAttributes: [StarGift.UniqueGift.Attribute]?
-            if case let .unique(uniqueGift) = arguments.gift {
-                selectedAttributes = uniqueGift.attributes
+            if let arguments = self.subject.arguments {
+                gift = arguments.gift
+                if case let .unique(uniqueGift) = arguments.gift {
+                    selectedAttributes = uniqueGift.attributes
+                }
+            } else if case let .upgradePreview(genericGift, _, _) = self.subject {
+                gift = .generic(genericGift)
             }
             
-            self.giftVariantsDisposable.set((self.context.engine.payments.getStarGiftUpgradeAttributes(giftId: arguments.gift.giftId)
+            guard let gift else {
+                return
+            }
+            
+            self.giftVariantsDisposable.set((self.context.engine.payments.getStarGiftUpgradeAttributes(giftId: gift.giftId)
             |> take(1)
             |> deliverOnMainQueue).start(next: { [weak self] attributes in
                 guard let self, let attributes else {
@@ -1421,8 +1432,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                 let variantsController = self.context.sharedContext.makeGiftUpgradeVariantsScreen(
                     context: self.context,
-                    gift: arguments.gift,
-                    onlyCrafted: false,
+                    gift: gift,
+                    crafted: false,
                     attributes: attributes,
                     selectedAttributes: selectedAttributes,
                     focusedAttribute: attribute
@@ -2592,7 +2603,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             } else if state.inUpgradePreview, let attributes = state.upgradePreview?.attributes {
                 headerHeight = 246.0
                 headerSubject = .preview(attributes)
-            } else if case let .upgradePreview(attributes, _) = component.subject {
+            } else if case let .upgradePreview(_, attributes, _) = component.subject {
                 headerHeight = 246.0
                 headerSubject = .preview(attributes)
             } else if case let .wearPreview(_, attributes) = component.subject, let attributes {
@@ -2857,7 +2868,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     title = environment.strings.Gift_Upgrade_GiftTitle
                     uniqueText = strings.Gift_Upgrade_Unique_GiftDescription(peerName).string
                     tradableText = strings.Gift_Upgrade_Tradable_GiftDescription(peerName).string
-                } else if case let .upgradePreview(_, peerName) = component.subject {
+                } else if case let .upgradePreview(_, _, peerName) = component.subject {
                     var peerName = peerName
                     if peerName.count > 22 {
                         peerName = "\(peerName.prefix(22))…"
@@ -2871,28 +2882,27 @@ private final class GiftViewSheetContent: CombinedComponent {
                     tradableText = strings.Gift_Upgrade_Tradable_Description
                 }
                 
-                let upgradeTitle = upgradeTitle.update(
-                    component: MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: title,
-                            font: Font.bold(20.0),
-                            textColor: .white,
-                            paragraphAlignment: .center
-                        )),
-                        horizontalAlignment: .center,
-                        maximumNumberOfLines: 1
-                    ),
-                    availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 60.0, height: CGFloat.greatestFiniteMagnitude),
-                    transition: .immediate
-                )
+                var variant1: GiftItemComponent.Subject?
+                var variant2: GiftItemComponent.Subject?
+                var variant3: GiftItemComponent.Subject?
                 
-                if case let .generic(gift) = component.subject.arguments?.gift, let upgradePreview = state.upgradePreview {
-                    var variant1: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
-                    var variant2: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
-                    var variant3: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                var upgradeAttributes: [StarGift.UniqueGift.Attribute]?
+                
+                if case let .generic(gift) = component.subject.arguments?.gift {
+                    variant1 = .starGift(gift: gift, price: "")
+                    variant2 = .starGift(gift: gift, price: "")
+                    variant3 = .starGift(gift: gift, price: "")
+                }
+                
+                if let upgradePreview = state.upgradePreview {
+                    upgradeAttributes = upgradePreview.attributes
+                } else if case let .upgradePreview(_, attributes, _) = component.subject {
+                    upgradeAttributes = attributes
+                }
 
+                if let upgradeAttributes {
                     var i = 0
-                    for attribute in upgradePreview.attributes {
+                    for attribute in upgradeAttributes {
                         if case .model = attribute {
                             switch i {
                             case 0:
@@ -2907,7 +2917,9 @@ private final class GiftViewSheetContent: CombinedComponent {
                             i += 1
                         }
                     }
-
+                }
+                
+                if let variant1, let variant2, let variant3 {
                     var buttonColor: UIColor = UIColor.white.withAlphaComponent(0.16)
                     if let backgroundColor = giftCompositionExternalState.backgroundColor {
                         buttonColor = backgroundColor.mixedWith(.white, alpha: 0.2)
@@ -2923,7 +2935,21 @@ private final class GiftViewSheetContent: CombinedComponent {
                     )
                     
                     let variantsButtonSize = CGSize(width: variantsMeasureDescription.size.width + 87.0, height: 24.0)
-                                        
+                       
+                    let upgradeTitle = upgradeTitle.update(
+                        component: MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: title,
+                                font: Font.bold(20.0),
+                                textColor: .white,
+                                paragraphAlignment: .center
+                            )),
+                            horizontalAlignment: .center,
+                            maximumNumberOfLines: 1
+                        ),
+                        availableSize: CGSize(width: context.availableSize.width - sideInset * 2.0 - 60.0, height: CGFloat.greatestFiniteMagnitude),
+                        transition: .immediate
+                    )
                     let upgradeDescription = upgradeDescription.update(
                         component: GlassBarButtonComponent(
                             size: variantsButtonSize,
@@ -5415,7 +5441,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         case uniqueGift(StarGift.UniqueGift, EnginePeer.Id?)
         case profileGift(EnginePeer.Id, ProfileGiftsContext.State.StarGift)
         case soldOutGift(StarGift.Gift)
-        case upgradePreview([StarGift.UniqueGift.Attribute], String)
+        case upgradePreview(StarGift.Gift, [StarGift.UniqueGift.Attribute], String)
         case wearPreview(StarGift, [StarGift.UniqueGift.Attribute]?)
         
         var arguments: (

@@ -3867,8 +3867,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftViewScreen(context: context, subject: .wearPreview(gift, attributes))
     }
     
-    public func makeGiftUpgradePreviewScreen(context: AccountContext, attributes: [StarGift.UniqueGift.Attribute], peerName: String) -> ViewController {
-        return GiftViewScreen(context: context, subject: .upgradePreview(attributes, peerName))
+    public func makeGiftUpgradePreviewScreen(context: AccountContext, gift: StarGift.Gift, attributes: [StarGift.UniqueGift.Attribute], peerName: String) -> ViewController {
+        return GiftViewScreen(context: context, subject: .upgradePreview(gift, attributes, peerName))
     }
     
     public func makeGiftAuctionInfoScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: (() -> Void)?) -> ViewController {
@@ -3891,8 +3891,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return giftOfferAlertController(context: context, updatedPresentationData: updatedPresentationData, gift: gift, peer: peer, amount: amount, commit: commit)
     }
     
-    public func makeGiftUpgradeVariantsScreen(context: AccountContext, gift: StarGift, onlyCrafted: Bool, attributes: [StarGift.UniqueGift.Attribute], selectedAttributes: [StarGift.UniqueGift.Attribute]?, focusedAttribute: StarGift.UniqueGift.Attribute?) -> ViewController {
-        return GiftUpgradeVariantsScreen(context: context, gift: gift, onlyCrafted: onlyCrafted, attributes: attributes, selectedAttributes: selectedAttributes, focusedAttribute: focusedAttribute)
+    public func makeGiftUpgradeVariantsScreen(context: AccountContext, gift: StarGift, crafted: Bool, attributes: [StarGift.UniqueGift.Attribute], selectedAttributes: [StarGift.UniqueGift.Attribute]?, focusedAttribute: StarGift.UniqueGift.Attribute?) -> ViewController {
+        return GiftUpgradeVariantsScreen(context: context, gift: gift, crafted: crafted, attributes: attributes, selectedAttributes: selectedAttributes, focusedAttribute: focusedAttribute)
     }
     
     public func makeGiftAuctionWearPreviewScreen(context: AccountContext, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?, attributes: [StarGift.UniqueGift.Attribute], completion: @escaping () -> Void) -> ViewController {

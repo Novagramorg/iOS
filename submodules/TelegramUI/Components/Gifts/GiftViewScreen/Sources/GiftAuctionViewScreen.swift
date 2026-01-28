@@ -1083,7 +1083,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         guard let state, let attributes = state.giftUpgradeAttributes else {
                             return
                         }
-                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsScreen(context: component.context, gift: .generic(gift), onlyCrafted: false, attributes: attributes, selectedAttributes: nil, focusedAttribute: nil)
+                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsScreen(context: component.context, gift: .generic(gift), crafted: false, attributes: attributes, selectedAttributes: nil, focusedAttribute: nil)
                         environment.controller()?.push(variantsController)
                     }, animateScale: false),
                     availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),
