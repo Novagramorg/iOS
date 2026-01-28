@@ -787,7 +787,6 @@ private final class CraftGiftPageContent: Component {
                 }
             }
             
-            
             let permilleValue = selectedGifts.reduce(0, { $0 + Int($1.value.gift.craftChancePermille ?? 0) })
             if component.displayState == .crafting {
                 //var craftingOriginY = craftContentHeight * 0.5 + 160.0
@@ -814,7 +813,7 @@ private final class CraftGiftPageContent: Component {
                     craftingTitleView.frame = craftingTitleFrame
                 }
                 craftingOriginY += craftingTitleSize.height
-                craftingOriginY += 7.0
+                craftingOriginY += 6.0
                 
                 let craftingSubtitleSize = self.craftingSubtitle.update(
                     transition: transition,
@@ -1173,7 +1172,7 @@ private final class CraftGiftPageContent: Component {
                     )
                 ),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width, height: 245.0)
+                containerSize: CGSize(width: availableSize.width, height: 260.0)
             )
             let infoHeaderFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - infoHeaderSize.width) * 0.5), y: 0.0), size: infoHeaderSize)
             if let infoHeaderView = self.infoHeader.view {
@@ -1206,7 +1205,7 @@ private final class CraftGiftPageContent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
-            let infoTitleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - infoTitleSize.width) * 0.5), y: infoHeaderSize.height - 73.0), size: infoTitleSize)
+            let infoTitleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - infoTitleSize.width) * 0.5), y: infoHeaderSize.height - 87.0), size: infoTitleSize)
             if let infoTitleView = self.infoTitle.view {
                 if infoTitleView.superview == nil {
                     self.infoContainer.addSubview(infoTitleView)
@@ -1233,7 +1232,7 @@ private final class CraftGiftPageContent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
-            let infoDescriptionTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - infoDescriptionTextSize.width) * 0.5), y: infoHeaderSize.height - 40.0), size: infoDescriptionTextSize)
+            let infoDescriptionTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - infoDescriptionTextSize.width) * 0.5), y: infoHeaderSize.height - 56.0), size: infoDescriptionTextSize)
             if let infoDescriptionTextView = self.infoDescription.view {
                 if infoDescriptionTextView.superview == nil {
                     self.infoContainer.addSubview(infoDescriptionTextView)
@@ -1429,6 +1428,7 @@ private final class SheetContainerComponent: CombinedComponent {
         let animateOut = StoredActionSlot(Action<Void>.self)
         
         let externalState = CraftGiftPageContent.ExternalState()
+        let playButtonAnimation = ActionSlot<Void>()
                 
         return { context in
             let component = context.component
@@ -1514,9 +1514,23 @@ private final class SheetContainerComponent: CombinedComponent {
             
             let buttonContent: AnyComponentWithIdentity<Empty>
             if state.displayInfo {
-                
+                var buttonTitle: [AnyComponentWithIdentity<Empty>] = []
+                buttonTitle.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(LottieComponent(
+                    content: LottieComponent.AppBundleContent(name: "anim_ok"),
+                    color: environment.theme.list.itemCheckColors.foregroundColor,
+                    startingPosition: .begin,
+                    size: CGSize(width: 28.0, height: 28.0),
+                    playOnce: playButtonAnimation
+                ))))
+                buttonTitle.append(AnyComponentWithIdentity(id: 1, component: AnyComponent(ButtonTextContentComponent(
+                    text: strings.Gift_Craft_Info_Understood,
+                    badge: 0,
+                    textColor: environment.theme.list.itemCheckColors.foregroundColor,
+                    badgeBackground: environment.theme.list.itemCheckColors.foregroundColor,
+                    badgeForeground: environment.theme.list.itemCheckColors.fillColor
+                ))))
                 buttonContent = AnyComponentWithIdentity(id: "info", component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Info_SelectGifts, font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor)))
+                    HStack(buttonTitle, spacing: 2.0)
                 ))
             } else if state.displayFailure {
                 buttonContent = AnyComponentWithIdentity(id: "fail", component: AnyComponent(
@@ -1642,8 +1656,9 @@ private final class SheetContainerComponent: CombinedComponent {
                                 guard let state, !state.inProgress else {
                                     return
                                 }
-                                state.displayInfo = !state.displayInfo
+                                state.displayInfo = true
                                 state.updated(transition: .spring(duration: 0.3))
+                                playButtonAnimation.invoke(Void())
                             }
                         )
                     ),

@@ -3063,7 +3063,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                 originY += 16.0
                 
                 if case .upgradePreview = component.subject {
-                    
                 } else if !incoming {
                 } else {
                     let checkTheme = CheckComponent.Theme(
@@ -3120,17 +3119,13 @@ private final class GiftViewSheetContent: CombinedComponent {
                 var descriptionText: String
                 var hasDescriptionButton = false
                 if let uniqueGift {
-                    titleString = uniqueGift.title
-                    var isCrafted = false
+                    titleString = uniqueGift.title + " **#\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))**"
+                    descriptionText = "\(strings.Gift_Unique_Collectible) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))"
                     for attribute in uniqueGift.attributes {
-                        if case let .model(_, _, _, crafted) = attribute {
-                            isCrafted = crafted
+                        if case let .model(name, _, _, _) = attribute {
+                            descriptionText = name
                         }
                     }
-                    //TODO:localize
-                    let prefix: String = isCrafted ? "Crafted Collectible" : strings.Gift_Unique_Collectible
-                    descriptionText = "\(prefix) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))"
-                    
                     if let releasedBy = uniqueGift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
                         descriptionText = strings.Gift_Unique_CollectibleBy("#\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))", "[@\(addressName)]()").string
                         hasDescriptionButton = true
@@ -3204,14 +3199,24 @@ private final class GiftViewSheetContent: CombinedComponent {
                     descriptionText = modifiedString
                 }
                 
+                let titleFont = Font.bold(20.0)
+                let smallTitleFont = Font.bold(15.0)
+                let titleAttributedString: NSAttributedString
+                if let uniqueGift {
+                    let numberFont = uniqueGift.number < 1000 ? titleFont : smallTitleFont
+                    titleAttributedString = parseMarkdownIntoAttributedString(titleString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: .white), bold: MarkdownAttributeSet(font: numberFont, textColor: vibrantColor), link: MarkdownAttributeSet(font: titleFont, textColor: .white), linkAttribute: { _ in return nil }), textAlignment: .center)
+                } else {
+                    titleAttributedString = NSAttributedString(
+                        string: titleString,
+                        font: titleFont,
+                        textColor: theme.actionSheet.primaryTextColor,
+                        paragraphAlignment: .center
+                    )
+                }
+                
                 let title = title.update(
                     component: MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: titleString,
-                            font: Font.bold(20.0),
-                            textColor: uniqueGift != nil ? .white : theme.actionSheet.primaryTextColor,
-                            paragraphAlignment: .center
-                        )),
+                        text: .plain(titleAttributedString),
                         horizontalAlignment: .center,
                         maximumNumberOfLines: 1
                     ),
@@ -4103,14 +4108,17 @@ private final class GiftViewSheetContent: CombinedComponent {
                                         badgeString = formatPercentage(Float(value) * 0.1)
                                     }
                                 case .epic:
-                                    badgeString = "epic"
+                                    badgeString = strings.Gift_Attribute_Epic
                                     badgeColor = UIColor(rgb: 0xaf52de)
                                 case .legendary:
-                                    badgeString = "legendary"
+                                    badgeString = strings.Gift_Attribute_Legendary
                                     badgeColor = UIColor(rgb: 0xd57e32)
                                 case .rare:
-                                    badgeString = "rare"
-                                    badgeColor = UIColor(rgb: 0x79993d)
+                                    badgeString = strings.Gift_Attribute_Rare
+                                    badgeColor = UIColor(rgb: 0x25a3b9)
+                                case .uncommon:
+                                    badgeString = strings.Gift_Attribute_Uncommon
+                                    badgeColor = UIColor(rgb: 0x22b447)
                                 }
                                 items.append(AnyComponentWithIdentity(
                                     id: AnyHashable(1),

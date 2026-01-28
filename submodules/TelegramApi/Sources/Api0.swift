@@ -997,6 +997,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[2029777832] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarityEpic($0) }
     dict[-822614104] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarityLegendary($0) }
     dict[-259174037] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarityRare($0) }
+    dict[-607231095] = { return Api.StarGiftAttributeRarity.parse_starGiftAttributeRarityUncommon($0) }
     dict[1118831432] = { return Api.StarGiftAuctionAcquiredGift.parse_starGiftAuctionAcquiredGift($0) }
     dict[984483112] = { return Api.StarGiftAuctionRound.parse_starGiftAuctionRound($0) }
     dict[178266597] = { return Api.StarGiftAuctionRound.parse_starGiftAuctionRoundExtendable($0) }
