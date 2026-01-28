@@ -792,9 +792,7 @@ public final class GiftItemComponent: Component {
                 func formatPercentage(_ value: Float) -> String {
                     return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%"
                 }
-                
-                //TODO:localize
-               
+                               
                 let badgeString: String
                 var badgeColor: UIColor?
                 switch rarity {
@@ -805,13 +803,13 @@ public final class GiftItemComponent: Component {
                         badgeString = formatPercentage(Float(value) * 0.1)
                     }
                 case .epic:
-                    badgeString = "epic"
+                    badgeString = component.strings.Gift_Attribute_Epic
                     badgeColor = UIColor(rgb: 0xaf52de)
                 case .legendary:
-                    badgeString = "legendary"
+                    badgeString = component.strings.Gift_Attribute_Legendary
                     badgeColor = UIColor(rgb: 0xd57e32)
                 case .rare:
-                    badgeString = "rare"
+                    badgeString = component.strings.Gift_Attribute_Rare
                     badgeColor = UIColor(rgb: 0x79993d)
                 }
                 

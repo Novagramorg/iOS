@@ -15673,3 +15673,38 @@ Error: %8$@";
 "Appearance.SendWithCmdEnter" = "Send Messages with ⌘+Enter";
 
 "Notification.StarsGift.Crafted" = "You crafted a new unique collectible";
+
+"Gift.Craft.Title" = "Craft Gift";
+"Gift.Craft.Description" = "Add up to **4 gifts** to craft new\n**$ %@**.\n\nIf crafting fails, all used gifts\nwill be lost.";
+"Gift.Craft.ViewVariants" = "View all new variants";
+"Gift.Craft.BackdropTooltip" = "There's **%1$@%** chance the crafted gift will have **%2$@** backdrop.";
+"Gift.Craft.SymbolTooltip" = "There's **%1$@%** chance the crafted gift will have **%2$@** symbol.";
+"Gift.Craft.SuccessChanceSuffix" = "% Success Chance";
+"Gift.Craft.Craft" = "Craft %@";
+"Gift.Craft.Crafting.Title" = "Crafting";
+"Gift.Craft.Crafting.Description" = "If crafting fails, all used gifts\nwill be lost.";
+"Gift.Craft.Crafting.SuccessChance" = "%@% Success Chance";
+"Gift.Craft.CraftingFailed.Title" = "Crafting Failed";
+"Gift.Craft.CraftingFailed.Text_1" = "This crafting attempt was unsuccessful.\n**%@ gift** was lost.";
+"Gift.Craft.CraftingFailed.Text_any" = "This crafting attempt was unsuccessful.\n**%@ gifts** were lost.";
+"Gift.Craft.CraftingFailed.CraftAnotherGift" = "Craft Another Gift";
+"Gift.Craft.Info.Title" = "Craft Gift";
+"Gift.Craft.Info.Description" = "Use your existing gifts to craft new ones.";
+"Gift.Craft.Info.Paragraph1.Title" = "Combine Gifts";
+"Gift.Craft.Info.Paragraph1.Text" = "Add up to 4 Gifts to attempt crafting a new upgraded model.";
+"Gift.Craft.Info.Paragraph2.Title" = "Input Matters";
+"Gift.Craft.Info.Paragraph2.Text" = "Each craft has a success chance. Better combinations improve the outcome.";
+"Gift.Craft.Info.Paragraph3.Title" = "Exclusive Look";
+"Gift.Craft.Info.Paragraph3.Text" = "Reforge gifts into a rarer collectibles with a new look.";
+"Gift.Craft.Info.SelectGifts" = "Select Gifts";
+"Gift.Craft.Unavailable.Title" = "Try Later";
+"Gift.Craft.Unavailable.Text" = "You will be able to craft this gift on %@.";
+
+"Gift.Attribute.Rare" = "rare";
+"Gift.Attribute.Legendary" = "legendary";
+"Gift.Attribute.Epic" = "epic";
+
+"SocksProxySetup.CheckStatus" = "Check Status";
+"SocksProxySetup.Warning.Title" = "Warning";
+"SocksProxySetup.Warning.Text" = "This action will expose your IP address to the admin of the proxy server.";
+"SocksProxySetup.Warning.Proceed" = "Proceed";
