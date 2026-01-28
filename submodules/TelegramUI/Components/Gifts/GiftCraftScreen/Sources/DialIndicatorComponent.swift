@@ -106,7 +106,7 @@ final class DialIndicatorComponent: Component {
                         
             self.backgroundLayer.lineCap = .round
             self.foregroundLayer.lineCap = .round
-            
+                        
             self.addSubview(self.containerView)
             
             self.containerView.layer.addSublayer(self.backgroundLayer)

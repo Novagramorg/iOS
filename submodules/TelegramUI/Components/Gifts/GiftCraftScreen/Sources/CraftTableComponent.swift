@@ -546,7 +546,7 @@ final class GiftSlotComponent: Component {
             self.state = state
             
             let backgroundFrame = CGRect(origin: .zero, size: availableSize).insetBy(dx: 1.0, dy: 1.0)
-            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 28.0, isDark: true, tintColor: .init(kind: .custom(style: .default, color: component.buttonColor)), transition: .immediate)
+            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 28.0, isDark: true, tintColor: .init(kind: .custom(style: .default, color: component.buttonColor)), isInteractive: true, transition: .immediate)
             transition.setFrame(view: self.backgroundView, frame: backgroundFrame)
             if component.gift == nil && component.isCrafting && previousComponent?.isCrafting == false {
                 transition.setBlur(layer: self.backgroundView.layer, radius: 10.0)
