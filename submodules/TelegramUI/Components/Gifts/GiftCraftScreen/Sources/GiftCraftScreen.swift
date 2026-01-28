@@ -414,7 +414,7 @@ private final class CraftGiftPageContent: Component {
             let titleSize = self.title.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Craft Gift", font: Font.semibold(17.0), textColor: .white)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Title, font: Font.semibold(17.0), textColor: .white)))
                 ),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -426,17 +426,14 @@ private final class CraftGiftPageContent: Component {
                 }
                 transition.setFrame(view: titleView, frame: titleFrame)
                 transition.setAlpha(view: titleView, alpha: 1.0)
-                //transition.setBlur(layer: titleView.layer, radius: component.isCrafting ? 10.0 : 0.0)
             }
             
             let giftTitle = "\(component.gift.title) #\(formatCollectibleNumber(component.gift.number, dateTimeFormat: environment.dateTimeFormat))"
             
-            //TODO:localize
-            
             let descriptionFont = Font.regular(13.0)
             let descriptionBoldFont = Font.semibold(13.0)
             let descriptionColor = UIColor.white
-            let rawDescriptionString = "Add up to **4 gifts** to craft new\n**$ \(giftTitle)**.\n\nIf crafting fails, all used gifts\nwill be lost."
+            let rawDescriptionString = environment.strings.Gift_Craft_Description(giftTitle).string
             let descriptionString = parseMarkdownIntoAttributedString(rawDescriptionString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: descriptionFont, textColor: descriptionColor), bold: MarkdownAttributeSet(font: descriptionBoldFont, textColor: descriptionColor), link: MarkdownAttributeSet(font: descriptionFont, textColor: descriptionColor), linkAttribute: { _ in return nil })).mutableCopy() as! NSMutableAttributedString
             
             if let gift = self.starGiftsMap[component.gift.giftId] {
@@ -582,7 +579,7 @@ private final class CraftGiftPageContent: Component {
                             #if DEBUG
                             self.component?.externalState.testFailOrSuccess = true
                             #endif
-                            self.showAttributeInfo(tag: backdropButtonTag, text: "There's **\(backdropPermille / 10)%** chance the crafted gift will have **\(backdropName)** backdrop.")
+                            self.showAttributeInfo(tag: backdropButtonTag, text: environment.strings.Gift_Craft_BackdropTooltip("\(backdropPermille / 10)", backdropName).string)
                         },
                         tag: backdropButtonTag
                     )
@@ -631,7 +628,7 @@ private final class CraftGiftPageContent: Component {
                             #if DEBUG
                             self.component?.externalState.testFailOrSuccess = false
                             #endif
-                            self.showAttributeInfo(tag: symbolButtonTag, text: "There's **\(symbolPermille / 10)%** chance the crafted gift will have **\(symbolName)** backdrop.")
+                            self.showAttributeInfo(tag: symbolButtonTag, text: environment.strings.Gift_Craft_SymbolTooltip("\(symbolPermille / 10)", symbolName).string)
                         },
                         tag: symbolButtonTag
                     )
@@ -642,7 +639,7 @@ private final class CraftGiftPageContent: Component {
             craftContentHeight += backdropDialSize.height
             craftContentHeight += 15.0
             
-            let variantsString = "View all new variants"
+            let variantsString = environment.strings.Gift_Craft_ViewVariants
             let variantsButtonMeasure = self.variantsButtonMeasure.update(
                 transition: .immediate,
                 component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: variantsString, font: Font.semibold(13.0), textColor: .clear)))),
@@ -800,7 +797,7 @@ private final class CraftGiftPageContent: Component {
                 let craftingTitleSize = self.craftingTitle.update(
                     transition: transition,
                     component: AnyComponent(
-                        MultilineTextComponent(text: .plain(NSAttributedString(string: "Crafting", font: Font.bold(20.0), textColor: .white)))
+                        MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Crafting_Title, font: Font.bold(20.0), textColor: .white)))
                     ),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -844,7 +841,7 @@ private final class CraftGiftPageContent: Component {
                 let descriptionFont = Font.regular(13.0)
                 let descriptionBoldFont = Font.semibold(13.0)
                 let descriptionColor = UIColor.white.withAlphaComponent(0.5)
-                let rawDescriptionString = "If crafting fails, all used gifts\nwill be lost."
+                let rawDescriptionString = environment.strings.Gift_Craft_Crafting_Description
                 let descriptionString = parseMarkdownIntoAttributedString(rawDescriptionString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: descriptionFont, textColor: descriptionColor), bold: MarkdownAttributeSet(font: descriptionBoldFont, textColor: descriptionColor), link: MarkdownAttributeSet(font: descriptionFont, textColor: descriptionColor), linkAttribute: { _ in return nil })).mutableCopy() as! NSMutableAttributedString
                                 
                 let craftingDescriptionSize = self.craftingDescription.update(
@@ -874,7 +871,7 @@ private final class CraftGiftPageContent: Component {
                 craftingOriginY += craftingDescriptionSize.height
                 craftingOriginY += 24.0
                 
-                let craftingProbabilityString = "\(permilleValue / 10)% Success Chance"
+                let craftingProbabilityString = environment.strings.Gift_Craft_Crafting_SuccessChance("\(permilleValue / 10)").string
                 let craftingProbabilityMeasure = self.craftingProbabilityMeasure.update(
                     transition: .immediate,
                     component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: craftingProbabilityString, font: Font.semibold(13.0), textColor: .clear)))),
@@ -945,7 +942,7 @@ private final class CraftGiftPageContent: Component {
                 let failureTitleSize = self.failureTitle.update(
                     transition: transition,
                     component: AnyComponent(
-                        MultilineTextComponent(text: .plain(NSAttributedString(string: "Crafting Failed", font: Font.bold(20.0), textColor: UIColor(rgb: 0xff746d))))
+                        MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_CraftingFailed_Title, font: Font.bold(20.0), textColor: UIColor(rgb: 0xff746d))))
                     ),
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -967,7 +964,7 @@ private final class CraftGiftPageContent: Component {
                 let descriptionFont = Font.regular(13.0)
                 let descriptionBoldFont = Font.semibold(13.0)
                 let descriptionColor = UIColor(rgb: 0xf7af8c)
-                let rawDescriptionString = "This crafting attempt was unsuccessful.\n**\(component.selectedGiftIds.count) gifts** were lost."
+                let rawDescriptionString = environment.strings.Gift_Craft_CraftingFailed_Text(Int32(component.selectedGiftIds.count))
                 let descriptionString = parseMarkdownIntoAttributedString(rawDescriptionString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: descriptionFont, textColor: descriptionColor), bold: MarkdownAttributeSet(font: descriptionBoldFont, textColor: descriptionColor), link: MarkdownAttributeSet(font: descriptionFont, textColor: descriptionColor), linkAttribute: { _ in return nil })).mutableCopy() as! NSMutableAttributedString
                                 
                 let failureDescriptionSize = self.failureDescription.update(
@@ -1204,7 +1201,7 @@ private final class CraftGiftPageContent: Component {
             let infoTitleSize = self.infoTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Craft Gift", font: Font.bold(20.0), textColor: .white)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Info_Title, font: Font.bold(20.0), textColor: .white)))
                 ),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -1221,7 +1218,7 @@ private final class CraftGiftPageContent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .markdown(
-                        text: "Use your existing gifts to craft new ones.",
+                        text: environment.strings.Gift_Craft_Info_Description,
                         attributes: MarkdownAttributes(
                             body: MarkdownAttributeSet(font: Font.regular(14.0), textColor: UIColor(rgb: 0xffffff, alpha: 0.6)),
                             bold: MarkdownAttributeSet(font: Font.semibold(14.0), textColor: UIColor(rgb: 0xffffff, alpha: 0.6)),
@@ -1256,11 +1253,11 @@ private final class CraftGiftPageContent: Component {
             var items: [AnyComponentWithIdentity<Empty>] = []
             items.append(
                 AnyComponentWithIdentity(
-                    id: "combine",
+                    id: "paragraph1",
                     component: AnyComponent(InfoParagraphComponent(
-                        title: "Combine Gifts",
+                        title: environment.strings.Gift_Craft_Info_Paragraph1_Title,
                         titleColor: titleColor,
-                        text: "Add up to 3 Gifts to attempt crafting a new upgraded model.",
+                        text: environment.strings.Gift_Craft_Info_Paragraph1_Text,
                         textColor: textColor,
                         accentColor: accentColor,
                         iconName: "Premium/Collectible/Badge",
@@ -1270,11 +1267,11 @@ private final class CraftGiftPageContent: Component {
             )
             items.append(
                 AnyComponentWithIdentity(
-                    id: "input",
+                    id: "paragraph2",
                     component: AnyComponent(InfoParagraphComponent(
-                        title: "Input Matters",
+                        title: environment.strings.Gift_Craft_Info_Paragraph2_Title,
                         titleColor: titleColor,
-                        text: "Each craft has a success chance. Better combinations improve the outcome.",
+                        text: environment.strings.Gift_Craft_Info_Paragraph2_Text,
                         textColor: textColor,
                         accentColor: accentColor,
                         iconName: "Premium/Collectible/Transferable",
@@ -1284,11 +1281,11 @@ private final class CraftGiftPageContent: Component {
             )
             items.append(
                 AnyComponentWithIdentity(
-                    id: "exclusive",
+                    id: "paragraph3",
                     component: AnyComponent(InfoParagraphComponent(
-                        title: "Exclusive Look",
+                        title: environment.strings.Gift_Craft_Info_Paragraph3_Title,
                         titleColor: titleColor,
-                        text: "Reforge gifts into a rarer collectibles with a new look",
+                        text: environment.strings.Gift_Craft_Info_Paragraph3_Text,
                         textColor: textColor,
                         accentColor: accentColor,
                         iconName: "Premium/Collectible/Unique",
@@ -1517,17 +1514,18 @@ private final class SheetContainerComponent: CombinedComponent {
             
             let buttonContent: AnyComponentWithIdentity<Empty>
             if state.displayInfo {
+                
                 buttonContent = AnyComponentWithIdentity(id: "info", component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Select Gifts", font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Info_SelectGifts, font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor)))
                 ))
             } else if state.displayFailure {
                 buttonContent = AnyComponentWithIdentity(id: "fail", component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Craft Another Gift", font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_CraftingFailed_CraftAnotherGift, font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor)))
                 ))
             } else {
                 var buttonAnimatedItems: [AnimatedTextComponent.Item] = []
                 buttonAnimatedItems.append(AnimatedTextComponent.Item(id: "percent", content: .number(Int(permilleValue / 10), minDigits: 1)))
-                buttonAnimatedItems.append(AnimatedTextComponent.Item(id: "suffix", content: .text("% Success Chance")))
+                buttonAnimatedItems.append(AnimatedTextComponent.Item(id: "suffix", content: .text(environment.strings.Gift_Craft_SuccessChanceSuffix)))
                 
                 buttonContent = AnyComponentWithIdentity(id: "craft", component: AnyComponent(
                     VStack([
@@ -1537,7 +1535,7 @@ private final class SheetContainerComponent: CombinedComponent {
                                 HStack([
                                     AnyComponentWithIdentity(
                                         id: AnyHashable("label"),
-                                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: "Craft \(giftTitle)", font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor))))
+                                        component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Craft(giftTitle).string, font: Font.semibold(17.0), textColor: environment.theme.list.itemCheckColors.foregroundColor))))
                                     )
                                 ], spacing: 2.0)
                             )

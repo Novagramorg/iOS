@@ -613,6 +613,7 @@ public final class ButtonComponent: Component {
                 if contentView.superview == nil {
                     contentTransition = .immediate
                     animateIn = true
+                    contentView.layer.rasterizationScale = UIScreenScale
                     contentView.isUserInteractionEnabled = false
                     contentContainerView.addSubview(contentView)
                     
@@ -624,7 +625,10 @@ public final class ButtonComponent: Component {
                 contentTransition.setAlpha(view: contentView, alpha: contentAlpha)
                 
                 if animateIn && previousContentItem != nil && !transition.animation.isImmediate {
-                    contentView.layer.animateScale(from: 0.4, to: 1.0, duration: 0.35, timingFunction: kCAMediaTimingFunctionSpring)
+                    contentView.layer.shouldRasterize = true
+                    contentView.layer.animateScale(from: 0.4, to: 1.0, duration: 0.35, timingFunction: kCAMediaTimingFunctionSpring, completion: { _ in
+                        contentView.layer.shouldRasterize = false
+                    })
                     contentView.layer.animateAlpha(from: 0.0, to: contentAlpha, duration: 0.1)
                     contentView.layer.animatePosition(from: CGPoint(x: 0.0, y: -size.height * 0.15), to: CGPoint(), duration: 0.35, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
                 }
@@ -632,6 +636,7 @@ public final class ButtonComponent: Component {
             
             if let previousContentItem, let previousContentView = previousContentItem.view.view {
                 if !transition.animation.isImmediate {
+                    previousContentView.layer.shouldRasterize = true
                     previousContentView.layer.animateScale(from: 1.0, to: 0.0, duration: 0.35, timingFunction: kCAMediaTimingFunctionSpring, removeOnCompletion: false)
                     previousContentView.layer.animateAlpha(from: contentAlpha, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak previousContentView] _ in
                         previousContentView?.removeFromSuperview()

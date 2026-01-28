@@ -1115,11 +1115,10 @@ private final class GiftViewSheetContent: CombinedComponent {
             let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
             if let canCraftDate = arguments.canCraftDate, currentTime < canCraftDate {
                 let dateString = stringForFullDate(timestamp: canCraftDate, strings: presentationData.strings, dateTimeFormat: presentationData.dateTimeFormat)
-                //TODO:localize
                 let alertController = textAlertController(
                     context: self.context,
-                    title: "Try Later",
-                    text: "You will be able to craft this gift on \(dateString).",
+                    title: presentationData.strings.Gift_Craft_Unavailable_Title,
+                    text: presentationData.strings.Gift_Craft_Unavailable_Text(dateString).string,
                     actions: [
                         TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})
                     ],

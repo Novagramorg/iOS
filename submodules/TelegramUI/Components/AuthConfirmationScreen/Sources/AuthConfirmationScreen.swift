@@ -89,7 +89,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                 let alertController = textAlertController(
                     context: self.context,
                     title: "Phone Number",
-                    text: "**\(domain)** wants to access your phone number **\(phoneNumber)**. Allow access?",
+                    text: "**\(domain)** wants to access your phone number **\(phoneNumber)**.\n\nAllow access?",
                     actions: [
                         TextAlertAction(type: .genericAction, title: "Deny", action: {
                             commit(false)
