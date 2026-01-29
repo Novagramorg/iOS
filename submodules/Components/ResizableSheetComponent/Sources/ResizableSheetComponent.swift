@@ -530,6 +530,11 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 if let view = leftItemView.view {
                     if view.superview == nil {
                         self.navigationBarContainer.addSubview(view)
+                        
+                        if !transition.animation.isImmediate {
+                            view.layer.animateScale(from: 0.01, to: 1.0, duration: 0.25)
+                            view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                        }
                     }
                     leftItemTransition.setFrame(view: view, frame: leftItemFrame)
                 }
@@ -587,17 +592,19 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             }
             
             if let bottomItem = component.bottomItem {
+                var bottomItemTransition = transition
                 let bottomItemView: ComponentView<Empty>
                 if let current = self.bottomItemView {
                     bottomItemView = current
                 } else {
+                    bottomItemTransition = .immediate
                     bottomItemView = ComponentView<Empty>()
                     self.bottomItemView = bottomItemView
                 }
                 
                 let bottomInsets = ContainerViewLayout.concentricInsets(bottomInset: sheetEnvironment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
                 let bottomItemSize = bottomItemView.update(
-                    transition: transition,
+                    transition: bottomItemTransition,
                     component: bottomItem,
                     environment: {},
                     containerSize: CGSize(width: containerSize.width - bottomInsets.left - bottomInsets.right, height: 52.0)
@@ -606,12 +613,24 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 if let view = bottomItemView.view {
                     if view.superview == nil {
                         self.bottomContainer.addSubview(view)
+                        
+                        if !transition.animation.isImmediate {
+                            view.layer.animateScale(from: 0.01, to: 1.0, duration: 0.25)
+                            view.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                        }
                     }
-                    transition.setFrame(view: view, frame: bottomItemFrame)
+                    bottomItemTransition.setFrame(view: view, frame: bottomItemFrame)
                 }
             } else if let bottomItemView = self.bottomItemView {
                 self.bottomItemView = nil
-                bottomItemView.view?.removeFromSuperview()
+                if !transition.animation.isImmediate {
+                    bottomItemView.view?.layer.animateScale(from: 1.0, to: 0.01, duration: 0.25, removeOnCompletion: false)
+                    bottomItemView.view?.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                        bottomItemView.view?.removeFromSuperview()
+                    })
+                } else {
+                    bottomItemView.view?.removeFromSuperview()
+                }
             }
             
             let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: rawSideInset, y: availableSize.height - edgeEffectHeight), size: CGSize(width: fillingSize, height: edgeEffectHeight))

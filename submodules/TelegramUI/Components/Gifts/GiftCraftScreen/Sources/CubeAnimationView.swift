@@ -79,6 +79,8 @@ final class CubeAnimationView: UIView {
     private var finishDelayTimerY: Timer?
     private var cubeScale: Float = 1.0
     private var hasFiredFinishApproach = false
+    
+    var isSuccess = false
 
     var onFinishApproach: ((Bool) -> Void)?
 
@@ -485,7 +487,7 @@ final class CubeAnimationView: UIView {
         let duration: TimeInterval = 0.2
         let startQuad = Quad(rect: sticker.frame)
         let animationView: UIView
-        if let snapshot = sticker.snapshotView(afterScreenUpdates: true) {
+        if let snapshot = sticker.snapshotView(afterScreenUpdates: false) {
             self.warpSnapshot?.removeFromSuperview()
             self.warpSnapshot = snapshot
                         
@@ -606,7 +608,7 @@ final class CubeAnimationView: UIView {
             }
             let stickerIndex = indices[index]
             if self.stickers.indices.contains(stickerIndex) {
-                let isLast = stickerIndex == indices.count - 1
+                let isLast = index == indices.count - 1
                 self.launchStickerView(self.stickers[stickerIndex], emphasized: isLast, willFinish: isLast)
             }
             self.scheduleStickerSequence(from: index + 1, indices: indices)
@@ -697,10 +699,12 @@ final class CubeAnimationView: UIView {
                 let upsideDown = abs(shortestAngleDelta(from: self.rotation.x, to: Float.pi)) < (Float.pi / 2)
                 self.onFinishApproach?(upsideDown)
             }
-            if absRemaining <= self.finishSuccessScaleTriggerAngle {
+            if self.isSuccess, absRemaining <= self.finishSuccessScaleTriggerAngle {
                 let raw = (self.finishSuccessScaleTriggerAngle - absRemaining) / self.finishSuccessScaleTriggerAngle
                 let eased = raw * raw * (3 - 2 * raw)
                 self.cubeScale = 1.0 + (self.finishSuccessScale - 1.0) * eased
+            } else if !self.isSuccess {
+                self.cubeScale = 1.0
             }
             if abs(remaining) < 0.0008 && abs(self.angularVelocity.y) < 0.0015 {
                 self.finishRotationY = self.finishTargetYUnwrapped

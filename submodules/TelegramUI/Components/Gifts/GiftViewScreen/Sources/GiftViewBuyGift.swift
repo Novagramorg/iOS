@@ -37,6 +37,8 @@ public func buyStarGiftImpl(
                 parseMarkdown: true
             )
             controller.present(alertController, in: .window(.root))
+            
+            beforeCompletion()
             return
         }
         
@@ -207,6 +209,8 @@ public func buyStarGiftImpl(
                     context.sharedContext.applicationBindings.openUrl(fragmentUrl)
                 }
             ))
+            
+            beforeCompletion()
         } else {
             proceed()
         }

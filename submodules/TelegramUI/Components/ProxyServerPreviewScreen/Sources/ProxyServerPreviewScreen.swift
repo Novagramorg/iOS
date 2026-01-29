@@ -195,15 +195,14 @@ private final class ProxyServerPreviewSheetContent: CombinedComponent {
                 commit()
                 return
             }
-            //TODO:localize
             let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
             let alertController = textAlertController(
                 context: context,
-                title: "Warning",
-                text: "This action will expose your IP address to the admin of the proxy server.",
+                title: presentationData.strings.SocksProxySetup_Warning_Title,
+                text: presentationData.strings.SocksProxySetup_Warning_Text,
                 actions: [
                     TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
-                    TextAlertAction(type: .defaultAction, title: "Proceed", action: {
+                    TextAlertAction(type: .defaultAction, title: presentationData.strings.SocksProxySetup_Warning_Proceed, action: {
                         commit()
                     })
                 ]
@@ -253,14 +252,11 @@ private final class ProxyServerPreviewSheetContent: CombinedComponent {
                 availableSize: CGSize(width: 44.0, height: 44.0),
                 transition: .immediate
             )
-            
-            let titleText: String = "Proxy"
-            let buttonText: String = "Connect Proxy"
-            
+                        
             let title = title.update(
                 component: MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: titleText,
+                        string: strings.SocksProxySetup_Title,
                         font: Font.semibold(17.0),
                         textColor: theme.actionSheet.primaryTextColor,
                         paragraphAlignment: .center
@@ -323,7 +319,7 @@ private final class ProxyServerPreviewSheetContent: CombinedComponent {
                 ))
             }
             
-            var statusText = "Check Status"
+            var statusText = strings.SocksProxySetup_CheckStatus
             var statusColor = tableLinkColor
             var statusIsActive = true
             if let status = state.status {
@@ -378,7 +374,7 @@ private final class ProxyServerPreviewSheetContent: CombinedComponent {
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: buttonText, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                        component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: strings.SocksProxySetup_ConnectAndSave, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
                     ),
                     displaysProgress: state.inProgress,
                     action: {

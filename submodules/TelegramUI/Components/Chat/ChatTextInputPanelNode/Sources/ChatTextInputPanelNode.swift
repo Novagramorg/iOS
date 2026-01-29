@@ -2520,7 +2520,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             case let .audio(recorder, isLocked):
                 let hadAudioRecorder = self.mediaActionButtons.micButton.audioRecorder != nil
                 if !hadAudioRecorder, isLocked {
-                    self.mediaActionButtons.micButton.lock()
+                    DispatchQueue.main.async { [weak self] in
+                        self?.mediaActionButtons.micButton.lock()
+                    }
                 }
                 self.mediaActionButtons.micButton.audioRecorder = recorder
                 audioRecordingTimeNode.audioRecorder = recorder
@@ -4528,15 +4530,29 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
     }
     
-    public func chatInputTextNodeShouldReturn() -> Bool {
+    public func chatInputTextNodeShouldReturn(modifierFlags: UIKeyModifierFlags) -> Bool {
+        var shouldSendMessage = false
         if self.sendActionButtons.sendButton.supernode != nil && !self.sendActionButtons.sendButton.isHidden && !self.sendActionButtons.sendContainerNode.alpha.isZero {
-            self.sendButtonPressed()
+            if let context = self.context, context.sharedContext.currentChatSettings.with({ $0 }).sendWithCmdEnter {
+                if modifierFlags.contains(.command) {
+                    shouldSendMessage = true
+                }
+            } else {
+                if modifierFlags.isEmpty {
+                    shouldSendMessage = true
+                }
+            }
         }
-        return false
+        if shouldSendMessage {
+            self.sendButtonPressed()
+            return false
+        }
+        
+        return true
     }
     
     @objc public func editableTextNodeShouldReturn(_ editableTextNode: ASEditableTextNode) -> Bool {
-        return self.chatInputTextNodeShouldReturn()
+        return self.chatInputTextNodeShouldReturn(modifierFlags: [])
     }
     
     private func applyUpdateSendButtonIcon() {

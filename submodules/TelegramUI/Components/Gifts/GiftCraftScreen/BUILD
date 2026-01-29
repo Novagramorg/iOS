@@ -49,6 +49,7 @@ swift_library(
         "//submodules/TelegramUI/Components/SpaceWarpView",
         "//submodules/ConfettiEffect",
         "//submodules/TelegramNotices",
+        "//submodules/TelegramUI/Components/Gifts/GiftLoadingShimmerView",
     ],
     visibility = [
         "//visibility:public",

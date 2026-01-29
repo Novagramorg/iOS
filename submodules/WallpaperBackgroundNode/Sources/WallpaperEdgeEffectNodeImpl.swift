@@ -121,6 +121,7 @@ final class WallpaperEdgeEffectNodeImpl: ASDisplayNode, WallpaperEdgeEffectNode 
             return
         }
         self.contentNode.contents = parentNode.contentNode.contents
+        self.contentNode.contentMode = parentNode.contentNode.contentMode
         self.contentNode.backgroundColor = parentNode.contentNode.backgroundColor
         self.contentNode.alpha = parentNode.contentNode.alpha
         self.contentNode.isHidden = parentNode.contentNode.isHidden
