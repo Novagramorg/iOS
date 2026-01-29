@@ -5606,7 +5606,14 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                 if case let .unique(uniqueGift) = gift.gift {
                     resellAmounts = uniqueGift.resellAmounts
                 }
-                return (peerId, gift.fromPeer?.id, gift.fromPeer?.debugDisplayTitle, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash, gift.upgradeSeparate, gift.dropOriginalDetailsStars, nil, gift.number, gift.canCraftAt)
+                
+                var number: Int32?
+                if case let .unique(uniqueGift) = gift.gift {
+                    number = uniqueGift.number
+                } else if let numberValue = gift.number {
+                    number = numberValue
+                }
+                return (peerId, gift.fromPeer?.id, gift.fromPeer?.debugDisplayTitle, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash, gift.upgradeSeparate, gift.dropOriginalDetailsStars, nil, number, gift.canCraftAt)
             case .soldOutGift:
                 return nil
             case .upgradePreview:
