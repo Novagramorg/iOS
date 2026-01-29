@@ -1511,7 +1511,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                                 
                 if case let .unique(gift) = arguments.gift, let resellAmount = gift.resellAmounts?.first, resellAmount.amount.value > 0 {
-                    if arguments.reference != nil || gift.owner.peerId == context.account.peerId {
+                    if arguments.reference != nil || gift.owner?.peerId == self.context.account.peerId {
                         items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_View_Context_ChangePrice, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/PriceTag"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] c, _ in
@@ -2483,6 +2483,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             var isMyHostedUniqueGift = false
             var releasedByPeer: EnginePeer?
             var canGiftUpgrade = false
+            var isDismantled = false
             
             if case let .soldOutGift(gift) = subject {
                 animationFile = gift.file
@@ -2569,6 +2570,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 limitTotal = nil
                 convertStars = nil
                 titleString = ""
+            }
+            
+            if let uniqueGift, uniqueGift.owner == nil {
+                isDismantled = true
             }
             
             if !canUpgrade, let gift = state.starGiftsMap[giftId], let _ = gift.upgradeStars {
@@ -3764,6 +3769,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     )
                                 )
                             ))
+                        default:
+                            break
                         }
                         
                         if let peerId = uniqueGift.hostPeerId, let peer = state.peerMap[peerId] {
@@ -4332,7 +4339,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         )
                     ), at: hasOriginalInfo ? tableItems.count - 1 : tableItems.count)
                     
-                    if let valueAmount = uniqueGift.valueAmount, let valueCurrency = uniqueGift.valueCurrency {
+                    if let valueAmount = uniqueGift.valueAmount, let valueCurrency = uniqueGift.valueCurrency, !isDismantled {
                         tableItems.insert(.init(
                             id: "fiatValue",
                             title: strings.Gift_Unique_Value,
@@ -4545,7 +4552,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             if let controller = controller() as? GiftViewScreen, controller.openChatTheme != nil {
                 isChatTheme = true
             }
-            if ((incoming && !converted && !upgraded) || exported || selling || isChatTheme) && (!showUpgradePreview && !showWearPreview) {
+            if ((incoming && !converted && !upgraded) || exported || selling || isChatTheme) && (!showUpgradePreview && !showWearPreview && !isDismantled) {
                 let textFont = Font.regular(13.0)
                 let textColor = theme.list.itemSecondaryTextColor
                 let linkColor = theme.actionSheet.controlAccentColor
@@ -4654,6 +4661,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 foreground: theme.list.itemCheckColors.foregroundColor,
                 pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
             )
+                        
             let buttonChild: _UpdatedChildComponent
             if state.canSkip {
                 buttonChild = button.update(
@@ -5027,7 +5035,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     availableSize: buttonSize,
                     transition: context.transition
                 )
-            } else if incoming && !converted && !savedToProfile {
+            } else if incoming && !converted && !savedToProfile && !isDismantled {
                 let buttonTitle = isChannelGift ? strings.Gift_View_Display_Channel : strings.Gift_View_Display
                 buttonChild = button.update(
                     component: ButtonComponent(
@@ -5246,7 +5254,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             ))
             
             var rightControlItems: [GlassControlGroupComponent.Item] = []
-            if uniqueGift != nil && !showWearPreview {
+            if uniqueGift != nil && !showWearPreview && !isDismantled {
                 if let _ = component.subject.arguments?.canCraftDate {
                     var canCraft = false
                     if let data = component.context.currentAppConfiguration.with({ $0 }).data {
