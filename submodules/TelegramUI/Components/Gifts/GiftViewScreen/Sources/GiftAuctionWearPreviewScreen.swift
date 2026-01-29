@@ -294,8 +294,8 @@ private final class GiftAuctionWearPreviewSheetContent: CombinedComponent {
                 } else {
                     return false
                 }
-            }), case let .backdrop(_, _, innerColor, _, _, _, _) = backdropAttribute {
-                buttonColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05)
+            }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
+                buttonColor = UIColor(rgb: UInt32(bitPattern: outerColor)).mixedWith(.white, alpha: 0.2)
                 secondaryTextColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.3)
             }
             

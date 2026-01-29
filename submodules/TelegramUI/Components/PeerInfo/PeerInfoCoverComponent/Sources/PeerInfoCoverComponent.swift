@@ -587,8 +587,7 @@ public final class PeerInfoCoverComponent: Component {
                         self.avatarPatternContentLayers.append(itemLayer)
                     }
                     
-                    //itemLayer.frame = itemFrame
-                    transition.setFrame(layer: itemLayer, frame: itemFrame)
+                    itemLayer.frame = itemFrame
                     itemLayer.layerTintColor = UIColor(white: 0.0, alpha: 0.8).cgColor
                     transition.setAlpha(layer: itemLayer, alpha: 1.0 - itemScaleFraction)
                     

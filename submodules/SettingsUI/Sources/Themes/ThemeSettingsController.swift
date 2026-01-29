@@ -23,6 +23,7 @@ import ThemeCarouselItem
 import ThemeAccentColorScreen
 import WallpaperGridScreen
 import PeerNameColorItem
+import DeviceModel
 
 private final class ThemeSettingsControllerArguments {
     let context: AccountContext
@@ -38,13 +39,34 @@ private final class ThemeSettingsControllerArguments {
     let openBubbleSettings: () -> Void
     let openPowerSavingSettings: () -> Void
     let openStickersAndEmoji: () -> Void
+    let toggleSendWithCmdEnter: (Bool) -> Void
     let toggleShowNextMediaOnTap: (Bool) -> Void
     let selectAppIcon: (PresentationAppIcon) -> Void
     let editTheme: (PresentationCloudTheme) -> Void
     let themeContextAction: (Bool, PresentationThemeReference, ASDisplayNode, ContextGesture?) -> Void
     let colorContextAction: (Bool, PresentationThemeReference, ThemeSettingsColorOption?, ASDisplayNode, ContextGesture?) -> Void
     
-    init(context: AccountContext, selectTheme: @escaping (PresentationThemeReference) -> Void, openThemeSettings: @escaping () -> Void, openWallpaperSettings: @escaping () -> Void, openNameColorSettings: @escaping () -> Void, selectAccentColor: @escaping (PresentationThemeAccentColor?) -> Void, openAccentColorPicker: @escaping (PresentationThemeReference, Bool) -> Void, toggleNightTheme: @escaping (Bool) -> Void, openAutoNightTheme: @escaping () -> Void, openTextSize: @escaping () -> Void, openBubbleSettings: @escaping () -> Void, openPowerSavingSettings: @escaping () -> Void, openStickersAndEmoji: @escaping () -> Void, toggleShowNextMediaOnTap: @escaping (Bool) -> Void, selectAppIcon: @escaping (PresentationAppIcon) -> Void, editTheme: @escaping (PresentationCloudTheme) -> Void, themeContextAction: @escaping (Bool, PresentationThemeReference, ASDisplayNode, ContextGesture?) -> Void, colorContextAction: @escaping (Bool, PresentationThemeReference, ThemeSettingsColorOption?, ASDisplayNode, ContextGesture?) -> Void) {
+    init(
+        context: AccountContext,
+        selectTheme: @escaping (PresentationThemeReference) -> Void,
+        openThemeSettings: @escaping () -> Void,
+        openWallpaperSettings: @escaping () -> Void,
+        openNameColorSettings: @escaping () -> Void,
+        selectAccentColor: @escaping (PresentationThemeAccentColor?) -> Void,
+        openAccentColorPicker: @escaping (PresentationThemeReference, Bool) -> Void,
+        toggleNightTheme: @escaping (Bool) -> Void,
+        openAutoNightTheme: @escaping () -> Void,
+        openTextSize: @escaping () -> Void,
+        openBubbleSettings: @escaping () -> Void,
+        openPowerSavingSettings: @escaping () -> Void,
+        openStickersAndEmoji: @escaping () -> Void,
+        toggleSendWithCmdEnter: @escaping (Bool) -> Void,
+        toggleShowNextMediaOnTap: @escaping (Bool) -> Void,
+        selectAppIcon: @escaping (PresentationAppIcon) -> Void,
+        editTheme: @escaping (PresentationCloudTheme) -> Void,
+        themeContextAction: @escaping (Bool, PresentationThemeReference, ASDisplayNode, ContextGesture?) -> Void,
+        colorContextAction: @escaping (Bool, PresentationThemeReference, ThemeSettingsColorOption?, ASDisplayNode, ContextGesture?) -> Void
+    ) {
         self.context = context
         self.selectTheme = selectTheme
         self.openThemeSettings = openThemeSettings
@@ -58,6 +80,7 @@ private final class ThemeSettingsControllerArguments {
         self.openBubbleSettings = openBubbleSettings
         self.openPowerSavingSettings = openPowerSavingSettings
         self.openStickersAndEmoji = openStickersAndEmoji
+        self.toggleSendWithCmdEnter = toggleSendWithCmdEnter
         self.toggleShowNextMediaOnTap = toggleShowNextMediaOnTap
         self.selectAppIcon = selectAppIcon
         self.editTheme = editTheme
@@ -84,6 +107,7 @@ public enum ThemeSettingsEntryTag: ItemListItemTag {
     case powerSaving
     case stickersAndEmoji
     case animations
+    case sendWithCmdEnter
     case tapForNextMedia
     case nightMode
     
@@ -112,6 +136,7 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
     case powerSaving
     case stickersAndEmoji
     case otherHeader(PresentationTheme, String)
+    case sendWithCmdEnter(PresentationTheme, String, Bool)
     case showNextMediaOnTap(PresentationTheme, String, Bool)
     case showNextMediaOnTapInfo(PresentationTheme, String)
     
@@ -127,7 +152,7 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 return ThemeSettingsControllerSection.icon.rawValue
             case .powerSaving, .stickersAndEmoji:
                 return ThemeSettingsControllerSection.message.rawValue
-            case .otherHeader, .showNextMediaOnTap, .showNextMediaOnTapInfo:
+            case .otherHeader, .sendWithCmdEnter, .showNextMediaOnTap, .showNextMediaOnTapInfo:
                 return ThemeSettingsControllerSection.other.rawValue
         }
     }
@@ -164,10 +189,12 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
             return 13
         case .otherHeader:
             return 14
-        case .showNextMediaOnTap:
+        case .sendWithCmdEnter:
             return 15
-        case .showNextMediaOnTapInfo:
+        case .showNextMediaOnTap:
             return 16
+        case .showNextMediaOnTapInfo:
+            return 17
         }
     }
     
@@ -263,6 +290,12 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 } else {
                     return false
                 }
+            case let .sendWithCmdEnter(lhsTheme, lhsTitle, lhsValue):
+                if case let .sendWithCmdEnter(rhsTheme, rhsTitle, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
             case let .showNextMediaOnTap(lhsTheme, lhsTitle, lhsValue):
                 if case let .showNextMediaOnTap(rhsTheme, rhsTitle, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsValue == rhsValue {
                     return true
@@ -351,6 +384,10 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
                 })
             case let .otherHeader(_, text):
                 return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+            case let .sendWithCmdEnter(_, title, value):
+                return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, sectionId: self.section, style: .blocks, updated: { value in
+                    arguments.toggleSendWithCmdEnter(value)
+                }, tag: ThemeSettingsEntryTag.sendWithCmdEnter)
             case let .showNextMediaOnTap(_, title, value):
                 return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, sectionId: self.section, style: .blocks, updated: { value in
                     arguments.toggleShowNextMediaOnTap(value)
@@ -361,7 +398,21 @@ private enum ThemeSettingsControllerEntry: ItemListNodeEntry {
     }
 }
 
-private func themeSettingsControllerEntries(presentationData: PresentationData, presentationThemeSettings: PresentationThemeSettings, mediaSettings: MediaDisplaySettings, themeReference: PresentationThemeReference, availableThemes: [PresentationThemeReference], availableAppIcons: [PresentationAppIcon], currentAppIconName: String?, isPremium: Bool, chatThemes: [PresentationThemeReference], animatedEmojiStickers: [String: [StickerPackItem]], accountPeer: EnginePeer?, nameColors: PeerNameColors) -> [ThemeSettingsControllerEntry] {
+private func themeSettingsControllerEntries(
+    presentationData: PresentationData,
+    presentationThemeSettings: PresentationThemeSettings,
+    chatSettings: ChatSettings,
+    mediaSettings: MediaDisplaySettings,
+    themeReference: PresentationThemeReference,
+    availableThemes: [PresentationThemeReference],
+    availableAppIcons: [PresentationAppIcon],
+    currentAppIconName: String?,
+    isPremium: Bool,
+    chatThemes: [PresentationThemeReference],
+    animatedEmojiStickers: [String: [StickerPackItem]],
+    accountPeer: EnginePeer?,
+    nameColors: PeerNameColors
+) -> [ThemeSettingsControllerEntry] {
     var entries: [ThemeSettingsControllerEntry] = []
     
     let strings = presentationData.strings
@@ -437,6 +488,9 @@ private func themeSettingsControllerEntries(presentationData: PresentationData, 
     }
     
     entries.append(.otherHeader(presentationData.theme, strings.Appearance_Other.uppercased()))
+    if DeviceModel.current.isIpad {
+        entries.append(.sendWithCmdEnter(presentationData.theme, strings.Appearance_SendWithCmdEnter, chatSettings.sendWithCmdEnter))
+    }
     entries.append(.showNextMediaOnTap(presentationData.theme, strings.Appearance_ShowNextMediaOnTap, mediaSettings.showNextMediaOnTap))
     entries.append(.showNextMediaOnTapInfo(presentationData.theme, strings.Appearance_ShowNextMediaOnTapInfo))
     
@@ -557,6 +611,10 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
             pushControllerImpl?(installedStickerPacksController(context: context, mode: .general, archivedPacks: archivedStickerPacks, updatedPacks: { _ in
             }))
         })
+    }, toggleSendWithCmdEnter: { value in
+        let _ = updateChatSettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
+            return current.withUpdatedSendWithCmdEnter(value)
+        }).start()
     }, toggleShowNextMediaOnTap: { value in
         let _ = updateMediaDisplaySettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
             return current.withUpdatedShowNextMediaOnTap(value)
@@ -1035,9 +1093,26 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
         })
     })
 
-    let signal = combineLatest(queue: .mainQueue(), context.sharedContext.presentationData, context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.presentationThemeSettings, SharedDataKeys.chatThemes, ApplicationSpecificSharedDataKeys.mediaDisplaySettings]), cloudThemes.get(), availableAppIcons, currentAppIconName.get(), removedThemeIndexesPromise.get(), animatedEmojiStickers, context.account.postbox.peerView(id: context.account.peerId), context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)))
+    let signal = combineLatest(
+        queue: .mainQueue(),
+        context.sharedContext.presentationData,
+        context.sharedContext.accountManager.sharedData(keys: [
+            ApplicationSpecificSharedDataKeys.presentationThemeSettings,
+            ApplicationSpecificSharedDataKeys.chatSettings,
+            ApplicationSpecificSharedDataKeys.mediaDisplaySettings,
+            SharedDataKeys.chatThemes
+        ]),
+        cloudThemes.get(),
+        availableAppIcons,
+        currentAppIconName.get(),
+        removedThemeIndexesPromise.get(),
+        animatedEmojiStickers,
+        context.account.postbox.peerView(id: context.account.peerId),
+        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+    )
     |> map { presentationData, sharedData, cloudThemes, availableAppIcons, currentAppIconName, removedThemeIndexes, animatedEmojiStickers, peerView, accountPeer -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let settings = sharedData.entries[ApplicationSpecificSharedDataKeys.presentationThemeSettings]?.get(PresentationThemeSettings.self) ?? PresentationThemeSettings.defaultSettings
+        let chatSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.chatSettings]?.get(ChatSettings.self) ?? ChatSettings.defaultSettings
         let mediaSettings = sharedData.entries[ApplicationSpecificSharedDataKeys.mediaDisplaySettings]?.get(MediaDisplaySettings.self) ?? MediaDisplaySettings.defaultSettings
         
         let isPremium = peerView.peers[peerView.peerId]?.isPremium ?? false
@@ -1077,7 +1152,7 @@ public func themeSettingsController(context: AccountContext, focusOnItemTag: The
         chatThemes.insert(.builtin(.dayClassic), at: 0)
         
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(presentationData.strings.Appearance_Title), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: themeSettingsControllerEntries(presentationData: presentationData, presentationThemeSettings: settings, mediaSettings: mediaSettings, themeReference: themeReference, availableThemes: availableThemes, availableAppIcons: availableAppIcons, currentAppIconName: currentAppIconName, isPremium: isPremium, chatThemes: chatThemes, animatedEmojiStickers: animatedEmojiStickers, accountPeer: accountPeer, nameColors: context.peerNameColors), style: .blocks, ensureVisibleItemTag: focusOnItemTag, animateChanges: false)
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: themeSettingsControllerEntries(presentationData: presentationData, presentationThemeSettings: settings, chatSettings: chatSettings, mediaSettings: mediaSettings, themeReference: themeReference, availableThemes: availableThemes, availableAppIcons: availableAppIcons, currentAppIconName: currentAppIconName, isPremium: isPremium, chatThemes: chatThemes, animatedEmojiStickers: animatedEmojiStickers, accountPeer: accountPeer, nameColors: context.peerNameColors), style: .blocks, ensureVisibleItemTag: focusOnItemTag, animateChanges: false)
         
         return (controllerState, (listState, arguments))
     }

@@ -13,29 +13,41 @@ final class DialIndicatorComponent: Component {
     let backgroundColor: UIColor
     let foregroundColor: UIColor
     let diameter: CGFloat
+    let contentSize: CGSize?
     let lineWidth: CGFloat
     let fontSize: CGFloat
-    let percentage: Int
+    let progress: CGFloat
+    let value: Int
+    let suffix: String
     let isVisible: Bool
+    let isFlipped: Bool
 
     public init(
         content: AnyComponentWithIdentity<Empty>,
         backgroundColor: UIColor,
         foregroundColor: UIColor,
         diameter: CGFloat,
+        contentSize: CGSize? = nil,
         lineWidth: CGFloat,
         fontSize: CGFloat,
-        percentage: Int,
-        isVisible: Bool = true
+        progress: CGFloat,
+        value: Int,
+        suffix: String,
+        isVisible: Bool = true,
+        isFlipped: Bool = false,
     ) {
         self.content = content
         self.backgroundColor = backgroundColor
         self.foregroundColor = foregroundColor
         self.diameter = diameter
+        self.contentSize = contentSize
         self.lineWidth = lineWidth
         self.fontSize = fontSize
-        self.percentage = percentage
+        self.progress = progress
+        self.value = value
+        self.suffix = suffix
         self.isVisible = isVisible
+        self.isFlipped = isFlipped
     }
 
     public static func ==(lhs: DialIndicatorComponent, rhs: DialIndicatorComponent) -> Bool {
@@ -51,16 +63,28 @@ final class DialIndicatorComponent: Component {
         if lhs.diameter != rhs.diameter {
             return false
         }
+        if lhs.contentSize != rhs.contentSize {
+            return false
+        }
         if lhs.lineWidth != rhs.lineWidth {
             return false
         }
         if lhs.fontSize != rhs.fontSize {
             return false
         }
-        if lhs.percentage != rhs.percentage {
+        if lhs.progress != rhs.progress {
+            return false
+        }
+        if lhs.value != rhs.value {
+            return false
+        }
+        if lhs.suffix != rhs.suffix {
             return false
         }
         if lhs.isVisible != rhs.isVisible {
+            return false
+        }
+        if lhs.isFlipped != rhs.isFlipped {
             return false
         }
         return true
@@ -82,7 +106,7 @@ final class DialIndicatorComponent: Component {
                         
             self.backgroundLayer.lineCap = .round
             self.foregroundLayer.lineCap = .round
-            
+                        
             self.addSubview(self.containerView)
             
             self.containerView.layer.addSublayer(self.backgroundLayer)
@@ -119,7 +143,7 @@ final class DialIndicatorComponent: Component {
             self.foregroundLayer.path = CGPath(ellipseIn: pathFrame, transform: nil)
             self.foregroundLayer.transform = CATransform3DMakeRotation(.pi / 2.0, 0.0, 0.0, 1.0)
             self.foregroundLayer.strokeStart = strokeStart
-            transition.setShapeLayerStrokeEnd(layer: self.foregroundLayer, strokeEnd: strokeStart + (strokeEnd - strokeStart) * (CGFloat(component.percentage) / 100.0))
+            transition.setShapeLayerStrokeEnd(layer: self.foregroundLayer, strokeEnd: strokeStart + (strokeEnd - strokeStart) * component.progress)
             self.foregroundLayer.frame = CGRect(origin: .zero, size: pathSize)
             
             if previousComponent?.content.id != component.content.id {
@@ -136,7 +160,8 @@ final class DialIndicatorComponent: Component {
                 self.content = ComponentView()
             }
             
-            let contentFrame = CGRect(origin: CGPoint(x: 8.0, y: 8.0), size: CGSize(width: component.diameter - 16.0, height: component.diameter - 16.0))
+            let contentSize = component.contentSize ?? CGSize(width: component.diameter - 16.0, height: component.diameter - 16.0)
+            let contentFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((pathSize.width - contentSize.width) / 2.0), y: floorToScreenPixels((pathSize.height - contentSize.height) / 2.0)), size: contentSize)
             let _ = self.content.update(
                 transition: .immediate,
                 component: component.content.component,
@@ -154,10 +179,12 @@ final class DialIndicatorComponent: Component {
                 contentView.frame = contentFrame
             }
             
-            let labelItems: [AnimatedTextComponent.Item] = [
-                AnimatedTextComponent.Item(id: "percent", content: .number(component.percentage, minDigits: 1)),
-                AnimatedTextComponent.Item(id: "suffix", content: .text("%"))
+            var labelItems: [AnimatedTextComponent.Item] = [
+                AnimatedTextComponent.Item(id: "percent", content: .number(component.value, minDigits: 1))
             ]
+            if !component.suffix.isEmpty {
+                labelItems.append(AnimatedTextComponent.Item(id: "suffix", content: .text(component.suffix)))
+            }
             
             let labelSize = self.label.update(
                 transition: transition,
@@ -180,6 +207,8 @@ final class DialIndicatorComponent: Component {
             
             transition.setAlpha(view: self.containerView, alpha: component.isVisible ? 1.0 : 0.0)
             transition.setBlur(layer: self.containerView.layer, radius: component.isVisible ? 0.0 : 10.0)
+            
+            self.containerView.transform = CGAffineTransform(rotationAngle: component.isFlipped ? .pi : 0.0)
             
             self.containerView.frame = CGRect(origin: .zero, size: pathSize)
             

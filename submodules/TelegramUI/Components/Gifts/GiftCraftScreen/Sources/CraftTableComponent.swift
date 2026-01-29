@@ -108,7 +108,7 @@ final class CraftTableComponent: Component {
             fatalError("init(coder:) has not been implemented")
         }
                 
-        func setupFailAnimation() {
+        func setupFailureAnimation() {
             guard !self.didSetupFinishAnimation else {
                 return
             }
@@ -127,41 +127,29 @@ final class CraftTableComponent: Component {
                 }
                 for i in 0 ..< min(2, availableStickers.count) {
                     if let sticker = availableStickers[i].view {
-                        self.animationView.setSticker(sticker, face: 3 - i, mirror: isUpsideDown)
+                        let face: Int
+                        if isUpsideDown {
+                            face = i + 1
+                        } else {
+                            face = 3 - i
+                        }
+                        self.animationView.setSticker(sticker, face: face, mirror: isUpsideDown)
                     }
                 }
                 
-                self.state?.updated()
+                self.flipFaces = isUpsideDown
+                                
+                Queue.mainQueue().after(0.3, {
+                    self.failWillFinish = true
+                    self.component?.willFinish(false)
+                })
                 
-                if let failOverlayView = self.failOverlay.view as? LottieComponent.View {
-                    failOverlayView.isHidden = false
-                    failOverlayView.onFrameUpdate = { [weak self] frameIndex in
-                        guard let self else {
-                            return
-                        }
-                        if frameIndex >= 5 && !self.failDidStartCrossAnimation {
-                            self.failDidStartCrossAnimation = true
-                            self.craftFailPlayOnce.invoke(Void())
-                        }
-                        if frameIndex >= 65 && !self.failDidBringToFront {
-                            self.failDidBringToFront = true
-                            failOverlayView.superview?.bringSubviewToFront(failOverlayView)
-                            
-                            self.animationView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, removeOnCompletion: false)
-                        }
-                        if frameIndex >= 75 && !self.failWillFinish {
-                            self.failWillFinish = true
-                            self.component?.willFinish(false)
-                        }
-                        if frameIndex >= 82 && !self.failDidFinish {
-                            self.failDidFinish = true
-                            
-                            failOverlayView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false)
-                            self.component?.finished(nil)
-                        }
-                    }
-                }
-                self.craftFailOverlayPlayOnce.invoke(Void())
+                Queue.mainQueue().after(0.5, {
+                    self.failDidFinish = true
+                    self.component?.finished(nil)
+                })
+                
+                self.state?.updated(transition: .easeInOut(duration: 0.4))
             }
         }
         
@@ -170,6 +158,8 @@ final class CraftTableComponent: Component {
                 return
             }
             self.didSetupFinishAnimation = true
+            
+            self.animationView.isSuccess = true
             
             self.animationView.onFinishApproach = { [weak self] isUpsideDown in
                 guard let self else {
@@ -270,10 +260,10 @@ final class CraftTableComponent: Component {
                 if index == 0 {
                     faceItems.append(
                         AnyComponentWithIdentity(id: "background", component: AnyComponent(
-                            RoundedRectangle(color: component.buttonColor, cornerRadius: 28.0)
+                            FilledRoundedRectangleComponent(color: component.buttonColor, cornerRadius: .value(28.0), smoothCorners: true)
                         ))
                     )
-                    if !component.isCrafting {
+                    if !component.isCrafting || self.isFailed {
                         faceItems.append(
                             AnyComponentWithIdentity(id: "glass", component: AnyComponent(
                                 GlassBackgroundComponent(size: CGSize(width: cubeSide, height: cubeSide), cornerRadius: 28.0, isDark: true, tintColor: .init(kind: .custom(style: .default, color: component.buttonColor)))
@@ -282,11 +272,20 @@ final class CraftTableComponent: Component {
                     }
                     if self.isFailed {
                         faceItems.append(
-                            AnyComponentWithIdentity(id: "fail", component: AnyComponent(
-                                LottieComponent(
-                                    content: LottieComponent.AppBundleContent(name: "CraftFail"),
-                                    size: CGSize(width: 96.0, height: 96.0),
-                                    playOnce: self.craftFailPlayOnce
+                            AnyComponentWithIdentity(id: "faildial", component: AnyComponent(
+                                DialIndicatorComponent(
+                                    content: AnyComponentWithIdentity(id: "gift", component: AnyComponent(BundleIconComponent(name: "Premium/GiftCrash", tintColor: .white))),
+                                    backgroundColor: .white.withAlphaComponent(0.1),
+                                    foregroundColor: .white,
+                                    diameter: 84.0,
+                                    contentSize: CGSize(width: 44.0, height: 44.0),
+                                    lineWidth: 5.0,
+                                    fontSize: 18.0,
+                                    progress: 0.0,
+                                    value: component.gifts.count,
+                                    suffix: "",
+                                    isVisible: true,
+                                    isFlipped: self.flipFaces
                                 )
                             ))
                         )
@@ -300,7 +299,9 @@ final class CraftTableComponent: Component {
                                     diameter: 84.0,
                                     lineWidth: 5.0,
                                     fontSize: 18.0,
-                                    percentage: permilleValue / 10,
+                                    progress: CGFloat(permilleValue / 10 / 100),
+                                    value: permilleValue / 10,
+                                    suffix: "%",
                                     isVisible: !component.isCrafting
                                 )
                             ))
@@ -318,7 +319,7 @@ final class CraftTableComponent: Component {
                 } else {
                     faceItems.append(
                         AnyComponentWithIdentity(id: "background", component: AnyComponent(
-                            RoundedRectangle(color: component.buttonColor, cornerRadius: 28.0)
+                            FilledRoundedRectangleComponent(color: component.buttonColor, cornerRadius: .value(28.0), smoothCorners: true)
                         ))
                     )
                     faceItems.append(
@@ -412,35 +413,36 @@ final class CraftTableComponent: Component {
                             self.setupSuccessAnimation(uniqueGift)
                         }
                     case .fail:
-                        self.setupFailAnimation()
+                        self.setupFailureAnimation()
                     default:
                         break
                     }
                 })
             }
+                        
             
-            if self.isFailed {
-                let failOverlaySize = self.failOverlay.update(
-                    transition: .immediate,
-                    component: AnyComponent(
-                        LottieComponent(
-                            content: LottieComponent.AppBundleContent(name: "CraftFailOverlay"),
-                            size: CGSize(width: availableSize.width, height: availableSize.width),
-                            playOnce: self.craftFailOverlayPlayOnce
-                        )
-                    ),
-                    environment: {},
-                    containerSize: CGSize(width: availableSize.width, height: availableSize.width)
-                )
-                let failOverlayFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - failOverlaySize.width) / 2.0), y: floor((availableSize.height - failOverlaySize.height) / 2.0)), size: failOverlaySize)
-                if let failOverlayView = self.failOverlay.view {
-                    if failOverlayView.superview == nil {
-                        failOverlayView.isHidden = true
-                        self.insertSubview(failOverlayView, belowSubview: self.animationView)
-                    }
-                    failOverlayView.frame = failOverlayFrame
-                }
-            }
+//            if self.isFailed {
+//                let failOverlaySize = self.failOverlay.update(
+//                    transition: .immediate,
+//                    component: AnyComponent(
+//                        LottieComponent(
+//                            content: LottieComponent.AppBundleContent(name: "CraftFailOverlay"),
+//                            size: CGSize(width: availableSize.width, height: availableSize.width),
+//                            playOnce: self.craftFailOverlayPlayOnce
+//                        )
+//                    ),
+//                    environment: {},
+//                    containerSize: CGSize(width: availableSize.width, height: availableSize.width)
+//                )
+//                let failOverlayFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - failOverlaySize.width) / 2.0), y: floor((availableSize.height - failOverlaySize.height) / 2.0)), size: failOverlaySize)
+//                if let failOverlayView = self.failOverlay.view {
+//                    if failOverlayView.superview == nil {
+//                        failOverlayView.isHidden = true
+//                        self.insertSubview(failOverlayView, belowSubview: self.animationView)
+//                    }
+//                    failOverlayView.frame = failOverlayFrame
+//                }
+//            }
             
             return availableSize
         }
@@ -544,9 +546,9 @@ final class GiftSlotComponent: Component {
             self.state = state
             
             let backgroundFrame = CGRect(origin: .zero, size: availableSize).insetBy(dx: 1.0, dy: 1.0)
-            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 28.0, isDark: true, tintColor: .init(kind: .custom(style: .default, color: component.buttonColor)), transition: .immediate)
+            self.backgroundView.update(size: backgroundFrame.size, cornerRadius: 28.0, isDark: true, tintColor: .init(kind: .custom(style: .default, color: component.buttonColor)), isInteractive: true, transition: .immediate)
             transition.setFrame(view: self.backgroundView, frame: backgroundFrame)
-            if component.gift == nil && component.isCrafting {
+            if component.gift == nil && component.isCrafting && previousComponent?.isCrafting == false {
                 transition.setBlur(layer: self.backgroundView.layer, radius: 10.0)
                 self.backgroundView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.35, removeOnCompletion: false)
                 transition.setBlur(layer: self.addIcon.layer, radius: 10.0)

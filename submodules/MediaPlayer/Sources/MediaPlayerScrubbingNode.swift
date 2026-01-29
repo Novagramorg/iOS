@@ -891,8 +891,13 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
                 let backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: floor((bounds.size.height - node.lineHeight) / 2.0)), size: CGSize(width: bounds.size.width, height: node.lineHeight))
                 let foregroundContentFrame = CGRect(origin: CGPoint(), size: CGSize(width: backgroundFrame.size.width, height: backgroundFrame.size.height))
             
-                node.backgroundNode.position = CGPoint(x: backgroundFrame.midX, y: backgroundFrame.midY)
-                node.backgroundNode.bounds = CGRect(origin: CGPoint(), size: backgroundFrame.size)
+                if let animator {
+                    animator.updatePosition(layer: node.backgroundNode.layer, position: CGPoint(x: backgroundFrame.midX, y: backgroundFrame.midY), completion: nil)
+                    animator.updateBounds(layer: node.backgroundNode.layer, bounds: CGRect(origin: CGPoint(), size: backgroundFrame.size), completion: nil)
+                } else {
+                    node.backgroundNode.position = CGPoint(x: backgroundFrame.midX, y: backgroundFrame.midY)
+                    node.backgroundNode.bounds = CGRect(origin: CGPoint(), size: backgroundFrame.size)
+                }
                 
                 node.foregroundContentNode.position = CGPoint(x: foregroundContentFrame.midX, y: foregroundContentFrame.midY)
                 node.foregroundContentNode.bounds = CGRect(origin: CGPoint(), size: foregroundContentFrame.size)
@@ -1090,10 +1095,14 @@ public final class MediaPlayerScrubbingNode: ASDisplayNode {
         switch self.contentNodes {
         case let .standard(node):
             if let handleNodeContainer = node.handleNodeContainer, handleNodeContainer.isUserInteractionEnabled, handleNodeContainer.frame.insetBy(dx: 0.0, dy: -16.0).contains(point) {
-                if let handleNode = node.handleNode, handleNode.convert(handleNode.bounds, to: self).insetBy(dx: -32.0, dy: -16.0).contains(point) {
+                if case .none = node.handle {
                     return handleNodeContainer.view
                 } else {
-                    return nil
+                    if let handleNode = node.handleNode, handleNode.convert(handleNode.bounds, to: self).insetBy(dx: -32.0, dy: -16.0).contains(point) {
+                        return handleNodeContainer.view
+                    } else {
+                        return nil
+                    }
                 }
             } else {
                 return nil

@@ -18,6 +18,7 @@ import UIKitRuntimeUtils
 public final class GiftCompositionComponent: Component {
     public class ExternalState {
         public fileprivate(set) var previewPatternColor: UIColor?
+        public fileprivate(set) var backgroundColor: UIColor?
         public fileprivate(set) var previewModel: StarGift.UniqueGift.Attribute?
         public fileprivate(set) var previewBackdrop: StarGift.UniqueGift.Attribute?
         public fileprivate(set) var previewSymbol: StarGift.UniqueGift.Attribute?
@@ -766,6 +767,7 @@ public final class GiftCompositionComponent: Component {
                 }
             }
             
+            component.externalState?.backgroundColor = backgroundColor
             component.externalState?.previewPatternColor = secondBackgroundColor
             
             var animateBackdropSwipe = false

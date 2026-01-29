@@ -313,7 +313,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     let tipsPeerDisposable = MetaDisposable()
     
     let cachedFaq = Promise<ResolvedUrl?>(nil)
-    private var didSetCachedFaq = false
+    var didSetCachedFaq = false
     
     weak var copyProtectionTooltipController: TooltipController?
     weak var emojiStatusSelectionController: ViewController?
@@ -4804,10 +4804,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.headerNode.navigationButtonContainer.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
         
         if self.isSettings {
-            if !self.didSetCachedFaq {
-                self.cachedFaq.set(.single(nil) |> then(cachedFaqInstantPage(context: self.context) |> map(Optional.init)))
-                self.didSetCachedFaq = true
-            }
+            self.setupFaqIfNeeded()
             
             if let settings = self.data?.globalSettings {
                 self.searchDisplayController = SearchDisplayController(

@@ -21,6 +21,7 @@ import ResizableSheetComponent
 import TooltipUI
 import GlassBarButtonComponent
 import ConfettiEffect
+import GiftLoadingShimmerView
 
 final class SelectGiftPageContent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -74,6 +75,7 @@ final class SelectGiftPageContent: Component {
         private let myGiftsTitle = ComponentView<Empty>()
         private var gifts: [AnyHashable: ComponentView<Empty>] = [:]
         private let myGiftsPlaceholder = ComponentView<Empty>()
+        private let loadingView = GiftLoadingShimmerView()
         
         private let storeGiftsTitle = ComponentView<Empty>()
         private let storeGifts = ComponentView<Empty>()
@@ -94,6 +96,8 @@ final class SelectGiftPageContent: Component {
             
             self.layer.cornerRadius = 40.0
             self.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+                        
+            self.addSubview(self.loadingView)
         }
         
         required init?(coder: NSCoder) {
@@ -204,10 +208,25 @@ final class SelectGiftPageContent: Component {
             }
             let itemWidth = (availableSize.width - itemSideInset * 2.0 - itemSpacing * CGFloat(itemsInRow - 1)) / CGFloat(itemsInRow)
             let itemSize = CGSize(width: itemWidth, height: itemWidth)
-            var itemFrame = CGRect(origin: CGPoint(x: itemSideInset, y: contentHeight), size: itemSize)
             
+            
+            var isLoading = false
+            if self.availableGifts.isEmpty, case .loading = (self.craftState?.dataState ?? .loading) {
+                isLoading = true
+            }
+            let loadingTransition: ComponentTransition = .easeInOut(duration: 0.25)
+            let loadingSize = CGSize(width: availableSize.width, height: 180.0)
+            if isLoading {
+                contentHeight += 120.0
+                self.loadingView.update(size: loadingSize, theme: environment.theme, itemSize: itemSize, showFilters: false, isPlain: true, transition: .immediate)
+                loadingTransition.setAlpha(view: self.loadingView, alpha: 1.0)
+            } else {
+                loadingTransition.setAlpha(view: self.loadingView, alpha: 0.0)
+            }
+            transition.setFrame(view: self.loadingView, frame: CGRect(origin: CGPoint(x: 0.0, y: contentHeight - 170.0), size: loadingSize))
+            
+            var itemFrame = CGRect(origin: CGPoint(x: itemSideInset, y: contentHeight), size: itemSize)
             var itemsHeight: CGFloat = 0.0
-                        
             var validIds: [AnyHashable] = []
             for gift in self.availableGifts {
                 let isVisible = "".isEmpty
@@ -272,17 +291,15 @@ final class SelectGiftPageContent: Component {
                     )
                     if let itemView = visibleItem.view {
                         if itemView.superview == nil {
-                            self.addSubview(itemView)
-                            
+                            if let _ = self.loadingView.superview {
+                                self.insertSubview(itemView, belowSubview: self.loadingView)
+                            } else {
+                                self.addSubview(itemView)
+                            }
                             if !transition.animation.isImmediate {
-                                let delay = ((itemFrame.minY - contentHeight) / itemSize.height) * 0.07
-                                itemView.layer.animateScale(from: 0.01, to: 1.0, duration: 0.25, delay: delay)
-                                itemView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25, delay: delay)
+                                itemView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
                             }
                         }
-                        itemView.isUserInteractionEnabled = !component.selectedGiftIds.contains(gift.gift.id)
-                        itemView.alpha = component.selectedGiftIds.contains(gift.gift.id) ? 0.4 : 1.0
-                        itemView.layer.allowsGroupOpacity = itemView.alpha < 1.0
                         itemTransition.setFrame(view: itemView, frame: itemFrame)
                     }
                 }
@@ -315,7 +332,7 @@ final class SelectGiftPageContent: Component {
             for id in removeIds {
                 self.gifts.removeValue(forKey: id)
             }
-            
+                        
             if let state = self.craftState, case .ready = state.dataState, self.availableGifts.isEmpty {
                 contentHeight += 10.0
                 let myGiftsPlaceholderSize = self.myGiftsPlaceholder.update(
@@ -379,6 +396,7 @@ final class SelectGiftPageContent: Component {
                         starsContext: component.context.starsContext!,
                         peerId: component.context.account.peerId,
                         gift: component.genericGift,
+                        isPlain: true,
                         confirmPurchaseImmediately: true,
                         starsTopUpOptions: component.starsTopUpOptions,
                         scrollToTop: {},
@@ -530,9 +548,9 @@ private final class SheetContainerComponent: CombinedComponent {
                             backgroundColor: nil,
                             isDark: theme.overallDarkAppearance,
                             state: .glass,
-                            component: AnyComponentWithIdentity(id: "back", component: AnyComponent(
+                            component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                                 BundleIconComponent(
-                                    name: "Navigation/Back",
+                                    name: "Navigation/Close",
                                     tintColor: theme.chat.inputPanel.panelControlColor
                                 )
                             )),
