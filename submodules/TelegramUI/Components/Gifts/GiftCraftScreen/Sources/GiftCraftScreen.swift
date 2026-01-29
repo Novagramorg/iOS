@@ -1259,7 +1259,7 @@ private final class CraftGiftPageContent: Component {
                         text: environment.strings.Gift_Craft_Info_Paragraph1_Text,
                         textColor: textColor,
                         accentColor: accentColor,
-                        iconName: "Premium/Collectible/Badge",
+                        iconName: "Premium/Craft/Rare",
                         iconColor: environment.theme.list.itemAccentColor
                     ))
                 )
@@ -1273,7 +1273,7 @@ private final class CraftGiftPageContent: Component {
                         text: environment.strings.Gift_Craft_Info_Paragraph2_Text,
                         textColor: textColor,
                         accentColor: accentColor,
-                        iconName: "Premium/Collectible/Transferable",
+                        iconName: "Premium/Craft/Chance",
                         iconColor: accentColor
                     ))
                 )
@@ -1287,7 +1287,7 @@ private final class CraftGiftPageContent: Component {
                         text: environment.strings.Gift_Craft_Info_Paragraph3_Text,
                         textColor: textColor,
                         accentColor: accentColor,
-                        iconName: "Premium/Collectible/Unique",
+                        iconName: "Premium/Craft/Result",
                         iconColor: accentColor
                     ))
                 )
