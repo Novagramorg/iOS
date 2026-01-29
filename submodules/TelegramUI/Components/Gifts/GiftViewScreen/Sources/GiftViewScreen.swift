@@ -46,6 +46,7 @@ import PeerTableCellComponent
 import AvatarComponent
 import GlassControls
 import GlassBarButtonComponent
+import GlassBackgroundComponent
 
 private final class GiftViewSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -2398,8 +2399,6 @@ private final class GiftViewSheetContent: CombinedComponent {
     }
     
     static var body: Body {
-        let priceButton = Child(PlainButtonComponent.self)
-        
         let buttons = Child(GlassControlPanelComponent.self)
         let animation = Child(GiftCompositionComponent.self)
         let title = Child(MultilineTextComponent.self)
@@ -2409,9 +2408,9 @@ private final class GiftViewSheetContent: CombinedComponent {
         let description = Child(MultilineTextComponent.self)
         let animatedDescription = Child(HStack<Empty>.self)
         
-        let transferButton = Child(PlainButtonComponent.self)
-        let wearButton = Child(PlainButtonComponent.self)
-        let resellButton = Child(PlainButtonComponent.self)
+        let transferButton = Child(HeaderButtonComponent.self)
+        let wearButton = Child(HeaderButtonComponent.self)
+        let resellButton = Child(HeaderButtonComponent.self)
         
         let wearAvatar = Child(AvatarComponent.self)
         let wearPeerName = Child(MultilineTextComponent.self)
@@ -2431,7 +2430,10 @@ private final class GiftViewSheetContent: CombinedComponent {
         let upgradePerks = Child(List<Empty>.self)
         let upgradeKeepName = Child(PlainButtonComponent.self)
         let upgradePriceButton = Child(PlainButtonComponent.self)
-        let variantsMeasureDescription = Child(MultilineTextComponent.self)
+        let upgradeDescriptionMeasure = Child(MultilineTextComponent.self)
+        
+        let priceButtonMeasure = Child(MultilineTextWithEntitiesComponent.self)
+        let priceButton = Child(GlassBarButtonComponent.self)
     
         let spaceRegex = try? NSRegularExpression(pattern: "\\[(.*?)\\]", options: [])
         
@@ -2617,6 +2619,19 @@ private final class GiftViewSheetContent: CombinedComponent {
                 headerSubject = nil
             }
             
+            var buttonsBackground: GlassControlGroupComponent.Background = .panel
+            if let uniqueGift, let backdropAttribute = uniqueGift.attributes.first(where: { attribute in
+                if case .backdrop = attribute {
+                    return true
+                } else {
+                    return false
+                }
+            }), case let .backdrop(_, _, _, outerColor, _, _, _) = backdropAttribute {
+                buttonsBackground = .color(UIColor(rgb: UInt32(bitPattern: outerColor)).mixedWith(.white, alpha: 0.2))
+            } else if showUpgradePreview, let backgroundColor = giftCompositionExternalState.backgroundColor {
+                buttonsBackground = .color(backgroundColor.mixedWith(.white, alpha: 0.2))
+            }
+            
             var ownerPeerId: EnginePeer.Id?
             if let uniqueGift {
                 if case let .peerId(peerId) = uniqueGift.owner {
@@ -2729,6 +2744,16 @@ private final class GiftViewSheetContent: CombinedComponent {
             
             let tableTextColor = theme.list.itemPrimaryTextColor
             let tableLinkColor = theme.list.itemAccentColor
+            
+            var resellAmount: CurrencyAmount?
+            var selling = false
+            if let uniqueGift {
+                if uniqueGift.resellForTonOnly {
+                    resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == .ton })
+                } else {
+                    resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == .stars })
+                }
+            }
             
             if let headerSubject {
                 let animation = animation.update(
@@ -2925,16 +2950,16 @@ private final class GiftViewSheetContent: CombinedComponent {
                         buttonColor = backgroundColor.mixedWith(.white, alpha: 0.2)
                     }
                     
-                    let variantsMeasureDescription = variantsMeasureDescription.update(
+                    let upgradeDescriptionMeasure = upgradeDescriptionMeasure.update(
                         component: MultilineTextComponent(text: .plain(NSAttributedString(string: strings.Gift_Upgrade_ViewAllVariants, font: Font.semibold(13.0), textColor: .clear))),
                         availableSize: context.availableSize,
                         transition: .immediate
                     )
-                    context.add(variantsMeasureDescription
+                    context.add(upgradeDescriptionMeasure
                         .position(CGPoint(x: -10000.0, y: -10000.0))
                     )
                     
-                    let variantsButtonSize = CGSize(width: variantsMeasureDescription.size.width + 87.0, height: 24.0)
+                    let variantsButtonSize = CGSize(width: upgradeDescriptionMeasure.size.width + 87.0, height: 24.0)
                        
                     let upgradeTitle = upgradeTitle.update(
                         component: MultilineTextComponent(
@@ -3153,7 +3178,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         }
                     }
                     if let releasedBy = uniqueGift.releasedBy, let peer = state.peerMap[releasedBy], let addressName = peer.addressName {
-                        descriptionText = strings.Gift_Unique_CollectibleBy("#\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))", "[@\(addressName)]()").string
+                        descriptionText = strings.Gift_View_ReleasedBy("[@\(addressName)]()").string
                         hasDescriptionButton = true
                         releasedByPeer = peer
                     }
@@ -3300,6 +3325,88 @@ private final class GiftViewSheetContent: CombinedComponent {
                     })
                     descriptionOffset += subtitle.size.height
                 }
+                
+                if let resellAmount {
+                    if incoming || ownerPeerId == component.context.account.peerId {
+                        var valueString = formatCurrencyAmountText(resellAmount, dateTimeFormat: environment.dateTimeFormat)
+                        switch resellAmount.currency {
+                        case .stars:
+                            valueString = "⭐️\(valueString)"
+                        case .ton:
+                            valueString = "💎\(valueString)"
+                        }
+                        let priceButtonAttributedString = NSMutableAttributedString(string: strings.Gift_View_OnSale(valueString).string, font: Font.regular(13.0), textColor: .white)
+                        let starRange = (priceButtonAttributedString.string as NSString).range(of: "⭐️")
+                        if starRange.location != NSNotFound {
+                            priceButtonAttributedString.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 0, file: nil, custom: .stars(tinted: true)), range: starRange)
+                            priceButtonAttributedString.addAttribute(.baselineOffset, value: 1.0, range: starRange)
+                        }
+                        let tonRange = (priceButtonAttributedString.string as NSString).range(of: "💎")
+                        if tonRange.location != NSNotFound {
+                            priceButtonAttributedString.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: 1, file: nil, custom: .ton(tinted: true)), range: tonRange)
+                            priceButtonAttributedString.addAttribute(.baselineOffset, value: 1.0, range: tonRange)
+                        }
+
+                        let priceButtonMeasure = priceButtonMeasure.update(
+                            component: MultilineTextWithEntitiesComponent(
+                                context: component.context,
+                                animationCache: component.context.animationCache,
+                                animationRenderer: component.context.animationRenderer,
+                                placeholderColor: .white,
+                                text: .plain(priceButtonAttributedString)
+                            ),
+                            availableSize: context.availableSize,
+                            transition: context.transition
+                        )
+                        context.add(priceButtonMeasure
+                            .position(CGPoint(x: -10000.0, y: -10000.0))
+                        )
+                        
+                        var buttonColor: UIColor = UIColor(rgb: 0xffffff, alpha: 0.1)
+                        if case let .color(color) = buttonsBackground {
+                            buttonColor = color
+                        }
+
+                        let priceButtonSize = CGSize(width: priceButtonMeasure.size.width + 18.0, height: 19.0)
+                        let priceButton = priceButton.update(
+                            component: GlassBarButtonComponent(
+                                size: priceButtonSize,
+                                backgroundColor: buttonColor,
+                                isDark: true,
+                                state: .tintedGlass,
+                                component: AnyComponentWithIdentity(id: "label", component: AnyComponent(
+                                    MultilineTextWithEntitiesComponent(
+                                        context: component.context,
+                                        animationCache: component.context.animationCache,
+                                        animationRenderer: component.context.animationRenderer,
+                                        placeholderColor: .white,
+                                        text: .plain(priceButtonAttributedString)
+                                    )
+                                )),
+                                action: { [weak state] _ in
+                                    state?.resellGift(update: true)
+                                }
+                            ),
+                            availableSize: priceButtonSize,
+                            transition: context.transition
+                        )
+                        headerComponents.append({
+                            context.add(priceButton
+                                .position(CGPoint(x: context.availableSize.width / 2.0, y: 207.0 + descriptionOffset + priceButton.size.height / 2.0))
+                                .appear(.default(scale: true, alpha: true))
+                                .disappear(.default(scale: true, alpha: true))
+                            )
+                        })
+                        
+                        descriptionText = ""
+                        originY += 7.0
+                    }
+                    if case let .uniqueGift(_, recipientPeerId) = component.subject, recipientPeerId != nil {
+                    } else if ownerPeerId != component.context.account.peerId {
+                        selling = true
+                    }
+                }
+                
                 var useDescriptionTint = false
                 if !descriptionText.isEmpty {
                     var linkColor = theme.actionSheet.controlAccentColor
@@ -3787,18 +3894,19 @@ private final class GiftViewSheetContent: CombinedComponent {
                         let buttonWidth = floor(context.availableSize.width - sideInset * 2.0 - buttonSpacing * CGFloat(buttonsCount - 1)) / CGFloat(buttonsCount)
                         let buttonHeight: CGFloat = 58.0
                         
+                        var buttonColor: UIColor = UIColor(rgb: 0xffffff, alpha: 0.1)
+                        if case let .color(color) = buttonsBackground {
+                            buttonColor = color
+                        }
+                        
                         var buttonOriginX = sideInset
                         if canTransfer {
                             let transferButton = transferButton.update(
-                                component: PlainButtonComponent(
-                                    content: AnyComponent(
-                                        HeaderButtonComponent(
-                                            title: strings.Gift_View_Header_Transfer,
-                                            iconName: "Premium/Collectible/Transfer",
-                                            isLocked: isMyHostedUniqueGift
-                                        )
-                                    ),
-                                    effectAlignment: .center,
+                                component: HeaderButtonComponent(
+                                    title: strings.Gift_View_Header_Transfer,
+                                    buttonColor: buttonColor,
+                                    iconName: "Premium/Collectible/Transfer",
+                                    isLocked: isMyHostedUniqueGift,
                                     action: { [weak state] in
                                         state?.transferGift()
                                     }
@@ -3819,19 +3927,15 @@ private final class GiftViewSheetContent: CombinedComponent {
                         }
                         
                         let wearButton = wearButton.update(
-                            component: PlainButtonComponent(
-                                content: AnyComponent(
-                                    HeaderButtonComponent(
-                                        title: isWearing ? strings.Gift_View_Header_TakeOff : strings.Gift_View_Header_Wear,
-                                        iconName: isWearing ? "Premium/Collectible/Unwear" : "Premium/Collectible/Wear"
-                                    )
-                                ),
-                                effectAlignment: .center,
+                            component: HeaderButtonComponent(
+                                title: isWearing ? strings.Gift_View_Header_TakeOff : strings.Gift_View_Header_Wear,
+                                buttonColor: buttonColor,
+                                iconName: isWearing ? "Premium/Collectible/Unwear" : "Premium/Collectible/Wear",
                                 action: { [weak state] in
                                     if let state {
                                         if isWearing {
                                             state.commitTakeOff()
-
+                                            
                                             state.showAttributeInfo(tag: state.statusTag, text: strings.Gift_View_TookOff("\(uniqueGift.title) #\(formatCollectibleNumber(uniqueGift.number, dateTimeFormat: environment.dateTimeFormat))").string)
                                         } else {
                                             if let controller = controller() as? GiftViewScreen {
@@ -3851,7 +3955,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                                                 canWear = component.context.isPremium
                                             }
                                             let _ = (ApplicationSpecificNotice.getStarGiftWearTips(accountManager: component.context.sharedContext.accountManager)
-                                            |> deliverOnMainQueue).start(next: { [weak state] count in
+                                                     |> deliverOnMainQueue).start(next: { [weak state] count in
                                                 guard let state else {
                                                     return
                                                 }
@@ -3882,15 +3986,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                         
                         if canResell {
                             let resellButton = resellButton.update(
-                                component: PlainButtonComponent(
-                                    content: AnyComponent(
-                                        HeaderButtonComponent(
-                                            title: (uniqueGift.resellAmounts ?? []).isEmpty ? strings.Gift_View_Sell : strings.Gift_View_Unlist,
-                                            iconName: (uniqueGift.resellAmounts ?? []).isEmpty ? "Premium/Collectible/Sell" : "Premium/Collectible/Unlist",
-                                            isLocked: isMyHostedUniqueGift
-                                        )
-                                    ),
-                                    effectAlignment: .center,
+                                component: HeaderButtonComponent(
+                                    title: (uniqueGift.resellAmounts ?? []).isEmpty ? strings.Gift_View_Sell : strings.Gift_View_Unlist,
+                                    buttonColor: buttonColor,
+                                    iconName: (uniqueGift.resellAmounts ?? []).isEmpty ? "Premium/Collectible/Sell" : "Premium/Collectible/Unlist",
+                                    isLocked: isMyHostedUniqueGift,
                                     action: { [weak state] in
                                         state?.resellGift()
                                     }
@@ -4440,44 +4540,6 @@ private final class GiftViewSheetContent: CombinedComponent {
                 component()
             }
                         
-            var resellAmount: CurrencyAmount?
-            var selling = false
-            if let uniqueGift {
-                if uniqueGift.resellForTonOnly {
-                    resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == .ton })
-                } else {
-                    resellAmount = uniqueGift.resellAmounts?.first(where: { $0.currency == .stars })
-                }
-                if let resellAmount, wearPeerNameChild == nil {
-                    if incoming || ownerPeerId == component.context.account.peerId {
-                        let priceButton = priceButton.update(
-                            component: PlainButtonComponent(
-                                content: AnyComponent(
-                                    PriceButtonComponent(price: resellAmount, dateTimeFormat: environment.dateTimeFormat)
-                                ),
-                                effectAlignment: .center,
-                                action: { [weak state] in
-                                    state?.resellGift(update: true)
-                                },
-                                animateScale: false
-                            ),
-                            availableSize: CGSize(width: 150.0, height: 30.0),
-                            transition: context.transition
-                        )
-                        context.add(priceButton
-                            .position(CGPoint(x: environment.safeInsets.left + 16.0 + priceButton.size.width / 2.0, y: 76.0 + priceButton.size.height / 2.0))
-                            .appear(.default(scale: true, alpha: true))
-                            .disappear(.default(scale: true, alpha: true))
-                        )
-                    }
-                    if case let .uniqueGift(_, recipientPeerId) = component.subject, recipientPeerId != nil {
-                    } else if ownerPeerId != component.context.account.peerId {
-                        selling = true
-                    }
-                }
-            }
-            
-            
             var isChatTheme = false
             if let controller = controller() as? GiftViewScreen, controller.openChatTheme != nil {
                 isChatTheme = true
@@ -5155,20 +5217,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 )
                 originY += upgradePriceButton.size.height
             }
-            
-            var buttonsBackground: GlassControlGroupComponent.Background = .panel
-            if let uniqueGift, let backdropAttribute = uniqueGift.attributes.first(where: { attribute in
-                if case .backdrop = attribute {
-                    return true
-                } else {
-                    return false
-                }
-            }), case let .backdrop(_, _, _, outerColor, _, _, _) = backdropAttribute {
-                buttonsBackground = .color(UIColor(rgb: UInt32(bitPattern: outerColor)).mixedWith(.white, alpha: 0.2))
-            } else if showUpgradePreview, let backgroundColor = giftCompositionExternalState.backgroundColor {
-                buttonsBackground = .color(backgroundColor.mixedWith(.white, alpha: 0.2))
-            }
-            
+                        
             var isBackButton = false
             if state.inWearPreview || state.inUpgradePreview {
                 isBackButton = true
@@ -5233,6 +5282,11 @@ private final class GiftViewSheetContent: CombinedComponent {
                 ))
             }
             
+            var buttonsIsDark = theme.overallDarkAppearance
+            if case .color = buttonsBackground {
+                buttonsIsDark = true
+            }
+            
             let buttons = buttons.update(
                 component: GlassControlPanelComponent(
                     theme: theme,
@@ -5246,6 +5300,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         background: buttonsBackground
                     ),
                     centerAlignmentIfPossible: true,
+                    isDark: buttonsIsDark,
                     tag: state.controlButtonsTag
                 ),
                 availableSize: CGSize(width: context.availableSize.width - 16.0 * 2.0, height: 44.0),
@@ -6095,23 +6150,32 @@ private final class GiftViewContextReferenceContentSource: ContextReferenceConte
     }
 }
 
-private final class HeaderButtonComponent: CombinedComponent {
+private final class HeaderButtonComponent: Component {
     let title: String
+    let buttonColor: UIColor
     let iconName: String
     let isLocked: Bool
+    let action: () -> Void
     
     public init(
         title: String,
+        buttonColor: UIColor,
         iconName: String,
-        isLocked: Bool = false
+        isLocked: Bool = false,
+        action: @escaping () -> Void
     ) {
         self.title = title
+        self.buttonColor = buttonColor
         self.iconName = iconName
         self.isLocked = isLocked
+        self.action = action
     }
     
     static func ==(lhs: HeaderButtonComponent, rhs: HeaderButtonComponent) -> Bool {
         if lhs.title != rhs.title {
+            return false
+        }
+        if lhs.buttonColor != rhs.buttonColor {
             return false
         }
         if lhs.iconName != rhs.iconName {
@@ -6123,79 +6187,205 @@ private final class HeaderButtonComponent: CombinedComponent {
         return true
     }
     
-    static var body: Body {
-        let background = Child(RoundedRectangle.self)
-        let title = Child(MultilineTextComponent.self)
-        let icon = Child(BundleIconComponent.self)
-        let lockIcon = Child(BundleIconComponent.self)
+    final class View: UIView {
+        private var component: HeaderButtonComponent?
+        private weak var componentState: EmptyComponentState?
         
-        return { context in
-            let component = context.component
+        private let backgroundView = GlassBackgroundView()
+        private let title = ComponentView<Empty>()
+        private let icon = ComponentView<Empty>()
+        private let lockIcon = ComponentView<Empty>()
+        private let button = HighlightTrackingButton()
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
             
-            let background = background.update(
-                component: RoundedRectangle(
-                    color: UIColor.white.withAlphaComponent(0.16),
-                    cornerRadius: 16.0
+            self.addSubview(self.backgroundView)
+            self.backgroundView.contentView.addSubview(self.button)
+            
+            self.button.addTarget(self, action: #selector(self.buttonPressed), for: .touchUpInside)
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        @objc private func buttonPressed() {
+            if let component = self.component {
+                component.action()
+            }
+        }
+        
+        func update(component: HeaderButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.componentState = state
+            
+            let bounds = CGRect(origin: .zero, size: availableSize)
+            
+            self.backgroundView.update(size: bounds.size, cornerRadius: 16.0, isDark: true, tintColor: .init(kind: .custom(style: .default, color: component.buttonColor)), isInteractive: true, transition: transition)
+            transition.setFrame(view: self.backgroundView, frame: bounds)
+            
+            let iconSize = self.icon.update(
+                transition: transition,
+                component: AnyComponent(
+                    BundleIconComponent(
+                        name: component.iconName,
+                        tintColor: UIColor.white
+                    )
                 ),
-                availableSize: context.availableSize,
-                transition: .immediate
+                environment: {},
+                containerSize: availableSize
             )
-            context.add(background
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0))
+            if let iconView = self.icon.view {
+                if iconView.superview == nil {
+                    iconView.isUserInteractionEnabled = false
+                    self.backgroundView.contentView.addSubview(iconView)
+                }
+                iconView.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - iconSize.width) / 2.0), y: floorToScreenPixels(22.0 - iconSize.height * 0.5)), size: iconSize)
+            }
+            
+            let titleSize = self.title.update(
+                transition: transition,
+                component: AnyComponent(
+                    MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: component.title,
+                            font: Font.regular(11.0),
+                            textColor: UIColor.white,
+                            paragraphAlignment: .natural
+                        )),
+                        horizontalAlignment: .center,
+                        maximumNumberOfLines: 1
+                    )
+                ),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - 16.0, height: availableSize.height)
             )
             
-            let icon = icon.update(
-                component: BundleIconComponent(
-                    name: component.iconName,
-                    tintColor: UIColor.white
-                ),
-                availableSize: context.availableSize,
-                transition: .immediate
-            )
-            context.add(icon
-                .position(CGPoint(x: context.availableSize.width / 2.0, y: 22.0))
-            )
-            
-            let title = title.update(
-                component: MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: component.title,
-                        font: Font.regular(11.0),
-                        textColor: UIColor.white,
-                        paragraphAlignment: .natural
-                    )),
-                    horizontalAlignment: .center,
-                    maximumNumberOfLines: 1
-                ),
-                availableSize: CGSize(width: context.availableSize.width - 16.0, height: context.availableSize.height),
-                transition: .immediate
-            )
-            var totalTitleWidth = title.size.width
-            var titleOriginX = context.availableSize.width / 2.0 - totalTitleWidth / 2.0
+            var totalTitleWidth = titleSize.width
+            var titleOriginX = availableSize.width / 2.0 - totalTitleWidth / 2.0
             if component.isLocked {
                 let titleSpacing: CGFloat = 3.0
-                let lockIcon = lockIcon.update(
-                    component: BundleIconComponent(
-                        name: "Chat List/StatusLockIcon",
-                        tintColor: UIColor.white
+                
+                let lockIconSize = self.lockIcon.update(
+                    transition: transition,
+                    component: AnyComponent(
+                        BundleIconComponent(
+                            name: "Chat List/StatusLockIcon",
+                            tintColor: .white
+                        )
                     ),
-                    availableSize: context.availableSize,
-                    transition: .immediate
+                    environment: {},
+                    containerSize: availableSize
                 )
-                totalTitleWidth += lockIcon.size.width + titleSpacing
-                titleOriginX = context.availableSize.width / 2.0 - totalTitleWidth / 2.0
-                context.add(lockIcon
-                    .position(CGPoint(x: titleOriginX + lockIcon.size.width / 2.0, y: 42.0))
-                )
-                titleOriginX += lockIcon.size.width + titleSpacing
+                totalTitleWidth += lockIconSize.width + titleSpacing
+                titleOriginX = availableSize.width / 2.0 - totalTitleWidth / 2.0
+                
+                if let lockIconView = self.lockIcon.view {
+                    if lockIconView.superview == nil {
+                        lockIconView.isUserInteractionEnabled = false
+                        self.backgroundView.contentView.addSubview(lockIconView)
+                    }
+                    lockIconView.frame = CGRect(origin: CGPoint(x: titleOriginX, y: floorToScreenPixels(42.0 - lockIconSize.height * 0.5)), size: lockIconSize)
+                }
+                titleOriginX += lockIconSize.width + titleSpacing
             }
-            context.add(title
-                .position(CGPoint(x: titleOriginX + title.size.width / 2.0, y: 42.0))
-            )
             
-            return context.availableSize
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    titleView.isUserInteractionEnabled = false
+                    self.backgroundView.contentView.addSubview(titleView)
+                }
+                titleView.frame = CGRect(origin: CGPoint(x: titleOriginX, y: floorToScreenPixels(42.0 - titleSize.height * 0.5)), size: titleSize)
+            }
+            
+            self.button.frame = bounds
+        
+            return availableSize
         }
     }
+
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+    
+//    static var body: Body {
+//        let background = Child(RoundedRectangle.self)
+//        let title = Child(MultilineTextComponent.self)
+//        let icon = Child(BundleIconComponent.self)
+//        let lockIcon = Child(BundleIconComponent.self)
+//        
+//        return { context in
+//            let component = context.component
+//            
+//            let background = background.update(
+//                component: RoundedRectangle(
+//                    color: UIColor.white.withAlphaComponent(0.16),
+//                    cornerRadius: 16.0
+//                ),
+//                availableSize: context.availableSize,
+//                transition: .immediate
+//            )
+//            context.add(background
+//                .position(CGPoint(x: context.availableSize.width / 2.0, y: context.availableSize.height / 2.0))
+//            )
+//            
+//            let icon = icon.update(
+//                component: BundleIconComponent(
+//                    name: component.iconName,
+//                    tintColor: UIColor.white
+//                ),
+//                availableSize: context.availableSize,
+//                transition: .immediate
+//            )
+//            context.add(icon
+//                .position(CGPoint(x: context.availableSize.width / 2.0, y: 22.0))
+//            )
+//            
+//            let title = title.update(
+//                component: MultilineTextComponent(
+//                    text: .plain(NSAttributedString(
+//                        string: component.title,
+//                        font: Font.regular(11.0),
+//                        textColor: UIColor.white,
+//                        paragraphAlignment: .natural
+//                    )),
+//                    horizontalAlignment: .center,
+//                    maximumNumberOfLines: 1
+//                ),
+//                availableSize: CGSize(width: context.availableSize.width - 16.0, height: context.availableSize.height),
+//                transition: .immediate
+//            )
+//            var totalTitleWidth = title.size.width
+//            var titleOriginX = context.availableSize.width / 2.0 - totalTitleWidth / 2.0
+//            if component.isLocked {
+//                let titleSpacing: CGFloat = 3.0
+//                let lockIcon = lockIcon.update(
+//                    component: BundleIconComponent(
+//                        name: "Chat List/StatusLockIcon",
+//                        tintColor: UIColor.white
+//                    ),
+//                    availableSize: context.availableSize,
+//                    transition: .immediate
+//                )
+//                totalTitleWidth += lockIcon.size.width + titleSpacing
+//                titleOriginX = context.availableSize.width / 2.0 - totalTitleWidth / 2.0
+//                context.add(lockIcon
+//                    .position(CGPoint(x: titleOriginX + lockIcon.size.width / 2.0, y: 42.0))
+//                )
+//                titleOriginX += lockIcon.size.width + titleSpacing
+//            }
+//            context.add(title
+//                .position(CGPoint(x: titleOriginX + title.size.width / 2.0, y: 42.0))
+//            )
+//            
+//            return context.availableSize
+//        }
+//    }
 }
 
 private struct GiftViewConfiguration {
