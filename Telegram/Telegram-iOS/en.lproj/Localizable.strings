@@ -15714,3 +15714,5 @@ Error: %8$@";
 "Gift.Variants.CollectionInfo.CraftableModel_any" = "**%@** craftable models";
 "Gift.Variants.ViewCraftableModels" = "View Craftable Models";
 "Gift.Variants.ViewPrimaryModels" = "View Primary Models";
+
+"Gift.View.OnSale" = "On sale for %@";

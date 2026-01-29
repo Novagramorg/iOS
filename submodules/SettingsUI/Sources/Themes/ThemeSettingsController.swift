@@ -23,6 +23,7 @@ import ThemeCarouselItem
 import ThemeAccentColorScreen
 import WallpaperGridScreen
 import PeerNameColorItem
+import DeviceModel
 
 private final class ThemeSettingsControllerArguments {
     let context: AccountContext
@@ -487,7 +488,9 @@ private func themeSettingsControllerEntries(
     }
     
     entries.append(.otherHeader(presentationData.theme, strings.Appearance_Other.uppercased()))
-    entries.append(.sendWithCmdEnter(presentationData.theme, strings.Appearance_SendWithCmdEnter, chatSettings.sendWithCmdEnter))
+    if DeviceModel.current.isIpad {
+        entries.append(.sendWithCmdEnter(presentationData.theme, strings.Appearance_SendWithCmdEnter, chatSettings.sendWithCmdEnter))
+    }
     entries.append(.showNextMediaOnTap(presentationData.theme, strings.Appearance_ShowNextMediaOnTap, mediaSettings.showNextMediaOnTap))
     entries.append(.showNextMediaOnTapInfo(presentationData.theme, strings.Appearance_ShowNextMediaOnTapInfo))
     
