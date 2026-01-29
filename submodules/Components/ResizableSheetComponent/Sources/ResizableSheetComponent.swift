@@ -19,6 +19,7 @@ public final class ResizableSheetComponentEnvironment: Equatable {
     public let screenSize: CGSize
     public let regularMetricsSize: CGSize?
     public let dismiss: (Bool) -> Void
+    public let boundsUpdated: ActionSlot<CGRect>
     
     public init(
         theme: PresentationTheme,
@@ -30,7 +31,8 @@ public final class ResizableSheetComponentEnvironment: Equatable {
         isCentered: Bool,
         screenSize: CGSize,
         regularMetricsSize: CGSize?,
-        dismiss: @escaping (Bool) -> Void
+        dismiss: @escaping (Bool) -> Void,
+        boundsUpdated: ActionSlot<CGRect> = ActionSlot<CGRect>()
     ) {
         self.theme = theme
         self.statusBarHeight = statusBarHeight
@@ -42,6 +44,7 @@ public final class ResizableSheetComponentEnvironment: Equatable {
         self.screenSize = screenSize
         self.regularMetricsSize = regularMetricsSize
         self.dismiss = dismiss
+        self.boundsUpdated = boundsUpdated
     }
     
     public static func ==(lhs: ResizableSheetComponentEnvironment, rhs: ResizableSheetComponentEnvironment) -> Bool {
@@ -469,6 +472,8 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             } else {
                 self.scrollView.isScrollEnabled = !self.isDismissingInteractively
             }
+            
+            self.environment?.boundsUpdated.invoke(self.scrollView.bounds)
         }
         
         private var didPlayAppearanceAnimation = false
