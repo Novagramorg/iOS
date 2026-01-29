@@ -1780,7 +1780,27 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         rawString = strings.Conversation_EmojiStake_WonYou(value).string
                     }
                 } else {
-                    let compactPeerName = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle ?? ""
+                    var compactPeerName = ""
+                    if let authorSignature = message.forwardInfo?.authorSignature {
+                        compactPeerName = authorSignature
+                    } else if let author = message.forwardInfo?.author {
+                        compactPeerName = EnginePeer(author).compactDisplayTitle
+                    } else if let source = message.forwardInfo?.source {
+                        compactPeerName = EnginePeer(source).compactDisplayTitle
+                    } else {
+                        if let author = message.author, case .user = author {
+                            compactPeerName = author.compactDisplayTitle
+                        } else {
+                            for attribute in message.attributes {
+                                if let attribute = attribute as? AuthorSignatureMessageAttribute {
+                                    compactPeerName = attribute.signature
+                                }
+                            }
+                            if compactPeerName.isEmpty {
+                                compactPeerName = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle ?? ""
+                            }
+                        }
+                    }
                     if value == 1, let tonAmount = dice.tonAmount {
                         let value = formatTonAmountText(tonAmount, dateTimeFormat: dateTimeFormat)
                         rawString = strings.Conversation_EmojiStake_Lost(compactPeerName, value).string
