@@ -3899,8 +3899,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return GiftAuctionWearPreviewScreen(context: context, auctionContext: auctionContext, attributes: attributes, completion: completion)
     }
     
-    public func makeGiftCraftScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController {
-        return GiftCraftScreen(context: context, gift: gift)
+    public func makeGiftCraftScreen(context: AccountContext, gift: StarGift.UniqueGift, profileGiftsContext: ProfileGiftsContext?) -> ViewController {
+        return GiftCraftScreen(context: context, gift: gift, profileGiftsContext: profileGiftsContext)
     }
     
     public func makeGiftDemoScreen(context: AccountContext) -> ViewController {

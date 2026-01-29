@@ -129,7 +129,6 @@ final class SelectGiftPageContent: Component {
                     guard let self else {
                         return
                     }
-                    //let isFirstTime = self.craftState == nil
                     self.craftState = state
                     
                     var items: [GiftItem] = []
@@ -179,7 +178,7 @@ final class SelectGiftPageContent: Component {
             let myGiftsTitleSize = self.myGiftsTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Your Gifts".uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_YourGifts.uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
                 ),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -339,7 +338,7 @@ final class SelectGiftPageContent: Component {
                     transition: .immediate,
                     component: AnyComponent(
                         MultilineTextComponent(
-                            text: .plain(NSAttributedString(string: "You don't have other gifts\nfrom this collection", font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor)),
+                            text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_NoGiftsFromCollection, font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor)),
                             horizontalAlignment: .center,
                             maximumNumberOfLines: 3,
                             lineSpacing: 0.1
@@ -365,7 +364,7 @@ final class SelectGiftPageContent: Component {
             let storeGiftsTitleSize = self.storeGiftsTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "SUITABLE GIFTS ON SALE".uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_SaleGifts.uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
                 ),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -540,7 +539,7 @@ private final class SheetContainerComponent: CombinedComponent {
                         )
                     ),
                     titleItem: AnyComponent(
-                        MultilineTextComponent(text: .plain(NSAttributedString(string: "Select Gifts", font: Font.semibold(17.0), textColor: environment.theme.actionSheet.primaryTextColor)))
+                        MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_Title, font: Font.semibold(17.0), textColor: environment.theme.actionSheet.primaryTextColor)))
                     ),
                     leftItem: AnyComponent(
                         GlassBarButtonComponent(

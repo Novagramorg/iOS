@@ -270,7 +270,6 @@ private final class CraftGiftPageContent: Component {
                     guard let self else {
                         return
                     }
-                    //let isFirstTime = self.craftState == nil
                     self.craftState = state
                     
                     var items: [GiftItem] = []
@@ -1118,9 +1117,14 @@ private final class CraftGiftPageContent: Component {
                             self.state?.updated(transition: .easeInOut(duration: 0.5))
                         },
                         finished: { [weak self] view in
-                            guard let self, let component = self.component, let environment = self.environment, let controller = environment.controller() else {
+                            guard let self, let component = self.component, let environment = self.environment, let controller = environment.controller() as? GiftCraftScreen else {
                                 return
                             }
+                            var references: [StarGiftReference] = []
+                            for gift in selectedGifts.values {
+                                references.append(gift.reference)
+                            }
+                            controller.profileGiftsContext?.removeStarGifts(references: references)
                             if let _ = view {
                                 if case let .gift(gift) = component.result {
                                     let giftController = GiftViewScreen(context: component.context, subject: .profileGift(component.context.account.peerId, gift))
@@ -1129,12 +1133,12 @@ private final class CraftGiftPageContent: Component {
                                         
                                         navigationController.view.addSubview(ConfettiView(frame: navigationController.view.bounds))
                                     }
+                                    
+                                    controller.profileGiftsContext?.insertStarGifts(gifts: [gift])
                                 }
                                 controller.view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.35, removeOnCompletion: false, completion: { _ in
                                     controller.dismiss()
                                 })
-                            } else {
-
                             }
                         }
                     )
@@ -1691,8 +1695,8 @@ private final class SheetContainerComponent: CombinedComponent {
                                         selectedGiftIds: Set(),
                                         starsTopUpOptions: state.starsTopUpOptionsPromise.get(),
                                         selectGift: { item in
-                                            let craftController = GiftCraftScreen(context: component.context, gift: item.gift)
                                             if let controller = controller() as? GiftCraftScreen, let navigationController = controller.navigationController as? NavigationController {
+                                                let craftController = GiftCraftScreen(context: component.context, gift: item.gift, profileGiftsContext: controller.profileGiftsContext)
                                                 controller.dismissAnimated()
                                                 navigationController.pushViewController(craftController)
                                             }
@@ -1770,7 +1774,7 @@ private final class SheetContainerComponent: CombinedComponent {
                         )
                     ),
                     backgroundColor: .color(backgroundColor),
-                    isFullscreen: false, //state.isCrafting,
+                    isFullscreen: false,
                     animateOut: animateOut
                 ),
                 environment: {
@@ -1805,12 +1809,16 @@ private final class SheetContainerComponent: CombinedComponent {
 
 
 public class GiftCraftScreen: ViewControllerComponentContainer {
+    fileprivate weak var profileGiftsContext: ProfileGiftsContext?
+    
     public init(
         context: AccountContext,
-        gift: StarGift.UniqueGift
+        gift: StarGift.UniqueGift,
+        profileGiftsContext: ProfileGiftsContext?
     ) {
-        let craftContext = CraftGiftsContext(account: context.account, giftId: gift.giftId)
+        self.profileGiftsContext = profileGiftsContext
         
+        let craftContext = CraftGiftsContext(account: context.account, giftId: gift.giftId)
         super.init(
             context: context,
             component: SheetContainerComponent(

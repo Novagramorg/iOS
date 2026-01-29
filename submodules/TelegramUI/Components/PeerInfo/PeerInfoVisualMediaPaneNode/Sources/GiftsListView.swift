@@ -606,6 +606,7 @@ final class GiftsListView: UIView {
                                         subject: .profileGift(self.peerId, product),
                                         allSubjects: allSubjects,
                                         index: index,
+                                        profileGiftsContext: self.profileGifts,
                                         updateSavedToProfile: { [weak self] reference, added in
                                             guard let self else {
                                                 return

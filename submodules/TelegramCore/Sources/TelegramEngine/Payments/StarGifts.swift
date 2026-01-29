@@ -2380,12 +2380,16 @@ private final class ProfileGiftsContextImpl {
     }
     
     func removeStarGifts(references: [StarGiftReference]) {
-        self.gifts.removeAll(where: {
-            if let reference = $0.reference {
-                return references.contains(reference)
-            } else {
-                return false
+        self.gifts.removeAll(where: { gift in
+            if let reference = gift.reference, references.contains(reference) {
+                return true
             }
+            for reference in references {
+                if case let .slug(slug) = reference, case let .unique(uniqueGift) = gift.gift, uniqueGift.slug == slug {
+                    return true
+                }
+            }
+            return false
         })
         self.pushState()
         
@@ -2400,13 +2404,17 @@ private final class ProfileGiftsContextImpl {
             } else {
                 updatedGifts = []
             }
-            updatedGifts = updatedGifts.filter { gift in
-                if let reference = gift.reference {
-                    return !references.contains(reference)
-                } else {
+            updatedGifts.removeAll(where: { gift in
+                if let reference = gift.reference, references.contains(reference) {
                     return true
                 }
-            }
+                for reference in references {
+                    if case let .slug(slug) = reference, case let .unique(uniqueGift) = gift.gift, uniqueGift.slug == slug {
+                        return true
+                    }
+                }
+                return false
+            })
             updatedCount -= Int32(references.count)
             if let entry = CodableEntry(CachedProfileGifts(gifts: updatedGifts, count: updatedCount, notificationsEnabled: nil)) {
                 transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)

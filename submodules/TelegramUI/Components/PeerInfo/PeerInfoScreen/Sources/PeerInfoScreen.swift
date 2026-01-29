@@ -2368,6 +2368,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                         let controller = GiftViewScreen(
                             context: self.context,
                             subject: .profileGift(self.peerId, gift),
+                            profileGiftsContext: profileGifts,
                             updateSavedToProfile: { [weak profileGifts] reference, added in
                                 guard let profileGifts else {
                                     return

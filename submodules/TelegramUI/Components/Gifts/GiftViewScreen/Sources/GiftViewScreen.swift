@@ -1134,7 +1134,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 let craftScreen = self.context.sharedContext.makeGiftCraftScreen(
                     context: self.context,
-                    gift: gift
+                    gift: gift,
+                    profileGiftsContext: controller.profileGiftsContext
                 )
                 navigationController.pushViewController(craftScreen)
             }
@@ -2554,7 +2555,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                 
                 if let number = arguments.giftNumber, let title = genericGift?.title {
-                    titleString = "\(title) #\(formatCollectibleNumber(number, dateTimeFormat: environment.dateTimeFormat))"
+                    titleString = "\(title) **#\(formatCollectibleNumber(number, dateTimeFormat: environment.dateTimeFormat))**"
                 } else if isSelfGift {
                     titleString = strings.Gift_View_Self_Title
                 } else {
@@ -3252,17 +3253,17 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 let titleFont = Font.bold(20.0)
                 let smallTitleFont = Font.bold(15.0)
+                let numberFont: UIFont
+                if let number = context.component.subject.arguments?.giftNumber, number < 1000 {
+                    numberFont = titleFont
+                } else {
+                    numberFont = smallTitleFont
+                }
                 let titleAttributedString: NSAttributedString
-                if let uniqueGift {
-                    let numberFont = uniqueGift.number < 1000 ? titleFont : smallTitleFont
+                if let _ = uniqueGift {
                     titleAttributedString = parseMarkdownIntoAttributedString(titleString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: .white), bold: MarkdownAttributeSet(font: numberFont, textColor: vibrantColor), link: MarkdownAttributeSet(font: titleFont, textColor: .white), linkAttribute: { _ in return nil }), textAlignment: .center)
                 } else {
-                    titleAttributedString = NSAttributedString(
-                        string: titleString,
-                        font: titleFont,
-                        textColor: theme.actionSheet.primaryTextColor,
-                        paragraphAlignment: .center
-                    )
+                    titleAttributedString = parseMarkdownIntoAttributedString(titleString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.primaryTextColor), bold: MarkdownAttributeSet(font: numberFont, textColor: theme.actionSheet.secondaryTextColor), link: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.primaryTextColor), linkAttribute: { _ in return nil }), textAlignment: .center)
                 }
                 
                 let title = title.update(
@@ -5639,6 +5640,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     
     fileprivate let balanceOverlay = ComponentView<Empty>()
     
+    fileprivate let profileGiftsContext: ProfileGiftsContext?
     fileprivate let updateSavedToProfile: ((StarGiftReference, Bool) -> Void)?
     fileprivate let convertToStars: ((StarGiftReference) -> Void)?
     fileprivate let dropOriginalDetails: ((StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError>)?
@@ -5658,6 +5660,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         allSubjects: [GiftViewScreen.Subject]? = nil,
         index: Int? = nil,
         forceDark: Bool = false,
+        profileGiftsContext: ProfileGiftsContext? = nil,
         updateSavedToProfile: ((StarGiftReference, Bool) -> Void)? = nil,
         convertToStars: ((StarGiftReference) -> Void)? = nil,
         dropOriginalDetails: ((StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError>)? = nil,
@@ -5672,6 +5675,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         self.context = context
         self.subject = subject
         
+        self.profileGiftsContext = profileGiftsContext
         self.updateSavedToProfile = updateSavedToProfile
         self.convertToStars = convertToStars
         self.dropOriginalDetails = dropOriginalDetails
