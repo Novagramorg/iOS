@@ -1245,7 +1245,7 @@ private final class CraftGiftPageContent: Component {
             }
             
             
-            self.infoBackground.backgroundColor = environment.theme.list.plainBackgroundColor.cgColor
+            self.infoBackground.backgroundColor = environment.theme.list.modalPlainBackgroundColor.cgColor
             
             let infoBackgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: 80.0), size: CGSize(width: availableSize.width, height: 1000.0))
             transition.setFrame(layer: self.infoBackground, frame: infoBackgroundFrame)
