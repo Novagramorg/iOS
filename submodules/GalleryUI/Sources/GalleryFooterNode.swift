@@ -29,10 +29,14 @@ public final class GalleryFooterNode: ASDisplayNode {
     }
     
     private var visibilityAlpha: CGFloat = 1.0
+    private var isEdgeEffectVisible: Bool = false
+    
     public func setVisibilityAlpha(_ alpha: CGFloat, animated: Bool) {
         self.visibilityAlpha = alpha
         let transition: ComponentTransition = animated ? .easeInOut(duration: 0.2) : .immediate
-        transition.setAlpha(view: self.edgeEffectView, alpha: alpha)
+        if self.isEdgeEffectVisible {
+            transition.setAlpha(view: self.edgeEffectView, alpha: alpha)
+        }
         self.currentFooterContentNode?.setVisibilityAlpha(alpha, animated: true)
         self.currentOverlayContentNode?.setVisibilityAlpha(alpha)
     }
@@ -151,8 +155,10 @@ public final class GalleryFooterNode: ASDisplayNode {
         edgeEffectTransition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
         self.edgeEffectView.update(content: .black, alpha: 0.65, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: edgeEffectTransition)
         if let backgroundLayoutInfo, backgroundLayoutInfo.needsShadow {
-            ComponentTransition(transition).setAlpha(view: self.edgeEffectView, alpha: 1.0)
+            self.isEdgeEffectVisible = true
+            ComponentTransition(transition).setAlpha(view: self.edgeEffectView, alpha: self.visibilityAlpha)
         } else {
+            self.isEdgeEffectVisible = false
             ComponentTransition(transition).setAlpha(view: self.edgeEffectView, alpha: 0.0)
         }
         

@@ -49,7 +49,10 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
         
         self.addSubnode(self.backgroundContainerNode)
         
+        self.backgroundView.isUserInteractionEnabled = false
         self.backgroundContainerNode.view.addSubview(self.backgroundView)
+        
+        self.textNode.isUserInteractionEnabled = false
         self.addSubnode(self.textNode)
                 
         self.highligthedChanged = { [weak self] highlighted in
@@ -66,6 +69,8 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
     }
     
     func update(context: AccountContext, size: CGSize, theme: PresentationTheme, wallpaperBackgroundNode: WallpaperBackgroundNode?, button: ReplyMarkupButton, message: EngineMessage) {
+        self.button = button
+        
         if theme !== self.theme {
             self.theme = theme
         }
@@ -114,6 +119,7 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
                 let iconNode = ASImageNode()
                 iconNode.contentMode = .center
                 self.iconNode = iconNode
+                iconNode.isUserInteractionEnabled = false
                 self.addSubnode(iconNode)
             }
             self.iconNode?.image = iconImage
@@ -180,6 +186,7 @@ private final class ChatButtonKeyboardInputButtonNode: HighlightTrackingButtonNo
             
             let iconFrame = CGRect(origin: CGPoint(x: contentX, y: floor((size.height - iconSize.height) * 0.5)), size: iconSize)
             if iconView.superview == nil {
+                iconView.isUserInteractionEnabled = false
                 self.view.addSubview(iconView)
             }
             iconView.frame = iconFrame
