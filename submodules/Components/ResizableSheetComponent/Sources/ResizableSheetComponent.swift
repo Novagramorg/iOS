@@ -19,6 +19,7 @@ public final class ResizableSheetComponentEnvironment: Equatable {
     public let screenSize: CGSize
     public let regularMetricsSize: CGSize?
     public let dismiss: (Bool) -> Void
+    public let boundsUpdated: ActionSlot<CGRect>
     
     public init(
         theme: PresentationTheme,
@@ -30,7 +31,8 @@ public final class ResizableSheetComponentEnvironment: Equatable {
         isCentered: Bool,
         screenSize: CGSize,
         regularMetricsSize: CGSize?,
-        dismiss: @escaping (Bool) -> Void
+        dismiss: @escaping (Bool) -> Void,
+        boundsUpdated: ActionSlot<CGRect> = ActionSlot<CGRect>()
     ) {
         self.theme = theme
         self.statusBarHeight = statusBarHeight
@@ -42,6 +44,7 @@ public final class ResizableSheetComponentEnvironment: Equatable {
         self.screenSize = screenSize
         self.regularMetricsSize = regularMetricsSize
         self.dismiss = dismiss
+        self.boundsUpdated = boundsUpdated
     }
     
     public static func ==(lhs: ResizableSheetComponentEnvironment, rhs: ResizableSheetComponentEnvironment) -> Bool {
@@ -179,7 +182,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
         }
     }
         
-    public final class View: UIView, UIScrollViewDelegate, ComponentTaggedView {
+    public final class View: UIView, UIScrollViewDelegate, ComponentTaggedView, UIGestureRecognizerDelegate {
         public final class Tag {
             public init() {
             }
@@ -213,6 +216,10 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
         private let backgroundHandleView: UIImageView
         
         private var ignoreScrolling: Bool = false
+        private var isDismissingInteractively: Bool = false
+        private var dismissTranslation: CGFloat = 0.0
+        private var dismissStartTranslation: CGFloat?
+        private var dismissPanGesture: UIPanGestureRecognizer?
         
         private var component: ResizableSheetComponent?
         private weak var state: EmptyComponentState?
@@ -284,6 +291,12 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             self.containerView.addSubview(self.bottomContainer)
             
             self.dimView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.dimTapGesture(_:))))
+            
+            let dismissPanGesture = UIPanGestureRecognizer(target: self, action: #selector(self.dismissPanGesture(_:)))
+            dismissPanGesture.maximumNumberOfTouches = 1
+            dismissPanGesture.delegate = self
+            self.addGestureRecognizer(dismissPanGesture)
+            self.dismissPanGesture = dismissPanGesture
         }
         
         required init?(coder: NSCoder) {
@@ -314,6 +327,26 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             return result
         }
         
+        override public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            if gestureRecognizer === self.dismissPanGesture {
+                let pan = gestureRecognizer as! UIPanGestureRecognizer
+                let velocity = pan.velocity(in: self)
+                if abs(velocity.y) <= abs(velocity.x) {
+                    return false
+                }
+            }
+            return true
+        }
+        
+        public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            if gestureRecognizer === self.dismissPanGesture {
+                if otherGestureRecognizer === self.scrollView.panGestureRecognizer {
+                    return true
+                }
+            }
+            return false
+        }
+        
         @objc private func dimTapGesture(_ recognizer: UITapGestureRecognizer) {
             if case .ended = recognizer.state {
                 self.dismissAnimated()
@@ -326,6 +359,79 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             }
             self.endEditing(true)
             environment.dismiss(true)
+        }
+        
+        private func updateDismissTranslation(_ translation: CGFloat) {
+            self.dismissTranslation = translation
+            self.updateScrolling(transition: .immediate)
+            
+            let maxAlphaDistance = max(1.0, self.bounds.height * 0.9)
+            let alpha = 1.0 - min(1.0, translation / maxAlphaDistance)
+            self.dimView.alpha = alpha
+        }
+        
+        private func resetDismissTranslation(animated: Bool) {
+            self.dismissTranslation = 0.0
+            if animated {
+                let transition: ComponentTransition = .easeInOut(duration: 0.2)
+                transition.setAlpha(view: self.dimView, alpha: 1.0)
+                self.updateScrolling(transition: transition)
+            } else {
+                self.dimView.alpha = 1.0
+                self.updateScrolling(transition: .immediate)
+            }
+        }
+        
+        @objc private func dismissPanGesture(_ recognizer: UIPanGestureRecognizer) {
+            guard let component = self.component else {
+                return
+            }
+            
+            let translation = recognizer.translation(in: self)
+            switch recognizer.state {
+            case .began:
+                self.dismissStartTranslation = nil
+            case .changed:
+                let shouldStartDismiss = self.scrollView.contentOffset.y <= 0.0 && translation.y > 0.0
+                if shouldStartDismiss {
+                    if !self.isDismissingInteractively {
+                        self.isDismissingInteractively = true
+                        self.dismissStartTranslation = translation.y
+                        self.scrollView.isScrollEnabled = false
+                    }
+                    
+                    let start = self.dismissStartTranslation ?? translation.y
+                    let dismissOffset = max(0.0, translation.y - start)
+                    self.scrollView.contentOffset = .zero
+                    self.updateDismissTranslation(dismissOffset)
+                } else if self.isDismissingInteractively {
+                    let start = self.dismissStartTranslation ?? translation.y
+                    let dismissOffset = max(0.0, translation.y - start)
+                    self.updateDismissTranslation(dismissOffset)
+                }
+            case .ended, .cancelled:
+                if self.isDismissingInteractively {
+                    let velocityY = recognizer.velocity(in: self).y
+                    let currentOffset = self.dismissTranslation
+                    let threshold = min(180.0, self.bounds.height * 0.25)
+                    let shouldDismiss = currentOffset > threshold || velocityY > 1000.0
+                    
+                    self.isDismissingInteractively = false
+                    self.scrollView.isScrollEnabled = !component.isFullscreen
+                    
+                    if shouldDismiss {
+                        let animateOffset = self.bounds.height - self.backgroundLayer.frame.minY
+                        let initialVelocity = animateOffset > 0.0 ? max(0.0, velocityY) / animateOffset : 0.0
+                        self.animateOut(initialVelocity: initialVelocity, completion: { [weak self] in
+                            self?.environment?.dismiss(false)
+                        })
+                    } else {
+                        self.resetDismissTranslation(animated: true)
+                    }
+                }
+            default:
+                break
+            }
         }
         
         private func updateScrolling(transition: ComponentTransition) {
@@ -356,6 +462,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             var containerTransform = CATransform3DIdentity
             containerTransform = CATransform3DTranslate(containerTransform, 0.0, scaledTranslation, 0.0)
             containerTransform = CATransform3DScale(containerTransform, scale, scale, scale)
+            containerTransform = CATransform3DTranslate(containerTransform, 0.0, self.dismissTranslation, 0.0)
             transition.setTransform(view: self.containerView, transform: containerTransform)
             transition.setCornerRadius(layer: self.containerView.layer, cornerRadius: scaledCornerRadius)
             
@@ -363,8 +470,10 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 transition.setBounds(view: self.scrollView, bounds: CGRect(origin: .zero, size: self.scrollView.bounds.size))
                 self.scrollView.isScrollEnabled = false
             } else {
-                self.scrollView.isScrollEnabled = true
+                self.scrollView.isScrollEnabled = !self.isDismissingInteractively
             }
+            
+            self.environment?.boundsUpdated.invoke(self.scrollView.bounds)
         }
         
         private var didPlayAppearanceAnimation = false
@@ -379,16 +488,28 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             self.bottomContainer.layer.animatePosition(from: CGPoint(x: 0.0, y: animateOffset), to: CGPoint(), duration: 0.5, timingFunction: kCAMediaTimingFunctionSpring, additive: true)
         }
         
-        func animateOut(completion: @escaping () -> Void) {
+        func animateOut(initialVelocity: CGFloat? = nil, completion: @escaping () -> Void) {
             let animateOffset: CGFloat = self.bounds.height - self.backgroundLayer.frame.minY
             
-            self.dimView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false)
-            self.scrollContentClippingView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true, completion: { _ in
-                completion()
-            })
-            self.backgroundLayer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
-            self.navigationBarContainer.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
-            self.bottomContainer.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: 0.3, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
+            self.dimView.layer.animateAlpha(from: self.dimView.alpha, to: 0.0, duration: 0.3, removeOnCompletion: false)
+            if let initialVelocity = initialVelocity {
+                let transition = ContainedViewLayoutTransition.animated(duration: 0.35, curve: .customSpring(damping: 124.0, initialVelocity: initialVelocity))
+                
+                transition.updatePosition(layer: self.scrollContentClippingView.layer, position: CGPoint(x: self.scrollContentClippingView.layer.position.x, y: self.scrollContentClippingView.layer.position.y + animateOffset), completion: { _ in
+                    completion()
+                })
+                transition.updatePosition(layer: self.backgroundLayer, position: CGPoint(x: self.backgroundLayer.position.x, y: self.backgroundLayer.position.y + animateOffset))
+                transition.updatePosition(layer: self.navigationBarContainer.layer, position: CGPoint(x: self.navigationBarContainer.layer.position.x, y: self.navigationBarContainer.layer.position.y + animateOffset))
+                transition.updatePosition(layer: self.bottomContainer.layer, position: CGPoint(x: self.bottomContainer.layer.position.x, y: self.bottomContainer.layer.position.y + animateOffset))
+            } else {
+                let duration: Double = 0.25
+                self.scrollContentClippingView.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: duration, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true, completion: { _ in
+                    completion()
+                })
+                self.backgroundLayer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: duration, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
+                self.navigationBarContainer.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: duration, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
+                self.bottomContainer.layer.animatePosition(from: CGPoint(), to: CGPoint(x: 0.0, y: animateOffset), duration: duration, timingFunction: CAMediaTimingFunctionName.easeInEaseOut.rawValue, removeOnCompletion: false, additive: true)
+            }
         }
       
         func update(component: ResizableSheetComponent<ChildEnvironmentType>, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
