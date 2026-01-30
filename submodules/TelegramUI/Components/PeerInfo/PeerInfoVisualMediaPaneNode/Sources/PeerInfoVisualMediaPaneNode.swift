@@ -1727,6 +1727,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
         }
         self.isRequestingView = true
         var firstTime = true
+        var firstTimeRealData = true
         let queue = Queue()
 
         self.listDisposable.set((self.listSource.state
@@ -1768,24 +1769,34 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
 
                 let currentSynchronous = synchronous && firstTime
                 let currentReloadAtTop = reloadAtTop && firstTime
+                
+                var crossfade = currentReloadAtTop
+                if firstTimeRealData && !list.isLoading {
+                    firstTimeRealData = false
+                    if !firstTime {
+                        crossfade = true
+                    }
+                }
+                
                 firstTime = false
-                strongSelf.updateHistory(items: items, synchronous: currentSynchronous, reloadAtTop: currentReloadAtTop)
+                strongSelf.updateHistory(items: items, synchronous: currentSynchronous, crossfade: crossfade)
                 strongSelf.isRequestingView = false
             }
         }))
     }
     
-    private func updateHistory(items: SparseItemGrid.Items, synchronous: Bool, reloadAtTop: Bool) {
+    private func updateHistory(items: SparseItemGrid.Items, synchronous: Bool, crossfade: Bool) {
         self.items = items
 
         if let (size, topInset, sideInset, bottomInset, deviceMetrics, visibleHeight, isScrollingLockedAtTop, expandProgress, navigationHeight, presentationData) = self.currentParams {
             var gridSnapshot: UIView?
-            if reloadAtTop {
+            if crossfade {
                 gridSnapshot = self.itemGrid.view.snapshotView(afterScreenUpdates: false)
             }
             self.update(size: size, topInset: topInset, sideInset: sideInset, bottomInset: bottomInset, deviceMetrics: deviceMetrics, visibleHeight: visibleHeight, isScrollingLockedAtTop: isScrollingLockedAtTop, expandProgress: expandProgress, navigationHeight: navigationHeight, presentationData: presentationData, synchronous: false, transition: .immediate)
             if let gridSnapshot = gridSnapshot {
                 self.view.addSubview(gridSnapshot)
+                self.itemGrid.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
                 gridSnapshot.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { [weak gridSnapshot] _ in
                     gridSnapshot?.removeFromSuperview()
                 })
