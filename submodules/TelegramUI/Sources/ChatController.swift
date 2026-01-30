@@ -1204,15 +1204,19 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             self.push(controller)
                             return true
                         case .starGift, .starGiftUnique:
-                            let controller = self.context.sharedContext.makeGiftViewScreen(context: self.context, message: EngineMessage(message), shareStory: { [weak self] uniqueGift in
-                                Queue.mainQueue().after(0.15) {
-                                    if let self {
-                                        let controller = self.context.sharedContext.makeStorySharingScreen(context: self.context, subject: .gift(uniqueGift), parentController: self)
-                                        self.push(controller)
+                            if case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = action.action, case let .unique(uniqueGift) = gift, uniqueGift.flags.contains(.isBurned) {
+                                self.present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: self.presentationData.strings.Resolve_GiftErrorBurned, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            } else {
+                                let controller = self.context.sharedContext.makeGiftViewScreen(context: self.context, message: EngineMessage(message), shareStory: { [weak self] uniqueGift in
+                                    Queue.mainQueue().after(0.15) {
+                                        if let self {
+                                            let controller = self.context.sharedContext.makeStorySharingScreen(context: self.context, subject: .gift(uniqueGift), parentController: self)
+                                            self.push(controller)
+                                        }
                                     }
-                                }
-                            })
-                            self.push(controller)
+                                })
+                                self.push(controller)
+                            }
                             return true
                         case .giftStars:
                             let controller = self.context.sharedContext.makeStarsGiftScreen(context: self.context, message: EngineMessage(message))
@@ -1377,189 +1381,232 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
             }
             
-            let openChatMessageParams = OpenChatMessageParams(context: context, updatedPresentationData: self.updatedPresentationData, chatLocation: openChatLocation, chatFilterTag: chatFilterTag, chatLocationContextHolder: self.chatLocationContextHolder, message: message, mediaIndex: params.mediaIndex, standalone: standalone, reverseMessageGalleryOrder: false, mode: mode, navigationController: self.effectiveNavigationController, dismissInput: { [weak self] in
-                self?.chatDisplayNode.dismissInput()
-            }, present: { [weak self] c, a, i in
-                guard let self else {
-                    return
-                }
-                
-                if case .current = i {
-                    c.presentationArguments = a
-                    c.statusBar.alphaUpdated = { [weak self] transition in
-                        guard let self else {
-                            return
-                        }
-                        self.updateStatusBarPresentation(animated: transition.isAnimated)
-                    }
-                    self.galleryPresentationContext.present(c, on: PresentationSurfaceLevel(rawValue: 0), blockInteraction: true, completion: {})
-                } else {
-                    self.present(c, in: .window(.root), with: a, blockInteraction: true)
-                }
-            }, transitionNode: { [weak self] messageId, media, adjustRect in
-                var selectedNode: (ASDisplayNode, CGRect, () -> (UIView?, UIView?))?
-                if let self {
-                    self.chatDisplayNode.historyNode.forEachItemNode { itemNode in
-                        if let itemNode = itemNode as? ChatMessageItemView {
-                            if let result = itemNode.transitionNode(id: messageId, media: media, adjustRect: adjustRect) {
-                                selectedNode = result
-                            }
-                        }
-                    }
-                }
-                return selectedNode
-            }, addToTransitionSurface: { [weak self] view in
-                guard let self else {
-                    return
-                }
-                if let contextController = self.currentContextController {
-                    contextController.view.addSubview(view)
-                } else {
-                    self.chatDisplayNode.historyNode.view.superview?.insertSubview(view, aboveSubview: self.chatDisplayNode.historyNode.view)
-                }
-            }, openUrl: { [weak self] url in
-                self?.openUrl(url, concealed: false, skipConcealedAlert: isLocation, message: nil)
-            }, openPeer: { [weak self] peer, navigation in
-                self?.openPeer(peer: EnginePeer(peer), navigation: navigation, fromMessage: nil)
-            }, callPeer: { [weak self] peerId, isVideo in
-                self?.controllerInteraction?.callPeer(peerId, isVideo)
-            }, openConferenceCall: { [weak self] message in
-                self?.controllerInteraction?.openConferenceCall(message)
-            }, enqueueMessage: { [weak self] message in
-                self?.sendMessages([message])
-            }, sendSticker: canSendMessagesToChat(self.presentationInterfaceState) ? { [weak self] fileReference, sourceNode, sourceRect in
-                return self?.controllerInteraction?.sendSticker(fileReference, false, false, nil, false, sourceNode, sourceRect, nil, []) ?? false
-            } : nil, sendEmoji: canSendMessagesToChat(self.presentationInterfaceState) ? { [weak self] text, attribute in
-                self?.controllerInteraction?.sendEmoji(text, attribute, false)
-            } : nil, setupTemporaryHiddenMedia: { [weak self] signal, centralIndex, galleryMedia in
-                if let self {
-                    self.temporaryHiddenGalleryMediaDisposable.set((signal |> deliverOnMainQueue).startStrict(next: { [weak self] entry in
-                        if let self, let controllerInteraction = self.controllerInteraction {
-                            var messageIdAndMedia: [MessageId: [Media]] = [:]
-                            
-                            if let entry = entry as? InstantPageGalleryEntry, entry.index == centralIndex {
-                                messageIdAndMedia[message.id] = [galleryMedia]
-                            }
-                            
-                            controllerInteraction.hiddenMedia = messageIdAndMedia
-                            
-                            self.chatDisplayNode.historyNode.forEachItemNode { itemNode in
-                                if let itemNode = itemNode as? ChatMessageItemView {
-                                    itemNode.updateHiddenMedia()
-                                }
-                            }
-                        }
-                    }))
-                }
-            }, chatAvatarHiddenMedia: { [weak self] signal, media in
-                if let self {
-                    self.temporaryHiddenGalleryMediaDisposable.set((signal |> deliverOnMainQueue).startStrict(next: { [weak self] messageId in
-                        if let self, let controllerInteraction = self.controllerInteraction {
-                            var messageIdAndMedia: [MessageId: [Media]] = [:]
-                            
-                            if let messageId = messageId {
-                                messageIdAndMedia[messageId] = [media]
-                            }
-                            
-                            controllerInteraction.hiddenMedia = messageIdAndMedia
-                            
-                            self.chatDisplayNode.historyNode.forEachItemNode { itemNode in
-                                if let itemNode = itemNode as? ChatMessageItemView {
-                                    itemNode.updateHiddenMedia()
-                                }
-                            }
-                        }
-                    }))
-                }
-            }, actionInteraction: GalleryControllerActionInteraction(
-                openUrl: { [weak self] url, concealed, forceExternal in
-                    if let self {
-                        self.openUrl(url, concealed: concealed, forceExternal: forceExternal, message: nil)
-                    }
-                }, openUrlIn: { [weak self] url in
-                    if let self {
-                        self.openUrlIn(url)
-                    }
-                }, openPeerMention: { [weak self] mention in
-                    if let self {
-                        self.controllerInteraction?.openPeerMention(mention, nil)
-                    }
-                }, openPeer: { [weak self] peer in
-                    if let self {
-                        self.controllerInteraction?.openPeer(peer, .default, nil, .default)
-                    }
-                }, openHashtag: { [weak self] peerName, hashtag in
-                    if let self {
-                        self.controllerInteraction?.openHashtag(peerName, hashtag)
-                    }
-                }, openBotCommand: { [weak self] command in
-                    if let self {
-                        self.controllerInteraction?.sendBotCommand(nil, command)
-                    }
-                }, openAd: { [weak self] messageId in
-                    if let self {
-                        self.controllerInteraction?.activateAdAction(messageId, nil, true, true)
-                    }
-                }, addContact: { [weak self] phoneNumber in
-                    if let self {
-                        self.controllerInteraction?.addContact(phoneNumber)
-                    }
-                }, storeMediaPlaybackState: { [weak self] messageId, timestamp, playbackRate in
-                    guard let self else {
-                        return
-                    }
-                    var storedState: MediaPlaybackStoredState?
-                    if let timestamp = timestamp {
-                        storedState = MediaPlaybackStoredState(timestamp: timestamp, playbackRate: AudioPlaybackRate(playbackRate))
-                    }
-                    let _ = updateMediaPlaybackStoredStateInteractively(engine: self.context.engine, messageId: messageId, state: storedState).startStandalone()
-                }, editMedia: { [weak self] messageId, snapshots, transitionCompletion in
+            let openChatMessageParams = OpenChatMessageParams(
+                context: context,
+                updatedPresentationData: self.updatedPresentationData,
+                chatLocation: openChatLocation,
+                chatFilterTag: chatFilterTag,
+                chatLocationContextHolder: self.chatLocationContextHolder,
+                message: message,
+                mediaIndex: params.mediaIndex,
+                standalone: standalone,
+                reverseMessageGalleryOrder: false,
+                mode: mode,
+                navigationController: self.effectiveNavigationController, dismissInput: { [weak self] in
+                    self?.chatDisplayNode.dismissInput()
+                },
+                present: { [weak self] c, a, i in
                     guard let self else {
                         return
                     }
                     
-                    let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: messageId))
-                    |> deliverOnMainQueue).startStandalone(next: { [weak self] message in
-                        guard let self, let message = message else {
-                            return
+                    if case .current = i {
+                        c.presentationArguments = a
+                        c.statusBar.alphaUpdated = { [weak self] transition in
+                            guard let self else {
+                                return
+                            }
+                            self.updateStatusBarPresentation(animated: transition.isAnimated)
                         }
-                        
-                        var mediaReference: AnyMediaReference?
-                        for media in message.media {
-                            if let image = media as? TelegramMediaImage {
-                                mediaReference = AnyMediaReference.standalone(media: image)
-                            } else if let file = media as? TelegramMediaFile {
-                                mediaReference = AnyMediaReference.standalone(media: file)
-                            } else if let webpage = media as? TelegramMediaWebpage, case let .Loaded(content) = webpage.content {
-                                if let image = content.image {
-                                    mediaReference = AnyMediaReference.standalone(media: image)
-                                } else if let file = content.file {
-                                    mediaReference = AnyMediaReference.standalone(media: file)
+                        self.galleryPresentationContext.present(c, on: PresentationSurfaceLevel(rawValue: 0), blockInteraction: true, completion: {})
+                    } else {
+                        self.present(c, in: .window(.root), with: a, blockInteraction: true)
+                    }
+                },
+                transitionNode: { [weak self] messageId, media, adjustRect in
+                    var selectedNode: (ASDisplayNode, CGRect, () -> (UIView?, UIView?))?
+                    if let self {
+                        self.chatDisplayNode.historyNode.forEachItemNode { itemNode in
+                            if let itemNode = itemNode as? ChatMessageItemView {
+                                if let result = itemNode.transitionNode(id: messageId, media: media, adjustRect: adjustRect) {
+                                    selectedNode = result
                                 }
                             }
                         }
-                        
-                        if let mediaReference = mediaReference, let peer = message.peers[message.id.peerId] {
-                            legacyMediaEditor(context: self.context, peer: peer, threadTitle: self.contentData?.state.threadInfo?.title, media: mediaReference, mode: .draw, initialCaption: NSAttributedString(), snapshots: snapshots, transitionCompletion: {
-                                transitionCompletion()
-                            }, getCaptionPanelView: { [weak self] in
-                                return self?.getCaptionPanelView(isFile: false)
-                            }, sendMessagesWithSignals: { [weak self] signals, _, _, isCaptionAbove in
-                                if let self {
-                                    var parameters: ChatSendMessageActionSheetController.SendParameters?
-                                    if isCaptionAbove {
-                                        parameters = ChatSendMessageActionSheetController.SendParameters(effect: nil, textIsAboveMedia: true)
-                                    }
-                                    self.enqueueMediaMessages(signals: signals, silentPosting: false, parameters: parameters)
+                    }
+                    return selectedNode
+                },
+                addToTransitionSurface: { [weak self] view in
+                    guard let self else {
+                        return
+                    }
+                    if let contextController = self.currentContextController {
+                        contextController.view.addSubview(view)
+                    } else {
+                        self.chatDisplayNode.historyNode.view.superview?.insertSubview(view, aboveSubview: self.chatDisplayNode.historyNode.view)
+                    }
+                },
+                openUrl: { [weak self] url in
+                    self?.openUrl(url, concealed: false, skipConcealedAlert: isLocation, message: nil)
+                },
+                openPeer: { [weak self] peer, navigation in
+                    self?.openPeer(peer: EnginePeer(peer), navigation: navigation, fromMessage: nil)
+                },
+                callPeer: { [weak self] peerId, isVideo in
+                    self?.controllerInteraction?.callPeer(peerId, isVideo)
+                },
+                openConferenceCall: { [weak self] message in
+                    self?.controllerInteraction?.openConferenceCall(message)
+                },
+                enqueueMessage: { [weak self] message in
+                    self?.sendMessages([message])
+                },
+                sendSticker: canSendMessagesToChat(self.presentationInterfaceState) ? { [weak self] fileReference, sourceNode, sourceRect in
+                    return self?.controllerInteraction?.sendSticker(fileReference, false, false, nil, false, sourceNode, sourceRect, nil, []) ?? false
+                } : nil,
+                sendEmoji: canSendMessagesToChat(self.presentationInterfaceState) ? { [weak self] text, attribute in
+                    self?.controllerInteraction?.sendEmoji(text, attribute, false)
+                } : nil,
+                setupTemporaryHiddenMedia: { [weak self] signal, centralIndex, galleryMedia in
+                    if let self {
+                        self.temporaryHiddenGalleryMediaDisposable.set((signal |> deliverOnMainQueue).startStrict(next: { [weak self] entry in
+                            if let self, let controllerInteraction = self.controllerInteraction {
+                                var messageIdAndMedia: [MessageId: [Media]] = [:]
+                                
+                                if let entry = entry as? InstantPageGalleryEntry, entry.index == centralIndex {
+                                    messageIdAndMedia[message.id] = [galleryMedia]
                                 }
-                            }, present: { [weak self] c, a in
-                                self?.present(c, in: .window(.root), with: a)
-                            })
+                                
+                                controllerInteraction.hiddenMedia = messageIdAndMedia
+                                
+                                self.chatDisplayNode.historyNode.forEachItemNode { itemNode in
+                                    if let itemNode = itemNode as? ChatMessageItemView {
+                                        itemNode.updateHiddenMedia()
+                                    }
+                                }
+                            }
+                        }))
+                    }
+                },
+                chatAvatarHiddenMedia: { [weak self] signal, media in
+                    if let self {
+                        self.temporaryHiddenGalleryMediaDisposable.set((signal |> deliverOnMainQueue).startStrict(next: { [weak self] messageId in
+                            if let self, let controllerInteraction = self.controllerInteraction {
+                                var messageIdAndMedia: [MessageId: [Media]] = [:]
+                                
+                                if let messageId = messageId {
+                                    messageIdAndMedia[messageId] = [media]
+                                }
+                                
+                                controllerInteraction.hiddenMedia = messageIdAndMedia
+                                
+                                self.chatDisplayNode.historyNode.forEachItemNode { itemNode in
+                                    if let itemNode = itemNode as? ChatMessageItemView {
+                                        itemNode.updateHiddenMedia()
+                                    }
+                                }
+                            }
+                        }))
+                    }
+                },
+                actionInteraction: GalleryControllerActionInteraction(
+                    openUrl: { [weak self] url, concealed, forceExternal in
+                        if let self {
+                            self.openUrl(url, concealed: concealed, forceExternal: forceExternal, message: nil)
                         }
-                    })
-                }, updateCanReadHistory: { [weak self] canReadHistory in
-                    self?.canReadHistory.set(canReadHistory)
-                }),
+                    },
+                    openUrlIn: { [weak self] url in
+                        if let self {
+                            self.openUrlIn(url)
+                        }
+                    },
+                    openPeerMention: { [weak self] mention in
+                        if let self {
+                            self.controllerInteraction?.openPeerMention(mention, nil)
+                        }
+                    },
+                    openPeer: { [weak self] peer in
+                        if let self {
+                            self.controllerInteraction?.openPeer(peer, .default, nil, .default)
+                        }
+                    },
+                    openHashtag: { [weak self] peerName, hashtag in
+                        if let self {
+                            self.controllerInteraction?.openHashtag(peerName, hashtag)
+                        }
+                    },
+                    openBotCommand: { [weak self] command in
+                        if let self {
+                            self.controllerInteraction?.sendBotCommand(nil, command)
+                        }
+                    },
+                    openAd: { [weak self] messageId in
+                        if let self {
+                            self.controllerInteraction?.activateAdAction(messageId, nil, true, true)
+                        }
+                    },
+                    addContact: { [weak self] phoneNumber in
+                        if let self {
+                            self.controllerInteraction?.addContact(phoneNumber)
+                        }
+                    },
+                    storeMediaPlaybackState: { [weak self] messageId, timestamp, playbackRate in
+                        guard let self else {
+                            return
+                        }
+                        var storedState: MediaPlaybackStoredState?
+                        if let timestamp = timestamp {
+                            storedState = MediaPlaybackStoredState(timestamp: timestamp, playbackRate: AudioPlaybackRate(playbackRate))
+                        }
+                        let _ = updateMediaPlaybackStoredStateInteractively(engine: self.context.engine, messageId: messageId, state: storedState).startStandalone()
+                    },
+                    editMedia: { [weak self] messageId, snapshots, transitionCompletion in
+                        guard let self else {
+                            return
+                        }
+                        
+                        let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: messageId))
+                        |> deliverOnMainQueue).startStandalone(next: { [weak self] message in
+                            guard let self, let message = message else {
+                                return
+                            }
+                            
+                            var mediaReference: AnyMediaReference?
+                            for media in message.media {
+                                if let image = media as? TelegramMediaImage {
+                                    mediaReference = AnyMediaReference.standalone(media: image)
+                                } else if let file = media as? TelegramMediaFile {
+                                    mediaReference = AnyMediaReference.standalone(media: file)
+                                } else if let webpage = media as? TelegramMediaWebpage, case let .Loaded(content) = webpage.content {
+                                    if let image = content.image {
+                                        mediaReference = AnyMediaReference.standalone(media: image)
+                                    } else if let file = content.file {
+                                        mediaReference = AnyMediaReference.standalone(media: file)
+                                    }
+                                }
+                            }
+                            
+                            if let mediaReference = mediaReference, let peer = message.peers[message.id.peerId] {
+                                legacyMediaEditor(context: self.context, peer: peer, threadTitle: self.contentData?.state.threadInfo?.title, media: mediaReference, mode: .draw, initialCaption: NSAttributedString(), snapshots: snapshots, transitionCompletion: {
+                                    transitionCompletion()
+                                }, getCaptionPanelView: { [weak self] in
+                                    return self?.getCaptionPanelView(isFile: false)
+                                }, sendMessagesWithSignals: { [weak self] signals, _, _, isCaptionAbove in
+                                    if let self {
+                                        var parameters: ChatSendMessageActionSheetController.SendParameters?
+                                        if isCaptionAbove {
+                                            parameters = ChatSendMessageActionSheetController.SendParameters(effect: nil, textIsAboveMedia: true)
+                                        }
+                                        self.enqueueMediaMessages(signals: signals, silentPosting: false, parameters: parameters)
+                                    }
+                                }, present: { [weak self] c, a in
+                                    self?.present(c, in: .window(.root), with: a)
+                                })
+                            }
+                        })
+                    },
+                    updateCanReadHistory: { [weak self] canReadHistory in
+                        self?.canReadHistory.set(canReadHistory)
+                    }
+                ),
+                navigateToMessageContext: { [weak self] message in
+                    Task {
+                        guard let self else {
+                            return
+                        }
+                        await self.openMediaMessageContext(message: message)
+                    }
+                },
                 getSourceRect: { [weak self] in
                     guard let self else {
                         return nil
@@ -2112,7 +2159,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             if let context = self?.context, let navigationController = self?.effectiveNavigationController {
                 let _ = context.sharedContext.navigateToForumThread(context: context, peerId: peerId, threadId: threadId, messageId: messageId, navigationController: navigationController, activateInput: nil, scrollToEndIfExists: false, keepStack: .always, animated: true).startStandalone()
             }
-        }, tapMessage: nil, clickThroughMessage: { [weak self] view, location in
+        }, tapMessage: nil,
+        clickThroughMessage: { [weak self] view, location in
             self?.chatDisplayNode.dismissInput(view: view, location: location)
         }, toggleMessagesSelection: { [weak self] ids, value in
             guard let strongSelf = self, strongSelf.isNodeLoaded else {

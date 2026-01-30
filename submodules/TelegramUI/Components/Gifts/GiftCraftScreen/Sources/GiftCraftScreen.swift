@@ -460,7 +460,7 @@ private final class CraftGiftPageContent: Component {
                 },
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
-            craftContentHeight += 276.0
+            craftContentHeight += 291.0
             craftContentHeight += descriptionTextSize.height
             craftContentHeight += 25.0
             
@@ -566,7 +566,7 @@ private final class CraftGiftPageContent: Component {
                                 diameter: 48.0,
                                 lineWidth: 4.0,
                                 fontSize: 10.0,
-                                progress: CGFloat(backdropPermille / 10 / 100),
+                                progress: CGFloat(backdropPermille) / 10.0 / 100.0,
                                 value: backdropPermille / 10,
                                 suffix: "%"
                             )
@@ -615,7 +615,7 @@ private final class CraftGiftPageContent: Component {
                                 contentSize: CGSize(width: 28.0, height: 28.0),
                                 lineWidth: 4.0,
                                 fontSize: 10.0,
-                                progress: CGFloat(symbolPermille / 10 / 100),
+                                progress: CGFloat(symbolPermille) / 10.0 / 100.0,
                                 value: symbolPermille / 10,
                                 suffix: "%"
                             )
@@ -1763,8 +1763,15 @@ private final class SheetContainerComponent: CombinedComponent {
                                             }
                                         default:
                                             if let navigationController = controller()?.navigationController {
+                                                var text: String = strings.Login_UnknownError
+                                                switch error {
+                                                case .unavailable:
+                                                    text = strings.Gift_Craft_Error_NotAvailable
+                                                default:
+                                                    break
+                                                }
                                                 dismiss(true)
-                                                let alertController = textAlertController(context: component.context, title: nil, text: strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})])
+                                                let alertController = textAlertController(context: component.context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})])
                                                 (navigationController.topViewController as? ViewController)?.present(alertController, in: .window(.root))
                                             }
                                         }

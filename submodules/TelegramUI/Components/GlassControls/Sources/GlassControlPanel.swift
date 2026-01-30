@@ -32,6 +32,7 @@ public final class GlassControlPanelComponent: Component {
     }
 
     public let theme: PresentationTheme
+    public let preferClearGlass: Bool
     public let leftItem: Item?
     public let rightItem: Item?
     public let centralItem: Item?
@@ -41,6 +42,7 @@ public final class GlassControlPanelComponent: Component {
 
     public init(
         theme: PresentationTheme,
+        preferClearGlass: Bool = false,
         leftItem: Item?,
         centralItem: Item?,
         rightItem: Item?,
@@ -49,6 +51,7 @@ public final class GlassControlPanelComponent: Component {
         tag: AnyObject? = nil
     ) {
         self.theme = theme
+        self.preferClearGlass = preferClearGlass
         self.leftItem = leftItem
         self.centralItem = centralItem
         self.rightItem = rightItem
@@ -59,6 +62,9 @@ public final class GlassControlPanelComponent: Component {
 
     public static func ==(lhs: GlassControlPanelComponent, rhs: GlassControlPanelComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.preferClearGlass != rhs.preferClearGlass {
             return false
         }
         if lhs.leftItem != rhs.leftItem {
@@ -149,6 +155,7 @@ public final class GlassControlPanelComponent: Component {
                     transition: leftItemTransition,
                     component: AnyComponent(GlassControlGroupComponent(
                         theme: component.theme,
+                        preferClearGlass: component.preferClearGlass,
                         background: leftItem.background,
                         items: leftItem.items,
                         minWidth: availableSize.height
@@ -198,6 +205,7 @@ public final class GlassControlPanelComponent: Component {
                     transition: rightItemTransition,
                     component: AnyComponent(GlassControlGroupComponent(
                         theme: component.theme,
+                        preferClearGlass: component.preferClearGlass,
                         background: rightItem.background,
                         items: rightItem.items,
                         minWidth: availableSize.height
@@ -264,6 +272,7 @@ public final class GlassControlPanelComponent: Component {
                     transition: centralItemTransition,
                     component: AnyComponent(GlassControlGroupComponent(
                         theme: component.theme,
+                        preferClearGlass: component.preferClearGlass,
                         background: centralItem.background,
                         items: centralItem.items,
                         minWidth: centralItem.keepWide ? 165.0 : availableSize.height

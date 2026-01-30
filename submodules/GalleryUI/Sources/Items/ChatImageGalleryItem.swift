@@ -149,7 +149,7 @@ class ChatImageGalleryItem: GalleryItem {
     func node(synchronous: Bool) -> GalleryItemNode {
         let node = ChatImageGalleryItemNode(context: self.context, presentationData: self.presentationData, performAction: self.performAction, openActionOptions: self.openActionOptions, present: self.present)
         
-        node.setMessage(self.message, displayInfo: !self.displayInfoOnTop, translateToLanguage: self.translateToLanguage, peerIsCopyProtected: self.peerIsCopyProtected, isSecret: self.isSecret)
+        node.setMessage(self.message, displayInfo: !self.displayInfoOnTop, translateToLanguage: self.translateToLanguage, peerIsCopyProtected: self.peerIsCopyProtected, isSecret: self.isSecret, location: self.location)
         for media in self.message.media {
             if let paidContent = media as? TelegramMediaPaidContent {
                 let mediaIndex = self.mediaIndex ?? 0
@@ -175,26 +175,12 @@ class ChatImageGalleryItem: GalleryItem {
             }
         }
         
-        var title: String?
-        if let _ = message.adAttribute {
-            title = self.presentationData.strings.Gallery_Ad
-        } else if let location = self.location {
-            title = self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string
-        }
-                
-        node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId, title: title)
-        
         return node
     }
     
     func updateNode(node: GalleryItemNode, synchronous: Bool) {
         if let node = node as? ChatImageGalleryItemNode, let location = self.location {
-            let title = self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string
-        
-            if self.displayInfoOnTop {
-                node.titleContentView?.setMessage(self.message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId, title: title)
-            }
-            node.setMessage(self.message, displayInfo: !self.displayInfoOnTop, translateToLanguage: self.translateToLanguage, peerIsCopyProtected: self.peerIsCopyProtected, isSecret: self.isSecret)
+            node.setMessage(self.message, displayInfo: !self.displayInfoOnTop, translateToLanguage: self.translateToLanguage, peerIsCopyProtected: self.peerIsCopyProtected, isSecret: self.isSecret, location: location)
         }
     }
     
@@ -251,12 +237,11 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
     private var tilingNode: TilingNode?
     fileprivate let _ready = Promise<Void>()
     fileprivate let _title = Promise<String>()
-    fileprivate let _titleView = Promise<UIView?>()
+    fileprivate let _titleContent = Promise<GalleryTitleView.Content?>(nil)
     fileprivate let _rightBarButtonItems = Promise<[UIBarButtonItem]?>(nil)
     private let statusNodeContainer: HighlightableButtonNode
     private let statusNode: RadialStatusNode
     private let footerContentNode: ChatItemGalleryFooterContentNode
-    fileprivate var titleContentView: GalleryTitleView?
     
     private var contextAndMedia: (AccountContext, AnyMediaReference)?
     
@@ -319,9 +304,6 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         self.statusNodeContainer.addTarget(self, action: #selector(self.statusPressed), forControlEvents: .touchUpInside)
         
         self.statusNodeContainer.isUserInteractionEnabled = false
-        
-        self.titleContentView = GalleryTitleView(frame: CGRect())
-        self._titleView.set(.single(self.titleContentView))
         
         self.recognitionOverlayContentNode.action = { [weak self] active in
             if let strongSelf = self {
@@ -459,7 +441,7 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         }))
     }
     
-    fileprivate func setMessage(_ message: Message, displayInfo: Bool, translateToLanguage: String?, peerIsCopyProtected: Bool, isSecret: Bool) {
+    fileprivate func setMessage(_ message: Message, displayInfo: Bool, translateToLanguage: String?, peerIsCopyProtected: Bool, isSecret: Bool, location: MessageHistoryEntryLocation?) {
         self.message = message
         self.displayInfo = displayInfo
         self.translateToLanguage = translateToLanguage
@@ -467,6 +449,23 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         self.isSecret = isSecret
         self.imageNode.captureProtected = message.id.peerId.namespace == Namespaces.Peer.SecretChat || message.isCopyProtected() || peerIsCopyProtected || isSecret || message.paidContent != nil
         self.updateFooter(animated: false)
+        
+        var title: String?
+        if let _ = message.adAttribute {
+            title = self.presentationData.strings.Gallery_Ad
+        } else if let location {
+            title = self.presentationData.strings.Items_NOfM("\(location.index + 1)", "\(location.count)").string
+        }
+        
+        self._titleContent.set(.single(GalleryTitleView.Content(message: EngineMessage(message), title: title, action: message.adAttribute == nil ? { [weak self] in
+            guard let self else {
+                return
+            }
+            guard let controller = self.galleryController() as? GalleryController else {
+                return
+            }
+            controller.dismissAndNavigateToMessageContext(message: message)
+        } : nil)))
     }
     
     private func updateFooter(animated: Bool) {
@@ -1133,8 +1132,8 @@ final class ChatImageGalleryItemNode: ZoomableContentGalleryItemNode {
         return self._title.get()
     }
     
-    override func titleView() -> Signal<UIView?, NoError> {
-        return self._titleView.get()
+    override func titleContent() -> Signal<GalleryTitleView.Content?, NoError> {
+        return self._titleContent.get()
     }
     
     override func rightBarButtonItems() -> Signal<[UIBarButtonItem]?, NoError> {
