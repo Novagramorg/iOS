@@ -114,6 +114,7 @@ import GiftViewScreen
 import PeerMessagesMediaPlaylist
 import EdgeEffect
 import Pasteboard
+import AccountPeerContextItem
 
 public enum PeerInfoAvatarEditingMode {
     case generic
