@@ -180,7 +180,7 @@ public enum MessageActionUrlAuthResult {
         public static let requestPhoneNumber = Flags(rawValue: 1 << 1)
     }
     
-    public struct ClientData {
+    public struct ClientData  : Equatable {
         public let browser: String
         public let platform: String
         public let ip: String
