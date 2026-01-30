@@ -1735,15 +1735,20 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
 
             var mappedItems: [SparseItemGrid.Item] = []
             var mappedHoles: [SparseItemGrid.HoleAnchor] = []
-            for item in list.items {
-                switch item.content {
-                case let .message(message, isLocal):
-                    mappedItems.append(VisualMediaItem(index: item.index, message: message, localMonthTimestamp: Month(localTimestamp: message.timestamp + timezoneOffset).packedValue))
-                    if !isLocal {
-                        mappedHoles.append(VisualMediaHoleAnchor(index: item.index, messageId: message.id, localMonthTimestamp: Month(localTimestamp: message.timestamp + timezoneOffset).packedValue))
+            var totalCount = list.totalCount
+            if list.items.isEmpty && list.isLoading && list.totalCount == 0 {
+                totalCount = 100
+            } else {
+                for item in list.items {
+                    switch item.content {
+                    case let .message(message, isLocal):
+                        mappedItems.append(VisualMediaItem(index: item.index, message: message, localMonthTimestamp: Month(localTimestamp: message.timestamp + timezoneOffset).packedValue))
+                        if !isLocal {
+                            mappedHoles.append(VisualMediaHoleAnchor(index: item.index, messageId: message.id, localMonthTimestamp: Month(localTimestamp: message.timestamp + timezoneOffset).packedValue))
+                        }
+                    case let .placeholder(id, timestamp):
+                        mappedHoles.append(VisualMediaHoleAnchor(index: item.index, messageId: id, localMonthTimestamp: Month(localTimestamp: timestamp + timezoneOffset).packedValue))
                     }
-                case let .placeholder(id, timestamp):
-                    mappedHoles.append(VisualMediaHoleAnchor(index: item.index, messageId: id, localMonthTimestamp: Month(localTimestamp: timestamp + timezoneOffset).packedValue))
                 }
             }
 
@@ -1755,7 +1760,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
                 let items = SparseItemGrid.Items(
                     items: mappedItems,
                     holeAnchors: mappedHoles,
-                    count: list.totalCount,
+                    count: totalCount,
                     itemBinding: strongSelf.itemGridBinding,
                     headerText: nil,
                     snapTopInset: true
@@ -2201,7 +2206,13 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
             }
          
             self.itemGrid.update(size: size, insets: UIEdgeInsets(top: topInset, left: sideInset, bottom:  bottomInset, right: sideInset), useSideInsets: !isList, scrollIndicatorInsets: UIEdgeInsets(top: 0.0, left: sideInset, bottom: bottomInset, right: sideInset), lockScrollingAtTop: isScrollingLockedAtTop, fixedItemHeight: fixedItemHeight, fixedItemAspect: nil, items: items, theme: self.itemGridBinding.chatPresentationData.theme.theme, synchronous: wasFirstTime ? .full : .none)
-            if let initialMessageIndexValue = self.initialMessageIndex {
+            if let initialMessageIndexValue = self.initialMessageIndex, items.items.contains(where: { item in
+                if let _ = item as? VisualMediaItem {
+                    return true
+                } else {
+                    return false
+                }
+            }) {
                 self.initialMessageIndex = nil
                 for item in items.items {
                     if let item = item as? VisualMediaItem {

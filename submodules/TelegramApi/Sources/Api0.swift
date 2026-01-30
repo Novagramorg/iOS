@@ -538,25 +538,26 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[736157604] = { return Api.JSONValue.parse_jsonNumber($0) }
     dict[-1715350371] = { return Api.JSONValue.parse_jsonObject($0) }
     dict[-1222740358] = { return Api.JSONValue.parse_jsonString($0) }
-    dict[-916050683] = { return Api.KeyboardButton.parse_inputKeyboardButtonRequestPeer($0) }
-    dict[-802258988] = { return Api.KeyboardButton.parse_inputKeyboardButtonUrlAuth($0) }
-    dict[-376962181] = { return Api.KeyboardButton.parse_inputKeyboardButtonUserProfile($0) }
-    dict[-1560655744] = { return Api.KeyboardButton.parse_keyboardButton($0) }
-    dict[-1344716869] = { return Api.KeyboardButton.parse_keyboardButtonBuy($0) }
-    dict[901503851] = { return Api.KeyboardButton.parse_keyboardButtonCallback($0) }
-    dict[1976723854] = { return Api.KeyboardButton.parse_keyboardButtonCopy($0) }
-    dict[1358175439] = { return Api.KeyboardButton.parse_keyboardButtonGame($0) }
-    dict[-59151553] = { return Api.KeyboardButton.parse_keyboardButtonRequestGeoLocation($0) }
-    dict[1406648280] = { return Api.KeyboardButton.parse_keyboardButtonRequestPeer($0) }
-    dict[-1318425559] = { return Api.KeyboardButton.parse_keyboardButtonRequestPhone($0) }
-    dict[-1144565411] = { return Api.KeyboardButton.parse_keyboardButtonRequestPoll($0) }
-    dict[-1598009252] = { return Api.KeyboardButton.parse_keyboardButtonSimpleWebView($0) }
-    dict[-1816527947] = { return Api.KeyboardButton.parse_keyboardButtonSwitchInline($0) }
-    dict[629866245] = { return Api.KeyboardButton.parse_keyboardButtonUrl($0) }
-    dict[280464681] = { return Api.KeyboardButton.parse_keyboardButtonUrlAuth($0) }
-    dict[814112961] = { return Api.KeyboardButton.parse_keyboardButtonUserProfile($0) }
-    dict[326529584] = { return Api.KeyboardButton.parse_keyboardButtonWebView($0) }
+    dict[45580630] = { return Api.KeyboardButton.parse_inputKeyboardButtonRequestPeer($0) }
+    dict[1744911986] = { return Api.KeyboardButton.parse_inputKeyboardButtonUrlAuth($0) }
+    dict[2103314375] = { return Api.KeyboardButton.parse_inputKeyboardButtonUserProfile($0) }
+    dict[2098662655] = { return Api.KeyboardButton.parse_keyboardButton($0) }
+    dict[1067792645] = { return Api.KeyboardButton.parse_keyboardButtonBuy($0) }
+    dict[-433338016] = { return Api.KeyboardButton.parse_keyboardButtonCallback($0) }
+    dict[-1127960816] = { return Api.KeyboardButton.parse_keyboardButtonCopy($0) }
+    dict[-1983540999] = { return Api.KeyboardButton.parse_keyboardButtonGame($0) }
+    dict[-1438582451] = { return Api.KeyboardButton.parse_keyboardButtonRequestGeoLocation($0) }
+    dict[1527715317] = { return Api.KeyboardButton.parse_keyboardButtonRequestPeer($0) }
+    dict[1098841487] = { return Api.KeyboardButton.parse_keyboardButtonRequestPhone($0) }
+    dict[2047989634] = { return Api.KeyboardButton.parse_keyboardButtonRequestPoll($0) }
+    dict[-514047120] = { return Api.KeyboardButton.parse_keyboardButtonSimpleWebView($0) }
+    dict[-1726768644] = { return Api.KeyboardButton.parse_keyboardButtonSwitchInline($0) }
+    dict[-670292500] = { return Api.KeyboardButton.parse_keyboardButtonUrl($0) }
+    dict[-183499015] = { return Api.KeyboardButton.parse_keyboardButtonUrlAuth($0) }
+    dict[-1057137399] = { return Api.KeyboardButton.parse_keyboardButtonUserProfile($0) }
+    dict[-398020192] = { return Api.KeyboardButton.parse_keyboardButtonWebView($0) }
     dict[2002815875] = { return Api.KeyboardButtonRow.parse_keyboardButtonRow($0) }
+    dict[1339896880] = { return Api.KeyboardButtonStyle.parse_keyboardButtonStyle($0) }
     dict[-886477832] = { return Api.LabeledPrice.parse_labeledPrice($0) }
     dict[-209337866] = { return Api.LangPackDifference.parse_langPackDifference($0) }
     dict[-288727837] = { return Api.LangPackLanguage.parse_langPackLanguage($0) }
@@ -579,6 +580,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[2055212554] = { return Api.Message.parse_messageService($0) }
     dict[-872240531] = { return Api.MessageAction.parse_messageActionBoostApply($0) }
     dict[-988359047] = { return Api.MessageAction.parse_messageActionBotAllowed($0) }
+    dict[-511160261] = { return Api.MessageAction.parse_messageActionChangeCreator($0) }
     dict[-1781355374] = { return Api.MessageAction.parse_messageActionChannelCreate($0) }
     dict[-365344535] = { return Api.MessageAction.parse_messageActionChannelMigrateFrom($0) }
     dict[365886720] = { return Api.MessageAction.parse_messageActionChatAddUser($0) }
@@ -606,6 +608,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1281329567] = { return Api.MessageAction.parse_messageActionGroupCallScheduled($0) }
     dict[-1615153660] = { return Api.MessageAction.parse_messageActionHistoryClear($0) }
     dict[1345295095] = { return Api.MessageAction.parse_messageActionInviteToGroupCall($0) }
+    dict[-1333866363] = { return Api.MessageAction.parse_messageActionNewCreatorPending($0) }
     dict[-2068281992] = { return Api.MessageAction.parse_messageActionPaidMessagesPrice($0) }
     dict[-1407246387] = { return Api.MessageAction.parse_messageActionPaidMessagesRefunded($0) }
     dict[1102307842] = { return Api.MessageAction.parse_messageActionPaymentRefunded($0) }
@@ -2015,6 +2018,8 @@ public extension Api {
         case let _1 as Api.KeyboardButton:
             _1.serialize(buffer, boxed)
         case let _1 as Api.KeyboardButtonRow:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.KeyboardButtonStyle:
             _1.serialize(buffer, boxed)
         case let _1 as Api.LabeledPrice:
             _1.serialize(buffer, boxed)

@@ -104,6 +104,11 @@ public final class SparseMessageList {
 
             if self.threadId == nil {
                 self.isLoadingInitial = true
+                
+                if initialMessageIndex != nil {
+                    self.updateState()
+                }
+                
                 self.sparseItemsDisposable = (self.account.postbox.transaction { transaction -> Api.InputPeer? in
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
                 }
@@ -630,6 +635,16 @@ public final class SparseMessageList {
         }
 
         private func updateState() {
+            if self.isLoadingInitial {
+                self.statePromise.set(.single(SparseMessageList.State(
+                    items: [],
+                    totalCount: 0,
+                    isLoading: true
+                )))
+                
+                return
+            }
+            
             var items: [SparseMessageList.State.Item] = []
             var minMessageId: MessageId?
             if let topSection = self.topSection {

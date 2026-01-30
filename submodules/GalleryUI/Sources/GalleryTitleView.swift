@@ -90,6 +90,8 @@ public final class GalleryTitleView: UIView, NavigationBarTitleView {
         self.backgroundView.contentView.addSubview(self.authorNameNode.view)
         self.backgroundView.contentView.addSubview(self.dateNode.view)
         
+        self.backgroundContainer.isHidden = true
+        
         self.addSubview(self.titleBackgroundContainer)
         self.titleBackgroundContainer.alpha = 0.0
         
@@ -112,6 +114,8 @@ public final class GalleryTitleView: UIView, NavigationBarTitleView {
     
     public func setContent(content: Content?) {
         self.content = content
+        
+        self.backgroundContainer.isHidden = self.content == nil
         
         if let content {
             let authorNameText = stringForFullAuthorName(message: content.message, strings: self.presentationData.strings, nameDisplayOrder: self.presentationData.nameDisplayOrder, accountPeerId: self.context.account.peerId).first ?? ""

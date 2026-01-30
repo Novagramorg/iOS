@@ -292,6 +292,10 @@ func apiMessagePeerIds(_ message: Api.Message) -> [PeerId] {
                     if let otherParticipants {
                         result.append(contentsOf: otherParticipants.map(\.peerId))
                     }
+                case let .messageActionNewCreatorPending(messageActionNewCreatorPending):
+                    result.append(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageActionNewCreatorPending.newCreatorId)))
+                case let .messageActionChangeCreator(messageActionChangeCreator):
+                    result.append(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageActionChangeCreator.newCreatorId)))
             }
         
             return result

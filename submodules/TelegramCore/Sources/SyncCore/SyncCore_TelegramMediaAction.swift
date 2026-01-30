@@ -211,6 +211,38 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         public static let isFinal = StarGiftAuctionBidFlags(rawValue: 1 << 3)
     }
     
+    public struct GroupCreatorChange: Codable, Equatable {
+        private enum CodingKeys: String, CodingKey {
+            case kind = "k"
+            case targetPeerId = "t"
+        }
+        
+        public enum Kind: Int32 {
+            case pending = 0
+            case applied = 1
+        }
+        
+        public let kind: Kind
+        public let targetPeerId: PeerId
+        
+        public init(kind: Kind, targetPeerId: PeerId) {
+            self.kind = kind
+            self.targetPeerId = targetPeerId
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.kind = Kind(rawValue: try container.decode(Int32.self, forKey: .kind)) ?? .pending
+            self.targetPeerId = PeerId(try container.decode(Int64.self, forKey: .targetPeerId))
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(self.kind.rawValue, forKey: .kind)
+            try container.encode(self.targetPeerId.toInt64(), forKey: .kind)
+        }
+    }
+    
     case unknown
     case groupCreated(title: String)
     case addedMembers(peerIds: [PeerId])
@@ -269,6 +301,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case suggestedBirthday(TelegramBirthday)
     case starGiftPurchaseOffer(gift: StarGift, amount: CurrencyAmount, expireDate: Int32, isAccepted: Bool, isDeclined: Bool)
     case starGiftPurchaseOfferDeclined(gift: StarGift, amount: CurrencyAmount, hasExpired: Bool)
+    case groupCreatorChange(GroupCreatorChange)
     
     public init(decoder: PostboxDecoder) {
         let rawValue: Int32 = decoder.decodeInt32ForKey("_rawValue", orElse: 0)
@@ -440,6 +473,8 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             self = .starGiftPurchaseOffer(gift: decoder.decodeObjectForKey("gift", decoder: { StarGift(decoder: $0) }) as! StarGift, amount: decoder.decodeCodable(CurrencyAmount.self, forKey: "amount")!, expireDate: decoder.decodeInt32ForKey("expireDate", orElse: 0), isAccepted: decoder.decodeBoolForKey("isAccepted", orElse: false), isDeclined: decoder.decodeBoolForKey("isDeclined", orElse: false))
         case 57:
             self = .starGiftPurchaseOfferDeclined(gift: decoder.decodeObjectForKey("gift", decoder: { StarGift(decoder: $0) }) as! StarGift, amount: decoder.decodeCodable(CurrencyAmount.self, forKey: "amount")!, hasExpired: decoder.decodeBoolForKey("hasExpired", orElse: false))
+        case 58:
+            self = .groupCreatorChange(decoder.decodeCodable(GroupCreatorChange.self, forKey: "d") ?? GroupCreatorChange(kind: .pending, targetPeerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(0))))
         default:
             self = .unknown
         }
@@ -931,6 +966,9 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             encoder.encodeObject(gift, forKey: "gift")
             encoder.encodeCodable(amount, forKey: "amount")
             encoder.encodeBool(hasExpired, forKey: "hasExpired")
+        case let .groupCreatorChange(groupCreatorChange):
+            encoder.encodeInt32(58, forKey: "_rawValue")
+            encoder.encodeCodable(groupCreatorChange, forKey: "d")
         }
     }
     
@@ -987,6 +1025,8 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             return peerIds
         case let .conferenceCall(conferenceCall):
             return conferenceCall.otherParticipants
+        case let .groupCreatorChange(groupCreatorChange):
+            return [groupCreatorChange.targetPeerId]
         default:
             return []
         }

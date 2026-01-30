@@ -940,12 +940,14 @@ public extension Api {
     indirect enum KeyboardButton: TypeConstructorDescription {
         public class Cons_inputKeyboardButtonRequestPeer {
             public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var buttonId: Int32
             public var peerType: Api.RequestPeerType
             public var maxQuantity: Int32
-            public init(flags: Int32, text: String, buttonId: Int32, peerType: Api.RequestPeerType, maxQuantity: Int32) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, buttonId: Int32, peerType: Api.RequestPeerType, maxQuantity: Int32) {
                 self.flags = flags
+                self.style = style
                 self.text = text
                 self.buttonId = buttonId
                 self.peerType = peerType
@@ -954,12 +956,14 @@ public extension Api {
         }
         public class Cons_inputKeyboardButtonUrlAuth {
             public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var fwdText: String?
             public var url: String
             public var bot: Api.InputUser
-            public init(flags: Int32, text: String, fwdText: String?, url: String, bot: Api.InputUser) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, fwdText: String?, url: String, bot: Api.InputUser) {
                 self.flags = flags
+                self.style = style
                 self.text = text
                 self.fwdText = fwdText
                 self.url = url
@@ -967,61 +971,91 @@ public extension Api {
             }
         }
         public class Cons_inputKeyboardButtonUserProfile {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var userId: Api.InputUser
-            public init(text: String, userId: Api.InputUser) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, userId: Api.InputUser) {
+                self.flags = flags
+                self.style = style
                 self.text = text
                 self.userId = userId
             }
         }
         public class Cons_keyboardButton {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
-            public init(text: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
             }
         }
         public class Cons_keyboardButtonBuy {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
-            public init(text: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
             }
         }
         public class Cons_keyboardButtonCallback {
             public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var data: Buffer
-            public init(flags: Int32, text: String, data: Buffer) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, data: Buffer) {
                 self.flags = flags
+                self.style = style
                 self.text = text
                 self.data = data
             }
         }
         public class Cons_keyboardButtonCopy {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var copyText: String
-            public init(text: String, copyText: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, copyText: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
                 self.copyText = copyText
             }
         }
         public class Cons_keyboardButtonGame {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
-            public init(text: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
             }
         }
         public class Cons_keyboardButtonRequestGeoLocation {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
-            public init(text: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
             }
         }
         public class Cons_keyboardButtonRequestPeer {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var buttonId: Int32
             public var peerType: Api.RequestPeerType
             public var maxQuantity: Int32
-            public init(text: String, buttonId: Int32, peerType: Api.RequestPeerType, maxQuantity: Int32) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, buttonId: Int32, peerType: Api.RequestPeerType, maxQuantity: Int32) {
+                self.flags = flags
+                self.style = style
                 self.text = text
                 self.buttonId = buttonId
                 self.peerType = peerType
@@ -1029,57 +1063,75 @@ public extension Api {
             }
         }
         public class Cons_keyboardButtonRequestPhone {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
-            public init(text: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
             }
         }
         public class Cons_keyboardButtonRequestPoll {
             public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var quiz: Api.Bool?
             public var text: String
-            public init(flags: Int32, quiz: Api.Bool?, text: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, quiz: Api.Bool?, text: String) {
                 self.flags = flags
+                self.style = style
                 self.quiz = quiz
                 self.text = text
             }
         }
         public class Cons_keyboardButtonSimpleWebView {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var url: String
-            public init(text: String, url: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, url: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
                 self.url = url
             }
         }
         public class Cons_keyboardButtonSwitchInline {
             public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var query: String
             public var peerTypes: [Api.InlineQueryPeerType]?
-            public init(flags: Int32, text: String, query: String, peerTypes: [Api.InlineQueryPeerType]?) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, query: String, peerTypes: [Api.InlineQueryPeerType]?) {
                 self.flags = flags
+                self.style = style
                 self.text = text
                 self.query = query
                 self.peerTypes = peerTypes
             }
         }
         public class Cons_keyboardButtonUrl {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var url: String
-            public init(text: String, url: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, url: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
                 self.url = url
             }
         }
         public class Cons_keyboardButtonUrlAuth {
             public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var fwdText: String?
             public var url: String
             public var buttonId: Int32
-            public init(flags: Int32, text: String, fwdText: String?, url: String, buttonId: Int32) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, fwdText: String?, url: String, buttonId: Int32) {
                 self.flags = flags
+                self.style = style
                 self.text = text
                 self.fwdText = fwdText
                 self.url = url
@@ -1087,17 +1139,25 @@ public extension Api {
             }
         }
         public class Cons_keyboardButtonUserProfile {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var userId: Int64
-            public init(text: String, userId: Int64) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, userId: Int64) {
+                self.flags = flags
+                self.style = style
                 self.text = text
                 self.userId = userId
             }
         }
         public class Cons_keyboardButtonWebView {
+            public var flags: Int32
+            public var style: Api.KeyboardButtonStyle?
             public var text: String
             public var url: String
-            public init(text: String, url: String) {
+            public init(flags: Int32, style: Api.KeyboardButtonStyle?, text: String, url: String) {
+                self.flags = flags
+                self.style = style
                 self.text = text
                 self.url = url
             }
@@ -1125,9 +1185,12 @@ public extension Api {
             switch self {
             case .inputKeyboardButtonRequestPeer(let _data):
                 if boxed {
-                    buffer.appendInt32(-916050683)
+                    buffer.appendInt32(45580630)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
+                }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeInt32(_data.buttonId, buffer: buffer, boxed: false)
                 _data.peerType.serialize(buffer, true)
@@ -1135,9 +1198,12 @@ public extension Api {
                 break
             case .inputKeyboardButtonUrlAuth(let _data):
                 if boxed {
-                    buffer.appendInt32(-802258988)
+                    buffer.appendInt32(1744911986)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
+                }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 if Int(_data.flags) & Int(1 << 1) != 0 {
                     serializeString(_data.fwdText!, buffer: buffer, boxed: false)
@@ -1147,53 +1213,84 @@ public extension Api {
                 break
             case .inputKeyboardButtonUserProfile(let _data):
                 if boxed {
-                    buffer.appendInt32(-376962181)
+                    buffer.appendInt32(2103314375)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 _data.userId.serialize(buffer, true)
                 break
             case .keyboardButton(let _data):
                 if boxed {
-                    buffer.appendInt32(-1560655744)
+                    buffer.appendInt32(2098662655)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonBuy(let _data):
                 if boxed {
-                    buffer.appendInt32(-1344716869)
+                    buffer.appendInt32(1067792645)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonCallback(let _data):
                 if boxed {
-                    buffer.appendInt32(901503851)
+                    buffer.appendInt32(-433338016)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
+                }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeBytes(_data.data, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonCopy(let _data):
                 if boxed {
-                    buffer.appendInt32(1976723854)
+                    buffer.appendInt32(-1127960816)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeString(_data.copyText, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonGame(let _data):
                 if boxed {
-                    buffer.appendInt32(1358175439)
+                    buffer.appendInt32(-1983540999)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonRequestGeoLocation(let _data):
                 if boxed {
-                    buffer.appendInt32(-59151553)
+                    buffer.appendInt32(-1438582451)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonRequestPeer(let _data):
                 if boxed {
-                    buffer.appendInt32(1406648280)
+                    buffer.appendInt32(1527715317)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeInt32(_data.buttonId, buffer: buffer, boxed: false)
@@ -1202,15 +1299,22 @@ public extension Api {
                 break
             case .keyboardButtonRequestPhone(let _data):
                 if boxed {
-                    buffer.appendInt32(-1318425559)
+                    buffer.appendInt32(1098841487)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonRequestPoll(let _data):
                 if boxed {
-                    buffer.appendInt32(-1144565411)
+                    buffer.appendInt32(2047989634)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
+                }
                 if Int(_data.flags) & Int(1 << 0) != 0 {
                     _data.quiz!.serialize(buffer, true)
                 }
@@ -1218,16 +1322,23 @@ public extension Api {
                 break
             case .keyboardButtonSimpleWebView(let _data):
                 if boxed {
-                    buffer.appendInt32(-1598009252)
+                    buffer.appendInt32(-514047120)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeString(_data.url, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonSwitchInline(let _data):
                 if boxed {
-                    buffer.appendInt32(-1816527947)
+                    buffer.appendInt32(-1726768644)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
+                }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeString(_data.query, buffer: buffer, boxed: false)
                 if Int(_data.flags) & Int(1 << 1) != 0 {
@@ -1240,16 +1351,23 @@ public extension Api {
                 break
             case .keyboardButtonUrl(let _data):
                 if boxed {
-                    buffer.appendInt32(629866245)
+                    buffer.appendInt32(-670292500)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeString(_data.url, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonUrlAuth(let _data):
                 if boxed {
-                    buffer.appendInt32(280464681)
+                    buffer.appendInt32(-183499015)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
+                }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 if Int(_data.flags) & Int(1 << 0) != 0 {
                     serializeString(_data.fwdText!, buffer: buffer, boxed: false)
@@ -1259,14 +1377,22 @@ public extension Api {
                 break
             case .keyboardButtonUserProfile(let _data):
                 if boxed {
-                    buffer.appendInt32(814112961)
+                    buffer.appendInt32(-1057137399)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeInt64(_data.userId, buffer: buffer, boxed: false)
                 break
             case .keyboardButtonWebView(let _data):
                 if boxed {
-                    buffer.appendInt32(326529584)
+                    buffer.appendInt32(-398020192)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    _data.style!.serialize(buffer, true)
                 }
                 serializeString(_data.text, buffer: buffer, boxed: false)
                 serializeString(_data.url, buffer: buffer, boxed: false)
@@ -1277,64 +1403,71 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, Any)]) {
             switch self {
             case .inputKeyboardButtonRequestPeer(let _data):
-                return ("inputKeyboardButtonRequestPeer", [("flags", _data.flags as Any), ("text", _data.text as Any), ("buttonId", _data.buttonId as Any), ("peerType", _data.peerType as Any), ("maxQuantity", _data.maxQuantity as Any)])
+                return ("inputKeyboardButtonRequestPeer", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("buttonId", _data.buttonId as Any), ("peerType", _data.peerType as Any), ("maxQuantity", _data.maxQuantity as Any)])
             case .inputKeyboardButtonUrlAuth(let _data):
-                return ("inputKeyboardButtonUrlAuth", [("flags", _data.flags as Any), ("text", _data.text as Any), ("fwdText", _data.fwdText as Any), ("url", _data.url as Any), ("bot", _data.bot as Any)])
+                return ("inputKeyboardButtonUrlAuth", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("fwdText", _data.fwdText as Any), ("url", _data.url as Any), ("bot", _data.bot as Any)])
             case .inputKeyboardButtonUserProfile(let _data):
-                return ("inputKeyboardButtonUserProfile", [("text", _data.text as Any), ("userId", _data.userId as Any)])
+                return ("inputKeyboardButtonUserProfile", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("userId", _data.userId as Any)])
             case .keyboardButton(let _data):
-                return ("keyboardButton", [("text", _data.text as Any)])
+                return ("keyboardButton", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any)])
             case .keyboardButtonBuy(let _data):
-                return ("keyboardButtonBuy", [("text", _data.text as Any)])
+                return ("keyboardButtonBuy", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any)])
             case .keyboardButtonCallback(let _data):
-                return ("keyboardButtonCallback", [("flags", _data.flags as Any), ("text", _data.text as Any), ("data", _data.data as Any)])
+                return ("keyboardButtonCallback", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("data", _data.data as Any)])
             case .keyboardButtonCopy(let _data):
-                return ("keyboardButtonCopy", [("text", _data.text as Any), ("copyText", _data.copyText as Any)])
+                return ("keyboardButtonCopy", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("copyText", _data.copyText as Any)])
             case .keyboardButtonGame(let _data):
-                return ("keyboardButtonGame", [("text", _data.text as Any)])
+                return ("keyboardButtonGame", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any)])
             case .keyboardButtonRequestGeoLocation(let _data):
-                return ("keyboardButtonRequestGeoLocation", [("text", _data.text as Any)])
+                return ("keyboardButtonRequestGeoLocation", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any)])
             case .keyboardButtonRequestPeer(let _data):
-                return ("keyboardButtonRequestPeer", [("text", _data.text as Any), ("buttonId", _data.buttonId as Any), ("peerType", _data.peerType as Any), ("maxQuantity", _data.maxQuantity as Any)])
+                return ("keyboardButtonRequestPeer", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("buttonId", _data.buttonId as Any), ("peerType", _data.peerType as Any), ("maxQuantity", _data.maxQuantity as Any)])
             case .keyboardButtonRequestPhone(let _data):
-                return ("keyboardButtonRequestPhone", [("text", _data.text as Any)])
+                return ("keyboardButtonRequestPhone", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any)])
             case .keyboardButtonRequestPoll(let _data):
-                return ("keyboardButtonRequestPoll", [("flags", _data.flags as Any), ("quiz", _data.quiz as Any), ("text", _data.text as Any)])
+                return ("keyboardButtonRequestPoll", [("flags", _data.flags as Any), ("style", _data.style as Any), ("quiz", _data.quiz as Any), ("text", _data.text as Any)])
             case .keyboardButtonSimpleWebView(let _data):
-                return ("keyboardButtonSimpleWebView", [("text", _data.text as Any), ("url", _data.url as Any)])
+                return ("keyboardButtonSimpleWebView", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("url", _data.url as Any)])
             case .keyboardButtonSwitchInline(let _data):
-                return ("keyboardButtonSwitchInline", [("flags", _data.flags as Any), ("text", _data.text as Any), ("query", _data.query as Any), ("peerTypes", _data.peerTypes as Any)])
+                return ("keyboardButtonSwitchInline", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("query", _data.query as Any), ("peerTypes", _data.peerTypes as Any)])
             case .keyboardButtonUrl(let _data):
-                return ("keyboardButtonUrl", [("text", _data.text as Any), ("url", _data.url as Any)])
+                return ("keyboardButtonUrl", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("url", _data.url as Any)])
             case .keyboardButtonUrlAuth(let _data):
-                return ("keyboardButtonUrlAuth", [("flags", _data.flags as Any), ("text", _data.text as Any), ("fwdText", _data.fwdText as Any), ("url", _data.url as Any), ("buttonId", _data.buttonId as Any)])
+                return ("keyboardButtonUrlAuth", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("fwdText", _data.fwdText as Any), ("url", _data.url as Any), ("buttonId", _data.buttonId as Any)])
             case .keyboardButtonUserProfile(let _data):
-                return ("keyboardButtonUserProfile", [("text", _data.text as Any), ("userId", _data.userId as Any)])
+                return ("keyboardButtonUserProfile", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("userId", _data.userId as Any)])
             case .keyboardButtonWebView(let _data):
-                return ("keyboardButtonWebView", [("text", _data.text as Any), ("url", _data.url as Any)])
+                return ("keyboardButtonWebView", [("flags", _data.flags as Any), ("style", _data.style as Any), ("text", _data.text as Any), ("url", _data.url as Any)])
             }
         }
 
         public static func parse_inputKeyboardButtonRequestPeer(_ reader: BufferReader) -> KeyboardButton? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: Int32?
-            _3 = reader.readInt32()
-            var _4: Api.RequestPeerType?
-            if let signature = reader.readInt32() {
-                _4 = Api.parse(reader, signature: signature) as? Api.RequestPeerType
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
             }
-            var _5: Int32?
-            _5 = reader.readInt32()
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Int32?
+            _4 = reader.readInt32()
+            var _5: Api.RequestPeerType?
+            if let signature = reader.readInt32() {
+                _5 = Api.parse(reader, signature: signature) as? Api.RequestPeerType
+            }
+            var _6: Int32?
+            _6 = reader.readInt32()
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.KeyboardButton.inputKeyboardButtonRequestPeer(Cons_inputKeyboardButtonRequestPeer(flags: _1!, text: _2!, buttonId: _3!, peerType: _4!, maxQuantity: _5!))
+            let _c6 = _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.KeyboardButton.inputKeyboardButtonRequestPeer(Cons_inputKeyboardButtonRequestPeer(flags: _1!, style: _2, text: _3!, buttonId: _4!, peerType: _5!, maxQuantity: _6!))
             }
             else {
                 return nil
@@ -1343,63 +1476,100 @@ public extension Api {
         public static func parse_inputKeyboardButtonUrlAuth(_ reader: BufferReader) -> KeyboardButton? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: String?
-            if Int(_1!) & Int(1 << 1) != 0 {
-                _3 = parseString(reader)
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
             }
+            var _3: String?
+            _3 = parseString(reader)
             var _4: String?
-            _4 = parseString(reader)
-            var _5: Api.InputUser?
+            if Int(_1!) & Int(1 << 1) != 0 {
+                _4 = parseString(reader)
+            }
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Api.InputUser?
             if let signature = reader.readInt32() {
-                _5 = Api.parse(reader, signature: signature) as? Api.InputUser
+                _6 = Api.parse(reader, signature: signature) as? Api.InputUser
             }
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
-            let _c4 = _4 != nil
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
             let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.KeyboardButton.inputKeyboardButtonUrlAuth(Cons_inputKeyboardButtonUrlAuth(flags: _1!, text: _2!, fwdText: _3, url: _4!, bot: _5!))
+            let _c6 = _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.KeyboardButton.inputKeyboardButtonUrlAuth(Cons_inputKeyboardButtonUrlAuth(flags: _1!, style: _2, text: _3!, fwdText: _4, url: _5!, bot: _6!))
             }
             else {
                 return nil
             }
         }
         public static func parse_inputKeyboardButtonUserProfile(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: Api.InputUser?
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Api.InputUser?
             if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.InputUser
+                _4 = Api.parse(reader, signature: signature) as? Api.InputUser
             }
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.KeyboardButton.inputKeyboardButtonUserProfile(Cons_inputKeyboardButtonUserProfile(text: _1!, userId: _2!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardButton.inputKeyboardButtonUserProfile(Cons_inputKeyboardButtonUserProfile(flags: _1!, style: _2, text: _3!, userId: _4!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButton(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
             let _c1 = _1 != nil
-            if _c1 {
-                return Api.KeyboardButton.keyboardButton(Cons_keyboardButton(text: _1!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.KeyboardButton.keyboardButton(Cons_keyboardButton(flags: _1!, style: _2, text: _3!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonBuy(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
             let _c1 = _1 != nil
-            if _c1 {
-                return Api.KeyboardButton.keyboardButtonBuy(Cons_keyboardButtonBuy(text: _1!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.KeyboardButton.keyboardButtonBuy(Cons_keyboardButtonBuy(flags: _1!, style: _2, text: _3!))
             }
             else {
                 return nil
@@ -1408,84 +1578,141 @@ public extension Api {
         public static func parse_keyboardButtonCallback(_ reader: BufferReader) -> KeyboardButton? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: Buffer?
-            _3 = parseBytes(reader)
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Buffer?
+            _4 = parseBytes(reader)
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
             let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.KeyboardButton.keyboardButtonCallback(Cons_keyboardButtonCallback(flags: _1!, text: _2!, data: _3!))
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardButton.keyboardButtonCallback(Cons_keyboardButtonCallback(flags: _1!, style: _2, text: _3!, data: _4!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonCopy(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: String?
-            _2 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: String?
+            _4 = parseString(reader)
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.KeyboardButton.keyboardButtonCopy(Cons_keyboardButtonCopy(text: _1!, copyText: _2!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardButton.keyboardButtonCopy(Cons_keyboardButtonCopy(flags: _1!, style: _2, text: _3!, copyText: _4!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonGame(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
             let _c1 = _1 != nil
-            if _c1 {
-                return Api.KeyboardButton.keyboardButtonGame(Cons_keyboardButtonGame(text: _1!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.KeyboardButton.keyboardButtonGame(Cons_keyboardButtonGame(flags: _1!, style: _2, text: _3!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonRequestGeoLocation(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
             let _c1 = _1 != nil
-            if _c1 {
-                return Api.KeyboardButton.keyboardButtonRequestGeoLocation(Cons_keyboardButtonRequestGeoLocation(text: _1!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.KeyboardButton.keyboardButtonRequestGeoLocation(Cons_keyboardButtonRequestGeoLocation(flags: _1!, style: _2, text: _3!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonRequestPeer(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: Api.RequestPeerType?
-            if let signature = reader.readInt32() {
-                _3 = Api.parse(reader, signature: signature) as? Api.RequestPeerType
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
             }
+            var _3: String?
+            _3 = parseString(reader)
             var _4: Int32?
             _4 = reader.readInt32()
+            var _5: Api.RequestPeerType?
+            if let signature = reader.readInt32() {
+                _5 = Api.parse(reader, signature: signature) as? Api.RequestPeerType
+            }
+            var _6: Int32?
+            _6 = reader.readInt32()
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.KeyboardButton.keyboardButtonRequestPeer(Cons_keyboardButtonRequestPeer(text: _1!, buttonId: _2!, peerType: _3!, maxQuantity: _4!))
+            let _c5 = _5 != nil
+            let _c6 = _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.KeyboardButton.keyboardButtonRequestPeer(Cons_keyboardButtonRequestPeer(flags: _1!, style: _2, text: _3!, buttonId: _4!, peerType: _5!, maxQuantity: _6!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonRequestPhone(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
             let _c1 = _1 != nil
-            if _c1 {
-                return Api.KeyboardButton.keyboardButtonRequestPhone(Cons_keyboardButtonRequestPhone(text: _1!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.KeyboardButton.keyboardButtonRequestPhone(Cons_keyboardButtonRequestPhone(flags: _1!, style: _2, text: _3!))
             }
             else {
                 return nil
@@ -1494,33 +1721,50 @@ public extension Api {
         public static func parse_keyboardButtonRequestPoll(_ reader: BufferReader) -> KeyboardButton? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: Api.Bool?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
                 if let signature = reader.readInt32() {
-                    _2 = Api.parse(reader, signature: signature) as? Api.Bool
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
                 }
             }
-            var _3: String?
-            _3 = parseString(reader)
+            var _3: Api.Bool?
+            if Int(_1!) & Int(1 << 0) != 0 {
+                if let signature = reader.readInt32() {
+                    _3 = Api.parse(reader, signature: signature) as? Api.Bool
+                }
+            }
+            var _4: String?
+            _4 = parseString(reader)
             let _c1 = _1 != nil
-            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.KeyboardButton.keyboardButtonRequestPoll(Cons_keyboardButtonRequestPoll(flags: _1!, quiz: _2, text: _3!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardButton.keyboardButtonRequestPoll(Cons_keyboardButtonRequestPoll(flags: _1!, style: _2, quiz: _3, text: _4!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonSimpleWebView(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: String?
-            _2 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: String?
+            _4 = parseString(reader)
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.KeyboardButton.keyboardButtonSimpleWebView(Cons_keyboardButtonSimpleWebView(text: _1!, url: _2!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardButton.keyboardButtonSimpleWebView(Cons_keyboardButtonSimpleWebView(flags: _1!, style: _2, text: _3!, url: _4!))
             }
             else {
                 return nil
@@ -1529,36 +1773,53 @@ public extension Api {
         public static func parse_keyboardButtonSwitchInline(_ reader: BufferReader) -> KeyboardButton? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
             var _3: String?
             _3 = parseString(reader)
-            var _4: [Api.InlineQueryPeerType]?
+            var _4: String?
+            _4 = parseString(reader)
+            var _5: [Api.InlineQueryPeerType]?
             if Int(_1!) & Int(1 << 1) != 0 {
                 if let _ = reader.readInt32() {
-                    _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.InlineQueryPeerType.self)
+                    _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.InlineQueryPeerType.self)
                 }
             }
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.KeyboardButton.keyboardButtonSwitchInline(Cons_keyboardButtonSwitchInline(flags: _1!, text: _2!, query: _3!, peerTypes: _4))
+            let _c4 = _4 != nil
+            let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.KeyboardButton.keyboardButtonSwitchInline(Cons_keyboardButtonSwitchInline(flags: _1!, style: _2, text: _3!, query: _4!, peerTypes: _5))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonUrl(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: String?
-            _2 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: String?
+            _4 = parseString(reader)
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.KeyboardButton.keyboardButtonUrl(Cons_keyboardButtonUrl(text: _1!, url: _2!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardButton.keyboardButtonUrl(Cons_keyboardButtonUrl(flags: _1!, style: _2, text: _3!, url: _4!))
             }
             else {
                 return nil
@@ -1567,51 +1828,78 @@ public extension Api {
         public static func parse_keyboardButtonUrlAuth(_ reader: BufferReader) -> KeyboardButton? {
             var _1: Int32?
             _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                _3 = parseString(reader)
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
             }
+            var _3: String?
+            _3 = parseString(reader)
             var _4: String?
-            _4 = parseString(reader)
-            var _5: Int32?
-            _5 = reader.readInt32()
+            if Int(_1!) & Int(1 << 0) != 0 {
+                _4 = parseString(reader)
+            }
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Int32?
+            _6 = reader.readInt32()
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            let _c4 = _4 != nil
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = _5 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 {
-                return Api.KeyboardButton.keyboardButtonUrlAuth(Cons_keyboardButtonUrlAuth(flags: _1!, text: _2!, fwdText: _3, url: _4!, buttonId: _5!))
+            let _c6 = _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.KeyboardButton.keyboardButtonUrlAuth(Cons_keyboardButtonUrlAuth(flags: _1!, style: _2, text: _3!, fwdText: _4, url: _5!, buttonId: _6!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonUserProfile(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: Int64?
-            _2 = reader.readInt64()
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Int64?
+            _4 = reader.readInt64()
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.KeyboardButton.keyboardButtonUserProfile(Cons_keyboardButtonUserProfile(text: _1!, userId: _2!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardButton.keyboardButtonUserProfile(Cons_keyboardButtonUserProfile(flags: _1!, style: _2, text: _3!, userId: _4!))
             }
             else {
                 return nil
             }
         }
         public static func parse_keyboardButtonWebView(_ reader: BufferReader) -> KeyboardButton? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: String?
-            _2 = parseString(reader)
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.KeyboardButtonStyle?
+            if Int(_1!) & Int(1 << 10) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.KeyboardButtonStyle
+                }
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: String?
+            _4 = parseString(reader)
             let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.KeyboardButton.keyboardButtonWebView(Cons_keyboardButtonWebView(text: _1!, url: _2!))
+            let _c2 = (Int(_1!) & Int(1 << 10) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.KeyboardButton.keyboardButtonWebView(Cons_keyboardButtonWebView(flags: _1!, style: _2, text: _3!, url: _4!))
             }
             else {
                 return nil
