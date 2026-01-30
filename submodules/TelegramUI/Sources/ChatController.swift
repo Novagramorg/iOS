@@ -1204,15 +1204,19 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             self.push(controller)
                             return true
                         case .starGift, .starGiftUnique:
-                            let controller = self.context.sharedContext.makeGiftViewScreen(context: self.context, message: EngineMessage(message), shareStory: { [weak self] uniqueGift in
-                                Queue.mainQueue().after(0.15) {
-                                    if let self {
-                                        let controller = self.context.sharedContext.makeStorySharingScreen(context: self.context, subject: .gift(uniqueGift), parentController: self)
-                                        self.push(controller)
+                            if case let .starGiftUnique(gift, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = action.action, case let .unique(uniqueGift) = gift, uniqueGift.flags.contains(.isBurned) {
+                                self.present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: self.presentationData.strings.Resolve_GiftErrorBurned, actions: [TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})]), in: .window(.root))
+                            } else {
+                                let controller = self.context.sharedContext.makeGiftViewScreen(context: self.context, message: EngineMessage(message), shareStory: { [weak self] uniqueGift in
+                                    Queue.mainQueue().after(0.15) {
+                                        if let self {
+                                            let controller = self.context.sharedContext.makeStorySharingScreen(context: self.context, subject: .gift(uniqueGift), parentController: self)
+                                            self.push(controller)
+                                        }
                                     }
-                                }
-                            })
-                            self.push(controller)
+                                })
+                                self.push(controller)
+                            }
                             return true
                         case .giftStars:
                             let controller = self.context.sharedContext.makeStarsGiftScreen(context: self.context, message: EngineMessage(message))
