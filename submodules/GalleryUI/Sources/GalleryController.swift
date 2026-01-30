@@ -587,6 +587,8 @@ public class GalleryController: ViewController, StandalonePresentableController,
     private let source: GalleryControllerItemSource
     private let invertItemOrder: Bool
     
+    private let titleView: GalleryTitleView
+    
     private let streamVideos: Bool
     
     private let _ready = Promise<Bool>()
@@ -617,7 +619,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
     private var configuration: GalleryConfiguration?
     
     private let centralItemTitle = Promise<String>()
-    private let centralItemTitleView = Promise<UIView?>()
+    private let centralItemTitleContent = Promise<GalleryTitleView.Content?>()
     private let centralItemRightBarButtonItem = Promise<UIBarButtonItem?>()
     private let centralItemRightBarButtonItems = Promise<[UIBarButtonItem]?>(nil)
     private let centralItemNavigationStyle = Promise<GalleryItemNodeNavigationStyle>()
@@ -644,6 +646,8 @@ public class GalleryController: ViewController, StandalonePresentableController,
     public var centralItemUpdated: ((MessageId) -> Void)?
     public var onDidAppear: (() -> Void)?
     public var useSimpleAnimation: Bool = false
+    
+    public var navigateToMessageContext: ((EngineMessage) -> Void)?
     
     private var initialOrientation: UIInterfaceOrientation?
     
@@ -679,6 +683,8 @@ public class GalleryController: ViewController, StandalonePresentableController,
         self.openActionOptions = { action, message in
             openActionOptionsImpl?(action, message)
         }
+        
+        self.titleView = GalleryTitleView(context: context, presentationData: self.presentationData)
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: GalleryController.darkNavigationTheme, strings: NavigationBarStrings(presentationStrings: self.presentationData.strings)))
         
@@ -915,8 +921,8 @@ public class GalleryController: ViewController, StandalonePresentableController,
             self?.navigationItem.title = title
         }))
         
-        self.centralItemAttributesDisposable.add(self.centralItemTitleView.get().start(next: { [weak self] titleView in
-            self?.navigationItem.titleView = titleView
+        self.centralItemAttributesDisposable.add(self.centralItemTitleContent.get().start(next: { [weak self] titleContent in
+            self?.titleView.setContent(content: titleContent)
         }))
         
         self.centralItemAttributesDisposable.add(combineLatest(self.centralItemRightBarButtonItem.get(), self.centralItemRightBarButtonItems.get()).start(next: { [weak self] rightBarButtonItem, rightBarButtonItems in
@@ -933,7 +939,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
         self.centralItemAttributesDisposable.add(self.centralItemFooterContentNode.get().start(next: { [weak self] footerContentNode, overlayContentNode in
             self?.galleryNode.updatePresentationState({
                 $0.withUpdatedFooterContentNode(footerContentNode).withUpdatedOverlayContentNode(overlayContentNode)
-            }, transition: .immediate)
+            }, transition: .animated(duration: 0.4, curve: .spring))
         }))
         
         self.centralItemAttributesDisposable.add(self.centralItemNavigationStyle.get().start(next: { [weak self] style in
@@ -1297,6 +1303,10 @@ public class GalleryController: ViewController, StandalonePresentableController,
         var animatedOutNode = true
         var animatedOutInterface = false
         
+        if forceAway {
+            self._hiddenMedia.set(.single(nil))
+        }
+        
         let completion = { [weak self] in
             if animatedOutNode && animatedOutInterface {
                 self?.actionInteraction?.updateCanReadHistory(true)
@@ -1375,7 +1385,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
         })
         
         let disableTapNavigation = !(self.context.sharedContext.currentMediaDisplaySettings.with { $0 }.showNextMediaOnTap)
-        self.displayNode = GalleryControllerNode(context: self.context, controllerInteraction: controllerInteraction, disableTapNavigation: disableTapNavigation)
+        self.displayNode = GalleryControllerNode(context: self.context, controllerInteraction: controllerInteraction, titleView: titleView, disableTapNavigation: disableTapNavigation)
         self.displayNodeDidLoad()
         
         self.galleryNode.statusBar = self.statusBar
@@ -1529,7 +1539,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
                     
                     if let node = strongSelf.galleryNode.pager.centralItemNode() {
                         strongSelf.centralItemTitle.set(node.title())
-                        strongSelf.centralItemTitleView.set(node.titleView())
+                        strongSelf.centralItemTitleContent.set(node.titleContent())
                         strongSelf.centralItemRightBarButtonItem.set(node.rightBarButtonItem())
                         strongSelf.centralItemRightBarButtonItems.set(node.rightBarButtonItems())
                         strongSelf.centralItemNavigationStyle.set(node.navigationStyle())
@@ -1715,7 +1725,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
             let entry = self.entries[centralItemNode.index]
             
             self.centralItemTitle.set(centralItemNode.title())
-            self.centralItemTitleView.set(centralItemNode.titleView())
+            self.centralItemTitleContent.set(centralItemNode.titleContent())
             self.centralItemRightBarButtonItem.set(centralItemNode.rightBarButtonItem())
             self.centralItemRightBarButtonItems.set(centralItemNode.rightBarButtonItems())
             self.centralItemNavigationStyle.set(centralItemNode.navigationStyle())
@@ -1768,7 +1778,7 @@ public class GalleryController: ViewController, StandalonePresentableController,
         if let centralItemNode = self.galleryNode.pager.centralItemNode() {
             let message = self.entries[centralItemNode.index].entry.message
             self.centralItemTitle.set(centralItemNode.title())
-            self.centralItemTitleView.set(centralItemNode.titleView())
+            self.centralItemTitleContent.set(centralItemNode.titleContent())
             self.centralItemRightBarButtonItem.set(centralItemNode.rightBarButtonItem())
             self.centralItemRightBarButtonItems.set(centralItemNode.rightBarButtonItems())
             self.centralItemNavigationStyle.set(centralItemNode.navigationStyle())
@@ -1912,5 +1922,12 @@ public class GalleryController: ViewController, StandalonePresentableController,
         currentPictureInPictureNode.expandPIP()
         
         return true
+    }
+    
+    func dismissAndNavigateToMessageContext(message: Message) {
+        if let navigateToMessageContext = self.navigateToMessageContext {
+            navigateToMessageContext(EngineMessage(message))
+        }
+        self.dismiss(forceAway: true)
     }
 }

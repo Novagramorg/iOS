@@ -86,13 +86,14 @@ public final class SparseMessageList {
         }
         private let loadHoleDisposable = MetaDisposable()
         private var loadingHole: LoadingHole?
+        private var isLoadingInitial: Bool = false
 
         private var loadingPlaceholders: [MessageId: Disposable] = [:]
         private var loadedPlaceholders: [MessageId: Message] = [:]
 
         let statePromise = Promise<SparseMessageList.State>()
 
-        init(queue: Queue, account: Account, peerId: PeerId, threadId: Int64?, messageTag: MessageTags) {
+        init(queue: Queue, account: Account, peerId: PeerId, threadId: Int64?, messageTag: MessageTags, initialMessageIndex: MessageIndex?) {
             self.queue = queue
             self.account = account
             self.peerId = peerId
@@ -102,6 +103,7 @@ public final class SparseMessageList {
             self.resetTopSection()
 
             if self.threadId == nil {
+                self.isLoadingInitial = true
                 self.sparseItemsDisposable = (self.account.postbox.transaction { transaction -> Api.InputPeer? in
                     return transaction.getPeer(peerId).flatMap(apiInputPeer)
                 }
@@ -112,7 +114,7 @@ public final class SparseMessageList {
                     guard let messageFilter = messageFilterForTagMask(messageTag) else {
                         return .single(SparseItems(items: []))
                     }
-                    //TODO:api
+                    
                     return account.network.request(Api.functions.messages.getSearchResultsPositions(flags: 0, peer: inputPeer, savedPeerId: nil, filter: messageFilter, offsetId: 0, limit: 1000))
                     |> map { result -> SparseItems in
                         switch result {
@@ -136,7 +138,11 @@ public final class SparseMessageList {
                             
                             var result = SparseItems(items: [])
                             for i in 0 ..< positions.count {
-                                if i != 0 {
+                                if i == 0 {
+                                    if initialMessageIndex != nil && positions[i].offset != 0 {
+                                        result.items.append(.range(count: positions[i].offset))
+                                    }
+                                } else {
                                     let deltaCount = positions[i].offset - 1 - positions[i - 1].offset
                                     if deltaCount > 0 {
                                         result.items.append(.range(count: deltaCount))
@@ -162,9 +168,34 @@ public final class SparseMessageList {
                     guard let strongSelf = self else {
                         return
                     }
+                    strongSelf.isLoadingInitial = false
                     strongSelf.sparseItems = sparseItems
-                    if strongSelf.topSection != nil {
-                        strongSelf.updateState()
+                    if let initialMessageIndex {
+                        var loadHoleAnchor: MessageId?
+                        loop: for item in sparseItems.items {
+                            switch item {
+                            case let .anchor(id, timestamp, _):
+                                let anchorIndex = MessageIndex(id: id, timestamp: timestamp)
+                                if anchorIndex <= initialMessageIndex {
+                                    loadHoleAnchor = id
+                                    break loop
+                                }
+                            case .range:
+                                break
+                            }
+                        }
+                        if let loadHoleAnchor {
+                            strongSelf.loadHole(anchor: loadHoleAnchor, direction: .around, completion: {
+                            })
+                        } else {
+                            if strongSelf.topSection != nil {
+                                strongSelf.updateState()
+                            }
+                        }
+                    } else {
+                        if strongSelf.topSection != nil {
+                            strongSelf.updateState()
+                        }
                     }
                 })
             }
@@ -593,7 +624,9 @@ public final class SparseMessageList {
             if self.topSection != topSection {
                 self.topSection = topSection
             }
-            self.updateState()
+            if self.loadingHole == nil && !self.isLoadingInitial {
+                self.updateState()
+            }
         }
 
         private func updateState() {
@@ -694,11 +727,11 @@ public final class SparseMessageList {
         }
     }
 
-    init(account: Account, peerId: PeerId, threadId: Int64?, messageTag: MessageTags) {
+    init(account: Account, peerId: PeerId, threadId: Int64?, messageTag: MessageTags, initialMessageIndex: MessageIndex?) {
         self.queue = Queue()
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
-            return Impl(queue: queue, account: account, peerId: peerId, threadId: threadId, messageTag: messageTag)
+            return Impl(queue: queue, account: account, peerId: peerId, threadId: threadId, messageTag: messageTag, initialMessageIndex: initialMessageIndex)
         })
     }
 
