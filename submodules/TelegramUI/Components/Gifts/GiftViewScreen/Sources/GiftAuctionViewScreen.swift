@@ -746,8 +746,8 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                     } else {
                         return false
                     }
-                }), case let .backdrop(_, _, innerColor, _, _, _, _) = backdropAttribute {
-                    buttonColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultipliedBrightnessBy(1.05)
+                }), case let .backdrop(_, _, innerColor, outerColor, _, _, _) = backdropAttribute {
+                    buttonColor = UIColor(rgb: UInt32(bitPattern: outerColor)).mixedWith(.white, alpha: 0.2)
                     secondaryTextColor = UIColor(rgb: UInt32(bitPattern: innerColor)).withMultiplied(hue: 1.0, saturation: 1.02, brightness: 1.25).mixedWith(UIColor.white, alpha: 0.3)
                 }
                 
@@ -1083,7 +1083,7 @@ private final class GiftAuctionViewSheetContent: CombinedComponent {
                         guard let state, let attributes = state.giftUpgradeAttributes else {
                             return
                         }
-                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsScreen(context: component.context, gift: .generic(gift), onlyCrafted: false, attributes: attributes, selectedAttributes: nil, focusedAttribute: nil)
+                        let variantsController = component.context.sharedContext.makeGiftUpgradeVariantsScreen(context: component.context, gift: .generic(gift), crafted: false, attributes: attributes, selectedAttributes: nil, focusedAttribute: nil)
                         environment.controller()?.push(variantsController)
                     }, animateScale: false),
                     availableSize: CGSize(width: context.availableSize.width - 64.0, height: context.availableSize.height),

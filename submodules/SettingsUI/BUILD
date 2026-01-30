@@ -139,6 +139,7 @@ swift_library(
         "//submodules/TelegramUI/Components/Settings/PeerSelectionScreen",
         "//submodules/TelegramUI/Components/ListSectionComponent",
         "//submodules/TelegramUI/Components/ListActionItemComponent",
+        "//submodules/Utils/DeviceModel",
     ],
     visibility = [
         "//visibility:public",

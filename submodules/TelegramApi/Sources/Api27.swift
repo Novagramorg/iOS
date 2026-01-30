@@ -1,4 +1,187 @@
 public extension Api {
+    enum StickerSetCovered: TypeConstructorDescription {
+        public class Cons_stickerSetCovered {
+            public var set: Api.StickerSet
+            public var cover: Api.Document
+            public init(set: Api.StickerSet, cover: Api.Document) {
+                self.set = set
+                self.cover = cover
+            }
+        }
+        public class Cons_stickerSetFullCovered {
+            public var set: Api.StickerSet
+            public var packs: [Api.StickerPack]
+            public var keywords: [Api.StickerKeyword]
+            public var documents: [Api.Document]
+            public init(set: Api.StickerSet, packs: [Api.StickerPack], keywords: [Api.StickerKeyword], documents: [Api.Document]) {
+                self.set = set
+                self.packs = packs
+                self.keywords = keywords
+                self.documents = documents
+            }
+        }
+        public class Cons_stickerSetMultiCovered {
+            public var set: Api.StickerSet
+            public var covers: [Api.Document]
+            public init(set: Api.StickerSet, covers: [Api.Document]) {
+                self.set = set
+                self.covers = covers
+            }
+        }
+        public class Cons_stickerSetNoCovered {
+            public var set: Api.StickerSet
+            public init(set: Api.StickerSet) {
+                self.set = set
+            }
+        }
+        case stickerSetCovered(Cons_stickerSetCovered)
+        case stickerSetFullCovered(Cons_stickerSetFullCovered)
+        case stickerSetMultiCovered(Cons_stickerSetMultiCovered)
+        case stickerSetNoCovered(Cons_stickerSetNoCovered)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .stickerSetCovered(let _data):
+                if boxed {
+                    buffer.appendInt32(1678812626)
+                }
+                _data.set.serialize(buffer, true)
+                _data.cover.serialize(buffer, true)
+                break
+            case .stickerSetFullCovered(let _data):
+                if boxed {
+                    buffer.appendInt32(1087454222)
+                }
+                _data.set.serialize(buffer, true)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.packs.count))
+                for item in _data.packs {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.keywords.count))
+                for item in _data.keywords {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.documents.count))
+                for item in _data.documents {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .stickerSetMultiCovered(let _data):
+                if boxed {
+                    buffer.appendInt32(872932635)
+                }
+                _data.set.serialize(buffer, true)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.covers.count))
+                for item in _data.covers {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .stickerSetNoCovered(let _data):
+                if boxed {
+                    buffer.appendInt32(2008112412)
+                }
+                _data.set.serialize(buffer, true)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            switch self {
+            case .stickerSetCovered(let _data):
+                return ("stickerSetCovered", [("set", _data.set as Any), ("cover", _data.cover as Any)])
+            case .stickerSetFullCovered(let _data):
+                return ("stickerSetFullCovered", [("set", _data.set as Any), ("packs", _data.packs as Any), ("keywords", _data.keywords as Any), ("documents", _data.documents as Any)])
+            case .stickerSetMultiCovered(let _data):
+                return ("stickerSetMultiCovered", [("set", _data.set as Any), ("covers", _data.covers as Any)])
+            case .stickerSetNoCovered(let _data):
+                return ("stickerSetNoCovered", [("set", _data.set as Any)])
+            }
+        }
+
+        public static func parse_stickerSetCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            var _2: Api.Document?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.Document
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.StickerSetCovered.stickerSetCovered(Cons_stickerSetCovered(set: _1!, cover: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_stickerSetFullCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            var _2: [Api.StickerPack]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StickerPack.self)
+            }
+            var _3: [Api.StickerKeyword]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StickerKeyword.self)
+            }
+            var _4: [Api.Document]?
+            if let _ = reader.readInt32() {
+                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            if _c1 && _c2 && _c3 && _c4 {
+                return Api.StickerSetCovered.stickerSetFullCovered(Cons_stickerSetFullCovered(set: _1!, packs: _2!, keywords: _3!, documents: _4!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_stickerSetMultiCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            var _2: [Api.Document]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Document.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.StickerSetCovered.stickerSetMultiCovered(Cons_stickerSetMultiCovered(set: _1!, covers: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_stickerSetNoCovered(_ reader: BufferReader) -> StickerSetCovered? {
+            var _1: Api.StickerSet?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.StickerSet
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.StickerSetCovered.stickerSetNoCovered(Cons_stickerSetNoCovered(set: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     enum StoriesStealthMode: TypeConstructorDescription {
         public class Cons_storiesStealthMode {
             public var flags: Int32
@@ -1529,67 +1712,6 @@ public extension Api {
         }
         public static func parse_topPeerCategoryPhoneCalls(_ reader: BufferReader) -> TopPeerCategory? {
             return Api.TopPeerCategory.topPeerCategoryPhoneCalls
-        }
-    }
-}
-public extension Api {
-    enum TopPeerCategoryPeers: TypeConstructorDescription {
-        public class Cons_topPeerCategoryPeers {
-            public var category: Api.TopPeerCategory
-            public var count: Int32
-            public var peers: [Api.TopPeer]
-            public init(category: Api.TopPeerCategory, count: Int32, peers: [Api.TopPeer]) {
-                self.category = category
-                self.count = count
-                self.peers = peers
-            }
-        }
-        case topPeerCategoryPeers(Cons_topPeerCategoryPeers)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .topPeerCategoryPeers(let _data):
-                if boxed {
-                    buffer.appendInt32(-75283823)
-                }
-                _data.category.serialize(buffer, true)
-                serializeInt32(_data.count, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.peers.count))
-                for item in _data.peers {
-                    item.serialize(buffer, true)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .topPeerCategoryPeers(let _data):
-                return ("topPeerCategoryPeers", [("category", _data.category as Any), ("count", _data.count as Any), ("peers", _data.peers as Any)])
-            }
-        }
-
-        public static func parse_topPeerCategoryPeers(_ reader: BufferReader) -> TopPeerCategoryPeers? {
-            var _1: Api.TopPeerCategory?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.TopPeerCategory
-            }
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: [Api.TopPeer]?
-            if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.TopPeer.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.TopPeerCategoryPeers.topPeerCategoryPeers(Cons_topPeerCategoryPeers(category: _1!, count: _2!, peers: _3!))
-            }
-            else {
-                return nil
-            }
         }
     }
 }

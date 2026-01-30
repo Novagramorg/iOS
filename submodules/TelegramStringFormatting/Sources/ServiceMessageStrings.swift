@@ -1262,7 +1262,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Sent(authorName, starsPrice)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
-            case let .starGiftUnique(gift, isUpgrade, _, _, _, _, _, isPrepaidUpgrade, peerId, senderId, _, resaleStars, _, _, _, assigned, fromOffer, _):
+            case let .starGiftUnique(gift, isUpgrade, _, _, _, _, _, isPrepaidUpgrade, peerId, senderId, _, resaleStars, _, _, _, assigned, fromOffer, _, isCrafted):
                 if case let .unique(gift) = gift {
                     if !forAdditionalServiceMessage && !"".isEmpty {
                         attributedString = NSAttributedString(string: "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))", font: titleFont, textColor: primaryTextColor)
@@ -1338,7 +1338,11 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_BoughtYou(giftTitle, starsString)._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes, 1: boldAttributes])
                                     }
                                 } else {
-                                    attributedString = NSAttributedString(string: strings.Notification_StarsGift_TransferYou, font: titleFont, textColor: primaryTextColor)
+                                    if isCrafted {
+                                        attributedString = NSAttributedString(string: strings.Notification_StarsGift_Crafted, font: titleFont, textColor: primaryTextColor)
+                                    } else {
+                                        attributedString = NSAttributedString(string: strings.Notification_StarsGift_TransferYou, font: titleFont, textColor: primaryTextColor)
+                                    }
                                 }
                             } else if let senderId, let peer = message.peers[senderId] {
                                 if let peerId, let targetPeer = message.peers[peerId] {
@@ -1776,7 +1780,27 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         rawString = strings.Conversation_EmojiStake_WonYou(value).string
                     }
                 } else {
-                    let compactPeerName = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle ?? ""
+                    var compactPeerName = ""
+                    if let authorSignature = message.forwardInfo?.authorSignature {
+                        compactPeerName = authorSignature
+                    } else if let author = message.forwardInfo?.author {
+                        compactPeerName = EnginePeer(author).compactDisplayTitle
+                    } else if let source = message.forwardInfo?.source {
+                        compactPeerName = EnginePeer(source).compactDisplayTitle
+                    } else {
+                        if let author = message.author, case .user = author {
+                            compactPeerName = author.compactDisplayTitle
+                        } else {
+                            for attribute in message.attributes {
+                                if let attribute = attribute as? AuthorSignatureMessageAttribute {
+                                    compactPeerName = attribute.signature
+                                }
+                            }
+                            if compactPeerName.isEmpty {
+                                compactPeerName = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle ?? ""
+                            }
+                        }
+                    }
                     if value == 1, let tonAmount = dice.tonAmount {
                         let value = formatTonAmountText(tonAmount, dateTimeFormat: dateTimeFormat)
                         rawString = strings.Conversation_EmojiStake_Lost(compactPeerName, value).string

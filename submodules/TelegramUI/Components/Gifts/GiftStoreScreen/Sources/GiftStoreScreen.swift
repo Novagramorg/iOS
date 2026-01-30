@@ -29,6 +29,7 @@ import LottieComponent
 import GiftLoadingShimmerView
 import EdgeEffect
 import GlassBackgroundComponent
+import ContextUI
 
 private let minimumCountToDisplayFilters = 18
 
@@ -45,6 +46,7 @@ public final class GiftStoreContentComponent: Component {
     let starsContext: StarsContext
     let peerId: EnginePeer.Id
     let gift: StarGift.Gift
+    let isPlain: Bool
     let confirmPurchaseImmediately: Bool
     let starsTopUpOptions: Signal<[StarsTopUpOption]?, NoError>?
     let scrollToTop: () -> Void
@@ -64,6 +66,7 @@ public final class GiftStoreContentComponent: Component {
         starsContext: StarsContext,
         peerId: EnginePeer.Id,
         gift: StarGift.Gift,
+        isPlain: Bool,
         confirmPurchaseImmediately: Bool,
         starsTopUpOptions: Signal<[StarsTopUpOption]?, NoError>?,
         scrollToTop: @escaping () -> Void,
@@ -82,6 +85,7 @@ public final class GiftStoreContentComponent: Component {
         self.starsContext = starsContext
         self.peerId = peerId
         self.gift = gift
+        self.isPlain = isPlain
         self.confirmPurchaseImmediately = confirmPurchaseImmediately
         self.starsTopUpOptions = starsTopUpOptions
         self.scrollToTop = scrollToTop
@@ -1075,7 +1079,7 @@ public final class GiftStoreContentComponent: Component {
                         
             let loadingSize = CGSize(width: availableSize.width, height: min(1000.0, availableSize.height))
             if isLoading && self.showLoading {
-                self.loadingView.update(size: loadingSize, theme: component.theme, showFilters: !showingFilters, isPlain: true, transition: .immediate)
+                self.loadingView.update(size: loadingSize, theme: component.theme, showFilters: !showingFilters, isPlain: component.isPlain, transition: .immediate)
                 loadingTransition.setAlpha(view: self.loadingView, alpha: 1.0)
             } else {
                 loadingTransition.setAlpha(view: self.loadingView, alpha: 0.0)
@@ -1145,10 +1149,8 @@ final class GiftStoreScreenComponent: Component {
         
         private let edgeEffectView: EdgeEffectView
         
-        private let balanceBackgroundView: GlassBackgroundView
-        private let balanceTitle = ComponentView<Empty>()
-        private let balanceValue = ComponentView<Empty>()
-        private let balanceIcon = ComponentView<Empty>()
+        private let balance = ComponentView<Empty>()
+        private let balanceBackgroundView: GlassContextExtractableContainer
         
         private let title = ComponentView<Empty>()
         private let subtitle = ComponentView<Empty>()
@@ -1165,7 +1167,7 @@ final class GiftStoreScreenComponent: Component {
         private var isUpdating: Bool = false
         
         override init(frame: CGRect) {
-            self.balanceBackgroundView = GlassBackgroundView()
+            self.balanceBackgroundView = GlassContextExtractableContainer()
             
             self.scrollView = ScrollView()
             self.scrollView.showsVerticalScrollIndicator = true
@@ -1211,6 +1213,68 @@ final class GiftStoreScreenComponent: Component {
                 contentView.updateScrolling(bounds: bounds, interactive: interactive, transition: transition)
             }
         }
+        
+        func presentBalanceMenu() {
+            guard let component = self.component, let starsContext = component.context.starsContext, let tonContext = component.context.tonContext, let controller = self.environment?.controller() else {
+                return
+            }
+            let tonBalance = tonContext.currentState?.balance.value ?? 0
+            if tonBalance == 0 {
+                let controller = component.context.sharedContext.makeStarsTransactionsScreen(context: component.context, starsContext: tonContext)
+                controller.push(controller)
+                return
+            }
+            
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                
+            let sourceView = self.balanceBackgroundView
+            
+            let items: Signal<[ContextMenuItem], NoError> = combineLatest(
+                queue: Queue.mainQueue(),
+                starsContext.state,
+                tonContext.state
+            )
+            |> take(1)
+            |> map { starsState, tonState -> [ContextMenuItem] in
+                let starsBalance = starsState?.balance ?? .zero
+                let tonBalance = tonState?.balance.value ?? 0
+                
+                var items: [ContextMenuItem] = []
+                
+                items.append(.action(ContextMenuActionItem(
+                    text: "My Stars",
+                    textLayout: .secondLineWithValue(formatStarsAmountText(starsBalance, dateTimeFormat: presentationData.dateTimeFormat)),
+                    icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Stars"), color: theme.contextMenu.primaryColor) },
+                    action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        guard let self, let component = self.component, let environment = self.environment else {
+                            return
+                        }
+                        let controller = component.context.sharedContext.makeStarsTransactionsScreen(context: component.context, starsContext: starsContext)
+                        environment.controller()?.push(controller)
+                    }
+                )))
+                
+                items.append(.action(ContextMenuActionItem(
+                    text: "My TON",
+                    textLayout: .secondLineWithValue(formatTonAmountText(tonBalance, dateTimeFormat: presentationData.dateTimeFormat)),
+                    icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Ton"), color: theme.contextMenu.primaryColor) },
+                    action: { [weak self] _, f in
+                        f(.dismissWithoutContent)
+                        guard let self, let component = self.component, let environment = self.environment else {
+                            return
+                        }
+                        let controller = component.context.sharedContext.makeStarsTransactionsScreen(context: component.context, starsContext: tonContext)
+                        environment.controller()?.push(controller)
+                    }
+                )))
+                
+                return items
+            }
+
+            let contextController = makeContextController(presentationData: presentationData, source: .reference(GiftStoreReferenceContentSource(controller: controller, sourceView: sourceView)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: nil)
+            controller.presentInGlobalOverlay(contextController)
+        }
                 
         func update(component: GiftStoreScreenComponent, availableSize: CGSize, state: State, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
@@ -1255,42 +1319,37 @@ final class GiftStoreScreenComponent: Component {
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
             self.edgeEffectView.update(content: environment.theme.list.blocksBackgroundColor, blur: true, rect: edgeEffectFrame, edge: .top, edgeSize: min(30, edgeEffectFrame.height), transition: transition)
-                                    
-            let balanceTitleSize = self.balanceTitle.update(
+                              
+            
+            let balanceSize = self.balance.update(
                 transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: strings.Stars_Purchase_Balance,
-                        font: Font.regular(14.0),
-                        textColor: environment.theme.actionSheet.primaryTextColor
-                    )),
-                    maximumNumberOfLines: 1
-                )),
+                component: AnyComponent(
+                    BalanceComponent(
+                        context: component.context,
+                        theme: environment.theme,
+                        action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.presentBalanceMenu()
+                        }
+                    )
+                ),
                 environment: {},
                 containerSize: availableSize
             )
-            
-            let formattedBalance = formatStarsAmountText(self.starsState?.balance ?? StarsAmount.zero, dateTimeFormat: environment.dateTimeFormat)
-            let smallLabelFont = Font.regular(11.0)
-            let labelFont = Font.semibold(14.0)
-            let balanceText = tonAmountAttributedString(formattedBalance, integralFont: labelFont, fractionalFont: smallLabelFont, color: environment.theme.actionSheet.primaryTextColor, decimalSeparator: environment.dateTimeFormat.decimalSeparator)
-            
-            let balanceValueSize = self.balanceValue.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(balanceText),
-                    maximumNumberOfLines: 1
-                )),
-                environment: {},
-                containerSize: availableSize
-            )
-            let balanceIconSize = self.balanceIcon.update(
-                transition: .immediate,
-                component: AnyComponent(BundleIconComponent(name: "Premium/Stars/StarSmall", tintColor: nil)),
-                environment: {},
-                containerSize: availableSize
-            )
-            
+            let balanceFrame = CGRect(origin: .zero, size: balanceSize)
+            if let balanceView = self.balance.view {
+                if balanceView.superview == nil {
+                    self.balanceBackgroundView.contentView.addSubview(balanceView)
+                }
+                balanceView.frame = balanceFrame
+
+                let balanceBackgroundFrame = CGRect(origin: CGPoint(x: availableSize.width - environment.safeInsets.right - 16.0 - balanceSize.width, y: environment.navigationHeight - 60.0 + 2.0 + floor((60.0 - 44.0) * 0.5)), size: balanceSize)
+                
+                transition.setFrame(view: self.balanceBackgroundView, frame: balanceBackgroundFrame)
+                self.balanceBackgroundView.update(size: balanceBackgroundFrame.size, cornerRadius: balanceBackgroundFrame.height * 0.5, isDark: environment.theme.overallDarkAppearance, tintColor: .init(kind: .panel), isInteractive: true, transition: transition)
+            }
             if self.balanceBackgroundView.superview == nil {
                 component.overNavigationContainer.addSubview(self.balanceBackgroundView)
             }
@@ -1298,32 +1357,6 @@ final class GiftStoreScreenComponent: Component {
             var topInset: CGFloat = 0.0
             if environment.statusBarHeight > 0.0 {
                 topInset = environment.statusBarHeight - 6.0
-            }
-            
-            if let balanceTitleView = self.balanceTitle.view, let balanceValueView = self.balanceValue.view, let balanceIconView = self.balanceIcon.view {
-                if balanceTitleView.superview == nil {
-                    self.balanceBackgroundView.contentView.addSubview(balanceTitleView)
-                    self.balanceBackgroundView.contentView.addSubview(balanceValueView)
-                    self.balanceBackgroundView.contentView.addSubview(balanceIconView)
-                }
-                
-                let topBalanceOriginY = (44.0 - balanceTitleSize.height - balanceValueSize.height) / 2.0
-                
-                let balanceSideInset: CGFloat = 12.0
-                var balanceBackgroundSize = CGSize(width: balanceTitleSize.width + balanceSideInset * 2.0, height: 44.0)
-                balanceBackgroundSize.width = max(balanceBackgroundSize.width, balanceValueSize.width + balanceIconSize.width + 2.0 + balanceSideInset * 2.0)
-                
-                let balanceBackgroundFrame = CGRect(origin: CGPoint(x: availableSize.width - environment.safeInsets.right - 16.0 - balanceBackgroundSize.width, y: environment.navigationHeight - 60.0 + 2.0 + floor((60.0 - 44.0) * 0.5)), size: balanceBackgroundSize)
-                
-                transition.setFrame(view: self.balanceBackgroundView, frame: balanceBackgroundFrame)
-                self.balanceBackgroundView.update(size: balanceBackgroundFrame.size, cornerRadius: balanceBackgroundFrame.height * 0.5, isDark: environment.theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: transition)
-                
-                balanceTitleView.center = CGPoint(x: balanceBackgroundFrame.width - balanceSideInset - balanceTitleSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height / 2.0)
-                balanceTitleView.bounds = CGRect(origin: .zero, size: balanceTitleSize)
-                balanceValueView.center = CGPoint(x: balanceBackgroundFrame.width - balanceSideInset - balanceValueSize.width / 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0)
-                balanceValueView.bounds = CGRect(origin: .zero, size: balanceValueSize)
-                balanceIconView.center = CGPoint(x: balanceBackgroundFrame.width - balanceSideInset - balanceValueSize.width - balanceIconSize.width / 2.0 - 2.0, y: topBalanceOriginY + balanceTitleSize.height + balanceValueSize.height / 2.0 - UIScreenPixel)
-                balanceIconView.bounds = CGRect(origin: .zero, size: balanceIconSize)
             }
             
             let titleSize = self.title.update(
@@ -1360,6 +1393,7 @@ final class GiftStoreScreenComponent: Component {
                         starsContext: component.starsContext,
                         peerId: component.peerId,
                         gift: component.gift,
+                        isPlain: false,
                         confirmPurchaseImmediately: false,
                         starsTopUpOptions: nil,
                         scrollToTop: { [weak self] in

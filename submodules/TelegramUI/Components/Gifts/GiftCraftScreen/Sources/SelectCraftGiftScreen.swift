@@ -21,6 +21,7 @@ import ResizableSheetComponent
 import TooltipUI
 import GlassBarButtonComponent
 import ConfettiEffect
+import GiftLoadingShimmerView
 
 final class SelectGiftPageContent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -34,6 +35,7 @@ final class SelectGiftPageContent: Component {
     let starsTopUpOptions: Signal<[StarsTopUpOption]?, NoError>
     let selectGift: (GiftItem) -> Void
     let dismiss: () -> Void
+    let boundsUpdated: ActionSlot<CGRect>
     
     init(
         context: AccountContext,
@@ -44,7 +46,8 @@ final class SelectGiftPageContent: Component {
         selectedGiftIds: Set<Int64>,
         starsTopUpOptions: Signal<[StarsTopUpOption]?, NoError>,
         selectGift: @escaping (GiftItem) -> Void,
-        dismiss: @escaping () -> Void
+        dismiss: @escaping () -> Void,
+        boundsUpdated: ActionSlot<CGRect>
     ) {
         self.context = context
         self.craftContext = craftContext
@@ -55,6 +58,7 @@ final class SelectGiftPageContent: Component {
         self.starsTopUpOptions = starsTopUpOptions
         self.selectGift = selectGift
         self.dismiss = dismiss
+        self.boundsUpdated = boundsUpdated
     }
     
     static func ==(lhs: SelectGiftPageContent, rhs: SelectGiftPageContent) -> Bool {
@@ -74,6 +78,7 @@ final class SelectGiftPageContent: Component {
         private let myGiftsTitle = ComponentView<Empty>()
         private var gifts: [AnyHashable: ComponentView<Empty>] = [:]
         private let myGiftsPlaceholder = ComponentView<Empty>()
+        private let loadingView = GiftLoadingShimmerView()
         
         private let storeGiftsTitle = ComponentView<Empty>()
         private let storeGifts = ComponentView<Empty>()
@@ -84,6 +89,9 @@ final class SelectGiftPageContent: Component {
         private var availableGifts: [GiftItem] = []
         private var giftMap: [Int64: GiftItem] = [:]
                 
+        private var availableSize: CGSize?
+        private var currentBounds: CGRect?
+        
         private var component: SelectGiftPageContent?
         private weak var state: EmptyComponentState?
         private var environment: ViewControllerComponentContainer.Environment?
@@ -94,6 +102,8 @@ final class SelectGiftPageContent: Component {
             
             self.layer.cornerRadius = 40.0
             self.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+                        
+            self.addSubview(self.loadingView)
         }
         
         required init?(coder: NSCoder) {
@@ -103,6 +113,187 @@ final class SelectGiftPageContent: Component {
         deinit {
             self.craftStateDisposable?.dispose()
         }
+        
+        func updateScrolling(interactive: Bool, transition: ComponentTransition) -> CGFloat {
+            guard let bounds = self.currentBounds, let availableSize = self.availableSize, let component = self.component, let environment = self.environment else {
+                return 0.0
+            }
+            
+            let visibleBounds = bounds.insetBy(dx: 0.0, dy: -10.0)
+            
+            var contentHeight: CGFloat = 88.0 + 32.0
+            
+            let itemSpacing: CGFloat = 10.0
+            let itemSideInset = 16.0
+            let itemsInRow: Int
+            if availableSize.width > availableSize.height || availableSize.width > 480.0 {
+                if case .tablet = environment.deviceMetrics.type {
+                    itemsInRow = 4
+                } else {
+                    itemsInRow = 5
+                }
+            } else {
+                itemsInRow = 3
+            }
+            let itemWidth = (availableSize.width - itemSideInset * 2.0 - itemSpacing * CGFloat(itemsInRow - 1)) / CGFloat(itemsInRow)
+            let itemSize = CGSize(width: itemWidth, height: itemWidth)
+
+            var isLoading = false
+            if self.availableGifts.isEmpty, case .loading = (self.craftState?.dataState ?? .loading) {
+                isLoading = true
+            }
+            let loadingTransition: ComponentTransition = .easeInOut(duration: 0.25)
+            let loadingSize = CGSize(width: availableSize.width, height: 180.0)
+            if isLoading {
+                contentHeight += 120.0
+                self.loadingView.update(size: loadingSize, theme: environment.theme, itemSize: itemSize, showFilters: false, isPlain: true, transition: .immediate)
+                loadingTransition.setAlpha(view: self.loadingView, alpha: 1.0)
+            } else {
+                loadingTransition.setAlpha(view: self.loadingView, alpha: 0.0)
+            }
+            transition.setFrame(view: self.loadingView, frame: CGRect(origin: CGPoint(x: 0.0, y: contentHeight - 170.0), size: loadingSize))
+            
+            var itemFrame = CGRect(origin: CGPoint(x: itemSideInset, y: contentHeight), size: itemSize)
+            var itemsHeight: CGFloat = 0.0
+            var validIds: [AnyHashable] = []
+            for gift in self.availableGifts {
+                var isVisible = false
+                if visibleBounds.intersects(itemFrame) {
+                    isVisible = true
+                }
+                if isVisible {
+                    let itemId = AnyHashable(gift.gift.id)
+                    validIds.append(itemId)
+                    
+                    var itemTransition = transition
+                    let visibleItem: ComponentView<Empty>
+                    if let current = self.gifts[itemId] {
+                        visibleItem = current
+                    } else {
+                        visibleItem = ComponentView()
+                        self.gifts[itemId] = visibleItem
+                        itemTransition = .immediate
+                    }
+                    
+                    var ribbonColor: GiftItemComponent.Ribbon.Color = .blue
+                    let ribbonText = "#\(gift.gift.number)"
+                    for attribute in gift.gift.attributes {
+                        if case let .backdrop(_, _, innerColor, outerColor, _, _, _) = attribute {
+                            ribbonColor = .custom(outerColor, innerColor)
+                            break
+                        }
+                    }
+                    
+                    let _ = visibleItem.update(
+                        transition: itemTransition,
+                        component: AnyComponent(
+                            GiftItemComponent(
+                                context: component.context,
+                                style: .glass,
+                                theme: environment.theme,
+                                strings: environment.strings,
+                                peer: nil,
+                                subject: .uniqueGift(gift: gift.gift, price: nil),
+                                ribbon: GiftItemComponent.Ribbon(text: ribbonText, font: .monospaced, color: ribbonColor, outline: nil),
+                                badge: gift.gift.craftChancePermille.flatMap { "+\($0 / 10)%" },
+                                resellPrice: nil,
+                                isHidden: false,
+                                isSelected: false,
+                                isPinned: false,
+                                isEditing: false,
+                                mode: .grid,
+                                action: { [weak self] in
+                                    guard let self, let component = self.component else {
+                                        return
+                                    }
+                                    component.selectGift(gift)
+                                    component.dismiss()
+                                },
+                                contextAction: { _, _ in }
+                            )
+                        ),
+                        environment: {},
+                        containerSize: itemSize
+                    )
+                    if let itemView = visibleItem.view {
+                        if itemView.superview == nil {
+                            if let _ = self.loadingView.superview {
+                                self.insertSubview(itemView, belowSubview: self.loadingView)
+                            } else {
+                                self.addSubview(itemView)
+                            }
+                            if !transition.animation.isImmediate {
+                                itemView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                            }
+                        }
+                        itemTransition.setFrame(view: itemView, frame: itemFrame)
+                    }
+                }
+                
+                itemsHeight = itemFrame.maxY - contentHeight
+                
+                itemFrame.origin.x += itemFrame.width + itemSpacing
+                if itemFrame.maxX > availableSize.width {
+                    itemFrame.origin.x = itemSideInset
+                    itemFrame.origin.y += itemSize.height + itemSpacing
+                }
+            }
+            
+            var removeIds: [AnyHashable] = []
+            for (id, item) in self.gifts {
+                if !validIds.contains(id) {
+                    removeIds.append(id)
+                    if let itemView = item.view {
+                        if !transition.animation.isImmediate {
+                            itemView.layer.animateScale(from: 1.0, to: 0.01, duration: 0.25, removeOnCompletion: false)
+                            itemView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                                itemView.removeFromSuperview()
+                            })
+                        } else {
+                            itemView.removeFromSuperview()
+                        }
+                    }
+                }
+            }
+            for id in removeIds {
+                self.gifts.removeValue(forKey: id)
+            }
+                        
+            if let state = self.craftState, case .ready = state.dataState, self.availableGifts.isEmpty {
+                contentHeight += 10.0
+                let myGiftsPlaceholderSize = self.myGiftsPlaceholder.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        MultilineTextComponent(
+                            text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_NoGiftsFromCollection, font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor)),
+                            horizontalAlignment: .center,
+                            maximumNumberOfLines: 3,
+                            lineSpacing: 0.1
+                        )
+                    ),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - 32.0, height: .greatestFiniteMagnitude)
+                )
+                let myGiftsPlaceholderFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - myGiftsPlaceholderSize.width) / 2.0), y: contentHeight), size: myGiftsPlaceholderSize)
+                if let myGiftsPlaceholderView = self.myGiftsPlaceholder.view {
+                    if myGiftsPlaceholderView.superview == nil {
+                        self.addSubview(myGiftsPlaceholderView)
+                    }
+                    myGiftsPlaceholderView.frame = myGiftsPlaceholderFrame
+                }
+                contentHeight += myGiftsPlaceholderSize.height
+                contentHeight += 32.0
+            } else {
+                contentHeight += itemsHeight
+                contentHeight += 24.0
+            }
+            
+            if let storeGiftsView = self.storeGifts.view as? GiftStoreContentComponent.View {
+                storeGiftsView.updateScrolling(bounds: bounds.offsetBy(dx: 0.0, dy: -contentHeight), interactive: interactive, transition: .immediate)
+            }
+            
+            return contentHeight
+        }
                 
         func update(component: SelectGiftPageContent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
@@ -110,7 +301,18 @@ final class SelectGiftPageContent: Component {
                 self.isUpdating = false
             }
             
+            self.availableSize = availableSize
             if self.component == nil {
+                self.currentBounds = CGRect(origin: .zero, size: availableSize)
+                
+                component.boundsUpdated.connect { [weak self] bounds in
+                    guard let self else {
+                        return
+                    }
+                    self.currentBounds = bounds
+                    let _ = self.updateScrolling(interactive: true, transition: .immediate)
+                }
+                
                 let initialGiftItem = GiftItem(
                     gift: component.gift,
                     reference: .slug(slug: component.gift.slug)
@@ -125,7 +327,6 @@ final class SelectGiftPageContent: Component {
                     guard let self else {
                         return
                     }
-                    //let isFirstTime = self.craftState == nil
                     self.craftState = state
                     
                     var items: [GiftItem] = []
@@ -175,7 +376,7 @@ final class SelectGiftPageContent: Component {
             let myGiftsTitleSize = self.myGiftsTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Your Gifts".uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_YourGifts.uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
                 ),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -190,165 +391,12 @@ final class SelectGiftPageContent: Component {
             
             contentHeight += 32.0
                         
-            let itemSpacing: CGFloat = 10.0
-            let itemSideInset = 16.0
-            let itemsInRow: Int
-            if availableSize.width > availableSize.height || availableSize.width > 480.0 {
-                if case .tablet = environment.deviceMetrics.type {
-                    itemsInRow = 4
-                } else {
-                    itemsInRow = 5
-                }
-            } else {
-                itemsInRow = 3
-            }
-            let itemWidth = (availableSize.width - itemSideInset * 2.0 - itemSpacing * CGFloat(itemsInRow - 1)) / CGFloat(itemsInRow)
-            let itemSize = CGSize(width: itemWidth, height: itemWidth)
-            var itemFrame = CGRect(origin: CGPoint(x: itemSideInset, y: contentHeight), size: itemSize)
-            
-            var itemsHeight: CGFloat = 0.0
-                        
-            var validIds: [AnyHashable] = []
-            for gift in self.availableGifts {
-                let isVisible = "".isEmpty
-//                if visibleBounds.intersects(itemFrame) {
-//                    isVisible = true
-//                }
-                if isVisible {
-                    let itemId = AnyHashable(gift.gift.id)
-                    validIds.append(itemId)
-                    
-                    var itemTransition = transition
-                    let visibleItem: ComponentView<Empty>
-                    if let current = self.gifts[itemId] {
-                        visibleItem = current
-                    } else {
-                        visibleItem = ComponentView()
-                        self.gifts[itemId] = visibleItem
-                        itemTransition = .immediate
-                    }
-                    
-                    var ribbonColor: GiftItemComponent.Ribbon.Color = .blue
-                    let ribbonText = "#\(gift.gift.number)"
-                    for attribute in gift.gift.attributes {
-                        if case let .backdrop(_, _, innerColor, outerColor, _, _, _) = attribute {
-                            ribbonColor = .custom(outerColor, innerColor)
-                            break
-                        }
-                    }
-                    
-                    let badge: String? = gift.gift.craftChancePermille.flatMap { "+\($0 / 10)%" }
-                    
-                    let _ = visibleItem.update(
-                        transition: itemTransition,
-                        component: AnyComponent(
-                            GiftItemComponent(
-                                context: component.context,
-                                style: .glass,
-                                theme: environment.theme,
-                                strings: environment.strings,
-                                peer: nil,
-                                subject: .uniqueGift(gift: gift.gift, price: nil),
-                                ribbon: GiftItemComponent.Ribbon(text: ribbonText, font: .monospaced, color: ribbonColor, outline: nil),
-                                badge: badge,
-                                resellPrice: nil,
-                                isHidden: false,
-                                isSelected: false,
-                                isPinned: false,
-                                isEditing: false,
-                                mode: .grid,
-                                action: { [weak self] in
-                                    guard let self, let component = self.component else {
-                                        return
-                                    }
-                                    component.selectGift(gift)
-                                    component.dismiss()
-                                },
-                                contextAction: { _, _ in }
-                            )
-                        ),
-                        environment: {},
-                        containerSize: itemSize
-                    )
-                    if let itemView = visibleItem.view {
-                        if itemView.superview == nil {
-                            self.addSubview(itemView)
-                            
-                            if !transition.animation.isImmediate {
-                                let delay = ((itemFrame.minY - contentHeight) / itemSize.height) * 0.07
-                                itemView.layer.animateScale(from: 0.01, to: 1.0, duration: 0.25, delay: delay)
-                                itemView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25, delay: delay)
-                            }
-                        }
-                        itemView.isUserInteractionEnabled = !component.selectedGiftIds.contains(gift.gift.id)
-                        itemView.alpha = component.selectedGiftIds.contains(gift.gift.id) ? 0.4 : 1.0
-                        itemView.layer.allowsGroupOpacity = itemView.alpha < 1.0
-                        itemTransition.setFrame(view: itemView, frame: itemFrame)
-                    }
-                }
-                
-                itemsHeight = itemFrame.maxY - contentHeight
-                
-                itemFrame.origin.x += itemFrame.width + itemSpacing
-                if itemFrame.maxX > availableSize.width {
-                    itemFrame.origin.x = itemSideInset
-                    itemFrame.origin.y += itemSize.height + itemSpacing
-                }
-            }
-            
-            var removeIds: [AnyHashable] = []
-            for (id, item) in self.gifts {
-                if !validIds.contains(id) {
-                    removeIds.append(id)
-                    if let itemView = item.view {
-                        if !transition.animation.isImmediate {
-                            itemView.layer.animateScale(from: 1.0, to: 0.01, duration: 0.25, removeOnCompletion: false)
-                            itemView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
-                                itemView.removeFromSuperview()
-                            })
-                        } else {
-                            itemView.removeFromSuperview()
-                        }
-                    }
-                }
-            }
-            for id in removeIds {
-                self.gifts.removeValue(forKey: id)
-            }
-            
-            if let state = self.craftState, case .ready = state.dataState, self.availableGifts.isEmpty {
-                contentHeight += 10.0
-                let myGiftsPlaceholderSize = self.myGiftsPlaceholder.update(
-                    transition: .immediate,
-                    component: AnyComponent(
-                        MultilineTextComponent(
-                            text: .plain(NSAttributedString(string: "You don't have other gifts\nfrom this collection", font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor)),
-                            horizontalAlignment: .center,
-                            maximumNumberOfLines: 3,
-                            lineSpacing: 0.1
-                        )
-                    ),
-                    environment: {},
-                    containerSize: CGSize(width: availableSize.width - 32.0, height: .greatestFiniteMagnitude)
-                )
-                let myGiftsPlaceholderFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - myGiftsPlaceholderSize.width) / 2.0), y: contentHeight), size: myGiftsPlaceholderSize)
-                if let myGiftsPlaceholderView = self.myGiftsPlaceholder.view {
-                    if myGiftsPlaceholderView.superview == nil {
-                        self.addSubview(myGiftsPlaceholderView)
-                    }
-                    myGiftsPlaceholderView.frame = myGiftsPlaceholderFrame
-                }
-                contentHeight += myGiftsPlaceholderSize.height
-                contentHeight += 32.0
-            } else {
-                contentHeight += itemsHeight
-                contentHeight += 24.0
-            }
+            contentHeight = self.updateScrolling(interactive: false, transition: transition)
             
             let storeGiftsTitleSize = self.storeGiftsTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "SUITABLE GIFTS ON SALE".uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_SaleGifts.uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
                 ),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -379,6 +427,7 @@ final class SelectGiftPageContent: Component {
                         starsContext: component.context.starsContext!,
                         peerId: component.context.account.peerId,
                         gift: component.genericGift,
+                        isPlain: true,
                         confirmPurchaseImmediately: true,
                         starsTopUpOptions: component.starsTopUpOptions,
                         scrollToTop: {},
@@ -479,6 +528,8 @@ private final class SheetContainerComponent: CombinedComponent {
     static var body: Body {
         let sheet = Child(ResizableSheetComponent<EnvironmentType>.self)
         let animateOut = StoredActionSlot(Action<Void>.self)
+        
+        let boundsUpdated = ActionSlot<CGRect>()
                         
         return { context in
             let component = context.component
@@ -518,11 +569,12 @@ private final class SheetContainerComponent: CombinedComponent {
                             selectGift: component.selectGift,
                             dismiss: {
                                 dismiss(true)
-                            }
+                            },
+                            boundsUpdated: boundsUpdated
                         )
                     ),
                     titleItem: AnyComponent(
-                        MultilineTextComponent(text: .plain(NSAttributedString(string: "Select Gifts", font: Font.semibold(17.0), textColor: environment.theme.actionSheet.primaryTextColor)))
+                        MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_Title, font: Font.semibold(17.0), textColor: environment.theme.actionSheet.primaryTextColor)))
                     ),
                     leftItem: AnyComponent(
                         GlassBarButtonComponent(
@@ -530,9 +582,9 @@ private final class SheetContainerComponent: CombinedComponent {
                             backgroundColor: nil,
                             isDark: theme.overallDarkAppearance,
                             state: .glass,
-                            component: AnyComponentWithIdentity(id: "back", component: AnyComponent(
+                            component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
                                 BundleIconComponent(
-                                    name: "Navigation/Back",
+                                    name: "Navigation/Close",
                                     tintColor: theme.chat.inputPanel.panelControlColor
                                 )
                             )),
@@ -561,7 +613,8 @@ private final class SheetContainerComponent: CombinedComponent {
                         regularMetricsSize: CGSize(width: 430.0, height: 900.0),
                         dismiss: { animated in
                             dismiss(animated)
-                        }
+                        },
+                        boundsUpdated: boundsUpdated
                     )
                 },
                 availableSize: context.availableSize,

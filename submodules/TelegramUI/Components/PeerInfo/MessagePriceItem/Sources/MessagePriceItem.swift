@@ -197,6 +197,8 @@ private class MessagePriceItemNode: ListViewItemNode, ItemListItemNode {
     }
     
     private let backgroundNode: ASDisplayNode
+    private let highlightNode: ASDisplayNode
+    
     private let topStripeNode: ASDisplayNode
     private let bottomStripeNode: ASDisplayNode
     private let maskNode: ASImageNode
@@ -224,6 +226,9 @@ private class MessagePriceItemNode: ListViewItemNode, ItemListItemNode {
     init() {
         self.backgroundNode = ASDisplayNode()
         self.backgroundNode.isLayerBacked = true
+        
+        self.highlightNode = ASDisplayNode()
+        self.highlightNode.isLayerBacked = true
         
         self.topStripeNode = ASDisplayNode()
         self.topStripeNode.isLayerBacked = true
@@ -297,6 +302,20 @@ private class MessagePriceItemNode: ListViewItemNode, ItemListItemNode {
         self.item?.openSetCustom?()
     }
     
+    public func displayHighlight() {
+        if self.backgroundNode.supernode != nil {
+            self.insertSubnode(self.highlightNode, aboveSubnode: self.backgroundNode)
+        } else {
+            self.insertSubnode(self.highlightNode, at: 0)
+        }
+        
+        Queue.mainQueue().after(1.2, {
+            self.highlightNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { _ in
+                self.highlightNode.removeFromSupernode()
+            })
+        })
+    }
+    
     func asyncLayout() -> (_ item: MessagePriceItem, _ params: ListViewItemLayoutParams, _ neighbors: ItemListNeighbors) -> (ListViewItemNodeLayout, () -> Void) {
         let currentItem = self.item
         
@@ -329,6 +348,7 @@ private class MessagePriceItemNode: ListViewItemNode, ItemListItemNode {
                     strongSelf.backgroundNode.backgroundColor = item.theme.list.itemBlocksBackgroundColor
                     strongSelf.topStripeNode.backgroundColor = item.theme.list.itemBlocksSeparatorColor
                     strongSelf.bottomStripeNode.backgroundColor = item.theme.list.itemBlocksSeparatorColor
+                    strongSelf.highlightNode.backgroundColor = item.theme.list.itemSearchHighlightColor
                     
                     if strongSelf.backgroundNode.supernode == nil {
                         strongSelf.insertSubnode(strongSelf.backgroundNode, at: 0)
@@ -370,6 +390,7 @@ private class MessagePriceItemNode: ListViewItemNode, ItemListItemNode {
                     strongSelf.maskNode.image = hasCorners ? PresentationResourcesItemList.cornersImage(item.theme, top: hasTopCorners, bottom: hasBottomCorners, glass: item.systemStyle == .glass) : nil
                     
                     strongSelf.backgroundNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: params.width, height: contentSize.height + min(insets.top, separatorHeight) + min(insets.bottom, separatorHeight)))
+                    strongSelf.highlightNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: params.width, height: contentSize.height + min(insets.top, separatorHeight) + min(insets.bottom, separatorHeight)))
                     strongSelf.maskNode.frame = strongSelf.backgroundNode.frame.insetBy(dx: params.leftInset, dy: 0.0)
                     strongSelf.topStripeNode.frame = CGRect(origin: CGPoint(x: 0.0, y: -min(insets.top, separatorHeight)), size: CGSize(width: layoutSize.width, height: separatorHeight))
                     strongSelf.bottomStripeNode.frame = CGRect(origin: CGPoint(x: bottomStripeInset, y: contentSize.height + bottomStripeOffset), size: CGSize(width: layoutSize.width - bottomStripeInset - params.rightInset - separatorRightInset, height: separatorHeight))

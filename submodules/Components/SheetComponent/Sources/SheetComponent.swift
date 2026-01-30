@@ -191,9 +191,7 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
             
             self.scrollView = ScrollView()
             self.scrollView.delaysContentTouches = false
-            if #available(iOSApplicationExtension 11.0, iOS 11.0, *) {
-                self.scrollView.contentInsetAdjustmentBehavior = .never
-            }
+            self.scrollView.contentInsetAdjustmentBehavior = .never
             self.scrollView.showsVerticalScrollIndicator = false
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.alwaysBounceVertical = true
@@ -351,6 +349,9 @@ public final class SheetComponent<ChildEnvironmentType: Sendable & Equatable>: C
                 })
             } else {
                 var targetOffset: CGFloat = self.scrollView.contentSize.height + abs(contentView.frame.minY) + 6.0
+                if self.currentHasInputHeight {
+                    targetOffset += 330.0
+                }
                 if self.isCentered {
                     targetOffset = self.frame.height + self.scrollView.frame.height * 0.5
                 }
