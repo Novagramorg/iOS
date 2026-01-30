@@ -1743,6 +1743,9 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGiftOffer_Rejected(peerName, giftTitle, priceString)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                     }
                 }
+            case .starGiftCraftFail:
+                //TODO:localize
+                attributedString = NSAttributedString(string: "Gift crafting failed", font: titleFont, textColor: primaryTextColor)
             case let .groupCreatorChange(groupCreatorChange):
                 var targetName = ""
                 if let peer = message.peers[groupCreatorChange.targetPeerId] {

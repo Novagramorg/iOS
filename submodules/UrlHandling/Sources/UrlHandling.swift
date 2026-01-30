@@ -1208,6 +1208,9 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
             return .single(.result(.premiumGiftCode(slug: slug)))
         case let .collectible(slug):
             return .single(.progress) |> then(context.engine.payments.getUniqueStarGift(slug: slug)
+            |> `catch` { _ -> Signal<StarGift.UniqueGift?, NoError> in
+                return .single(nil)
+            }
             |> map { gift -> ResolveInternalUrlResult in
                 return .result(.collectible(gift: gift))
             })
