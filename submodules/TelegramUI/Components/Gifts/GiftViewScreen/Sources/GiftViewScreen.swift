@@ -1013,6 +1013,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 .single(gift.themePeerId)
                 |> then(
                     context.engine.payments.getUniqueStarGift(slug: gift.slug)
+                    |> map(Optional.init)
+                    |> `catch` { _ -> Signal<StarGift.UniqueGift?, NoError> in
+                        return .single(nil)
+                    }
                     |> map { gift in
                         return gift?.themePeerId
                     }

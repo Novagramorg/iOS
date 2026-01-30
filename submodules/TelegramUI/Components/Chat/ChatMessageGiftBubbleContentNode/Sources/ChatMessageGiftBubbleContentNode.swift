@@ -725,6 +725,11 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 } else {
                                     ribbonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_Gift
                                 }
+                                
+                                if uniqueGift.flags.contains(.isBurned) {
+                                    ribbonTitle = item.presentationData.strings.Notification_StarGift_Burned
+                                }
+                                
                                 buttonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_View
                                 modelTitle = item.presentationData.strings.Notification_StarGift_Model
                                 backdropTitle = item.presentationData.strings.Notification_StarGift_Backdrop

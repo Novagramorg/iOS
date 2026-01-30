@@ -31,6 +31,9 @@ swift_library(
         "//submodules/TelegramUI/Components/AvatarComponent",
         "//submodules/Markdown",
         "//submodules/PhoneNumberFormat",
+        "//submodules/ContextUI",
+        "//submodules/AccountUtils",
+        "//submodules/TelegramUI/Components/PeerInfo/AccountPeerContextItem",
     ],
     visibility = [
         "//visibility:public",

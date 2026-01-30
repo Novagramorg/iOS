@@ -1632,33 +1632,36 @@ func openResolvedUrlImpl(
                     present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
                 }
             })
-        case let .collectible(gift):
-            if let gift {
-                var dismissedImpl: (() -> Void)?
-                if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
-                    let updateExternalController = storyProgressPauseContext.update
-                    dismissedImpl = {
-                        updateExternalController(nil)
-                    }
+        case let .collectible(result):
+        switch result {
+        case let .gift(gift):
+            var dismissedImpl: (() -> Void)?
+            if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
+                let updateExternalController = storyProgressPauseContext.update
+                dismissedImpl = {
+                    updateExternalController(nil)
                 }
-                let controller = context.sharedContext.makeGiftViewScreen(context: context, gift: gift, shareStory: { [weak navigationController] uniqueGift in
-                    Queue.mainQueue().after(0.15) {
-                        if let lastController = navigationController?.viewControllers.last as? ViewController {
-                            let controller = context.sharedContext.makeStorySharingScreen(context: context, subject: .gift(gift), parentController: lastController)
-                            navigationController?.pushViewController(controller)
-                        }
-                    }
-                }, openChatTheme: nil, dismissed: {
-                    dismissedImpl?()
-                })
-                navigationController?.pushViewController(controller)
-                
-                if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
-                    storyProgressPauseContext.update(controller)
-                }
-            } else {
-                present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
             }
+            let controller = context.sharedContext.makeGiftViewScreen(context: context, gift: gift, shareStory: { [weak navigationController] uniqueGift in
+                Queue.mainQueue().after(0.15) {
+                    if let lastController = navigationController?.viewControllers.last as? ViewController {
+                        let controller = context.sharedContext.makeStorySharingScreen(context: context, subject: .gift(gift), parentController: lastController)
+                        navigationController?.pushViewController(controller)
+                    }
+                }
+            }, openChatTheme: nil, dismissed: {
+                dismissedImpl?()
+            })
+            navigationController?.pushViewController(controller)
+            
+            if let storyProgressPauseContext = contentContext as? StoryProgressPauseContext {
+                storyProgressPauseContext.update(controller)
+            }
+        case .alreadyBurned:
+            present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Resolve_GiftErrorBurned, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
+        case .invalidSlug:
+            present(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: presentationData.strings.Resolve_GiftErrorNotFound, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
+        }
         case let .auction(auctionContext):
             if let auctionContext, case let .generic(gift) = auctionContext.gift {
                 if !auctionContext.isFinished, let currentBidPeerId = auctionContext.currentBidPeerId {
@@ -1818,8 +1821,27 @@ func openResolvedUrlImpl(
                 if case .request = result {
                     var dismissImpl: (() -> Void)?
                     let controller = AuthConfirmationScreen(context: context, subject: result, completion: { allowWriteAccess, sharePhoneNumber in
-                        let _ = context.engine.messages.acceptMessageActionUrlAuth(subject: .url(url), allowWriteAccess: allowWriteAccess, sharePhoneNumber: sharePhoneNumber).start(next: { _ in
+                        let _ = (context.engine.messages.acceptMessageActionUrlAuth(subject: .url(url), allowWriteAccess: allowWriteAccess, sharePhoneNumber: sharePhoneNumber)
+                        |> deliverOnMainQueue).start(next: { _ in
                             dismissImpl?()
+                            
+                            Queue.mainQueue().after(0.3) {
+                                let text: String
+                                if case let .request(domain, _, _, flags) = result {
+                                    if flags.contains(.requestPhoneNumber) && !sharePhoneNumber {
+                                        text = presentationData.strings.AuthConfirmation_LoginSuccess_TextNoNumber(domain).string
+                                    } else {
+                                        text = presentationData.strings.AuthConfirmation_LoginSuccess_Text(domain).string
+                                    }
+                                    let controller = UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: presentationData.strings.AuthConfirmation_LoginSuccess_Title, text: text, cancel: nil, destructive: false), action: { _ in return true })
+                                    (navigationController?.topViewController as? ViewController)?.present(controller, in: .window(.root))
+                                }
+                            }
+                        }, error: { _ in
+                            if case let .request(domain, _, _, _) = result {
+                                let controller = UndoOverlayController(presentationData: presentationData, content: .actionSucceeded(title: presentationData.strings.AuthConfirmation_LoginFail_Title, text: presentationData.strings.AuthConfirmation_LoginFail_Text(domain).string, cancel: nil, destructive: false), action: { _ in return true })
+                                (navigationController?.topViewController as? ViewController)?.present(controller, in: .window(.root))
+                            }
                         })
                     })
                     navigationController?.pushViewController(controller)
