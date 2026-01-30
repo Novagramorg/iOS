@@ -15755,3 +15755,5 @@ Error: %8$@";
 
 "Notification.GroupCreatorChangePending" = "%2$@ will become the new main admin in 7 days if %1$@ does not return.";
 "Notification.GroupCreatorChangeApplied" = "%1$@ has transferred ownership of the group to %2$@.";
+
+"Notification.StarGift.Crafted.Title" = "Crafted Gift";

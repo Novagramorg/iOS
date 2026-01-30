@@ -1124,7 +1124,9 @@ private final class CraftGiftPageContent: Component {
                             for gift in selectedGifts.values {
                                 references.append(gift.reference)
                             }
-                            controller.profileGiftsContext?.removeStarGifts(references: references)
+                            Queue.mainQueue().after(0.5) {
+                                controller.profileGiftsContext?.removeStarGifts(references: references)
+                            }
                             if let _ = view {
                                 if case let .gift(gift) = component.result {
                                     let giftController = GiftViewScreen(context: component.context, subject: .profileGift(component.context.account.peerId, gift))
@@ -1133,8 +1135,9 @@ private final class CraftGiftPageContent: Component {
                                         
                                         navigationController.view.addSubview(ConfettiView(frame: navigationController.view.bounds))
                                     }
-                                    
-                                    controller.profileGiftsContext?.insertStarGifts(gifts: [gift])
+                                    Queue.mainQueue().after(0.5) {
+                                        controller.profileGiftsContext?.insertStarGifts(gifts: [gift])
+                                    }
                                 }
                                 controller.view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.35, removeOnCompletion: false, completion: { _ in
                                     controller.dismiss()

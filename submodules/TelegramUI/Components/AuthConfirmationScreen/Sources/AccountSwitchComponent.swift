@@ -112,7 +112,7 @@ final class AccountSwitchComponent: Component {
                     self.backgroundView.contentView.addSubview(arrowView)
                     self.backgroundView.contentView.addSubview(self.button)
                 }
-                arrowView.frame = CGRect(origin: CGPoint(x: size.width - arrowSize.width - 12.0, y: floorToScreenPixels((size.height - arrowSize.height) / 2.0)), size: arrowSize)
+                arrowView.frame = CGRect(origin: CGPoint(x: size.width - arrowSize.width - 8.0, y: floorToScreenPixels((size.height - arrowSize.height) / 2.0)), size: arrowSize)
                 transition.setAlpha(view: arrowView, alpha: component.canSwitch ? 1.0 : 0.0)
             }
             
