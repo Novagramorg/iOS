@@ -1763,8 +1763,15 @@ private final class SheetContainerComponent: CombinedComponent {
                                             }
                                         default:
                                             if let navigationController = controller()?.navigationController {
+                                                var text: String = strings.Login_UnknownError
+                                                switch error {
+                                                case .unavailable:
+                                                    text = strings.Gift_Craft_Error_NotAvailable
+                                                default:
+                                                    break
+                                                }
                                                 dismiss(true)
-                                                let alertController = textAlertController(context: component.context, title: nil, text: strings.Login_UnknownError, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})])
+                                                let alertController = textAlertController(context: component.context, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: strings.Common_OK, action: {})])
                                                 (navigationController.topViewController as? ViewController)?.present(alertController, in: .window(.root))
                                             }
                                         }

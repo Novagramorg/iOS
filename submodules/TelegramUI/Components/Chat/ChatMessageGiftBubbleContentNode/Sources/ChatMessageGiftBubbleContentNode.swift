@@ -725,15 +725,17 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 } else {
                                     ribbonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_Gift
                                 }
-                                
-                                if uniqueGift.flags.contains(.isBurned) {
-                                    ribbonTitle = item.presentationData.strings.Notification_StarGift_Burned
-                                }
-                                
+                                                                
                                 buttonTitle = isStoryEntity ? "" : item.presentationData.strings.Notification_StarGift_View
                                 modelTitle = item.presentationData.strings.Notification_StarGift_Model
                                 backdropTitle = item.presentationData.strings.Notification_StarGift_Backdrop
                                 symbolTitle = item.presentationData.strings.Notification_StarGift_Symbol
+                                
+                                if uniqueGift.flags.contains(.isBurned) {
+                                    ribbonTitle = item.presentationData.strings.Notification_StarGift_Burned
+                                    customRibbonColors = [UIColor(rgb: 0xd9433a), UIColor(rgb: 0xff645b)]
+                                    buttonTitle = ""
+                                }
                                 
                                 for attribute in uniqueGift.attributes {
                                     switch attribute {
