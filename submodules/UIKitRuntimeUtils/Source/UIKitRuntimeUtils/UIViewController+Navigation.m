@@ -115,17 +115,41 @@ static bool notyfyingShiftState = false;
 
 @implementation CALayerSpringParametersOverrideParameters
 
-- (instancetype _Nonnull)initWithStiffness:(CGFloat)stiffness damping:(CGFloat)damping duration:(double)duration; {
+- (instancetype _Nonnull)init {
     self = [super init];
     if (self != nil) {
-        _stiffness = stiffness;
-        _damping = damping;
-        _duration = duration;
     }
     return self;
 }
 
 @end
+
+@implementation CALayerSpringParametersOverrideParametersSpring
+
+- (instancetype _Nonnull)initWithStiffness:(CGFloat)stiffness damping:(CGFloat)damping duration:(double)duration {
+    self = [super init];
+    if (self != nil) {
+        _stiffness = stiffness;
+        _damping = damping;
+    }
+    return self;
+}
+
+@end
+
+@implementation CALayerSpringParametersOverrideParametersCustomCurve
+
+- (instancetype _Nonnull)initWithCp1:(CGPoint)cp1 cp2:(CGPoint)cp2 {
+    self = [super init];
+    if (self != nil) {
+        _cp1 = cp1;
+        _cp2 = cp2;
+    }
+    return self;
+}
+
+@end
+
 
 @implementation CALayerSpringParametersOverride
 
@@ -167,12 +191,13 @@ static NSMutableArray<CALayerSpringParametersOverride *> *currentSpringParameter
     if (currentSpringParametersOverrideStack().count != 0 && [anim isKindOfClass:[CASpringAnimation class]]) {
         CALayerSpringParametersOverride *overrideData = [currentSpringParametersOverrideStack() lastObject];
         if (overrideData) {
-            if (overrideData.parameters) {
+            if ([overrideData.parameters isKindOfClass:[CALayerSpringParametersOverrideParametersSpring class]]) {
+                CALayerSpringParametersOverrideParametersSpring *parameters = (CALayerSpringParametersOverrideParametersSpring *)overrideData.parameters;
                 CABasicAnimation *sourceAnimation = (CABasicAnimation *)anim;
                 
-                CASpringAnimation *animation = makeSpringBounceAnimationImpl(sourceAnimation.keyPath, 0.0, overrideData.parameters.damping);
+                CASpringAnimation *animation = makeSpringBounceAnimationImpl(sourceAnimation.keyPath, 0.0, parameters.damping);
                 
-                animation.stiffness = overrideData.parameters.stiffness;
+                animation.stiffness = parameters.stiffness;
                 animation.fromValue = sourceAnimation.fromValue;
                 animation.toValue = sourceAnimation.toValue;
                 animation.byValue = sourceAnimation.byValue;
@@ -189,7 +214,34 @@ static NSMutableArray<CALayerSpringParametersOverride *> *currentSpringParameter
                 if (k != 0.0 && k != 1.0) {
                     speed = 1.0f / k;
                 }
-                animation.speed = sourceAnimation.speed * (float)(animation.duration / overrideData.parameters.duration);
+                animation.speed = sourceAnimation.speed * (float)(animation.duration / parameters.duration);
+                
+                updatedAnimation = animation;
+            } else if ([overrideData.parameters isKindOfClass:[CALayerSpringParametersOverrideParametersCustomCurve class]]) {
+                CALayerSpringParametersOverrideParametersCustomCurve *parameters = (CALayerSpringParametersOverrideParametersCustomCurve *)overrideData.parameters;
+                CABasicAnimation *sourceAnimation = (CABasicAnimation *)anim;
+                
+                CABasicAnimation *animation = [CABasicAnimation animationWithKeyPath:sourceAnimation.keyPath];
+                animation.fromValue = sourceAnimation.fromValue;
+                animation.toValue = sourceAnimation.toValue;
+                animation.byValue = sourceAnimation.byValue;
+                animation.additive = sourceAnimation.additive;
+                animation.duration = sourceAnimation.duration;
+                animation.timingFunction = [[CAMediaTimingFunction alloc] initWithControlPoints:parameters.cp1.x :parameters.cp1.y :parameters.cp2.x :parameters.cp2.y];
+                animation.removedOnCompletion = sourceAnimation.isRemovedOnCompletion;
+                animation.fillMode = sourceAnimation.fillMode;
+                animation.speed = sourceAnimation.speed;
+                animation.beginTime = sourceAnimation.beginTime;
+                animation.timeOffset = sourceAnimation.timeOffset;
+                animation.repeatCount = sourceAnimation.repeatCount;
+                animation.autoreverses = sourceAnimation.autoreverses;
+                
+                float k = animationDurationFactorImpl();
+                float speed = 1.0f;
+                if (k != 0.0 && k != 1.0) {
+                    speed = 1.0f / k;
+                }
+                animation.speed = speed * sourceAnimation.speed;
                 
                 updatedAnimation = animation;
             } else {

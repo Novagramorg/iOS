@@ -114,12 +114,14 @@ public extension ComponentTransition {
                 options.insert(.allowUserInteraction)
             }
             switch curve {
-            case .spring, .bounce:
+            case .spring, .bounce, .custom:
                 var parameters: CALayerSpringParametersOverrideParameters?
                 var dampingValue: CGFloat = 500.0
                 if case let .bounce(stiffness, damping) = curve {
                     dampingValue = damping
-                    parameters = CALayerSpringParametersOverrideParameters(stiffness: stiffness, damping: damping, duration: duration)
+                    parameters = CALayerSpringParametersOverrideParametersSpring(stiffness: stiffness, damping: damping, duration: duration)
+                } else if case let .custom(a, b, c, d) = curve {
+                    parameters = CALayerSpringParametersOverrideParametersCustomCurve(cp1: CGPoint(x: CGFloat(a), y: CGFloat(b)), cp2: CGPoint(x: CGFloat(c), y: CGFloat(d)))
                 }
                 CALayer.push(CALayerSpringParametersOverride(parameters: parameters))
                 UIView.animate(withDuration: duration, delay: delay, usingSpringWithDamping: dampingValue, initialSpringVelocity: 0.0, options: options, animations: {

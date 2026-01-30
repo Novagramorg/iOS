@@ -456,6 +456,25 @@ func updateChatPresentationInterfaceStateImpl(
     
     selfController.tempHideAccessoryPanels = selfController.presentationInterfaceState.search != nil
     
+    if let chatTitleContent = selfController.contentData?.state.chatTitleContent {
+        var titleTransition = ComponentTransition(transition)
+        if case .messageOptions = selfController.subject {
+            titleTransition = titleTransition.withAnimation(.none)
+        }
+        selfController.chatTitleView?.update(
+            context: selfController.context,
+            theme: selfController.presentationData.theme,
+            preferClearGlass: selfController.presentationInterfaceState.preferredGlassType == .clear,
+            wallpaper: selfController.presentationInterfaceState.chatWallpaper,
+            strings: selfController.presentationData.strings,
+            dateTimeFormat: selfController.presentationData.dateTimeFormat,
+            nameDisplayOrder: selfController.presentationData.nameDisplayOrder,
+            content: chatTitleContent,
+            transition: titleTransition,
+            ignoreParentTransitionRequests: true
+        )
+    }
+    
     if selfController.isNodeLoaded {
         selfController.chatDisplayNode.updateChatPresentationInterfaceState(updatedChatPresentationInterfaceState, transition: transition, interactive: interactive, completion: completion)
     } else {
@@ -607,24 +626,6 @@ func updateChatPresentationInterfaceStateImpl(
         } else {
             selfController.customNavigationPanelNode = nil
         }
-    }
-    
-    if let chatTitleContent = selfController.contentData?.state.chatTitleContent {
-        var titleTransition = ComponentTransition(transition)
-        if case .messageOptions = selfController.subject {
-            titleTransition = titleTransition.withAnimation(.none)
-        }
-        selfController.chatTitleView?.update(
-            context: selfController.context,
-            theme: selfController.presentationData.theme,
-            preferClearGlass: selfController.presentationInterfaceState.preferredGlassType == .clear,
-            wallpaper: selfController.presentationInterfaceState.chatWallpaper,
-            strings: selfController.presentationData.strings,
-            dateTimeFormat: selfController.presentationData.dateTimeFormat,
-            nameDisplayOrder: selfController.presentationData.nameDisplayOrder,
-            content: chatTitleContent,
-            transition: titleTransition
-        )
     }
     
     selfController.stateUpdated?(transition)
