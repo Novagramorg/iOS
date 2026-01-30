@@ -15699,6 +15699,7 @@ Error: %8$@";
 "Gift.Craft.Info.Understood" = "Understood";
 "Gift.Craft.Unavailable.Title" = "Try Later";
 "Gift.Craft.Unavailable.Text" = "You will be able to craft this gift on %@.";
+"Gift.Craft.Error.NotAvailable" = "One of the gifts is not available for crafting.";
 
 "Gift.Craft.Select.Title" = "Select Gifts";
 "Gift.Craft.Select.YourGifts" = "Your Gifts";

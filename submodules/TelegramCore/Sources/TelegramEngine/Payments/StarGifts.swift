@@ -3409,6 +3409,7 @@ public enum CraftStarGiftError {
     case generic
     case tooEarly(Int32)
     case craftFailed
+    case unavailable
 }
 
 func _internal_craftStarGift(account: Account, references: [StarGiftReference]) -> Signal<ProfileGiftsContext.State.StarGift, CraftStarGiftError> {
@@ -3427,6 +3428,8 @@ func _internal_craftStarGift(account: Account, references: [StarGiftReference]) 
                 if let value = Int32(timeout) {
                     return .tooEarly(value)
                 }
+            } else if error.errorDescription == "STARGIFT_CRAFT_UNAVAILABLE" {
+                return .unavailable
             }
             return .generic
         }
