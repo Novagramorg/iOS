@@ -45,7 +45,9 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
     private var activities: ChatTitleComponent.Activities?
     private var networkState: AccountNetworkState?
     
+    private var ignoreParentTransitionRequests: Bool = false
     public var requestUpdate: ((ContainedViewLayoutTransition) -> Void)?
+    
     public var tapAction: (() -> Void)?
     public var longTapAction: (() -> Void)?
     
@@ -82,8 +84,10 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
         dateTimeFormat: PresentationDateTimeFormat,
         nameDisplayOrder: PresentationPersonNameOrder,
         content: ChatTitleContent,
-        transition: ComponentTransition
+        transition: ComponentTransition,
+        ignoreParentTransitionRequests: Bool = false
     ) {
+        self.ignoreParentTransitionRequests = ignoreParentTransitionRequests
         self.contentData = ContentData(
             context: context,
             theme: theme,
@@ -95,6 +99,7 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
             content: content
         )
         self.update(transition: transition)
+        self.ignoreParentTransitionRequests = false
     }
     
     public func updateActivities(activities: ChatTitleComponent.Activities?, transition: ComponentTransition) {
@@ -112,7 +117,9 @@ public final class ChatNavigationBarTitleView: UIView, NavigationBarTitleView {
     }
     
     private func update(transition: ComponentTransition) {
-        self.requestUpdate?(transition.containedViewLayoutTransition)
+        if !self.ignoreParentTransitionRequests {
+            self.requestUpdate?(transition.containedViewLayoutTransition)
+        }
     }
     
     public func updateLayout(availableSize: CGSize, transition: ContainedViewLayoutTransition) -> CGSize {
