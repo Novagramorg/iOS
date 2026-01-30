@@ -302,7 +302,6 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case starGiftPurchaseOffer(gift: StarGift, amount: CurrencyAmount, expireDate: Int32, isAccepted: Bool, isDeclined: Bool)
     case starGiftPurchaseOfferDeclined(gift: StarGift, amount: CurrencyAmount, hasExpired: Bool)
     case groupCreatorChange(GroupCreatorChange)
-    case starGiftCraftFail
     
     public init(decoder: PostboxDecoder) {
         let rawValue: Int32 = decoder.decodeInt32ForKey("_rawValue", orElse: 0)
@@ -474,8 +473,6 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             self = .starGiftPurchaseOffer(gift: decoder.decodeObjectForKey("gift", decoder: { StarGift(decoder: $0) }) as! StarGift, amount: decoder.decodeCodable(CurrencyAmount.self, forKey: "amount") ?? CurrencyAmount(amount: .zero, currency: .stars), expireDate: decoder.decodeInt32ForKey("expireDate", orElse: 0), isAccepted: decoder.decodeBoolForKey("isAccepted", orElse: false), isDeclined: decoder.decodeBoolForKey("isDeclined", orElse: false))
         case 57:
             self = .starGiftPurchaseOfferDeclined(gift: decoder.decodeObjectForKey("gift", decoder: { StarGift(decoder: $0) }) as! StarGift, amount: decoder.decodeCodable(CurrencyAmount.self, forKey: "amount")!, hasExpired: decoder.decodeBoolForKey("hasExpired", orElse: false))
-        case 58:
-            self = .starGiftCraftFail
         case 59:
             self = .groupCreatorChange(decoder.decodeCodable(GroupCreatorChange.self, forKey: "d") ?? GroupCreatorChange(kind: .pending, targetPeerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(0))))
         default:
@@ -969,8 +966,6 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             encoder.encodeObject(gift, forKey: "gift")
             encoder.encodeCodable(amount, forKey: "amount")
             encoder.encodeBool(hasExpired, forKey: "hasExpired")
-        case .starGiftCraftFail:
-            encoder.encodeInt32(58, forKey: "_rawValue")
         case let .groupCreatorChange(groupCreatorChange):
             encoder.encodeInt32(59, forKey: "_rawValue")
             encoder.encodeCodable(groupCreatorChange, forKey: "d")

@@ -3592,33 +3592,36 @@ extension StarGift.UniqueGift.Attribute {
     }
 }
 
-
 public enum GetUniqueStarGiftError {
     case generic
-    case burned
+    case invalidSlug
+    case alreadyBurned
 }
 
-func _internal_getUniqueStarGift(account: Account, slug: String) -> Signal<StarGift.UniqueGift?, GetUniqueStarGiftError> {
+func _internal_getUniqueStarGift(account: Account, slug: String) -> Signal<StarGift.UniqueGift, GetUniqueStarGiftError> {
     return account.network.request(Api.functions.payments.getUniqueStarGift(slug: slug))
     |> mapError { error -> GetUniqueStarGiftError in
         if error.errorDescription == "STARGIFT_ALREADY_BURNED" {
-            return .burned
+            return .alreadyBurned
+        } else if error.errorDescription == "STARGIFT_SLUG_INVALID" {
+            return .invalidSlug
         }
         return .generic
     }
-    |> mapToSignal { result -> Signal<StarGift.UniqueGift?, GetUniqueStarGiftError> in
+    |> mapToSignal { result -> Signal<StarGift.UniqueGift, GetUniqueStarGiftError> in
         switch result {
         case let .uniqueStarGift(uniqueStarGiftData):
             let (gift, chats, users) = (uniqueStarGiftData.gift, uniqueStarGiftData.chats, uniqueStarGiftData.users)
-            return account.postbox.transaction { transaction in
+            return account.postbox.transaction { transaction -> Signal<StarGift.UniqueGift, GetUniqueStarGiftError> in
                 let parsedPeers = AccumulatedPeers(chats: chats, users: users)
                 updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
                 guard case let .unique(uniqueGift) = StarGift(apiStarGift: gift) else {
-                    return nil
+                    return .fail(.invalidSlug)
                 }
-                return uniqueGift
+                return .single(uniqueGift)
             }
             |> castError(GetUniqueStarGiftError.self)
+            |> switchToLatest
         }
     }
 }

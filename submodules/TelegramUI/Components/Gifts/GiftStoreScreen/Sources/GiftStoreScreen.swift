@@ -1220,7 +1220,7 @@ final class GiftStoreScreenComponent: Component {
             }
             let tonBalance = tonContext.currentState?.balance.value ?? 0
             if tonBalance == 0 {
-                let controller = component.context.sharedContext.makeStarsTransactionsScreen(context: component.context, starsContext: tonContext)
+                let controller = component.context.sharedContext.makeStarsTransactionsScreen(context: component.context, starsContext: starsContext)
                 controller.push(controller)
                 return
             }
@@ -1242,7 +1242,7 @@ final class GiftStoreScreenComponent: Component {
                 var items: [ContextMenuItem] = []
                 
                 items.append(.action(ContextMenuActionItem(
-                    text: "My Stars",
+                    text: presentationData.strings.Gift_Store_Balance_MyStars,
                     textLayout: .secondLineWithValue(formatStarsAmountText(starsBalance, dateTimeFormat: presentationData.dateTimeFormat)),
                     icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Stars"), color: theme.contextMenu.primaryColor) },
                     action: { [weak self] _, f in
@@ -1256,7 +1256,7 @@ final class GiftStoreScreenComponent: Component {
                 )))
                 
                 items.append(.action(ContextMenuActionItem(
-                    text: "My TON",
+                    text: presentationData.strings.Gift_Store_Balance_MyTon,
                     textLayout: .secondLineWithValue(formatTonAmountText(tonBalance, dateTimeFormat: presentationData.dateTimeFormat)),
                     icon: { theme in return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Ton"), color: theme.contextMenu.primaryColor) },
                     action: { [weak self] _, f in

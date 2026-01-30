@@ -316,7 +316,6 @@ public enum ResolvedUrl {
     case boost(peerId: PeerId?, status: ChannelBoostStatus?, myBoostStatus: MyBoostStatus?)
     case premiumGiftCode(slug: String)
     case premiumMultiGift(reference: String?)
-    case collectible(gift: StarGift.UniqueGift?)
     case auction(auction: GiftAuctionContext?)
     case messageLink(link: TelegramResolvedMessageLink?)
     case stars
@@ -327,6 +326,13 @@ public enum ResolvedUrl {
     case sendGift(peerId: PeerId?)
     case unknownDeepLink(path: String)
     case oauth(url: String)
+    
+    public enum ResolvedCollectible {
+        case gift(StarGift.UniqueGift)
+        case invalidSlug
+        case alreadyBurned
+    }
+    case collectible(ResolvedCollectible)
     
     public enum ChatsSection {
         case search
