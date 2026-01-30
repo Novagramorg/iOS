@@ -491,11 +491,13 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                             return String(format: "%.1f%%", percent)
                         }
                     case .rare:
-                        return "Rare"
+                        return "rare"
                     case .epic:
-                        return "Epic"
+                        return "epic"
                     case .legendary:
-                        return "Legendary"
+                        return "legendary"
+                    case .uncommon:
+                        return "uncommon"
                     }
                 }
             }
