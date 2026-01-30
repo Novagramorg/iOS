@@ -690,7 +690,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                     }
                                 }
                             }
-                        case let .starGiftUnique(gift, isUpgrade, _, _, _, _, isRefunded, _, _, _, _, _, _, _, _, _, fromOffer, _, _):
+                        case let .starGiftUnique(gift, isUpgrade, _, _, _, _, isRefunded, _, _, _, _, _, _, _, _, _, fromOffer, _, isCrafted):
                             if case let .unique(uniqueGift) = gift {
                                 isStarGift = true
                                 
@@ -712,7 +712,11 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 if isStoryEntity {
                                     title = uniqueGift.title
                                 } else if isSelfGift {
-                                    title = item.presentationData.strings.Notification_StarGift_Self_Title
+                                    if isCrafted {
+                                        title = item.presentationData.strings.Notification_StarGift_Crafted_Title
+                                    } else {
+                                        title = item.presentationData.strings.Notification_StarGift_Self_Title
+                                    }
                                 } else if item.message.id.peerId.isTelegramNotifications {
                                     title = item.presentationData.strings.Notification_StarGift_TitleShort
                                 } else {
