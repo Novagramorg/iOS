@@ -460,12 +460,13 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 case rare
                 case epic
                 case legendary
+                case uncommon
 
                 public var permilleValue: Int32 {
                     switch self {
                     case let .permille(value):
                         return value
-                    case .rare, .epic, .legendary:
+                    case .rare, .epic, .legendary, .uncommon:
                         return 0
                     }
                 }
@@ -501,6 +502,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         return .epic
                     case 3:
                         return .legendary
+                    case 4:
+                        return .uncommon
                     default:
                         let permille = try container.decodeIfPresent(Int32.self, forKey: .rarity) ?? 0
                         return .permille(permille)
@@ -555,6 +558,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         return .epic
                     case 3:
                         return .legendary
+                    case 4:
+                        return .uncommon
                     default:
                         let permille = decoder.decodeInt32ForKey(CodingKeys.rarity.rawValue, orElse: 0)
                         return .permille(permille)
@@ -614,6 +619,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         try container.encode(Int32(2), forKey: .rarityType)
                     case .legendary:
                         try container.encode(Int32(3), forKey: .rarityType)
+                    case .uncommon:
+                        try container.encode(Int32(4), forKey: .rarityType)
                     }
                 }
 
@@ -660,6 +667,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         encoder.encodeInt32(2, forKey: CodingKeys.rarityType.rawValue)
                     case .legendary:
                         encoder.encodeInt32(3, forKey: CodingKeys.rarityType.rawValue)
+                    case .uncommon:
+                        encoder.encodeInt32(4, forKey: CodingKeys.rarityType.rawValue)
                     }
                 }
 
@@ -772,7 +781,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let title: String
         public let number: Int32
         public let slug: String
-        public let owner: Owner
+        public let owner: Owner?
         public let attributes: [Attribute]
         public let availability: Availability
         public let giftAddress: String?
@@ -789,7 +798,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let minOfferStars: Int64?
         public let craftChancePermille: Int32?
         
-        public init(id: Int64, giftId: Int64, title: String, number: Int32, slug: String, owner: Owner, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?, valueAmount: Int64?, valueCurrency: String?, valueUsdAmount: Int64?, flags: Flags, themePeerId: EnginePeer.Id?, peerColor: PeerCollectibleColor?, hostPeerId: EnginePeer.Id?, minOfferStars: Int64?, craftChancePermille: Int32?) {
+        public init(id: Int64, giftId: Int64, title: String, number: Int32, slug: String, owner: Owner?, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?, valueAmount: Int64?, valueCurrency: String?, valueUsdAmount: Int64?, flags: Flags, themePeerId: EnginePeer.Id?, peerColor: PeerCollectibleColor?, hostPeerId: EnginePeer.Id?, minOfferStars: Int64?, craftChancePermille: Int32?) {
             self.id = id
             self.giftId = giftId
             self.title = title
@@ -827,7 +836,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             } else if let ownerName = try container.decodeIfPresent(String.self, forKey: .ownerName) {
                 self.owner = .name(ownerName)
             } else {
-                self.owner = .name("Unknown")
+                self.owner = nil
             }
             self.attributes = try container.decode([UniqueGift.Attribute].self, forKey: .attributes)
             self.availability = try container.decode(UniqueGift.Availability.self, forKey: .availability)
@@ -865,7 +874,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             } else if let ownerName = decoder.decodeOptionalStringForKey(CodingKeys.ownerName.rawValue) {
                 self.owner = .name(ownerName)
             } else {
-                self.owner = .name("Unknown")
+                self.owner = nil
             }
             self.attributes = (try? decoder.decodeObjectArrayWithCustomDecoderForKey(CodingKeys.attributes.rawValue, decoder: { UniqueGift.Attribute(decoder: $0) })) ?? []
             self.availability = decoder.decodeObjectForKey(CodingKeys.availability.rawValue, decoder: { UniqueGift.Availability(decoder: $0) }) as! UniqueGift.Availability
@@ -904,6 +913,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 try container.encode(name, forKey: .ownerName)
             case let .address(address):
                 try container.encode(address, forKey: .ownerAddress)
+            default:
+                break
             }
             try container.encode(self.attributes, forKey: .attributes)
             try container.encode(self.availability, forKey: .availability)
@@ -935,6 +946,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 encoder.encodeString(name, forKey: CodingKeys.ownerName.rawValue)
             case let .address(address):
                 encoder.encodeString(address, forKey: CodingKeys.ownerAddress.rawValue)
+            default:
+                break
             }
             encoder.encodeObjectArray(self.attributes, forKey: CodingKeys.attributes.rawValue)
             encoder.encodeObject(self.availability, forKey: CodingKeys.availability.rawValue)
@@ -1257,7 +1270,7 @@ extension StarGift {
             ))
         case let .starGiftUnique(starGiftUniqueData):
             let (apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, apiResellAmount, releasedBy, valueAmount, valueCurrency, valueUsdAmount, themePeer, peerColor, hostPeerId, minOfferStars, craftChancePermille) = (starGiftUniqueData.flags, starGiftUniqueData.id, starGiftUniqueData.giftId, starGiftUniqueData.title, starGiftUniqueData.slug, starGiftUniqueData.num, starGiftUniqueData.ownerId, starGiftUniqueData.ownerName, starGiftUniqueData.ownerAddress, starGiftUniqueData.attributes, starGiftUniqueData.availabilityIssued, starGiftUniqueData.availabilityTotal, starGiftUniqueData.giftAddress, starGiftUniqueData.resellAmount, starGiftUniqueData.releasedBy, starGiftUniqueData.valueAmount, starGiftUniqueData.valueCurrency, starGiftUniqueData.valueUsdAmount, starGiftUniqueData.themePeer, starGiftUniqueData.peerColor, starGiftUniqueData.hostId, starGiftUniqueData.offerMinStars, starGiftUniqueData.craftChancePermille)
-            let owner: StarGift.UniqueGift.Owner
+            let owner: StarGift.UniqueGift.Owner?
             if let ownerAddress {
                 owner = .address(ownerAddress)
             } else if let ownerId = ownerPeerId?.peerId {
@@ -1265,7 +1278,7 @@ extension StarGift {
             } else if let ownerName {
                 owner = .name(ownerName)
             } else {
-                return nil
+                owner = nil
             }
             let resellAmounts = apiResellAmount?.compactMap { CurrencyAmount(apiAmount: $0) }
             var flags = StarGift.UniqueGift.Flags()
@@ -1296,8 +1309,7 @@ extension StarGift {
                 number: num,
                 slug: slug,
                 owner: owner,
-                attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0)
-                },
+                attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0) },
                 availability: UniqueGift.Availability(issued: availabilityIssued, total: availabilityTotal),
                 giftAddress: giftAddress,
                 resellAmounts: resellAmounts,
@@ -1312,7 +1324,7 @@ extension StarGift {
                 hostPeerId: hostPeerId?.peerId,
                 minOfferStars: minOfferStars.flatMap { Int64($0) },
                 craftChancePermille: craftChancePermille
-        ))
+            ))
         }
     }
 }
@@ -1524,7 +1536,7 @@ func _internal_dropStarGiftOriginalDetails(account: Account, reference: StarGift
                             storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
                         }
                         var media = currentMessage.media
-                        if let action = media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, isRefunded, isPrepaidUpgrade, peerId, senderId, savedId, resaleAmount, canTransferDate, canResaleDate, _, assigned, fromOffer, canCraftAt) = action.action, case let .unique(uniqueGift) = gift {
+                        if let action = media.first(where: { $0 is TelegramMediaAction }) as? TelegramMediaAction, case let .starGiftUnique(gift, isUpgrade, isTransferred, savedToProfile, canExportDate, transferStars, isRefunded, isPrepaidUpgrade, peerId, senderId, savedId, resaleAmount, canTransferDate, canResaleDate, _, assigned, fromOffer, canCraftAt, isCrafted) = action.action, case let .unique(uniqueGift) = gift {
                             let updatedAttributes = uniqueGift.attributes.filter { $0.attributeType != .originalInfo }
                             media = [
                                 TelegramMediaAction(
@@ -1546,7 +1558,8 @@ func _internal_dropStarGiftOriginalDetails(account: Account, reference: StarGift
                                         dropOriginalDetailsStars: nil,
                                         assigned: assigned,
                                         fromOffer: fromOffer,
-                                        canCraftAt: canCraftAt
+                                        canCraftAt: canCraftAt,
+                                        isCrafted: isCrafted
                                     )
                                 )
                             ]
@@ -1653,7 +1666,7 @@ func _internal_upgradeStarGift(account: Account, formId: Int64?, reference: Star
                         let message = updateNewMessageData.message
                         if let message = StoreMessage(apiMessage: message, accountPeerId: account.peerId, peerIsForum: false) {
                             for media in message.media {
-                                if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt) = action.action, case let .Id(messageId) = message.id {
+                                if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt, _) = action.action, case let .Id(messageId) = message.id {
                                     let reference: StarGiftReference
                                     if let peerId, let savedId {
                                         reference = .peer(peerId: peerId, id: savedId)
@@ -2370,12 +2383,16 @@ private final class ProfileGiftsContextImpl {
     }
     
     func removeStarGifts(references: [StarGiftReference]) {
-        self.gifts.removeAll(where: {
-            if let reference = $0.reference {
-                return references.contains(reference)
-            } else {
-                return false
+        self.gifts.removeAll(where: { gift in
+            if let reference = gift.reference, references.contains(reference) {
+                return true
             }
+            for reference in references {
+                if case let .slug(slug) = reference, case let .unique(uniqueGift) = gift.gift, uniqueGift.slug == slug {
+                    return true
+                }
+            }
+            return false
         })
         self.pushState()
         
@@ -2390,13 +2407,17 @@ private final class ProfileGiftsContextImpl {
             } else {
                 updatedGifts = []
             }
-            updatedGifts = updatedGifts.filter { gift in
-                if let reference = gift.reference {
-                    return !references.contains(reference)
-                } else {
+            updatedGifts.removeAll(where: { gift in
+                if let reference = gift.reference, references.contains(reference) {
                     return true
                 }
-            }
+                for reference in references {
+                    if case let .slug(slug) = reference, case let .unique(uniqueGift) = gift.gift, uniqueGift.slug == slug {
+                        return true
+                    }
+                }
+                return false
+            })
             updatedCount -= Int32(references.count)
             if let entry = CodableEntry(CachedProfileGifts(gifts: updatedGifts, count: updatedCount, notificationsEnabled: nil)) {
                 transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)
@@ -3186,12 +3207,6 @@ private final class CraftGiftsContextImpl {
         return _internal_craftStarGift(account: self.account, references: references)
     }
 
-    func addGift(gift: ProfileGiftsContext.State.StarGift) {
-        self.gifts.insert(gift, at: 0)
-        self.count = self.count + 1
-        self.pushState()
-    }
-    
     func removeGifts(references: [StarGiftReference]) {
         let referencesSet = Set(references)
         self.gifts.removeAll { gift in
@@ -3325,12 +3340,6 @@ public final class CraftGiftsContext {
         }
     }
     
-    public func addGift(gift: ProfileGiftsContext.State.StarGift) {
-        self.impl.with { impl in
-            impl.addGift(gift: gift)
-        }
-    }
-
     public func removeGifts(references: [StarGiftReference]) {
         self.impl.with { impl in
             impl.removeGifts(references: references)
@@ -3395,7 +3404,7 @@ func _internal_craftStarGift(account: Account, references: [StarGiftReference]) 
                     let message = updateNewMessageData.message
                     if let message = StoreMessage(apiMessage: message, accountPeerId: account.peerId, peerIsForum: false) {
                         for media in message.media {
-                            if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt) = action.action, case let .Id(messageId) = message.id {
+                            if let action = media as? TelegramMediaAction, case let .starGiftUnique(gift, _, _, savedToProfile, canExportDate, transferStars, _, _, peerId, _, savedId, _, canTransferDate, canResaleDate, dropOriginalDetailsStars, _, _, canCraftAt, _) = action.action, case let .Id(messageId) = message.id {
                                 let reference: StarGiftReference
                                 if let peerId, let savedId {
                                     reference = .peer(peerId: peerId, id: savedId)
@@ -3514,6 +3523,8 @@ extension StarGift.UniqueGift.Attribute {
                 return .epic
             case .starGiftAttributeRarityLegendary:
                 return .legendary
+            case .starGiftAttributeRarityUncommon:
+                return .uncommon
             }
         }
 

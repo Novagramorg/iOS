@@ -792,9 +792,7 @@ public final class GiftItemComponent: Component {
                 func formatPercentage(_ value: Float) -> String {
                     return String(format: "%0.1f", value).replacingOccurrences(of: ".0", with: "").replacingOccurrences(of: ",0", with: "") + "%"
                 }
-                
-                //TODO:localize
-               
+                               
                 let badgeString: String
                 var badgeColor: UIColor?
                 switch rarity {
@@ -805,21 +803,28 @@ public final class GiftItemComponent: Component {
                         badgeString = formatPercentage(Float(value) * 0.1)
                     }
                 case .epic:
-                    badgeString = "epic"
+                    badgeString = component.strings.Gift_Attribute_Epic
                     badgeColor = UIColor(rgb: 0xaf52de)
                 case .legendary:
-                    badgeString = "legendary"
+                    badgeString = component.strings.Gift_Attribute_Legendary
                     badgeColor = UIColor(rgb: 0xd57e32)
                 case .rare:
-                    badgeString = "rare"
-                    badgeColor = UIColor(rgb: 0x79993d)
+                    badgeString = component.strings.Gift_Attribute_Rare
+                    badgeColor = UIColor(rgb: 0x25a3b9)
+                case .uncommon:
+                    badgeString = component.strings.Gift_Attribute_Uncommon
+                    badgeColor = UIColor(rgb: 0x22b447)
                 }
                 
                 var badgeTextColor = isColored ? .white : component.theme.list.itemSecondaryTextColor
                 var badgeBackgroundColor = isColored ? UIColor(white: 0.0, alpha: 0.2) : component.theme.list.itemPrimaryTextColor.withMultipliedAlpha(0.06)
                 if let badgeColor {
                     badgeTextColor = badgeColor
-                    badgeBackgroundColor = badgeColor.withMultipliedAlpha(0.1)
+                    if let backgroundColor {
+                        badgeBackgroundColor = badgeColor.mixedWith(backgroundColor, alpha: 0.9)
+                    } else {
+                        badgeBackgroundColor =  badgeColor.withMultipliedAlpha(0.1)
+                    }
                 }
                 let badgeTextSize = self.badgeText.update(
                     transition: .spring(duration: 0.2),

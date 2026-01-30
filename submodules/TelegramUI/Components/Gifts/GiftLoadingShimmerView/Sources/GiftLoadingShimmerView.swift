@@ -139,7 +139,7 @@ public final class GiftLoadingShimmerView: UIView {
     
     required init?(coder: NSCoder) { fatalError() }
     
-    public func update(size: CGSize, theme: PresentationTheme, showFilters: Bool = false, isPlain: Bool = false, transition: ContainedViewLayoutTransition) {
+    public func update(size: CGSize, theme: PresentationTheme, itemSize: CGSize? = nil, showFilters: Bool = false, isPlain: Bool = false, transition: ContainedViewLayoutTransition) {
         let backgroundColor = isPlain ? theme.list.itemBlocksBackgroundColor : theme.list.blocksBackgroundColor
         let color = theme.list.itemSecondaryTextColor.mixedWith(theme.list.blocksBackgroundColor, alpha: 0.85)
         
@@ -169,7 +169,7 @@ public final class GiftLoadingShimmerView: UIView {
                 
                 let optionSpacing: CGFloat = 10.0
                 let optionWidth = (size.width - sideInset * 2.0 - optionSpacing * 2.0) / 3.0
-                let itemSize = CGSize(width: optionWidth, height: 154.0)
+                let itemSize = itemSize ?? CGSize(width: optionWidth, height: 154.0)
                 
                 context.setBlendMode(.copy)
                 context.setFillColor(UIColor.clear.cgColor)

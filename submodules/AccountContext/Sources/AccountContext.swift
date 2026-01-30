@@ -1300,6 +1300,7 @@ public protocol SharedAccountContext: AnyObject {
     var currentMediaInputSettings: Atomic<MediaInputSettings> { get }
     var currentStickerSettings: Atomic<StickerSettings> { get }
     var currentMediaDisplaySettings: Atomic<MediaDisplaySettings> { get }
+    var currentChatSettings: Atomic<ChatSettings> { get }
     
     var energyUsageSettings: EnergyUsageSettings { get }
     
@@ -1459,15 +1460,15 @@ public protocol SharedAccountContext: AnyObject {
     func makeGiftViewScreen(context: AccountContext, message: EngineMessage, shareStory: ((StarGift.UniqueGift) -> Void)?) -> ViewController
     func makeGiftViewScreen(context: AccountContext, gift: StarGift.UniqueGift, shareStory: ((StarGift.UniqueGift) -> Void)?, openChatTheme: (() -> Void)?, dismissed: (() -> Void)?) -> ViewController
     func makeGiftWearPreviewScreen(context: AccountContext, gift: StarGift, attributes: [StarGift.UniqueGift.Attribute]?) -> ViewController
-    func makeGiftUpgradePreviewScreen(context: AccountContext, attributes: [StarGift.UniqueGift.Attribute], peerName: String) -> ViewController
+    func makeGiftUpgradePreviewScreen(context: AccountContext, gift: StarGift.Gift, attributes: [StarGift.UniqueGift.Attribute], peerName: String) -> ViewController
     func makeGiftAuctionInfoScreen(context: AccountContext, auctionContext: GiftAuctionContext, completion: (() -> Void)?) -> ViewController
     func makeGiftAuctionBidScreen(context: AccountContext, toPeerId: EnginePeer.Id, text: String?, entities: [MessageTextEntity]?, hideName: Bool, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?) -> ViewController
     func makeGiftAuctionViewScreen(context: AccountContext, auctionContext: GiftAuctionContext, peerId: EnginePeer.Id?, completion: @escaping (Signal<[GiftAuctionAcquiredGift], NoError>, [StarGift.UniqueGift.Attribute]?) -> Void) -> ViewController
     func makeGiftAuctionActiveBidsScreen(context: AccountContext) -> ViewController
     func makeGiftOfferScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, gift: StarGift.UniqueGift, peer: EnginePeer, amount: CurrencyAmount, commit: @escaping () -> Void) -> ViewController
-    func makeGiftUpgradeVariantsScreen(context: AccountContext, gift: StarGift, onlyCrafted: Bool, attributes: [StarGift.UniqueGift.Attribute], selectedAttributes: [StarGift.UniqueGift.Attribute]?, focusedAttribute: StarGift.UniqueGift.Attribute?) -> ViewController
+    func makeGiftUpgradeVariantsScreen(context: AccountContext, gift: StarGift, crafted: Bool, attributes: [StarGift.UniqueGift.Attribute], selectedAttributes: [StarGift.UniqueGift.Attribute]?, focusedAttribute: StarGift.UniqueGift.Attribute?) -> ViewController
     func makeGiftAuctionWearPreviewScreen(context: AccountContext, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?, attributes: [StarGift.UniqueGift.Attribute], completion: @escaping () -> Void) -> ViewController
-    func makeGiftCraftScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController
+    func makeGiftCraftScreen(context: AccountContext, gift: StarGift.UniqueGift, profileGiftsContext: ProfileGiftsContext?) -> ViewController
     func makeGiftDemoScreen(context: AccountContext) -> ViewController
     func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController
     func makeContentReportScreen(context: AccountContext, subject: ReportContentSubject, forceDark: Bool, present: @escaping (ViewController) -> Void, completion: @escaping () -> Void, requestSelectMessages: ((String, Data, String?) -> Void)?)

@@ -36,6 +36,7 @@ public final class GlassControlPanelComponent: Component {
     public let rightItem: Item?
     public let centralItem: Item?
     public let centerAlignmentIfPossible: Bool
+    public let isDark: Bool?
     public let tag: AnyObject?
 
     public init(
@@ -44,6 +45,7 @@ public final class GlassControlPanelComponent: Component {
         centralItem: Item?,
         rightItem: Item?,
         centerAlignmentIfPossible: Bool = false,
+        isDark: Bool? = nil,
         tag: AnyObject? = nil
     ) {
         self.theme = theme
@@ -51,6 +53,7 @@ public final class GlassControlPanelComponent: Component {
         self.centralItem = centralItem
         self.rightItem = rightItem
         self.centerAlignmentIfPossible = centerAlignmentIfPossible
+        self.isDark = isDark
         self.tag = tag
     }
 
@@ -68,6 +71,9 @@ public final class GlassControlPanelComponent: Component {
             return false
         }
         if lhs.centerAlignmentIfPossible != rhs.centerAlignmentIfPossible {
+            return false
+        }
+        if lhs.isDark != rhs.isDark {
             return false
         }
         if lhs.tag !== rhs.tag {
@@ -298,7 +304,7 @@ public final class GlassControlPanelComponent: Component {
             }
             
             transition.setFrame(view: self.glassContainerView, frame: CGRect(origin: CGPoint(), size: availableSize))
-            self.glassContainerView.update(size: availableSize, isDark: component.theme.overallDarkAppearance, transition: transition)
+            self.glassContainerView.update(size: availableSize, isDark: component.isDark ?? component.theme.overallDarkAppearance, transition: transition)
             
             return availableSize
         }

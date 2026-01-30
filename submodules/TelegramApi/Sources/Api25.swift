@@ -1318,6 +1318,7 @@ public extension Api {
         case starGiftAttributeRarityEpic
         case starGiftAttributeRarityLegendary
         case starGiftAttributeRarityRare
+        case starGiftAttributeRarityUncommon
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             switch self {
@@ -1342,6 +1343,11 @@ public extension Api {
                     buffer.appendInt32(-259174037)
                 }
                 break
+            case .starGiftAttributeRarityUncommon:
+                if boxed {
+                    buffer.appendInt32(-607231095)
+                }
+                break
             }
         }
 
@@ -1355,6 +1361,8 @@ public extension Api {
                 return ("starGiftAttributeRarityLegendary", [])
             case .starGiftAttributeRarityRare:
                 return ("starGiftAttributeRarityRare", [])
+            case .starGiftAttributeRarityUncommon:
+                return ("starGiftAttributeRarityUncommon", [])
             }
         }
 
@@ -1377,6 +1385,9 @@ public extension Api {
         }
         public static func parse_starGiftAttributeRarityRare(_ reader: BufferReader) -> StarGiftAttributeRarity? {
             return Api.StarGiftAttributeRarity.starGiftAttributeRarityRare
+        }
+        public static func parse_starGiftAttributeRarityUncommon(_ reader: BufferReader) -> StarGiftAttributeRarity? {
+            return Api.StarGiftAttributeRarity.starGiftAttributeRarityUncommon
         }
     }
 }
@@ -2120,79 +2131,6 @@ public extension Api {
             let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.StarRefProgram.starRefProgram(Cons_starRefProgram(flags: _1!, botId: _2!, commissionPermille: _3!, durationMonths: _4, endDate: _5, dailyRevenuePerUser: _6))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum StarsAmount: TypeConstructorDescription {
-        public class Cons_starsAmount {
-            public var amount: Int64
-            public var nanos: Int32
-            public init(amount: Int64, nanos: Int32) {
-                self.amount = amount
-                self.nanos = nanos
-            }
-        }
-        public class Cons_starsTonAmount {
-            public var amount: Int64
-            public init(amount: Int64) {
-                self.amount = amount
-            }
-        }
-        case starsAmount(Cons_starsAmount)
-        case starsTonAmount(Cons_starsTonAmount)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .starsAmount(let _data):
-                if boxed {
-                    buffer.appendInt32(-1145654109)
-                }
-                serializeInt64(_data.amount, buffer: buffer, boxed: false)
-                serializeInt32(_data.nanos, buffer: buffer, boxed: false)
-                break
-            case .starsTonAmount(let _data):
-                if boxed {
-                    buffer.appendInt32(1957618656)
-                }
-                serializeInt64(_data.amount, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .starsAmount(let _data):
-                return ("starsAmount", [("amount", _data.amount as Any), ("nanos", _data.nanos as Any)])
-            case .starsTonAmount(let _data):
-                return ("starsTonAmount", [("amount", _data.amount as Any)])
-            }
-        }
-
-        public static func parse_starsAmount(_ reader: BufferReader) -> StarsAmount? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: Int32?
-            _2 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.StarsAmount.starsAmount(Cons_starsAmount(amount: _1!, nanos: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_starsTonAmount(_ reader: BufferReader) -> StarsAmount? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.StarsAmount.starsTonAmount(Cons_starsTonAmount(amount: _1!))
             }
             else {
                 return nil
