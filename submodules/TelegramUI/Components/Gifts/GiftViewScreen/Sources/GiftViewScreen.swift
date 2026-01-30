@@ -1134,7 +1134,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 let craftScreen = self.context.sharedContext.makeGiftCraftScreen(
                     context: self.context,
-                    gift: gift
+                    gift: gift,
+                    profileGiftsContext: controller.profileGiftsContext
                 )
                 navigationController.pushViewController(craftScreen)
             }
@@ -1510,7 +1511,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                                 
                 if case let .unique(gift) = arguments.gift, let resellAmount = gift.resellAmounts?.first, resellAmount.amount.value > 0 {
-                    if arguments.reference != nil || gift.owner.peerId == context.account.peerId {
+                    if arguments.reference != nil || gift.owner?.peerId == self.context.account.peerId {
                         items.append(.action(ContextMenuActionItem(text: presentationData.strings.Gift_View_Context_ChangePrice, icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/PriceTag"), color: theme.contextMenu.primaryColor)
                         }, action: { [weak self] c, _ in
@@ -2482,6 +2483,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             var isMyHostedUniqueGift = false
             var releasedByPeer: EnginePeer?
             var canGiftUpgrade = false
+            var isDismantled = false
             
             if case let .soldOutGift(gift) = subject {
                 animationFile = gift.file
@@ -2554,7 +2556,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 }
                 
                 if let number = arguments.giftNumber, let title = genericGift?.title {
-                    titleString = "\(title) #\(formatCollectibleNumber(number, dateTimeFormat: environment.dateTimeFormat))"
+                    titleString = "\(title) **#\(formatCollectibleNumber(number, dateTimeFormat: environment.dateTimeFormat))**"
                 } else if isSelfGift {
                     titleString = strings.Gift_View_Self_Title
                 } else {
@@ -2568,6 +2570,10 @@ private final class GiftViewSheetContent: CombinedComponent {
                 limitTotal = nil
                 convertStars = nil
                 titleString = ""
+            }
+            
+            if let uniqueGift, uniqueGift.owner == nil {
+                isDismantled = true
             }
             
             if !canUpgrade, let gift = state.starGiftsMap[giftId], let _ = gift.upgradeStars {
@@ -3252,17 +3258,17 @@ private final class GiftViewSheetContent: CombinedComponent {
                 
                 let titleFont = Font.bold(20.0)
                 let smallTitleFont = Font.bold(15.0)
+                let numberFont: UIFont
+                if let number = context.component.subject.arguments?.giftNumber, number < 1000 {
+                    numberFont = titleFont
+                } else {
+                    numberFont = smallTitleFont
+                }
                 let titleAttributedString: NSAttributedString
-                if let uniqueGift {
-                    let numberFont = uniqueGift.number < 1000 ? titleFont : smallTitleFont
+                if let _ = uniqueGift {
                     titleAttributedString = parseMarkdownIntoAttributedString(titleString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: .white), bold: MarkdownAttributeSet(font: numberFont, textColor: vibrantColor), link: MarkdownAttributeSet(font: titleFont, textColor: .white), linkAttribute: { _ in return nil }), textAlignment: .center)
                 } else {
-                    titleAttributedString = NSAttributedString(
-                        string: titleString,
-                        font: titleFont,
-                        textColor: theme.actionSheet.primaryTextColor,
-                        paragraphAlignment: .center
-                    )
+                    titleAttributedString = parseMarkdownIntoAttributedString(titleString, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.primaryTextColor), bold: MarkdownAttributeSet(font: numberFont, textColor: theme.actionSheet.secondaryTextColor), link: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.primaryTextColor), linkAttribute: { _ in return nil }), textAlignment: .center)
                 }
                 
                 let title = title.update(
@@ -3763,6 +3769,8 @@ private final class GiftViewSheetContent: CombinedComponent {
                                     )
                                 )
                             ))
+                        default:
+                            break
                         }
                         
                         if let peerId = uniqueGift.hostPeerId, let peer = state.peerMap[peerId] {
@@ -4331,7 +4339,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                         )
                     ), at: hasOriginalInfo ? tableItems.count - 1 : tableItems.count)
                     
-                    if let valueAmount = uniqueGift.valueAmount, let valueCurrency = uniqueGift.valueCurrency {
+                    if let valueAmount = uniqueGift.valueAmount, let valueCurrency = uniqueGift.valueCurrency, !isDismantled {
                         tableItems.insert(.init(
                             id: "fiatValue",
                             title: strings.Gift_Unique_Value,
@@ -4544,7 +4552,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             if let controller = controller() as? GiftViewScreen, controller.openChatTheme != nil {
                 isChatTheme = true
             }
-            if ((incoming && !converted && !upgraded) || exported || selling || isChatTheme) && (!showUpgradePreview && !showWearPreview) {
+            if ((incoming && !converted && !upgraded) || exported || selling || isChatTheme) && (!showUpgradePreview && !showWearPreview && !isDismantled) {
                 let textFont = Font.regular(13.0)
                 let textColor = theme.list.itemSecondaryTextColor
                 let linkColor = theme.actionSheet.controlAccentColor
@@ -4653,6 +4661,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                 foreground: theme.list.itemCheckColors.foregroundColor,
                 pressedColor: theme.list.itemCheckColors.fillColor.withMultipliedAlpha(0.9)
             )
+                        
             let buttonChild: _UpdatedChildComponent
             if state.canSkip {
                 buttonChild = button.update(
@@ -5026,7 +5035,7 @@ private final class GiftViewSheetContent: CombinedComponent {
                     availableSize: buttonSize,
                     transition: context.transition
                 )
-            } else if incoming && !converted && !savedToProfile {
+            } else if incoming && !converted && !savedToProfile && !isDismantled {
                 let buttonTitle = isChannelGift ? strings.Gift_View_Display_Channel : strings.Gift_View_Display
                 buttonChild = button.update(
                     component: ButtonComponent(
@@ -5245,7 +5254,7 @@ private final class GiftViewSheetContent: CombinedComponent {
             ))
             
             var rightControlItems: [GlassControlGroupComponent.Item] = []
-            if uniqueGift != nil && !showWearPreview {
+            if uniqueGift != nil && !showWearPreview && !isDismantled {
                 if let _ = component.subject.arguments?.canCraftDate {
                     var canCraft = false
                     if let data = component.context.currentAppConfiguration.with({ $0 }).data {
@@ -5597,7 +5606,14 @@ public class GiftViewScreen: ViewControllerComponentContainer {
                 if case let .unique(uniqueGift) = gift.gift {
                     resellAmounts = uniqueGift.resellAmounts
                 }
-                return (peerId, gift.fromPeer?.id, gift.fromPeer?.debugDisplayTitle, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash, gift.upgradeSeparate, gift.dropOriginalDetailsStars, nil, gift.number, gift.canCraftAt)
+                
+                var number: Int32?
+                if case let .unique(uniqueGift) = gift.gift {
+                    number = uniqueGift.number
+                } else if let numberValue = gift.number {
+                    number = numberValue
+                }
+                return (peerId, gift.fromPeer?.id, gift.fromPeer?.debugDisplayTitle, gift.fromPeer?.compactDisplayTitle, messageId, gift.reference, false, gift.gift, gift.date, gift.convertStars, gift.text, gift.entities, gift.nameHidden, gift.savedToProfile, gift.pinnedToTop, false, false, false, gift.canUpgrade, gift.upgradeStars, gift.transferStars, resellAmounts, gift.canExportDate, nil, gift.canTransferDate, gift.canResaleDate, gift.prepaidUpgradeHash, gift.upgradeSeparate, gift.dropOriginalDetailsStars, nil, number, gift.canCraftAt)
             case .soldOutGift:
                 return nil
             case .upgradePreview:
@@ -5639,6 +5655,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
     
     fileprivate let balanceOverlay = ComponentView<Empty>()
     
+    fileprivate let profileGiftsContext: ProfileGiftsContext?
     fileprivate let updateSavedToProfile: ((StarGiftReference, Bool) -> Void)?
     fileprivate let convertToStars: ((StarGiftReference) -> Void)?
     fileprivate let dropOriginalDetails: ((StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError>)?
@@ -5658,6 +5675,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         allSubjects: [GiftViewScreen.Subject]? = nil,
         index: Int? = nil,
         forceDark: Bool = false,
+        profileGiftsContext: ProfileGiftsContext? = nil,
         updateSavedToProfile: ((StarGiftReference, Bool) -> Void)? = nil,
         convertToStars: ((StarGiftReference) -> Void)? = nil,
         dropOriginalDetails: ((StarGiftReference) -> Signal<Never, DropStarGiftOriginalDetailsError>)? = nil,
@@ -5672,6 +5690,7 @@ public class GiftViewScreen: ViewControllerComponentContainer {
         self.context = context
         self.subject = subject
         
+        self.profileGiftsContext = profileGiftsContext
         self.updateSavedToProfile = updateSavedToProfile
         self.convertToStars = convertToStars
         self.dropOriginalDetails = dropOriginalDetails

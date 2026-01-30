@@ -1462,7 +1462,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeGiftOfferScreen(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, gift: StarGift.UniqueGift, peer: EnginePeer, amount: CurrencyAmount, commit: @escaping () -> Void) -> ViewController
     func makeGiftUpgradeVariantsScreen(context: AccountContext, gift: StarGift, crafted: Bool, attributes: [StarGift.UniqueGift.Attribute], selectedAttributes: [StarGift.UniqueGift.Attribute]?, focusedAttribute: StarGift.UniqueGift.Attribute?) -> ViewController
     func makeGiftAuctionWearPreviewScreen(context: AccountContext, auctionContext: GiftAuctionContext, acquiredGifts: Signal<[GiftAuctionAcquiredGift], NoError>?, attributes: [StarGift.UniqueGift.Attribute], completion: @escaping () -> Void) -> ViewController
-    func makeGiftCraftScreen(context: AccountContext, gift: StarGift.UniqueGift) -> ViewController
+    func makeGiftCraftScreen(context: AccountContext, gift: StarGift.UniqueGift, profileGiftsContext: ProfileGiftsContext?) -> ViewController
     func makeGiftDemoScreen(context: AccountContext) -> ViewController
     func makeStorySharingScreen(context: AccountContext, subject: StorySharingSubject, parentController: ViewController) -> ViewController
     func makeContentReportScreen(context: AccountContext, subject: ReportContentSubject, forceDark: Bool, present: @escaping (ViewController) -> Void, completion: @escaping () -> Void, requestSelectMessages: ((String, Data, String?) -> Void)?)

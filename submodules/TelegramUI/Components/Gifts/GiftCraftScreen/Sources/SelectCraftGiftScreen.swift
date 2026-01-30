@@ -35,6 +35,7 @@ final class SelectGiftPageContent: Component {
     let starsTopUpOptions: Signal<[StarsTopUpOption]?, NoError>
     let selectGift: (GiftItem) -> Void
     let dismiss: () -> Void
+    let boundsUpdated: ActionSlot<CGRect>
     
     init(
         context: AccountContext,
@@ -45,7 +46,8 @@ final class SelectGiftPageContent: Component {
         selectedGiftIds: Set<Int64>,
         starsTopUpOptions: Signal<[StarsTopUpOption]?, NoError>,
         selectGift: @escaping (GiftItem) -> Void,
-        dismiss: @escaping () -> Void
+        dismiss: @escaping () -> Void,
+        boundsUpdated: ActionSlot<CGRect>
     ) {
         self.context = context
         self.craftContext = craftContext
@@ -56,6 +58,7 @@ final class SelectGiftPageContent: Component {
         self.starsTopUpOptions = starsTopUpOptions
         self.selectGift = selectGift
         self.dismiss = dismiss
+        self.boundsUpdated = boundsUpdated
     }
     
     static func ==(lhs: SelectGiftPageContent, rhs: SelectGiftPageContent) -> Bool {
@@ -86,6 +89,9 @@ final class SelectGiftPageContent: Component {
         private var availableGifts: [GiftItem] = []
         private var giftMap: [Int64: GiftItem] = [:]
                 
+        private var availableSize: CGSize?
+        private var currentBounds: CGRect?
+        
         private var component: SelectGiftPageContent?
         private weak var state: EmptyComponentState?
         private var environment: ViewControllerComponentContainer.Environment?
@@ -107,93 +113,16 @@ final class SelectGiftPageContent: Component {
         deinit {
             self.craftStateDisposable?.dispose()
         }
-                
-        func update(component: SelectGiftPageContent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
-            self.isUpdating = true
-            defer {
-                self.isUpdating = false
+        
+        func updateScrolling(interactive: Bool, transition: ComponentTransition) -> CGFloat {
+            guard let bounds = self.currentBounds, let availableSize = self.availableSize, let component = self.component, let environment = self.environment else {
+                return 0.0
             }
             
-            if self.component == nil {
-                let initialGiftItem = GiftItem(
-                    gift: component.gift,
-                    reference: .slug(slug: component.gift.slug)
-                )
-                self.availableGifts = [
-                    initialGiftItem
-                ]
-                self.giftMap = [initialGiftItem.gift.id: initialGiftItem]
-                
-                self.craftStateDisposable = (component.craftContext.state
-                |> deliverOnMainQueue).start(next: { [weak self] state in
-                    guard let self else {
-                        return
-                    }
-                    //let isFirstTime = self.craftState == nil
-                    self.craftState = state
-                    
-                    var items: [GiftItem] = []
-                    var map: [Int64: GiftItem] = [:]
-                    var foundInitial = false
-                    for gift in state.gifts {
-                        guard let reference = gift.reference, case let .unique(uniqueGift) = gift.gift else {
-                            continue
-                        }
-                        let giftItem = GiftItem(
-                            gift: uniqueGift,
-                            reference: reference
-                        )
-                        map[uniqueGift.id] = giftItem
-                        if uniqueGift.id == component.gift.id {
-                            foundInitial = true
-                        } else {
-                            if component.selectedGiftIds.contains(uniqueGift.id) {
-                                continue
-                            }
-                            items.append(giftItem)
-                        }
-                    }
-                    
-                    if !foundInitial {
-                        map[initialGiftItem.gift.id] = initialGiftItem
-                    }
-                    self.availableGifts = items
-                    self.giftMap = map
-                    
-                    self.state?.updated(transition: .spring(duration: 0.4))
-                })
-            }
+            let visibleBounds = bounds.insetBy(dx: 0.0, dy: -10.0)
             
-            let environment = environment[ViewControllerComponentContainer.Environment.self].value
+            var contentHeight: CGFloat = 88.0 + 32.0
             
-            let sideInset: CGFloat = 16.0 + environment.safeInsets.left
-            
-            self.component = component
-            self.state = state
-            self.environment = environment
-            
-            self.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor
-                                    
-            var contentHeight: CGFloat = 88.0
-                                   
-            let myGiftsTitleSize = self.myGiftsTitle.update(
-                transition: transition,
-                component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "Your Gifts".uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
-                ),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
-            )
-            let myGiftsTitleFrame = CGRect(origin: CGPoint(x: 26.0, y: contentHeight), size: myGiftsTitleSize)
-            if let myGiftsTitleView = self.myGiftsTitle.view {
-                if myGiftsTitleView.superview == nil {
-                    self.addSubview(myGiftsTitleView)
-                }
-                transition.setFrame(view: myGiftsTitleView, frame: myGiftsTitleFrame)
-            }
-            
-            contentHeight += 32.0
-                        
             let itemSpacing: CGFloat = 10.0
             let itemSideInset = 16.0
             let itemsInRow: Int
@@ -208,8 +137,7 @@ final class SelectGiftPageContent: Component {
             }
             let itemWidth = (availableSize.width - itemSideInset * 2.0 - itemSpacing * CGFloat(itemsInRow - 1)) / CGFloat(itemsInRow)
             let itemSize = CGSize(width: itemWidth, height: itemWidth)
-            
-            
+
             var isLoading = false
             if self.availableGifts.isEmpty, case .loading = (self.craftState?.dataState ?? .loading) {
                 isLoading = true
@@ -229,10 +157,10 @@ final class SelectGiftPageContent: Component {
             var itemsHeight: CGFloat = 0.0
             var validIds: [AnyHashable] = []
             for gift in self.availableGifts {
-                let isVisible = "".isEmpty
-//                if visibleBounds.intersects(itemFrame) {
-//                    isVisible = true
-//                }
+                var isVisible = false
+                if visibleBounds.intersects(itemFrame) {
+                    isVisible = true
+                }
                 if isVisible {
                     let itemId = AnyHashable(gift.gift.id)
                     validIds.append(itemId)
@@ -256,8 +184,6 @@ final class SelectGiftPageContent: Component {
                         }
                     }
                     
-                    let badge: String? = gift.gift.craftChancePermille.flatMap { "+\($0 / 10)%" }
-                    
                     let _ = visibleItem.update(
                         transition: itemTransition,
                         component: AnyComponent(
@@ -269,7 +195,7 @@ final class SelectGiftPageContent: Component {
                                 peer: nil,
                                 subject: .uniqueGift(gift: gift.gift, price: nil),
                                 ribbon: GiftItemComponent.Ribbon(text: ribbonText, font: .monospaced, color: ribbonColor, outline: nil),
-                                badge: badge,
+                                badge: gift.gift.craftChancePermille.flatMap { "+\($0 / 10)%" },
                                 resellPrice: nil,
                                 isHidden: false,
                                 isSelected: false,
@@ -339,7 +265,7 @@ final class SelectGiftPageContent: Component {
                     transition: .immediate,
                     component: AnyComponent(
                         MultilineTextComponent(
-                            text: .plain(NSAttributedString(string: "You don't have other gifts\nfrom this collection", font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor)),
+                            text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_NoGiftsFromCollection, font: Font.regular(13.0), textColor: environment.theme.list.itemSecondaryTextColor)),
                             horizontalAlignment: .center,
                             maximumNumberOfLines: 3,
                             lineSpacing: 0.1
@@ -362,10 +288,115 @@ final class SelectGiftPageContent: Component {
                 contentHeight += 24.0
             }
             
+            if let storeGiftsView = self.storeGifts.view as? GiftStoreContentComponent.View {
+                storeGiftsView.updateScrolling(bounds: bounds.offsetBy(dx: 0.0, dy: -contentHeight), interactive: interactive, transition: .immediate)
+            }
+            
+            return contentHeight
+        }
+                
+        func update(component: SelectGiftPageContent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
+            self.isUpdating = true
+            defer {
+                self.isUpdating = false
+            }
+            
+            self.availableSize = availableSize
+            if self.component == nil {
+                self.currentBounds = CGRect(origin: .zero, size: availableSize)
+                
+                component.boundsUpdated.connect { [weak self] bounds in
+                    guard let self else {
+                        return
+                    }
+                    self.currentBounds = bounds
+                    let _ = self.updateScrolling(interactive: true, transition: .immediate)
+                }
+                
+                let initialGiftItem = GiftItem(
+                    gift: component.gift,
+                    reference: .slug(slug: component.gift.slug)
+                )
+                self.availableGifts = [
+                    initialGiftItem
+                ]
+                self.giftMap = [initialGiftItem.gift.id: initialGiftItem]
+                
+                self.craftStateDisposable = (component.craftContext.state
+                |> deliverOnMainQueue).start(next: { [weak self] state in
+                    guard let self else {
+                        return
+                    }
+                    self.craftState = state
+                    
+                    var items: [GiftItem] = []
+                    var map: [Int64: GiftItem] = [:]
+                    var foundInitial = false
+                    for gift in state.gifts {
+                        guard let reference = gift.reference, case let .unique(uniqueGift) = gift.gift else {
+                            continue
+                        }
+                        let giftItem = GiftItem(
+                            gift: uniqueGift,
+                            reference: reference
+                        )
+                        map[uniqueGift.id] = giftItem
+                        if uniqueGift.id == component.gift.id {
+                            foundInitial = true
+                        } else {
+                            if component.selectedGiftIds.contains(uniqueGift.id) {
+                                continue
+                            }
+                            items.append(giftItem)
+                        }
+                    }
+                    
+                    if !foundInitial {
+                        map[initialGiftItem.gift.id] = initialGiftItem
+                    }
+                    self.availableGifts = items
+                    self.giftMap = map
+                    
+                    self.state?.updated(transition: .spring(duration: 0.4))
+                })
+            }
+            
+            let environment = environment[ViewControllerComponentContainer.Environment.self].value
+            
+            let sideInset: CGFloat = 16.0 + environment.safeInsets.left
+            
+            self.component = component
+            self.state = state
+            self.environment = environment
+            
+            self.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor
+                                    
+            var contentHeight: CGFloat = 88.0
+                                   
+            let myGiftsTitleSize = self.myGiftsTitle.update(
+                transition: transition,
+                component: AnyComponent(
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_YourGifts.uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
+                ),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
+            )
+            let myGiftsTitleFrame = CGRect(origin: CGPoint(x: 26.0, y: contentHeight), size: myGiftsTitleSize)
+            if let myGiftsTitleView = self.myGiftsTitle.view {
+                if myGiftsTitleView.superview == nil {
+                    self.addSubview(myGiftsTitleView)
+                }
+                transition.setFrame(view: myGiftsTitleView, frame: myGiftsTitleFrame)
+            }
+            
+            contentHeight += 32.0
+                        
+            contentHeight = self.updateScrolling(interactive: false, transition: transition)
+            
             let storeGiftsTitleSize = self.storeGiftsTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: "SUITABLE GIFTS ON SALE".uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_SaleGifts.uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
                 ),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
@@ -497,6 +528,8 @@ private final class SheetContainerComponent: CombinedComponent {
     static var body: Body {
         let sheet = Child(ResizableSheetComponent<EnvironmentType>.self)
         let animateOut = StoredActionSlot(Action<Void>.self)
+        
+        let boundsUpdated = ActionSlot<CGRect>()
                         
         return { context in
             let component = context.component
@@ -536,11 +569,12 @@ private final class SheetContainerComponent: CombinedComponent {
                             selectGift: component.selectGift,
                             dismiss: {
                                 dismiss(true)
-                            }
+                            },
+                            boundsUpdated: boundsUpdated
                         )
                     ),
                     titleItem: AnyComponent(
-                        MultilineTextComponent(text: .plain(NSAttributedString(string: "Select Gifts", font: Font.semibold(17.0), textColor: environment.theme.actionSheet.primaryTextColor)))
+                        MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_Title, font: Font.semibold(17.0), textColor: environment.theme.actionSheet.primaryTextColor)))
                     ),
                     leftItem: AnyComponent(
                         GlassBarButtonComponent(
@@ -579,7 +613,8 @@ private final class SheetContainerComponent: CombinedComponent {
                         regularMetricsSize: CGSize(width: 430.0, height: 900.0),
                         dismiss: { animated in
                             dismiss(animated)
-                        }
+                        },
+                        boundsUpdated: boundsUpdated
                     )
                 },
                 availableSize: context.availableSize,

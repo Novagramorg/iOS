@@ -811,7 +811,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let title: String
         public let number: Int32
         public let slug: String
-        public let owner: Owner
+        public let owner: Owner?
         public let attributes: [Attribute]
         public let availability: Availability
         public let giftAddress: String?
@@ -828,7 +828,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
         public let minOfferStars: Int64?
         public let craftChancePermille: Int32?
         
-        public init(id: Int64, giftId: Int64, title: String, number: Int32, slug: String, owner: Owner, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?, valueAmount: Int64?, valueCurrency: String?, valueUsdAmount: Int64?, flags: Flags, themePeerId: EnginePeer.Id?, peerColor: PeerCollectibleColor?, hostPeerId: EnginePeer.Id?, minOfferStars: Int64?, craftChancePermille: Int32?) {
+        public init(id: Int64, giftId: Int64, title: String, number: Int32, slug: String, owner: Owner?, attributes: [Attribute], availability: Availability, giftAddress: String?, resellAmounts: [CurrencyAmount]?, resellForTonOnly: Bool, releasedBy: EnginePeer.Id?, valueAmount: Int64?, valueCurrency: String?, valueUsdAmount: Int64?, flags: Flags, themePeerId: EnginePeer.Id?, peerColor: PeerCollectibleColor?, hostPeerId: EnginePeer.Id?, minOfferStars: Int64?, craftChancePermille: Int32?) {
             self.id = id
             self.giftId = giftId
             self.title = title
@@ -866,7 +866,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             } else if let ownerName = try container.decodeIfPresent(String.self, forKey: .ownerName) {
                 self.owner = .name(ownerName)
             } else {
-                self.owner = .name("Unknown")
+                self.owner = nil
             }
             self.attributes = try container.decode([UniqueGift.Attribute].self, forKey: .attributes)
             self.availability = try container.decode(UniqueGift.Availability.self, forKey: .availability)
@@ -904,7 +904,7 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
             } else if let ownerName = decoder.decodeOptionalStringForKey(CodingKeys.ownerName.rawValue) {
                 self.owner = .name(ownerName)
             } else {
-                self.owner = .name("Unknown")
+                self.owner = nil
             }
             self.attributes = (try? decoder.decodeObjectArrayWithCustomDecoderForKey(CodingKeys.attributes.rawValue, decoder: { UniqueGift.Attribute(decoder: $0) })) ?? []
             self.availability = decoder.decodeObjectForKey(CodingKeys.availability.rawValue, decoder: { UniqueGift.Availability(decoder: $0) }) as! UniqueGift.Availability
@@ -943,6 +943,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 try container.encode(name, forKey: .ownerName)
             case let .address(address):
                 try container.encode(address, forKey: .ownerAddress)
+            default:
+                break
             }
             try container.encode(self.attributes, forKey: .attributes)
             try container.encode(self.availability, forKey: .availability)
@@ -974,6 +976,8 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                 encoder.encodeString(name, forKey: CodingKeys.ownerName.rawValue)
             case let .address(address):
                 encoder.encodeString(address, forKey: CodingKeys.ownerAddress.rawValue)
+            default:
+                break
             }
             encoder.encodeObjectArray(self.attributes, forKey: CodingKeys.attributes.rawValue)
             encoder.encodeObject(self.availability, forKey: CodingKeys.availability.rawValue)
@@ -1296,7 +1300,7 @@ extension StarGift {
             ))
         case let .starGiftUnique(starGiftUniqueData):
             let (apiFlags, id, giftId, title, slug, num, ownerPeerId, ownerName, ownerAddress, attributes, availabilityIssued, availabilityTotal, giftAddress, apiResellAmount, releasedBy, valueAmount, valueCurrency, valueUsdAmount, themePeer, peerColor, hostPeerId, minOfferStars, craftChancePermille) = (starGiftUniqueData.flags, starGiftUniqueData.id, starGiftUniqueData.giftId, starGiftUniqueData.title, starGiftUniqueData.slug, starGiftUniqueData.num, starGiftUniqueData.ownerId, starGiftUniqueData.ownerName, starGiftUniqueData.ownerAddress, starGiftUniqueData.attributes, starGiftUniqueData.availabilityIssued, starGiftUniqueData.availabilityTotal, starGiftUniqueData.giftAddress, starGiftUniqueData.resellAmount, starGiftUniqueData.releasedBy, starGiftUniqueData.valueAmount, starGiftUniqueData.valueCurrency, starGiftUniqueData.valueUsdAmount, starGiftUniqueData.themePeer, starGiftUniqueData.peerColor, starGiftUniqueData.hostId, starGiftUniqueData.offerMinStars, starGiftUniqueData.craftChancePermille)
-            let owner: StarGift.UniqueGift.Owner
+            let owner: StarGift.UniqueGift.Owner?
             if let ownerAddress {
                 owner = .address(ownerAddress)
             } else if let ownerId = ownerPeerId?.peerId {
@@ -1304,7 +1308,7 @@ extension StarGift {
             } else if let ownerName {
                 owner = .name(ownerName)
             } else {
-                return nil
+                owner = nil
             }
             let resellAmounts = apiResellAmount?.compactMap { CurrencyAmount(apiAmount: $0) }
             var flags = StarGift.UniqueGift.Flags()
@@ -1335,8 +1339,7 @@ extension StarGift {
                 number: num,
                 slug: slug,
                 owner: owner,
-                attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0)
-                },
+                attributes: attributes.compactMap { UniqueGift.Attribute(apiAttribute: $0) },
                 availability: UniqueGift.Availability(issued: availabilityIssued, total: availabilityTotal),
                 giftAddress: giftAddress,
                 resellAmounts: resellAmounts,
@@ -1351,7 +1354,7 @@ extension StarGift {
                 hostPeerId: hostPeerId?.peerId,
                 minOfferStars: minOfferStars.flatMap { Int64($0) },
                 craftChancePermille: craftChancePermille
-        ))
+            ))
         }
     }
 }
@@ -2410,12 +2413,16 @@ private final class ProfileGiftsContextImpl {
     }
     
     func removeStarGifts(references: [StarGiftReference]) {
-        self.gifts.removeAll(where: {
-            if let reference = $0.reference {
-                return references.contains(reference)
-            } else {
-                return false
+        self.gifts.removeAll(where: { gift in
+            if let reference = gift.reference, references.contains(reference) {
+                return true
             }
+            for reference in references {
+                if case let .slug(slug) = reference, case let .unique(uniqueGift) = gift.gift, uniqueGift.slug == slug {
+                    return true
+                }
+            }
+            return false
         })
         self.pushState()
         
@@ -2430,13 +2437,17 @@ private final class ProfileGiftsContextImpl {
             } else {
                 updatedGifts = []
             }
-            updatedGifts = updatedGifts.filter { gift in
-                if let reference = gift.reference {
-                    return !references.contains(reference)
-                } else {
+            updatedGifts.removeAll(where: { gift in
+                if let reference = gift.reference, references.contains(reference) {
                     return true
                 }
-            }
+                for reference in references {
+                    if case let .slug(slug) = reference, case let .unique(uniqueGift) = gift.gift, uniqueGift.slug == slug {
+                        return true
+                    }
+                }
+                return false
+            })
             updatedCount -= Int32(references.count)
             if let entry = CodableEntry(CachedProfileGifts(gifts: updatedGifts, count: updatedCount, notificationsEnabled: nil)) {
                 transaction.putItemCacheEntry(id: giftsEntryId(peerId: peerId, collectionId: collectionId), entry: entry)

@@ -15700,6 +15700,11 @@ Error: %8$@";
 "Gift.Craft.Unavailable.Title" = "Try Later";
 "Gift.Craft.Unavailable.Text" = "You will be able to craft this gift on %@.";
 
+"Gift.Craft.Select.Title" = "Select Gifts";
+"Gift.Craft.Select.YourGifts" = "Your Gifts";
+"Gift.Craft.Select.SaleGifts" = "Suitable Gifts On Sale";
+"Gift.Craft.Select.NoGiftsFromCollection" = "You don't have other gifts\nfrom this collection";
+
 "Gift.Attribute.Rare" = "rare";
 "Gift.Attribute.Legendary" = "legendary";
 "Gift.Attribute.Epic" = "epic";
