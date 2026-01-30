@@ -417,6 +417,7 @@ private final class PeerInfoPendingPane {
         sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?,
         initialStoryFolderId: Int64?,
         initialGiftCollectionId: Int64?,
+        switchToMediaTarget: PeerInfoSwitchToMediaTarget?,
         key: PeerInfoPaneKey,
         hasBecomeReady: @escaping (PeerInfoPaneKey) -> Void,
         parentController: ViewController?,
@@ -520,7 +521,7 @@ private final class PeerInfoPendingPane {
                 openAddStory()
             }
         case .media:
-            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .photoOrVideo, captureProtected: captureProtected)
+            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .photoOrVideo, captureProtected: captureProtected, initialFocusMessageIndex: switchToMediaTarget?.kind == .photoVideo ? switchToMediaTarget?.messageIndex : nil)
             paneNode = visualPaneNode
             visualPaneNode.openCurrentDate = {
                 openMediaCalendar()
@@ -529,15 +530,15 @@ private final class PeerInfoPendingPane {
                 paneDidScroll()
             }
         case .files:
-            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .files, captureProtected: captureProtected)
+            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .files, captureProtected: captureProtected, initialFocusMessageIndex: switchToMediaTarget?.kind == .photoVideo ? switchToMediaTarget?.messageIndex : nil)
             paneNode = visualPaneNode
         case .links:
             paneNode = PeerInfoListPaneNode(context: context, updatedPresentationData: updatedPresentationData, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, tagMask: .webPage)
         case .voice:
-            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .voiceAndVideoMessages, captureProtected: captureProtected)
+            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .voiceAndVideoMessages, captureProtected: captureProtected, initialFocusMessageIndex: nil)
             paneNode = visualPaneNode
         case .music:
-            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .music, captureProtected: captureProtected)
+            let visualPaneNode = PeerInfoVisualMediaPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .music, captureProtected: captureProtected, initialFocusMessageIndex: nil)
             paneNode = visualPaneNode
         case .gifs:
             let visualPaneNode = PeerInfoGifPaneNode(context: context, chatControllerInteraction: chatControllerInteraction, peerId: chatLocationPeerId, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, contentType: .gifs)
@@ -626,6 +627,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     private var shouldFadeIn = false
     private var initialStoryFolderId: Int64?
     private var initialGiftCollectionId: Int64?
+    private var switchToMediaTarget: PeerInfoSwitchToMediaTarget?
     
     private var isDraggingTabs: Bool = false
     private var transitionFraction: CGFloat = 0.0
@@ -653,7 +655,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
     
     private let initialPaneKey: PeerInfoPaneKey?
     
-    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: PeerId, chatLocation: ChatLocation, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?, initialStoryFolderId: Int64?, initialGiftCollectionId: Int64?) {
+    init(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, peerId: PeerId, chatLocation: ChatLocation, sharedMediaFromForumTopic: (EnginePeer.Id, Int64)?, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, isMediaOnly: Bool, initialPaneKey: PeerInfoPaneKey?, initialStoryFolderId: Int64?, initialGiftCollectionId: Int64?, switchToMediaTarget: PeerInfoSwitchToMediaTarget?) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.peerId = peerId
@@ -664,6 +666,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
         self.initialPaneKey = initialPaneKey
         self.initialStoryFolderId = initialStoryFolderId
         self.initialGiftCollectionId = initialGiftCollectionId
+        self.switchToMediaTarget = switchToMediaTarget
         
         self.tabsBackgroundContainer = GlassBackgroundContainerView()
         self.tabsBackgroundView = GlassBackgroundView()
@@ -1002,6 +1005,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                 var leftScope = false
                 var initialStoryFolderId: Int64?
                 var initialGiftCollectionId: Int64?
+                var switchToMediaTarget: PeerInfoSwitchToMediaTarget?
                 if case .stories = key {
                     if let initialStoryFolderIdValue = self.initialStoryFolderId {
                         self.initialStoryFolderId = nil
@@ -1012,6 +1016,18 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                     if let initialGiftCollectionIdValue = self.initialGiftCollectionId {
                         self.initialGiftCollectionId = nil
                         initialGiftCollectionId = initialGiftCollectionIdValue
+                    }
+                }
+                if case .media = key {
+                    if let switchToMediaTargetValue = self.switchToMediaTarget, case .photoVideo = switchToMediaTargetValue.kind {
+                        self.switchToMediaTarget = nil
+                        switchToMediaTarget = switchToMediaTargetValue
+                    }
+                }
+                if case .files = key {
+                    if let switchToMediaTargetValue = self.switchToMediaTarget, case .file = switchToMediaTargetValue.kind {
+                        self.switchToMediaTarget = nil
+                        switchToMediaTarget = switchToMediaTargetValue
                     }
                 }
                 let pane = PeerInfoPendingPane(
@@ -1034,6 +1050,7 @@ final class PeerInfoPaneContainerNode: ASDisplayNode, ASGestureRecognizerDelegat
                     sharedMediaFromForumTopic: self.sharedMediaFromForumTopic,
                     initialStoryFolderId: initialStoryFolderId,
                     initialGiftCollectionId: initialGiftCollectionId,
+                    switchToMediaTarget: switchToMediaTarget,
                     key: key,
                     hasBecomeReady: { [weak self] key in
                         let apply: () -> Void = {

@@ -189,7 +189,7 @@ class SecureIdDocumentGalleryController: ViewController, StandalonePresentableCo
         }, currentItemNode: { [weak self] in
             return self?.galleryNode.pager.centralItemNode()
         })
-        self.displayNode = GalleryControllerNode(context: self.context, controllerInteraction: controllerInteraction)
+        self.displayNode = GalleryControllerNode(context: self.context, controllerInteraction: controllerInteraction, titleView: nil)
         self.displayNodeDidLoad()
         
         self.galleryNode.statusBar = self.statusBar
@@ -218,7 +218,7 @@ class SecureIdDocumentGalleryController: ViewController, StandalonePresentableCo
                     
                     if let node = strongSelf.galleryNode.pager.centralItemNode() {
                         strongSelf.centralItemTitle.set(node.title())
-                        strongSelf.centralItemTitleView.set(node.titleView())
+                        //strongSelf.centralItemTitleView.set(node.titleView())
                         strongSelf.centralItemNavigationStyle.set(node.navigationStyle())
                         strongSelf.centralItemFooterContentNode.set(node.footerContent())
                     }
@@ -237,7 +237,7 @@ class SecureIdDocumentGalleryController: ViewController, StandalonePresentableCo
         
         if let centralItemNode = self.galleryNode.pager.centralItemNode(), let presentationArguments = self.presentationArguments as? SecureIdDocumentGalleryControllerPresentationArguments {
             self.centralItemTitle.set(centralItemNode.title())
-            self.centralItemTitleView.set(centralItemNode.titleView())
+            //self.centralItemTitleView.set(centralItemNode.titleView())
             self.centralItemNavigationStyle.set(centralItemNode.navigationStyle())
             self.centralItemFooterContentNode.set(centralItemNode.footerContent())
             

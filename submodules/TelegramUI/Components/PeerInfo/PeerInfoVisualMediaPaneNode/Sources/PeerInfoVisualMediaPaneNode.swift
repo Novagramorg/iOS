@@ -1113,6 +1113,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
     private let directMediaImageCache: DirectMediaImageCache
     private var items: SparseItemGrid.Items?
     private var didUpdateItemsOnce: Bool = false
+    private var initialMessageIndex: EngineMessage.Index?
 
     private var isDeceleratingAfterTracking = false
     
@@ -1164,7 +1165,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
     private var presentationData: PresentationData
     private var presentationDataDisposable: Disposable?
         
-    public init(context: AccountContext, chatControllerInteraction: ChatControllerInteraction, peerId: PeerId, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, contentType: ContentType, captureProtected: Bool) {
+    public init(context: AccountContext, chatControllerInteraction: ChatControllerInteraction, peerId: PeerId, chatLocation: ChatLocation, chatLocationContextHolder: Atomic<ChatLocationContextHolder?>, contentType: ContentType, captureProtected: Bool, initialFocusMessageIndex: EngineMessage.Index?) {
         self.context = context
         self.peerId = peerId
         self.chatLocation = chatLocation
@@ -1173,6 +1174,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
         self.contentType = contentType
         self.contentTypePromise = ValuePromise<ContentType>(contentType)
         self.stateTag = tagMaskForType(contentType)
+        self.initialMessageIndex = initialFocusMessageIndex
 
         self.presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
 
@@ -1234,7 +1236,7 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
             threadId = message.threadId
         }
 
-        self.listSource = self.context.engine.messages.sparseMessageList(peerId: self.peerId, threadId: threadId, tag: tagMaskForType(self.contentType))
+        self.listSource = self.context.engine.messages.sparseMessageList(peerId: self.peerId, threadId: threadId, tag: tagMaskForType(self.contentType), initialMessageIndex: initialFocusMessageIndex)
         if threadId == nil {
             switch contentType {
             case .photoOrVideo, .photo, .video:
@@ -1247,6 +1249,11 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
         }
         
         super.init()
+        
+        if self.initialMessageIndex != nil {
+            self.didSetReady = true
+            self.ready.set(.single(true))
+        }
 
         let _ = (ApplicationSpecificNotice.getSharedMediaScrollingTooltip(accountManager: context.sharedContext.accountManager)
         |> deliverOnMainQueue).start(next: { [weak self] count in
@@ -2194,6 +2201,17 @@ public final class PeerInfoVisualMediaPaneNode: ASDisplayNode, PeerInfoPaneNode,
             }
          
             self.itemGrid.update(size: size, insets: UIEdgeInsets(top: topInset, left: sideInset, bottom:  bottomInset, right: sideInset), useSideInsets: !isList, scrollIndicatorInsets: UIEdgeInsets(top: 0.0, left: sideInset, bottom: bottomInset, right: sideInset), lockScrollingAtTop: isScrollingLockedAtTop, fixedItemHeight: fixedItemHeight, fixedItemAspect: nil, items: items, theme: self.itemGridBinding.chatPresentationData.theme.theme, synchronous: wasFirstTime ? .full : .none)
+            if let initialMessageIndexValue = self.initialMessageIndex {
+                self.initialMessageIndex = nil
+                for item in items.items {
+                    if let item = item as? VisualMediaItem {
+                        if item.message.index <= initialMessageIndexValue {
+                            self.itemGrid.scrollToItem(at: item.index, force: true)
+                            break
+                        }
+                    }
+                }
+            }
         }
     }
 
