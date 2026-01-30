@@ -69,17 +69,20 @@ public final class GlassControlGroupComponent: Component {
     }
 
     public let theme: PresentationTheme
+    public let preferClearGlass: Bool
     public let background: Background
     public let items: [Item]
     public let minWidth: CGFloat
 
     public init(
         theme: PresentationTheme,
+        preferClearGlass: Bool,
         background: Background,
         items: [Item],
         minWidth: CGFloat
     ) {
         self.theme = theme
+        self.preferClearGlass = preferClearGlass
         self.background = background
         self.items = items
         self.minWidth = minWidth
@@ -87,6 +90,9 @@ public final class GlassControlGroupComponent: Component {
 
     public static func ==(lhs: GlassControlGroupComponent, rhs: GlassControlGroupComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.preferClearGlass != rhs.preferClearGlass {
             return false
         }
         if lhs.background != rhs.background {
@@ -151,13 +157,13 @@ public final class GlassControlGroupComponent: Component {
             switch component.background {
             case .panel:
                 foregroundColor = component.theme.chat.inputPanel.panelControlColor
-                tintColor = .init(kind: .panel)
+                tintColor = .init(kind: component.preferClearGlass ? .clear : .panel)
             case .activeTint:
                 foregroundColor = component.theme.list.itemCheckColors.foregroundColor
-                tintColor = .init(kind: .panel, innerColor: component.theme.list.itemCheckColors.fillColor)
+                tintColor = .init(kind: component.preferClearGlass ? .clear : .panel, innerColor: component.theme.list.itemCheckColors.fillColor)
             case let .color(color):
                 foregroundColor = .white
-                tintColor = .init(kind: .custom(style: .default, color: color))
+                tintColor = .init(kind: .custom(style: component.preferClearGlass ? .clear : .default, color: color))
             }
             
             var contentsWidth: CGFloat = 0.0
