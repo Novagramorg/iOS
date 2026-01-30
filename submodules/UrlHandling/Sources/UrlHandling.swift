@@ -1209,8 +1209,16 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
         case let .collectible(slug):
             return .single(.progress) |> then(context.engine.payments.getUniqueStarGift(slug: slug)
             |> map { gift -> ResolveInternalUrlResult in
-                return .result(.collectible(gift: gift))
+                return .result(.collectible(.gift(gift)))
             })
+            |> `catch` { error -> Signal<ResolveInternalUrlResult, NoError> in
+                switch error {
+                case .alreadyBurned:
+                    return .single(.result(.collectible(.alreadyBurned)))
+                default:
+                    return .single(.result(.collectible(.invalidSlug)))
+                }
+            }
         case let .auction(slug):
             if let giftAuctionsManager = context.giftAuctionsManager {
                 return .single(.progress) |> then(giftAuctionsManager.auctionContext(for: .slug(slug))

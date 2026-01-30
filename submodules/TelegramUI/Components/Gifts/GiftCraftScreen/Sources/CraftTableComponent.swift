@@ -299,7 +299,7 @@ final class CraftTableComponent: Component {
                                     diameter: 84.0,
                                     lineWidth: 5.0,
                                     fontSize: 18.0,
-                                    progress: CGFloat(permilleValue / 10 / 100),
+                                    progress: CGFloat(permilleValue) / 10.0 / 100.0,
                                     value: permilleValue / 10,
                                     suffix: "%",
                                     isVisible: !component.isCrafting

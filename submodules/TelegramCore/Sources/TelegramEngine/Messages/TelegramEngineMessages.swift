@@ -99,7 +99,7 @@ public extension TelegramEngine {
             return _internal_requestMessageActionUrlAuth(account: self.account, subject: subject)
         }
 
-        public func acceptMessageActionUrlAuth(subject: MessageActionUrlSubject, allowWriteAccess: Bool, sharePhoneNumber: Bool) -> Signal<MessageActionUrlAuthResult, NoError> {
+        public func acceptMessageActionUrlAuth(subject: MessageActionUrlSubject, allowWriteAccess: Bool, sharePhoneNumber: Bool) -> Signal<MessageActionUrlAuthResult, MessageActionUrlAuthError> {
             return _internal_acceptMessageActionUrlAuth(account: self.account, subject: subject, allowWriteAccess: allowWriteAccess, sharePhoneNumber: sharePhoneNumber)
         }
 

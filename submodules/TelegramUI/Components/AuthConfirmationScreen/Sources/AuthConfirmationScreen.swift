@@ -19,6 +19,10 @@ import ListActionItemComponent
 import AvatarComponent
 import Markdown
 import PhoneNumberFormat
+import ContextUI
+import AccountUtils
+import GlassBackgroundComponent
+import AccountPeerContextItem
 
 private final class AuthConfirmationSheetContent: CombinedComponent {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -52,6 +56,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
         private let subject: MessageActionUrlAuthResult
         
         var peer: EnginePeer?
+        var forcedAccount: (AccountContext, EnginePeer)?
         
         fileprivate var inProgress = false
         var allowWrite = true
@@ -77,30 +82,75 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
             guard case let .request(domain, _, _, _) = self.subject else {
                 return
             }
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
             
             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
             |> deliverOnMainQueue).start(next: { [weak self] peer in
                 guard let self, case let .user(user) = peer, let phone = user.phone else {
                     return
                 }
-                let phoneNumber = formatPhoneNumber(context: self.context, number: phone)
+                let phoneNumber = formatPhoneNumber(context: self.context, number: phone).replacingOccurrences(of: " ", with: "\u{00A0}")
                 
-                //TODO:localize
                 let alertController = textAlertController(
                     context: self.context,
-                    title: "Phone Number",
-                    text: "**\(domain)** wants to access your phone number **\(phoneNumber)**.\n\nAllow access?",
+                    title: presentationData.strings.AuthConfirmation_PhoneNumberConfirmation_Title,
+                    text: presentationData.strings.AuthConfirmation_PhoneNumberConfirmation_Text(domain, phoneNumber).string,
                     actions: [
-                        TextAlertAction(type: .genericAction, title: "Deny", action: {
+                        TextAlertAction(type: .genericAction, title: presentationData.strings.AuthConfirmation_PhoneNumberConfirmation_Deny, action: {
                             commit(false)
                         }),
-                        TextAlertAction(type: .defaultAction, title: "Allow", action: {
+                        TextAlertAction(type: .defaultAction, title: presentationData.strings.AuthConfirmation_PhoneNumberConfirmation_Allow, action: {
                             commit(true)
                         })
                     ]
                 )
                 self.controller?.present(alertController, in: .window(.root))
             })
+        }
+        
+        func presentAccountSwitchMenu(sourceView: GlassContextExtractableContainer) {
+            guard let controller = self.controller else {
+                return
+            }
+            
+            let context = self.context
+            let presentationData = self.context.sharedContext.currentPresentationData.with { $0 }
+            let items: Signal<[ContextMenuItem], NoError> = activeAccountsAndPeers(context: self.context, includePrimary: true)
+            |> take(1)
+            |> map { primary, other -> [ContextMenuItem] in
+                var items: [ContextMenuItem] = []
+                var existingIds = Set<EnginePeer.Id>()
+                if let (_, peer) = primary {
+                    items.append(.custom(AccountPeerContextItem(context: context, account: context.account, peer: peer, action: { [weak self] _, f in
+                        f(.default)
+                        guard let self else {
+                            return
+                        }
+                        self.forcedAccount = nil
+                        self.updated()
+                    }), true))
+                    existingIds.insert(peer.id)
+                }
+                
+                for (accountContext, peer, _) in other {
+                    guard !existingIds.contains(peer.id) else {
+                        continue
+                    }
+                    items.append(.custom(AccountPeerContextItem(context: accountContext, account: accountContext.account, peer: peer, action: { [weak self] _, f in
+                        f(.default)
+                        guard let self else {
+                            return
+                        }
+                        self.forcedAccount = (accountContext, peer)
+                        self.updated()
+                    }), true))
+                }
+                
+                return items
+            }
+
+            let contextController = makeContextController(presentationData: presentationData, source: .reference(AuthConfirmationReferenceContentSource(controller: controller, sourceView: sourceView)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: nil)
+            controller.presentInGlobalOverlay(contextController)
         }
     }
     
@@ -110,7 +160,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
     
     static var body: Body {
         let closeButton = Child(GlassBarButtonComponent.self)
-        let peerButton = Child(AvatarComponent.self)
+        let accountButton = Child(AccountSwitchComponent.self)
         let avatar = Child(AvatarComponent.self)
         let title = Child(MultilineTextComponent.self)
         let description = Child(MultilineTextComponent.self)
@@ -162,17 +212,21 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
             )
             
             if let peer = state.peer {
-                let peerButton = peerButton.update(
-                    component: AvatarComponent(
-                        context: component.context,
+                let accountButton = accountButton.update(
+                    component: AccountSwitchComponent(
+                        context: state.forcedAccount?.0 ?? component.context,
                         theme: environment.theme,
-                        peer: peer
+                        peer: state.forcedAccount?.1 ?? peer,
+                        canSwitch: true,
+                        action: { [weak state] sourceView in
+                            state?.presentAccountSwitchMenu(sourceView: sourceView)
+                        }
                     ),
-                    availableSize: CGSize(width: 44.0, height: 44.0),
+                    availableSize: context.availableSize,
                     transition: .immediate
                 )
-                context.add(peerButton
-                    .position(CGPoint(x: context.availableSize.width - 16.0 - peerButton.size.width / 2.0, y: 16.0 + peerButton.size.height / 2.0))
+                context.add(accountButton
+                    .position(CGPoint(x: context.availableSize.width - 16.0 - accountButton.size.width / 2.0, y: 16.0 + accountButton.size.height / 2.0))
                 )
             }
             
@@ -192,11 +246,11 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
             )
             contentHeight += avatar.size.height
             contentHeight += 18.0
-            
+                        
             let titleFont = Font.bold(24.0)
             let title = title.update(
                 component: MultilineTextComponent(
-                    text: .markdown(text: "Log in to **\(domain)**", attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.primaryTextColor), bold: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.controlAccentColor), link: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.primaryTextColor), linkAttribute: { _ in return nil })),
+                    text: .markdown(text: strings.AuthConfirmation_Title(domain).string, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.primaryTextColor), bold: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.controlAccentColor), link: MarkdownAttributeSet(font: titleFont, textColor: theme.actionSheet.primaryTextColor), linkAttribute: { _ in return nil })),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 2
                 ),
@@ -213,7 +267,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
             let boldTextFont = Font.semibold(15.0)
             let description = description.update(
                 component: MultilineTextComponent(
-                    text: .markdown(text: "This site will receive your **name**,\n**username** and **profile photo**.", attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: textFont, textColor: theme.actionSheet.primaryTextColor), bold: MarkdownAttributeSet(font: boldTextFont, textColor: theme.actionSheet.primaryTextColor), link: MarkdownAttributeSet(font: textFont, textColor: theme.actionSheet.primaryTextColor), linkAttribute: { _ in return nil })),
+                    text: .markdown(text: strings.AuthConfirmation_Description, attributes: MarkdownAttributes(body: MarkdownAttributeSet(font: textFont, textColor: theme.actionSheet.primaryTextColor), bold: MarkdownAttributeSet(font: boldTextFont, textColor: theme.actionSheet.primaryTextColor), link: MarkdownAttributeSet(font: textFont, textColor: theme.actionSheet.primaryTextColor), linkAttribute: { _ in return nil })),
                     horizontalAlignment: .center,
                     maximumNumberOfLines: 3,
                     lineSpacing: 0.2
@@ -235,7 +289,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                         style: .glass,
                         title: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Device",
+                                string: strings.AuthConfirmation_Device,
                                 font: Font.regular(17.0),
                                 textColor: theme.list.itemPrimaryTextColor
                             )),
@@ -283,7 +337,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                         style: .glass,
                         title: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "IP Address",
+                                string: strings.AuthConfirmation_IpAddress,
                                 font: Font.regular(17.0),
                                 textColor: theme.list.itemPrimaryTextColor
                             )),
@@ -331,7 +385,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                     header: nil,
                     footer: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
-                            string: "This login attempt came from the device above.",
+                            string: strings.AuthConfirmation_Info,
                             font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                             textColor: environment.theme.list.freeTextColor
                         )),
@@ -357,7 +411,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                     title: AnyComponent(VStack([
                         AnyComponentWithIdentity(id: AnyHashable(0), component: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "Allow Messages",
+                                string: strings.AuthConfirmation_AllowMessages,
                                 font: Font.regular(presentationData.listsFontSize.itemListBaseFontSize),
                                 textColor: theme.list.itemPrimaryTextColor
                             )),
@@ -380,7 +434,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                         header: nil,
                         footer: AnyComponent(MultilineTextComponent(
                             text: .plain(NSAttributedString(
-                                string: "This will allow \(EnginePeer(bot).compactDisplayTitle) to message you.",
+                                string: strings.AuthConfirmation_AllowMessagesInfo(EnginePeer(bot).compactDisplayTitle).string,
                                 font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
                                 textColor: environment.theme.list.freeTextColor
                             )),
@@ -412,7 +466,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: "Cancel", font: Font.semibold(17.0), textColor: theme.list.itemPrimaryTextColor, paragraphAlignment: .center))))
+                        component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: strings.AuthConfirmation_Cancel, font: Font.semibold(17.0), textColor: theme.list.itemPrimaryTextColor, paragraphAlignment: .center))))
                     ),
                     action: {
                         component.cancel(true)
@@ -436,7 +490,7 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                     ),
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
-                        component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: "Log In", font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
+                        component: AnyComponent(MultilineTextComponent(text: .plain(NSMutableAttributedString(string: strings.AuthConfirmation_LogIn, font: Font.semibold(17.0), textColor: theme.list.itemCheckColors.foregroundColor, paragraphAlignment: .center))))
                     ),
                     displaysProgress: state.inProgress,
                     action: { [weak state] in
@@ -608,5 +662,21 @@ public class AuthConfirmationScreen: ViewControllerComponentContainer {
         if let view = self.node.hostView.findTaggedView(tag: SheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()) as? SheetComponent<ViewControllerComponentContainer.Environment>.View {
             view.dismissAnimated()
         }
+    }
+}
+
+private final class AuthConfirmationReferenceContentSource: ContextReferenceContentSource {
+    private let controller: ViewController
+    private let sourceView: UIView
+    
+    let forceDisplayBelowKeyboard = true
+    
+    init(controller: ViewController, sourceView: UIView) {
+        self.controller = controller
+        self.sourceView = sourceView
+    }
+    
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }
