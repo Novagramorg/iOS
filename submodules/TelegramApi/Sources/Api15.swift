@@ -46,6 +46,57 @@ public extension Api {
     }
 }
 public extension Api {
+    enum KeyboardButtonStyle: TypeConstructorDescription {
+        public class Cons_keyboardButtonStyle {
+            public var flags: Int32
+            public var icon: Int64?
+            public init(flags: Int32, icon: Int64?) {
+                self.flags = flags
+                self.icon = icon
+            }
+        }
+        case keyboardButtonStyle(Cons_keyboardButtonStyle)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .keyboardButtonStyle(let _data):
+                if boxed {
+                    buffer.appendInt32(1339896880)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 3) != 0 {
+                    serializeInt64(_data.icon!, buffer: buffer, boxed: false)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, Any)]) {
+            switch self {
+            case .keyboardButtonStyle(let _data):
+                return ("keyboardButtonStyle", [("flags", _data.flags as Any), ("icon", _data.icon as Any)])
+            }
+        }
+
+        public static func parse_keyboardButtonStyle(_ reader: BufferReader) -> KeyboardButtonStyle? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            if Int(_1!) & Int(1 << 3) != 0 {
+                _2 = reader.readInt64()
+            }
+            let _c1 = _1 != nil
+            let _c2 = (Int(_1!) & Int(1 << 3) == 0) || _2 != nil
+            if _c1 && _c2 {
+                return Api.KeyboardButtonStyle.keyboardButtonStyle(Cons_keyboardButtonStyle(flags: _1!, icon: _2))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     enum LabeledPrice: TypeConstructorDescription {
         public class Cons_labeledPrice {
             public var label: String
@@ -1513,6 +1564,12 @@ public extension Api {
                 self.app = app
             }
         }
+        public class Cons_messageActionChangeCreator {
+            public var newCreatorId: Int64
+            public init(newCreatorId: Int64) {
+                self.newCreatorId = newCreatorId
+            }
+        }
         public class Cons_messageActionChannelCreate {
             public var title: String
             public init(title: String) {
@@ -1723,6 +1780,12 @@ public extension Api {
             public init(call: Api.InputGroupCall, users: [Int64]) {
                 self.call = call
                 self.users = users
+            }
+        }
+        public class Cons_messageActionNewCreatorPending {
+            public var newCreatorId: Int64
+            public init(newCreatorId: Int64) {
+                self.newCreatorId = newCreatorId
             }
         }
         public class Cons_messageActionPaidMessagesPrice {
@@ -2043,6 +2106,7 @@ public extension Api {
         }
         case messageActionBoostApply(Cons_messageActionBoostApply)
         case messageActionBotAllowed(Cons_messageActionBotAllowed)
+        case messageActionChangeCreator(Cons_messageActionChangeCreator)
         case messageActionChannelCreate(Cons_messageActionChannelCreate)
         case messageActionChannelMigrateFrom(Cons_messageActionChannelMigrateFrom)
         case messageActionChatAddUser(Cons_messageActionChatAddUser)
@@ -2070,6 +2134,7 @@ public extension Api {
         case messageActionGroupCallScheduled(Cons_messageActionGroupCallScheduled)
         case messageActionHistoryClear
         case messageActionInviteToGroupCall(Cons_messageActionInviteToGroupCall)
+        case messageActionNewCreatorPending(Cons_messageActionNewCreatorPending)
         case messageActionPaidMessagesPrice(Cons_messageActionPaidMessagesPrice)
         case messageActionPaidMessagesRefunded(Cons_messageActionPaidMessagesRefunded)
         case messageActionPaymentRefunded(Cons_messageActionPaymentRefunded)
@@ -2121,6 +2186,12 @@ public extension Api {
                 if Int(_data.flags) & Int(1 << 2) != 0 {
                     _data.app!.serialize(buffer, true)
                 }
+                break
+            case .messageActionChangeCreator(let _data):
+                if boxed {
+                    buffer.appendInt32(-511160261)
+                }
+                serializeInt64(_data.newCreatorId, buffer: buffer, boxed: false)
                 break
             case .messageActionChannelCreate(let _data):
                 if boxed {
@@ -2368,6 +2439,12 @@ public extension Api {
                 for item in _data.users {
                     serializeInt64(item, buffer: buffer, boxed: false)
                 }
+                break
+            case .messageActionNewCreatorPending(let _data):
+                if boxed {
+                    buffer.appendInt32(-1333866363)
+                }
+                serializeInt64(_data.newCreatorId, buffer: buffer, boxed: false)
                 break
             case .messageActionPaidMessagesPrice(let _data):
                 if boxed {
@@ -2737,6 +2814,8 @@ public extension Api {
                 return ("messageActionBoostApply", [("boosts", _data.boosts as Any)])
             case .messageActionBotAllowed(let _data):
                 return ("messageActionBotAllowed", [("flags", _data.flags as Any), ("domain", _data.domain as Any), ("app", _data.app as Any)])
+            case .messageActionChangeCreator(let _data):
+                return ("messageActionChangeCreator", [("newCreatorId", _data.newCreatorId as Any)])
             case .messageActionChannelCreate(let _data):
                 return ("messageActionChannelCreate", [("title", _data.title as Any)])
             case .messageActionChannelMigrateFrom(let _data):
@@ -2791,6 +2870,8 @@ public extension Api {
                 return ("messageActionHistoryClear", [])
             case .messageActionInviteToGroupCall(let _data):
                 return ("messageActionInviteToGroupCall", [("call", _data.call as Any), ("users", _data.users as Any)])
+            case .messageActionNewCreatorPending(let _data):
+                return ("messageActionNewCreatorPending", [("newCreatorId", _data.newCreatorId as Any)])
             case .messageActionPaidMessagesPrice(let _data):
                 return ("messageActionPaidMessagesPrice", [("flags", _data.flags as Any), ("stars", _data.stars as Any)])
             case .messageActionPaidMessagesRefunded(let _data):
@@ -2885,6 +2966,17 @@ public extension Api {
             let _c3 = (Int(_1!) & Int(1 << 2) == 0) || _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.MessageAction.messageActionBotAllowed(Cons_messageActionBotAllowed(flags: _1!, domain: _2, app: _3))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_messageActionChangeCreator(_ reader: BufferReader) -> MessageAction? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.MessageAction.messageActionChangeCreator(Cons_messageActionChangeCreator(newCreatorId: _1!))
             }
             else {
                 return nil
@@ -3322,6 +3414,17 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.MessageAction.messageActionInviteToGroupCall(Cons_messageActionInviteToGroupCall(call: _1!, users: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_messageActionNewCreatorPending(_ reader: BufferReader) -> MessageAction? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.MessageAction.messageActionNewCreatorPending(Cons_messageActionNewCreatorPending(newCreatorId: _1!))
             }
             else {
                 return nil

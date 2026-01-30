@@ -471,6 +471,36 @@ public enum StarGift: Equatable, Codable, PostboxCoding {
                         return 0
                     }
                 }
+
+                public var isPermille: Bool {
+                    if case .permille = self {
+                        return true
+                    }
+                    return false
+                }
+
+                public var badgeText: String {
+                    switch self {
+                    case let .permille(value):
+                        if value == 0 {
+                            return "<0.1%"
+                        }
+                        let percent = Double(value) / 10.0
+                        if percent.truncatingRemainder(dividingBy: 1) == 0 {
+                            return "\(Int(percent))%"
+                        } else {
+                            return String(format: "%.1f%%", percent)
+                        }
+                    case .rare:
+                        return "rare"
+                    case .epic:
+                        return "epic"
+                    case .legendary:
+                        return "legendary"
+                    case .uncommon:
+                        return "uncommon"
+                    }
+                }
             }
 
             case model(name: String, file: TelegramMediaFile, rarity: Rarity, crafted: Bool)
@@ -1279,7 +1309,7 @@ extension StarGift {
             } else if let ownerName {
                 owner = .name(ownerName)
             } else {
-                owner = nil
+                owner = .none
             }
             let resellAmounts = apiResellAmount?.compactMap { CurrencyAmount(apiAmount: $0) }
             var flags = StarGift.UniqueGift.Flags()

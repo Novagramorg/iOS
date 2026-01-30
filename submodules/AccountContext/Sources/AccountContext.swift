@@ -738,6 +738,11 @@ public enum DeviceContactInfoSubject {
 }
 
 public enum PeerInfoControllerMode {
+    public enum PeerInfoMediaKind {
+        case photoVideo
+        case file
+    }
+    
     case generic
     case calls(messages: [Message])
     case nearbyPeer(distance: Int32)
@@ -753,6 +758,7 @@ public enum PeerInfoControllerMode {
     case monoforum(EnginePeer.Id)
     case storyAlbum(id: Int64)
     case giftCollection(id: Int64)
+    case media(kind: PeerInfoMediaKind, messageIndex: EngineMessage.Index)
 }
 
 public enum ContactListActionItemInlineIconPosition {

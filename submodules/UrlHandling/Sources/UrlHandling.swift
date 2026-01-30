@@ -846,7 +846,14 @@ private func resolveInternalUrl(context: AccountContext, url: ParsedInternalUrl)
                                         if let peer {
                                             return .single(peer)
                                         } else {
-                                            return context.engine.peers.findChannelById(channelId: monoforumId.id._internalGetInt64Value())
+                                            return context.engine.peers.fetchAndUpdateCachedPeerData(peerId: channel.id)
+                                            |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
+                                                if result {
+                                                    return context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: monoforumId))
+                                                } else {
+                                                    return .single(nil)
+                                                }
+                                            }
                                         }
                                     }
                                     |> map { peer -> ResolveInternalUrlResult in

@@ -211,6 +211,38 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         public static let isFinal = StarGiftAuctionBidFlags(rawValue: 1 << 3)
     }
     
+    public struct GroupCreatorChange: Codable, Equatable {
+        private enum CodingKeys: String, CodingKey {
+            case kind = "k"
+            case targetPeerId = "t"
+        }
+        
+        public enum Kind: Int32 {
+            case pending = 0
+            case applied = 1
+        }
+        
+        public let kind: Kind
+        public let targetPeerId: PeerId
+        
+        public init(kind: Kind, targetPeerId: PeerId) {
+            self.kind = kind
+            self.targetPeerId = targetPeerId
+        }
+        
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.kind = Kind(rawValue: try container.decode(Int32.self, forKey: .kind)) ?? .pending
+            self.targetPeerId = PeerId(try container.decode(Int64.self, forKey: .targetPeerId))
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(self.kind.rawValue, forKey: .kind)
+            try container.encode(self.targetPeerId.toInt64(), forKey: .kind)
+        }
+    }
+    
     case unknown
     case groupCreated(title: String)
     case addedMembers(peerIds: [PeerId])
@@ -247,7 +279,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case requestedPeer(buttonId: Int32, peerIds: [PeerId])
     case setChatWallpaper(wallpaper: TelegramWallpaper, forBoth: Bool)
     case setSameChatWallpaper(wallpaper: TelegramWallpaper)
-    case giftCode(slug: String, fromGiveaway: Bool, isUnclaimed: Bool, boostPeerId: PeerId?, days: Int32, currency: String?, amount: Int64?, cryptoCurrency: String?, cryptoAmount: Int64?, text: String?, entities: [MessageTextEntity]?)
+    case giftCode(slug: String, fromGiveaway: Bool, isUnclaimed: Bool, boostPeerId: PeerId?, months: Int32, currency: String?, amount: Int64?, cryptoCurrency: String?, cryptoAmount: Int64?, text: String?, entities: [MessageTextEntity]?)
     case giveawayLaunched(stars: Int64?)
     case joinedChannel
     case giveawayResults(winners: Int32, unclaimed: Int32, stars: Bool)
@@ -269,6 +301,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
     case suggestedBirthday(TelegramBirthday)
     case starGiftPurchaseOffer(gift: StarGift, amount: CurrencyAmount, expireDate: Int32, isAccepted: Bool, isDeclined: Bool)
     case starGiftPurchaseOfferDeclined(gift: StarGift, amount: CurrencyAmount, hasExpired: Bool)
+    case groupCreatorChange(GroupCreatorChange)
     
     public init(decoder: PostboxDecoder) {
         let rawValue: Int32 = decoder.decodeInt32ForKey("_rawValue", orElse: 0)
@@ -374,7 +407,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case 35:
             self = .botAppAccessGranted(appName: decoder.decodeOptionalStringForKey("app"), type: decoder.decodeOptionalInt32ForKey("atp").flatMap { BotSendMessageAccessGrantedType(rawValue: $0) })
         case 36:
-            self = .giftCode(slug: decoder.decodeStringForKey("slug", orElse: ""), fromGiveaway: decoder.decodeBoolForKey("give", orElse: false), isUnclaimed: decoder.decodeBoolForKey("unclaimed", orElse: false), boostPeerId: decoder.decodeOptionalInt64ForKey("pi").flatMap { PeerId($0) }, days: decoder.decodeInt32ForKey("days", orElse: decoder.decodeInt32ForKey("months", orElse: 0)), currency: decoder.decodeOptionalStringForKey("currency"), amount: decoder.decodeOptionalInt64ForKey("amount"), cryptoCurrency: decoder.decodeOptionalStringForKey("cryptoCurrency"), cryptoAmount: decoder.decodeOptionalInt64ForKey("cryptoAmount"), text: decoder.decodeOptionalStringForKey("text"), entities: decoder.decodeOptionalObjectArrayWithDecoderForKey("entities"))
+            self = .giftCode(slug: decoder.decodeStringForKey("slug", orElse: ""), fromGiveaway: decoder.decodeBoolForKey("give", orElse: false), isUnclaimed: decoder.decodeBoolForKey("unclaimed", orElse: false), boostPeerId: decoder.decodeOptionalInt64ForKey("pi").flatMap { PeerId($0) }, months: decoder.decodeInt32ForKey("months", orElse: 0), currency: decoder.decodeOptionalStringForKey("currency"), amount: decoder.decodeOptionalInt64ForKey("amount"), cryptoCurrency: decoder.decodeOptionalStringForKey("cryptoCurrency"), cryptoAmount: decoder.decodeOptionalInt64ForKey("cryptoAmount"), text: decoder.decodeOptionalStringForKey("text"), entities: decoder.decodeOptionalObjectArrayWithDecoderForKey("entities"))
         case 37:
             self = .giveawayLaunched(stars: decoder.decodeOptionalInt64ForKey("stars"))
         case 38:
@@ -437,9 +470,11 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
         case 55:
             self = .suggestedBirthday(decoder.decodeCodable(TelegramBirthday.self, forKey: "birthday") ?? TelegramBirthday(day: 1, month: 1, year: nil))
         case 56:
-            self = .starGiftPurchaseOffer(gift: decoder.decodeObjectForKey("gift", decoder: { StarGift(decoder: $0) }) as! StarGift, amount: decoder.decodeCodable(CurrencyAmount.self, forKey: "amount")!, expireDate: decoder.decodeInt32ForKey("expireDate", orElse: 0), isAccepted: decoder.decodeBoolForKey("isAccepted", orElse: false), isDeclined: decoder.decodeBoolForKey("isDeclined", orElse: false))
+            self = .starGiftPurchaseOffer(gift: decoder.decodeObjectForKey("gift", decoder: { StarGift(decoder: $0) }) as! StarGift, amount: decoder.decodeCodable(CurrencyAmount.self, forKey: "amount") ?? CurrencyAmount(amount: .zero, currency: .stars), expireDate: decoder.decodeInt32ForKey("expireDate", orElse: 0), isAccepted: decoder.decodeBoolForKey("isAccepted", orElse: false), isDeclined: decoder.decodeBoolForKey("isDeclined", orElse: false))
         case 57:
             self = .starGiftPurchaseOfferDeclined(gift: decoder.decodeObjectForKey("gift", decoder: { StarGift(decoder: $0) }) as! StarGift, amount: decoder.decodeCodable(CurrencyAmount.self, forKey: "amount")!, hasExpired: decoder.decodeBoolForKey("hasExpired", orElse: false))
+        case 59:
+            self = .groupCreatorChange(decoder.decodeCodable(GroupCreatorChange.self, forKey: "d") ?? GroupCreatorChange(kind: .pending, targetPeerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(0))))
         default:
             self = .unknown
         }
@@ -632,7 +667,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             } else {
                 encoder.encodeNil(forKey: "atp")
             }
-        case let .giftCode(slug, fromGiveaway, unclaimed, boostPeerId, days, currency, amount, cryptoCurrency, cryptoAmount, text, entities):
+        case let .giftCode(slug, fromGiveaway, unclaimed, boostPeerId, months, currency, amount, cryptoCurrency, cryptoAmount, text, entities):
             encoder.encodeInt32(36, forKey: "_rawValue")
             encoder.encodeString(slug, forKey: "slug")
             encoder.encodeBool(fromGiveaway, forKey: "give")
@@ -642,7 +677,7 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             } else {
                 encoder.encodeNil(forKey: "pi")
             }
-            encoder.encodeInt32(days, forKey: "days")
+            encoder.encodeInt32(months, forKey: "months")
             if let currency = currency {
                 encoder.encodeString(currency, forKey: "currency")
             } else {
@@ -931,6 +966,9 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             encoder.encodeObject(gift, forKey: "gift")
             encoder.encodeCodable(amount, forKey: "amount")
             encoder.encodeBool(hasExpired, forKey: "hasExpired")
+        case let .groupCreatorChange(groupCreatorChange):
+            encoder.encodeInt32(59, forKey: "_rawValue")
+            encoder.encodeCodable(groupCreatorChange, forKey: "d")
         }
     }
     
@@ -987,6 +1025,8 @@ public enum TelegramMediaActionType: PostboxCoding, Equatable {
             return peerIds
         case let .conferenceCall(conferenceCall):
             return conferenceCall.otherParticipants
+        case let .groupCreatorChange(groupCreatorChange):
+            return [groupCreatorChange.targetPeerId]
         default:
             return []
         }
