@@ -103,9 +103,8 @@ public final class SparseMessageList {
             self.resetTopSection()
 
             if self.threadId == nil {
-                self.isLoadingInitial = true
-                
                 if initialMessageIndex != nil {
+                    self.isLoadingInitial = true
                     self.updateState()
                 }
                 

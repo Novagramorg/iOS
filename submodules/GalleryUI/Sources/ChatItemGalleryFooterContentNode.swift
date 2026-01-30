@@ -1275,8 +1275,8 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         
         if let scrubberView = self.scrubberView, scrubberView.superview == self.view {
             panelHeight += 10.0
-            if isLandscape, case .compact = metrics.widthClass {
-                panelHeight += 14.0
+            if isLandscape {
+                panelHeight += 34.0
             } else {
                 panelHeight += 34.0
             }
