@@ -1152,7 +1152,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.hasExpandedCaptionPromise.set(scrollView.contentOffset.y > 1.0)
     }
     
-    override func updateLayout(size: CGSize, metrics: LayoutMetrics, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, contentInset: CGFloat, transition: ContainedViewLayoutTransition) -> CGFloat {
+    override func updateLayout(size: CGSize, metrics: LayoutMetrics, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, contentInset: CGFloat, transition: ContainedViewLayoutTransition) -> LayoutInfo {
         self.validLayout = (size, metrics, leftInset, rightInset, bottomInset, contentInset)
         
         let width = size.width
@@ -1177,6 +1177,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             buttonPanelInsets.right += 18.0
         }
         
+        var needsShadow = false
         if !self.textNode.isHidden {
             var textFrame = CGRect()
             var visibleTextHeight: CGFloat = 0.0
@@ -1191,6 +1192,8 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             var textOffset: CGFloat = 0.0
             var additionalTextHeight: CGFloat = 0.0
             if displayCaption {
+                needsShadow = true
+                
                 visibleTextHeight = textSize.height
                 if visibleTextHeight > 100.0 {
                     visibleTextHeight = 80.0
@@ -1272,8 +1275,8 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         
         if let scrubberView = self.scrubberView, scrubberView.superview == self.view {
             panelHeight += 10.0
-            if isLandscape, case .compact = metrics.widthClass {
-                panelHeight += 14.0
+            if isLandscape {
+                panelHeight += 34.0
             } else {
                 panelHeight += 34.0
             }
@@ -1409,6 +1412,11 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             }
         }
         
+        if !centerControlItems.isEmpty && rightControlItems.isEmpty {
+            rightControlItems = centerControlItems
+            centerControlItems = []
+        }
+        
         let buttonPanelSize = self.buttonPanel.update(
             transition: ComponentTransition(transition),
             component: AnyComponent(GlassControlPanelComponent(
@@ -1482,7 +1490,7 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         
         self.contentNode.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: panelHeight))
         
-        return panelHeight
+        return LayoutInfo(height: panelHeight, needsShadow: needsShadow)
     }
     
     override func animateIn(transition: ContainedViewLayoutTransition) {
@@ -1500,7 +1508,8 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             scrubberView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
         }
         transition.animatePositionAdditive(node: self.scrollWrapperNode, offset: CGPoint(x: 0.0, y: self.bounds.height - fromHeight))
-        self.scrollWrapperNode.alpha = 1.0
+        self.scrollNode.alpha = 0.0
+        ComponentTransition(transition).setAlpha(view: self.scrollNode.view, alpha: 1.0)
         if let buttonPanelView = self.buttonPanel.view {
             buttonPanelView.alpha = 1.0
         }
@@ -1510,7 +1519,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.statusNode.alpha = 1.0
         self.playbackControlButton.alpha = 1.0
         self.buttonNode?.alpha = 1.0
-        self.scrollWrapperNode.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.15)
     }
     
     override func animateOut(transition: ContainedViewLayoutTransition) {
@@ -1527,7 +1535,9 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             scrubberView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15)
         }
         transition.updateFrame(node: self.scrollWrapperNode, frame: self.scrollWrapperNode.frame.offsetBy(dx: 0.0, dy: self.bounds.height - toHeight))
-        self.scrollWrapperNode.alpha = 0.0
+        ComponentTransition(transition).setAlpha(view: self.scrollNode.view, alpha: 0.0, completion: { _ in
+            completion()
+        })
         
         if let buttonPanelView = self.buttonPanel.view {
             buttonPanelView.alpha = 0.0
@@ -1538,9 +1548,6 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
         self.statusNode.alpha = 0.0
         self.playbackControlButton.alpha = 0.0
         self.buttonNode?.alpha = 0.0
-        self.scrollWrapperNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.15, completion: { _ in
-            completion()
-        })
     }
 
     @objc func fullscreenButtonPressed() {

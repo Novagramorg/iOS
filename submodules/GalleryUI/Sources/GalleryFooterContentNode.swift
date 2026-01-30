@@ -28,6 +28,16 @@ public final class GalleryControllerInteraction {
 }
 
 open class GalleryFooterContentNode: ASDisplayNode {
+    public struct LayoutInfo {
+        let height: CGFloat
+        let needsShadow: Bool
+        
+        public init(height: CGFloat, needsShadow: Bool) {
+            self.height = height
+            self.needsShadow = needsShadow
+        }
+    }
+    
     public var requestLayout: ((ContainedViewLayoutTransition) -> Void)?
     public var controllerInteraction: GalleryControllerInteraction?
     
@@ -37,8 +47,8 @@ open class GalleryFooterContentNode: ASDisplayNode {
         self.alpha = alpha
     }
     
-    open func updateLayout(size: CGSize, metrics: LayoutMetrics, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, contentInset: CGFloat, transition: ContainedViewLayoutTransition) -> CGFloat {
-        return 0.0
+    open func updateLayout(size: CGSize, metrics: LayoutMetrics, leftInset: CGFloat, rightInset: CGFloat, bottomInset: CGFloat, contentInset: CGFloat, transition: ContainedViewLayoutTransition) -> LayoutInfo {
+        return LayoutInfo(height: 0.0, needsShadow: false)
     }
     
     open func animateIn(transition: ContainedViewLayoutTransition) {

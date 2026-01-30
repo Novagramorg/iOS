@@ -1008,6 +1008,14 @@ public final class NavigationBarImpl: ASDisplayNode, NavigationBar {
             }
         }
         
+        if (leftTitleInset == leftInset) != (rightTitleInset == rightInset) {
+            if rightTitleInset == rightInset {
+                rightTitleInset = leftTitleInset
+            } else if leftTitleInset == leftInset {
+                leftTitleInset = rightTitleInset
+            }
+        }
+        
         if self.titleNode.view.superview != nil {
             let titleSize = self.titleNode.updateLayout(CGSize(width: max(1.0, size.width - max(leftTitleInset, rightTitleInset) * 2.0), height: nominalHeight))
             

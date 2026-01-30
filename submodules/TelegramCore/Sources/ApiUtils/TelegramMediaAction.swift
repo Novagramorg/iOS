@@ -205,7 +205,7 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
             text = nil
             entities = nil
         }
-        return TelegramMediaAction(action: .giftCode(slug: slug, fromGiveaway: (flags & (1 << 0)) != 0, isUnclaimed: (flags & (1 << 5)) != 0, boostPeerId: boostPeer?.peerId, days: days, currency: currency, amount: amount, cryptoCurrency: cryptoCurrency, cryptoAmount: cryptoAmount, text: text, entities: entities))
+        return TelegramMediaAction(action: .giftCode(slug: slug, fromGiveaway: (flags & (1 << 0)) != 0, isUnclaimed: (flags & (1 << 5)) != 0, boostPeerId: boostPeer?.peerId, months: days, currency: currency, amount: amount, cryptoCurrency: cryptoCurrency, cryptoAmount: cryptoAmount, text: text, entities: entities))
     case let .messageActionGiveawayLaunch(messageActionGiveawayLaunchData):
         return TelegramMediaAction(action: .giveawayLaunched(stars: messageActionGiveawayLaunchData.stars))
     case let .messageActionGiveawayResults(messageActionGiveawayResultsData):
@@ -349,6 +349,16 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
             return nil
         }
         return TelegramMediaAction(action: .starGiftPurchaseOfferDeclined(gift: gift, amount: CurrencyAmount(apiAmount: price), hasExpired: (flags & (1 << 0)) != 0))
+    case let .messageActionNewCreatorPending(messageActionNewCreatorPending):
+        return TelegramMediaAction(action: .groupCreatorChange(TelegramMediaActionType.GroupCreatorChange(
+            kind: .pending,
+            targetPeerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageActionNewCreatorPending.newCreatorId))
+        )))
+    case let .messageActionChangeCreator(messageActionChangeCreator):
+        return TelegramMediaAction(action: .groupCreatorChange(TelegramMediaActionType.GroupCreatorChange(
+            kind: .applied,
+            targetPeerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageActionChangeCreator.newCreatorId))
+        )))
     }
 }
 
