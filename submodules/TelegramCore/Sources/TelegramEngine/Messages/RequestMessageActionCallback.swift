@@ -199,6 +199,11 @@ public enum MessageActionUrlAuthResult {
     case request(domain: String, bot: Peer, clientData: ClientData?, flags: Flags)
 }
 
+public enum MessageActionUrlAuthError {
+    case generic
+    case urlExpired
+}
+
 public enum MessageActionUrlSubject {
     case message(id: MessageId, buttonId: Int32)
     case url(String)
@@ -259,7 +264,7 @@ func _internal_requestMessageActionUrlAuth(account: Account, subject: MessageAct
     }
 }
 
-func _internal_acceptMessageActionUrlAuth(account: Account, subject: MessageActionUrlSubject, allowWriteAccess: Bool, sharePhoneNumber: Bool) -> Signal<MessageActionUrlAuthResult, NoError> {
+func _internal_acceptMessageActionUrlAuth(account: Account, subject: MessageActionUrlSubject, allowWriteAccess: Bool, sharePhoneNumber: Bool) -> Signal<MessageActionUrlAuthResult, MessageActionUrlAuthError> {
     var flags: Int32 = 0
     if allowWriteAccess {
         flags |= Int32(1 << 0)
@@ -292,13 +297,10 @@ func _internal_acceptMessageActionUrlAuth(account: Account, subject: MessageActi
     
 
     return request
-    |> `catch` { _ -> Signal<Api.UrlAuthResult?, NoError> in
-        return .single(nil)
+    |> mapError { _ -> MessageActionUrlAuthError in
+        return .generic
     }
     |> map { result -> MessageActionUrlAuthResult in
-        guard let result = result else {
-            return .default
-        }
         switch result {
             case let .urlAuthResultAccepted(urlAuthResultAcceptedData):
                 let url = urlAuthResultAcceptedData.url

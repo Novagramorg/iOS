@@ -29,10 +29,14 @@ public final class GalleryFooterNode: ASDisplayNode {
     }
     
     private var visibilityAlpha: CGFloat = 1.0
+    private var isEdgeEffectVisible: Bool = false
+    
     public func setVisibilityAlpha(_ alpha: CGFloat, animated: Bool) {
         self.visibilityAlpha = alpha
         let transition: ComponentTransition = animated ? .easeInOut(duration: 0.2) : .immediate
-        transition.setAlpha(view: self.edgeEffectView, alpha: alpha)
+        if self.isEdgeEffectVisible {
+            transition.setAlpha(view: self.edgeEffectView, alpha: alpha)
+        }
         self.currentFooterContentNode?.setVisibilityAlpha(alpha, animated: true)
         self.currentOverlayContentNode?.setVisibilityAlpha(alpha)
     }
@@ -107,32 +111,38 @@ public final class GalleryFooterNode: ASDisplayNode {
         if layout.size.width > layout.size.height {
             effectiveThumbnailPanelHeight = 0.0
         }
-        var backgroundHeight: CGFloat = 0.0
+        var backgroundLayoutInfo: GalleryFooterContentNode.LayoutInfo?
         let verticalOffset: CGFloat = isHidden ? (layout.size.width > layout.size.height ? 44.0 : (effectiveThumbnailPanelHeight > 0.0 ? 106.0 : 54.0)) : 0.0
         let backgroundFrame: CGRect
         var edgeEffectTransition = ComponentTransition(transition)
         if let footerContentNode = self.currentFooterContentNode {
-            backgroundHeight = footerContentNode.updateLayout(size: layout.size, metrics: layout.metrics, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, bottomInset: cleanInsets.bottom, contentInset: effectiveThumbnailPanelHeight, transition: transition)
-            transition.updateFrame(node: footerContentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - backgroundHeight + verticalOffset), size: CGSize(width: layout.size.width, height: backgroundHeight)))
+            var footerTransition = transition
+            if footerContentNode.bounds.isEmpty {
+                footerTransition = .immediate
+            }
+            let backgroundLayoutInfoValue = footerContentNode.updateLayout(size: layout.size, metrics: layout.metrics, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, bottomInset: cleanInsets.bottom, contentInset: effectiveThumbnailPanelHeight, transition: footerTransition)
+            backgroundLayoutInfo = backgroundLayoutInfoValue
+            
+            footerTransition.updateFrame(node: footerContentNode, frame: CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - backgroundLayoutInfoValue.height + verticalOffset), size: CGSize(width: layout.size.width, height: backgroundLayoutInfoValue.height)))
             if let dismissedCurrentFooterContentNode = dismissedCurrentFooterContentNode {
                 let contentTransition = ContainedViewLayoutTransition.animated(duration: 0.4, curve: .spring)
                 footerContentNode.animateIn(fromHeight: dismissedCurrentFooterContentNode.bounds.height, previousContentNode: dismissedCurrentFooterContentNode, transition: contentTransition)
-                dismissedCurrentFooterContentNode.animateOut(toHeight: backgroundHeight, nextContentNode: footerContentNode, transition: contentTransition, completion: { [weak self, weak dismissedCurrentFooterContentNode] in
+                dismissedCurrentFooterContentNode.animateOut(toHeight: backgroundLayoutInfoValue.height, nextContentNode: footerContentNode, transition: contentTransition, completion: { [weak self, weak dismissedCurrentFooterContentNode] in
                     if let strongSelf = self, let dismissedCurrentFooterContentNode = dismissedCurrentFooterContentNode, dismissedCurrentFooterContentNode !== strongSelf.currentFooterContentNode {
                         dismissedCurrentFooterContentNode.removeFromSupernode()
                     }
                 })
-                backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - backgroundHeight + verticalOffset), size: CGSize(width: layout.size.width, height: backgroundHeight))
+                backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - backgroundLayoutInfoValue.height + verticalOffset), size: CGSize(width: layout.size.width, height: backgroundLayoutInfoValue.height))
                 edgeEffectTransition = ComponentTransition(contentTransition)
             } else {
-                backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - backgroundHeight + verticalOffset), size: CGSize(width: layout.size.width, height: backgroundHeight))
+                backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - backgroundLayoutInfoValue.height + verticalOffset), size: CGSize(width: layout.size.width, height: backgroundLayoutInfoValue.height))
             }
         } else {
             if let dismissedCurrentFooterContentNode = dismissedCurrentFooterContentNode {
                 dismissedCurrentFooterContentNode.removeFromSupernode()
             }
             
-            backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - backgroundHeight + verticalOffset), size: CGSize(width: layout.size.width, height: backgroundHeight))
+            backgroundFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height + verticalOffset), size: CGSize(width: layout.size.width, height: 0.0))
         }
         
         self.contentsFrame = backgroundFrame
@@ -144,9 +154,20 @@ public final class GalleryFooterNode: ASDisplayNode {
         edgeEffectFrame.size.height += edgeEffectOffset
         edgeEffectTransition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
         self.edgeEffectView.update(content: .black, alpha: 0.65, rect: edgeEffectFrame, edge: .bottom, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: edgeEffectTransition)
+        if let backgroundLayoutInfo, backgroundLayoutInfo.needsShadow {
+            self.isEdgeEffectVisible = true
+            ComponentTransition(transition).setAlpha(view: self.edgeEffectView, alpha: self.visibilityAlpha)
+        } else {
+            self.isEdgeEffectVisible = false
+            ComponentTransition(transition).setAlpha(view: self.edgeEffectView, alpha: 0.0)
+        }
         
         let contentTransition = ContainedViewLayoutTransition.animated(duration: 0.4, curve: .spring)
         if let overlayContentNode = self.currentOverlayContentNode {
+            var backgroundHeight: CGFloat = 0.0
+            if let backgroundLayoutInfo {
+                backgroundHeight = backgroundLayoutInfo.height
+            }
             let insets = UIEdgeInsets(top: navigationBarHeight, left: layout.safeInsets.left, bottom: isHidden ? layout.intrinsicInsets.bottom : backgroundHeight, right: layout.safeInsets.right)
             overlayContentNode.updateLayout(size: layout.size, metrics: layout.metrics, insets: insets, isHidden: isHidden, transition: transition)
             transition.updateFrame(node: overlayContentNode, frame: CGRect(origin: CGPoint(), size: layout.size))

@@ -316,7 +316,6 @@ public enum ResolvedUrl {
     case boost(peerId: PeerId?, status: ChannelBoostStatus?, myBoostStatus: MyBoostStatus?)
     case premiumGiftCode(slug: String)
     case premiumMultiGift(reference: String?)
-    case collectible(gift: StarGift.UniqueGift?)
     case auction(auction: GiftAuctionContext?)
     case messageLink(link: TelegramResolvedMessageLink?)
     case stars
@@ -327,6 +326,13 @@ public enum ResolvedUrl {
     case sendGift(peerId: PeerId?)
     case unknownDeepLink(path: String)
     case oauth(url: String)
+    
+    public enum ResolvedCollectible {
+        case gift(StarGift.UniqueGift)
+        case invalidSlug
+        case alreadyBurned
+    }
+    case collectible(ResolvedCollectible)
     
     public enum ChatsSection {
         case search
@@ -732,6 +738,11 @@ public enum DeviceContactInfoSubject {
 }
 
 public enum PeerInfoControllerMode {
+    public enum PeerInfoMediaKind {
+        case photoVideo
+        case file
+    }
+    
     case generic
     case calls(messages: [Message])
     case nearbyPeer(distance: Int32)
@@ -747,6 +758,7 @@ public enum PeerInfoControllerMode {
     case monoforum(EnginePeer.Id)
     case storyAlbum(id: Int64)
     case giftCollection(id: Int64)
+    case media(kind: PeerInfoMediaKind, messageIndex: EngineMessage.Index)
 }
 
 public enum ContactListActionItemInlineIconPosition {

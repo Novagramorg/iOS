@@ -101,34 +101,14 @@ public class UniversalVideoGalleryItem: GalleryItem {
     public func node(synchronous: Bool) -> GalleryItemNode {
         let node = UniversalVideoGalleryItemNode(context: self.context, presentationData: self.presentationData, performAction: self.performAction, openActionOptions: self.openActionOptions, present: self.present)
         
-        var title: String?
-        if let indexData = self.indexData {
-            title = self.presentationData.strings.Items_NOfM("\(indexData.position + 1)", "\(indexData.totalCount)").string
-        } else if case let .message(message, _) = self.contentInfo, let _ = message.adAttribute {
-            title = self.presentationData.strings.Gallery_Ad
-        }
-        
         node.setupItem(self)
-        
-        if case let .message(message, _) = self.contentInfo {
-            node.titleContentView?.setMessage(message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId, title: title)
-        }
         
         return node
     }
     
     public func updateNode(node: GalleryItemNode, synchronous: Bool) {
         if let node = node as? UniversalVideoGalleryItemNode {
-            var title: String?
-            if let indexData = self.indexData {
-                title = self.presentationData.strings.Items_NOfM("\(indexData.position + 1)", "\(indexData.totalCount)").string
-            }
-            
             node.setupItem(self)
-            
-            if self.displayInfoOnTop, case let .message(message, _) = self.contentInfo {
-                node.titleContentView?.setMessage(message, presentationData: self.presentationData, accountPeerId: self.context.account.peerId, title: title)
-            }
         }
     }
     
@@ -881,7 +861,7 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
     
     fileprivate let _ready = Promise<Void>()
     fileprivate let _title = Promise<String>()
-    fileprivate let _titleView = Promise<UIView?>()
+    fileprivate let _titleContent = Promise<GalleryTitleView.Content?>(nil)
     fileprivate let _rightBarButtonItems = Promise<[UIBarButtonItem]?>()
     
     fileprivate var titleContentView: GalleryTitleView?
@@ -1135,9 +1115,6 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             }
             self.openMoreMenu(sourceView: self.moreBarButton.referenceNode.view, gesture: gesture, adMessage: adMessage, isSettings: false)
         }
-        
-        self.titleContentView = GalleryTitleView(frame: CGRect())
-        self._titleView.set(.single(self.titleContentView))
         
         let shouldHideControlsSignal: Signal<Void, NoError> = combineLatest(self.isPlayingPromise.get(), self.isInteractingPromise.get(), self.controlsVisiblePromise.get(), self.isShowingContextMenuPromise.get(), self.isShowingSettingsMenuPromise.get(), self.isShowingAdMenuPromise.get(), self.hasExpandedCaptionPromise.get())
         |> mapToSignal { isPlaying, isInteracting, controlsVisible, isShowingContextMenu, isShowingSettingsMenu, isShowingAdMenu, hasExpandedCaptionPromise -> Signal<Void, NoError> in
@@ -1962,6 +1939,25 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
             }
             self.overlayContentNode.setMessage(context: item.context, message: message)
         }
+        
+        var title: String?
+        if let indexData = item.indexData {
+            title = self.presentationData.strings.Items_NOfM("\(indexData.position + 1)", "\(indexData.totalCount)").string
+        } else if case let .message(message, _) = item.contentInfo, let _ = message.adAttribute {
+            title = self.presentationData.strings.Gallery_Ad
+        }
+        
+        if case let .message(message, _) = item.contentInfo {
+            self._titleContent.set(.single(GalleryTitleView.Content(message: EngineMessage(message), title: title, action: message.adAttribute == nil ? { [weak self] in
+                guard let self else {
+                    return
+                }
+                guard let controller = self.galleryController() as? GalleryController else {
+                    return
+                }
+                controller.dismissAndNavigateToMessageContext(message: message)
+            } : nil)))
+        }
     }
     
     override func controlsVisibilityUpdated(isVisible: Bool) {
@@ -2759,8 +2755,8 @@ final class UniversalVideoGalleryItemNode: ZoomableContentGalleryItemNode {
         return self._title.get()
     }
     
-    override func titleView() -> Signal<UIView?, NoError> {
-        return self._titleView.get()
+    override func titleContent() -> Signal<GalleryTitleView.Content?, NoError> {
+        return self._titleContent.get()
     }
     
     override func rightBarButtonItems() -> Signal<[UIBarButtonItem]?, NoError> {

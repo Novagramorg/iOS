@@ -99,7 +99,7 @@ public extension TelegramEngine {
             return _internal_requestMessageActionUrlAuth(account: self.account, subject: subject)
         }
 
-        public func acceptMessageActionUrlAuth(subject: MessageActionUrlSubject, allowWriteAccess: Bool, sharePhoneNumber: Bool) -> Signal<MessageActionUrlAuthResult, NoError> {
+        public func acceptMessageActionUrlAuth(subject: MessageActionUrlSubject, allowWriteAccess: Bool, sharePhoneNumber: Bool) -> Signal<MessageActionUrlAuthResult, MessageActionUrlAuthError> {
             return _internal_acceptMessageActionUrlAuth(account: self.account, subject: subject, allowWriteAccess: allowWriteAccess, sharePhoneNumber: sharePhoneNumber)
         }
 
@@ -495,8 +495,8 @@ public extension TelegramEngine {
             }
         }
 
-        public func sparseMessageList(peerId: EnginePeer.Id, threadId: Int64?, tag: EngineMessage.Tags) -> SparseMessageList {
-            return SparseMessageList(account: self.account, peerId: peerId, threadId: threadId, messageTag: tag)
+        public func sparseMessageList(peerId: EnginePeer.Id, threadId: Int64?, tag: EngineMessage.Tags, initialMessageIndex: MessageIndex? = nil) -> SparseMessageList {
+            return SparseMessageList(account: self.account, peerId: peerId, threadId: threadId, messageTag: tag, initialMessageIndex: initialMessageIndex)
         }
 
         public func sparseMessageCalendar(peerId: EnginePeer.Id, threadId: Int64?, tag: EngineMessage.Tags, displayMedia: Bool) -> SparseMessageCalendar {

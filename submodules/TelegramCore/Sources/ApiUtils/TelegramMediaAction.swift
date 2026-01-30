@@ -349,6 +349,16 @@ func telegramMediaActionFromApiAction(_ action: Api.MessageAction) -> TelegramMe
             return nil
         }
         return TelegramMediaAction(action: .starGiftPurchaseOfferDeclined(gift: gift, amount: CurrencyAmount(apiAmount: price), hasExpired: (flags & (1 << 0)) != 0))
+    case let .messageActionNewCreatorPending(messageActionNewCreatorPending):
+        return TelegramMediaAction(action: .groupCreatorChange(TelegramMediaActionType.GroupCreatorChange(
+            kind: .pending,
+            targetPeerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageActionNewCreatorPending.newCreatorId))
+        )))
+    case let .messageActionChangeCreator(messageActionChangeCreator):
+        return TelegramMediaAction(action: .groupCreatorChange(TelegramMediaActionType.GroupCreatorChange(
+            kind: .applied,
+            targetPeerId: PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageActionChangeCreator.newCreatorId))
+        )))
     }
 }
 
