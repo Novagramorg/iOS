@@ -166,13 +166,17 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
         var containerCornerRadius: CGFloat
         var bottomInset: CGFloat
         var topInset: CGFloat
+        var fillingSize: CGFloat
+        let isTablet: Bool
         
-        init(containerSize: CGSize, containerInset: CGFloat, containerCornerRadius: CGFloat, bottomInset: CGFloat, topInset: CGFloat) {
+        init(containerSize: CGSize, containerInset: CGFloat, containerCornerRadius: CGFloat, bottomInset: CGFloat, topInset: CGFloat, fillingSize: CGFloat, isTablet: Bool) {
             self.containerSize = containerSize
             self.containerInset = containerInset
             self.containerCornerRadius = containerCornerRadius
             self.bottomInset = bottomInset
             self.topInset = topInset
+            self.fillingSize = fillingSize
+            self.isTablet = isTablet
         }
     }
     
@@ -451,8 +455,8 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 topOffsetFraction = 1.0
             }
             
-            let minScale: CGFloat = (itemLayout.containerSize.width - 6.0 * 2.0) / itemLayout.containerSize.width
-            let minScaledTranslation: CGFloat = (itemLayout.containerSize.height - itemLayout.containerSize.height * minScale) * 0.5 - 6.0
+            let minScale: CGFloat = itemLayout.isTablet ? 1.0 : (itemLayout.containerSize.width - 6.0 * 2.0) / itemLayout.containerSize.width
+            let minScaledTranslation: CGFloat = itemLayout.isTablet ? 0.0 : (itemLayout.containerSize.height - itemLayout.containerSize.height * minScale) * 0.5 - 6.0
             let minScaledCornerRadius: CGFloat = itemLayout.containerCornerRadius
             
             let scale = minScale * (1.0 - topOffsetFraction) + 1.0 * topOffsetFraction
@@ -473,7 +477,9 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 self.scrollView.isScrollEnabled = !self.isDismissingInteractively
             }
             
-            self.environment?.boundsUpdated.invoke(self.scrollView.bounds)
+            var bounds = self.scrollView.bounds
+            bounds.size.width = itemLayout.fillingSize
+            self.environment?.boundsUpdated.invoke(bounds)
         }
         
         private var didPlayAppearanceAnimation = false
@@ -617,7 +623,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                     environment: {},
                     containerSize: CGSize(width: containerSize.width - 66.0 * 2.0, height: 66.0)
                 )
-                let titleItemFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((containerSize.width - titleItemSize.width)) / 2.0, y: floorToScreenPixels(36.0 - titleItemSize.height * 0.5)), size: titleItemSize)
+                let titleItemFrame = CGRect(origin: CGPoint(x: rawSideInset + floorToScreenPixels((containerSize.width - titleItemSize.width)) / 2.0, y: floorToScreenPixels(36.0 - titleItemSize.height * 0.5)), size: titleItemSize)
                 if let view = titleItemView.view {
                     if view.superview == nil {
                         self.navigationBarContainer.addSubview(view)
@@ -628,7 +634,6 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                 self.titleItemView = nil
                 titleItemView.view?.removeFromSuperview()
             }
-            
             
             if let leftItem = component.leftItem {
                 var leftItemTransition = transition
@@ -730,7 +735,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                     environment: {},
                     containerSize: CGSize(width: containerSize.width - bottomInsets.left - bottomInsets.right, height: 52.0)
                 )
-                let bottomItemFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((containerSize.width - bottomItemSize.width)) / 2.0, y: availableSize.height - bottomItemSize.height - bottomInsets.bottom), size: bottomItemSize)
+                let bottomItemFrame = CGRect(origin: CGPoint(x: rawSideInset + floorToScreenPixels((containerSize.width - bottomItemSize.width)) / 2.0, y: availableSize.height - bottomItemSize.height - bottomInsets.bottom), size: bottomItemSize)
                 if let view = bottomItemView.view {
                     if view.superview == nil {
                         self.bottomContainer.addSubview(view)
@@ -774,7 +779,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
             
             self.scrollContentClippingView.layer.cornerRadius = 38.0
             
-            self.itemLayout = ItemLayout(containerSize: availableSize, containerInset: containerInset, containerCornerRadius: sheetEnvironment.deviceMetrics.screenCornerRadius, bottomInset: sheetEnvironment.safeInsets.bottom, topInset: topInset)
+            self.itemLayout = ItemLayout(containerSize: availableSize, containerInset: containerInset, containerCornerRadius: sheetEnvironment.deviceMetrics.screenCornerRadius, bottomInset: sheetEnvironment.safeInsets.bottom, topInset: topInset, fillingSize: fillingSize, isTablet: sheetEnvironment.metrics.isTablet)
             
             transition.setFrame(view: self.scrollContentView, frame: CGRect(origin: CGPoint(x: 0.0, y: topInset + containerInset), size: CGSize(width: availableSize.width, height: contentHeight)))
             
