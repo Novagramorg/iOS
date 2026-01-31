@@ -53,8 +53,7 @@ public final class ChannelMembersSearchControllerImpl: ViewController, ChannelMe
         let title: String
         switch params.mode {
         case .ownershipTransfer:
-            //TODO:localize
-            title = "Appoint Another Owner"
+            title = self.presentationData.strings.AppointAnotherOwner_Title
             let titleView = CounterControllerTitleView(theme: self.presentationData.theme)
             titleView.title = CounterControllerTitle(title: title, counter: " ")
             self.navigationItem.titleView = titleView

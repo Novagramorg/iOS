@@ -34,7 +34,7 @@ final class DialIndicatorComponent: Component {
         value: Int,
         suffix: String,
         isVisible: Bool = true,
-        isFlipped: Bool = false,
+        isFlipped: Bool = false
     ) {
         self.content = content
         self.backgroundColor = backgroundColor
@@ -213,6 +213,75 @@ final class DialIndicatorComponent: Component {
             self.containerView.frame = CGRect(origin: .zero, size: pathSize)
             
             return pathSize
+        }
+    }
+
+    public func makeView() -> View {
+        return View(frame: CGRect())
+    }
+
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+
+final class ColorSwatchComponent: Component {
+    let innerColor: UIColor
+    let outerColor: UIColor
+
+    public init(
+        innerColor: UIColor,
+        outerColor: UIColor
+    ) {
+        self.innerColor = innerColor
+        self.outerColor = outerColor
+    }
+
+    public static func ==(lhs: ColorSwatchComponent, rhs: ColorSwatchComponent) -> Bool {
+        if lhs.innerColor != rhs.innerColor {
+            return false
+        }
+        if lhs.outerColor != rhs.outerColor {
+            return false
+        }
+        return true
+    }
+
+    public final class View: UIImageView {
+        private var component: ColorSwatchComponent?
+        private weak var state: EmptyComponentState?
+        
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        func update(component: ColorSwatchComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            let previousComponent = self.component
+            self.component = component
+            self.state = state
+            
+            if previousComponent?.innerColor != component.innerColor || previousComponent?.outerColor != component.outerColor {
+                self.image = generateImage(availableSize, contextGenerator: { size, context in
+                    context.clear(CGRect(origin: .zero, size: size))
+                    if let image = UIImage(bundleImageName: "Premium/Craft/DialColorMask"), let cgImage = image.cgImage {
+                        context.clip(to: CGRect(origin: .zero, size: size), mask: cgImage)
+                    }
+                    var locations: [CGFloat] = [1.0, 0.0]
+                    let colors: [CGColor] = [component.innerColor.cgColor, component.outerColor.cgColor]
+                    
+                    let colorSpace = CGColorSpaceCreateDeviceRGB()
+                    let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: &locations)!
+                    
+                    context.drawLinearGradient(gradient, start: CGPoint(x: 0.0, y: 0.0), end: CGPoint(x: 0.0, y: size.height), options: CGGradientDrawingOptions())
+                })
+            }
+            
+            return availableSize
         }
     }
 

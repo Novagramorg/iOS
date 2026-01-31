@@ -581,7 +581,7 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 
                                 let isChannelGift = item.message.id.peerId.namespace == Namespaces.Peer.CloudChannel || channelPeerId != nil
                                 if isSelfGift {
-                                    title = item.presentationData.strings.Notification_StarGift_Self_Title
+                                    title = item.presentationData.strings.Notification_StarGift_Purchased_Title
                                 } else {
                                     if isPrepaidUpgrade && senderPeerId == channelPeerId {
                                         title = item.presentationData.strings.Gift_View_Unknown_Title
@@ -714,8 +714,10 @@ public class ChatMessageGiftBubbleContentNode: ChatMessageBubbleContentNode {
                                 } else if isSelfGift {
                                     if isCrafted {
                                         title = item.presentationData.strings.Notification_StarGift_Crafted_Title
+                                    } else if isUpgrade {
+                                        title = item.presentationData.strings.Notification_StarGift_Upgraded_Title
                                     } else {
-                                        title = item.presentationData.strings.Notification_StarGift_Self_Title
+                                        title = item.presentationData.strings.Notification_StarGift_Purchased_Title
                                     }
                                 } else if item.message.id.peerId.isTelegramNotifications {
                                     title = item.presentationData.strings.Notification_StarGift_TitleShort

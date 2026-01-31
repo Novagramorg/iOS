@@ -172,6 +172,7 @@ public final class GiftItemComponent: Component {
     let animateChanges: Bool
     let mode: Mode
     let cornerRadius: CGFloat?
+    let allowAnimations: Bool
     let action: (() -> Void)?
     let contextAction: ((UIView, ContextGesture) -> Void)?
     
@@ -200,6 +201,7 @@ public final class GiftItemComponent: Component {
         animateChanges: Bool = false,
         mode: Mode = .generic,
         cornerRadius: CGFloat? = nil,
+        allowAnimations: Bool = true,
         action: (() -> Void)? = nil,
         contextAction: ((UIView, ContextGesture) -> Void)? = nil
     ) {
@@ -227,6 +229,7 @@ public final class GiftItemComponent: Component {
         self.animateChanges = animateChanges
         self.mode = mode
         self.cornerRadius = cornerRadius
+        self.allowAnimations = allowAnimations
         self.action = action
         self.contextAction = contextAction
     }
@@ -302,6 +305,9 @@ public final class GiftItemComponent: Component {
             return false
         }
         if lhs.cornerRadius != rhs.cornerRadius {
+            return false
+        }
+        if lhs.allowAnimations != rhs.allowAnimations {
             return false
         }
         if (lhs.contextAction == nil) != (rhs.contextAction == nil) {
@@ -713,7 +719,7 @@ public final class GiftItemComponent: Component {
                     pointSize: CGSize(width: iconSize.width * 2.0, height: iconSize.height * 2.0),
                     loopCount: 1
                 )
-                animationLayer.isVisibleForAnimations = true
+                animationLayer.isVisibleForAnimations = component.allowAnimations
                 self.animationLayer = animationLayer
                 
                 if let patternView = self.patternView.view {
