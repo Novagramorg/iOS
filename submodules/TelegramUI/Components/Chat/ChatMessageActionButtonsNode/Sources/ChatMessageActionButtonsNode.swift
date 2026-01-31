@@ -467,11 +467,11 @@ private final class ChatMessageActionButtonNode: ASDisplayNode {
                         
                         switch color {
                         case .primary:
-                            backgroundColorView.backgroundColor = UIColor(rgb: 0x0067D7, alpha: 0.55)
+                            backgroundColorView.backgroundColor = theme.theme.list.itemAccentColor.withMultipliedAlpha(0.7)
                         case .danger:
-                            backgroundColorView.backgroundColor = UIColor(rgb: 0xD5000C, alpha: 0.55)
+                            backgroundColorView.backgroundColor = theme.theme.contextMenu.destructiveColor.withMultipliedAlpha(0.7)
                         case .success:
-                            backgroundColorView.backgroundColor = UIColor(rgb: 0x127E2D, alpha: 0.55)
+                            backgroundColorView.backgroundColor = theme.theme.list.freeTextSuccessColor.withMultipliedAlpha(0.7)
                         }
                     } else if let backgroundColorView = node.backgroundColorView {
                         node.backgroundColorView = nil
