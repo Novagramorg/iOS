@@ -519,7 +519,8 @@ private final class GiftUpgradeVariantsScreenComponent: Component {
                                         title: title,
                                         ribbon: nil,
                                         isSelected: isSelected,
-                                        mode: .upgradePreview
+                                        mode: .upgradePreview,
+                                        allowAnimations: self.selectedSection != .backdrops
                                     )
                                 ),
                                 effectAlignment: .center,

@@ -15672,7 +15672,7 @@ Error: %8$@";
 
 "Appearance.SendWithCmdEnter" = "Send Messages with ⌘+Enter";
 
-"Notification.StarsGift.Crafted" = "You crafted a new unique collectible";
+"Notification.StarsGift.Crafted" = "You crafted a new gift";
 
 "Gift.Craft.Title" = "Craft Gift";
 "Gift.Craft.Description" = "Add up to **4 gifts** to craft new\n**$ %@**.\n\nIf crafting fails, all used gifts\nwill be lost.";
@@ -15757,3 +15757,11 @@ Error: %8$@";
 "Notification.GroupCreatorChangeApplied" = "%1$@ has transferred ownership of the group to %2$@.";
 
 "Notification.StarGift.Crafted.Title" = "Crafted Gift";
+"Notification.StarGift.Upgraded.Title" = "Upgraded Gift";
+"Notification.StarGift.Purchased.Title" = "Purchased Gift";
+
+"LeaveGroup.Title" = "Leave %@";
+"LeaveGroup.Text" = "If you leave, **%1$@** will become the owner of **%2$@** in **1 week**.";
+"LeaveGroup.AppointAnotherOwner" = "Appoint Another Owner";
+"LeaveGroup.Proceed" = "Leave Group";
+"AppointAnotherOwner.Title" = "Appoint Another Owner";

@@ -46,7 +46,6 @@ swift_library(
         "//submodules/TooltipUI",
         "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/Gifts/GiftStoreScreen",
-        "//submodules/TelegramUI/Components/SpaceWarpView",
         "//submodules/ConfettiEffect",
         "//submodules/TelegramNotices",
         "//submodules/TelegramUI/Components/Gifts/GiftLoadingShimmerView",

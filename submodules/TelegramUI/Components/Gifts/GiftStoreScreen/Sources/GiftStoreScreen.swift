@@ -882,6 +882,8 @@ public final class GiftStoreContentComponent: Component {
                     }
                     let previousFilterAttributes = self.starGiftsState?.filterAttributes
                     let previousSorting = self.starGiftsState?.sorting
+                    let previousDataState = self.starGiftsState?.dataState
+                    let previousItems = self.starGiftsState?.gifts
                     self.starGiftsState = state
                     
                     var transition: ComponentTransition = .immediate
@@ -890,6 +892,11 @@ public final class GiftStoreContentComponent: Component {
                     } else if let previousSorting, previousSorting != state.sorting {
                         transition = .easeInOut(duration: 0.25)
                     }
+                    
+                    if previousItems?.isEmpty == true, case .loading = previousDataState, component.confirmPurchaseImmediately {
+                        transition = .spring(duration: 0.3)
+                    }
+                    
                     if !self.isUpdating {
                         self.state?.updated(transition: transition)
                     }

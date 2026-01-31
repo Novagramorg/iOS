@@ -31,12 +31,8 @@ import LottieComponent
 import TooltipUI
 import TextFormat
 import GlassBackgroundComponent
-import SpaceWarpView
 import ConfettiEffect
 import TelegramNotices
-
-private let backdropButtonTag = GenericComponentViewTag()
-private let symbolButtonTag = GenericComponentViewTag()
 
 private final class CraftGiftPageContent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -145,9 +141,9 @@ private final class CraftGiftPageContent: Component {
         
         private var craftTable = ComponentView<Empty>()
         
-        private var backdropDial = ComponentView<Empty>()
-        private var symbolDial = ComponentView<Empty>()
-        private var variantsButton = ComponentView<Empty>()
+        private var attributeDials: [AnyHashable: ComponentView<Empty>] = [:]
+        private var attributeDialTags: [AnyHashable: GenericComponentViewTag] = [:]
+        private var variantsButton: ComponentView<Empty>?
         private var variantsButtonMeasure = ComponentView<Empty>()
         
         private let craftingTitle = ComponentView<Empty>()
@@ -461,282 +457,8 @@ private final class CraftGiftPageContent: Component {
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)
             )
             craftContentHeight += 291.0
-            craftContentHeight += descriptionTextSize.height
-            craftContentHeight += 25.0
             
-            var attributes: [ResaleGiftsContext.Attribute: StarGift.UniqueGift.Attribute] = [:]
-            var backdropAttributeCount: [ResaleGiftsContext.Attribute: Int32] = [:]
-            var patternAttributeCount: [ResaleGiftsContext.Attribute: Int32] = [:]
-            for gift in selectedGifts.values {
-                for attribute in gift.gift.attributes {
-                    switch attribute {
-                    case let .backdrop(_, id, _, _, _, _, _):
-                        let attributeId: ResaleGiftsContext.Attribute = .backdrop(id)
-                        attributes[attributeId] = attribute
-                        if let count = backdropAttributeCount[attributeId] {
-                            backdropAttributeCount[attributeId] = count + 1
-                        } else {
-                            backdropAttributeCount[attributeId] = 1
-                        }
-                    case let .pattern(_, file, _):
-                        let attributeId: ResaleGiftsContext.Attribute = .pattern(file.fileId.id)
-                        attributes[attributeId] = attribute
-                        if let count = patternAttributeCount[attributeId] {
-                            patternAttributeCount[attributeId] = count + 1
-                        } else {
-                            patternAttributeCount[attributeId] = 1
-                        }
-                    default:
-                        break
-                    }
-                }
-            }
-            
-            func mostFrequentAttribute(from counts: [ResaleGiftsContext.Attribute: Int32]) -> (attribute: StarGift.UniqueGift.Attribute, count: Int32)? {
-                guard let (id, count) = counts.max(by: { $0.value < $1.value }),
-                      count > 1,
-                      let attribute = attributes[id] else {
-                    return nil
-                }
-                return (attribute, count)
-            }
-            
-            var possibleBackdrop: (StarGift.UniqueGift.Attribute, Int32)?
-            var possiblePattern: (StarGift.UniqueGift.Attribute, Int32)?
-
-            var backdropColor: UIColor = .white
-            var backdropPermille: Int = 0
-            var backdropName = ""
-            var symbolFile: TelegramMediaFile?
-            var symbolPermille: Int = 0
-            var symbolName = ""
-            
-            for attribute in component.gift.attributes {
-                switch attribute {
-                case .backdrop:
-                    possibleBackdrop = (attribute, 1)
-                case .pattern:
-                    possiblePattern = (attribute, 1)
-                default:
-                    break
-                }
-            }
-            
-            if let betterBackdrop = mostFrequentAttribute(from: backdropAttributeCount) {
-                possibleBackdrop = betterBackdrop
-            }
-            
-            if let betterPattern = mostFrequentAttribute(from: patternAttributeCount) {
-                possiblePattern = betterPattern
-            }
-            
-            let appConfiguration = component.context.currentAppConfiguration.with { $0 }
-            let giftCraftConfiguration = GiftCraftConfiguration.with(appConfiguration: appConfiguration)
-            
-            if case let .backdrop(name, _, innerColor, _, _, _, _) = possibleBackdrop?.0  {
-                backdropColor = UIColor(rgb: UInt32(bitPattern: innerColor))
-                backdropName = name
-            }
-            if let possibleBackdrop {
-                backdropPermille = Int(giftCraftConfiguration.craftAttributePermilles[Int(possibleBackdrop.1 - 1)])
-            }
-            
-            if case let .pattern(name, file, _) = possiblePattern?.0 {
-                symbolFile = file
-                symbolName = name
-            }
-            if let possiblePattern {
-                symbolPermille = Int(giftCraftConfiguration.craftAttributePermilles[Int(possiblePattern.1 - 1)])
-            }
-            
-            let backdropDialSize = self.backdropDial.update(
-                transition: transition,
-                component: AnyComponent(
-                    PlainButtonComponent(
-                        content: AnyComponent(
-                            DialIndicatorComponent(
-                                content: AnyComponentWithIdentity(
-                                    id: "color",
-                                    component: AnyComponent(
-                                        BundleIconComponent(name: "Components/ColorMask", tintColor: backdropColor)
-                                    )
-                                ),
-                                backgroundColor: .white.withAlphaComponent(0.1),
-                                foregroundColor: .white,
-                                diameter: 48.0,
-                                lineWidth: 4.0,
-                                fontSize: 10.0,
-                                progress: CGFloat(backdropPermille) / 10.0 / 100.0,
-                                value: backdropPermille / 10,
-                                suffix: "%"
-                            )
-                        ),
-                        action: { [weak self] in
-                            guard let self else {
-                                return
-                            }
-                            #if DEBUG
-                            self.component?.externalState.testFailOrSuccess = true
-                            #endif
-                            self.showAttributeInfo(tag: backdropButtonTag, text: environment.strings.Gift_Craft_BackdropTooltip("\(backdropPermille / 10)", backdropName).string)
-                        },
-                        tag: backdropButtonTag
-                    )
-                ),
-                environment: {},
-                containerSize: availableSize
-            )
-            
-            let symbolDialSize = self.symbolDial.update(
-                transition: transition,
-                component: AnyComponent(
-                    PlainButtonComponent(
-                        content: AnyComponent(
-                            DialIndicatorComponent(
-                                content: symbolFile.flatMap { AnyComponentWithIdentity(
-                                    id: "symbol",
-                                    component: AnyComponent(
-                                        LottieComponent(
-                                            content: LottieComponent.ResourceContent(
-                                                context: component.context,
-                                                file: $0,
-                                                attemptSynchronously: true,
-                                                providesPlaceholder: true
-                                            ),
-                                            color: .white,
-                                            size: CGSize(width: 32.0, height: 32.0)
-                                        )
-                                    )
-                                ) } ?? AnyComponentWithIdentity(
-                                    id: "empty", component: AnyComponent(Rectangle(color: .clear))),
-                                backgroundColor: .white.withAlphaComponent(0.1),
-                                foregroundColor: .white,
-                                diameter: 48.0,
-                                contentSize: CGSize(width: 28.0, height: 28.0),
-                                lineWidth: 4.0,
-                                fontSize: 10.0,
-                                progress: CGFloat(symbolPermille) / 10.0 / 100.0,
-                                value: symbolPermille / 10,
-                                suffix: "%"
-                            )
-                        ),
-                        action: { [weak self] in
-                            guard let self else {
-                                return
-                            }
-                            #if DEBUG
-                            self.component?.externalState.testFailOrSuccess = false
-                            #endif
-                            self.showAttributeInfo(tag: symbolButtonTag, text: environment.strings.Gift_Craft_SymbolTooltip("\(symbolPermille / 10)", symbolName).string)
-                        },
-                        tag: symbolButtonTag
-                    )
-                ),
-                environment: {},
-                containerSize: availableSize
-            )
-            craftContentHeight += backdropDialSize.height
-            craftContentHeight += 15.0
-            
-            let variantsString = environment.strings.Gift_Craft_ViewVariants
-            let variantsButtonMeasure = self.variantsButtonMeasure.update(
-                transition: .immediate,
-                component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: variantsString, font: Font.semibold(13.0), textColor: .clear)))),
-                environment: {},
-                containerSize: availableSize
-            )
-            
-            let variantsButtonSize = CGSize(width: variantsButtonMeasure.width + 87.0, height: 24.0)
-            if let gift = self.starGiftsMap[component.gift.giftId] {
-                var variant1: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
-                var variant2: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
-                var variant3: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
-                
-                if let upgradePreview = self.upgradePreview {
-                    var i = 0
-                    for attribute in upgradePreview {
-                        if case .model = attribute {
-                            switch i {
-                            case 0:
-                                variant1 = .preview(attributes: [attribute], rarity: nil)
-                            case 1:
-                                variant2 = .preview(attributes: [attribute], rarity: nil)
-                            case 2:
-                                variant3 = .preview(attributes: [attribute], rarity: nil)
-                            default:
-                                break
-                            }
-                            i += 1
-                        }
-                    }
-                }
-                
-                let _ = self.variantsButton.update(
-                    transition: transition,
-                    component: AnyComponent(
-                        GlassBarButtonComponent(
-                            size: variantsButtonSize,
-                            backgroundColor: component.colors.3,
-                            isDark: true,
-                            state: .tintedGlass,
-                            component: AnyComponentWithIdentity(id: "content", component: AnyComponent(HStack([
-                                AnyComponentWithIdentity(id: "icon1", component: AnyComponent(
-                                    GiftItemComponent(
-                                        context: component.context,
-                                        theme: environment.theme,
-                                        strings: environment.strings,
-                                        peer: nil,
-                                        subject: variant1,
-                                        isPlaceholder: false,
-                                        mode: .tableIcon
-                                    )
-                                )),
-                                AnyComponentWithIdentity(id: "icon2", component: AnyComponent(
-                                    GiftItemComponent(
-                                        context: component.context,
-                                        theme: environment.theme,
-                                        strings: environment.strings,
-                                        peer: nil,
-                                        subject: variant2,
-                                        isPlaceholder: false,
-                                        mode: .tableIcon
-                                    )
-                                )),
-                                AnyComponentWithIdentity(id: "icon3", component: AnyComponent(
-                                    GiftItemComponent(
-                                        context: component.context,
-                                        theme: environment.theme,
-                                        strings: environment.strings,
-                                        peer: nil,
-                                        subject: variant3,
-                                        isPlaceholder: false,
-                                        mode: .tableIcon
-                                    )
-                                )),
-                                AnyComponentWithIdentity(id: "text", component: AnyComponent(
-                                    MultilineTextComponent(text: .plain(NSAttributedString(string: variantsString, font: Font.semibold(13.0), textColor: .white)))
-                                )),
-                                AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
-                                    BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: .white)
-                                ))
-                            ], spacing: 3.0))),
-                            action: { [weak self] _ in
-                                self?.openUpgradeVariants()
-                            }
-                        )
-                    ),
-                    environment: {},
-                    containerSize: availableSize
-                )
-            }
-            craftContentHeight += 160.0
-            
-            let originalCraftContentHeight = craftContentHeight
-            if !"".isEmpty, isCrafting {
-                craftContentHeight = component.screenSize.height
-            }
-            
-            let descriptionTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - descriptionTextSize.width) * 0.5), y: craftContentHeight - 145.0 - 78.0 - 115.0), size: descriptionTextSize)
+            let descriptionTextFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - descriptionTextSize.width) * 0.5), y: craftContentHeight), size: descriptionTextSize)
             if let descriptionTextView = self.descriptionText.view {
                 if descriptionTextView.superview == nil {
                     self.addSubview(descriptionTextView)
@@ -745,52 +467,395 @@ private final class CraftGiftPageContent: Component {
                 transition.setAlpha(view: descriptionTextView, alpha: isCrafting ? 0.0 : 1.0)
                 transition.setBlur(layer: descriptionTextView.layer, radius: isCrafting ? 10.0 : 0.0)
             }
+            craftContentHeight += descriptionTextSize.height
+            craftContentHeight += 16.0
             
-            let backdropDialFrame = CGRect(origin: CGPoint(x: availableSize.width * 0.5 - 9.0 - backdropDialSize.width, y: craftContentHeight - 145.0 - 78.0), size: backdropDialSize)
-            if let backdropDialView = self.backdropDial.view {
-                if backdropDialView.superview == nil {
-                    self.addSubview(backdropDialView)
-                }
-                transition.setFrame(view: backdropDialView, frame: backdropDialFrame)
-                transition.setAlpha(view: backdropDialView, alpha: isCrafting ? 0.0 : 1.0)
-                transition.setBlur(layer: backdropDialView.layer, radius: isCrafting ? 10.0 : 0.0)
-            }
-            
-            let symbolDialFrame = CGRect(origin: CGPoint(x: availableSize.width * 0.5 + 9.0, y: craftContentHeight - 145.0 - 78.0), size: symbolDialSize)
-            if let symbolDialView = self.symbolDial.view {
-                if symbolDialView.superview == nil {
-                    self.addSubview(symbolDialView)
-                }
-                transition.setFrame(view: symbolDialView, frame: symbolDialFrame)
-                transition.setAlpha(view: symbolDialView, alpha: isCrafting ? 0.0 : 1.0)
-                transition.setBlur(layer: symbolDialView.layer, radius: isCrafting ? 10.0 : 0.0)
-            }
-            
-            let variantsButtonFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - variantsButtonSize.width) / 2.0), y: craftContentHeight - 145.0), size: variantsButtonSize)
-            var varitantsButtonTransition = transition
-            if let variantsButtonView = self.variantsButton.view {
-                if variantsButtonView.superview == nil && component.displayState == .default {
-                    varitantsButtonTransition = .immediate
-                    if let symbolDialView = self.symbolDial.view {
-                        self.insertSubview(variantsButtonView, aboveSubview: symbolDialView)
-                    } else {
-                        self.addSubview(variantsButtonView)
+            var attributes: [ResaleGiftsContext.Attribute: StarGift.UniqueGift.Attribute] = [:]
+            var backdropAttributeCount: [ResaleGiftsContext.Attribute: (Int32, Int)] = [:]
+            var patternAttributeCount: [ResaleGiftsContext.Attribute: (Int32, Int)] = [:]
+            for (index, gift) in selectedGifts {
+                for attribute in gift.gift.attributes {
+                    switch attribute {
+                    case let .backdrop(_, id, _, _, _, _, _):
+                        let attributeId: ResaleGiftsContext.Attribute = .backdrop(id)
+                        attributes[attributeId] = attribute
+                        if let (minPosition, count) = backdropAttributeCount[attributeId] {
+                            backdropAttributeCount[attributeId] = (min(index, minPosition), count + 1)
+                        } else {
+                            backdropAttributeCount[attributeId] = (index, 1)
+                        }
+                    case let .pattern(_, file, _):
+                        let attributeId: ResaleGiftsContext.Attribute = .pattern(file.fileId.id)
+                        attributes[attributeId] = attribute
+                        if let (minPosition, count) = patternAttributeCount[attributeId] {
+                            patternAttributeCount[attributeId] = (min(index, minPosition), count + 1)
+                        } else {
+                            patternAttributeCount[attributeId] = (index, 1)
+                        }
+                    default:
+                        break
                     }
                 }
-                varitantsButtonTransition.setFrame(view: variantsButtonView, frame: variantsButtonFrame)
-                varitantsButtonTransition.setBlur(layer: variantsButtonView.layer, radius: isCrafting ? 10.0 : 0.0)
-                if component.displayState == .crafting {
+            }
+            var attributesCount: [ResaleGiftsContext.Attribute: (Int32, Int)] = [:]
+            for (attributeId, value) in backdropAttributeCount {
+                attributesCount[attributeId] = value
+            }
+            for (attributeId, value) in patternAttributeCount {
+                attributesCount[attributeId] = value
+            }
+            
+            var backdropAttributes: [(ResaleGiftsContext.Attribute, Int)] = []
+            for (attributeId, count) in backdropAttributeCount {
+                backdropAttributes.append((attributeId, count.1))
+            }
+            backdropAttributes = backdropAttributes.sorted(by: { lhs, rhs in
+                if lhs.1 != rhs.1 {
+                    return lhs.1 > rhs.1
+                } else {
+                    return attributesCount[lhs.0]!.0 < attributesCount[rhs.0]!.0
+                }
+            })
+            var patternAttributes: [(ResaleGiftsContext.Attribute, Int)] = []
+            for (attributeId, count) in patternAttributeCount {
+                patternAttributes.append((attributeId, count.1))
+            }
+            patternAttributes = patternAttributes.sorted(by: { lhs, rhs in
+                if lhs.1 != rhs.1 {
+                    return lhs.1 > rhs.1
+                } else {
+                    return attributesCount[lhs.0]!.0 < attributesCount[rhs.0]!.0
+                }
+            })
+            
+            var combinedAttributes: [ResaleGiftsContext.Attribute] = []
+            for (attributeId, _) in backdropAttributes {
+                combinedAttributes.append(attributeId)
+            }
+            for (attributeId, _) in patternAttributes {
+                combinedAttributes.append(attributeId)
+            }
+            
+            let appConfiguration = component.context.currentAppConfiguration.with { $0 }
+            let giftCraftConfiguration = GiftCraftConfiguration.with(appConfiguration: appConfiguration)
+            
+            var firstRowCount = 0
+            var secondRowCount = 0
+            switch combinedAttributes.count {
+            case 0, 1, 2, 3, 4:
+                firstRowCount = combinedAttributes.count
+            case 5:
+                firstRowCount = 2
+                secondRowCount = 3
+            case 6:
+                firstRowCount = 3
+                secondRowCount = 3
+            case 7:
+                firstRowCount = 3
+                secondRowCount = 4
+            case 8:
+                firstRowCount = 4
+                secondRowCount = 4
+            default:
+                break
+            }
+            
+            let attributeDialSpacing: CGFloat = 18.0
+            let attributeDialSize = CGSize(width: 48.0, height: 48.0)
+            
+            let attributeFirstRowTotalWidth = CGFloat(firstRowCount) * attributeDialSize.width + CGFloat(firstRowCount - 1) * attributeDialSpacing
+            let attributeSecondRowTotalWidth = CGFloat(secondRowCount) * attributeDialSize.width + CGFloat(secondRowCount - 1) * attributeDialSpacing
+            var attributeDialFrame: CGRect = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - attributeFirstRowTotalWidth) / 2.0), y: craftContentHeight), size: attributeDialSize)
+            
+            craftContentHeight += attributeDialSize.height
+            craftContentHeight += 39.0
+            
+            var validIds: [AnyHashable] = []
+            var attributeDialIndex = 0
+            for attribute in combinedAttributes {
+                let itemId = AnyHashable(attribute)
+                validIds.append(itemId)
+                
+                var itemTransition = transition
+                let visibleItem: ComponentView<Empty>
+                if let current = self.attributeDials[itemId] {
+                    visibleItem = current
+                } else {
+                    visibleItem = ComponentView()
+                    self.attributeDials[itemId] = visibleItem
+                    itemTransition = .immediate
+                }
+                
+                let tag: GenericComponentViewTag
+                if let current = self.attributeDialTags[itemId] {
+                    tag = current
+                } else {
+                    tag = GenericComponentViewTag()
+                    self.attributeDialTags[itemId] = tag
+                }
+                                
+                let attributeCount = attributesCount[attribute]?.1 ?? 0
+                let permille = Int(giftCraftConfiguration.craftAttributePermilles[selectedGifts.count - 1][attributeCount - 1])
+                
+                let dialContent: AnyComponentWithIdentity<Empty>
+                var dialContentSize: CGSize?
+                let tooltipText: String
+                switch attribute {
+                case .backdrop:
+                    guard case let .backdrop(name, _, innerColor, outerColor, _, _, _) = attributes[attribute] else {
+                        continue
+                    }
+                    dialContent = AnyComponentWithIdentity(
+                        id: "color",
+                        component: AnyComponent(
+                            ColorSwatchComponent(
+                                innerColor: UIColor(rgb: UInt32(bitPattern: innerColor)),
+                                outerColor: UIColor(rgb: UInt32(bitPattern: outerColor))
+                            )
+                        )
+                    )
+                    tooltipText = environment.strings.Gift_Craft_BackdropTooltip("\(permille / 10)", name).string
+                case .pattern:
+                    guard case let .pattern(name, file, _) = attributes[attribute] else {
+                        continue
+                    }
+                    dialContent = AnyComponentWithIdentity(
+                        id: "symbol",
+                        component: AnyComponent(
+                            LottieComponent(
+                                content: LottieComponent.ResourceContent(
+                                    context: component.context,
+                                    file: file,
+                                    attemptSynchronously: true,
+                                    providesPlaceholder: true
+                                ),
+                                color: .white,
+                                size: CGSize(width: 32.0, height: 32.0)
+                            )
+                        )
+                    )
+                    dialContentSize = CGSize(width: 30.0, height: 30.0)
+                    tooltipText = environment.strings.Gift_Craft_SymbolTooltip("\(permille / 10)", name).string
+                default:
+                    continue
+                }
+                
+                let _ = visibleItem.update(
+                    transition: itemTransition,
+                    component: AnyComponent(
+                        PlainButtonComponent(
+                            content: AnyComponent(
+                                DialIndicatorComponent(
+                                    content: dialContent,
+                                    backgroundColor: .white.withAlphaComponent(0.1),
+                                    foregroundColor: .white,
+                                    diameter: 48.0,
+                                    contentSize: dialContentSize,
+                                    lineWidth: 4.0,
+                                    fontSize: 10.0,
+                                    progress: CGFloat(permille) / 10.0 / 100.0,
+                                    value: permille / 10,
+                                    suffix: "%"
+                                )
+                            ),
+                            action: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                HapticFeedback().impact(.light)
+                                
+                            #if DEBUG
+                                switch attribute {
+                                case .backdrop:
+                                    self.component?.externalState.testFailOrSuccess = true
+                                case .pattern:
+                                    self.component?.externalState.testFailOrSuccess = false
+                                default:
+                                    break
+                                }
+                            #endif
+                                self.showAttributeInfo(tag: tag, text: tooltipText)
+                            },
+                            tag: tag
+                        )
+                    ),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                if let itemView = visibleItem.view {
+                    if itemView.superview == nil {
+                        self.addSubview(itemView)
+                        
+                        if !transition.animation.isImmediate {
+                            itemView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.25)
+                        }
+                    }
+                    itemTransition.setFrame(view: itemView, frame: attributeDialFrame)
+                    transition.setAlpha(view: itemView, alpha: isCrafting ? 0.0 : 1.0)
+                    transition.setBlur(layer: itemView.layer, radius: isCrafting ? 10.0 : 0.0)
+                }
+                
+                attributeDialFrame.origin.x += attributeDialSize.width + attributeDialSpacing
+                attributeDialIndex += 1
+                
+                if attributeDialIndex == firstRowCount {
+                    attributeDialFrame.origin.x = floorToScreenPixels((availableSize.width - attributeSecondRowTotalWidth) / 2.0)
+                    attributeDialFrame.origin.y += 66.0
+                }
+            }
+                        
+            var removeIds: [AnyHashable] = []
+            for (id, item) in self.attributeDials {
+                if !validIds.contains(id) {
+                    removeIds.append(id)
+                    if let itemView = item.view {
+                        if !transition.animation.isImmediate {
+                            itemView.layer.animateScale(from: 1.0, to: 0.01, duration: 0.25, removeOnCompletion: false)
+                            itemView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.25, removeOnCompletion: false, completion: { _ in
+                                itemView.removeFromSuperview()
+                            })
+                        } else {
+                            itemView.removeFromSuperview()
+                        }
+                    }
+                }
+            }
+            for id in removeIds {
+                self.attributeDials.removeValue(forKey: id)
+            }
+            
+            
+            if secondRowCount == 0, case .default = component.displayState {
+                let variantsString = environment.strings.Gift_Craft_ViewVariants
+                let variantsButtonMeasure = self.variantsButtonMeasure.update(
+                    transition: .immediate,
+                    component: AnyComponent(MultilineTextComponent(text: .plain(NSAttributedString(string: variantsString, font: Font.semibold(13.0), textColor: .clear)))),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                
+                let variantsButton: ComponentView<Empty>
+                if let current = self.variantsButton {
+                    variantsButton = current
+                } else {
+                    variantsButton = ComponentView<Empty>()
+                    self.variantsButton = variantsButton
+                }
+                
+                let variantsButtonSize = CGSize(width: variantsButtonMeasure.width + 87.0, height: 24.0)
+                if let gift = self.starGiftsMap[component.gift.giftId] {
+                    var variant1: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                    var variant2: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                    var variant3: GiftItemComponent.Subject = .starGift(gift: gift, price: "")
+                    
+                    if let upgradePreview = self.upgradePreview {
+                        var i = 0
+                        for attribute in upgradePreview {
+                            if case .model = attribute {
+                                switch i {
+                                case 0:
+                                    variant1 = .preview(attributes: [attribute], rarity: nil)
+                                case 1:
+                                    variant2 = .preview(attributes: [attribute], rarity: nil)
+                                case 2:
+                                    variant3 = .preview(attributes: [attribute], rarity: nil)
+                                default:
+                                    break
+                                }
+                                i += 1
+                            }
+                        }
+                    }
+                    
+                    let _ = variantsButton.update(
+                        transition: transition,
+                        component: AnyComponent(
+                            GlassBarButtonComponent(
+                                size: variantsButtonSize,
+                                backgroundColor: component.colors.3,
+                                isDark: true,
+                                state: .tintedGlass,
+                                component: AnyComponentWithIdentity(id: "content", component: AnyComponent(HStack([
+                                    AnyComponentWithIdentity(id: "icon1", component: AnyComponent(
+                                        GiftItemComponent(
+                                            context: component.context,
+                                            theme: environment.theme,
+                                            strings: environment.strings,
+                                            peer: nil,
+                                            subject: variant1,
+                                            isPlaceholder: false,
+                                            mode: .tableIcon
+                                        )
+                                    )),
+                                    AnyComponentWithIdentity(id: "icon2", component: AnyComponent(
+                                        GiftItemComponent(
+                                            context: component.context,
+                                            theme: environment.theme,
+                                            strings: environment.strings,
+                                            peer: nil,
+                                            subject: variant2,
+                                            isPlaceholder: false,
+                                            mode: .tableIcon
+                                        )
+                                    )),
+                                    AnyComponentWithIdentity(id: "icon3", component: AnyComponent(
+                                        GiftItemComponent(
+                                            context: component.context,
+                                            theme: environment.theme,
+                                            strings: environment.strings,
+                                            peer: nil,
+                                            subject: variant3,
+                                            isPlaceholder: false,
+                                            mode: .tableIcon
+                                        )
+                                    )),
+                                    AnyComponentWithIdentity(id: "text", component: AnyComponent(
+                                        MultilineTextComponent(text: .plain(NSAttributedString(string: variantsString, font: Font.semibold(13.0), textColor: .white)))
+                                    )),
+                                    AnyComponentWithIdentity(id: "arrow", component: AnyComponent(
+                                        BundleIconComponent(name: "Item List/InlineTextRightArrow", tintColor: .white)
+                                    ))
+                                ], spacing: 3.0))),
+                                action: { [weak self] _ in
+                                    HapticFeedback().impact(.light)
+                                    
+                                    self?.openUpgradeVariants()
+                                }
+                            )
+                        ),
+                        environment: {},
+                        containerSize: availableSize
+                    )
+                }
+                let variantsButtonFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - variantsButtonSize.width) / 2.0), y: craftContentHeight), size: variantsButtonSize)
+                var varitantsButtonTransition = transition
+                if let variantsButtonView = variantsButton.view {
+                    if variantsButtonView.superview == nil {
+                        varitantsButtonTransition = .immediate
+                        if let descriptionView = self.descriptionText.view {
+                            self.insertSubview(variantsButtonView, aboveSubview: descriptionView)
+                        } else {
+                            self.addSubview(variantsButtonView)
+                        }
+                    }
+                    varitantsButtonTransition.setFrame(view: variantsButtonView, frame: variantsButtonFrame)
+                }
+            } else if let variantsButton = self.variantsButton {
+                self.variantsButton = nil
+                if let variantsButtonView = variantsButton.view {
+                    transition.setBlur(layer: variantsButtonView.layer, radius: isCrafting ? 10.0 : 0.0)
                     variantsButtonView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3, removeOnCompletion: false, completion: { _ in
                         variantsButtonView.removeFromSuperview()
                     })
                 }
             }
             
+            craftContentHeight += 145.0
+            
             let permilleValue = selectedGifts.reduce(0, { $0 + Int($1.value.gift.craftChancePermille ?? 0) })
             if component.displayState == .crafting {
-                //var craftingOriginY = craftContentHeight * 0.5 + 160.0
                 var craftingOriginY = craftContentHeight * 0.5 - 16.0
-                let offset = -(craftContentHeight - originalCraftContentHeight)
+                let offset: CGFloat = 0.0
                 
                 let craftingTitleSize = self.craftingTitle.update(
                     transition: transition,
@@ -935,7 +1000,7 @@ private final class CraftGiftPageContent: Component {
             
             if component.displayState == .failure {
                 var failureOriginY = craftContentHeight * 0.5 - 16.0
-                let offset = -(craftContentHeight - originalCraftContentHeight)
+                let offset: CGFloat = 0.0
                 
                 let failureTitleSize = self.failureTitle.update(
                     transition: transition,
@@ -1081,6 +1146,9 @@ private final class CraftGiftPageContent: Component {
                             guard let self, let component = self.component, let environment = self.environment, let genericGift = self.starGiftsMap[component.gift.giftId], let resaleContext = component.resaleContext() else {
                                 return
                             }
+                            
+                            HapticFeedback().impact(.light)
+                            
                             let selectController = SelectCraftGiftScreen(
                                 context: component.context,
                                 craftContext: component.craftContext,
@@ -1105,6 +1173,8 @@ private final class CraftGiftPageContent: Component {
                             guard let self else {
                                 return
                             }
+                            HapticFeedback().impact(.light)
+                            
                             self.component?.removeGift(index)
                         },
                         willFinish: { [weak self] success in
@@ -1142,6 +1212,10 @@ private final class CraftGiftPageContent: Component {
                                 controller.view.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.35, removeOnCompletion: false, completion: { _ in
                                     controller.dismiss()
                                 })
+                                
+                                HapticFeedback().success()
+                            } else {
+                                HapticFeedback().error()
                             }
                         }
                     )
@@ -1482,7 +1556,7 @@ private final class SheetContainerComponent: CombinedComponent {
                     permilleValue += gift.gift.craftChancePermille ?? 0
                 }
             }
-            if permilleValue > 900 {
+            if permilleValue >= 950 {
                 colors.0 = UIColor(rgb: 0x1b3b3d)
                 colors.1 = UIColor(rgb: 0x1a2f38)
                 colors.2 = UIColor(rgb: 0x22464a)
@@ -1689,6 +1763,8 @@ private final class SheetContainerComponent: CombinedComponent {
                                     state.displayInfo = false
                                     state.updated(transition: .spring(duration: 0.3))
                                 } else if state.displayFailure, let genericGift = externalState.starGiftsMap[component.gift.giftId] {
+                                    HapticFeedback().impact(.light)
+                                    
                                     let selectController = SelectCraftGiftScreen(
                                         context: component.context,
                                         craftContext: component.craftContext,
@@ -1707,6 +1783,8 @@ private final class SheetContainerComponent: CombinedComponent {
                                     )
                                     environment.controller()?.push(selectController)
                                 } else {
+                                    HapticFeedback().impact(.medium)
+                                    
                                     state.inProgress = true
                                     state.updated(transition: .spring(duration: 0.3))
                                     
@@ -1876,23 +1954,25 @@ public class GiftCraftScreen: ViewControllerComponentContainer {
 private struct GiftCraftConfiguration {
     static var defaultValue: GiftCraftConfiguration {
         return GiftCraftConfiguration(
-            craftAttributePermilles: [60, 180, 450, 1000]
+            craftAttributePermilles: [[90], [80, 200], [70, 190, 460], [60, 180, 450, 1000]]
         )
     }
     
-    let craftAttributePermilles: [Int32]
+    let craftAttributePermilles: [[Int32]]
         
     fileprivate init(
-        craftAttributePermilles: [Int32]
+        craftAttributePermilles: [[Int32]]
     ) {
         self.craftAttributePermilles = craftAttributePermilles
     }
     
     static func with(appConfiguration: AppConfiguration) -> GiftCraftConfiguration {
         if let data = appConfiguration.data {
-            var craftAttributePermilles: [Int32] = []
-            if let value = data["stargifts_craft_attribute_permilles"] as? [Double] {
-                craftAttributePermilles = value.map { Int32($0) }
+            var craftAttributePermilles: [[Int32]] = []
+            if let value = data["stargifts_craft_attribute_permilles"] as? [[Double]] {
+                craftAttributePermilles = value.map { innerArray in
+                    innerArray.map { Int32($0) }
+                }
             } else {
                 craftAttributePermilles = GiftCraftConfiguration.defaultValue.craftAttributePermilles
             }
@@ -1903,22 +1983,5 @@ private struct GiftCraftConfiguration {
         } else {
             return .defaultValue
         }
-    }
-}
-
-private func animateRipple(parentView: UIView, screenCornerRadius: CGFloat, location: CGPoint) {
-    if let snapshotView = parentView.snapshotView(afterScreenUpdates: false) {
-        let wrappingNode = SpaceWarpNodeImpl()
-        wrappingNode.isUserInteractionEnabled = false
-        wrappingNode.frame = CGRect(origin: .zero, size: parentView.bounds.size)
-        wrappingNode.update(size: parentView.bounds.size, cornerRadius: screenCornerRadius, transition: .immediate)
-        parentView.addSubview(wrappingNode.view)
-        wrappingNode.contentNode.view.addSubview(snapshotView)
-        
-        wrappingNode.triggerRipple(at: location)
-        
-        Queue.mainQueue().after(0.7, {
-            wrappingNode.view.removeFromSuperview()
-        })
     }
 }

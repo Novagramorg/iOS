@@ -206,6 +206,8 @@ final class SelectGiftPageContent: Component {
                                     guard let self, let component = self.component else {
                                         return
                                     }
+                                    HapticFeedback().impact(.light)
+                                    
                                     component.selectGift(gift)
                                     component.dismiss()
                                 },

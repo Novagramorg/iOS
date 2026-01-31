@@ -51,17 +51,16 @@ extension ChatListControllerImpl {
                     )
                 )
             ))
-            //TODO:localize
             content.append(AnyComponentWithIdentity(
                 id: "title",
                 component: AnyComponent(
-                    AlertTitleComponent(title: "Leave \(peer.compactDisplayTitle)")
+                    AlertTitleComponent(title: self.presentationData.strings.LeaveGroup_Title(peer.compactDisplayTitle).string)
                 )
             ))
             content.append(AnyComponentWithIdentity(
                 id: "text",
                 component: AnyComponent(
-                    AlertTextComponent(content: .plain("If you leave, **\(nextCreator.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder))** will become the owner of **\(peer.compactDisplayTitle)** in **1 week**."))
+                    AlertTextComponent(content: .plain(self.presentationData.strings.LeaveGroup_Text(nextCreator.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder), peer.compactDisplayTitle).string))
                 )
             ))
             
@@ -70,16 +69,18 @@ extension ChatListControllerImpl {
                 configuration: .init(actionAlignment: .vertical),
                 content: content,
                 actions: [
-                    .init(title: "Appoint Another Owner", action: { [weak self] in
+                    .init(title: self.presentationData.strings.LeaveGroup_AppointAnotherOwner, action: { [weak self] in
                         guard let self else {
                             return
                         }
-                        self.presentOwnershipTransfer(chatPeer: peer)
+                        self.presentOwnershipTransfer(chatPeer: peer, leaveGroup: {
+                            completion(true)
+                        })
                     }),
-                    .init(title: "Cancel", action: {
+                    .init(title: self.presentationData.strings.Common_Cancel, action: {
                         completion(false)
                     }),
-                    .init(title: "Leave Group", type: .destructive, action: {
+                    .init(title: self.presentationData.strings.LeaveGroup_Proceed, type: .destructive, action: {
                         completion(true)
                     })
                 ]
@@ -90,7 +91,7 @@ extension ChatListControllerImpl {
         }
     }
     
-    func presentOwnershipTransfer(chatPeer: EnginePeer) {
+    func presentOwnershipTransfer(chatPeer: EnginePeer, leaveGroup: @escaping () -> Void) {
         let presentController: (ViewController) -> Void = { [weak self] c in
             if let topController = self?.navigationController?.topViewController as? ViewController {
                 topController.present(c, in: .window(.root))
@@ -121,7 +122,9 @@ extension ChatListControllerImpl {
                         case .creator:
                             return
                         case let .member(_, _, adminInfo, _, _, _):
-                            let _ = adminInfo
+                            if adminInfo == nil {
+                                let _ = self.context.engine.peers.updateChannelAdminRights(peerId: chatPeer.id, adminId: peer.id, rights: TelegramChatAdminRights(rights: .all), rank: nil).start()
+                            }
                             
                             let _ = (self.context.engine.peers.checkOwnershipTranfserAvailability(memberId: peer.id) |> deliverOnMainQueue).start(error: { [weak self] error in
                                 guard let self, case let .user(user) = peer else {
@@ -141,6 +144,8 @@ extension ChatListControllerImpl {
                                     },
                                     completion: { _ in
                                         dismissController?()
+                                        
+                                        leaveGroup()
                                     }
                                 )
                                 presentController(controller)
