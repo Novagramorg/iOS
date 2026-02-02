@@ -5431,10 +5431,33 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 if canRemoveGlobally && isGroupOrChannel {
                     items.append(DeleteChatPeerActionSheetItem(context: strongSelf.context, peer: mainPeer, chatPeer: chatPeer, action: .deleteAndLeave, strings: strongSelf.presentationData.strings, nameDisplayOrder: strongSelf.presentationData.nameDisplayOrder))
                     
-                    items.append(ActionSheetButtonItem(title: strongSelf.presentationData.strings.ChatList_DeleteForCurrentUser, color: .destructive, action: { [weak actionSheet] in
+                    items.append(ActionSheetButtonItem(title: strongSelf.presentationData.strings.ChatList_DeleteForCurrentUser, color: .destructive, action: { [weak self, weak actionSheet] in
                         actionSheet?.dismissAnimated()
-                        self?.schedulePeerChatRemoval(peer: peer, type: .forLocalPeer, deleteGloballyIfPossible: false, completion: {
-                        })
+                        
+                        let proceed = {
+                            self?.schedulePeerChatRemoval(peer: peer, type: .forLocalPeer, deleteGloballyIfPossible: false, completion: {
+                            })
+                        }
+                        
+                        if let self, case let .channel(channel) = peer.peer, channel.flags.contains(.isCreator) {
+                            let _ = (self.context.engine.peers.getFutureCreatorAfterLeave(peerId: channel.id)
+                            |> deliverOnMainQueue).start(next: { [weak self] nextCreator in
+                                guard let self else {
+                                    return
+                                }
+                                if let nextCreator, let peer = peer.peer {
+                                    self.presentLeaveChannelConfirmation(peer: peer, nextCreator: nextCreator, completion: { commit in
+                                        if commit {
+                                            proceed()
+                                        }
+                                    })
+                                } else {
+                                    proceed()
+                                }
+                            })
+                        } else {
+                            proceed()
+                        }
                     }))
                     
                     let deleteForAllText: String

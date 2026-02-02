@@ -15764,4 +15764,6 @@ Error: %8$@";
 "LeaveGroup.Text" = "If you leave, **%1$@** will become the owner of **%2$@** in **1 week**.";
 "LeaveGroup.AppointAnotherOwner" = "Appoint Another Owner";
 "LeaveGroup.Proceed" = "Leave Group";
-"AppointAnotherOwner.Title" = "Appoint Another Owner";
+"AppointAnotherOwner.Title" = "Choose New Owner";
+
+"Gift.View.Context.Craft" = "Craft";

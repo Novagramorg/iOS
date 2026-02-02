@@ -116,6 +116,7 @@ public final class AvatarComponent: Component {
                 peer: component.peer,
                 clipStyle: clipStyle,
                 synchronousLoad: true,
+                displayDimensions: availableSize,
                 cutoutRect: cutoutRect
             )
             

@@ -109,7 +109,7 @@ extension ChatListControllerImpl {
                 context: self.context,
                 peerId: chatPeer.id,
                 mode: .ownershipTransfer,
-                filters: [],
+                filters: [.exclude([self.context.account.peerId])],
                 openPeer: { [weak self] peer, participant in
                     guard let self else {
                         return
