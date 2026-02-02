@@ -1624,7 +1624,9 @@ private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
             return
         }
         self.appeared = true
-        ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 1.0)
+        if self.isSelected {
+            ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 1.0)
+        }
     }
     
     override func updateLayout(size: CGSize, metrics: LayoutMetrics, insets: UIEdgeInsets, isHidden: Bool, transition: ContainedViewLayoutTransition) {
@@ -1669,7 +1671,9 @@ private class ImageRecognitionOverlayContentNode: GalleryOverlayContentNode {
             self.backgroundContainer.alpha = 1.0
         } else {
             self.backgroundContainer.alpha = 0.0
-            ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 1.0)
+            if self.isSelected {
+                ComponentTransition.easeInOut(duration: 0.2).setAlpha(view: self.backgroundContainer, alpha: 1.0)
+            }
         }
     }
     

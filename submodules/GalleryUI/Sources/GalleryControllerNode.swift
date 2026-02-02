@@ -307,7 +307,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         }
         transition.updateFrame(view: self.headerEdgeEffectView, frame: edgeEffectFrame)
         self.headerEdgeEffectView.update(content: .black, alpha: 0.65, rect: edgeEffectFrame, edge: .top, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: ComponentTransition(transition))
-        transition.updateAlpha(layer: self.headerEdgeEffectView.layer, alpha: self.areControlsHidden ? 0.0 : 0.25)
+        transition.updateAlpha(layer: self.headerEdgeEffectView.layer, alpha: self.areControlsHidden ? 0.0 : 0.5)
         
         if let navigationBar = self.navigationBar {
             transition.updateFrame(node: navigationBar, frame: CGRect(origin: CGPoint(x: 0.0, y: self.areControlsHidden ? -navigationBarHeight : 0.0), size: CGSize(width: layout.size.width, height: navigationBarHeight)))
@@ -441,7 +441,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             self.footerNode.animateIn(transition: .animated(duration: 0.15, curve: .linear))
             
             ComponentTransition.easeInOut(duration: 0.15).animateView {
-                self.headerEdgeEffectView.alpha = 0.25
+                self.headerEdgeEffectView.alpha = 0.5
                 self.titleView?.alpha = 1.0
             }
         }
@@ -548,7 +548,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         if let overlayNode = self.overlayNode {
             overlayNode.alpha = transition
         }
-        self.headerEdgeEffectView.alpha = transition
+        self.headerEdgeEffectView.alpha = transition * 0.5
         self.titleView?.alpha = transition
     }
     
