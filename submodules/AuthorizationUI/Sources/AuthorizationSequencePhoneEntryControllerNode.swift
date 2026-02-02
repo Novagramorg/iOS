@@ -842,7 +842,7 @@ final class PhoneConfirmationController: ViewController {
             
             self.backgroundNode = ASDisplayNode()
             self.backgroundNode.backgroundColor = theme.list.itemBlocksBackgroundColor
-            self.backgroundNode.cornerRadius = 24.0
+            self.backgroundNode.cornerRadius = 42.0
             
             self.textNode = ImmediateTextNode()
             self.textNode.displaysAsynchronously = false
@@ -1110,7 +1110,7 @@ final class PhoneConfirmationController: ViewController {
             self.textActivateAreaNode.frame = self.textNode.frame
             self.textActivateAreaNode.accessibilityLabel = "\(self.code) \(self.number). \(self.strings.Login_PhoneNumberConfirmation)"
             
-            let proceedWidth = backgroundSize.width - 16.0 * 2.0
+            let proceedWidth = backgroundSize.width - innerInset * 2.0
             let proceedHeight = self.proceedNode.updateLayout(width: proceedWidth, transition: transition)
             transition.updateFrame(node: self.proceedNode, frame: CGRect(origin: CGPoint(x: innerInset, y: backgroundSize.height - proceedHeight - innerInset), size: CGSize(width: proceedWidth, height: proceedHeight)).offsetBy(dx: backgroundFrame.minX, dy: backgroundFrame.minY))
             

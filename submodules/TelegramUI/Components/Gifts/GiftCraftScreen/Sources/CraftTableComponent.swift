@@ -79,10 +79,6 @@ final class CraftTableComponent: Component {
         
         private let anvilPlayOnce = ActionSlot<Void>()
         private let animationView = CubeAnimationView()
-        
-        private let failOverlay = ComponentView<Empty>()
-        private let craftFailOverlayPlayOnce = ActionSlot<Void>()
-        
         private let craftFailPlayOnce = ActionSlot<Void>()
         
         private var didSetupFinishAnimation = false
@@ -142,6 +138,8 @@ final class CraftTableComponent: Component {
                 Queue.mainQueue().after(0.3, {
                     self.failWillFinish = true
                     self.component?.willFinish(false)
+                    
+                    self.craftFailPlayOnce.invoke(Void())
                 })
                 
                 Queue.mainQueue().after(0.5, {
@@ -274,7 +272,14 @@ final class CraftTableComponent: Component {
                         faceItems.append(
                             AnyComponentWithIdentity(id: "faildial", component: AnyComponent(
                                 DialIndicatorComponent(
-                                    content: AnyComponentWithIdentity(id: "gift", component: AnyComponent(BundleIconComponent(name: "Premium/GiftCrash", tintColor: .white))),
+                                    content: AnyComponentWithIdentity(id: "gift", component: AnyComponent(
+                                        LottieComponent(
+                                            content: LottieComponent.AppBundleContent(name: "CraftFail"),
+                                            color: .white,
+                                            size: CGSize(width: 52.0, height: 52.0),
+                                            playOnce: self.craftFailPlayOnce
+                                        )
+                                    )),
                                     backgroundColor: .white.withAlphaComponent(0.1),
                                     foregroundColor: .white,
                                     diameter: 84.0,
@@ -420,30 +425,6 @@ final class CraftTableComponent: Component {
                 })
             }
                         
-            
-//            if self.isFailed {
-//                let failOverlaySize = self.failOverlay.update(
-//                    transition: .immediate,
-//                    component: AnyComponent(
-//                        LottieComponent(
-//                            content: LottieComponent.AppBundleContent(name: "CraftFailOverlay"),
-//                            size: CGSize(width: availableSize.width, height: availableSize.width),
-//                            playOnce: self.craftFailOverlayPlayOnce
-//                        )
-//                    ),
-//                    environment: {},
-//                    containerSize: CGSize(width: availableSize.width, height: availableSize.width)
-//                )
-//                let failOverlayFrame = CGRect(origin: CGPoint(x: floor((availableSize.width - failOverlaySize.width) / 2.0), y: floor((availableSize.height - failOverlaySize.height) / 2.0)), size: failOverlaySize)
-//                if let failOverlayView = self.failOverlay.view {
-//                    if failOverlayView.superview == nil {
-//                        failOverlayView.isHidden = true
-//                        self.insertSubview(failOverlayView, belowSubview: self.animationView)
-//                    }
-//                    failOverlayView.frame = failOverlayFrame
-//                }
-//            }
-            
             return availableSize
         }
     }
