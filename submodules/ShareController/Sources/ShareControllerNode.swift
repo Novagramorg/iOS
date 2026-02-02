@@ -547,7 +547,7 @@ final class ShareControllerNode: ViewControllerTracingNode, ASScrollViewDelegate
                                 if showNamesValue {
                                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                                 } else {
-                                    return nil
+                                    return UIImage()
                                 }
                             }, action: { _, _ in
                                 self?.showNames.set(true)
@@ -556,7 +556,7 @@ final class ShareControllerNode: ViewControllerTracingNode, ASScrollViewDelegate
                                 if !showNamesValue {
                                     return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                                 } else {
-                                    return nil
+                                    return UIImage()
                                 }
                             }, action: { _, _ in
                                 self?.showNames.set(false)
