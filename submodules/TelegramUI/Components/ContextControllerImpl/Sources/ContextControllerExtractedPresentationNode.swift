@@ -187,7 +187,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             super.init()
             
             self.clipsToBounds = true
-            self.cornerRadius = 14.0
+            self.cornerRadius = 30.0
             
             self.addSubnode(self.controller.displayNode)
         }
