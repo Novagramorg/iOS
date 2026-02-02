@@ -748,6 +748,15 @@ open class AlertScreen: ViewControllerComponentContainer, KeyShortcutResponder {
             ))
         }
         
+        if content.isEmpty {
+            content.append(AnyComponentWithIdentity(
+                id: "text",
+                component: AnyComponent(
+                    AlertTextComponent(content: .plain(" "), action: textAction)
+                )
+            ))
+        }
+        
         self.init(
             configuration: configuration,
             content: content,

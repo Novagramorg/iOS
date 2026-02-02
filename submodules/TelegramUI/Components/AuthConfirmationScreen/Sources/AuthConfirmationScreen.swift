@@ -29,13 +29,13 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
     
     let context: AccountContext
     let subject: MessageActionUrlAuthResult
-    let completion: (Bool, Bool) -> Void
+    let completion: (AccountContext, EnginePeer, Bool, Bool) -> Void
     let cancel: (Bool) -> Void
     
     init(
         context: AccountContext,
         subject: MessageActionUrlAuthResult,
-        completion: @escaping (Bool, Bool) -> Void,
+        completion: @escaping (AccountContext, EnginePeer, Bool, Bool) -> Void,
         cancel: @escaping  (Bool) -> Void
     ) {
         self.context = context
@@ -501,14 +501,20 @@ private final class AuthConfirmationSheetContent: CombinedComponent {
                         if flags.contains(.requestWriteAccess) && state.allowWrite {
                             allowWrite = true
                         }
+                        
+                        let accountContext = state.forcedAccount?.0 ?? component.context
+                        guard let accountPeer = state.forcedAccount?.1 ?? state.peer else {
+                            return
+                        }
+                        
                         if flags.contains(.requestPhoneNumber) {
                             state.displayPhoneNumberConfirmation(commit: { sharePhoneNumber in
-                                component.completion(allowWrite, sharePhoneNumber)
+                                component.completion(accountContext, accountPeer, allowWrite, sharePhoneNumber)
                                 state.inProgress = true
                                 state.updated()
                             })
                         } else {
-                            component.completion(allowWrite, false)
+                            component.completion(accountContext, accountPeer, allowWrite, false)
                             state.inProgress = true
                             state.updated()
                         }
@@ -533,12 +539,12 @@ private final class AuthConfirmationSheetComponent: CombinedComponent {
     
     let context: AccountContext
     let subject: MessageActionUrlAuthResult
-    let completion: (Bool, Bool) -> Void
+    let completion: (AccountContext, EnginePeer, Bool, Bool) -> Void
     
     init(
         context: AccountContext,
         subject: MessageActionUrlAuthResult,
-        completion: @escaping (Bool, Bool) -> Void
+        completion: @escaping (AccountContext, EnginePeer, Bool, Bool) -> Void
     ) {
         self.context = context
         self.subject = subject
@@ -622,12 +628,12 @@ private final class AuthConfirmationSheetComponent: CombinedComponent {
 public class AuthConfirmationScreen: ViewControllerComponentContainer {
     private let context: AccountContext
     private let subject: MessageActionUrlAuthResult
-    fileprivate let completion: (Bool, Bool) -> Void
+    fileprivate let completion: (AccountContext, EnginePeer, Bool, Bool) -> Void
     
     public init(
         context: AccountContext,
         subject: MessageActionUrlAuthResult,
-        completion: @escaping (Bool, Bool) -> Void
+        completion: @escaping (AccountContext, EnginePeer, Bool, Bool) -> Void
     ) {
         self.context = context
         self.subject = subject

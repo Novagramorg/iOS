@@ -1820,8 +1820,22 @@ func openResolvedUrlImpl(
             |> deliverOnMainQueue).start(next: { result in
                 if case .request = result {
                     var dismissImpl: (() -> Void)?
-                    let controller = AuthConfirmationScreen(context: context, subject: result, completion: { allowWriteAccess, sharePhoneNumber in
-                        let _ = (context.engine.messages.acceptMessageActionUrlAuth(subject: .url(url), allowWriteAccess: allowWriteAccess, sharePhoneNumber: sharePhoneNumber)
+                    let controller = AuthConfirmationScreen(context: context, subject: result, completion: { accountContext, accountPeer, allowWriteAccess, sharePhoneNumber in
+                        let signal: Signal<MessageActionUrlAuthResult, MessageActionUrlAuthError>
+                        if accountContext === context {
+                            signal = accountContext.engine.messages.acceptMessageActionUrlAuth(subject: .url(url), allowWriteAccess: allowWriteAccess, sharePhoneNumber: sharePhoneNumber)
+                        } else {
+                            accountContext.account.shouldBeServiceTaskMaster.set(.single(.now))
+                            signal = accountContext.engine.messages.requestMessageActionUrlAuth(subject: .url(url))
+                            |> castError(MessageActionUrlAuthError.self)
+                            |> mapToSignal { result in
+                                return accountContext.engine.messages.acceptMessageActionUrlAuth(subject: .url(url), allowWriteAccess: allowWriteAccess, sharePhoneNumber: sharePhoneNumber)
+                            } |> afterDisposed {
+                                accountContext.account.shouldBeServiceTaskMaster.set(.single(.never))
+                            }
+                        }
+                        
+                        let _ = (signal
                         |> deliverOnMainQueue).start(next: { _ in
                             dismissImpl?()
                             
