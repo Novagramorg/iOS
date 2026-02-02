@@ -750,6 +750,8 @@ private final class ChatScheduleTimeScreenComponent: Component {
             self.environment = environment
             
             let sheetEnvironment = SheetComponentEnvironment(
+                metrics: environment.metrics,
+                deviceMetrics: environment.deviceMetrics,
                 isDisplaying: environment.isVisible,
                 isCentered: environment.metrics.widthClass == .regular,
                 hasInputHeight: !environment.inputHeight.isZero,
