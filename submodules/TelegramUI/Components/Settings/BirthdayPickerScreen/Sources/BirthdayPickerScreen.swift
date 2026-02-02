@@ -270,6 +270,8 @@ private final class BirthdayPickerScreenComponent: Component {
             }
             
             let sheetEnvironment = SheetComponentEnvironment(
+                metrics: environment.metrics,
+                deviceMetrics: environment.deviceMetrics,
                 isDisplaying: self.didAppear || environment.isVisible,
                 isCentered: environment.metrics.widthClass == .regular,
                 hasInputHeight: !environment.inputHeight.isZero,
@@ -332,7 +334,7 @@ private final class BirthdayPickerScreenComponent: Component {
                         }
                     )),
                     style: .glass,
-                    backgroundColor: .color(environment.theme.list.plainBackgroundColor),
+                    backgroundColor: .color(environment.theme.list.modalPlainBackgroundColor),
                     followContentSizeChanges: true,
                     isScrollEnabled: false,
                     animateOut: self.sheetAnimateOut
