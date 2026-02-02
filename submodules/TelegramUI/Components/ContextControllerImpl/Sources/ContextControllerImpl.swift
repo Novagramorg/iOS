@@ -463,7 +463,7 @@ final class ContextControllerNode: ViewControllerTracingNode, ASScrollViewDelega
                         self.contentContainerNode.contentNode = .controller(contentParentNode)
                         self.scrollNode.addSubnode(self.contentContainerNode)
                         self.contentContainerNode.clipsToBounds = true
-                        self.contentContainerNode.cornerRadius = 14.0
+                        self.contentContainerNode.cornerRadius = 30.0
                         self.contentContainerNode.addSubnode(contentParentNode)
                         
                         let projectedFrame = convertFrame(sourceNodeRect, from: sourceView, to: self.view)
