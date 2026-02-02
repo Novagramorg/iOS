@@ -1421,15 +1421,15 @@ final class ChatItemGalleryFooterContentNode: GalleryFooterContentNode, ASScroll
             transition: ComponentTransition(transition),
             component: AnyComponent(GlassControlPanelComponent(
                 theme: defaultDarkColorPresentationTheme,
-                leftItem: GlassControlPanelComponent.Item(
+                leftItem: leftControlItems.isEmpty ? nil : GlassControlPanelComponent.Item(
                     items: leftControlItems,
                     background: .panel
                 ),
-                centralItem: GlassControlPanelComponent.Item(
+                centralItem: centerControlItems.isEmpty ? nil : GlassControlPanelComponent.Item(
                     items: centerControlItems,
                     background: .panel
                 ),
-                rightItem: GlassControlPanelComponent.Item(
+                rightItem: rightControlItems.isEmpty ? nil : GlassControlPanelComponent.Item(
                     items: rightControlItems,
                     background: .panel
                 ),

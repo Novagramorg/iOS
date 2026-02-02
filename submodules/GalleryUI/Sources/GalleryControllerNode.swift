@@ -307,13 +307,19 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
         }
         transition.updateFrame(view: self.headerEdgeEffectView, frame: edgeEffectFrame)
         self.headerEdgeEffectView.update(content: .black, alpha: 0.65, rect: edgeEffectFrame, edge: .top, edgeSize: min(edgeEffectHeight, edgeEffectFrame.height), transition: ComponentTransition(transition))
-        transition.updateAlpha(layer: self.headerEdgeEffectView.layer, alpha: self.areControlsHidden ? 0.0 : 1.0)
+        transition.updateAlpha(layer: self.headerEdgeEffectView.layer, alpha: self.areControlsHidden ? 0.0 : 0.25)
         
         if let navigationBar = self.navigationBar {
             transition.updateFrame(node: navigationBar, frame: CGRect(origin: CGPoint(x: 0.0, y: self.areControlsHidden ? -navigationBarHeight : 0.0), size: CGSize(width: layout.size.width, height: navigationBarHeight)))
+            
+            if self.headerEdgeEffectView.superview == nil {
+                self.view.insertSubview(self.headerEdgeEffectView, belowSubview: navigationBar.view)
+            }
+            
             if self.footerNode.supernode == nil {
                 self.addSubnode(self.footerNode)
             }
+            
             if let titleView = self.titleView {
                 if titleView.superview == nil {
                     self.view.addSubview(titleView)
@@ -328,10 +334,6 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
                 let _ = titleView.updateLayout(availableSize: titleFrame.size, transition: .immediate)
                 transition.updateFrame(view: titleView, frame: titleFrame)
             }
-            
-            /*if self.headerEdgeEffectView.superview == nil {
-                self.view.insertSubview(self.headerEdgeEffectView, belowSubview: navigationBar.view)
-            }*/
         }
             
         var thumbnailPanelHeight: CGFloat = 0.0
@@ -439,7 +441,7 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
             self.footerNode.animateIn(transition: .animated(duration: 0.15, curve: .linear))
             
             ComponentTransition.easeInOut(duration: 0.15).animateView {
-                self.headerEdgeEffectView.alpha = 1.0
+                self.headerEdgeEffectView.alpha = 0.25
                 self.titleView?.alpha = 1.0
             }
         }
