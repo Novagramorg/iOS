@@ -155,7 +155,7 @@ public final class GalleryFooterNode: ASDisplayNode {
         if let backgroundLayoutInfo, backgroundLayoutInfo.needsShadow {
             self.defaultEdgeEffectAlpha = 1.0
         } else {
-            self.defaultEdgeEffectAlpha = 0.25
+            self.defaultEdgeEffectAlpha = 0.5
         }
         ComponentTransition(transition).setAlpha(view: self.edgeEffectView, alpha: self.visibilityAlpha * self.defaultEdgeEffectAlpha)
         

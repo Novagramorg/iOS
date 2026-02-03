@@ -3958,7 +3958,12 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
         var copyLinkImpl: ((String) -> Void)?
         var shareLinkImpl: ((String) -> Void)?
         
-        self.overNavigationContainer = UIView()
+        self.overNavigationContainer = SparseContainerView()
+        
+        var baseNavigationColors: BaseNavigationColors = .plain
+        if case .emojiStatus = source {
+            baseNavigationColors = .blocks
+        }
         
         super.init(component: PremiumIntroScreenComponent(
             overNavigationContainer: self.overNavigationContainer,
@@ -3985,7 +3990,7 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
             shareLink: { link in
                 shareLinkImpl?(link)
             }
-        ), navigationBarAppearance: .default, presentationMode: modal ? .modal : .default, theme: forceDark ? .dark : .default, updatedPresentationData: screenContext.updatedPresentationData)
+        ), navigationBarAppearance: .default, presentationMode: modal ? .modal : .default, theme: forceDark ? .dark : .default, updatedPresentationData: screenContext.updatedPresentationData, baseNavigationColors: baseNavigationColors)
         
         self._hasGlassStyle = true
                 
@@ -4065,7 +4070,7 @@ public final class PremiumIntroScreen: ViewControllerComponentContainer {
         }
         
         if let navigationBar = self.navigationBar {
-            navigationBar.view.insertSubview(self.overNavigationContainer, aboveSubview: navigationBar.backgroundView)
+            navigationBar.customOverBackgroundContentView.addSubview(self.overNavigationContainer)
         }
     }
     
