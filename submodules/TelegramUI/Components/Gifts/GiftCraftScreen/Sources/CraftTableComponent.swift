@@ -98,6 +98,10 @@ final class CraftTableComponent: Component {
             super.init(frame: frame)
             
             self.addSubview(self.animationView)
+            
+            self.animationView.onStickerLaunch = {
+                HapticFeedback().impact(.soft)
+            }
         }
         
         required init?(coder: NSCoder) {
@@ -110,26 +114,29 @@ final class CraftTableComponent: Component {
             }
             self.didSetupFinishAnimation = true
             
-            self.animationView.onFinishApproach = { [weak self] isUpsideDown in
-                guard let self else {
+            self.animationView.onFinishApproach = { [weak self] isUpsideDown, isClockwise in
+                guard let self, let component = self.component else {
                     return
                 }
                 self.isFailed = true
                 self.animationView.setSticker(nil, face: 0, mirror: false)
                 
                 var availableStickers: [ComponentView<Empty>] = []
-                for gift in self.selectedGifts.values {
-                    availableStickers.append(gift)
+                for (id, gift) in self.selectedGifts {
+                    if let id = id.base as? Int, component.gifts[Int32(id)] != nil {
+                        availableStickers.append(gift)
+                    }
                 }
-                for i in 0 ..< min(2, availableStickers.count) {
+                let wrappingCount = min(2, availableStickers.count)
+                for i in 0 ..< wrappingCount {
                     if let sticker = availableStickers[i].view {
                         let face: Int
-                        if isUpsideDown {
+                        if isClockwise {
                             face = i + 1
                         } else {
                             face = 3 - i
                         }
-                        self.animationView.setSticker(sticker, face: face, mirror: isUpsideDown)
+                        self.animationView.setSticker(sticker, face: face, mirror: isUpsideDown, animated: true)
                     }
                 }
                 
@@ -159,25 +166,28 @@ final class CraftTableComponent: Component {
             
             self.animationView.isSuccess = true
             
-            self.animationView.onFinishApproach = { [weak self] isUpsideDown in
+            self.animationView.onFinishApproach = { [weak self] isUpsideDown, isClockwise in
                 guard let self else {
                     return
                 }
                 self.isSuccess = true
                 
                 var availableStickers: [ComponentView<Empty>] = []
-                for gift in self.selectedGifts.values {
-                    availableStickers.append(gift)
+                for (id, gift) in self.selectedGifts {
+                    if let id = id.base as? Int, component.gifts[Int32(id)] != nil {
+                        availableStickers.append(gift)
+                    }
                 }
-                for i in 0 ..< min(2, availableStickers.count) {
+                let wrappingCount = min(2, availableStickers.count)
+                for i in 0 ..< wrappingCount {
                     if let sticker = availableStickers[i].view {
                         let face: Int
-                        if isUpsideDown {
+                        if isClockwise {
                             face = i + 1
                         } else {
                             face = 3 - i
                         }
-                        self.animationView.setSticker(sticker, face: face, mirror: isUpsideDown)
+                        self.animationView.setSticker(sticker, face: face, mirror: isUpsideDown, animated: true)
                     }
                 }
                 
@@ -258,7 +268,7 @@ final class CraftTableComponent: Component {
                 if index == 0 {
                     faceItems.append(
                         AnyComponentWithIdentity(id: "background", component: AnyComponent(
-                            FilledRoundedRectangleComponent(color: component.buttonColor, cornerRadius: .value(28.0), smoothCorners: true)
+                            CubeFaceComponent(color: component.buttonColor, cornerRadius: 28.0)
                         ))
                     )
                     if !component.isCrafting || self.isFailed {
@@ -324,12 +334,12 @@ final class CraftTableComponent: Component {
                 } else {
                     faceItems.append(
                         AnyComponentWithIdentity(id: "background", component: AnyComponent(
-                            FilledRoundedRectangleComponent(color: component.buttonColor, cornerRadius: .value(28.0), smoothCorners: true)
+                            CubeFaceComponent(color: component.buttonColor, cornerRadius: 28.0)
                         ))
                     )
                     faceItems.append(
                         AnyComponentWithIdentity(id: "icon", component: AnyComponent(
-                            BundleIconComponent(name: "Components/CubeSide", tintColor: nil, flipVertically: self.flipFaces)
+                            BundleIconComponent(name: "Components/CubeSide", tintColor: nil, flipVertically: index < 4 ? self.flipFaces : false)
                         ))
                     )
                 }
@@ -408,8 +418,13 @@ final class CraftTableComponent: Component {
                 for index in component.gifts.keys.sorted() {
                     indices.append(Int(index))
                 }
+                
+                Queue.mainQueue().after(0.55) {
+                    HapticFeedback().impact(.light)
+                }
+                
                 self.anvilPlayOnce.invoke(Void())
-                Queue.mainQueue().after(0.6, {
+                Queue.mainQueue().after(0.75, {
                     self.animationView.startStickerSequence(indices: indices)
                     
                     switch component.result {
@@ -771,4 +786,48 @@ private func generateAddIcon(backgroundColor: UIColor) -> UIImage? {
         context.addLine(to: CGPoint(x: 33.0, y: 23.0))
         context.strokePath()
     })
+}
+
+private final class CubeFaceComponent: Component {
+    private let color: UIColor
+    private let cornerRadius: CGFloat
+    
+    public init(color: UIColor, cornerRadius: CGFloat) {
+        self.color = color
+        self.cornerRadius = cornerRadius
+    }
+
+    public static func ==(lhs: CubeFaceComponent, rhs: CubeFaceComponent) -> Bool {
+        if !lhs.color.isEqual(rhs.color) {
+            return false
+        }
+        if lhs.cornerRadius != rhs.cornerRadius {
+            return false
+        }
+        return true
+    }
+    
+    public final class View: UIView {
+        override public init(frame: CGRect) {
+            super.init(frame: frame)
+            
+            self.clipsToBounds = true
+            self.layer.cornerCurve = .continuous
+        }
+        
+        required public init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+    }
+    
+    public func makeView() -> View {
+        return View(frame: CGRect())
+    }
+    
+    public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        transition.setBackgroundColor(view: view, color: self.color)
+        transition.setCornerRadius(layer: view.layer, cornerRadius: self.cornerRadius)
+    
+        return availableSize
+    }
 }
