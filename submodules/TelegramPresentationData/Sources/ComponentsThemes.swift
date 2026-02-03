@@ -84,8 +84,8 @@ public extension NavigationBarPresentationData {
         self.init(theme: NavigationBarTheme(rootControllerTheme: presentationData.theme, style: style, glassStyle: glassStyle), strings: NavigationBarStrings(presentationStrings: presentationData.strings))
     }
     
-    convenience init(presentationData: PresentationData, hideBackground: Bool, hideBadge: Bool, hideSeparator: Bool = false, style: NavigationBar.Style = .legacy, glassStyle: NavigationBar.GlassStyle = .default) {
-        self.init(theme: NavigationBarTheme(rootControllerTheme: presentationData.theme, hideBackground: hideBackground, hideBadge: hideBadge, hideSeparator: hideSeparator, edgeEffectColor: hideBackground ? .clear : nil, style: style, glassStyle: glassStyle), strings: NavigationBarStrings(presentationStrings: presentationData.strings))
+    convenience init(presentationData: PresentationData, hideBackground: Bool, hideBadge: Bool, hideSeparator: Bool = false, style: NavigationBar.Style = .legacy, glassStyle: NavigationBar.GlassStyle = .default, edgeEffectColor: UIColor? = nil) {
+        self.init(theme: NavigationBarTheme(rootControllerTheme: presentationData.theme, hideBackground: hideBackground, hideBadge: hideBadge, hideSeparator: hideSeparator, edgeEffectColor: hideBackground ? .clear : edgeEffectColor, style: style, glassStyle: glassStyle), strings: NavigationBarStrings(presentationStrings: presentationData.strings))
     }
     
     convenience init(presentationTheme: PresentationTheme, presentationStrings: PresentationStrings, style: NavigationBar.Style = .legacy, glassStyle: NavigationBar.GlassStyle = .default) {
