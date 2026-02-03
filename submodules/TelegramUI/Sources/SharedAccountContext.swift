@@ -3783,7 +3783,24 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
         
     public func makeStarsTransferScreen(context: AccountContext, starsContext: StarsContext, invoice: TelegramMediaInvoice, source: BotPaymentInvoiceSource, extendedMedia: [TelegramExtendedMedia], inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>, completion: @escaping (Bool) -> Void) -> ViewController {
-        return StarsTransferScreen(context: context, starsContext: starsContext, invoice: invoice, source: source, extendedMedia: extendedMedia, inputData: inputData, completion: completion)
+        return StarsTransferScreen(context: context, starsContext: starsContext, invoice: invoice, source: source, extendedMedia: extendedMedia, inputData: inputData, navigateToPeer: { [weak self] peer in
+            guard let self else {
+                return
+            }
+            if let infoController = self.makePeerInfoController(
+                context: context,
+                updatedPresentationData: nil,
+                peer: peer._asPeer(),
+                mode: .generic,
+                avatarInitiallyExpanded: peer.smallProfileImage != nil,
+                fromChat: false,
+                requestsContext: nil
+            ) {
+                if let navigationController = self.mainWindow?.viewController as? NavigationController {
+                    navigationController.pushViewController(infoController)
+                }
+            }
+        }, completion: completion)
     }
     
     public func makeStarsSubscriptionTransferScreen(context: AccountContext, starsContext: StarsContext, invoice: TelegramMediaInvoice, link: String, inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>, navigateToPeer: @escaping (EnginePeer) -> Void) -> ViewController {
