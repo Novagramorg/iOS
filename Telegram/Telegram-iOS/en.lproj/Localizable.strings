@@ -15703,7 +15703,8 @@ Error: %8$@";
 
 "Gift.Craft.Select.Title" = "Select Gifts";
 "Gift.Craft.Select.YourGifts" = "Your Gifts";
-"Gift.Craft.Select.SaleGifts" = "Suitable Gifts On Sale";
+"Gift.Craft.Select.SaleGiftsCount_1" = "%@ Suitable Gift On Sale";
+"Gift.Craft.Select.SaleGiftsCount_any" = "%@ Suitable Gifts On Sale";
 "Gift.Craft.Select.NoGiftsFromCollection" = "You don't have other gifts\nfrom this collection";
 
 "Gift.Attribute.Rare" = "rare";
