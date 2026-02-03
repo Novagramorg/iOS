@@ -552,7 +552,10 @@ public final class GiftStoreContentComponent: Component {
             
             let attributes = self.starGiftsState?.attributes ?? []
             let modelAttributes = attributes.filter { attribute in
-                if case .model = attribute {
+                if case let .model(_, _, _, crafted) = attribute {
+                    if component.resaleGiftsContext.forCrafting && crafted {
+                        return false
+                    }
                     return true
                 } else {
                     return false

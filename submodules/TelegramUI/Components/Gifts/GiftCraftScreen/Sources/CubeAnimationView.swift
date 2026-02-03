@@ -83,7 +83,7 @@ final class CubeAnimationView: UIView {
     var isSuccess = false
 
     var onStickerLaunch: (() -> Void)?
-    var onFinishApproach: ((Bool) -> Void)?
+    var onFinishApproach: ((Bool, Bool) -> Void)?
 
     private let defaultStickOrder: [Int] = [0, 5, 4, 3]
     private let sequenceStickOrders: [String: [Int]] = [
@@ -161,7 +161,7 @@ final class CubeAnimationView: UIView {
         self.layoutStickers()
     }
 
-    func setSticker(_ sticker: UIView?, face index: Int, mirror: Bool) {
+    func setSticker(_ sticker: UIView?, face index: Int, mirror: Bool, animated: Bool = false) {
         guard self.faces.indices.contains(index) else {
             return
         }
@@ -177,6 +177,13 @@ final class CubeAnimationView: UIView {
 
         if let priorIndex = self.faceOccupants.first(where: { $0.value === sticker })?.key {
             self.faceOccupants[priorIndex] = nil
+        }
+        
+        if animated, let stickerSuperview = sticker.superview, let snapshotView = sticker.snapshotView(afterScreenUpdates: false) {
+            stickerSuperview.addSubview(snapshotView)
+            snapshotView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2, removeOnCompletion: false, completion: { _ in
+                snapshotView.removeFromSuperview()
+            })
         }
         sticker.removeFromSuperview()
         
@@ -201,6 +208,10 @@ final class CubeAnimationView: UIView {
             snappedAngle += .pi
         }
         sticker.transform = CGAffineTransform(rotationAngle: snappedAngle)
+        
+        if animated {
+            sticker.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+        }
     }
 
     func startStickerSequence(indices: [Int]? = nil) {
@@ -700,7 +711,8 @@ final class CubeAnimationView: UIView {
             if !self.hasFiredFinishApproach && absRemaining <= self.finishApproachTriggerAngle {
                 self.hasFiredFinishApproach = true
                 let upsideDown = abs(shortestAngleDelta(from: self.rotation.x, to: Float.pi)) < (Float.pi / 2)
-                self.onFinishApproach?(upsideDown)
+                let isClockwise = self.finishDirectionY > 0
+                self.onFinishApproach?(upsideDown, isClockwise)
             }
             if self.isSuccess, absRemaining <= self.finishSuccessScaleTriggerAngle {
                 let raw = (self.finishSuccessScaleTriggerAngle - absRemaining) / self.finishSuccessScaleTriggerAngle
