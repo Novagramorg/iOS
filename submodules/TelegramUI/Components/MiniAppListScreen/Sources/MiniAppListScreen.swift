@@ -533,7 +533,7 @@ final class MiniAppListScreenComponent: Component {
                 contentListNode = ContentListNode(parentView: self, context: component.context)
                 self.contentListNode = contentListNode
                 
-                contentListNode.visibleContentOffsetChanged = { [weak self] offset in
+                contentListNode.visibleContentOffsetChanged = { [weak self] offset, _ in
                     guard let self else {
                         return
                     }

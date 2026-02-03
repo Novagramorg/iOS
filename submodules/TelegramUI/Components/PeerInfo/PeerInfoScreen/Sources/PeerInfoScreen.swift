@@ -1450,8 +1450,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             self.openShareLink(url: url)
         }
         
-        self.headerNode.performButtonAction = { [weak self] key, gesture in
-            self?.performButtonAction(key: key, gesture: gesture)
+        self.headerNode.performButtonAction = { [weak self] key, buttonNode, gesture in
+            self?.performButtonAction(key: key, buttonNode: buttonNode, gesture: gesture)
         }
         
         self.headerNode.displaySavedMusic = { [weak self] in

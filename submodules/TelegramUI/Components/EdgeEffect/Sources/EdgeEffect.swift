@@ -29,13 +29,19 @@ public class EdgeEffectView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    public func update(content: UIColor, blur: Bool = false, alpha: CGFloat = 0.75, rect: CGRect, edge: Edge, edgeSize: CGFloat, transition: ComponentTransition) {
+    public func updateColor(color: UIColor, transition: ComponentTransition) {
+        transition.setBackgroundColor(view: self.contentView, color: color)
+    }
+    
+    public func update(content: UIColor?, blur: Bool = false, alpha: CGFloat = 0.75, rect: CGRect, edge: Edge, edgeSize: CGFloat, transition: ComponentTransition) {
         #if DEBUG && false
         let content: UIColor = .blue
         //let blur: Bool = !"".isEmpty
         #endif
         
-        transition.setBackgroundColor(view: self.contentView, color: content)
+        if let content {
+            transition.setBackgroundColor(view: self.contentView, color: content)
+        }
         transition.setAlpha(view: self.contentView, alpha: alpha)
         
         let bounds = CGRect(origin: CGPoint(), size: rect.size)
