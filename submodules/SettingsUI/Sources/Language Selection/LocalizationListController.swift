@@ -143,7 +143,7 @@ public class LocalizationListController: ViewController {
             self?.push(c)
         }, focusOnItemTag: self.focusOnItemTag)
         
-        self.controllerNode.listNode.visibleContentOffsetChanged = { [weak self] offset in
+        self.controllerNode.listNode.visibleContentOffsetChanged = { [weak self] offset, _ in
             if let strongSelf = self {
                 if let searchContentNode = strongSelf.searchContentNode {
                     searchContentNode.updateListVisibleContentOffset(offset)

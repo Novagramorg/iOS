@@ -665,7 +665,7 @@ final class CallListControllerNode: ASDisplayNode {
                 }
             }
             
-            self.listNode.visibleContentOffsetChanged = { [weak self] offset in
+            self.listNode.visibleContentOffsetChanged = { [weak self] offset, _ in
                 if let strongSelf = self {
                     var previousContentOffsetValue: CGFloat?
                     if let previousContentOffset = strongSelf.previousContentOffset, case let .known(value) = previousContentOffset {
