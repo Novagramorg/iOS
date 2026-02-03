@@ -1517,6 +1517,7 @@ private final class SheetContainerComponent: CombinedComponent {
             let state = context.state
             
             let strings = environment.strings
+            let dateTimeFormat = environment.dateTimeFormat
             
             if externalState.displayFailure {
                 state.displayFailure = true
@@ -1846,6 +1847,9 @@ private final class SheetContainerComponent: CombinedComponent {
                                             if let navigationController = controller()?.navigationController {
                                                 var text: String = strings.Login_UnknownError
                                                 switch error {
+                                                case let .tooEarly(canCraftDate):
+                                                    let dateString = stringForFullDate(timestamp: canCraftDate, strings: strings, dateTimeFormat: dateTimeFormat)
+                                                    text = strings.Gift_Craft_Unavailable_Text(dateString).string
                                                 case .unavailable:
                                                     text = strings.Gift_Craft_Error_NotAvailable
                                                 default:

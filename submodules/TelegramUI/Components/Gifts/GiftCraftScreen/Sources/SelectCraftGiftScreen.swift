@@ -87,7 +87,7 @@ final class SelectGiftPageContent: Component {
         private var craftStateDisposable: Disposable?
                 
         private var availableGifts: [GiftItem] = []
-        private var giftMap: [Int64: GiftItem] = [:]
+        private var giftMap: [Int64: ProfileGiftsContext.State.StarGift] = [:]
                 
         private var availableSize: CGSize?
         private var currentBounds: CGRect?
@@ -203,10 +203,26 @@ final class SelectGiftPageContent: Component {
                                 isEditing: false,
                                 mode: .grid,
                                 action: { [weak self] in
-                                    guard let self, let component = self.component else {
+                                    guard let self, let component = self.component, let environment = self.environment else {
                                         return
                                     }
                                     HapticFeedback().impact(.light)
+                                    
+                                    let currentTime = Int32(CFAbsoluteTimeGetCurrent() + kCFAbsoluteTimeIntervalSince1970)
+                                    if let profileGift = self.giftMap[gift.gift.id], let canCraftDate = profileGift.canCraftAt, currentTime < canCraftDate {
+                                        let dateString = stringForFullDate(timestamp: canCraftDate, strings: environment.strings, dateTimeFormat: environment.dateTimeFormat)
+                                        let alertController = textAlertController(
+                                            context: component.context,
+                                            title: environment.strings.Gift_Craft_Unavailable_Title,
+                                            text: environment.strings.Gift_Craft_Unavailable_Text(dateString).string,
+                                            actions: [
+                                                TextAlertAction(type: .defaultAction, title: environment.strings.Common_OK, action: {})
+                                            ],
+                                            parseMarkdown: true
+                                        )
+                                        environment.controller()?.present(alertController, in: .window(.root))
+                                        return
+                                    }
                                     
                                     component.selectGift(gift)
                                     component.dismiss()
@@ -322,7 +338,6 @@ final class SelectGiftPageContent: Component {
                 self.availableGifts = [
                     initialGiftItem
                 ]
-                self.giftMap = [initialGiftItem.gift.id: initialGiftItem]
                 
                 self.craftStateDisposable = (component.craftContext.state
                 |> deliverOnMainQueue).start(next: { [weak self] state in
@@ -332,32 +347,28 @@ final class SelectGiftPageContent: Component {
                     self.craftState = state
                     
                     var items: [GiftItem] = []
-                    var map: [Int64: GiftItem] = [:]
-                    var foundInitial = false
+                    var giftMap: [Int64: ProfileGiftsContext.State.StarGift] = [:]
+                    var existingIds = Set<Int64>()
                     for gift in state.gifts {
-                        guard let reference = gift.reference, case let .unique(uniqueGift) = gift.gift else {
+                        guard let reference = gift.reference, case let .unique(uniqueGift) = gift.gift, !existingIds.contains(uniqueGift.id) else {
                             continue
                         }
+                        existingIds.insert(uniqueGift.id)
+                        
                         let giftItem = GiftItem(
                             gift: uniqueGift,
                             reference: reference
                         )
-                        map[uniqueGift.id] = giftItem
-                        if uniqueGift.id == component.gift.id {
-                            foundInitial = true
-                        } else {
-                            if component.selectedGiftIds.contains(uniqueGift.id) {
-                                continue
-                            }
-                            items.append(giftItem)
+                        giftMap[uniqueGift.id] = gift
+   
+                        if component.selectedGiftIds.contains(uniqueGift.id) {
+                            continue
                         }
+                        items.append(giftItem)
                     }
                     
-                    if !foundInitial {
-                        map[initialGiftItem.gift.id] = initialGiftItem
-                    }
                     self.availableGifts = items
-                    self.giftMap = map
+                    self.giftMap = giftMap
                     
                     self.state?.updated(transition: .spring(duration: 0.4))
                 })
