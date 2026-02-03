@@ -4,6 +4,7 @@ import Display
 import WebKit
 import SwiftSignalKit
 import TelegramCore
+import WebWorkerShim
 
 private let findActiveElementY = """
 function getOffset(el) {
@@ -89,21 +90,7 @@ function tgBrowserDisconnectObserver() {
 });
 """
 
-protocol WebAppWebView: WKWebView {
-    var handleScriptMessage: (WKScriptMessage) -> Void { get set }
-    var customInsets: UIEdgeInsets { get set }
-    var lastTouchTimestamp: Double? { get set }
-    var didTouchOnce: Bool { get }
-    var onFirstTouch: () -> Void { get set }
-    
-    func sendEvent(name: String, data: String?)
-    func scrollToActiveElement(layout: ContainerViewLayout, completion: @escaping (CGPoint) -> Void, transition: ContainedViewLayoutTransition)
-    func updateMetrics(height: CGFloat, isExpanded: Bool, isStable: Bool, transition: ContainedViewLayoutTransition)
-    func hideScrollIndicators()
-    func loadMainUrl(url: URL)
-}
-
-final class WebAppWebViewImpl: WKWebView, WebAppWebView {
+final class WebAppPWAWebViewImpl: PWAWebView, WebAppWebView {
     var handleScriptMessage: (WKScriptMessage) -> Void = { _ in }
 
     var customInsets: UIEdgeInsets = .zero {
@@ -188,7 +175,7 @@ final class WebAppWebViewImpl: WKWebView, WebAppWebView {
         self.allowsBackForwardNavigationGestures = false
         if #available(iOS 16.4, *) {
             self.isInspectable = true
-        } 
+        }
         
         handleScriptMessageImpl = { [weak self] message in
             if let strongSelf = self {
@@ -206,7 +193,11 @@ final class WebAppWebViewImpl: WKWebView, WebAppWebView {
     }
     
     func loadMainUrl(url: URL) {
-        self.load(URLRequest(url: url))
+        var url = url
+        if let range = url.absoluteString.range(of: "#") {
+            url = URL(string: String(url.absoluteString[..<range.lowerBound])) ?? url
+        }
+        self.loadPWA(url: url)
     }
     
     override func didMoveToSuperview() {

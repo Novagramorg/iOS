@@ -283,6 +283,51 @@ private func removeCachedAttachMenuBot(postbox: Postbox, botId: PeerId) -> Signa
     }
 }
 
+enum CachedAttachMenuBotResult {
+    case empty
+    case bot(AttachMenuBots.Bot)
+}
+
+private func manuallyCachedAttachMenuBot(transaction: Transaction, peerId: PeerId) -> CachedAttachMenuBotResult? {
+    let key = ValueBoxKey(length: 8)
+    key.setInt64(0, value: peerId.toInt64())
+
+    if let entry = transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.manuallyCachedAttachMenuBots, key: key)) {
+        let cached = entry.get(AttachMenuBots.Bot.self)
+        if let cached {
+            return .bot(cached)
+        } else if let _ = entry.get(EmptyAttachMenuBotMarker.self) {
+            return .empty
+        } else {
+            return nil
+        }
+    } else {
+        return nil
+    }
+}
+
+struct EmptyAttachMenuBotMarker: Codable {
+    var trueValue: Bool
+}
+
+private func setManuallyCachedAttachMenuBot(transaction: Transaction, peerId: PeerId, bot: AttachMenuBots.Bot?) {
+    let key = ValueBoxKey(length: 8)
+    key.setInt64(0, value: peerId.toInt64())
+    
+    let entryId = ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.manuallyCachedAttachMenuBots, key: key)
+    if let bot {
+        if let entry = CodableEntry(bot) {
+            transaction.putItemCacheEntry(id: entryId, entry: entry)
+        } else {
+            transaction.removeItemCacheEntry(id: entryId)
+        }
+    } else {
+        if let entry = CodableEntry(EmptyAttachMenuBotMarker(trueValue: true)) {
+            transaction.putItemCacheEntry(id: entryId, entry: entry)
+        }
+    }
+}
+
 func managedSynchronizeAttachMenuBots(accountPeerId: PeerId, postbox: Postbox, network: Network, force: Bool = false) -> Signal<Void, NoError> {
     let poll = Signal<Void, NoError> { subscriber in
         let signal: Signal<Void, NoError> = cachedAttachMenuBots(postbox: postbox)
@@ -509,11 +554,21 @@ public enum GetAttachMenuBotError {
     case generic
 }
  
-func _internal_getAttachMenuBot(accountPeerId: PeerId, postbox: Postbox, network: Network, botId: PeerId, cached: Bool) -> Signal<AttachMenuBot, GetAttachMenuBotError> {
+func _internal_getAttachMenuBot(accountPeerId: PeerId, postbox: Postbox, network: Network, botId: PeerId, cached: Bool, allowManuallyCached: Bool) -> Signal<AttachMenuBot, GetAttachMenuBotError> {
     return postbox.transaction { transaction -> Signal<AttachMenuBot, GetAttachMenuBotError> in
         if cached, let cachedBots = cachedAttachMenuBots(transaction: transaction)?.bots {
             if let bot = cachedBots.first(where: { $0.peerId == botId }), let peer = transaction.getPeer(bot.peerId) {
                 return .single(AttachMenuBot(peer: EnginePeer(peer), shortName: bot.name, icons: bot.icons, peerTypes: bot.peerTypes, flags: bot.flags))
+            }
+        }
+        if allowManuallyCached, let bot = manuallyCachedAttachMenuBot(transaction: transaction, peerId: botId) {
+            switch bot {
+            case let .bot(bot):
+                if let peer = transaction.getPeer(bot.peerId) {
+                    return .single(AttachMenuBot(peer: EnginePeer(peer), shortName: bot.name, icons: bot.icons, peerTypes: bot.peerTypes, flags: bot.flags))
+                }
+            case .empty:
+                return .fail(.generic)
             }
         }
         
@@ -522,6 +577,10 @@ func _internal_getAttachMenuBot(accountPeerId: PeerId, postbox: Postbox, network
         }
         return network.request(Api.functions.messages.getAttachMenuBot(bot: inputUser))
         |> mapError { _ -> GetAttachMenuBotError in
+            let _ = postbox.transaction({ transaction -> Void in
+                setManuallyCachedAttachMenuBot(transaction: transaction, peerId: peer.id, bot: nil)
+            }).startStandalone()
+            
             return .generic
         }
         |> mapToSignal { result -> Signal<AttachMenuBot, GetAttachMenuBotError> in
@@ -586,6 +645,15 @@ func _internal_getAttachMenuBot(accountPeerId: PeerId, postbox: Postbox, network
                                 if (apiFlags & (1 << 5)) != 0 {
                                     flags.insert(.showInSettingsDisclaimer)
                                 }
+                            
+                                setManuallyCachedAttachMenuBot(transaction: transaction, peerId: peer.id, bot: AttachMenuBots.Bot(
+                                    peerId: peer.id,
+                                    name: name,
+                                    icons: icons,
+                                    peerTypes: peerTypes,
+                                    flags: flags
+                                ))
+                            
                                 return .single(AttachMenuBot(peer: EnginePeer(peer), shortName: name, icons: icons, peerTypes: peerTypes, flags: flags))
                         }
                 }
