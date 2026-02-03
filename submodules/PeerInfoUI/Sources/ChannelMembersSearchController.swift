@@ -141,7 +141,7 @@ public final class ChannelMembersSearchControllerImpl: ViewController, ChannelMe
         
         self.displayNodeDidLoad()
         
-        self.controllerNode.listNode.visibleContentOffsetChanged = { [weak self] offset in
+        self.controllerNode.listNode.visibleContentOffsetChanged = { [weak self] offset, _ in
             if let strongSelf = self, let searchContentNode = strongSelf.searchContentNode {
                 searchContentNode.updateListVisibleContentOffset(offset)
             }
