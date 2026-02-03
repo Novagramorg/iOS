@@ -623,7 +623,7 @@ public final class ResizableSheetComponent<ChildEnvironmentType: Sendable & Equa
                     environment: {},
                     containerSize: CGSize(width: containerSize.width - 66.0 * 2.0, height: 66.0)
                 )
-                let titleItemFrame = CGRect(origin: CGPoint(x: rawSideInset + floorToScreenPixels((containerSize.width - titleItemSize.width)) / 2.0, y: floorToScreenPixels(36.0 - titleItemSize.height * 0.5)), size: titleItemSize)
+                let titleItemFrame = CGRect(origin: CGPoint(x: rawSideInset + floorToScreenPixels((containerSize.width - titleItemSize.width)) / 2.0, y: floorToScreenPixels(38.0 - titleItemSize.height * 0.5)), size: titleItemSize)
                 if let view = titleItemView.view {
                     if view.superview == nil {
                         self.navigationBarContainer.addSubview(view)

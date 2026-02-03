@@ -251,7 +251,7 @@ private final class SheetContent: CombinedComponent {
         return { context in
             let environment = context.environment[ViewControllerComponentContainer.Environment.self].value
             let state = context.state
-            let theme = environment.theme
+            let theme = environment.theme.withModalBlocksBackground()
             let strings = environment.strings
             
             let topInset: CGFloat = environment.navigationHeight - 35.0
