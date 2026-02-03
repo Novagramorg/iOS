@@ -21,6 +21,7 @@ import StarsImageComponent
 import ConfettiEffect
 import PremiumPeerShortcutComponent
 import StarsBalanceOverlayComponent
+import PlainButtonComponent
 import GlassBarButtonComponent
 import TelegramStringFormatting
 
@@ -266,7 +267,7 @@ private final class SheetContent: CombinedComponent {
         let star = Child(StarsImageComponent.self)
         let closeButton = Child(GlassBarButtonComponent.self)
         let title = Child(Text.self)
-        let peerShortcut = Child(PremiumPeerShortcutComponent.self)
+        let peerShortcut = Child(PlainButtonComponent.self)
         
         let text = Child(BalancedTextComponent.self)
         let button = Child(ButtonComponent.self)
@@ -392,11 +393,18 @@ private final class SheetContent: CombinedComponent {
             if isBot && !isExtendedMedia, let peer = state.botPeer {
                 contentSize.height -= 3.0
                 let peerShortcut = peerShortcut.update(
-                    component: PremiumPeerShortcutComponent(
-                        context: component.context,
-                        theme: theme,
-                        peer: peer
-                    ),
+                    component: PlainButtonComponent(
+                        content: AnyComponent(
+                            PremiumPeerShortcutComponent(
+                                context: component.context,
+                                theme: theme,
+                                peer: peer
+                            )
+                        ),
+                        action: {
+                            component.navigateToPeer(peer)
+                        }
+                    ),  
                     availableSize: CGSize(width: context.availableSize.width - 32.0, height: context.availableSize.height),
                     transition: .immediate
                 )
