@@ -333,7 +333,9 @@ open class GalleryControllerNode: ASDisplayNode, ASScrollViewDelegate, ASGesture
                 }
                 let _ = titleView.updateLayout(availableSize: titleFrame.size, transition: .immediate)
                 transition.updateFrame(view: titleView, frame: titleFrame)
-                ComponentTransition(transition).setAlpha(view: titleView, alpha: self.areControlsHidden ? 0.0 : 1.0)
+                ComponentTransition(transition).animateView {
+                    titleView.alpha = self.areControlsHidden ? 0.0 : 1.0
+                }
             }
         }
             
