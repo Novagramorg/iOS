@@ -271,8 +271,8 @@ final class ColorSwatchComponent: Component {
                     if let image = UIImage(bundleImageName: "Premium/Craft/DialColorMask"), let cgImage = image.cgImage {
                         context.clip(to: CGRect(origin: .zero, size: size), mask: cgImage)
                     }
-                    var locations: [CGFloat] = [1.0, 0.0]
-                    let colors: [CGColor] = [component.innerColor.cgColor, component.outerColor.cgColor]
+                    var locations: [CGFloat] = [1.0, 0.95, 0.1, 0.0]
+                    let colors: [CGColor] = [component.innerColor.cgColor, component.innerColor.cgColor, component.outerColor.cgColor, component.outerColor.cgColor]
                     
                     let colorSpace = CGColorSpaceCreateDeviceRGB()
                     let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: &locations)!

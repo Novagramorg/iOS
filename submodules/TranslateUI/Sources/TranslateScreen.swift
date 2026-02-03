@@ -626,9 +626,8 @@ private final class TranslateSheetComponent: CombinedComponent {
                             }
                         )
                     ),
-                    hasTopEdgeEffect: false,
                     bottomItem: nil,
-                    backgroundColor: .color(theme.actionSheet.opaqueItemBackgroundColor),
+                    backgroundColor: .color(theme.list.modalBlocksBackgroundColor),
                     animateOut: animateOut
                 ),
                 environment: {

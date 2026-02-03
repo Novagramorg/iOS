@@ -689,6 +689,10 @@ public final class GlassBackgroundContainerView: UIView {
             return nil
         }
         
+        if result === self.contentView {
+            return nil
+        }
+        
         return result
     }
     

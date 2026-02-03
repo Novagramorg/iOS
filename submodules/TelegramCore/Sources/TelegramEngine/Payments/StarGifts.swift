@@ -4241,11 +4241,15 @@ public final class ResaleGiftsContext {
         }
     }
     
+    public let forCrafting: Bool
+    
     public init(
         account: Account,
         giftId: Int64,
         forCrafting: Bool
     ) {
+        self.forCrafting = forCrafting
+        
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
             return ResaleGiftsContextImpl(queue: queue, account: account, giftId: giftId, forCrafting: forCrafting)

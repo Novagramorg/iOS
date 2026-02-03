@@ -406,10 +406,13 @@ final class SelectGiftPageContent: Component {
                         
             contentHeight = self.updateScrolling(interactive: false, transition: transition)
             
+            let resaleCount = component.genericGift.availability?.resale ?? 0
+            let saleTitle = environment.strings.Gift_Craft_Select_SaleGiftsCount(Int32(clamping: resaleCount)).uppercased()
+            
             let storeGiftsTitleSize = self.storeGiftsTitle.update(
                 transition: transition,
                 component: AnyComponent(
-                    MultilineTextComponent(text: .plain(NSAttributedString(string: environment.strings.Gift_Craft_Select_SaleGifts.uppercased(), font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
+                    MultilineTextComponent(text: .plain(NSAttributedString(string: saleTitle, font: Font.semibold(14.0), textColor: environment.theme.actionSheet.secondaryTextColor)))
                 ),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 100.0)

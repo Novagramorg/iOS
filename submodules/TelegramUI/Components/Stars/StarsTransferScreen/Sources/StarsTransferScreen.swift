@@ -21,6 +21,7 @@ import StarsImageComponent
 import ConfettiEffect
 import PremiumPeerShortcutComponent
 import StarsBalanceOverlayComponent
+import PlainButtonComponent
 import GlassBarButtonComponent
 import TelegramStringFormatting
 
@@ -33,7 +34,7 @@ private final class SheetContent: CombinedComponent {
     let source: BotPaymentInvoiceSource
     let extendedMedia: [TelegramExtendedMedia]
     let inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>
-    let navigateToPeer: (EnginePeer) -> Void
+    let navigateToPeer: ((EnginePeer) -> Void)?
     let dismiss: () -> Void
     
     init(
@@ -43,7 +44,7 @@ private final class SheetContent: CombinedComponent {
         source: BotPaymentInvoiceSource,
         extendedMedia: [TelegramExtendedMedia],
         inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>,
-        navigateToPeer: @escaping (EnginePeer) -> Void,
+        navigateToPeer: ((EnginePeer) -> Void)?,
         dismiss: @escaping () -> Void
     ) {
         self.context = context
@@ -84,7 +85,7 @@ private final class SheetContent: CombinedComponent {
         private var peerDisposable: Disposable?
         private(set) var balance: StarsAmount?
         private(set) var form: BotPaymentForm?
-        private(set) var navigateToPeer: (EnginePeer) -> Void
+        private(set) var navigateToPeer: ((EnginePeer) -> Void)?
         
         private var stateDisposable: Disposable?
         
@@ -105,7 +106,7 @@ private final class SheetContent: CombinedComponent {
             extendedMedia: [TelegramExtendedMedia],
             invoice: TelegramMediaInvoice,
             inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>,
-            navigateToPeer: @escaping (EnginePeer) -> Void
+            navigateToPeer: ((EnginePeer) -> Void)?
         ) {
             self.context = context
             self.starsContext = starsContext
@@ -188,7 +189,7 @@ private final class SheetContent: CombinedComponent {
                         let _ = (self.context.engine.peers.joinLinkInformation(link)
                         |> deliverOnMainQueue).startStandalone(next: { result in
                             if case let .alreadyJoined(peer) = result {
-                                navigateToPeer(peer)
+                                navigateToPeer?(peer)
                             }
                         })
                     }
@@ -266,7 +267,7 @@ private final class SheetContent: CombinedComponent {
         let star = Child(StarsImageComponent.self)
         let closeButton = Child(GlassBarButtonComponent.self)
         let title = Child(Text.self)
-        let peerShortcut = Child(PremiumPeerShortcutComponent.self)
+        let peerShortcut = Child(PlainButtonComponent.self)
         
         let text = Child(BalancedTextComponent.self)
         let button = Child(ButtonComponent.self)
@@ -392,10 +393,19 @@ private final class SheetContent: CombinedComponent {
             if isBot && !isExtendedMedia, let peer = state.botPeer {
                 contentSize.height -= 3.0
                 let peerShortcut = peerShortcut.update(
-                    component: PremiumPeerShortcutComponent(
-                        context: component.context,
-                        theme: theme,
-                        peer: peer
+                    component: PlainButtonComponent(
+                        content: AnyComponent(
+                            PremiumPeerShortcutComponent(
+                                context: component.context,
+                                theme: theme,
+                                peer: peer
+                            )
+                        ),
+                        action: {
+                            component.navigateToPeer?(peer)
+                        },
+                        animateAlpha: component.navigateToPeer != nil,
+                        animateScale: false
                     ),
                     availableSize: CGSize(width: context.availableSize.width - 32.0, height: context.availableSize.height),
                     transition: .immediate
@@ -732,7 +742,7 @@ private final class StarsTransferSheetComponent: CombinedComponent {
     private let source: BotPaymentInvoiceSource
     private let extendedMedia: [TelegramExtendedMedia]
     private let inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>
-    private let navigateToPeer: (EnginePeer) -> Void
+    private let navigateToPeer: ((EnginePeer) -> Void)?
     
     init(
         context: AccountContext,
@@ -741,7 +751,7 @@ private final class StarsTransferSheetComponent: CombinedComponent {
         source: BotPaymentInvoiceSource,
         extendedMedia: [TelegramExtendedMedia],
         inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>,
-        navigateToPeer: @escaping (EnginePeer) -> Void
+        navigateToPeer: ((EnginePeer) -> Void)?
     ) {
         self.context = context
         self.starsContext = starsContext
@@ -796,6 +806,7 @@ private final class StarsTransferSheetComponent: CombinedComponent {
                     backgroundColor: .color(environment.theme.list.modalBlocksBackgroundColor),
                     followContentSizeChanges: true,
                     clipsContent: true,
+                    autoAnimateOut: false,
                     animateOut: animateOut
                 ),
                 environment: {
@@ -847,7 +858,7 @@ public final class StarsTransferScreen: ViewControllerComponentContainer {
         source: BotPaymentInvoiceSource,
         extendedMedia: [TelegramExtendedMedia] = [],
         inputData: Signal<(StarsContext.State, BotPaymentForm, EnginePeer?, EnginePeer?)?, NoError>,
-        navigateToPeer: @escaping (EnginePeer) -> Void = { _ in },
+        navigateToPeer: ((EnginePeer) -> Void)? = nil,
         completion: @escaping (Bool) -> Void
     ) {
         self.context = context
