@@ -729,7 +729,7 @@ final class MediaReferenceRevalidationContext {
     
     func attachBot(accountPeerId: PeerId, postbox: Postbox, network: Network, background: Bool, peer: PeerReference) -> Signal<AttachMenuBot, RevalidateMediaReferenceError> {
         return self.genericItem(key: .attachBot(peer: peer), background: background, request: { next, error in
-            return (_internal_getAttachMenuBot(accountPeerId: accountPeerId, postbox: postbox, network: network, botId: peer.id, cached: false)
+            return (_internal_getAttachMenuBot(accountPeerId: accountPeerId, postbox: postbox, network: network, botId: peer.id, cached: false, allowManuallyCached: false)
             |> mapError { _ -> RevalidateMediaReferenceError in
                 return .generic
             }).start(next: { value in

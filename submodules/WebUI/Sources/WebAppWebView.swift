@@ -89,7 +89,21 @@ function tgBrowserDisconnectObserver() {
 });
 """
 
-final class WebAppWebView: WKWebView {
+protocol WebAppWebView: WKWebView {
+    var handleScriptMessage: (WKScriptMessage) -> Void { get set }
+    var customInsets: UIEdgeInsets { get set }
+    var lastTouchTimestamp: Double? { get set }
+    var didTouchOnce: Bool { get }
+    var onFirstTouch: () -> Void { get set }
+    
+    func sendEvent(name: String, data: String?)
+    func scrollToActiveElement(layout: ContainerViewLayout, completion: @escaping (CGPoint) -> Void, transition: ContainedViewLayoutTransition)
+    func updateMetrics(height: CGFloat, isExpanded: Bool, isStable: Bool, transition: ContainedViewLayoutTransition)
+    func hideScrollIndicators()
+    func loadMainUrl(url: URL)
+}
+
+final class WebAppWebViewImpl: WKWebView, WebAppWebView {
     var handleScriptMessage: (WKScriptMessage) -> Void = { _ in }
 
     var customInsets: UIEdgeInsets = .zero {
@@ -189,6 +203,10 @@ final class WebAppWebView: WKWebView {
     
     deinit {
         print()
+    }
+    
+    func loadMainUrl(url: URL) {
+        self.load(URLRequest(url: url))
     }
     
     override func didMoveToSuperview() {

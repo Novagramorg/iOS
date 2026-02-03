@@ -671,8 +671,8 @@ public extension TelegramEngine {
             return _internal_rateAudioTranscription(postbox: self.account.postbox, network: self.account.network, messageId: messageId, id: id, isGood: isGood)
         }
         
-        public func requestWebView(peerId: PeerId, botId: PeerId, url: String?, payload: String?, themeParams: [String: Any]?, fromMenu: Bool, replyToMessageId: MessageId?, threadId: Int64?) -> Signal<RequestWebViewResult, RequestWebViewError> {
-            return _internal_requestWebView(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager, peerId: peerId, botId: botId, url: url, payload: payload, themeParams: themeParams, fromMenu: fromMenu, replyToMessageId: replyToMessageId, threadId: threadId)
+        public func requestWebView(peerId: PeerId, botId: PeerId, url: String?, payload: String?, themeParams: [String: Any]?, fromMenu: Bool, replyToMessageId: MessageId?, threadId: Int64?, enableCached: Bool = false) -> Signal<RequestWebViewResult, RequestWebViewError> {
+            return _internal_requestWebView(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager, peerId: peerId, botId: botId, url: url, payload: payload, themeParams: themeParams, fromMenu: fromMenu, replyToMessageId: replyToMessageId, threadId: threadId, enableCached: enableCached)
         }
         
         public func requestSimpleWebView(botId: PeerId, url: String?, source: RequestSimpleWebViewSource, themeParams: [String: Any]?) -> Signal<RequestWebViewResult, RequestWebViewError> {
@@ -719,8 +719,8 @@ public extension TelegramEngine {
             return _internal_acceptAttachMenuBotDisclaimer(postbox: self.account.postbox, botId: botId)
         }
         
-        public func getAttachMenuBot(botId: PeerId, cached: Bool = false) -> Signal<AttachMenuBot, GetAttachMenuBotError> {
-            return _internal_getAttachMenuBot(accountPeerId: self.account.peerId, postbox: self.account.postbox, network: self.account.network, botId: botId, cached: cached)
+        public func getAttachMenuBot(botId: PeerId, cached: Bool = false, allowManuallyCached: Bool = false) -> Signal<AttachMenuBot, GetAttachMenuBotError> {
+            return _internal_getAttachMenuBot(accountPeerId: self.account.peerId, postbox: self.account.postbox, network: self.account.network, botId: botId, cached: cached, allowManuallyCached: allowManuallyCached)
         }
         
         public func attachMenuBots() -> Signal<[AttachMenuBot], NoError> {
