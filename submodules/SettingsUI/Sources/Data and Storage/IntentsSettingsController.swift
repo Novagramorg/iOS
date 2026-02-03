@@ -47,7 +47,7 @@ private enum IntentsSettingsSection: Int32 {
 
 private enum IntentsSettingsControllerEntry: ItemListNodeEntry {
     case accountHeader(PresentationTheme, String)
-    case account(PresentationTheme, EnginePeer, Bool, Int32)
+    case account(PresentationTheme, Account, EnginePeer, Bool, Int32)
     case accountInfo(PresentationTheme, String)
     
     case chatsHeader(PresentationTheme, String)
@@ -80,7 +80,7 @@ private enum IntentsSettingsControllerEntry: ItemListNodeEntry {
         switch self {
             case .accountHeader:
                 return 0
-            case let .account(_, _, _, index):
+            case let .account(_, _, _, _, index):
                 return 1 + index
             case .accountInfo:
                 return 1000
@@ -115,8 +115,8 @@ private enum IntentsSettingsControllerEntry: ItemListNodeEntry {
                 } else {
                     return false
                 }
-            case let .account(lhsTheme, lhsPeer, lhsSelected, lhsIndex):
-                if case let .account(rhsTheme, rhsPeer, rhsSelected, rhsIndex) = rhs, lhsTheme === rhsTheme, lhsPeer == rhsPeer, lhsSelected == rhsSelected, lhsIndex == rhsIndex {
+            case let .account(lhsTheme, lhsAccount, lhsPeer, lhsSelected, lhsIndex):
+                if case let .account(rhsTheme, rhsAccount, rhsPeer, rhsSelected, rhsIndex) = rhs, lhsTheme === rhsTheme, lhsAccount === rhsAccount, lhsPeer == rhsPeer, lhsSelected == rhsSelected, lhsIndex == rhsIndex {
                     return true
                 } else {
                     return false
@@ -200,8 +200,8 @@ private enum IntentsSettingsControllerEntry: ItemListNodeEntry {
         switch self {
             case let .accountHeader(_, text):
                 return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
-            case let .account(_, peer, selected, _):
-                return ItemListPeerItem(presentationData: presentationData, systemStyle: .glass, dateTimeFormat: PresentationDateTimeFormat(), nameDisplayOrder: .firstLast, context: arguments.context.sharedContext.makeTempAccountContext(account: arguments.context.account), peer: peer, height: .generic, aliasHandling: .standard, nameStyle: .plain, presence: nil, text: .none, label: .none, editing: ItemListPeerItemEditing(editable: true, editing: false, revealed: false), revealOptions: nil, switchValue: ItemListPeerItemSwitch(value: selected, style: .check), enabled: true, selectable: true, sectionId: self.section, action: {
+            case let .account(_, account, peer, selected, _):
+                return ItemListPeerItem(presentationData: presentationData, systemStyle: .glass, dateTimeFormat: PresentationDateTimeFormat(), nameDisplayOrder: .firstLast, context: arguments.context.sharedContext.makeTempAccountContext(account: account), peer: peer, height: .generic, aliasHandling: .standard, nameStyle: .plain, presence: nil, text: .none, label: .none, editing: ItemListPeerItemEditing(editable: true, editing: false, revealed: false), revealOptions: nil, switchValue: ItemListPeerItemSwitch(value: selected, style: .check), enabled: true, selectable: true, sectionId: self.section, action: {
                     arguments.updateSettings { $0.withUpdatedAccount(peer.id) }
                 }, setPeerIdWithRevealedOptions: { _, _ in}, removePeer: { _ in })
             case let .accountInfo(_, text):
@@ -251,8 +251,8 @@ private func intentsSettingsControllerEntries(context: AccountContext, presentat
     if accounts.count > 1 {
         entries.append(.accountHeader(presentationData.theme, presentationData.strings.IntentsSettings_MainAccount.uppercased()))
         var index: Int32 = 0
-        for (_, peer) in accounts {
-            entries.append(.account(presentationData.theme, peer, peer.id == settings.account, index))
+        for (account, peer) in accounts {
+            entries.append(.account(presentationData.theme, account, peer, peer.id == settings.account, index))
             index += 1
         }
         entries.append(.accountInfo(presentationData.theme, presentationData.strings.IntentsSettings_MainAccountInfo))

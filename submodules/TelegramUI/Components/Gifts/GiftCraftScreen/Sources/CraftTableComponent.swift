@@ -98,6 +98,10 @@ final class CraftTableComponent: Component {
             super.init(frame: frame)
             
             self.addSubview(self.animationView)
+            
+            self.animationView.onStickerLaunch = {
+                HapticFeedback().impact(.soft)
+            }
         }
         
         required init?(coder: NSCoder) {
@@ -139,7 +143,9 @@ final class CraftTableComponent: Component {
                     self.failWillFinish = true
                     self.component?.willFinish(false)
                     
-                    self.craftFailPlayOnce.invoke(Void())
+                    Queue.mainQueue().after(0.1) {
+                        self.craftFailPlayOnce.invoke(Void())
+                    }
                 })
                 
                 Queue.mainQueue().after(0.5, {
@@ -408,8 +414,13 @@ final class CraftTableComponent: Component {
                 for index in component.gifts.keys.sorted() {
                     indices.append(Int(index))
                 }
+                
+                Queue.mainQueue().after(0.55) {
+                    HapticFeedback().impact(.light)
+                }
+                
                 self.anvilPlayOnce.invoke(Void())
-                Queue.mainQueue().after(0.6, {
+                Queue.mainQueue().after(0.75, {
                     self.animationView.startStickerSequence(indices: indices)
                     
                     switch component.result {

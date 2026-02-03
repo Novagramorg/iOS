@@ -82,6 +82,7 @@ final class CubeAnimationView: UIView {
     
     var isSuccess = false
 
+    var onStickerLaunch: (() -> Void)?
     var onFinishApproach: ((Bool) -> Void)?
 
     private let defaultStickOrder: [Int] = [0, 5, 4, 3]
@@ -520,6 +521,8 @@ final class CubeAnimationView: UIView {
                 return
             }
 
+            self.onStickerLaunch?()
+            
             if let animationView, animationView !== sticker {
                 animationView.removeFromSuperview()
                 self.warpSnapshot = nil
