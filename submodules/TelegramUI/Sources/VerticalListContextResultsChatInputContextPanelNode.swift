@@ -173,7 +173,7 @@ final class VerticalListContextResultsChatInputContextPanelNode: ChatInputContex
         }
         
         self.backgroundView.isHidden = true
-        self.listView.visibleContentOffsetChanged = { [weak self] offset in
+        self.listView.visibleContentOffsetChanged = { [weak self] offset, _ in
             guard let self else {
                 return
             }

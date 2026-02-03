@@ -224,6 +224,7 @@ public final class ChatListNavigationBar: Component {
         private var currentHeaderComponent: ChatListHeaderComponent?
 
         private var currentHeight: CGFloat = 0.0
+        private var pinnedFraction: CGFloat = 0.0
         
         override public init(frame: CGRect) {
             self.edgeEffectView = EdgeEffectView()
@@ -403,8 +404,7 @@ public final class ChatListNavigationBar: Component {
             edgeEffectHeight = max(0.0, edgeEffectHeight)
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))
             transition.setFrame(view: self.edgeEffectView, frame: edgeEffectFrame)
-            self.edgeEffectView.update(content: component.theme.list.plainBackgroundColor, blur: true, alpha: 0.85, rect: edgeEffectFrame, edge: .top, edgeSize: min(54.0, edgeEffectHeight), transition: transition)
-            
+            self.edgeEffectView.update(content: nil, blur: true, alpha: 0.85, rect: edgeEffectFrame, edge: .top, edgeSize: min(54.0, edgeEffectHeight), transition: transition)
             
             let headerTransition = transition
             
@@ -679,6 +679,24 @@ public final class ChatListNavigationBar: Component {
             }
         }
         
+        public func updateEdgeEffectForPinnedFraction(pinnedFraction: CGFloat, transition: ComponentTransition) {
+            if self.pinnedFraction != pinnedFraction {
+                self.pinnedFraction = pinnedFraction
+                self.updateEdgeEffectColor(transition: transition)
+            }
+        }
+        
+        private func updateEdgeEffectColor(transition: ComponentTransition) {
+            guard let component = self.component else {
+                return
+            }
+            var color: UIColor = component.theme.list.plainBackgroundColor
+            if component.activeSearch == nil {
+                color = component.theme.list.plainBackgroundColor.mixedWith(component.theme.chatList.pinnedItemBackgroundColor, alpha: self.pinnedFraction)
+            }
+            self.edgeEffectView.updateColor(color: color, transition: transition)
+        }
+        
         func update(component: ChatListNavigationBar, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             var uploadProgressUpdated = false
             var storySubscriptionsUpdated = false
@@ -785,6 +803,8 @@ public final class ChatListNavigationBar: Component {
                     self.applyScroll(offset: rawScrollOffset, allowAvatarsExpansion: self.currentAllowAvatarsExpansion, forceUpdate: true, transition: transition)
                 }
             }
+            
+            self.updateEdgeEffectColor(transition: transition)
             
             return size
         }

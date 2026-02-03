@@ -101,7 +101,7 @@ final class CommandMenuChatInputContextPanelNode: ChatInputContextPanelNode {
         self.listView.view.mask = self.listMaskView
         
         self.backgroundView.isHidden = true
-        self.listView.visibleContentOffsetChanged = { [weak self] offset in
+        self.listView.visibleContentOffsetChanged = { [weak self] offset, _ in
             guard let self else {
                 return
             }

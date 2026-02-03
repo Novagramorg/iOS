@@ -131,6 +131,7 @@ static bool notyfyingShiftState = false;
     if (self != nil) {
         _stiffness = stiffness;
         _damping = damping;
+        _duration = duration;
     }
     return self;
 }

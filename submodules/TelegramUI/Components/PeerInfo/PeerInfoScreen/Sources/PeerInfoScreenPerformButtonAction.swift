@@ -14,7 +14,7 @@ import ShareController
 import TranslateUI
 
 extension PeerInfoScreenNode {
-    func performButtonAction(key: PeerInfoHeaderButtonKey, gesture: ContextGesture?) {
+    func performButtonAction(key: PeerInfoHeaderButtonKey, buttonNode: PeerInfoHeaderButtonNode?, gesture: ContextGesture?) {
         guard let controller = self.controller else {
             return
         }
@@ -483,7 +483,7 @@ extension PeerInfoScreenNode {
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MessageBubble"), color: theme.contextMenu.primaryColor)
                     }, action: { [weak self] _, f in
                         f(.dismissWithoutContent)
-                        self?.performButtonAction(key: .discussion, gesture: nil)
+                        self?.performButtonAction(key: .discussion, buttonNode: nil, gesture: nil)
                     })))
                 }
                 
@@ -1187,7 +1187,10 @@ extension PeerInfoScreenNode {
             
             if let sourceNode = self.headerNode.buttonNodes[.more]?.referenceNode {
                 let items = mainItemsImpl?() ?? .single([])
-                let contextController = makeContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceNode: sourceNode)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+                
+                let sourceView = sourceNode.view
+                
+                let contextController = makeContextController(presentationData: self.presentationData, source: .reference(PeerInfoContextReferenceContentSource(controller: controller, sourceView: sourceView)), items: items |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
                 contextController.dismissed = { [weak self] in
                     if let strongSelf = self {
                         strongSelf.state = strongSelf.state.withHighlightedButton(nil)
