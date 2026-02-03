@@ -1215,7 +1215,7 @@ private final class CraftGiftPageContent: Component {
                                 
                                 HapticFeedback().success()
                             } else {
-                                Queue.mainQueue().after(0.15) {
+                                Queue.mainQueue().after(0.35) {
                                     HapticFeedback().error()
                                 }
                             }

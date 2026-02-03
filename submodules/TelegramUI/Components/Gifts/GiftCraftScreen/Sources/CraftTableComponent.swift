@@ -143,9 +143,7 @@ final class CraftTableComponent: Component {
                     self.failWillFinish = true
                     self.component?.willFinish(false)
                     
-                    Queue.mainQueue().after(0.1) {
-                        self.craftFailPlayOnce.invoke(Void())
-                    }
+                    self.craftFailPlayOnce.invoke(Void())
                 })
                 
                 Queue.mainQueue().after(0.5, {
