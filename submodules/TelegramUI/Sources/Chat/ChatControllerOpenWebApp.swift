@@ -115,17 +115,12 @@ func openWebAppImpl(
     if case let .inline(bot) = source {
         botPeer = bot
     }
-
-    var allowManuallyCached = false
-    if context.sharedContext.immediateExperimentalUISettings.enablePWA {
-        allowManuallyCached = true
-    }
-    
+            
     let _ = combineLatest(queue: Queue.mainQueue(),
         context.engine.data.get(TelegramEngine.EngineData.Item.Peer.BotAppSettings(id: botPeer.id)),
         ApplicationSpecificNotice.getBotGameNotice(accountManager: context.sharedContext.accountManager, peerId: botPeer.id),
         context.engine.messages.attachMenuBots(),
-        context.engine.messages.getAttachMenuBot(botId: botPeer.id, cached: true, allowManuallyCached: allowManuallyCached)
+        context.engine.messages.getAttachMenuBot(botId: botPeer.id, cached: true)
         |> map(Optional.init)
         |> `catch` { _ -> Signal<AttachMenuBot?, NoError> in
           return .single(nil)

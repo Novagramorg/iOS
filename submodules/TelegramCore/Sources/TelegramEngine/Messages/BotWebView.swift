@@ -203,52 +203,15 @@ private func keepWebViewSignal(network: Network, stateManager: AccountStateManag
     return signal
 }
 
-func _internal_requestWebView(
-    postbox: Postbox,
-    network: Network,
-    stateManager: AccountStateManager,
-    peerId: PeerId,
-    botId: PeerId,
-    url: String?,
-    payload: String?,
-    themeParams: [String: Any]?,
-    fromMenu: Bool,
-    replyToMessageId: MessageId?,
-    threadId: Int64?,
-    enableCached: Bool
-) -> Signal<RequestWebViewResult, RequestWebViewError> {
+func _internal_requestWebView(postbox: Postbox, network: Network, stateManager: AccountStateManager, peerId: PeerId, botId: PeerId, url: String?, payload: String?, themeParams: [String: Any]?, fromMenu: Bool, replyToMessageId: MessageId?, threadId: Int64?) -> Signal<RequestWebViewResult, RequestWebViewError> {
     var serializedThemeParams: Api.DataJSON?
-    var themeParamsJson: String?
     if let themeParams = themeParams, let data = try? JSONSerialization.data(withJSONObject: themeParams, options: []), let dataString = String(data: data, encoding: .utf8) {
-        themeParamsJson = dataString
         serializedThemeParams = .dataJSON(.init(data: dataString))
     }
     
     return postbox.transaction { transaction -> Signal<RequestWebViewResult, RequestWebViewError> in
         guard let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer), let bot = transaction.getPeer(botId), let inputBot = apiInputUser(bot) else {
             return .fail(.generic)
-        }
-        
-        let _ = themeParamsJson
-        let cacheKey = CachedBotWebView.Key(
-            peerId: peerId,
-            botId: botId,
-            url: url,
-            payload: payload,
-            themeParamsJson: nil,
-            fromMenu: fromMenu,
-            replyToMessageId: replyToMessageId,
-            threadId: threadId
-        )
-        if enableCached {
-            if let value = cachedBotWebView(transaction: transaction, key: cacheKey) {
-                return .single(RequestWebViewResult(
-                    flags: value.flags,
-                    queryId: value.queryId,
-                    url: value.url,
-                    keepAliveSignal: nil
-                ))
-            }
         }
 
         var flags: Int32 = 0
@@ -313,16 +276,6 @@ func _internal_requestWebView(
                 } else {
                     keepAlive = nil
                 }
-                
-                if enableCached {
-                    let _ = (postbox.transaction { transaction -> Void in
-                        setCachedBotWebView(transaction: transaction, key: cacheKey, value: CachedBotWebView(
-                            flags: resultFlags,
-                            queryId: queryId,
-                            url: url
-                        ))
-                    }).startStandalone()
-                }
 
                 return .single(RequestWebViewResult(flags: resultFlags, queryId: queryId, url: url, keepAliveSignal: keepAlive))
             }
@@ -330,99 +283,6 @@ func _internal_requestWebView(
     }
     |> castError(RequestWebViewError.self)
     |> switchToLatest
-}
-
-final class CachedBotWebView: Codable {
-    struct Key {
-        let peerId: PeerId
-        let botId: PeerId
-        let url: String?
-        let payload: String?
-        let themeParamsJson: String?
-        let fromMenu: Bool
-        let replyToMessageId: MessageId?
-        let threadId: Int64?
-        
-        func toData() -> ValueBoxKey {
-            var string = ""
-            string.append("_")
-            string.append("\(self.peerId.toInt64())")
-            string.append("_")
-            string.append("\(self.botId.toInt64())")
-            string.append("_")
-            string.append("\(self.url ?? "-")")
-            string.append("_")
-            string.append("\(self.payload ?? "-")")
-            string.append("_")
-            string.append("\(self.themeParamsJson ?? "-")")
-            string.append("_")
-            string.append("\(self.fromMenu)")
-            string.append("_")
-            string.append("\(String(describing: self.replyToMessageId))")
-            string.append("_")
-            string.append("\(self.threadId ?? -1)")
-            let data = sha256Digest(string.data(using: .utf8)!)
-            
-            let key = ValueBoxKey(length: data.count)
-            key.setData(0, value: data)
-            return key
-        }
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case flags
-        case queryId
-        case url
-    }
-    
-    let flags: RequestWebViewResult.Flags
-    let queryId: Int64?
-    let url: String
-    
-    init(flags: RequestWebViewResult.Flags, queryId: Int64?, url: String) {
-        self.flags = flags
-        self.queryId = queryId
-        self.url = url
-    }
-    
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.flags = RequestWebViewResult.Flags(rawValue: try container.decode(Int32.self, forKey: .flags))
-        self.queryId = try container.decodeIfPresent(Int64.self, forKey: .queryId)
-        self.url = try container.decode(String.self, forKey: .url)
-    }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(self.flags.rawValue, forKey: .flags)
-        try container.encodeIfPresent(self.queryId, forKey: .queryId)
-        try container.encodeIfPresent(self.url, forKey: .url)
-    }
-}
-
-private func cachedBotWebView(transaction: Transaction, key: CachedBotWebView.Key) -> CachedBotWebView? {
-    let key = key.toData()
-
-    if let entry = transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedBotWebViews, key: key)) {
-        return entry.get(CachedBotWebView.self)
-    } else {
-        return nil
-    }
-}
-
-private func setCachedBotWebView(transaction: Transaction, key: CachedBotWebView.Key, value: CachedBotWebView?) {
-    let key = key.toData()
-    
-    let entryId = ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedBotWebViews, key: key)
-    if let value {
-        if let entry = CodableEntry(value) {
-            transaction.putItemCacheEntry(id: entryId, entry: entry)
-        } else {
-            transaction.removeItemCacheEntry(id: entryId)
-        }
-    } else {
-        transaction.removeItemCacheEntry(id: entryId)
-    }
 }
 
 public enum SendWebViewDataError {
