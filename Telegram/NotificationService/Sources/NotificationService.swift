@@ -1978,17 +1978,12 @@ private final class NotificationServiceHandler {
                                                 if let media = message.media.first {
                                                     parsedMedia = media
                                                 }
-                                                if enableInlineEmoji, let textEntitiesAttribute = message.textEntitiesAttribute, let author = message.author {
-                                                    let authorTitle = author.debugDisplayTitle
-                                                    let messagePrefix = "\(authorTitle): "
-                                                    let messagePrefixLength = (messagePrefix as NSString).length
+                                                if enableInlineEmoji, let textEntitiesAttribute = message.textEntitiesAttribute {
+                                                    content.body = message.text
                                                     for entity in textEntitiesAttribute.entities {
                                                         if case let .CustomEmoji(_, fileId) = entity.type {
-                                                            content.customEmoji.append(NotificationContent.CustomEmoji(range: (entity.range.lowerBound + messagePrefixLength) ..< (entity.range.upperBound + messagePrefixLength), fileId: fileId))
+                                                            content.customEmoji.append(NotificationContent.CustomEmoji(range: entity.range, fileId: fileId))
                                                         }
-                                                    }
-                                                    if !content.customEmoji.isEmpty {
-                                                        content.body = messagePrefix + message.text
                                                     }
                                                 }
                                             }

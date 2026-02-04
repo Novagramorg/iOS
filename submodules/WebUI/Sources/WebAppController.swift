@@ -140,6 +140,53 @@ public func generateWebAppThemeParams(_ theme: PresentationTheme) -> [String: An
     ]
 }
 
+#if DEBUG
+private let registeredProtocols: Void = {
+    class AppURLProtocol: URLProtocol {
+        var urlTask: URLSessionDataTask?
+        
+        override class func canInit(with request: URLRequest) -> Bool {
+            if request.url?.scheme == "https" {
+                return false
+            }
+            return false
+        }
+        
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+            return request
+        }
+        
+        override func startLoading() {
+            super.startLoading()
+            
+            /*if self.urlTask != nil {
+                return
+            }
+            self.urlTask = URLSession.shared.dataTask(with: self.request, completionHandler: { [weak self] _, response, error in
+                guard let self else {
+                    return
+                }
+                if let error {
+                    self.client?.urlProtocol(self, didFailWithError: error)
+                } else {
+                    if let response = response as? HTTPURLResponse {
+                        self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                    } else {
+                    }
+                    self.client?.urlProtocolDidFinishLoading(self)
+                }
+            })
+            self.urlTask?.resume()*/
+        }
+        
+        override func stopLoading() {
+            self.urlTask?.cancel()
+        }
+    }
+    URLProtocol.registerClass(AppURLProtocol.self)
+}()
+#endif
+
 public final class WebAppController: ViewController, AttachmentContainable {
     public var requestAttachmentMenuExpansion: () -> Void = { }
     public var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
@@ -204,6 +251,10 @@ public final class WebAppController: ViewController, AttachmentContainable {
         private var validLayout: (ContainerViewLayout, CGFloat)?
         
         init(context: AccountContext, controller: WebAppController) {
+            #if DEBUG
+            let _ = registeredProtocols
+            #endif
+            
             self.context = context
             self.controller = controller
             self.presentationData = controller.presentationData
@@ -220,12 +271,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                 self.backgroundColor = self.presentationData.theme.list.plainBackgroundColor
             }
             
-            let webView: WebAppWebView
-            if context.sharedContext.immediateExperimentalUISettings.enablePWA {
-                webView = WebAppPWAWebViewImpl(account: context.account)
-            } else {
-                webView = WebAppWebViewImpl(account: context.account)
-            }
+            let webView = WebAppWebView(account: context.account)
             webView.alpha = 0.0
             webView.navigationDelegate = self
             webView.uiDelegate = self
@@ -433,12 +479,45 @@ public final class WebAppController: ViewController, AttachmentContainable {
             webView.scrollView.insertSubview(self.topOverscrollNode.view, at: 0)
         }
         
-        private func load(url: URL, isMainURL: Bool) {
-            if isMainURL {
-                self.webView?.loadMainUrl(url: url)
-            } else {
-                self.webView?.load(URLRequest(url: url))
+        private func load(url: URL) {
+            /*#if DEBUG
+            if "".isEmpty {
+                if #available(iOS 16.0, *) {
+                    let documentsPath = URL.documentsDirectory.path(percentEncoded: false)
+                    
+                    var hasher = SHA256()
+                    var urlString = url.absoluteString
+                    if let range = urlString.firstRange(of: "#") {
+                        urlString.removeSubrange(range.lowerBound...)
+                    }
+                    hasher.update(data: urlString.data(using: .utf8)!)
+                    let digest = Data(hasher.finalize())
+                    let urlHash = hexString(digest)
+                    
+                    let cachedFilePath = documentsPath.appending("\(urlHash).bin")
+                    
+                    Task {
+                        do {
+                            let data: Data
+                            if let cachedData = try? Data(contentsOf: URL(fileURLWithPath: cachedFilePath)) {
+                                data = cachedData
+                                print("Loaded from cache at \(cachedFilePath)")
+                            } else {
+                                let (loadedData, _) = try await URLSession.shared.data(from: url)
+                                data = loadedData
+                                try loadedData.write(to: URL(fileURLWithPath: cachedFilePath), options: .atomic)
+                            }
+                            self.webView?.load(data, mimeType: "text/html", characterEncodingName: "utf-8", baseURL: url)
+                        } catch let e {
+                            print("\(e)")
+                        }
+                    }
+                }
+                
+                return
             }
+            #endif*/
+            self.webView?.load(URLRequest(url: url))
         }
         
         func setupWebView() {
@@ -449,7 +528,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
             if let url = controller.url, controller.source != .menu {
                 self.queryId = controller.queryId
                 if let parsedUrl = URL(string: url) {
-                    self.load(url: parsedUrl, isMainURL: true)
+                    self.load(url: parsedUrl)
                 }
                 if let keepAliveSignal = controller.keepAliveSignal {
                     self.keepAliveDisposable = (keepAliveSignal
@@ -472,7 +551,7 @@ public final class WebAppController: ViewController, AttachmentContainable {
                         }
                         if let parsedUrl = URL(string: result.url) {
                             strongSelf.queryId = result.queryId
-                            strongSelf.load(url: parsedUrl, isMainURL: true)
+                            strongSelf.load(url: parsedUrl)
                         }
                     })
                 } else {
@@ -492,21 +571,17 @@ public final class WebAppController: ViewController, AttachmentContainable {
                                     return
                                 }
                                 self.controller?.titleView?.title = WebAppTitle(title: botApp.title, counter: self.presentationData.strings.WebApp_Miniapp, isVerified: controller.botVerified)
-                                self.load(url: parsedUrl, isMainURL: true)
+                                self.load(url: parsedUrl)
                             })
                         })
                     } else {
-                        var enableCached = false
-                        if self.context.sharedContext.immediateExperimentalUISettings.enablePWA {
-                            enableCached = true
-                        }
-                        let _ = (self.context.engine.messages.requestWebView(peerId: controller.peerId, botId: controller.botId, url: controller.url, payload: controller.payload, themeParams: generateWebAppThemeParams(presentationData.theme), fromMenu: controller.source == .menu, replyToMessageId: controller.replyToMessageId, threadId: controller.threadId, enableCached: enableCached)
+                        let _ = (self.context.engine.messages.requestWebView(peerId: controller.peerId, botId: controller.botId, url: controller.url, payload: controller.payload, themeParams: generateWebAppThemeParams(presentationData.theme), fromMenu: controller.source == .menu, replyToMessageId: controller.replyToMessageId, threadId: controller.threadId)
                         |> deliverOnMainQueue).start(next: { [weak self] result in
                             guard let strongSelf = self, let parsedUrl = URL(string: result.url) else {
                                 return
                             }
                             strongSelf.queryId = result.queryId
-                            strongSelf.load(url: parsedUrl, isMainURL: true)
+                            strongSelf.load(url: parsedUrl)
                                                         
                             if let keepAliveSignal = result.keepAliveSignal {
                                 strongSelf.keepAliveDisposable = (keepAliveSignal
