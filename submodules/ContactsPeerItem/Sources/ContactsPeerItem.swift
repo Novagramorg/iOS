@@ -754,6 +754,8 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
         let currentItem = self.layoutParams?.0
         
         return { [weak self] item, params, first, last, firstWithHeader, neighbors in
+            let showMutualContactSymbol = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_mutual_contact_symbol") as? Bool ?? true
+            
             var updatedTheme: PresentationTheme?
             
             let titleFont = Font.regular(item.presentationData.fontSize.itemListBaseFontSize)
@@ -930,11 +932,22 @@ public class ContactsPeerItemNode: ItemListRevealOptionsItemNode {
                                 string.append(NSAttributedString(string: " ", font: titleFont, textColor: textColor))
                                 string.append(NSAttributedString(string: firstName, font: item.sortOrder == .firstLast ? titleBoldFont : titleFont, textColor: textColor))
                             }
+                            if user.flags.contains(.mutualContact) && showMutualContactSymbol {
+                                string.append(NSAttributedString(string: " 🤝", font: titleFont, textColor: textColor))
+                            }
                             titleAttributedString = string
                         } else if let firstName = user.firstName, !firstName.isEmpty {
-                            titleAttributedString = NSAttributedString(string: firstName, font: titleBoldFont, textColor: textColor)
+                            if user.flags.contains(.mutualContact) && showMutualContactSymbol {
+                                titleAttributedString = NSAttributedString(string: "\(firstName) 🤝", font: titleBoldFont, textColor: textColor)
+                            } else {
+                                titleAttributedString = NSAttributedString(string: firstName, font: titleBoldFont, textColor: textColor)
+                            }
                         } else if let lastName = user.lastName, !lastName.isEmpty {
-                            titleAttributedString = NSAttributedString(string: lastName, font: titleBoldFont, textColor: textColor)
+                            if user.flags.contains(.mutualContact) && showMutualContactSymbol {
+                                titleAttributedString = NSAttributedString(string: "\(lastName) 🤝", font: titleBoldFont, textColor: textColor)
+                            } else {
+                                titleAttributedString = NSAttributedString(string: lastName, font: titleBoldFont, textColor: textColor)
+                            }
                         } else {
                             titleAttributedString = NSAttributedString(string: item.presentationData.strings.User_DeletedAccount, font: titleBoldFont, textColor: textColor)
                         }

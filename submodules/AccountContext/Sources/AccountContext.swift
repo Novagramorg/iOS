@@ -596,6 +596,7 @@ public final class NavigateToChatControllerParams {
     public let forceOpenChat: Bool
     public let customChatNavigationStack: [EnginePeer.Id]?
     public let skipAgeVerification: Bool
+    public let isSecretRead: Bool
     
     public init(
         navigationController: NavigationController,
@@ -631,7 +632,8 @@ public final class NavigateToChatControllerParams {
         chatListCompletion: @escaping (ChatListController) -> Void = { _ in },
         forceOpenChat: Bool = false,
         customChatNavigationStack: [EnginePeer.Id]? = nil,
-        skipAgeVerification: Bool = false
+        skipAgeVerification: Bool = false,
+        isSecretRead: Bool = false
     ) {
         self.navigationController = navigationController
         self.chatController = chatController
@@ -667,6 +669,7 @@ public final class NavigateToChatControllerParams {
         self.forceOpenChat = forceOpenChat
         self.customChatNavigationStack = customChatNavigationStack
         self.skipAgeVerification = skipAgeVerification
+        self.isSecretRead = isSecretRead
     }
     
     public func withSkipAgeVerification(_ skipAgeVerification: Bool) -> NavigateToChatControllerParams {
@@ -704,7 +707,8 @@ public final class NavigateToChatControllerParams {
             chatListCompletion: self.chatListCompletion,
             forceOpenChat: self.forceOpenChat,
             customChatNavigationStack: self.customChatNavigationStack,
-            skipAgeVerification: skipAgeVerification
+            skipAgeVerification: skipAgeVerification,
+            isSecretRead: self.isSecretRead
         )
     }
 }
@@ -1611,6 +1615,7 @@ public protocol AccountContext: AnyObject {
     var availableMessageEffects: Signal<AvailableMessageEffects?, NoError> { get }
     
     var isPremium: Bool { get }
+    var isRealPremium: Bool { get }
     var isFrozen: Bool { get }
     var userLimits: EngineConfiguration.UserLimits { get }
     var peerNameColors: PeerNameColors { get }

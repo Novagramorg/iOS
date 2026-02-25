@@ -1227,10 +1227,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 } else if let addressName = peer.addressName {
                     title = "@\(addressName)"
                 } else {
-                    title = "_"
                 }
             }
-
+            
             titleStringText = title
             titleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white)
             smallTitleAttributes = MultiScaleTextState.Attributes(font: Font.medium(28.0), color: .white, shadowColor: titleShadowColor)

@@ -263,7 +263,13 @@ public final class AccountContextImpl: AccountContext {
     private var audioTranscriptionTrialDisposable: Disposable?
     public private(set) var audioTranscriptionTrial: AudioTranscription.TrialState
     
-    public private(set) var isPremium: Bool
+    private var _isPremium: Bool = false
+    public var isPremium: Bool {
+        return self._isPremium || (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "enable_premium") ?? false)
+    }
+    public var isRealPremium: Bool {
+        return self._isPremium
+    }
     
     private var isFrozenDisposable: Disposable?
     public private(set) var isFrozen: Bool
@@ -281,7 +287,7 @@ public final class AccountContextImpl: AccountContext {
         self.userLimits = EngineConfiguration.UserLimits(UserLimitsConfiguration.defaultValue)
         self.peerNameColors = PeerNameColors.with(availableReplyColors: availableReplyColors, availableProfileColors: availableProfileColors)
         self.audioTranscriptionTrial = AudioTranscription.TrialState.defaultValue
-        self.isPremium = false
+        self._isPremium = false
         self.isFrozen = false
         
         self.downloadedMediaStoreManager = DownloadedMediaStoreManagerImpl(postbox: account.postbox, accountManager: sharedContext.accountManager)
@@ -445,7 +451,7 @@ public final class AccountContextImpl: AccountContext {
             guard let self = self else {
                 return
             }
-            self.isPremium = isPremium
+            self._isPremium = isPremium
             self.userLimits = userLimits
         })
         
@@ -615,6 +621,10 @@ public final class AccountContextImpl: AccountContext {
     }
     
     public func applyMaxReadIndex(for location: ChatLocation, contextHolder: Atomic<ChatLocationContextHolder?>, messageIndex: MessageIndex) {
+        if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false {
+            return
+        }
+        
         switch location {
         case .peer:
             let _ = self.engine.messages.applyMaxReadIndexInteractively(index: messageIndex).start()

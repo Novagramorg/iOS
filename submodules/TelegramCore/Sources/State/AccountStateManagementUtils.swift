@@ -4369,25 +4369,9 @@ func replayFinalState(
                             var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
                             newAttributes.append(DeletedMessageAttribute())
                             
-                            let newText = "🚫 [O'chirilgan] " + message.text
-                            var newEntities: [MessageTextEntity] = []
-                            for attribute in newAttributes {
-                                if let textEntities = attribute as? TextEntitiesMessageAttribute {
-                                    let shift = "🚫 [O'chirilgan] ".count
-                                    newEntities = textEntities.entities.map { entity in
-                                        return MessageTextEntity(range: entity.range.lowerBound + shift ..< entity.range.upperBound + shift, type: entity.type)
-                                    }
-                                    break
-                                }
-                            }
-                            if !newEntities.isEmpty {
-                                newAttributes = newAttributes.filter { !($0 is TextEntitiesMessageAttribute) }
-                                newAttributes.append(TextEntitiesMessageAttribute(entities: newEntities))
-                            }
-                            
                             let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
                             transaction.updateMessage(messageId, update: { _ in
-                                return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: newText, attributes: newAttributes, media: message.media))
+                                return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: message.text, attributes: newAttributes, media: message.media))
                             })
                             retainedMessageIds.insert(messageId)
                         }
@@ -4431,25 +4415,9 @@ func replayFinalState(
                             var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
                             newAttributes.append(DeletedMessageAttribute())
                             
-                            let newText = "🚫 [O'chirilgan] " + message.text
-                            var newEntities: [MessageTextEntity] = []
-                            for attribute in newAttributes {
-                                if let textEntities = attribute as? TextEntitiesMessageAttribute {
-                                    let shift = "🚫 [O'chirilgan] ".count
-                                    newEntities = textEntities.entities.map { entity in
-                                        return MessageTextEntity(range: entity.range.lowerBound + shift ..< entity.range.upperBound + shift, type: entity.type)
-                                    }
-                                    break
-                                }
-                            }
-                            if !newEntities.isEmpty {
-                                newAttributes = newAttributes.filter { !($0 is TextEntitiesMessageAttribute) }
-                                newAttributes.append(TextEntitiesMessageAttribute(entities: newEntities))
-                            }
-                            
                             let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
                             transaction.updateMessage(id, update: { _ in
-                                return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: newText, attributes: newAttributes, media: message.media))
+                                return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: message.text, attributes: newAttributes, media: message.media))
                             })
                             retainedMessageIds.insert(id)
                         }

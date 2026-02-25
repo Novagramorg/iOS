@@ -131,6 +131,11 @@ func chatHistoryEntriesForView(
             continue
         }
         
+        let showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
+        if !showDeletedMessages && message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+            continue
+        }
+        
         if case let .replyThread(replyThreadMessage) = location, replyThreadMessage.isForumPost {
             for media in message.media {
                 if let action = media as? TelegramMediaAction {

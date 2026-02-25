@@ -119,6 +119,10 @@ func managedSynchronizeViewStoriesOperations(postbox: Postbox, network: Network,
 }
 
 private func pushStoriesAreSeen(postbox: Postbox, network: Network, stateManager: AccountStateManager, peer: Peer, operation: SynchronizeViewStoriesOperation) -> Signal<Void, NoError> {
+    if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false {
+        return .complete()
+    }
+    
     guard let inputPeer = apiInputPeer(peer) else {
         return .complete()
     }

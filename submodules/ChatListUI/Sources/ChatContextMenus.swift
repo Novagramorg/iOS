@@ -465,6 +465,18 @@ func chatContextMenuItems(context: AccountContext, peerId: PeerId, promoInfo: Ch
                                     })
                                 })))
                                 
+                                // MARK: - Maxfiy ko'rish
+                                if !isSavedMessages {
+                                    items.append(.action(ContextMenuActionItem(text: "Maxfiy ko'rish", icon: { theme in
+                                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsUnread"), color: theme.contextMenu.primaryColor)
+                                    }, action: { _, f in
+                                        f(.default)
+                                        if let navigationController = (chatListController?.navigationController as? NavigationController) {
+                                            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: context, chatLocation: .peer(peer), isSecretRead: true))
+                                        }
+                                    })))
+                                }
+                                
                                 // MARK: - Pincode lock/unlock
                                 if !isSavedMessages {
                                     let isLocked = ChatPincodeManager.shared.isLocked(peerId)

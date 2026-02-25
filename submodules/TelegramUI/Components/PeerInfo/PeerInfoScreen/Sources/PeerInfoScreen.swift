@@ -162,6 +162,7 @@ enum PeerInfoSettingsSection {
     case recentCalls
     case devices
     case chatFolders
+    case proMessager
     case notificationsAndSounds
     case privacyAndSecurity
     case passwordSetup

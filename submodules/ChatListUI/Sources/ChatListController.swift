@@ -269,6 +269,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 
         super.init(context: context, navigationBarPresentationData: nil)
         
+        NotificationCenter.default.addObserver(self, selector: #selector(self.proMessagerSettingsChanged), name: NSNotification.Name("ProMessagerSettingsChanged"), object: nil)
+        
         self.accessoryPanelContainer = ASDisplayNode()
         
         self.tabBarItemContextActionType = .always
@@ -776,6 +778,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     deinit {
+        NotificationCenter.default.removeObserver(self)
         self.openMessageFromSearchDisposable.dispose()
         self.badgeDisposable?.dispose()
         self.badgeIconDisposable?.dispose()
@@ -3954,6 +3957,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     private var initializedFilters = false
+    
+    @objc private func proMessagerSettingsChanged() {
+        self.reloadFilters()
+        self.chatListDisplayNode.requestNavigationBarLayout(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)))
+    }
+    
     private func reloadFilters(firstUpdate: (() -> Void)? = nil) {
         let filterItems = chatListFilterItems(context: self.context)
         var notifiedFirstUpdate = false
@@ -3970,7 +3979,16 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             let isPremium = peerView.peers[peerView.peerId]?.isPremium
             strongSelf.isPremium = isPremium ?? false
             
-            let (_, items) = countAndFilterItems
+            var (_, items) = countAndFilterItems
+            
+            let hideFolders = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "hide_folders") ?? false
+            if hideFolders {
+                items = items.filter { item in
+                    if case .allChats = item.0 { return true }
+                    return false
+                }
+            }
+            
             var filterItems: [ChatListFilterTabEntry] = []
             
             for (filter, unreadCount, hasUnmutedUnread) in items {
@@ -3999,7 +4017,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 wasEmpty = true
             }
             
-            let firstItem = countAndFilterItems.1.first?.0 ?? .allChats
+            let firstItem = items.first?.0 ?? .allChats
             let firstItemEntryId: ChatListFilterTabEntryId
             switch firstItem {
                 case .allChats:
@@ -6650,6 +6668,7 @@ private final class ChatListLocationContext {
     var rightButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     var proxyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     var storyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+    var ghostModeButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     
     var rightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] {
         var result: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
@@ -6658,6 +6677,9 @@ private final class ChatListLocationContext {
         }
         if let storyButton = self.storyButton {
             result.append(storyButton)
+        }
+        if let ghostModeButton = self.ghostModeButton {
+            result.append(ghostModeButton)
         }
         if let proxyButton = self.proxyButton {
             result.append(proxyButton)
@@ -7142,6 +7164,8 @@ private final class ChatListLocationContext {
                 } else {
                     self.storyButton = nil
                 }
+                
+                self.updateGhostModeButton()
             } else {
                 let parentController = self.parentController
                 self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(
@@ -7362,6 +7386,24 @@ private final class ChatListLocationContext {
             ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: parentController, isViewingAsTopics: true, sourceView: sourceView, gesture: nil)
         case .savedMessagesChats:
             break
+        }
+    }
+    
+    func updateGhostModeButton() {
+        if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_ghost_mode_button") ?? false {
+            let isGhostModeActive = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false
+            self.ghostModeButton = AnyComponentWithIdentity(id: "ghostMode", component: AnyComponent(NavigationButtonComponent(
+                content: .text(title: isGhostModeActive ? "👻" : "👤", isBold: false),
+                pressed: { [weak self] _ in
+                    guard let self, let parentController = self.parentController else { return }
+                    let current = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false
+                    UserDefaults(suiteName: "pro_messager")?.set(!current, forKey: "is_ghost_mode_active")
+                    self.updateGhostModeButton()
+                    parentController.requestLayout(transition: .animated(duration: 0.2, curve: .spring))
+                }
+            )))
+        } else {
+            self.ghostModeButton = nil
         }
     }
 }

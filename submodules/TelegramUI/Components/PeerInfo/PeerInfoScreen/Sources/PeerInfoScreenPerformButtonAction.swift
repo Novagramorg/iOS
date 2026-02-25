@@ -773,6 +773,31 @@ extension PeerInfoScreenNode {
                         })))
                     }
                     
+                    items.append(.action(ContextMenuActionItem(text: "Pro Messenger Info", icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
+                    }, action: { c, _ in
+                        c?.dismiss(completion: nil)
+                        
+                        var details = ["ID: \(peer.id.id._internalGetInt64Value())"]
+                        if let u = peer as? TelegramUser {
+                            details.append("Status: \(u.botInfo != nil ? "Bot" : "User")")
+                            if let username = u.username { details.append("Username: @\(username)") }
+                            if let nameOrPhone = (u.nameOrPhone.isEmpty ? nil : u.nameOrPhone) { details.append("Name: \(nameOrPhone)") }
+                            if u.flags.contains(.isPremium) { details.append("Premium: Yes") }
+                            if u.flags.contains(.isScam) { details.append("Scam: Yes") }
+                            if u.flags.contains(.isFake) { details.append("Fake: Yes") }
+                        }
+                        
+                        let text = details.joined(separator: "\n")
+                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Pro Messenger", text: text, actions: [
+                            TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}),
+                            TextAlertAction(type: .genericAction, title: "Copy", action: {
+                                UIPasteboard.general.string = text
+                            })
+                        ])
+                        strongSelf.controller?.present(alertController, in: .window(.root))
+                    })))
+                    
                     if strongSelf.peerId.namespace == Namespaces.Peer.CloudUser && user.botInfo == nil && !user.flags.contains(.isSupport) {
                         if data.isContact {
                             if let cachedData = data.cachedData as? CachedUserData, cachedData.isBlocked {
@@ -989,6 +1014,30 @@ extension PeerInfoScreenNode {
                         })))
                     }
                     
+                    items.append(.action(ContextMenuActionItem(text: "Pro Messenger Info", icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
+                    }, action: { c, _ in
+                        c?.dismiss(completion: nil)
+                        
+                        var details = ["ID: \(peer.id.id._internalGetInt64Value())"]
+                        if let c = peer as? TelegramChannel {
+                            details.append("Status: \(c.info == .broadcast(TelegramChannelBroadcastInfo(flags: [])) ? "Channel" : "Group")") // simplification for label
+                            if let username = c.username { details.append("Username: @\(username)") }
+                            details.append("Title: \(c.title)")
+                            if c.flags.contains(.isScam) { details.append("Scam: Yes") }
+                            if c.flags.contains(.isFake) { details.append("Fake: Yes") }
+                        }
+                        
+                        let text = details.joined(separator: "\n")
+                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Pro Messenger", text: text, actions: [
+                            TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}),
+                            TextAlertAction(type: .genericAction, title: "Copy", action: {
+                                UIPasteboard.general.string = text
+                            })
+                        ])
+                        strongSelf.controller?.present(alertController, in: .window(.root))
+                    })))
+                    
                     switch channel.info {
                     case .broadcast:
                         if case .member = channel.participationStatus, !headerButtons.contains(.leave) {
@@ -1155,6 +1204,28 @@ extension PeerInfoScreenNode {
                             }
                         })))
                     }
+                    
+                    items.append(.action(ContextMenuActionItem(text: "Pro Messenger Info", icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
+                    }, action: { c, _ in
+                        c?.dismiss(completion: nil)
+                        
+                        var details = ["ID: \(peer.id.id._internalGetInt64Value())"]
+                        if let g = peer as? TelegramGroup {
+                            details.append("Status: Group")
+                            details.append("Title: \(g.title)")
+                            details.append("Members: \(g.participantCount)")
+                        }
+                        
+                        let text = details.joined(separator: "\n")
+                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Pro Messenger", text: text, actions: [
+                            TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}),
+                            TextAlertAction(type: .genericAction, title: "Copy", action: {
+                                UIPasteboard.general.string = text
+                            })
+                        ])
+                        strongSelf.controller?.present(alertController, in: .window(.root))
+                    })))
                     
                     if case .Member = group.membership, !headerButtons.contains(.leave) {
                         if !items.isEmpty {

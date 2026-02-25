@@ -246,6 +246,7 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
                     }
                     
                     controller.purposefulAction = params.purposefulAction
+                    controller.isSecretRead = params.isSecretRead
                     if let activateInput = params.activateInput {
                         if case let .replyThread(replyThread) = params.chatLocation, (replyThread.isForumPost || replyThread.isMonoforumPost) {
                         } else {
@@ -289,7 +290,7 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
                     }
                 }
             } else {
-                controller = ChatControllerImpl(context: params.context, chatLocation: params.chatLocation.asChatLocation, chatLocationContextHolder: params.chatLocationContextHolder, subject: params.subject, botStart: params.botStart, attachBotStart: params.attachBotStart, botAppStart: params.botAppStart, peekData: params.peekData, peerNearbyData: params.peerNearbyData, chatListFilter: params.chatListFilter, chatNavigationStack: params.chatNavigationStack, customChatNavigationStack: params.customChatNavigationStack)
+                controller = ChatControllerImpl(context: params.context, chatLocation: params.chatLocation.asChatLocation, chatLocationContextHolder: params.chatLocationContextHolder, subject: params.subject, botStart: params.botStart, attachBotStart: params.attachBotStart, botAppStart: params.botAppStart, peekData: params.peekData, peerNearbyData: params.peerNearbyData, chatListFilter: params.chatListFilter, chatNavigationStack: params.chatNavigationStack, customChatNavigationStack: params.customChatNavigationStack, isSecretRead: params.isSecretRead)
                 
                 if let botAppStart = params.botAppStart, case let .peer(peer) = params.chatLocation {
                     Queue.mainQueue().after(0.1) {

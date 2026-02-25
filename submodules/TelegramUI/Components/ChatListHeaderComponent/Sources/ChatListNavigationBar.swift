@@ -306,7 +306,17 @@ public final class ChatListNavigationBar: Component {
             self.hasDeferredScrollOffset = false
             self.clippedScrollOffset = clippedScrollOffset
             
-            let visibleSize = CGSize(width: currentLayout.size.width, height: max(0.0, currentLayout.size.height - clippedScrollOffset))
+            // To prevent Search/Tabs from moving down from the Title, 
+            // we don't let visibleSize grow past its max height when stories are disabled.
+            let stretchedScrollOffset: CGFloat
+            if component.storySubscriptions == nil && clippedScrollOffset < 0.0 {
+                stretchedScrollOffset = 0.0
+            } else {
+                stretchedScrollOffset = clippedScrollOffset
+            }
+            
+            let visibleSize = CGSize(width: currentLayout.size.width, height: max(0.0, currentLayout.size.height - stretchedScrollOffset))
+
             
             let previousHeight = self.currentHeight
 
@@ -400,6 +410,9 @@ public final class ChatListNavigationBar: Component {
                     edgeEffectHeight -= embeddedSearchBarExpansionHeight
                 }
             } else if component.activeSearch != nil {
+            }
+            if component.storySubscriptions == nil && clippedScrollOffset < 0.0 {
+                edgeEffectHeight += -clippedScrollOffset
             }
             edgeEffectHeight = max(0.0, edgeEffectHeight)
             let edgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: currentLayout.size.width, height: edgeEffectHeight))

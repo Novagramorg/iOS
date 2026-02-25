@@ -977,6 +977,10 @@ public final class ChatListHeaderComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: availableSize.width, height: ChatListNavigationBar.storiesScrollHeight)
                 )
+            } else if let storyPeerList = self.storyPeerList {
+                // Stories disabled: remove the storyPeerList view so it doesn't create blank space
+                self.storyPeerList = nil
+                storyPeerList.view?.removeFromSuperview()
             }
             
             var secondaryContentTransition = transition

@@ -64,6 +64,8 @@ extension PeerInfoScreenNode {
                 isMyProfile: true,
                 profileGiftsContext: self.data?.profileGiftsContext
             ))
+        case .proMessager:
+            push(proMessagerController(context: self.context))
         case .stories:
             push(PeerInfoStoryGridScreen(context: self.context, peerId: self.context.account.peerId, scope: .saved))
         case .savedMessages:

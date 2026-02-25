@@ -412,7 +412,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     var canReadHistoryValue = false {
         didSet {
-            self.computedCanReadHistoryPromise.set(self.canReadHistoryValue)
+            self.computedCanReadHistoryPromise.set(self.canReadHistoryValue && !self.isSecretRead)
         }
     }
     var canReadHistoryDisposable: Disposable?
@@ -562,6 +562,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     public var purposefulAction: (() -> Void)?
     public var dismissPreviewing: ((Bool) -> (() -> Void))?
+    public var ignorePreviewTap: Bool = false
+    public var isSecretRead: Bool = false {
+        didSet {
+            self.computedCanReadHistoryPromise.set(self.canReadHistoryValue && !self.isSecretRead)
+        }
+    }
     
     var updatedClosedPinnedMessageId: ((MessageId) -> Void)?
     var requestedUnpinAllMessages: ((Int, MessageId) -> Void)?
@@ -644,8 +650,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         chatListFilter: Int32? = nil,
         chatNavigationStack: [ChatNavigationStackItem] = [],
         customChatNavigationStack: [EnginePeer.Id]? = nil,
-        params: ChatControllerParams? = nil
+        params: ChatControllerParams? = nil,
+        isSecretRead: Bool = false
     ) {
+        self.isSecretRead = isSecretRead
         self.initTimestamp = CFAbsoluteTimeGetCurrent()
         
         let _ = ChatControllerCount.modify { value in
@@ -846,10 +854,21 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return false
             }
             
+            if case .standard(.previewing) = self.presentationInterfaceState.mode {
+                self.ignorePreviewTap = true
+                Queue.mainQueue().after(0.5) { [weak self] in
+                    self?.ignorePreviewTap = false
+                }
+            }
+            
             if let contextController = self.currentContextController {
-                self.present(contextController, in: .window(.root))
-                Queue.mainQueue().after(0.15) {
-                    contextController.dismiss(result: .dismissWithoutContent, completion: nil)
+                if case .standard(.previewing) = self.presentationInterfaceState.mode {
+                    // Do not close the preview when interacting with messages directly
+                } else {
+                    self.present(contextController, in: .window(.root))
+                    Queue.mainQueue().after(0.15) {
+                        contextController.dismiss(result: .dismissWithoutContent, completion: nil)
+                    }
                 }
             }
             
