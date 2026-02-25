@@ -4358,19 +4358,113 @@ func replayFinalState(
                     }
                 }
             case let .DeleteMessagesWithGlobalIds(ids):
+                let messageIds = transaction.messageIdsForGlobalIds(ids)
+                var retainedMessageIds: Set<MessageId> = []
+                
+                for messageId in messageIds {
+                    if let message = transaction.getMessage(messageId) {
+                        if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                            retainedMessageIds.insert(messageId)
+                        } else {
+                            var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
+                            newAttributes.append(DeletedMessageAttribute())
+                            
+                            let newText = "🚫 [O'chirilgan] " + message.text
+                            var newEntities: [MessageTextEntity] = []
+                            for attribute in newAttributes {
+                                if let textEntities = attribute as? TextEntitiesMessageAttribute {
+                                    let shift = "🚫 [O'chirilgan] ".count
+                                    newEntities = textEntities.entities.map { entity in
+                                        return MessageTextEntity(range: entity.range.lowerBound + shift ..< entity.range.upperBound + shift, type: entity.type)
+                                    }
+                                    break
+                                }
+                            }
+                            if !newEntities.isEmpty {
+                                newAttributes = newAttributes.filter { !($0 is TextEntitiesMessageAttribute) }
+                                newAttributes.append(TextEntitiesMessageAttribute(entities: newEntities))
+                            }
+                            
+                            let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                            transaction.updateMessage(messageId, update: { _ in
+                                return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: newText, attributes: newAttributes, media: message.media))
+                            })
+                            retainedMessageIds.insert(messageId)
+                        }
+                    }
+                }
+                
+                var actuallyDeletedGlobalIds: [Int32] = []
+                for globalId in ids {
+                    let mappedIds = transaction.messageIdsForGlobalIds([globalId])
+                    var retain = false
+                    for mId in mappedIds {
+                        if retainedMessageIds.contains(mId) {
+                            retain = true
+                            break
+                        }
+                    }
+                    if !retain {
+                        actuallyDeletedGlobalIds.append(globalId)
+                    }
+                }
+                
                 var resourceIds: [MediaResourceId] = []
-                transaction.deleteMessagesWithGlobalIds(ids, forEachMedia: { media in
+                transaction.deleteMessagesWithGlobalIds(actuallyDeletedGlobalIds, forEachMedia: { media in
                     addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
                 })
                 if !resourceIds.isEmpty {
                     let _ = mediaBox.removeCachedResources(Array(Set(resourceIds)), force: true).start()
                 }
-                deletedMessageIds.append(contentsOf: ids.map { .global($0) })
+                deletedMessageIds.append(contentsOf: actuallyDeletedGlobalIds.map { .global($0) })
+                deletedMessageIds.append(contentsOf: retainedMessageIds.map { .messageId($0) })
+                
             case let .DeleteMessages(ids):
-                _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, manualAddMessageThreadStatsDifference: { id, add, remove in
-                    addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
-                })
-                deletedMessageIds.append(contentsOf: ids.map { .messageId($0) })
+                var actuallyDeletedIds: [MessageId] = []
+                var retainedMessageIds: Set<MessageId> = []
+                
+                for id in ids {
+                    if let message = transaction.getMessage(id) {
+                        if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+                            retainedMessageIds.insert(id)
+                        } else {
+                            var newAttributes = message.attributes.filter { !($0 is DeletedMessageAttribute) }
+                            newAttributes.append(DeletedMessageAttribute())
+                            
+                            let newText = "🚫 [O'chirilgan] " + message.text
+                            var newEntities: [MessageTextEntity] = []
+                            for attribute in newAttributes {
+                                if let textEntities = attribute as? TextEntitiesMessageAttribute {
+                                    let shift = "🚫 [O'chirilgan] ".count
+                                    newEntities = textEntities.entities.map { entity in
+                                        return MessageTextEntity(range: entity.range.lowerBound + shift ..< entity.range.upperBound + shift, type: entity.type)
+                                    }
+                                    break
+                                }
+                            }
+                            if !newEntities.isEmpty {
+                                newAttributes = newAttributes.filter { !($0 is TextEntitiesMessageAttribute) }
+                                newAttributes.append(TextEntitiesMessageAttribute(entities: newEntities))
+                            }
+                            
+                            let storeForwardInfo = message.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                            transaction.updateMessage(id, update: { _ in
+                                return .update(StoreMessage(id: message.id, customStableId: nil, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, timestamp: message.timestamp, flags: StoreMessageFlags(message.flags), tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, forwardInfo: storeForwardInfo, authorId: message.author?.id, text: newText, attributes: newAttributes, media: message.media))
+                            })
+                            retainedMessageIds.insert(id)
+                        }
+                    } else {
+                        actuallyDeletedIds.append(id)
+                    }
+                }
+                
+                if !actuallyDeletedIds.isEmpty {
+                    _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: actuallyDeletedIds, manualAddMessageThreadStatsDifference: { id, add, remove in
+                        addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
+                    })
+                }
+                deletedMessageIds.append(contentsOf: actuallyDeletedIds.map { .messageId($0) })
+                deletedMessageIds.append(contentsOf: retainedMessageIds.map { .messageId($0) })
             case let .UpdateMinAvailableMessage(id):
                 if let message = transaction.getMessage(id) {
                     updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: id.peerId, minTimestamp: message.timestamp, forceRootGroupIfNotExists: false)
@@ -4428,6 +4522,26 @@ func replayFinalState(
                                 updatedAttributes.append(translation)
                             }
                         }
+                    } else {
+                        print("EDIT HISTORY: text changed from \(previousMessage.text) to \(message.text)")
+                        // Capture the previous state of the message
+                        let previousEntities = previousMessage.textEntitiesAttribute?.entities ?? []
+                        let historyEntry = EditedMessageHistoryEntry(
+                            timestamp: previousMessage.timestamp,
+                            text: previousMessage.text,
+                            entities: previousEntities
+                        )
+                        
+                        var updatedHistory = [historyEntry]
+                        
+                        if let previousHistoryAttribute = previousMessage.attributes.first(where: { $0 is EditedMessageHistoryAttribute }) as? EditedMessageHistoryAttribute {
+                            updatedHistory.insert(contentsOf: previousHistoryAttribute.history, at: 0)
+                        }
+                        
+                        // we must carry over the original attribute from previously parsed edit instances inside updatedAttributes because message.attributes has it overwritten? Let's check updatedAttributes before removing.
+                        updatedAttributes.removeAll(where: { $0 is EditedMessageHistoryAttribute })
+                        updatedAttributes.append(EditedMessageHistoryAttribute(history: updatedHistory))
+                        print("EDIT HISTORY: updatedHistory count is \(updatedHistory.count)")
                     }
                     
                     if let previousFactCheckAttribute = previousMessage.attributes.first(where: { $0 is FactCheckMessageAttribute }) as? FactCheckMessageAttribute, let updatedFactCheckAttribute = message.attributes.first(where: { $0 is FactCheckMessageAttribute }) as? FactCheckMessageAttribute {

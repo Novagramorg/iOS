@@ -935,7 +935,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     
     return dataSignal
     |> deliverOnMainQueue
-    |> map { data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer -> ContextController.Items in
+    |> map { (data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer: EnginePeer?) -> ContextController.Items in
         let isPremium = accountPeer?.isPremium ?? false
         
         var actions: [ContextMenuItem] = []
@@ -1172,6 +1172,16 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         completed()
                     })
                 })
+            })))
+        }
+        
+        if let _ = messages[0].attributes.first(where: { $0 is EditedMessageHistoryAttribute }) {
+            actions.append(.action(ContextMenuActionItem(text: "History", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                let controller = EditedMessageHistoryController(context: context, message: messages[0])
+                controllerInteraction.navigationController()?.pushViewController(controller)
+                f(.dismissWithoutContent)
             })))
         }
         

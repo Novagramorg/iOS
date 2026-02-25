@@ -22,8 +22,44 @@ import WallpaperGalleryScreen
 import ChatMessageNotificationItem
 import FaceScanScreen
 
+/// Temporarily set to a peerId after successful pincode verification so the
+/// recursive navigateToChatControllerImpl call bypasses the lock gate.
+private var chatPincodeBypassPeerId: PeerId? = nil
+
 public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParams) {
+    // MARK: - Per-chat pincode protection
     if case let .peer(peer) = params.chatLocation {
+        let targetPeerId = peer.id
+        let isBypassed = chatPincodeBypassPeerId == targetPeerId
+        if ChatPincodeManager.shared.isLocked(targetPeerId) && !isBypassed {
+            let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+            let pincodeVC = ChatPincodeViewController(
+                mode: .verify(onVerify: { code in
+                    ChatPincodeManager.shared.verify(code, for: targetPeerId)
+                }, onSuccess: {
+                    // Set bypass BEFORE re-calling so the next invocation skips the gate
+                    chatPincodeBypassPeerId = targetPeerId
+                    navigateToChatControllerImpl(params)
+                    // Clear bypass immediately after (pincode check is synchronous)
+                    chatPincodeBypassPeerId = nil
+                }),
+                presentationData: presentationData
+            )
+            let navVC = UINavigationController(rootViewController: pincodeVC)
+            navVC.setNavigationBarHidden(true, animated: false)
+            navVC.modalPresentationStyle = .fullScreen
+            if let topVC = params.navigationController.viewControllers.last as? ViewController {
+                topVC.present(navVC, animated: true)
+            } else {
+                params.navigationController.present(navVC, animated: true)
+            }
+            return
+        }
+    }
+
+    
+    if case let .peer(peer) = params.chatLocation {
+
         let _ = params.context.engine.peers.ensurePeerIsLocallyAvailable(peer: peer).startStandalone()
     }
     

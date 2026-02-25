@@ -464,6 +464,41 @@ func chatContextMenuItems(context: AccountContext, peerId: PeerId, promoInfo: Ch
                                         f(.default)
                                     })
                                 })))
+                                
+                                // MARK: - Pincode lock/unlock
+                                if !isSavedMessages {
+                                    let isLocked = ChatPincodeManager.shared.isLocked(peerId)
+                                    let pincodeTitle = isLocked ? "🔓 Pincode o'chirish" : "🔒 Pincode qo'yish"
+                                    let pincodeIconName = isLocked ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"
+                                    items.append(.action(ContextMenuActionItem(text: pincodeTitle, icon: { theme in
+                                        generateTintedImage(image: UIImage(bundleImageName: pincodeIconName), color: theme.contextMenu.primaryColor)
+                                    }, action: { _, f in
+                                        f(.default)
+                                        guard let chatListController = chatListController else { return }
+                                        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                                        if isLocked {
+                                            // Ask to verify current code then remove
+                                            let pincodeVC = ChatPincodeViewController(mode: .remove(onVerify: { code in
+                                                ChatPincodeManager.shared.verify(code, for: peerId)
+                                            }, onSuccess: {
+                                                ChatPincodeManager.shared.removePincode(for: peerId)
+                                            }), presentationData: presentationData)
+                                            let navVC = UINavigationController(rootViewController: pincodeVC)
+                                            navVC.setNavigationBarHidden(true, animated: false)
+                                            navVC.modalPresentationStyle = .fullScreen
+                                            chatListController.view.window?.rootViewController?.present(navVC, animated: true)
+                                        } else {
+                                            // Set new pincode
+                                            let pincodeVC = ChatPincodeViewController(mode: .set(onSuccess: { code in
+                                                ChatPincodeManager.shared.setPincode(code, for: peerId)
+                                            }), presentationData: presentationData)
+                                            let navVC = UINavigationController(rootViewController: pincodeVC)
+                                            navVC.setNavigationBarHidden(true, animated: false)
+                                            navVC.modalPresentationStyle = .fullScreen
+                                            chatListController.view.window?.rootViewController?.present(navVC, animated: true)
+                                        }
+                                    })))
+                                }
                             }
                         } else {
                             if case .search = source {
