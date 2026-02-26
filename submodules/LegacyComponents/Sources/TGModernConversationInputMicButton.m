@@ -159,6 +159,9 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     BOOL _yFeedbackOccured;
     
     bool _skipCancelUpdate;
+    bool _cameraSelectionPresented;
+    
+    NSTimer *_cameraSelectionTimer;
 }
 
 @end
@@ -740,6 +743,11 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
                     [delegate micButtonInteractionBegan];
                 
                 _touchLocation = [touch locationInView:self];
+                
+                _cameraSelectionPresented = false;
+                if ([delegate respondsToSelector:@selector(micButtonInteractionPresentCameraSelection)]) {
+                    [self startCameraSelectionTimer];
+                }
             }
         }
         
@@ -747,6 +755,32 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
     }
     
     return false;
+}
+
+- (void)startCameraSelectionTimer {
+    [self cancelCameraSelectionTimer];
+    _cameraSelectionTimer = [NSTimer scheduledTimerWithTimeInterval:0.4 target:self selector:@selector(cameraSelectionTimerEvent) userInfo:nil repeats:false];
+}
+
+- (void)cancelCameraSelectionTimer {
+    if (_cameraSelectionTimer != nil) {
+        [_cameraSelectionTimer invalidate];
+        _cameraSelectionTimer = nil;
+    }
+}
+
+- (void)cameraSelectionTimerEvent {
+    _cameraSelectionTimer = nil;
+    if (_processCurrentTouch && !_cameraSelectionPresented) {
+        _cameraSelectionPresented = true;
+        
+        id<TGModernConversationInputMicButtonDelegate> delegate = _delegate;
+        if ([delegate respondsToSelector:@selector(micButtonInteractionPresentCameraSelection)]) {
+            [delegate micButtonInteractionPresentCameraSelection];
+        }
+        
+        [self _commitLocked];
+    }
 }
 
 - (BOOL)continueTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event
@@ -771,6 +805,11 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
                 
                 _targetTranslation = distanceY;
                 _cancelTargetTranslation = distanceX;
+                
+                if (distanceX < -15.0f || distanceY < -15.0f) {
+                    [self cancelCameraSelectionTimer];
+                }
+                
                 CGFloat targetLockness = _locked ? 1.0f : MIN(1.0f, fabs(_targetTranslation) / 105.0f);
                 [_lock updateLockness:targetLockness];
                 _lockView.lockness = targetLockness;
@@ -826,6 +865,8 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
 
 - (void)cancelTrackingWithEvent:(UIEvent *)event
 {
+    [self cancelCameraSelectionTimer];
+    
     if (_processCurrentTouch)
     {
         _currentTranslation = 0.0f;
@@ -844,6 +885,8 @@ static const CGFloat outerCircleMinScale = innerCircleRadius / outerCircleRadius
 
 - (void)endTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event
 {
+    [self cancelCameraSelectionTimer];
+    
     if (_processCurrentTouch)
     {
         _targetTranslation = 0.0f;

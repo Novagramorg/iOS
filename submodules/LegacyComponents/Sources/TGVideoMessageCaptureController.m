@@ -1025,6 +1025,39 @@ typedef enum
     });
 }
 
+- (void)setCameraPosition:(AVCaptureDevicePosition)position {
+    if (_positionChangeLocked || _preferredPosition == position)
+        return;
+    
+    _preferredPosition = position;
+    
+    _gpuAvailable = false;
+    [_previewView removeFromSuperview];
+    _previewView = nil;
+
+    _ringView.alpha = 0.0f;
+    
+    dispatch_async(dispatch_get_main_queue(), ^
+    {
+        [UIView transitionWithView:_circleWrapperView duration:0.4f options:UIViewAnimationOptionTransitionFlipFromLeft | UIViewAnimationOptionCurveEaseOut animations:^
+        {
+            _placeholderView.hidden = false;
+        } completion:^(__unused BOOL finished)
+        {
+            _ringView.alpha = 1.0f;
+            _gpuAvailable = true;
+        }];
+        
+        [_capturePipeline setCameraPosition:_preferredPosition];
+        
+        _positionChangeLocked = true;
+        TGDispatchAfter(1.0, dispatch_get_main_queue(), ^
+        {
+            _positionChangeLocked = false;
+        });
+    });
+}
+
 #pragma mark -
 
 - (void)startRecording

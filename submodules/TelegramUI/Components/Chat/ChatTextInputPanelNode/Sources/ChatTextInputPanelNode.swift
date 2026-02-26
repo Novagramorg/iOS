@@ -17,6 +17,7 @@ import AnimationUI
 import Speak
 import ObjCRuntimeUtils
 import AvatarNode
+import AVFoundation
 import ContextUI
 import InvisibleInkDustNode
 import TextInputMenu
@@ -842,7 +843,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     case .video:
                         isVideo = true
                 }
-                interfaceInteraction.beginMediaRecording(isVideo)
+                
+                if !isVideo {
+                    interfaceInteraction.beginMediaRecording(isVideo)
+                }
             }
         }
         self.mediaActionButtons.micButton.endRecording = { [weak self] sendMedia in
@@ -890,6 +894,44 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.mediaActionButtons.micButton.switchMode = { [weak self] in
             if let strongSelf = self, let interfaceInteraction = strongSelf.interfaceInteraction {
                 interfaceInteraction.switchMediaRecordingMode()
+            }
+        }
+        self.mediaActionButtons.micButton.presentCameraSelection = { [weak self] isVideo in
+            if let strongSelf = self, isVideo, let interfaceInteraction = strongSelf.interfaceInteraction, let presentationInterfaceState = strongSelf.presentationInterfaceState {
+                let actionSheet = ActionSheetController(theme: ActionSheetControllerTheme(presentationTheme: presentationInterfaceState.theme, fontSize: presentationInterfaceState.fontSize))
+                actionSheet.setItemGroups([
+                    ActionSheetItemGroup(items: [
+                        ActionSheetButtonItem(title: "Oldi Camera", color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                            actionSheet?.dismissAnimated()
+                            if let interfaceInteraction = strongSelf?.interfaceInteraction {
+                                interfaceInteraction.beginMediaRecording(true)
+                                interfaceInteraction.lockMediaRecording()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    NotificationCenter.default.post(name: NSNotification.Name("LegacyInstantVideoControllerSwitchCamera"), object: nil, userInfo: ["position": AVCaptureDevice.Position.front])
+                                }
+                            }
+                        }),
+                        ActionSheetButtonItem(title: "Orqa Camera", color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                            actionSheet?.dismissAnimated()
+                            if let interfaceInteraction = strongSelf?.interfaceInteraction {
+                                interfaceInteraction.beginMediaRecording(true)
+                                interfaceInteraction.lockMediaRecording()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                    NotificationCenter.default.post(name: NSNotification.Name("LegacyInstantVideoControllerSwitchCamera"), object: nil, userInfo: ["position": AVCaptureDevice.Position.back])
+                                }
+                            }
+                        })
+                    ]),
+                    ActionSheetItemGroup(items: [
+                        ActionSheetButtonItem(title: presentationInterfaceState.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet, weak strongSelf] in
+                            actionSheet?.dismissAnimated()
+                            strongSelf?.mediaActionButtons.micButton.cancelRecording()
+                        })
+                    ])
+                ])
+                if let controller = interfaceInteraction.chatController() {
+                    controller.present(actionSheet, in: .window(.root))
+                }
             }
         }
         

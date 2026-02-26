@@ -31,6 +31,8 @@ public final class InstantVideoController: LegacyController, StandalonePresentab
     private var completed = false
     private var dismissed = false
     
+    private var cameraPositionDisposable: NSObjectProtocol?
+    
     override public init(presentation: LegacyControllerPresentation, theme: PresentationTheme?, strings: PresentationStrings? = nil, initialLayout: ContainerViewLayout? = nil) {
         self.audioStatus = InstantVideoControllerRecordingStatus(micLevel: self.micLevelValue.get(), duration: self.durationValue.get())
         
@@ -38,6 +40,18 @@ public final class InstantVideoController: LegacyController, StandalonePresentab
         
         self.hasSparseContainerView = true
         self.lockOrientation = true
+        
+        self.cameraPositionDisposable = NotificationCenter.default.addObserver(forName: NSNotification.Name("LegacyInstantVideoControllerSwitchCamera"), object: nil, queue: nil) { [weak self] notification in
+            if let position = notification.userInfo?["position"] as? AVCaptureDevice.Position {
+                self?.setCameraPosition(position)
+            }
+        }
+    }
+    
+    deinit {
+        if let disposable = self.cameraPositionDisposable {
+            NotificationCenter.default.removeObserver(disposable)
+        }
     }
     
     required public init(coder aDecoder: NSCoder) {
@@ -112,6 +126,12 @@ public final class InstantVideoController: LegacyController, StandalonePresentab
     public func lockVideo() {
         if let captureController = self.captureController {
             return captureController.setLocked()
+        }
+    }
+    
+    public func setCameraPosition(_ position: AVCaptureDevice.Position) {
+        if let captureController = self.captureController {
+            captureController.setCameraPosition(position)
         }
     }
     
