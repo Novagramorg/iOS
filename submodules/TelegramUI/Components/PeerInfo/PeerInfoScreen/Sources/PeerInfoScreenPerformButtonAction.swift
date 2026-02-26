@@ -773,6 +773,28 @@ extension PeerInfoScreenNode {
                         })))
                     }
                     
+                    let showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
+                    if showViewFirstMessage {
+                        items.append(.action(ContextMenuActionItem(text: "View First message", icon: { theme in
+                            generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor)
+                        }, action: { c, _ in
+                            c?.dismiss(completion: {
+                                guard let strongSelf = self, let navigationController = strongSelf.controller?.navigationController as? NavigationController else { return }
+                                strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                                    navigationController: navigationController,
+                                    context: strongSelf.context,
+                                    chatLocation: .peer(EnginePeer(peer)),
+                                    keepStack: .always,
+                                    completion: { chatController in
+                                        Queue.mainQueue().after(0.6) {
+                                            chatController.navigateToFirstMessage()
+                                        }
+                                    }
+                                ))
+                            })
+                        })))
+                    }
+                    
                     items.append(.action(ContextMenuActionItem(text: "Pro Messenger Info", icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
                     }, action: { c, _ in
@@ -1014,6 +1036,28 @@ extension PeerInfoScreenNode {
                         })))
                     }
                     
+                    let showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
+                    if showViewFirstMessage {
+                        items.append(.action(ContextMenuActionItem(text: "View First message", icon: { theme in
+                            generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor)
+                        }, action: { c, _ in
+                            c?.dismiss(completion: {
+                                guard let strongSelf = self, let navigationController = strongSelf.controller?.navigationController as? NavigationController else { return }
+                                strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                                    navigationController: navigationController,
+                                    context: strongSelf.context,
+                                    chatLocation: .peer(EnginePeer(peer)),
+                                    keepStack: .always,
+                                     completion: { chatController in
+                                        Queue.mainQueue().after(0.6) {
+                                            chatController.navigateToFirstMessage()
+                                        }
+                                    }
+                                ))
+                            })
+                        })))
+                    }
+                    
                     items.append(.action(ContextMenuActionItem(text: "Pro Messenger Info", icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
                     }, action: { c, _ in
@@ -1202,6 +1246,28 @@ extension PeerInfoScreenNode {
                             if let c {
                                 self?.openClearHistory(contextController: c, clearPeerHistory: clearPeerHistory, peer: group, chatPeer: group)
                             }
+                        })))
+                    }
+                    
+                    let showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
+                    if showViewFirstMessage {
+                        items.append(.action(ContextMenuActionItem(text: "View First message", icon: { theme in
+                            generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.contextMenu.primaryColor)
+                        }, action: { c, _ in
+                            c?.dismiss(completion: {
+                                guard let strongSelf = self, let navigationController = strongSelf.controller?.navigationController as? NavigationController else { return }
+                                strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                                    navigationController: navigationController,
+                                    context: strongSelf.context,
+                                    chatLocation: .peer(EnginePeer(peer)),
+                                    keepStack: .always,
+                                     completion: { chatController in
+                                        Queue.mainQueue().after(0.6) {
+                                            chatController.navigateToFirstMessage()
+                                        }
+                                    }
+                                ))
+                            })
                         })))
                     }
                     

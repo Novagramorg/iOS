@@ -4126,6 +4126,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         self?.openPeer(peer: peer, navigation: .info(nil), fromMessage: nil)
                     }))
                 ]
+                let showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
+                if showViewFirstMessage {
+                    items.append(.action(ContextMenuActionItem(text: "View First message", icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        f(.dismissWithoutContent)
+                        self?.navigateToMessage(messageLocation: .index(MessageIndex.absoluteLowerBound()), animated: true, forceInCurrentChat: true)
+                    })))
+                }
                 items.append(.action(ContextMenuActionItem(text: isChannel ? strongSelf.presentationData.strings.Conversation_ContextMenuOpenChannel : strongSelf.presentationData.strings.Conversation_ContextMenuSendMessage, icon: { theme in
                     return generateTintedImage(image: UIImage(bundleImageName: isChannel ? "Chat/Context Menu/Channels" : "Chat/Context Menu/Message"), color: theme.actionSheet.primaryTextColor)
                 }, action: { _, f in
@@ -5297,6 +5306,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             f(.dismissWithoutContent)
                             self?.navigationButtonAction(.openChatInfo(expandAvatar: true, section: nil))
                         })))
+                        let showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
+                        if showViewFirstMessage {
+                            items.append(.action(ContextMenuActionItem(text: "View First message", icon: { theme in
+                                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/GoToMessage"), color: theme.actionSheet.primaryTextColor)
+                            }, action: { _, f in
+                                f(.dismissWithoutContent)
+                                self?.navigateToMessage(messageLocation: .index(MessageIndex.absoluteLowerBound()), animated: true, forceInCurrentChat: true)
+                            })))
+                        }
                         
                         if canViewStats {
                             items.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.ChannelInfo_Stats, icon: { theme in
@@ -8683,7 +8701,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             })
         })
     }
-    
+    public func navigateToFirstMessage() {
+        self.navigateToMessage(messageLocation: .index(MessageIndex.absoluteLowerBound()), animated: true, forceInCurrentChat: true)
+    }
+
     public func navigateToMessage(messageLocation: NavigateToMessageLocation, animated: Bool, forceInCurrentChat: Bool = false, dropStack: Bool = false, completion: (() -> Void)? = nil, customPresentProgress: ((ViewController, Any?) -> Void)? = nil) {
         let scrollPosition: ListViewScrollPosition
         if case .upperBound = messageLocation {
