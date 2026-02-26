@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).refresh</string>
@@ -16,10 +18,16 @@
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIcons</key>
 	<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>Black</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlackIcon</string>
@@ -30,6 +38,8 @@
 			</dict>
 			<key>BlackClassic</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlackClassicIcon</string>
@@ -40,6 +50,8 @@
 			</dict>
 			<key>BlackFilled</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlackFilledIcon</string>
@@ -49,6 +61,8 @@
 			</dict>
 			<key>Blue</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlueIcon</string>
@@ -59,6 +73,8 @@
 			</dict>
 			<key>BlueClassic</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlueClassicIcon</string>
@@ -69,6 +85,8 @@
 			</dict>
 			<key>BlueFilled</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlueFilledIcon</string>
@@ -78,6 +96,8 @@
 			</dict>
 			<key>WhiteFilled</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>WhiteFilledIcon</string>
@@ -88,6 +108,8 @@
 		</dict>
 		<key>CFBundlePrimaryIcon</key>
 		<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleIconName</key>
 			<string>AppIconLLC</string>
 			<key>UIPrerenderedIcon</key>
@@ -96,10 +118,16 @@
 	</dict>
 	<key>CFBundleIcons~ipad</key>
 	<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>Black</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlackIconIpad</string>
@@ -111,6 +139,8 @@
 			</dict>
 			<key>BlackClassic</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlackClassicIconIpad</string>
@@ -122,6 +152,8 @@
 			</dict>
 			<key>BlackFilled</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlackFilledIconIpad</string>
@@ -132,6 +164,8 @@
 			</dict>
 			<key>Blue</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlueIconIpad</string>
@@ -143,6 +177,8 @@
 			</dict>
 			<key>BlueClassic</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlueClassicIconIpad</string>
@@ -154,6 +190,8 @@
 			</dict>
 			<key>BlueFilled</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>BlueFilledIconIpad</string>
@@ -164,6 +202,8 @@
 			</dict>
 			<key>WhiteFilled</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
 					<string>WhiteFilledIcon</string>
@@ -174,6 +214,8 @@
 		</dict>
 		<key>CFBundlePrimaryIcon</key>
 		<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleIconName</key>
 			<string>AppIconLLC</string>
 			<key>UIPrerenderedIcon</key>
@@ -195,6 +237,8 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
@@ -205,6 +249,8 @@
 			</array>
 		</dict>
 		<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
@@ -216,6 +262,8 @@
 			</array>
 		</dict>
 		<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
@@ -270,6 +318,8 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
@@ -349,6 +399,8 @@
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
@@ -363,6 +415,8 @@
 			<string>org.telegram.Telegram-iOS.theme</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>public.filename-extension</key>
 				<array>
 					<string>tgios-theme</string>

@@ -239,6 +239,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var dustNode: InvisibleInkDustNode?
     public var customEmojiContainerView: CustomEmojiContainerView?
     
+
+    
     public let textInputBackgroundNode: ASImageNode
     public var textInputBackgroundTapRecognizer: TouchDownGestureRecognizer?
     public let mediaActionButtons: ChatTextInputActionButtonsNode
@@ -714,7 +716,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.slowModeButton = BoostSlowModeButton()
         self.slowModeButton.alpha = 0.0
-        
         self.viewOnceButton = ChatRecordingViewOnceButtonNode(icon: .viewOnce)
         self.recordMoreButton = ChatRecordingViewOnceButtonNode(icon: .recordMore)
         
@@ -844,7 +845,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         isVideo = true
                 }
                 
-                if !isVideo {
+                let longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? true
+                if !isVideo || !longPressCameraSelection {
                     interfaceInteraction.beginMediaRecording(isVideo)
                 }
             }
@@ -897,6 +899,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         self.mediaActionButtons.micButton.presentCameraSelection = { [weak self] isVideo in
+            let longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? true
+            if !longPressCameraSelection {
+                return
+            }
             if let strongSelf = self, isVideo, let interfaceInteraction = strongSelf.interfaceInteraction, let presentationInterfaceState = strongSelf.presentationInterfaceState {
                 let actionSheet = ActionSheetController(theme: ActionSheetControllerTheme(presentationTheme: presentationInterfaceState.theme, fontSize: presentationInterfaceState.fontSize))
                 actionSheet.setItemGroups([
@@ -989,6 +995,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         self.glassBackgroundContainer.contentView.addSubview(self.slowModeButton.view)
         
+
         self.textInputContainerBackgroundView.contentView.addSubview(self.searchLayoutClearButton)
         self.textInputContainerBackgroundView.contentView.addSubview(self.searchLayoutClearButtonIcon)
         self.textInputContainerBackgroundView.maskContentView.addSubview(self.searchLayoutClearButtonIcon.tintMask)
@@ -2396,8 +2403,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if let liveMicrophoneButtonSize {
             effectiveActionButtonsSize.width += 6.0 + liveMicrophoneButtonSize.width
         }
-        
         let baseWidth = width - leftInset - leftMenuInset - rightInset - rightSlowModeInset
+
         let (accessoryButtonsWidth, textFieldHeight, isTextFieldOverflow) = self.calculateTextFieldMetrics(width: baseWidth, sendActionControlsWidth: sendActionButtonsSize.width, maxHeight: maxHeight, metrics: metrics, bottomInset: bottomInset, interfaceState: interfaceState)
         var panelHeight = self.panelHeight(textFieldHeight: textFieldHeight, metrics: metrics, bottomInset: bottomInset)
         if displayBotStartButton {
@@ -3212,8 +3219,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 })
             }
         }
-        
+
         var mediaActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX + 6.0, y: textInputContainerBackgroundFrame.maxY - mediaActionButtonsSize.height), size: mediaActionButtonsSize)
+
         if inputHasText || self.extendedSearchLayout || hasMediaDraft || interfaceState.interfaceState.forwardMessageIds != nil {
             mediaActionButtonsFrame.origin.x = width + 8.0
         }
@@ -3561,7 +3569,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         return contentHeight
     }
-    
+
     @objc private func slowModeButtonPressed() {
         self.interfaceInteraction?.openBoostToUnrestrict()
     }

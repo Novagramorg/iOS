@@ -21,10 +21,13 @@ private enum ProMessagerEntry: ItemListNodeEntry {
     case showMutualContactSymbol(PresentationTheme, String, String, Bool)
     case showGhostMode(PresentationTheme, String, String, Bool)
     case showEnablePremium(PresentationTheme, String, String, Bool)
+    case longPressCameraSelection(PresentationTheme, String, String, Bool)
+    case translateMessages(PresentationTheme, String)
+    case translateToggle(PresentationTheme, String, String, Bool)
     
     var section: ItemListSectionId {
         switch self {
-            case .deletedMessages, .hideFolders, .showStories, .showMutualContactSymbol, .showGhostMode, .showEnablePremium:
+            case .deletedMessages, .hideFolders, .showStories, .showMutualContactSymbol, .showGhostMode, .showEnablePremium, .longPressCameraSelection, .translateMessages, .translateToggle:
                 return ProMessagerSection.features.rawValue
         }
     }
@@ -43,6 +46,12 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return 4
             case .showEnablePremium:
                 return 5
+            case .longPressCameraSelection:
+                return 6
+            case .translateToggle:
+                return 7
+            case .translateMessages:
+                return 8
         }
     }
     
@@ -60,6 +69,12 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return 4
             case .showEnablePremium:
                 return 5
+            case .longPressCameraSelection:
+                return 6
+            case .translateToggle:
+                return 7
+            case .translateMessages:
+                return 8
         }
     }
     
@@ -102,6 +117,24 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 } else {
                     return false
                 }
+            case let .longPressCameraSelection(lhsTheme, lhsTitle, lhsText, lhsValue):
+                if case let .longPressCameraSelection(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
+            case let .translateMessages(lhsTheme, lhsTitle):
+                if case let .translateMessages(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle {
+                    return true
+                } else {
+                    return false
+                }
+            case let .translateToggle(lhsTheme, lhsTitle, lhsText, lhsValue):
+                if case let .translateToggle(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
         }
     }
     
@@ -136,6 +169,18 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                     arguments.updateShowEnablePremium(val)
                 })
+            case let .longPressCameraSelection(_, title, text, value):
+                return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                    arguments.updateLongPressCameraSelection(val)
+                })
+            case let .translateMessages(_, title):
+                return ItemListDisclosureItem(presentationData: presentationData, title: title, label: "", sectionId: self.section, style: .blocks, action: {
+                    arguments.openTranslationSettings()
+                })
+            case let .translateToggle(_, title, text, value):
+                return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                    arguments.updateTranslateMessages(val)
+                })
         }
     }
 }
@@ -147,6 +192,8 @@ private struct ProMessagerControllerState: Equatable {
     var showMutualContactSymbol: Bool
     var showGhostMode: Bool
     var showEnablePremium: Bool
+    var longPressCameraSelection: Bool
+    var showTranslateMessages: Bool
     
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -155,6 +202,8 @@ private struct ProMessagerControllerState: Equatable {
         self.showMutualContactSymbol = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_mutual_contact_symbol") as? Bool ?? true
         self.showGhostMode = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_ghost_mode_button") ?? false
         self.showEnablePremium = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "enable_premium") ?? false
+        self.longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? true
+        self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? true
     }
     
     static func ==(lhs: ProMessagerControllerState, rhs: ProMessagerControllerState) -> Bool {
@@ -176,6 +225,12 @@ private struct ProMessagerControllerState: Equatable {
         if lhs.showEnablePremium != rhs.showEnablePremium {
             return false
         }
+        if lhs.longPressCameraSelection != rhs.longPressCameraSelection {
+            return false
+        }
+        if lhs.showTranslateMessages != rhs.showTranslateMessages {
+            return false
+        }
         return true
     }
 }
@@ -189,6 +244,9 @@ private func proMessagerControllerEntries(presentationData: PresentationData, st
     entries.append(.showMutualContactSymbol(presentationData.theme, "O'zaro kontakt belgisi", "Kontaktlar ro'yxatida o'zaro kontaktlar yonida 🤝 belgisini ko'rsatish", state.showMutualContactSymbol))
     entries.append(.showGhostMode(presentationData.theme, "Ghost rejimi tugmasi", "Chatlar ro'yxati tepasida Ghost rejimini yoqish/o'chirish tugmasini ko'rsatish", state.showGhostMode))
     entries.append(.showEnablePremium(presentationData.theme, "Premium sovg'a", "Barcha Premium imkoniyatlarni bepul ochish (Virtual)", state.showEnablePremium))
+    entries.append(.longPressCameraSelection(presentationData.theme, "Kamerani tanlash", "Video xabar yozish tugmasini bosib turganda kamera tanlash menyusini ko'rsatish", state.longPressCameraSelection))
+    entries.append(.translateToggle(presentationData.theme, "Tarjima tugmasini ko'rsatish", "Xabarlarni tarjima qilish uchun context menuda Translate tugmasini ko'rsatish", state.showTranslateMessages))
+    entries.append(.translateMessages(presentationData.theme, "Xabarni tarjima qilish tillari"))
     
     return entries
 }
@@ -200,14 +258,20 @@ private final class ProMessagerArguments {
     let updateShowMutualContactSymbol: (Bool) -> Void
     let updateShowGhostMode: (Bool) -> Void
     let updateShowEnablePremium: (Bool) -> Void
+    let updateLongPressCameraSelection: (Bool) -> Void
+    let updateTranslateMessages: (Bool) -> Void
+    let openTranslationSettings: () -> Void
     
-    init(updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void) {
+    init(updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void) {
         self.updateShowDeletedMessages = updateShowDeletedMessages
         self.updateHideFolders = updateHideFolders
         self.updateShowStories = updateShowStories
         self.updateShowMutualContactSymbol = updateShowMutualContactSymbol
         self.updateShowGhostMode = updateShowGhostMode
         self.updateShowEnablePremium = updateShowEnablePremium
+        self.updateLongPressCameraSelection = updateLongPressCameraSelection
+        self.updateTranslateMessages = updateTranslateMessages
+        self.openTranslationSettings = openTranslationSettings
     }
 }
 
@@ -220,6 +284,8 @@ public func proMessagerController(context: AccountContext) -> ViewController {
     let updateState: ((ProMessagerControllerState) -> ProMessagerControllerState) -> Void = { f in
         statePromise.set(stateValue.modify { f($0) })
     }
+    
+    var pushControllerImpl: ((ViewController) -> Void)?
     
     let arguments = ProMessagerArguments(updateShowDeletedMessages: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_deleted_messages")
@@ -271,6 +337,22 @@ public func proMessagerController(context: AccountContext) -> ViewController {
             state.showEnablePremium = value
             return state
         }
+    }, updateLongPressCameraSelection: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "long_press_camera_selection")
+        updateState { state in
+            var state = state
+            state.longPressCameraSelection = value
+            return state
+        }
+    }, updateTranslateMessages: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_translate_messages")
+        updateState { state in
+            var state = state
+            state.showTranslateMessages = value
+            return state
+        }
+    }, openTranslationSettings: {
+        pushControllerImpl?(proMessagerTranslationController(context: context))
     })
     
     let signal = combineLatest(
@@ -284,5 +366,8 @@ public func proMessagerController(context: AccountContext) -> ViewController {
         }
     
     let controller = ItemListController(context: context, state: signal)
+    pushControllerImpl = { [weak controller] c in
+        controller?.push(c)
+    }
     return controller
 }

@@ -3927,11 +3927,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         
                         let _ = ApplicationSpecificNotice.incrementTranslationSuggestion(accountManager: context.sharedContext.accountManager, timestamp: Int32(Date().timeIntervalSince1970)).startStandalone()
                         
+                        let targetLanguage = UserDefaults(suiteName: "pro_messager_translation")?.string(forKey: "selected_language")
                         presentTranslateScreen(
                             context: context,
                             text: text.string,
                             canCopy: canCopy,
                             fromLanguage: language,
+                            toLanguage: targetLanguage,
                             ignoredLanguages: translationSettings.ignoredLanguages,
                             pushController: { [weak self] c in
                                 self?.effectiveNavigationController?._keepModalDismissProgress = true
