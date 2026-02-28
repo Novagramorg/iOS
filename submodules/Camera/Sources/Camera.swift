@@ -294,22 +294,32 @@ private final class CameraContext {
     }
     
     public func setPosition(_ position: Camera.Position) {
+        guard position != self.positionValue else {
+            return
+        }
+        let isRoundVideo = self.initialConfiguration.isRoundVideo
+        
+        self.session.session.stopRunning()
         self.configure {
-            self.mainDeviceContext?.invalidate()
+            self.mainDeviceContext?.invalidate(switchAudio: !isRoundVideo)
             
             self._positionPromise.set(position)
             self.positionValue = position
             self.modeChange = .position
             
-            let preferWide = self.initialConfiguration.preferWide || (self.positionValue == .front && self.initialConfiguration.isRoundVideo)
-            let preferLowerFramerate = self.initialConfiguration.preferLowerFramerate || self.initialConfiguration.isRoundVideo
+            let preferWide = self.initialConfiguration.preferWide || (position == .front && isRoundVideo)
+            let preferLowerFramerate = self.initialConfiguration.preferLowerFramerate || isRoundVideo
             
-            self.mainDeviceContext?.configure(position: position, previewView: self.simplePreviewView, audio: self.initialConfiguration.audio, photo: self.initialConfiguration.photo, metadata: self.initialConfiguration.metadata, preferWide: preferWide, preferLowerFramerate: preferLowerFramerate)
+            self.mainDeviceContext?.configure(position: position, previewView: self.simplePreviewView, audio: self.initialConfiguration.audio, photo: self.initialConfiguration.photo, metadata: self.initialConfiguration.metadata, preferWide: preferWide, preferLowerFramerate: preferLowerFramerate, switchAudio: !isRoundVideo)
+            if isRoundVideo {
+                self.mainDeviceContext?.output.markPositionChange(position: position)
+            }
                         
             self.queue.after(0.5) {
                 self.modeChange = .none
             }
         }
+        self.session.session.startRunning()
     }
     
     private var micLevelPeak: Int16 = 0
@@ -585,6 +595,7 @@ private final class CameraContext {
         
         let orientation = self.simplePreviewView?.videoPreviewLayer.connection?.videoOrientation ?? .portrait
         if self.initialConfiguration.isRoundVideo {
+            mainDeviceContext.output.markPositionChange(position: self.positionValue)
             return mainDeviceContext.output.startRecording(mode: .roundVideo, orientation: DeviceModel.current.isIpad ? orientation : .portrait, additionalOutput: self.additionalDeviceContext?.output)
         } else {
             if let additionalDeviceContext = self.additionalDeviceContext {

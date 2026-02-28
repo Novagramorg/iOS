@@ -2238,10 +2238,31 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
             }, nil)
             var attributes: [MessageAttribute] = []
-            let entities = generateTextEntities(text, enabledTypes: .all)
+            var entities = generateTextEntities(text, enabledTypes: .all)
+            
+            // PRO MESSAGER: Apply default text style to outgoing messages
+            let proTextStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
+            let textLength = (text as NSString).length
+            if textLength > 0, proTextStyle != "none" {
+                let entityType: MessageTextEntityType?
+                switch proTextStyle {
+                case "bold":          entityType = .Bold
+                case "italic":        entityType = .Italic
+                case "monospace":     entityType = .Code
+                case "strikethrough": entityType = .Strikethrough
+                case "underline":     entityType = .Underline
+                case "spoiler":       entityType = .Spoiler
+                default:              entityType = nil
+                }
+                if let entityType = entityType {
+                    entities.append(MessageTextEntity(range: 0 ..< textLength, type: entityType))
+                }
+            }
+            
             if !entities.isEmpty {
                 attributes.append(TextEntitiesMessageAttribute(entities: entities))
             }
+
             
             let peerId = strongSelf.chatLocation.peerId
             if peerId?.namespace != Namespaces.Peer.SecretChat, let interactiveEmojis = strongSelf.chatDisplayNode.interactiveEmojis, interactiveEmojis.emojis.contains(text) {

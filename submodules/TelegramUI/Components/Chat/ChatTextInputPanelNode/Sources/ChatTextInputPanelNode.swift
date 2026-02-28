@@ -59,6 +59,7 @@ import ChatRecordingViewOnceButtonNode
 import ChatRecordingPreviewInputPanelNode
 import ChatInputContextPanelNode
 import RasterizedCompositionComponent
+import VideoMessageCameraScreen
 
 private let counterFont = Font.with(size: 14.0, design: .regular, traits: [.monospacedNumbers])
 
@@ -910,21 +911,17 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                         ActionSheetButtonItem(title: "Oldi Camera", color: .accent, action: { [weak actionSheet, weak strongSelf] in
                             actionSheet?.dismissAnimated()
                             if let interfaceInteraction = strongSelf?.interfaceInteraction {
+                                VideoMessageCameraScreen.pendingCameraPosition = .front
                                 interfaceInteraction.beginMediaRecording(true)
                                 interfaceInteraction.lockMediaRecording()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                    NotificationCenter.default.post(name: NSNotification.Name("LegacyInstantVideoControllerSwitchCamera"), object: nil, userInfo: ["position": AVCaptureDevice.Position.front])
-                                }
                             }
                         }),
                         ActionSheetButtonItem(title: "Orqa Camera", color: .accent, action: { [weak actionSheet, weak strongSelf] in
                             actionSheet?.dismissAnimated()
                             if let interfaceInteraction = strongSelf?.interfaceInteraction {
+                                VideoMessageCameraScreen.pendingCameraPosition = .back
                                 interfaceInteraction.beginMediaRecording(true)
                                 interfaceInteraction.lockMediaRecording()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                    NotificationCenter.default.post(name: NSNotification.Name("LegacyInstantVideoControllerSwitchCamera"), object: nil, userInfo: ["position": AVCaptureDevice.Position.back])
-                                }
                             }
                         })
                     ]),

@@ -80,6 +80,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
+    public var scheduledTasksController: ViewController?
     
     private var permissionsDisposable: Disposable?
     private var presentationDataDisposable: Disposable?
@@ -215,6 +216,11 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         if showCallsTab {
             controllers.append(callListController)
         }
+        
+        let scheduledTasksCtrl = TelegramUI.scheduledTasksController(context: self.context)
+        scheduledTasksCtrl.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
+        controllers.append(scheduledTasksCtrl)
+        
         controllers.append(chatListController)
         
         var restoreSettignsController: (ViewController & SettingsController)?
@@ -242,6 +248,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.callListController = callListController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
+        self.scheduledTasksController = scheduledTasksCtrl
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
     }
@@ -255,6 +262,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         if showCallsTab {
             controllers.append(self.callListController!)
         }
+        
+        if let tasksCtrl = self.scheduledTasksController {
+            tasksCtrl.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
+            controllers.append(tasksCtrl)
+        }
+        
         controllers.append(self.chatListController!)
         controllers.append(self.accountSettingsController!)
         

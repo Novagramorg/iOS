@@ -9,12 +9,38 @@ import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
+import CallListUI
 
 private enum ProMessagerSection: Int32 {
     case features
 }
 
+private func textStyleDisplayName(_ rawValue: String) -> String {
+    switch rawValue {
+    case "bold":          return "Qalin (Bold)"
+    case "italic":        return "Kiyshiq (Italic)"
+    case "monospace":     return "Monospace (Kod)"
+    case "strikethrough": return "Chizilgan (Strikethrough)"
+    case "underline":     return "Tagiga chizilgan (Underline)"
+    case "spoiler":       return "Spoiler"
+    default:             return "Uslubsiz (Oddiy)"
+    }
+}
+
+private func textStyleExampleDescription(_ rawValue: String) -> String {
+    switch rawValue {
+    case "bold":          return "Misol: Salom, bu xabar qalin (Bold) ko'rinishda yuboriladi"
+    case "italic":        return "Misol: Salom, bu xabar kiyshiq (Italic) ko'rinishda yuboriladi"
+    case "monospace":     return "Misol: Salom, bu xabar monospace (kod) ko'rinishda yuboriladi"
+    case "strikethrough": return "Misol: Salom, bu xabar chizilgan ko'rinishda yuboriladi"
+    case "underline":     return "Misol: Salom, bu xabar tagiga chizilgan ko'rinishda yuboriladi"
+    case "spoiler":       return "Misol: Salom, bu xabar spoiler ko'rinishda yuboriladi (bosib ko'rish kerak)"
+    default:             return "Uslub tanlanmagan. Xabarlar oddiy matn sifatida yuboriladi"
+    }
+}
+
 private enum ProMessagerEntry: ItemListNodeEntry {
+    case calls(PresentationTheme, String)
     case deletedMessages(PresentationTheme, String, String, Bool)
     case hideFolders(PresentationTheme, String, String, Bool)
     case showStories(PresentationTheme, String, String, Bool)
@@ -25,16 +51,21 @@ private enum ProMessagerEntry: ItemListNodeEntry {
     case longPressCameraSelection(PresentationTheme, String, String, Bool)
     case translateMessages(PresentationTheme, String)
     case translateToggle(PresentationTheme, String, String, Bool)
+    case textStyle(PresentationTheme, String, String)
+    case autoText(PresentationTheme, String, String)  // title, status label
+    case autoTranslate(PresentationTheme, String, String)
     
     var section: ItemListSectionId {
         switch self {
-            case .deletedMessages, .hideFolders, .showStories, .showMutualContactSymbol, .showGhostMode, .showEnablePremium, .showViewFirstMessage, .longPressCameraSelection, .translateMessages, .translateToggle:
+            case .calls, .deletedMessages, .hideFolders, .showStories, .showMutualContactSymbol, .showGhostMode, .showEnablePremium, .showViewFirstMessage, .longPressCameraSelection, .translateMessages, .translateToggle, .textStyle, .autoText, .autoTranslate:
                 return ProMessagerSection.features.rawValue
         }
     }
     
     var stableId: Int32 {
         switch self {
+            case .calls:
+                return -1
             case .deletedMessages:
                 return 0
             case .hideFolders:
@@ -55,11 +86,19 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return 8
             case .translateMessages:
                 return 9
+            case .textStyle:
+                return 10
+            case .autoText:
+                return 11
+            case .autoTranslate:
+                return 12
         }
     }
     
     var sortId: Int {
         switch self {
+            case .calls:
+                return -1
             case .deletedMessages:
                 return 0
             case .hideFolders:
@@ -80,11 +119,23 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return 8
             case .translateMessages:
                 return 9
+            case .textStyle:
+                return 10
+            case .autoText:
+                return 11
+            case .autoTranslate:
+                return 12
         }
     }
     
     static func ==(lhs: ProMessagerEntry, rhs: ProMessagerEntry) -> Bool {
         switch lhs {
+            case let .calls(lhsTheme, lhsTitle):
+                if case let .calls(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle {
+                    return true
+                } else {
+                    return false
+                }
             case let .deletedMessages(lhsTheme, lhsTitle, lhsText, lhsValue):
                 if case let .deletedMessages(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue {
                     return true
@@ -146,6 +197,24 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 } else {
                     return false
                 }
+            case let .textStyle(lhsTheme, lhsTitle, lhsLabel):
+                if case let .textStyle(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel {
+                    return true
+                } else {
+                    return false
+                }
+            case let .autoText(lhsTheme, lhsTitle, lhsLabel):
+                if case let .autoText(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel {
+                    return true
+                } else {
+                    return false
+                }
+            case let .autoTranslate(lhsTheme, lhsTitle, lhsLabel):
+                if case let .autoTranslate(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel {
+                    return true
+                } else {
+                    return false
+                }
         }
     }
     
@@ -156,6 +225,10 @@ private enum ProMessagerEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! ProMessagerArguments
         switch self {
+            case let .calls(_, title):
+                return ItemListDisclosureItem(presentationData: presentationData, title: title, label: "", sectionId: self.section, style: .blocks, action: {
+                    arguments.openCalls()
+                })
             case let .deletedMessages(_, title, text, value):
                 return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                     arguments.updateShowDeletedMessages(val)
@@ -196,6 +269,20 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                     arguments.updateTranslateMessages(val)
                 })
+            case let .textStyle(_, title, label):
+                return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                    arguments.openTextStyleSettings()
+                })
+            case let .autoText(theme, title, label):
+                let labelStyle: ItemListDisclosureLabelStyle = (label == "Yoqilgan") ? .badge(theme.list.itemAccentColor) : .text
+                return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
+                    arguments.openAutoTextSettings()
+                })
+            case let .autoTranslate(theme, title, label):
+                let labelStyle: ItemListDisclosureLabelStyle = (label == "Yoqilgan") ? .badge(theme.list.itemAccentColor) : .text
+                return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
+                    arguments.openAutoTranslateSettings()
+                })
         }
     }
 }
@@ -210,6 +297,9 @@ private struct ProMessagerControllerState: Equatable {
     var showViewFirstMessage: Bool
     var longPressCameraSelection: Bool
     var showTranslateMessages: Bool
+    var textStyle: String
+    var autoTextEnabled: Bool
+    var autoTranslateEnabled: Bool
     
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -221,6 +311,9 @@ private struct ProMessagerControllerState: Equatable {
         self.showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
         self.longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? true
         self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? true
+        self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
+        self.autoTextEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
+        self.autoTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_translate_enabled") ?? false
     }
     
     static func ==(lhs: ProMessagerControllerState, rhs: ProMessagerControllerState) -> Bool {
@@ -251,6 +344,15 @@ private struct ProMessagerControllerState: Equatable {
         if lhs.showTranslateMessages != rhs.showTranslateMessages {
             return false
         }
+        if lhs.textStyle != rhs.textStyle {
+            return false
+        }
+        if lhs.autoTextEnabled != rhs.autoTextEnabled {
+            return false
+        }
+        if lhs.autoTranslateEnabled != rhs.autoTranslateEnabled {
+            return false
+        }
         return true
     }
 }
@@ -258,6 +360,7 @@ private struct ProMessagerControllerState: Equatable {
 private func proMessagerControllerEntries(presentationData: PresentationData, state: ProMessagerControllerState) -> [ProMessagerEntry] {
     var entries: [ProMessagerEntry] = []
     
+    entries.append(.calls(presentationData.theme, "Qo'ng'iroqlar"))
     entries.append(.deletedMessages(presentationData.theme, "O'chirilgan xabarlarni ko'rish", "Agar yoqilgan bo'lsa, chatda o'chirilgan xabarlar 🗑 Removed bilan ko'rsatiladi.", state.showDeletedMessages))
     entries.append(.hideFolders(presentationData.theme, "Jildlarni yashirish", "Tepadagi barcha jildlar boshqalarga ko'rinmasligi uchun ularni vaqtinchalik yashirish", state.hideFolders))
     entries.append(.showStories(presentationData.theme, "Hikoyalarni ko'rsatish", "Chatlar ro'yxatida tepada hikoyalarni ko'rsatish yoki yashirish", state.showStories))
@@ -268,11 +371,18 @@ private func proMessagerControllerEntries(presentationData: PresentationData, st
     entries.append(.longPressCameraSelection(presentationData.theme, "Kamerani tanlash", "Video xabar yozish tugmasini bosib turganda kamera tanlash menyusini ko'rsatish", state.longPressCameraSelection))
     entries.append(.translateToggle(presentationData.theme, "Tarjima tugmasini ko'rsatish", "Xabarlarni tarjima qilish uchun context menuda Translate tugmasini ko'rsatish", state.showTranslateMessages))
     entries.append(.translateMessages(presentationData.theme, "Xabarni tarjima qilish tillari"))
+    entries.append(.textStyle(presentationData.theme, "Xabar uslubi", textStyleDisplayName(state.textStyle)))
+    let autoLabel = state.autoTextEnabled ? "Yoqilgan" : "O'chirilgan"
+    entries.append(.autoText(presentationData.theme, "Avtomatik qo'shimcha matn", autoLabel))
+    
+    let translateLabel = state.autoTranslateEnabled ? "Yoqilgan" : "O'chirilgan"
+    entries.append(.autoTranslate(presentationData.theme, "Avtomatik xabar tarjimasi", translateLabel))
     
     return entries
 }
 
 private final class ProMessagerArguments {
+    let openCalls: () -> Void
     let updateShowDeletedMessages: (Bool) -> Void
     let updateHideFolders: (Bool) -> Void
     let updateShowStories: (Bool) -> Void
@@ -283,8 +393,12 @@ private final class ProMessagerArguments {
     let updateLongPressCameraSelection: (Bool) -> Void
     let updateTranslateMessages: (Bool) -> Void
     let openTranslationSettings: () -> Void
+    let openTextStyleSettings: () -> Void
+    let openAutoTextSettings: () -> Void
+    let openAutoTranslateSettings: () -> Void
     
-    init(updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void) {
+    init(openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void) {
+        self.openCalls = openCalls
         self.updateShowDeletedMessages = updateShowDeletedMessages
         self.updateHideFolders = updateHideFolders
         self.updateShowStories = updateShowStories
@@ -295,6 +409,9 @@ private final class ProMessagerArguments {
         self.updateLongPressCameraSelection = updateLongPressCameraSelection
         self.updateTranslateMessages = updateTranslateMessages
         self.openTranslationSettings = openTranslationSettings
+        self.openTextStyleSettings = openTextStyleSettings
+        self.openAutoTextSettings = openAutoTextSettings
+        self.openAutoTranslateSettings = openAutoTranslateSettings
     }
 }
 
@@ -310,7 +427,9 @@ public func proMessagerController(context: AccountContext) -> ViewController {
     
     var pushControllerImpl: ((ViewController) -> Void)?
     
-    let arguments = ProMessagerArguments(updateShowDeletedMessages: { value in
+    let arguments = ProMessagerArguments(openCalls: {
+        pushControllerImpl?(CallListController(context: context, mode: .navigation))
+    }, updateShowDeletedMessages: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_deleted_messages")
         updateState { state in
             var state = state
@@ -383,6 +502,30 @@ public func proMessagerController(context: AccountContext) -> ViewController {
         }
     }, openTranslationSettings: {
         pushControllerImpl?(proMessagerTranslationController(context: context))
+    }, openTextStyleSettings: {
+        pushControllerImpl?(proMessagerTextStyleController(context: context, onStyleSelected: { newStyle in
+            updateState { state in
+                var state = state
+                state.textStyle = newStyle
+                return state
+            }
+        }))
+    }, openAutoTextSettings: {
+        pushControllerImpl?(proMessagerAutoTextController(context: context, onEnabledSelected: { isEnabled in
+            updateState { state in
+                var state = state
+                state.autoTextEnabled = isEnabled
+                return state
+            }
+        }))
+    }, openAutoTranslateSettings: {
+        pushControllerImpl?(proMessagerTranslateAutoController(context: context, onEnabledSelected: { isEnabled in
+            updateState { state in
+                var state = state
+                state.autoTranslateEnabled = isEnabled
+                return state
+            }
+        }))
     })
     
     let signal = combineLatest(

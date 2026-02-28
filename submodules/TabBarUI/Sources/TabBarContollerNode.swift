@@ -223,6 +223,7 @@ final class TabBarControllerNode: ASDisplayNode {
         if self.tabBarView.view == nil {
             tabBarTransition = .immediate
         }
+        
         let tabBarSize = self.tabBarView.update(
             transition: tabBarTransition,
             component: AnyComponent(TabBarComponent(
@@ -250,9 +251,10 @@ final class TabBarControllerNode: ASDisplayNode {
                         }
                     )
                 },
-                search: self.currentController?.tabBarSearchState.flatMap { tabBarSearchState in
+                search: {
+                    let searchState = self.currentController?.tabBarSearchState ?? ViewController.TabBarSearchState(isActive: false)
                     return TabBarComponent.Search(
-                        isActive: tabBarSearchState.isActive,
+                        isActive: searchState.isActive,
                         activate: { [weak self] in
                             guard let self else {
                                 return
@@ -266,7 +268,7 @@ final class TabBarControllerNode: ASDisplayNode {
                             self.deactivateSearch()
                         }
                     )
-                },
+                }(),
                 selectedId: selectedId,
                 outerInsets: UIEdgeInsets(top: 0.0, left: sideInset, bottom: tabBarBottomInset, right: sideInset)
             )),

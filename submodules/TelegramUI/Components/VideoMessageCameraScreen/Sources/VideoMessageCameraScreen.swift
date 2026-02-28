@@ -31,6 +31,7 @@ import ChatSendMessageActionUI
 import ChatControllerInteraction
 import LottieComponent
 import GlassBackgroundComponent
+import AVFoundation
 
 struct CameraState: Equatable {
     enum Recording: Equatable {
@@ -843,6 +844,8 @@ private final class VideoMessageCameraScreenComponent: CombinedComponent {
 }
 
 public class VideoMessageCameraScreen: ViewController {
+    public static var pendingCameraPosition: AVCaptureDevice.Position?
+    
     public enum CaptureResult {
         public struct Video {
             public let videoPath: String
@@ -947,7 +950,14 @@ public class VideoMessageCameraScreen: ViewController {
             self.previewContainerView.addSubview(self.previewContainerContentView)
                         
             let isDualCameraEnabled = Camera.isDualCameraSupported(forRoundVideo: true)
-            let isFrontPosition = "".isEmpty
+            
+            let isFrontPosition: Bool
+            if let pending = VideoMessageCameraScreen.pendingCameraPosition {
+                VideoMessageCameraScreen.pendingCameraPosition = nil
+                isFrontPosition = (pending == .front)
+            } else {
+                isFrontPosition = true
+            }
             
             self.mainPreviewView = CameraSimplePreviewView(frame: .zero, main: true, roundVideo: true)
             self.additionalPreviewView = CameraSimplePreviewView(frame: .zero, main: false, roundVideo: true)

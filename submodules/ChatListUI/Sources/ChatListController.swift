@@ -6695,6 +6695,7 @@ private final class ChatListLocationContext {
     let ready = Promise<Bool>()
     
     private var stateDisposable: Disposable?
+    private var ghostModeObserver: NSObjectProtocol?
     
     init(
         context: AccountContext,
@@ -6708,6 +6709,12 @@ private final class ChatListLocationContext {
         self.context = context
         self.location = location
         self.parentController = parentController
+        
+        self.ghostModeObserver = NotificationCenter.default.addObserver(forName: NSNotification.Name("ProMessagerSettingsChanged"), object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.updateGhostModeButton()
+            self.parentController?.requestLayout(transition: .animated(duration: 0.2, curve: .spring))
+        }
         
         let hasProxy = context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
         |> map { sharedData -> (Bool, Bool) in
@@ -7027,6 +7034,9 @@ private final class ChatListLocationContext {
     deinit {
         self.titleDisposable?.dispose()
         self.stateDisposable?.dispose()
+        if let ghostModeObserver = self.ghostModeObserver {
+            NotificationCenter.default.removeObserver(ghostModeObserver)
+        }
     }
     
     private func updateChatList(
