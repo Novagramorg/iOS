@@ -258,40 +258,17 @@ public func scheduledTasksController(context: AccountContext) -> ViewController 
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let rightButton = ItemListNavigationButton(content: .icon(.add), style: .regular, enabled: true, action: {
-                // Open peer selection — use ContactMultiselectionController for simplicity
-                let controller = context.sharedContext.makeContactSelectionController(ContactSelectionControllerParams(
+                // Open chat-list style peer picker with search and folders
+                let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(
                     context: context,
-                    title: { strings in return "Kimga yuborish?" }
+                    hasChatListSelector: true,
+                    hasContactSelector: false,
+                    title: "Kimga yuborish?"
                 ))
-                let _ = (controller.result
-                |> take(1)
-                |> deliverOnMainQueue).start(next: { result in
-                    guard let (peers, _, _, _, _, _) = result else {
-                        return
-                    }
-                    guard let contactPeer = peers.first else {
-                        return
-                    }
-                    
-                    if case let .peer(peer, _, _) = contactPeer {
-                        // Save task
-                        let task = ScheduledTask(
-                            peerId: peer.id.toInt64(),
-                            peerTitle: peer.debugDisplayTitle,
-                            messageText: "",
-                            scheduledDate: Int32(Date().timeIntervalSince1970) + 3600
-                        )
-                        ScheduledTaskStorage.addTask(task)
-                        updateState { state in
-                            var state = state
-                            state.tasks = ScheduledTaskStorage.loadTasks()
-                            return state
-                        }
-                        
-                        // Navigate to chat scheduled messages
-                        navigateToChatImpl?(peer.id)
-                    }
-                })
+                controller.peerSelected = { peer, _ in
+                    // Only navigate to chat scheduled messages — task will be created when message is actually scheduled
+                    navigateToChatImpl?(peer.id)
+                }
                 pushControllerImpl?(controller)
             })
             

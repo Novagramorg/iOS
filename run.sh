@@ -17,6 +17,16 @@ err()  { echo -e "${RED}✗ $1${NC}"; exit 1; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# ─── Disk tekshiruvi (5GB dan kam bo'lsa cache tozalaydi) ─────────────────────
+AVAIL_GB=$(df -g . | awk 'NR==2 {print $4}')
+if [ "$AVAIL_GB" -lt 50 ] 2>/dev/null; then
+    warn "Disk da faqat ${AVAIL_GB}GB bo'sh joy qoldi! Cache tozalanmoqda..."
+    rm -rf "$HOME/telegram-bazel-cache/cas" 2>/dev/null
+    rm -rf /private/tmp/telegram-sim-app 2>/dev/null
+    rm -rf /private/tmp/telegram-device-app 2>/dev/null
+    ok "Cache tozalandi. $(df -h . | awk 'NR==2 {print $4}') bo'sh joy mavjud"
+fi
+
 CONFIG_PATH="build-system/my-config.json"
 CACHE_DIR="$HOME/telegram-bazel-cache"
 SIM_NAME="iPhone 17 Pro"
