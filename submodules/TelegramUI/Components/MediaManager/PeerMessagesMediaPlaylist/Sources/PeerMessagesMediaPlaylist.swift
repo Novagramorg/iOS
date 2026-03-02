@@ -915,6 +915,9 @@ public final class PeerMessagesMediaPlaylist: SharedMediaPlaylist {
                 default:
                     break
             }
+            if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false {
+                return
+            }
             let _ = self.context.engine.messages.markMessageContentAsConsumedInteractively(messageId: item.message.id).startStandalone()
         }
     }
