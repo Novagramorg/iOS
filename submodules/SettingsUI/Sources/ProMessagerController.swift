@@ -13,6 +13,7 @@ import CallListUI
 
 private enum ProMessagerSection: Int32 {
     case features
+    case protection
 }
 
 private func textStyleDisplayName(_ rawValue: String) -> String {
@@ -54,11 +55,16 @@ private enum ProMessagerEntry: ItemListNodeEntry {
     case textStyle(PresentationTheme, String, String)
     case autoText(PresentationTheme, String, String)  // title, status label
     case autoTranslate(PresentationTheme, String, String)
+    case protectionHeader(String)
+    case blockForeignUsers(PresentationTheme, String, String, Bool)
+    case blockApkFiles(PresentationTheme, String, String, Bool)
     
     var section: ItemListSectionId {
         switch self {
             case .calls, .deletedMessages, .hideFolders, .showStories, .showMutualContactSymbol, .showGhostMode, .showEnablePremium, .showViewFirstMessage, .longPressCameraSelection, .translateMessages, .translateToggle, .textStyle, .autoText, .autoTranslate:
                 return ProMessagerSection.features.rawValue
+            case .protectionHeader, .blockForeignUsers, .blockApkFiles:
+                return ProMessagerSection.protection.rawValue
         }
     }
     
@@ -92,6 +98,12 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return 11
             case .autoTranslate:
                 return 12
+            case .protectionHeader:
+                return 13
+            case .blockForeignUsers:
+                return 14
+            case .blockApkFiles:
+                return 15
         }
     }
     
@@ -125,6 +137,12 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return 11
             case .autoTranslate:
                 return 12
+            case .protectionHeader:
+                return 13
+            case .blockForeignUsers:
+                return 14
+            case .blockApkFiles:
+                return 15
         }
     }
     
@@ -215,6 +233,24 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 } else {
                     return false
                 }
+            case let .protectionHeader(lhsText):
+                if case let .protectionHeader(rhsText) = rhs, lhsText == rhsText {
+                    return true
+                } else {
+                    return false
+                }
+            case let .blockForeignUsers(lhsTheme, lhsTitle, lhsText, lhsValue):
+                if case let .blockForeignUsers(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
+            case let .blockApkFiles(lhsTheme, lhsTitle, lhsText, lhsValue):
+                if case let .blockApkFiles(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
         }
     }
     
@@ -283,6 +319,16 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
                     arguments.openAutoTranslateSettings()
                 })
+            case let .protectionHeader(text):
+                return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+            case let .blockForeignUsers(_, title, text, value):
+                return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                    arguments.updateBlockForeignUsers(val)
+                })
+            case let .blockApkFiles(_, title, text, value):
+                return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                    arguments.updateBlockApkFiles(val)
+                })
         }
     }
 }
@@ -300,6 +346,8 @@ private struct ProMessagerControllerState: Equatable {
     var textStyle: String
     var autoTextEnabled: Bool
     var autoTranslateEnabled: Bool
+    var blockForeignUsers: Bool
+    var blockApkFiles: Bool
     
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -314,6 +362,8 @@ private struct ProMessagerControllerState: Equatable {
         self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
         self.autoTextEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
         self.autoTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_translate_enabled") ?? false
+        self.blockForeignUsers = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
+        self.blockApkFiles = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_apk_files") ?? false
     }
     
     static func ==(lhs: ProMessagerControllerState, rhs: ProMessagerControllerState) -> Bool {
@@ -353,6 +403,12 @@ private struct ProMessagerControllerState: Equatable {
         if lhs.autoTranslateEnabled != rhs.autoTranslateEnabled {
             return false
         }
+        if lhs.blockForeignUsers != rhs.blockForeignUsers {
+            return false
+        }
+        if lhs.blockApkFiles != rhs.blockApkFiles {
+            return false
+        }
         return true
     }
 }
@@ -378,6 +434,10 @@ private func proMessagerControllerEntries(presentationData: PresentationData, st
     let translateLabel = state.autoTranslateEnabled ? "Yoqilgan" : "O'chirilgan"
     entries.append(.autoTranslate(presentationData.theme, "Avtomatik xabar tarjimasi", translateLabel))
     
+    entries.append(.protectionHeader("SPAM VA FISHINGDAN HIMOYA"))
+    entries.append(.blockForeignUsers(presentationData.theme, "Boshqa davlat raqamlariga cheklov", "Boshqa davlat raqamidan ochilgan profillar bir-biriga xabar yozishini taqiqlash", state.blockForeignUsers))
+    entries.append(.blockApkFiles(presentationData.theme, ".apk fayllarni bloklash", "Barcha chatlarda (shaxsiy, guruh, kanal, bot) .apk formatdagi fayllarni yashirish", state.blockApkFiles))
+    
     return entries
 }
 
@@ -396,8 +456,10 @@ private final class ProMessagerArguments {
     let openTextStyleSettings: () -> Void
     let openAutoTextSettings: () -> Void
     let openAutoTranslateSettings: () -> Void
+    let updateBlockForeignUsers: (Bool) -> Void
+    let updateBlockApkFiles: (Bool) -> Void
     
-    init(openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void) {
+    init(openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
         self.openCalls = openCalls
         self.updateShowDeletedMessages = updateShowDeletedMessages
         self.updateHideFolders = updateHideFolders
@@ -412,6 +474,8 @@ private final class ProMessagerArguments {
         self.openTextStyleSettings = openTextStyleSettings
         self.openAutoTextSettings = openAutoTextSettings
         self.openAutoTranslateSettings = openAutoTranslateSettings
+        self.updateBlockForeignUsers = updateBlockForeignUsers
+        self.updateBlockApkFiles = updateBlockApkFiles
     }
 }
 
@@ -526,6 +590,20 @@ public func proMessagerController(context: AccountContext) -> ViewController {
                 return state
             }
         }))
+    }, updateBlockForeignUsers: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "block_foreign_users")
+        updateState { state in
+            var state = state
+            state.blockForeignUsers = value
+            return state
+        }
+    }, updateBlockApkFiles: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "block_apk_files")
+        updateState { state in
+            var state = state
+            state.blockApkFiles = value
+            return state
+        }
     })
     
     let signal = combineLatest(

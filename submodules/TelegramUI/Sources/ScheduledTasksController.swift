@@ -256,7 +256,7 @@ public func scheduledTasksController(context: AccountContext) -> ViewController 
         context.sharedContext.presentationData,
         statePromise.get()
     ) |> deliverOnMainQueue
-        |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, ScheduledTasksArguments)) in
             let rightButton = ItemListNavigationButton(content: .icon(.add), style: .regular, enabled: true, action: {
                 // Open chat-list style peer picker with search and folders
                 let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(
@@ -266,7 +266,15 @@ public func scheduledTasksController(context: AccountContext) -> ViewController 
                     title: "Kimga yuborish?"
                 ))
                 controller.peerSelected = { peer, _ in
-                    // Only navigate to chat scheduled messages — task will be created when message is actually scheduled
+                    // Save peer to task storage and update list, then navigate
+                    let peerTitle = peer.displayTitle(strings: context.sharedContext.currentPresentationData.with { $0 }.strings, displayOrder: context.sharedContext.currentPresentationData.with { $0 }.nameDisplayOrder)
+                    let task = ScheduledTask(peerId: peer.id.toInt64(), peerTitle: peerTitle, messageText: "", scheduledDate: Int32(Date().timeIntervalSince1970))
+                    ScheduledTaskStorage.addTask(task)
+                    updateState { state in
+                        var state = state
+                        state.tasks = ScheduledTaskStorage.loadTasks()
+                        return state
+                    }
                     navigateToChatImpl?(peer.id)
                 }
                 pushControllerImpl?(controller)
@@ -288,23 +296,21 @@ public func scheduledTasksController(context: AccountContext) -> ViewController 
         }
     
     let controller = ItemListController(context: context, state: signal)
-    controller.tabBarItem.title = "Vazifalar"
-    if #available(iOS 13.0, *) {
-        let config = UIImage.SymbolConfiguration(weight: .medium)
-        controller.tabBarItem.image = UIImage(systemName: "checklist", withConfiguration: config)
-        controller.tabBarItem.selectedImage = UIImage(systemName: "checklist", withConfiguration: config)
-    } else {
-        controller.tabBarItem.image = UIImage(bundleImageName: "Chat List/Tabs/IconTasks")
-        controller.tabBarItem.selectedImage = UIImage(bundleImageName: "Chat List/Tabs/IconTasks")
+    
+    // Refresh list from storage whenever controller appears (e.g., returning from chat)
+    controller.didAppear = { _ in
+        updateState { state in
+            var state = state
+            state.tasks = ScheduledTaskStorage.loadTasks()
+            return state
+        }
     }
-    controller.navigationItem.hidesBackButton = true
-    controller.navigationItem.leftBarButtonItem = nil
     
     pushControllerImpl = { [weak controller] c in
         controller?.push(c)
     }
     presentControllerImpl = { [weak controller] c in
-        controller?.present(c, in: .window(.root))
+        controller?.present(c, in: PresentationContextType.window(PresentationSurfaceLevel.root))
     }
     navigateToChatImpl = { [weak controller] peerId in
         guard let controller = controller, let navigationController = controller.navigationController as? NavigationController else {

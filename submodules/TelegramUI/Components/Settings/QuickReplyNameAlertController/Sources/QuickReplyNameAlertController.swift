@@ -501,7 +501,7 @@ public enum PromptControllerTitleFont {
     case bold
 }
 
-public func quickReplyNameAlertController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, text: String, subtext: String, titleFont: PromptControllerTitleFont = .regular, value: String?, characterLimit: Int = 1000, apply: @escaping (String?) -> Void) -> AlertController {
+public func quickReplyNameAlertController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, text: String, subtext: String, titleFont: PromptControllerTitleFont = .regular, value: String?, characterLimit: Int = 1000, dismissOnApply: Bool = true, apply: @escaping (String?) -> Void) -> AlertController {
 //    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
 //    let strings = presentationData.strings
 //    
@@ -616,7 +616,16 @@ public func quickReplyNameAlertController(context: AccountContext, updatedPresen
         guard let contentNode = contentNode else {
             return
         }
-        apply(contentNode.value)
+        let currentValue = contentNode.value
+        if currentValue.isEmpty {
+            return
+        }
+        apply(currentValue)
+        if dismissOnApply {
+            dismissImpl?(true)
+        } else {
+            contentNode.inputFieldNode.text = ""
+        }
     }
     
     let controller = AlertController(theme: AlertControllerTheme(presentationData: presentationData), contentNode: contentNode)

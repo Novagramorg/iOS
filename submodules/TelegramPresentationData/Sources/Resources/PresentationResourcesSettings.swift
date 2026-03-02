@@ -71,6 +71,7 @@ public struct PresentationResourcesSettings {
     public static let chatFolders = renderIcon(name: "Settings/Menu/ChatListFilters")
     public static let stickers = renderIcon(name: "Settings/Menu/Stickers")
     public static let notifications = renderIcon(name: "Settings/Menu/Notifications")
+    public static let contacts = renderIcon(name: "Settings/Menu/Contacts")
     public static let security = renderIcon(name: "Settings/Menu/Security")
     public static let dataAndStorage = renderIcon(name: "Settings/Menu/DataAndStorage")
     public static let appearance = renderIcon(name: "Settings/Menu/Appearance")

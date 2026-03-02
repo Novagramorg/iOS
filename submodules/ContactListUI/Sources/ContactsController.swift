@@ -126,6 +126,7 @@ public class ContactsController: ViewController {
     private let isInVoiceOver = ValuePromise<Bool>(false)
     
     public var switchToChatsController: (() -> Void)?
+    public var backPressed: (() -> Void)?
     
     public override func updateNavigationCustomData(_ data: Any?, progress: CGFloat, transition: ContainedViewLayoutTransition) {
         if self.isNodeLoaded {

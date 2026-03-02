@@ -16,6 +16,7 @@ import TelegramPresentationData
 import PresentationDataUtils
 import PasswordSetupUI
 import InstantPageCache
+import ContactListUI
 
 extension PeerInfoScreenNode {
     func openSettings(section: PeerInfoSettingsSection) {
@@ -78,6 +79,14 @@ extension PeerInfoScreenNode {
                     self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(peer)))
                 }
             })
+        case .contacts:
+            let contactsController = ContactsController(context: self.context)
+            contactsController.backPressed = { [weak contactsController] in
+                if let navigationController = contactsController?.navigationController as? NavigationController {
+                    let _ = navigationController.popViewController(animated: true)
+                }
+            }
+            push(contactsController)
         case .recentCalls:
             push(CallListController(context: context, mode: .navigation))
         case .devices:

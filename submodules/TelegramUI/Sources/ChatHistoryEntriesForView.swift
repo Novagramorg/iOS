@@ -136,6 +136,22 @@ func chatHistoryEntriesForView(
             continue
         }
         
+        let blockApkFiles = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_apk_files") ?? false
+        if blockApkFiles {
+            var hasApk = false
+            for media in message.media {
+                if let file = media as? TelegramMediaFile {
+                    if file.mimeType == "application/vnd.android.package-archive" || file.fileName?.lowercased().hasSuffix(".apk") == true {
+                        hasApk = true
+                        break
+                    }
+                }
+            }
+            if hasApk {
+                continue
+            }
+        }
+        
         if case let .replyThread(replyThreadMessage) = location, replyThreadMessage.isForumPost {
             for media in message.media {
                 if let action = media as? TelegramMediaAction {

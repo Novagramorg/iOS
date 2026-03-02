@@ -349,7 +349,7 @@ final class ContactsControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             chatListTitle: NetworkStatusTitle(text: title, activity: false, hasProxy: false, connectsViaProxy: false, isPasscodeSet: false, isManuallyLocked: false, peerStatus: nil),
             leftButton: leftButton,
             rightButtons: rightButtons,
-            backPressed: nil
+            backPressed: self.controller?.backPressed
         )
         
         let navigationBarSize = self.navigationBarView.update(

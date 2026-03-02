@@ -77,6 +77,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
     public var rootTabController: TabBarController?
     
     public var contactsController: ContactsController?
+    public var aiChatbotController: ViewController?
     public var callListController: CallListController?
     public var chatListController: ChatListController?
     public var accountSettingsController: PeerInfoScreen?
@@ -211,15 +212,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         contactsController.switchToChatsController = {  [weak self] in
             self?.openChatsController(activateSearch: false)
         }
-        controllers.append(contactsController)
+        // Contacts Tab removed here
         
         if showCallsTab {
             controllers.append(callListController)
         }
         
-        let scheduledTasksCtrl = TelegramUI.scheduledTasksController(context: self.context)
-        scheduledTasksCtrl.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
+        let scheduledTasksCtrl = tasksTabController(context: self.context)
         controllers.append(scheduledTasksCtrl)
+        
+        let aiChatbotCtrl = AIChatbotTabController(context: self.context)
+        controllers.append(aiChatbotCtrl)
         
         controllers.append(chatListController)
         
@@ -245,6 +248,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
         
         self.contactsController = contactsController
+        self.aiChatbotController = aiChatbotCtrl
         self.callListController = callListController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
@@ -258,14 +262,17 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             return
         }
         var controllers: [ViewController] = []
-        controllers.append(self.contactsController!)
+        // controllers.append(self.contactsController!)
         if showCallsTab {
             controllers.append(self.callListController!)
         }
         
         if let tasksCtrl = self.scheduledTasksController {
-            tasksCtrl.updateTabBarSearchState(ViewController.TabBarSearchState(isActive: false), transition: .immediate)
             controllers.append(tasksCtrl)
+        }
+        
+        if let aiCtrl = self.aiChatbotController {
+            controllers.append(aiCtrl)
         }
         
         controllers.append(self.chatListController!)
