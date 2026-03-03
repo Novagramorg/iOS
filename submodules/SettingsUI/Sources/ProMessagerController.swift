@@ -611,7 +611,7 @@ public func proMessagerController(context: AccountContext) -> ViewController {
         statePromise.get()
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
-            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Pro Messenger"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Fenixuz"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
             let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: proMessagerControllerEntries(presentationData: presentationData, state: state), style: .blocks)
             return (controllerState, (listState, arguments))
         }

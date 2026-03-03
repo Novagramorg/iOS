@@ -119,7 +119,7 @@ public func todoItemController(context: AccountContext, folder: TodoFolder) -> V
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, TodoItemArguments)) in
             let rightButton = ItemListNavigationButton(content: .icon(.add), style: .regular, enabled: true, action: {
-                let controller = quickReplyNameAlertController(context: context, text: "Yangi Vazifa", subtext: "Vazifa nomini kiriting", value: nil, dismissOnApply: false, apply: { title in
+                let (controller, _) = quickReplyNameAlertController(context: context, text: "Yangi Vazifa", subtext: "Vazifa nomini kiriting", value: nil, characterLimit: 200, apply: { title in
                     if let title = title, !title.isEmpty {
                         TodoStorage.addTask(folderId: folder.id, title: title)
                         updateState { state in

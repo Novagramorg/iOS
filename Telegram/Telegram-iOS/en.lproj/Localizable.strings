@@ -401,23 +401,23 @@
 "Date.ChatDateHeaderYear" = "%1$@ %2$@, %3$@";
 
 // Tour
-"Tour.Title1" = "Pro Messager";
+"Tour.Title1" = "Fenixuz";
 "Tour.Text1" = "The world's **fastest** messaging app.\nIt is **free** and **secure**.";
 
 "Tour.Title2" = "Fast";
-"Tour.Text2" = "**Pro Messager** delivers messages\nfaster than any other application.";
+"Tour.Text2" = "**Fenixuz** delivers messages\nfaster than any other application.";
 
 "Tour.Title3" = "Powerful";
-"Tour.Text3" = "**Pro Messager** has no limits on\nthe size of your media and chats.";
+"Tour.Text3" = "**Fenixuz** has no limits on\nthe size of your media and chats.";
 
 "Tour.Title4" = "Secure";
-"Tour.Text4" = "**Pro Messager** keeps your messages\nsafe from hacker attacks.";
+"Tour.Text4" = "**Fenixuz** keeps your messages\nsafe from hacker attacks.";
 
 "Tour.Title5" = "Cloud-Based";
-"Tour.Text5" = "**Pro Messager** lets you access your\nmessages from multiple devices.";
+"Tour.Text5" = "**Fenixuz** lets you access your\nmessages from multiple devices.";
 
 "Tour.Title6" = "Free";
-"Tour.Text6" = "**Pro Messager** provides free unlimited\ncloud storage for chats and media.";
+"Tour.Text6" = "**Fenixuz** provides free unlimited\ncloud storage for chats and media.";
 
 "Tour.StartButton" = "Start Messaging";
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-INPUT="/Users/azimjon/.gemini/antigravity/brain/266a919f-527a-4640-b232-db91b0064167/media__1772184032287.jpg"
+INPUT="/Users/azimjon/.gemini/antigravity/brain/45ab97d8-9fc0-4dc8-ab3a-18c5ed949620/media__1772525440210.jpg"
 OUTDIR="Telegram/Telegram-iOS/ProMessager.xcassets/AppIcon.appiconset"
 
 # Resize images using sips and enforce PNG format

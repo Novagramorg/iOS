@@ -118,7 +118,7 @@ public func todoListController(context: AccountContext) -> ViewController {
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, TodoListArguments)) in
             let rightButton = ItemListNavigationButton(content: .icon(.add), style: .regular, enabled: true, action: {
-                let controller = quickReplyNameAlertController(context: context, text: "Yangi papka", subtext: "Papka nomini kiriting", value: nil, apply: { title in
+                let (controller, _) = quickReplyNameAlertController(context: context, text: "Yangi papka", subtext: "Papka nomini kiriting", value: nil, characterLimit: 100, apply: { title in
                     if let title = title, !title.isEmpty {
                         TodoStorage.addFolder(title: title)
                         updateState { state in

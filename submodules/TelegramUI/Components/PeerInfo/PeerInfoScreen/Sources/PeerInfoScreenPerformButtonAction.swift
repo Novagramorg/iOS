@@ -874,7 +874,7 @@ extension PeerInfoScreenNode {
                         })))
                     }
                     
-                    items.append(.action(ContextMenuActionItem(text: "Pro Messenger Info", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: "Fenixuz Info", icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
                     }, action: { c, _ in
                         c?.dismiss(completion: nil)
@@ -890,7 +890,7 @@ extension PeerInfoScreenNode {
                         }
                         
                         let text = details.joined(separator: "\n")
-                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Pro Messenger", text: text, actions: [
+                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Fenixuz", text: text, actions: [
                             TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}),
                             TextAlertAction(type: .genericAction, title: "Copy", action: {
                                 UIPasteboard.general.string = text
@@ -1137,7 +1137,7 @@ extension PeerInfoScreenNode {
                         })))
                     }
                     
-                    items.append(.action(ContextMenuActionItem(text: "Pro Messenger Info", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: "Fenixuz Info", icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
                     }, action: { c, _ in
                         c?.dismiss(completion: nil)
@@ -1152,7 +1152,7 @@ extension PeerInfoScreenNode {
                         }
                         
                         let text = details.joined(separator: "\n")
-                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Pro Messenger", text: text, actions: [
+                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Fenixuz", text: text, actions: [
                             TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}),
                             TextAlertAction(type: .genericAction, title: "Copy", action: {
                                 UIPasteboard.general.string = text
@@ -1350,7 +1350,7 @@ extension PeerInfoScreenNode {
                         })))
                     }
                     
-                    items.append(.action(ContextMenuActionItem(text: "Pro Messenger Info", icon: { theme in
+                    items.append(.action(ContextMenuActionItem(text: "Fenixuz Info", icon: { theme in
                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Info"), color: theme.contextMenu.primaryColor)
                     }, action: { c, _ in
                         c?.dismiss(completion: nil)
@@ -1363,7 +1363,7 @@ extension PeerInfoScreenNode {
                         }
                         
                         let text = details.joined(separator: "\n")
-                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Pro Messenger", text: text, actions: [
+                        let alertController = standardTextAlertController(theme: AlertControllerTheme(presentationData: strongSelf.presentationData), title: "Fenixuz", text: text, actions: [
                             TextAlertAction(type: .defaultAction, title: strongSelf.presentationData.strings.Common_OK, action: {}),
                             TextAlertAction(type: .genericAction, title: "Copy", action: {
                                 UIPasteboard.general.string = text

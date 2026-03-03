@@ -224,8 +224,8 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         interaction.openSettings(.chatFolders)
     }))
     
-    // Pro Messager Settings Item
-    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Pro Messager", icon: PresentationResourcesSettings.security, action: {
+    // Fenixuz Settings Item
+    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Fenixuz", icon: PresentationResourcesSettings.security, action: {
         interaction.openSettings(.proMessager)
     }))
     
