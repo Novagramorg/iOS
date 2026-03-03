@@ -2849,7 +2849,7 @@ final class StorageUsageScreenComponent: Component {
                     let _ = self
                 }, editMedia: { _, _, _ in
                 }, updateCanReadHistory: { _ in
-                }),
+                }, sendSticker: nil),
                 centralItemUpdated: { [weak self] messageId in
                     //let _ = self?.paneContainerNode.requestExpandTabs?()
                     //self?.paneContainerNode.currentPane?.node.ensureMessageIsVisible(id: messageId)
@@ -3241,7 +3241,7 @@ final class StorageUsageScreenComponent: Component {
                         if currentValue == value {
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                         } else {
-                            return nil
+                            return UIImage()
                         }
                     }, action: { _, f in
                         applyValue(value)
