@@ -289,6 +289,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public let viewOnceButton: ChatRecordingViewOnceButtonNode
     public let recordMoreButton: ChatRecordingViewOnceButtonNode
     
+    // MARK: - Speech to Text
+    private var sttButton: HighlightTrackingButton?
+    private var sttManager: SpeechToTextManager?
+    private var isSttRecording: Bool = false
+    
     private var accessoryPanel: (component: AnyComponentWithIdentity<ChatInputAccessoryPanelEnvironment>, view: ComponentView<ChatInputAccessoryPanelEnvironment>)?
     public var accessoryPanelView: ChatInputAccessoryPanelView? {
         return self.accessoryPanel?.view.view as? ChatInputAccessoryPanelView
@@ -991,6 +996,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.glassBackgroundContainer.contentView.addSubview(self.sendActionButtons.view)
         self.glassBackgroundContainer.contentView.addSubview(self.mediaActionButtons.view)
         self.textInputContainerBackgroundView.contentView.addSubview(self.counterTextNode.view)
+        
+        // MARK: - Setup STT Button
+        self.setupSttButton()
         
         self.glassBackgroundContainer.contentView.addSubview(self.slowModeButton.view)
         
@@ -3232,6 +3240,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             mediaActionButtonsFrame.origin.x = width + 8.0
         }
         transition.updateFrame(node: self.mediaActionButtons, frame: mediaActionButtonsFrame)
+        
+        // MARK: - STT Button Layout
+        self.layoutSttButton(mediaActionButtonsFrame: mediaActionButtonsFrame, textInputContainerBackgroundFrame: textInputContainerBackgroundFrame, inputHasText: inputHasText, transition: transition)
         if let (rect, containerSize) = self.absoluteRect {
             self.mediaActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + mediaActionButtonsFrame.origin.x, y: rect.origin.y + mediaActionButtonsFrame.origin.y, width: mediaActionButtonsFrame.width, height: mediaActionButtonsFrame.height), within: containerSize, transition: transition)
         }
@@ -5556,5 +5567,175 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public func makeAttachmentMenuTransition(accessoryPanelNode: ASDisplayNode?) -> AttachmentInputPanelTransition {
         return AttachmentInputPanelTransition(inputNode: self, accessoryPanelNode: accessoryPanelNode, menuButtonNode: self.menuButton, menuButtonBackgroundView: self.menuButtonBackgroundView, menuIconNode: self.menuButtonIconNode, menuTextNode: self.menuButtonTextNode, prepareForDismiss: { self.menuButtonIconNode.enqueueState(.app, animated: false) })
+    }
+    
+    // MARK: - Speech to Text Methods
+    
+    private func setupSttButton() {
+        let sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
+        guard sttEnabled else {
+            self.sttButton?.removeFromSuperview()
+            self.sttButton = nil
+            return
+        }
+        
+        if self.sttButton != nil {
+            return
+        }
+        
+        let button = HighlightTrackingButton()
+        button.frame = CGRect(x: 0, y: 0, width: 30, height: 30)
+        
+        let iconImage = self.createSttIcon(isRecording: false)
+        button.setImage(iconImage, for: .normal)
+        button.contentMode = .center
+        
+        button.addTarget(self, action: #selector(self.sttButtonPressed), for: .touchUpInside)
+        
+        button.highligthedChanged = { [weak button] highlighted in
+            if highlighted {
+                UIView.animate(withDuration: 0.15) {
+                    button?.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
+                    button?.alpha = 0.65
+                }
+            } else {
+                UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 0, options: [], animations: {
+                    button?.transform = .identity
+                    button?.alpha = 1.0
+                })
+            }
+        }
+        
+        self.sttButton = button
+        self.textInputContainerBackgroundView.contentView.addSubview(button)
+    }
+    
+    private func createSttIcon(isRecording: Bool) -> UIImage? {
+        let color: UIColor
+        if isRecording {
+            color = UIColor.systemRed
+        } else {
+            color = self.presentationInterfaceState?.theme.chat.inputPanel.panelControlColor ?? UIColor.gray
+        }
+        
+        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        let symbolName = isRecording ? "waveform" : "waveform.and.mic"
+        
+        if let image = UIImage(systemName: symbolName, withConfiguration: config) {
+            return image.withTintColor(color, renderingMode: .alwaysOriginal)
+        }
+        return nil
+    }
+    
+    @objc private func sttButtonPressed() {
+        if self.isSttRecording {
+            self.sttManager?.stopRecording()
+            self.isSttRecording = false
+            self.sttButton?.setImage(self.createSttIcon(isRecording: false), for: .normal)
+            self.sttButton?.layer.removeAllAnimations()
+            return
+        }
+        
+        if self.sttManager == nil {
+            self.sttManager = SpeechToTextManager()
+        }
+        
+        let savedLocale = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "uz-UZ"
+        self.sttManager?.updateLocale(savedLocale)
+        
+        self.sttManager?.onTextUpdate = { [weak self] text in
+            guard let self = self else { return }
+            
+            if self.textInputNode == nil {
+                self.loadTextInputNode()
+            }
+            
+            if let textInputNode = self.textInputNode, let _ = self.context {
+                var textColor: UIColor = .black
+                var baseFontSize: CGFloat = 17.0
+                if let presentationInterfaceState = self.presentationInterfaceState {
+                    textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
+                    baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
+                }
+                if "".isEmpty {
+                    baseFontSize = 17.0
+                }
+                textInputNode.attributedText = NSAttributedString(string: text, font: Font.regular(baseFontSize), textColor: textColor)
+                self.chatInputTextNodeDidUpdateText()
+            }
+        }
+        
+        self.sttManager?.onStop = { [weak self] in
+            guard let self = self else { return }
+            self.isSttRecording = false
+            self.sttButton?.setImage(self.createSttIcon(isRecording: false), for: .normal)
+            self.sttButton?.layer.removeAllAnimations()
+        }
+        
+        self.sttManager?.onError = { errorMessage in
+            print("STT Error: \(errorMessage)")
+        }
+        
+        self.sttManager?.toggleRecording()
+        self.isSttRecording = true
+        self.sttButton?.setImage(self.createSttIcon(isRecording: true), for: .normal)
+        
+        // Subtle pulse animation
+        let pulseAnimation = CABasicAnimation(keyPath: "opacity")
+        pulseAnimation.fromValue = 1.0
+        pulseAnimation.toValue = 0.3
+        pulseAnimation.duration = 0.8
+        pulseAnimation.autoreverses = true
+        pulseAnimation.repeatCount = .infinity
+        pulseAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        self.sttButton?.layer.add(pulseAnimation, forKey: "pulse")
+    }
+    
+    private func layoutSttButton(mediaActionButtonsFrame: CGRect, textInputContainerBackgroundFrame: CGRect, inputHasText: Bool, transition: ContainedViewLayoutTransition) {
+        let sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
+        
+        if !sttEnabled {
+            if let sttButton = self.sttButton {
+                sttButton.removeFromSuperview()
+                self.sttButton = nil
+            }
+            return
+        }
+        
+        if self.sttButton == nil {
+            self.setupSttButton()
+        }
+        
+        guard let sttButton = self.sttButton else { return }
+        
+        let buttonSize = CGSize(width: 30, height: 30)
+        let minimalInputHeight: CGFloat = 33.0
+        
+        // Position inside text input container, right side, before accessory buttons
+        var sttX = textInputContainerBackgroundFrame.width - self.accessoryButtonInset - buttonSize.width
+        
+        // Account for accessory buttons
+        for (_, button) in self.accessoryItemButtons {
+            sttX -= button.buttonWidth + self.accessoryButtonSpacing
+        }
+        
+        // If text is entered, also account for send button width
+        if inputHasText {
+            // Move further left when send button is visible
+        }
+        
+        let sttY = textInputContainerBackgroundFrame.height - minimalInputHeight + floor((minimalInputHeight - buttonSize.height) / 2.0)
+        let sttFrame = CGRect(origin: CGPoint(x: sttX, y: sttY), size: buttonSize)
+        
+        transition.updateFrame(view: sttButton, frame: sttFrame)
+        
+        // Only show when there's no text and mic is visible
+        let shouldShow = !inputHasText && !self.extendedSearchLayout && !self.mediaActionButtons.micButton.isHidden
+        let targetAlpha: CGFloat = shouldShow ? 1.0 : 0.0
+        
+        if !self.isSttRecording {
+            transition.updateAlpha(layer: sttButton.layer, alpha: targetAlpha)
+        }
+        sttButton.isUserInteractionEnabled = shouldShow || self.isSttRecording
     }
 }

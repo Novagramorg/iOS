@@ -1435,6 +1435,48 @@ private final class NotificationServiceHandler {
                         case let .poll(peerId, initialContent, messageId, reportDelivery, enableInlineEmoji):
                             Logger.shared.log("NotificationService \(episode)", "Will poll")
                             if let stateManager = strongSelf.stateManager {
+                                // MARK: - Boshqa davlat raqamlariga cheklov (Foreign User Block) — Push Notification
+                                let blockForeignUsersNotif = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
+                                if blockForeignUsersNotif && peerId.namespace == Namespaces.Peer.CloudUser {
+                                    let myPhone = UserDefaults(suiteName: "pro_messager")?.string(forKey: "my_phone_number")
+                                    if let myPhoneValue = myPhone, !myPhoneValue.isEmpty {
+                                        var shouldBlock = false
+                                        let sem = DispatchSemaphore(value: 0)
+                                        let _ = (stateManager.postbox.transaction { transaction -> String? in
+                                            if let peer = transaction.getPeer(peerId) as? TelegramUser, peer.botInfo == nil {
+                                                return peer.phone
+                                            }
+                                            return nil
+                                        }).start(next: { peerPhone in
+                                            if let pp = peerPhone, !pp.isEmpty {
+                                                let myDigits = myPhoneValue.filter { $0.isNumber }
+                                                let peerDigits = pp.filter { $0.isNumber }
+                                                func nsExtractCode(from d: String) -> String? {
+                                                    let three: Set<String> = ["998","992","993","994","995","996","374","375","380","373","371","370","372","971","966","965","968","974","973","964","963","962","961","967","856","855","852","853","886","880","977","960","976","975","670","673","959","234","254","255","256","251","233","237","243","221","225","227","223","226","229","228","231","232","235","236","241","242","244","249","252","253","257","258","261","263","260","264","265","266","267","268","269","351","352","353","354","355","356","357","358","359","381","382","383","385","386","387","389","420","421","591","592","593","594","595","596","597","598","212","213","216","218","220","222","238","239","240","245","246","247","248","250","262","290","291","297","298","299"]
+                                                    let two: Set<String> = ["20","27","30","31","32","33","34","36","39","40","41","43","44","45","46","47","48","49","51","52","53","54","55","56","57","58","60","61","62","63","64","65","66","81","82","84","86","90","91","92","93","94","95","98"]
+                                                    let one: Set<String> = ["1","7"]
+                                                    if d.count >= 3 { let p = String(d.prefix(3)); if three.contains(p) { return p } }
+                                                    if d.count >= 2 { let p = String(d.prefix(2)); if two.contains(p) { return p } }
+                                                    if d.count >= 1 { let p = String(d.prefix(1)); if one.contains(p) { return p } }
+                                                    return nil
+                                                }
+                                                if let mc = nsExtractCode(from: myDigits), let pc = nsExtractCode(from: peerDigits), mc != pc {
+                                                    shouldBlock = true
+                                                }
+                                            }
+                                            sem.signal()
+                                        })
+                                        sem.wait()
+                                        if shouldBlock {
+                                            Logger.shared.log("NotificationService \(episode)", "Blocked notification from foreign user")
+                                            let content = NotificationContent(isLockedMessage: nil)
+                                            updateCurrentContent(content)
+                                            completed()
+                                            break
+                                        }
+                                    }
+                                }
+                                
                                 let shouldKeepConnection = stateManager.network.shouldKeepConnection
                                 
                                 let pollCompletion: (NotificationContent, Media?) -> Void = { content, customMedia in

@@ -55,6 +55,9 @@ private enum ProMessagerEntry: ItemListNodeEntry {
     case textStyle(PresentationTheme, String, String)
     case autoText(PresentationTheme, String, String)  // title, status label
     case autoTranslate(PresentationTheme, String, String)
+    case sttHeader(String)
+    case sttEnabled(PresentationTheme, String, String, Bool)
+    case sttLanguage(PresentationTheme, String, String)
     case protectionHeader(String)
     case blockForeignUsers(PresentationTheme, String, String, Bool)
     case blockApkFiles(PresentationTheme, String, String, Bool)
@@ -63,6 +66,8 @@ private enum ProMessagerEntry: ItemListNodeEntry {
         switch self {
             case .calls, .deletedMessages, .hideFolders, .showStories, .showMutualContactSymbol, .showGhostMode, .showEnablePremium, .showViewFirstMessage, .longPressCameraSelection, .translateMessages, .translateToggle, .textStyle, .autoText, .autoTranslate:
                 return ProMessagerSection.features.rawValue
+            case .sttHeader, .sttEnabled, .sttLanguage:
+                return 2
             case .protectionHeader, .blockForeignUsers, .blockApkFiles:
                 return ProMessagerSection.protection.rawValue
         }
@@ -98,12 +103,18 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return 11
             case .autoTranslate:
                 return 12
-            case .protectionHeader:
+            case .sttHeader:
                 return 13
-            case .blockForeignUsers:
+            case .sttEnabled:
                 return 14
-            case .blockApkFiles:
+            case .sttLanguage:
                 return 15
+            case .protectionHeader:
+                return 16
+            case .blockForeignUsers:
+                return 17
+            case .blockApkFiles:
+                return 18
         }
     }
     
@@ -137,12 +148,18 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return 11
             case .autoTranslate:
                 return 12
-            case .protectionHeader:
+            case .sttHeader:
                 return 13
-            case .blockForeignUsers:
+            case .sttEnabled:
                 return 14
-            case .blockApkFiles:
+            case .sttLanguage:
                 return 15
+            case .protectionHeader:
+                return 16
+            case .blockForeignUsers:
+                return 17
+            case .blockApkFiles:
+                return 18
         }
     }
     
@@ -229,6 +246,24 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 }
             case let .autoTranslate(lhsTheme, lhsTitle, lhsLabel):
                 if case let .autoTranslate(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel {
+                    return true
+                } else {
+                    return false
+                }
+            case let .sttHeader(lhsText):
+                if case let .sttHeader(rhsText) = rhs, lhsText == rhsText {
+                    return true
+                } else {
+                    return false
+                }
+            case let .sttEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
+                if case let .sttEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue {
+                    return true
+                } else {
+                    return false
+                }
+            case let .sttLanguage(lhsTheme, lhsTitle, lhsLabel):
+                if case let .sttLanguage(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel {
                     return true
                 } else {
                     return false
@@ -329,6 +364,16 @@ private enum ProMessagerEntry: ItemListNodeEntry {
                 return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                     arguments.updateBlockApkFiles(val)
                 })
+            case let .sttHeader(text):
+                return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+            case let .sttEnabled(_, title, text, value):
+                return ItemListSwitchItem(presentationData: presentationData, title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                    arguments.updateSttEnabled(val)
+                })
+            case let .sttLanguage(_, title, label):
+                return ItemListDisclosureItem(presentationData: presentationData, title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                    arguments.openSttLanguageSettings()
+                })
         }
     }
 }
@@ -346,6 +391,8 @@ private struct ProMessagerControllerState: Equatable {
     var textStyle: String
     var autoTextEnabled: Bool
     var autoTranslateEnabled: Bool
+    var sttEnabled: Bool
+    var sttLanguage: String
     var blockForeignUsers: Bool
     var blockApkFiles: Bool
     
@@ -362,6 +409,8 @@ private struct ProMessagerControllerState: Equatable {
         self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
         self.autoTextEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
         self.autoTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_translate_enabled") ?? false
+        self.sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
+        self.sttLanguage = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "uz-UZ"
         self.blockForeignUsers = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
         self.blockApkFiles = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_apk_files") ?? false
     }
@@ -409,6 +458,12 @@ private struct ProMessagerControllerState: Equatable {
         if lhs.blockApkFiles != rhs.blockApkFiles {
             return false
         }
+        if lhs.sttEnabled != rhs.sttEnabled {
+            return false
+        }
+        if lhs.sttLanguage != rhs.sttLanguage {
+            return false
+        }
         return true
     }
 }
@@ -434,6 +489,29 @@ private func proMessagerControllerEntries(presentationData: PresentationData, st
     let translateLabel = state.autoTranslateEnabled ? "Yoqilgan" : "O'chirilgan"
     entries.append(.autoTranslate(presentationData.theme, "Avtomatik xabar tarjimasi", translateLabel))
     
+    entries.append(.sttHeader("OVOZNI MATNGA O'GIRISH"))
+    entries.append(.sttEnabled(presentationData.theme, "Ovozni matnga o'girish", "Chat ichida mic tugmasi oldida ovozni matnga o'girish tugmasini ko'rsatish", state.sttEnabled))
+    
+    let sttLangName: String
+    switch state.sttLanguage {
+    case "uz-UZ": sttLangName = "🇺🇿 O'zbek"
+    case "ru-RU": sttLangName = "🇷🇺 Rus"
+    case "en-US": sttLangName = "🇬🇧 Ingliz"
+    case "tr-TR": sttLangName = "🇹🇷 Turk"
+    case "de-DE": sttLangName = "🇩🇪 Nemis"
+    case "fr-FR": sttLangName = "🇫🇷 Fransuz"
+    case "es-ES": sttLangName = "🇪🇸 Ispan"
+    case "ar-SA": sttLangName = "🇸🇦 Arab"
+    case "zh-CN": sttLangName = "🇨🇳 Xitoy"
+    case "ja-JP": sttLangName = "🇯🇵 Yapon"
+    case "ko-KR": sttLangName = "🇰🇷 Koreys"
+    case "hi-IN": sttLangName = "🇮🇳 Hind"
+    case "pt-BR": sttLangName = "🇧🇷 Portugaliya"
+    case "it-IT": sttLangName = "🇮🇹 Italyan"
+    default: sttLangName = state.sttLanguage
+    }
+    entries.append(.sttLanguage(presentationData.theme, "Til", sttLangName))
+    
     entries.append(.protectionHeader("SPAM VA FISHINGDAN HIMOYA"))
     entries.append(.blockForeignUsers(presentationData.theme, "Boshqa davlat raqamlariga cheklov", "Boshqa davlat raqamidan ochilgan profillar bir-biriga xabar yozishini taqiqlash", state.blockForeignUsers))
     entries.append(.blockApkFiles(presentationData.theme, ".apk fayllarni bloklash", "Barcha chatlarda (shaxsiy, guruh, kanal, bot) .apk formatdagi fayllarni yashirish", state.blockApkFiles))
@@ -456,10 +534,12 @@ private final class ProMessagerArguments {
     let openTextStyleSettings: () -> Void
     let openAutoTextSettings: () -> Void
     let openAutoTranslateSettings: () -> Void
+    let updateSttEnabled: (Bool) -> Void
+    let openSttLanguageSettings: () -> Void
     let updateBlockForeignUsers: (Bool) -> Void
     let updateBlockApkFiles: (Bool) -> Void
     
-    init(openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
+    init(openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
         self.openCalls = openCalls
         self.updateShowDeletedMessages = updateShowDeletedMessages
         self.updateHideFolders = updateHideFolders
@@ -474,6 +554,8 @@ private final class ProMessagerArguments {
         self.openTextStyleSettings = openTextStyleSettings
         self.openAutoTextSettings = openAutoTextSettings
         self.openAutoTranslateSettings = openAutoTranslateSettings
+        self.updateSttEnabled = updateSttEnabled
+        self.openSttLanguageSettings = openSttLanguageSettings
         self.updateBlockForeignUsers = updateBlockForeignUsers
         self.updateBlockApkFiles = updateBlockApkFiles
     }
@@ -490,6 +572,7 @@ public func proMessagerController(context: AccountContext) -> ViewController {
     }
     
     var pushControllerImpl: ((ViewController) -> Void)?
+    var presentControllerImpl: ((ViewController) -> Void)?
     
     let arguments = ProMessagerArguments(openCalls: {
         pushControllerImpl?(CallListController(context: context, mode: .navigation))
@@ -590,6 +673,53 @@ public func proMessagerController(context: AccountContext) -> ViewController {
                 return state
             }
         }))
+    }, updateSttEnabled: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "stt_enabled")
+        updateState { state in
+            var state = state
+            state.sttEnabled = value
+            return state
+        }
+    }, openSttLanguageSettings: {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        let languages: [(String, String)] = [
+            ("uz-UZ", "🇺🇿 O'zbek"),
+            ("ru-RU", "🇷🇺 Rus"),
+            ("en-US", "🇬🇧 Ingliz"),
+            ("tr-TR", "🇹🇷 Turk"),
+            ("de-DE", "🇩🇪 Nemis"),
+            ("fr-FR", "🇫🇷 Fransuz"),
+            ("es-ES", "🇪🇸 Ispan"),
+            ("ar-SA", "🇸🇦 Arab"),
+            ("zh-CN", "🇨🇳 Xitoy"),
+            ("ja-JP", "🇯🇵 Yapon"),
+            ("ko-KR", "🇰🇷 Koreys"),
+            ("hi-IN", "🇮🇳 Hind"),
+            ("pt-BR", "🇧🇷 Portugaliya"),
+            ("it-IT", "🇮🇹 Italyan")
+        ]
+        var items: [ActionSheetItem] = []
+        for (id, name) in languages {
+            items.append(ActionSheetButtonItem(title: name, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                UserDefaults(suiteName: "pro_messager")?.set(id, forKey: "stt_language")
+                updateState { state in
+                    var state = state
+                    state.sttLanguage = id
+                    return state
+                }
+            }))
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentControllerImpl?(actionSheet)
     }, updateBlockForeignUsers: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "block_foreign_users")
         updateState { state in
@@ -619,6 +749,9 @@ public func proMessagerController(context: AccountContext) -> ViewController {
     let controller = ItemListController(context: context, state: signal)
     pushControllerImpl = { [weak controller] c in
         controller?.push(c)
+    }
+    presentControllerImpl = { [weak controller] c in
+        controller?.present(c, in: .window(.root))
     }
     return controller
 }

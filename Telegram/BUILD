@@ -300,18 +300,10 @@ filegroup(
 )
 
 alternate_icon_folders = [
-    "BlackIcon",
-    "BlackClassicIcon",
-    "BlackFilledIcon",
-    "BlueIcon",
-    "BlueClassicIcon",
-    "BlueFilledIcon",
-    "WhiteFilledIcon",
-    "New1",
-    "New2",
-    "Premium",
-    "PremiumBlack",
-    "PremiumTurbo",
+    "AppIconLLCIcon",
+    "FenixYellowIcon",
+    "FenixGreenIcon",
+    "FenixGradientIcon",
 ]
 
 composer_icon_folders = []

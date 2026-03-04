@@ -2409,13 +2409,14 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             return
         }
         
-        #if true && DEBUG
+        #if false && DEBUG
         DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 1.0, execute: { [weak self] in
             guard let strongSelf = self else {
                 return
             }
             let count = ChatControllerCount.with({ $0 })
-            if count > 1 {
+            // Threshold is 2 because the AI tab keeps one ChatController permanently alive
+            if count > 2 {
                 strongSelf.present(textAlertController(context: strongSelf.context, title: "", text: "ChatControllerCount \(count)", actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]), in: .window(.root))
             }
         })

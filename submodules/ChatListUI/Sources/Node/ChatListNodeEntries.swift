@@ -649,6 +649,32 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         if let peerId = peerId, state.pendingRemovalItemIds.contains(ChatListNodeState.ItemId(peerId: peerId, threadId: threadId)) {
             continue loop
         }
+        
+        // MARK: - Boshqa davlat raqamlariga cheklov (Foreign User Block) — Chat List
+        let blockForeignUsersInList = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
+        if blockForeignUsersInList {
+            if case let .user(user) = entry.renderedPeer.peer, user.botInfo == nil {
+                // Telegram service va maxsus accountlarni bloklash shart emas
+                let userId = user.id.id._internalGetInt64Value()
+                let isServiceAccount = user.id.isReplies || userId == 777000 || userId == 333000 || user.id == accountPeerId
+                if !isServiceAccount {
+                    let myPhone = UserDefaults(suiteName: "pro_messager")?.string(forKey: "my_phone_number")
+                    let peerPhone = user.phone
+                    if let myP = myPhone, !myP.isEmpty, let peerP = peerPhone, !peerP.isEmpty {
+                        let myDigits = myP.filter { $0.isNumber }
+                        let peerDigits = peerP.filter { $0.isNumber }
+                        if !myDigits.isEmpty && !peerDigits.isEmpty {
+                            let myCode = proExtractCountryCode(from: myDigits)
+                            let peerCode = proExtractCountryCode(from: peerDigits)
+                            if let mc = myCode, let pc = peerCode, mc != pc {
+                                continue loop
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         var updatedMessages = entry.messages
         var updatedCombinedReadState = entry.readCounters
         if let peerId = peerId, state.pendingClearHistoryPeerIds.contains(ChatListNodeState.ItemId(peerId: peerId, threadId: threadId)) {

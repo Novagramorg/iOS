@@ -17,6 +17,7 @@ import WebUI
 import LegacyChatHeaderPanelComponent
 import ComponentFlow
 import ComponentDisplayAdapters
+import ChatTitleView
 
 func updateChatPresentationInterfaceStateImpl(
     selfController: ChatControllerImpl,
@@ -459,6 +460,18 @@ func updateChatPresentationInterfaceStateImpl(
     var forceLayout = false
     
     if let chatTitleContent = selfController.contentData?.state.chatTitleContent, let chatTitleView = selfController.chatTitleView {
+        // In embedded bot mode, override the title to hide bot identity
+        let effectiveTitleContent: ChatTitleContent
+        if selfController.isEmbeddedBotMode {
+            effectiveTitleContent = .custom(
+                title: [ChatTitleContent.TitleTextItem(id: AnyHashable(0), content: .text("AI"))],
+                subtitle: "online",
+                isEnabled: false
+            )
+        } else {
+            effectiveTitleContent = chatTitleContent
+        }
+        
         var titleTransition = ComponentTransition(transition)
         if case .messageOptions = selfController.subject {
             titleTransition = titleTransition.withAnimation(.none)
@@ -471,7 +484,7 @@ func updateChatPresentationInterfaceStateImpl(
             strings: selfController.presentationData.strings,
             dateTimeFormat: selfController.presentationData.dateTimeFormat,
             nameDisplayOrder: selfController.presentationData.nameDisplayOrder,
-            content: chatTitleContent,
+            content: effectiveTitleContent,
             transition: titleTransition,
             ignoreParentTransitionRequests: true
         )
@@ -551,11 +564,14 @@ func updateChatPresentationInterfaceStateImpl(
     }
     
     var rightBarButtons: [UIBarButtonItem] = []
-    if let rightNavigationButton = selfController.rightNavigationButton {
-        rightBarButtons.append(rightNavigationButton.buttonItem)
-    }
-    if let secondaryRightNavigationButton = selfController.secondaryRightNavigationButton {
-        rightBarButtons.append(secondaryRightNavigationButton.buttonItem)
+    // In embedded bot mode, hide the avatar/profile navigation buttons
+    if !selfController.isEmbeddedBotMode {
+        if let rightNavigationButton = selfController.rightNavigationButton {
+            rightBarButtons.append(rightNavigationButton.buttonItem)
+        }
+        if let secondaryRightNavigationButton = selfController.secondaryRightNavigationButton {
+            rightBarButtons.append(secondaryRightNavigationButton.buttonItem)
+        }
     }
     var rightBarButtonsUpdated = false
     let currentRightBarButtons = selfController.navigationItem.rightBarButtonItems ?? []

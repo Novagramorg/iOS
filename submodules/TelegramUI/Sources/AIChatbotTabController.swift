@@ -64,6 +64,9 @@ public final class AIChatbotTabController: ViewController {
                 params: nil
             )
             
+            // Hide bot identity — make it appear as a native in-app feature
+            chatController.isEmbeddedBotMode = true
+            
             chatController.navigationItem.hidesBackButton = true
             chatController.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
             

@@ -101,6 +101,16 @@ func chatHistoryEntriesForView(
         }
     }
     
+    // MARK: - Boshqa davlat raqamlariga cheklov (Foreign User Block)
+    let blockForeignUsers = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
+    if blockForeignUsers, let foreignPeer = chatPeer as? TelegramUser, foreignPeer.botInfo == nil {
+        // O'z foydalanuvchimizning telefon raqamini olish
+        let myPhone = UserDefaults(suiteName: "pro_messager")?.string(forKey: "my_phone_number")
+        if isForeignUser(peer: foreignPeer, myPhone: myPhone) {
+            return ([], currentState)
+        }
+    }
+    
     var joinMessage: Message?
     if (associatedData.subject?.isService ?? false) {
         

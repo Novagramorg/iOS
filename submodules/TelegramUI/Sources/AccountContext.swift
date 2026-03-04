@@ -440,19 +440,28 @@ public final class AccountContextImpl: AccountContext {
         })
         
         self.userLimitsConfigurationDisposable = (self.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: account.peerId))
-        |> mapToSignal { peer -> Signal<(Bool, EngineConfiguration.UserLimits), NoError> in
+        |> mapToSignal { peer -> Signal<(Bool, EngineConfiguration.UserLimits, String?), NoError> in
             let isPremium = peer?.isPremium ?? false
+            var phone: String? = nil
+            if case let .user(user) = peer {
+                phone = user.phone
+            }
             return self.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: isPremium))
             |> map { userLimits in
-                return (isPremium, userLimits)
+                return (isPremium, userLimits, phone)
             }
         }
-        |> deliverOnMainQueue).startStrict(next: { [weak self] isPremium, userLimits in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] isPremium, userLimits, myPhone in
             guard let self = self else {
                 return
             }
             self._isPremium = isPremium
             self.userLimits = userLimits
+            
+            // O'z telefon raqamimizni saqlash (Foreign User Block uchun)
+            if let phone = myPhone, !phone.isEmpty {
+                UserDefaults(suiteName: "pro_messager")?.set(phone, forKey: "my_phone_number")
+            }
         })
         
         self.peerNameColorsConfigurationDisposable = (combineLatest(

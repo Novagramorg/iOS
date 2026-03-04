@@ -24,83 +24,42 @@
 		<dict>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
-			<key>Black</key>
+			<key>AppIconLLCIcon</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackIcon</string>
-					<string>BlackNotificationIcon</string>
+					<string>AppIconLLCIcon</string>
+					<string>AppIconLLCNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlackClassic</key>
+			<key>FenixYellowIcon</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackClassicIcon</string>
-					<string>BlackClassicNotificationIcon</string>
+					<string>FenixYellowIcon</string>
+					<string>FenixYellowIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlackFilled</key>
+			<key>FenixGreenIcon</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackFilledIcon</string>
+					<string>FenixGreenIcon</string>
+					<string>FenixGreenIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>Blue</key>
+			<key>FenixGradientIcon</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlueIcon</string>
-					<string>BlueNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlueClassic</key>
-			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlueClassicIcon</string>
-					<string>BlueClassicNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlueFilled</key>
-			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlueFilledIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>WhiteFilled</key>
-			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>WhiteFilledIcon</string>
+					<string>FenixGradientIcon</string>
+					<string>FenixGradientIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
@@ -122,91 +81,46 @@
 	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
-			<key>Black</key>
+			<key>AppIconLLCIcon</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackIconIpad</string>
-					<string>BlackIconLargeIpad</string>
-					<string>BlackNotificationIcon</string>
+					<string>AppIconLLCIconIpad</string>
+					<string>AppIconLLCIconLargeIpad</string>
+					<string>AppIconLLCNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlackClassic</key>
+			<key>FenixYellowIcon</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackClassicIconIpad</string>
-					<string>BlackClassicIconLargeIpad</string>
-					<string>BlackClassicNotificationIcon</string>
+					<string>FenixYellowIconIpad</string>
+					<string>FenixYellowIconLargeIpad</string>
+					<string>FenixYellowIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>BlackFilled</key>
+			<key>FenixGreenIcon</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlackFilledIconIpad</string>
-					<string>BlackFilledIconLargeIpad</string>
+					<string>FenixGreenIconIpad</string>
+					<string>FenixGreenIconLargeIpad</string>
+					<string>FenixGreenIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
 			</dict>
-			<key>Blue</key>
+			<key>FenixGradientIcon</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>CFBundleIconFiles</key>
 				<array>
-					<string>BlueIconIpad</string>
-					<string>BlueIconLargeIpad</string>
-					<string>BlueNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlueClassic</key>
-			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlueClassicIconIpad</string>
-					<string>BlueClassicIconLargeIpad</string>
-					<string>BlueClassicNotificationIcon</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>BlueFilled</key>
-			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>BlueFilledIconIpad</string>
-					<string>BlueFilledIconLargeIpad</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<true/>
-			</dict>
-			<key>WhiteFilled</key>
-			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>WhiteFilledIcon</string>
+					<string>FenixGradientIconIpad</string>
+					<string>FenixGradientIconLargeIpad</string>
+					<string>FenixGradientIconNotificationIcon</string>
 				</array>
 				<key>UIPrerenderedIcon</key>
 				<true/>
