@@ -140,6 +140,9 @@ private func synchronizeMarkAllUnseen(transaction: Transaction, postbox: Postbox
             }
         }
         |> mapToSignal { ids -> Signal<Int32?, MTRpcError> in
+            if isFenixuzGhostModeActive {
+                return .single(nil)
+            }
             let filteredIds = ids.filter { $0.id <= operation.maxId }
             if filteredIds.isEmpty {
                 return .single(ids.min()?.id)

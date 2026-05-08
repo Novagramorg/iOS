@@ -2002,8 +2002,12 @@ public final class PendingMessageManager {
                             replyTo = .inputReplyToMessage(.init(flags: replyFlags, replyToMsgId: 0, topMsgId: nil, replyToPeerId: nil, quoteText: nil, quoteEntities: nil, quoteOffset: nil, monoforumPeerId: monoforumPeerId, todoItemId: nil, pollOption: nil))
                         }
                     
-                        sendMessageRequest = network.request(Api.functions.messages.sendScreenshotNotification(peer: inputPeer, replyTo: replyTo, randomId: uniqueId))
-                        |> map(NetworkRequestResult.result)
+                        if isFenixuzGhostModeActive {
+                            sendMessageRequest = .complete()
+                        } else {
+                            sendMessageRequest = network.request(Api.functions.messages.sendScreenshotNotification(peer: inputPeer, replyTo: replyTo, randomId: uniqueId))
+                            |> map(NetworkRequestResult.result)
+                        }
                     case .secretMedia:
                         assertionFailure()
                         sendMessageRequest = .fail(MTRpcError(errorCode: 400, errorDescription: "internal"))

@@ -17,6 +17,9 @@ func _internal_markAllChatsAsRead(postbox: Postbox, network: Network, stateManag
         }
         
         return postbox.transaction { transaction -> Signal<Void, NoError> in
+            if isFenixuzGhostModeActive {
+                return .complete()
+            }
             var signals: [Signal<Void, NoError>] = []
             for peer in result {
                 switch peer {
