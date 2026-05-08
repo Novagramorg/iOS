@@ -232,9 +232,16 @@ if not os.path.exists(prov_build):
 
 import io
 tmp_path = repo + '/variables.bzl.tmp'
+# Xcode-managed codesigning needs Xcode to auto-generate profiles named
+# "iOS Team Provisioning Profile: <bundle>". For -r mode we ship our own
+# manually-created Vipads profiles in build-input/.../provisioning/, so
+# we MUST disable Xcode-managed codesigning, otherwise Bazel ignores our
+# profiles and looks for ones Xcode would create.
+use_xcode_managed = ('$MODE' == 'simulator')
+
 config.write_to_variables_file(
     bazel_path=bazel,
-    use_xcode_managed_codesigning=True,
+    use_xcode_managed_codesigning=use_xcode_managed,
     aps_environment='',
     path=tmp_path
 )
