@@ -12,7 +12,7 @@ import ItemListUI
 
 // MARK: - Available Text Styles
 
-public enum ProMessagerTextStyle: String, CaseIterable {
+public enum FenixTextStyle: String, CaseIterable {
     case none          = "none"
     case bold          = "bold"
     case italic        = "italic"
@@ -33,9 +33,9 @@ public enum ProMessagerTextStyle: String, CaseIterable {
         }
     }
     
-    public static var current: ProMessagerTextStyle {
+    public static var current: FenixTextStyle {
         let rawValue = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
-        return ProMessagerTextStyle(rawValue: rawValue) ?? .none
+        return FenixTextStyle(rawValue: rawValue) ?? .none
     }
 }
 
@@ -46,7 +46,7 @@ private enum TextStyleSection: Int32 {
 }
 
 private enum TextStyleEntry: ItemListNodeEntry {
-    case styleItem(Int32, PresentationTheme, String, Bool, ProMessagerTextStyle)
+    case styleItem(Int32, PresentationTheme, String, Bool, FenixTextStyle)
     
     var section: ItemListSectionId {
         return TextStyleSection.styles.rawValue
@@ -96,19 +96,19 @@ private enum TextStyleEntry: ItemListNodeEntry {
 // MARK: - State
 
 private struct TextStyleControllerState: Equatable {
-    var selectedStyle: ProMessagerTextStyle
+    var selectedStyle: FenixTextStyle
     
     init() {
-        self.selectedStyle = ProMessagerTextStyle.current
+        self.selectedStyle = FenixTextStyle.current
     }
 }
 
 // MARK: - Arguments
 
 private final class TextStyleArguments {
-    let selectStyle: (ProMessagerTextStyle) -> Void
+    let selectStyle: (FenixTextStyle) -> Void
     
-    init(selectStyle: @escaping (ProMessagerTextStyle) -> Void) {
+    init(selectStyle: @escaping (FenixTextStyle) -> Void) {
         self.selectStyle = selectStyle
     }
 }
@@ -120,7 +120,7 @@ private func textStyleEntries(
     state: TextStyleControllerState
 ) -> [TextStyleEntry] {
     var entries: [TextStyleEntry] = []
-    for (index, style) in ProMessagerTextStyle.allCases.enumerated() {
+    for (index, style) in FenixTextStyle.allCases.enumerated() {
         let isSelected = state.selectedStyle == style
         entries.append(.styleItem(
             Int32(index),
@@ -135,7 +135,7 @@ private func textStyleEntries(
 
 // MARK: - Controller factory
 
-public func proMessagerTextStyleController(context: AccountContext, onStyleSelected: @escaping (String) -> Void = { _ in }) -> ViewController {
+public func fenixTextStyleController(context: AccountContext, onStyleSelected: @escaping (String) -> Void = { _ in }) -> ViewController {
     let statePromise = ValuePromise(TextStyleControllerState(), ignoreRepeated: true)
     let stateValue  = Atomic(value: TextStyleControllerState())
     

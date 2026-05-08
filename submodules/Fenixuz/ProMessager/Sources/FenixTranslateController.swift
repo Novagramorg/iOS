@@ -166,7 +166,7 @@ private func autoTranslateEntries(presentationData: PresentationData, state: Aut
 
 // MARK: - Controller factory
 
-public func proMessagerTranslateAutoController(context: AccountContext, onEnabledSelected: ((Bool) -> Void)? = nil) -> ViewController {
+public func fenixTranslateAutoController(context: AccountContext, onEnabledSelected: ((Bool) -> Void)? = nil) -> ViewController {
     let statePromise = ValuePromise(AutoTranslateState(), ignoreRepeated: true)
     let stateValue   = Atomic(value: AutoTranslateState())
 

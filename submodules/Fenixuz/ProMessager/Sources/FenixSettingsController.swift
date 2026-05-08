@@ -12,7 +12,7 @@ import ItemListUI
 import CallListUI
 import AppBundle
 
-private enum ProMessagerSection: Int32 {
+private enum FenixSection: Int32 {
     case chat = 0
     case interface = 1
     case messaging = 2
@@ -44,7 +44,7 @@ private func textStyleExampleDescription(_ rawValue: String) -> String {
     }
 }
 
-private enum ProMessagerEntry: ItemListNodeEntry {
+private enum FenixEntry: ItemListNodeEntry {
     // — Chat Section —
     case chatHeader(String)
     case calls(PresentationTheme, String)
@@ -85,15 +85,15 @@ private enum ProMessagerEntry: ItemListNodeEntry {
     var section: ItemListSectionId {
         switch self {
         case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .chatFooter:
-            return ProMessagerSection.chat.rawValue
+            return FenixSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .showEnablePremium, .interfaceFooter:
-            return ProMessagerSection.interface.rawValue
+            return FenixSection.interface.rawValue
         case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .messagingFooter:
-            return ProMessagerSection.messaging.rawValue
+            return FenixSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage:
-            return ProMessagerSection.stt.rawValue
+            return FenixSection.stt.rawValue
         case .protectionHeader, .blockForeignUsers, .blockApkFiles, .protectionFooter:
-            return ProMessagerSection.protection.rawValue
+            return FenixSection.protection.rawValue
         }
     }
     
@@ -138,7 +138,7 @@ private enum ProMessagerEntry: ItemListNodeEntry {
         return Int(self.stableId)
     }
     
-    static func ==(lhs: ProMessagerEntry, rhs: ProMessagerEntry) -> Bool {
+    static func ==(lhs: FenixEntry, rhs: FenixEntry) -> Bool {
         switch lhs {
         case let .chatHeader(lhsText):
             if case let .chatHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
@@ -201,110 +201,111 @@ private enum ProMessagerEntry: ItemListNodeEntry {
         }
     }
     
-    static func <(lhs: ProMessagerEntry, rhs: ProMessagerEntry) -> Bool {
+    static func <(lhs: FenixEntry, rhs: FenixEntry) -> Bool {
         return lhs.sortId < rhs.sortId
     }
     
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
-        let arguments = arguments as! ProMessagerArguments
+        let arguments = arguments as! FenixSettingsArguments
         switch self {
-        // ─── Chat Section ───
-        case let .chatHeader(text):
-            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
-        case let .calls(_, title):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/RecentCalls")?.precomposed(), title: title, label: "", sectionId: self.section, style: .blocks, action: {
-                arguments.openCalls()
-            })
-        case let .deletedMessages(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Timer")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
-                arguments.updateShowDeletedMessages(val)
-            })
-        case let .showViewFirstMessage(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Websites")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
-                arguments.updateShowViewFirstMessage(val)
-            })
-        case let .showGhostMode(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/FaceId")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
-                arguments.updateShowGhostMode(val)
-            })
-        case let .longPressCameraSelection(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/DataVideo")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
-                arguments.updateLongPressCameraSelection(val)
-            })
-        case let .chatFooter(_, text):
-            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
-            
-        // ─── Interface Section ───
+        // ─── INTERFEYS ───
         case let .interfaceHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .hideFolders(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Archived")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "folder.badge.minus", color: .lightBlue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateHideFolders(val)
             })
         case let .showStories(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Stories")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "circle.dashed", color: .violet), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowStories(val)
             })
         case let .showMutualContactSymbol(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/EditProfile")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.2.fill", color: .blue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowMutualContactSymbol(val)
             })
         case let .showEnablePremium(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Gift")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "star.fill", color: .yellow), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowEnablePremium(val)
             })
         case let .interfaceFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
-            
-        // ─── Messaging Section ───
+
+        // ─── CHAT ───
+        case let .chatHeader(text):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+        case let .calls(_, title):
+            // Hidden — Calls is navigation, not a setting. Kept for backward compat.
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "phone.fill", color: .green), title: title, label: "", sectionId: self.section, style: .blocks, action: {
+                arguments.openCalls()
+            })
+        case let .deletedMessages(_, title, text, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "trash.slash.fill", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateShowDeletedMessages(val)
+            })
+        case let .showViewFirstMessage(_, title, text, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrow.up.to.line", color: .blue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateShowViewFirstMessage(val)
+            })
+        case let .showGhostMode(_, title, text, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "eye.slash.fill", color: .gray), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateShowGhostMode(val)
+            })
+        case let .longPressCameraSelection(_, title, text, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "camera.rotate.fill", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateLongPressCameraSelection(val)
+            })
+        case let .chatFooter(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+
+        // ─── XABARLAR ───
         case let .messagingHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .textStyle(_, title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Appearance")?.precomposed(), title: title, label: label, sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "textformat", color: .purple), title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openTextStyleSettings()
             })
         case let .autoText(theme, title, label):
             let labelStyle: ItemListDisclosureLabelStyle = (label == "Yoqilgan") ? .badge(theme.list.itemAccentColor) : .text
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Files")?.precomposed(), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "text.append", color: .teal), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
                 arguments.openAutoTextSettings()
             })
         case let .autoTranslate(theme, title, label):
             let labelStyle: ItemListDisclosureLabelStyle = (label == "Yoqilgan") ? .badge(theme.list.itemAccentColor) : .text
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/AutoTranslate")?.precomposed(), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "globe", color: .pink), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
                 arguments.openAutoTranslateSettings()
             })
         case let .translateToggle(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/AutoTranslate")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "character.bubble.fill", color: .pink), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateTranslateMessages(val)
             })
         case let .translateMessages(_, title):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Language")?.precomposed(), title: title, label: "", sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "character.book.closed.fill", color: .lightBlue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openTranslationSettings()
             })
         case let .messagingFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
-            
-        // ─── STT Section ───
+
+        // ─── OVOZ → MATN ───
         case let .sttHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .sttEnabled(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Trending")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "mic.fill", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateSttEnabled(val)
             })
         case let .sttLanguage(_, title, label):
-            return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Language")?.precomposed(), title: title, label: label, sectionId: self.section, style: .blocks, action: {
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "globe", color: .blue), title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openSttLanguageSettings()
             })
-            
-        // ─── Protection Section ───
+
+        // ─── HIMOYA ───
         case let .protectionHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .blockForeignUsers(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Blocked")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.crop.circle.badge.xmark", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateBlockForeignUsers(val)
             })
         case let .blockApkFiles(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, icon: UIImage(bundleImageName: "Settings/Menu/Security")?.precomposed(), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "doc.fill.badge.ellipsis", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateBlockApkFiles(val)
             })
         case let .protectionFooter(_, text):
@@ -313,7 +314,7 @@ private enum ProMessagerEntry: ItemListNodeEntry {
     }
 }
 
-private struct ProMessagerControllerState: Equatable {
+private struct FenixSettingsState: Equatable {
     var showDeletedMessages: Bool
     var hideFolders: Bool
     var showStories: Bool
@@ -350,7 +351,7 @@ private struct ProMessagerControllerState: Equatable {
         self.blockApkFiles = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_apk_files") ?? false
     }
     
-    static func ==(lhs: ProMessagerControllerState, rhs: ProMessagerControllerState) -> Bool {
+    static func ==(lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
         if lhs.showDeletedMessages != rhs.showDeletedMessages {
             return false
         }
@@ -453,57 +454,56 @@ private func sttSupportedLanguages() -> [(String, String)] {
     ]
 }
 
-private func proMessagerControllerEntries(presentationData: PresentationData, state: ProMessagerControllerState) -> [ProMessagerEntry] {
-    var entries: [ProMessagerEntry] = []
-    
-    // ─── Chat Section ───
-    entries.append(.chatHeader("CHAT SOZLAMALARI"))
-    entries.append(.calls(presentationData.theme, "Qo'ng'iroqlar"))
-    entries.append(.deletedMessages(presentationData.theme, "O'chirilgan xabarlarni ko'rish", "Chatda o'chirilgan xabarlar 🗑 Removed bilan ko'rsatiladi", state.showDeletedMessages))
-    entries.append(.showViewFirstMessage(presentationData.theme, "Birinchi xabarni ko'rish", "Profil rasmiga bosib turganda View First message tugmasini ko'rsatish", state.showViewFirstMessage))
-    entries.append(.showGhostMode(presentationData.theme, "Ghost rejimi tugmasi", "Chatlar ro'yxati tepasida Ghost rejimini yoqish/o'chirish tugmasini ko'rsatish", state.showGhostMode))
-    entries.append(.longPressCameraSelection(presentationData.theme, "Kamerani tanlash", "Video xabar yozish tugmasini bosib turganda kamera tanlash menyusini ko'rsatish", state.longPressCameraSelection))
-    entries.append(.chatFooter(presentationData.theme, "Bu sozlamalar chat funksiyalariga ta'sir qiladi. O'zgarishlar barcha chatlarga darhol qo'llaniladi."))
-    
-    // ─── Interface Section ───
+private func fenixSettingsEntries(presentationData: PresentationData, state: FenixSettingsState) -> [FenixEntry] {
+    var entries: [FenixEntry] = []
+
+    // ─── INTERFEYS ───
     entries.append(.interfaceHeader("INTERFEYS"))
-    entries.append(.hideFolders(presentationData.theme, "Jildlarni yashirish", "Tepadagi barcha jildlarni vaqtinchalik yashirish", state.hideFolders))
-    entries.append(.showStories(presentationData.theme, "Hikoyalarni ko'rsatish", "Chatlar ro'yxatida tepada hikoyalarni ko'rsatish yoki yashirish", state.showStories))
-    entries.append(.showMutualContactSymbol(presentationData.theme, "O'zaro kontakt belgisi", "Kontaktlar ro'yxatida o'zaro kontaktlar yonida 🤝 belgisini ko'rsatish", state.showMutualContactSymbol))
-    entries.append(.showEnablePremium(presentationData.theme, "Premium sovg'a", "Barcha Premium imkoniyatlarni bepul ochish (Virtual)", state.showEnablePremium))
-    entries.append(.interfaceFooter(presentationData.theme, "Interfeys sozlamalari faqat sizning qurilmangizga ta'sir qiladi."))
-    
-    // ─── Messaging Section ───
-    entries.append(.messagingHeader("XABAR YUBORISH"))
-    entries.append(.textStyle(presentationData.theme, "Xabar uslubi", textStyleDisplayName(state.textStyle)))
-    
+    entries.append(.hideFolders(presentationData.theme, "Jildlarni yashirish", "Chatlar ro'yxati tepasidagi jildlarni vaqtinchalik berkitish", state.hideFolders))
+    entries.append(.showStories(presentationData.theme, "Hikoyalar paneli", "Chatlar ro'yxati tepasida hikoyalarni ko'rsatish", state.showStories))
+    entries.append(.showMutualContactSymbol(presentationData.theme, "Mutual kontakt belgisi", "Kontaktlar ro'yxatida 🤝 belgisini ko'rsatish", state.showMutualContactSymbol))
+    entries.append(.showEnablePremium(presentationData.theme, "Premium ko'rinish", "Premium imkoniyatlar belgilarini ko'rsatish", state.showEnablePremium))
+    entries.append(.interfaceFooter(presentationData.theme, "Faqat sizning qurilmangizga ta'sir qiladi."))
+
+    // ─── CHAT ───
+    entries.append(.chatHeader("CHAT"))
+    entries.append(.deletedMessages(presentationData.theme, "O'chirilgan xabarlar", "O'chirilgan xabarlarni 🗑 belgi bilan ko'rsatish", state.showDeletedMessages))
+    entries.append(.showViewFirstMessage(presentationData.theme, "Birinchi xabarga o'tish", "Profil menyusida \"View First Message\" tugmasini qo'shish", state.showViewFirstMessage))
+    entries.append(.showGhostMode(presentationData.theme, "Ghost rejimi tugmasi", "Chatlar ro'yxati tepasida tezkor Ghost rejimi tugmasi", state.showGhostMode))
+    entries.append(.longPressCameraSelection(presentationData.theme, "Kamerani tanlash", "Video xabar tugmasini uzun bosib old/orqa kamerani tanlash", state.longPressCameraSelection))
+    entries.append(.chatFooter(presentationData.theme, "O'zgarishlar barcha chatlarga darhol qo'llaniladi."))
+
+    // ─── XABARLAR ───
+    entries.append(.messagingHeader("XABARLAR"))
+    entries.append(.textStyle(presentationData.theme, "Yozuv uslubi", textStyleDisplayName(state.textStyle)))
+
     let autoLabel = state.autoTextEnabled ? "Yoqilgan" : "O'chirilgan"
-    entries.append(.autoText(presentationData.theme, "Avtomatik qo'shimcha matn", autoLabel))
-    
+    entries.append(.autoText(presentationData.theme, "Avto-matn qo'shimchasi", autoLabel))
+
     let translateLabel = state.autoTranslateEnabled ? "Yoqilgan" : "O'chirilgan"
-    entries.append(.autoTranslate(presentationData.theme, "Avtomatik xabar tarjimasi", translateLabel))
-    
-    entries.append(.translateToggle(presentationData.theme, "Tarjima tugmasini ko'rsatish", "Context menuda Translate tugmasini ko'rsatish", state.showTranslateMessages))
-    entries.append(.translateMessages(presentationData.theme, "Tarjima tillari"))
-    entries.append(.messagingFooter(presentationData.theme, "Xabar uslubi va tarjima sozlamalari yuboriladigan xabarlarga ta'sir qiladi."))
-    
-    // ─── STT Section ───
-    entries.append(.sttHeader("OVOZNI MATNGA O'GIRISH"))
-    entries.append(.sttEnabled(presentationData.theme, "Ovozni matnga o'girish", "Chat ichida mic tugmasi oldida ovozni matnga o'girish tugmasini ko'rsatish", state.sttEnabled))
-    
+    entries.append(.autoTranslate(presentationData.theme, "Avto-tarjima", translateLabel))
+
+    entries.append(.translateToggle(presentationData.theme, "Tarjima tugmasi", "Xabar context menyusida \"Translate\" ko'rsatilsin", state.showTranslateMessages))
+    entries.append(.translateMessages(presentationData.theme, "Tarjima tili"))
+    entries.append(.messagingFooter(presentationData.theme, "Yuboriladigan xabarlarning ko'rinishi va tarjimasini boshqaradi."))
+
+    // ─── OVOZ → MATN ───
+    entries.append(.sttHeader("OVOZ → MATN"))
+    entries.append(.sttEnabled(presentationData.theme, "Ovozni matnga o'girish", "Mikrofon yonida tezkor STT tugmasini ko'rsatish", state.sttEnabled))
+
     let sttLangName = sttLanguageDisplayName(state.sttLanguage)
-    entries.append(.sttLanguage(presentationData.theme, "Til", sttLangName))
-    
-    // ─── Protection Section ───
-    entries.append(.protectionHeader("SPAM VA FISHINGDAN HIMOYA"))
-    entries.append(.blockForeignUsers(presentationData.theme, "Boshqa davlat raqamlariga cheklov", "Boshqa davlat raqamidan ochilgan profillarni xabar yozishini taqiqlash", state.blockForeignUsers))
-    entries.append(.blockApkFiles(presentationData.theme, ".apk fayllarni bloklash", "Barcha chatlarda .apk formatdagi fayllarni yashirish", state.blockApkFiles))
-    entries.append(.protectionFooter(presentationData.theme, "Himoya sozlamalari spam va zararli fayllardan himoya qiladi."))
-    
+    entries.append(.sttLanguage(presentationData.theme, "Tanish tili", sttLangName))
+
+    // ─── HIMOYA ───
+    entries.append(.protectionHeader("HIMOYA"))
+    entries.append(.blockForeignUsers(presentationData.theme, "Xorijiy raqamlarni bloklash", "Boshqa davlat raqamlaridan kelgan xabarlarni avtomatik bloklash", state.blockForeignUsers))
+    entries.append(.blockApkFiles(presentationData.theme, "APK fayllarni bloklash", "Chatlarda .apk fayllarni yashirish (Android dasturlari)", state.blockApkFiles))
+    entries.append(.protectionFooter(presentationData.theme, "Spam va zararli kontentdan himoya."))
+
     return entries
 }
 
-private final class ProMessagerArguments {
+private final class FenixSettingsArguments {
     let openCalls: () -> Void
     let updateShowDeletedMessages: (Bool) -> Void
     let updateHideFolders: (Bool) -> Void
@@ -545,20 +545,20 @@ private final class ProMessagerArguments {
     }
 }
 
-public func proMessagerController(context: AccountContext) -> ViewController {
+public func fenixSettingsController(context: AccountContext) -> ViewController {
     if context.isRealPremium {
         UserDefaults(suiteName: "pro_messager")?.set(true, forKey: "enable_premium")
     }
-    let statePromise = ValuePromise(ProMessagerControllerState(), ignoreRepeated: true)
-    let stateValue = Atomic(value: ProMessagerControllerState())
-    let updateState: ((ProMessagerControllerState) -> ProMessagerControllerState) -> Void = { f in
+    let statePromise = ValuePromise(FenixSettingsState(), ignoreRepeated: true)
+    let stateValue = Atomic(value: FenixSettingsState())
+    let updateState: ((FenixSettingsState) -> FenixSettingsState) -> Void = { f in
         statePromise.set(stateValue.modify { f($0) })
     }
     
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController) -> Void)?
     
-    let arguments = ProMessagerArguments(openCalls: {
+    let arguments = FenixSettingsArguments(openCalls: {
         pushControllerImpl?(CallListController(context: context, mode: .navigation))
     }, updateShowDeletedMessages: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_deleted_messages")
@@ -569,7 +569,7 @@ public func proMessagerController(context: AccountContext) -> ViewController {
         }
     }, updateHideFolders: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "hide_folders")
-        NotificationCenter.default.post(name: NSNotification.Name("ProMessagerSettingsChanged"), object: nil)
+        NotificationCenter.default.post(name: NSNotification.Name("FenixSettingsChanged"), object: nil)
         updateState { state in
             var state = state
             state.hideFolders = value
@@ -577,7 +577,7 @@ public func proMessagerController(context: AccountContext) -> ViewController {
         }
     }, updateShowStories: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_stories")
-        NotificationCenter.default.post(name: NSNotification.Name("ProMessagerSettingsChanged"), object: nil)
+        NotificationCenter.default.post(name: NSNotification.Name("FenixSettingsChanged"), object: nil)
         updateState { state in
             var state = state
             state.showStories = value
@@ -592,7 +592,7 @@ public func proMessagerController(context: AccountContext) -> ViewController {
         }
     }, updateShowGhostMode: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_ghost_mode_button")
-        NotificationCenter.default.post(name: NSNotification.Name("ProMessagerSettingsChanged"), object: nil)
+        NotificationCenter.default.post(name: NSNotification.Name("FenixSettingsChanged"), object: nil)
         updateState { state in
             var state = state
             state.showGhostMode = value
@@ -632,9 +632,9 @@ public func proMessagerController(context: AccountContext) -> ViewController {
             return state
         }
     }, openTranslationSettings: {
-        pushControllerImpl?(proMessagerTranslationController(context: context))
+        pushControllerImpl?(fenixTranslationController(context: context))
     }, openTextStyleSettings: {
-        pushControllerImpl?(proMessagerTextStyleController(context: context, onStyleSelected: { newStyle in
+        pushControllerImpl?(fenixTextStyleController(context: context, onStyleSelected: { newStyle in
             updateState { state in
                 var state = state
                 state.textStyle = newStyle
@@ -642,7 +642,7 @@ public func proMessagerController(context: AccountContext) -> ViewController {
             }
         }))
     }, openAutoTextSettings: {
-        pushControllerImpl?(proMessagerAutoTextController(context: context, onEnabledSelected: { isEnabled in
+        pushControllerImpl?(fenixAutoTextController(context: context, onEnabledSelected: { isEnabled in
             updateState { state in
                 var state = state
                 state.autoTextEnabled = isEnabled
@@ -650,7 +650,7 @@ public func proMessagerController(context: AccountContext) -> ViewController {
             }
         }))
     }, openAutoTranslateSettings: {
-        pushControllerImpl?(proMessagerTranslateAutoController(context: context, onEnabledSelected: { isEnabled in
+        pushControllerImpl?(fenixTranslateAutoController(context: context, onEnabledSelected: { isEnabled in
             updateState { state in
                 var state = state
                 state.autoTranslateEnabled = isEnabled
@@ -711,7 +711,7 @@ public func proMessagerController(context: AccountContext) -> ViewController {
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Fenixuz"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-            let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: proMessagerControllerEntries(presentationData: presentationData, state: state), style: .blocks)
+            let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: fenixSettingsEntries(presentationData: presentationData, state: state), style: .blocks)
             return (controllerState, (listState, arguments))
         }
     

@@ -11,7 +11,7 @@ import PresentationDataUtils
 import ItemListUI
 import TranslateUI
 
-private final class ProMessagerTranslationArguments {
+private final class FenixTranslationArguments {
     let context: AccountContext
     let selectLanguage: (String) -> Void
     let downloadLanguage: (String) -> Void
@@ -23,15 +23,15 @@ private final class ProMessagerTranslationArguments {
     }
 }
 
-private enum ProMessagerTranslationSection: Int32 {
+private enum FenixTranslationSection: Int32 {
     case languages
 }
 
-private enum ProMessagerTranslationEntry: ItemListNodeEntry {
+private enum FenixTranslationEntry: ItemListNodeEntry {
     case language(Int32, PresentationTheme, String, String, Bool, Bool)
     
     var section: ItemListSectionId {
-        return ProMessagerTranslationSection.languages.rawValue
+        return FenixTranslationSection.languages.rawValue
     }
     
     var stableId: Int32 {
@@ -48,19 +48,19 @@ private enum ProMessagerTranslationEntry: ItemListNodeEntry {
         }
     }
     
-    static func ==(lhs: ProMessagerTranslationEntry, rhs: ProMessagerTranslationEntry) -> Bool {
+    static func ==(lhs: FenixTranslationEntry, rhs: FenixTranslationEntry) -> Bool {
         switch (lhs, rhs) {
             case (let .language(lhsIndex, lhsTheme, lhsName, lhsCode, lhsIsSelected, lhsIsDownloaded), let .language(rhsIndex, rhsTheme, rhsName, rhsCode, rhsIsSelected, rhsIsDownloaded)):
                 return lhsIndex == rhsIndex && lhsTheme === rhsTheme && lhsName == rhsName && lhsCode == rhsCode && lhsIsSelected == rhsIsSelected && lhsIsDownloaded == rhsIsDownloaded
         }
     }
     
-    static func <(lhs: ProMessagerTranslationEntry, rhs: ProMessagerTranslationEntry) -> Bool {
+    static func <(lhs: FenixTranslationEntry, rhs: FenixTranslationEntry) -> Bool {
         return lhs.sortId < rhs.sortId
     }
     
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
-        let arguments = arguments as! ProMessagerTranslationArguments
+        let arguments = arguments as! FenixTranslationArguments
         switch self {
             case let .language(_, theme, name, code, isSelected, isDownloaded):
                 return ItemListDisclosureItem(presentationData: presentationData, title: name, label: isDownloaded ? (isSelected ? "✅ Tanlangan" : "✅") : "Yuklash", labelStyle: isSelected ? .badge(theme.list.itemAccentColor) : .detailText, sectionId: self.section, style: .blocks, action: {
@@ -74,7 +74,7 @@ private enum ProMessagerTranslationEntry: ItemListNodeEntry {
     }
 }
 
-private struct ProMessagerTranslationState: Equatable {
+private struct FenixTranslationState: Equatable {
     var downloadedLanguages: Set<String>
     var selectedLanguage: String?
     
@@ -85,8 +85,8 @@ private struct ProMessagerTranslationState: Equatable {
     }
 }
 
-private func proMessagerTranslationEntries(presentationData: PresentationData, state: ProMessagerTranslationState) -> [ProMessagerTranslationEntry] {
-    var entries: [ProMessagerTranslationEntry] = []
+private func fenixTranslationEntries(presentationData: PresentationData, state: FenixTranslationState) -> [FenixTranslationEntry] {
+    var entries: [FenixTranslationEntry] = []
     
     let languages = [
         ("Ingliz tili", "en"),
@@ -110,14 +110,14 @@ private func proMessagerTranslationEntries(presentationData: PresentationData, s
     return entries
 }
 
-public func proMessagerTranslationController(context: AccountContext) -> ViewController {
-    let statePromise = ValuePromise(ProMessagerTranslationState(), ignoreRepeated: true)
-    let stateValue = Atomic(value: ProMessagerTranslationState())
-    let updateState: ((ProMessagerTranslationState) -> ProMessagerTranslationState) -> Void = { f in
+public func fenixTranslationController(context: AccountContext) -> ViewController {
+    let statePromise = ValuePromise(FenixTranslationState(), ignoreRepeated: true)
+    let stateValue = Atomic(value: FenixTranslationState())
+    let updateState: ((FenixTranslationState) -> FenixTranslationState) -> Void = { f in
         statePromise.set(stateValue.modify { f($0) })
     }
     
-    let arguments = ProMessagerTranslationArguments(context: context, selectLanguage: { code in
+    let arguments = FenixTranslationArguments(context: context, selectLanguage: { code in
         UserDefaults(suiteName: "pro_messager_translation")?.set(code, forKey: "selected_language")
         updateState { state in
             var state = state
@@ -140,7 +140,7 @@ public func proMessagerTranslationController(context: AccountContext) -> ViewCon
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
             let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Tarjima Tillari"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
-            let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: proMessagerTranslationEntries(presentationData: presentationData, state: state), style: .blocks)
+            let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: fenixTranslationEntries(presentationData: presentationData, state: state), style: .blocks)
             return (controllerState, (listState, arguments))
         }
     

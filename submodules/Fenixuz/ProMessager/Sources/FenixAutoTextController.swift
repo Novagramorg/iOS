@@ -160,7 +160,7 @@ private func autoTextEntries(presentationData: PresentationData, state: AutoText
 
 // MARK: - Controller factory
 
-public func proMessagerAutoTextController(context: AccountContext, onEnabledSelected: ((Bool) -> Void)? = nil) -> ViewController {
+public func fenixAutoTextController(context: AccountContext, onEnabledSelected: ((Bool) -> Void)? = nil) -> ViewController {
     let statePromise = ValuePromise(AutoTextState(), ignoreRepeated: true)
     let stateValue   = Atomic(value: AutoTextState())
 
