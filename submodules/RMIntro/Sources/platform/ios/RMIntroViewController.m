@@ -106,7 +106,9 @@ typedef enum {
     
     UIView *_wrapperView;
     UIView *_startButton;
-    
+
+    UIImageView *_fenixLogoView;
+
     bool _loadedView;
 }
 @end
@@ -232,38 +234,44 @@ typedef enum {
 - (void)animateIn {
     CGPoint logoTargetPosition = _glkView.center;
     _glkView.center = CGPointMake(self.view.bounds.size.width / 2.0, self.view.bounds.size.height / 2.0);
-    
+    _fenixLogoView.center = _glkView.center;
+
     RMIntroPageView *firstPage = (RMIntroPageView *)[_pageViews firstObject];
     CGPoint headerTargetPosition = firstPage.headerLabel.center;
     firstPage.headerLabel.center = CGPointMake(headerTargetPosition.x, headerTargetPosition.y + 140.0);
-    
+
     CGPoint descriptionTargetPosition = firstPage.descriptionLabel.center;
     firstPage.descriptionLabel.center = CGPointMake(descriptionTargetPosition.x, descriptionTargetPosition.y + 160.0);
-    
+
     CGPoint pageControlTargetPosition = _pageControl.center;
     _pageControl.center = CGPointMake(pageControlTargetPosition.x, pageControlTargetPosition.y + 200.0);
-    
+
     CGPoint buttonTargetPosition = _startButton.center;
     _startButton.center = CGPointMake(buttonTargetPosition.x, buttonTargetPosition.y + 220.0);
-    
+
     _glkView.transform = CGAffineTransformMakeScale(0.66, 0.66);
-        
+    _fenixLogoView.transform = _glkView.transform;
+
     [UIView animateWithDuration:0.65 delay:0.15 usingSpringWithDamping:1.2f initialSpringVelocity:0.0 options:kNilOptions animations:^{
         _glkView.center = logoTargetPosition;
+        _fenixLogoView.center = logoTargetPosition;
         firstPage.headerLabel.center = headerTargetPosition;
         firstPage.descriptionLabel.center = descriptionTargetPosition;
         _pageControl.center = pageControlTargetPosition;
         _startButton.center = buttonTargetPosition;
         _glkView.transform = CGAffineTransformIdentity;
+        _fenixLogoView.transform = CGAffineTransformIdentity;
     } completion:nil];
-    
+
     _glkView.alpha = 0.0;
+    _fenixLogoView.alpha = 0.0;
     _pageScrollView.alpha = 0.0;
     _pageControl.alpha = 0.0;
     _startButton.alpha = 0.0;
-    
+
     [UIView animateWithDuration:0.3 delay:0.15 options:kNilOptions animations:^{
         _glkView.alpha = 1.0;
+        _fenixLogoView.alpha = 1.0;
         _pageScrollView.alpha = 1.0;
         _pageControl.alpha = 1.0;
         _startButton.alpha = 1.0;
@@ -303,7 +311,21 @@ typedef enum {
         
         [self setupGL];
         [self.view addSubview:_glkView];
-        
+
+        // Fenixuz fork: hide the rotating OpenGL Telegram logo and overlay our
+        // static Phoenix logo at the same frame. The GLKView still loads (so
+        // animations like fade-in / center-shift continue to work) but it is
+        // covered by the logo, giving the user a clean static brand image.
+        _glkView.hidden = YES;
+        if (!_fenixLogoView) {
+            _fenixLogoView = [[UIImageView alloc] initWithFrame:_glkView.frame];
+            _fenixLogoView.image = [UIImage imageNamed:@"fenix_logo"];
+            _fenixLogoView.contentMode = UIViewContentModeScaleAspectFit;
+            _fenixLogoView.autoresizingMask = _glkView.autoresizingMask;
+            _fenixLogoView.userInteractionEnabled = NO;
+            [self.view addSubview:_fenixLogoView];
+        }
+
         [self startTimer];
         _isOpenGLLoaded = true;
     }
@@ -551,6 +573,7 @@ typedef enum {
     
     _pageControl.frame = CGRectMake(0, pageControlY, self.view.bounds.size.width, 7);
     _glkView.frame = CGRectChangedOriginY(_glkView.frame, glViewY - statusBarHeight);
+    _fenixLogoView.frame = _glkView.frame;
     
     CGFloat startButtonWidth = MIN(430.0 - 48.0, self.view.bounds.size.width - 48.0f);
     UIView *startButton = self.createStartButton(startButtonWidth);
