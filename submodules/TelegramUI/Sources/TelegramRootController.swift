@@ -18,6 +18,8 @@ import TabBarUI
 import WallpaperBackgroundNode
 import ChatPresentationInterfaceState
 import CameraScreen
+import FenixuzAIChatbot
+import FenixuzTasks
 import MediaEditorScreen
 import LegacyComponents
 import LegacyMediaPickerUI

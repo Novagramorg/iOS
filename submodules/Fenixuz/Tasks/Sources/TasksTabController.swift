@@ -96,9 +96,38 @@ private enum TasksTabEntry: ItemListNodeEntry {
 
 private func formatTaskDate(_ timestamp: Int32) -> String {
     let date = Date(timeIntervalSince1970: Double(timestamp))
-    let formatter = DateFormatter()
-    formatter.dateFormat = "dd.MM.yyyy HH:mm"
-    return formatter.string(from: date)
+    let now = Date()
+    let calendar = Calendar.current
+
+    let timeFormatter = DateFormatter()
+    timeFormatter.dateFormat = "HH:mm"
+    let timeString = timeFormatter.string(from: date)
+
+    if calendar.isDateInToday(date) {
+        return "Bugun, \(timeString)"
+    }
+    if calendar.isDateInTomorrow(date) {
+        return "Ertaga, \(timeString)"
+    }
+    if calendar.isDateInYesterday(date) {
+        return "Kecha, \(timeString)"
+    }
+
+    let daysBetween = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
+    let dayFormatter = DateFormatter()
+    dayFormatter.locale = Locale(identifier: "uz_UZ")
+
+    if daysBetween > 0 && daysBetween < 7 {
+        dayFormatter.dateFormat = "EEEE, HH:mm"
+        return dayFormatter.string(from: date).capitalized
+    }
+
+    if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
+        dayFormatter.dateFormat = "d MMM, HH:mm"
+    } else {
+        dayFormatter.dateFormat = "d MMM yyyy"
+    }
+    return dayFormatter.string(from: date)
 }
 
 // MARK: - Arguments
@@ -143,21 +172,29 @@ private func tasksTabEntries(presentationData: PresentationData, state: TasksTab
     var entries: [TasksTabEntry] = []
     
     if state.selectedSegment == 0 {
-        // Scheduled segment
         let pending = state.scheduledTasks.filter { !$0.isSent }.sorted { $0.scheduledDate < $1.scheduledDate }
-        entries.append(.scheduledHeader(presentationData.theme, "REJALASHTIRILGAN"))
+        let header = pending.isEmpty ? "REJALASHTIRILGAN" : "REJALASHTIRILGAN — \(pending.count) TA"
+        entries.append(.scheduledHeader(presentationData.theme, header))
         if pending.isEmpty {
-            entries.append(.scheduledEmpty(presentationData.theme, "Rejalashtirilgan xabarlar yo'q.\n\"+\" tugmasini bosib yangi task qo'shing."))
+            entries.append(.scheduledEmpty(presentationData.theme, "📅\n\nRejalashtirilgan xabarlar yo'q\n\nYuqoridagi “+” tugmasini bosib\nbirinchi rejani qo'shing."))
         } else {
             for (index, task) in pending.enumerated() {
                 entries.append(.scheduledTask(index, presentationData.theme, task))
             }
         }
     } else {
-        // Task segment
         if state.todoFolders.isEmpty {
-            entries.append(.todoEmpty(presentationData.theme, "Sizda hozircha papkalar yo'q.\n\"+\" tugmasini bosib yangi qo'shing."))
+            entries.append(.todoEmpty(presentationData.theme, "🗂\n\nPapkalar yo'q\n\nYuqoridagi “+” tugmasini bosib\nbirinchi papkangizni yarating."))
         } else {
+            let totalDone = state.todoTasks.filter { $0.isCompleted }.count
+            let totalAll = state.todoTasks.count
+            let header: String
+            if totalAll == 0 {
+                header = "PAPKALAR — \(state.todoFolders.count) TA"
+            } else {
+                header = "PAPKALAR — \(state.todoFolders.count) TA · \(totalDone)/\(totalAll) BAJARILDI"
+            }
+            entries.append(.scheduledHeader(presentationData.theme, header))
             for (index, folder) in state.todoFolders.enumerated() {
                 let folderTasks = state.todoTasks.filter { $0.folderId == folder.id }
                 let totalCount = folderTasks.count
@@ -166,7 +203,7 @@ private func tasksTabEntries(presentationData: PresentationData, state: TasksTab
             }
         }
     }
-    
+
     return entries
 }
 

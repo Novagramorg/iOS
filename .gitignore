@@ -83,3 +83,5 @@ xcode-files
 /buildbox/*
 PROJECT_LOG.md
 FENIXUZ_PLAN.md
+WEBSITE_AUDIT_FENIXUZ.md
+.playwright-mcp/
