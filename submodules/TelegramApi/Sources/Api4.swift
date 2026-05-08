@@ -5,8 +5,8 @@ public extension Api {
             public init(flags: Int32) {
                 self.flags = flags
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelAdminLogEventsFilter", [("flags", self.flags as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelAdminLogEventsFilter", [("flags", ConstructorParameterDescription(self.flags))])
             }
         }
         case channelAdminLogEventsFilter(Cons_channelAdminLogEventsFilter)
@@ -22,10 +22,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .channelAdminLogEventsFilter(let _data):
-                return ("channelAdminLogEventsFilter", [("flags", _data.flags as Any)])
+                return ("channelAdminLogEventsFilter", [("flags", ConstructorParameterDescription(_data.flags))])
             }
         }
 
@@ -51,8 +51,8 @@ public extension Api {
                 self.geoPoint = geoPoint
                 self.address = address
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelLocation", [("geoPoint", self.geoPoint as Any), ("address", self.address as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelLocation", [("geoPoint", ConstructorParameterDescription(self.geoPoint)), ("address", ConstructorParameterDescription(self.address))])
             }
         }
         case channelLocation(Cons_channelLocation)
@@ -75,10 +75,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .channelLocation(let _data):
-                return ("channelLocation", [("geoPoint", _data.geoPoint as Any), ("address", _data.address as Any)])
+                return ("channelLocation", [("geoPoint", ConstructorParameterDescription(_data.geoPoint)), ("address", ConstructorParameterDescription(_data.address))])
             case .channelLocationEmpty:
                 return ("channelLocationEmpty", [])
             }
@@ -114,8 +114,8 @@ public extension Api {
                 self.flags = flags
                 self.ranges = ranges
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelMessagesFilter", [("flags", self.flags as Any), ("ranges", self.ranges as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelMessagesFilter", [("flags", ConstructorParameterDescription(self.flags)), ("ranges", ConstructorParameterDescription(self.ranges))])
             }
         }
         case channelMessagesFilter(Cons_channelMessagesFilter)
@@ -142,10 +142,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .channelMessagesFilter(let _data):
-                return ("channelMessagesFilter", [("flags", _data.flags as Any), ("ranges", _data.ranges as Any)])
+                return ("channelMessagesFilter", [("flags", ConstructorParameterDescription(_data.flags)), ("ranges", ConstructorParameterDescription(_data.ranges))])
             case .channelMessagesFilterEmpty:
                 return ("channelMessagesFilterEmpty", [])
             }
@@ -187,8 +187,8 @@ public extension Api {
                 self.subscriptionUntilDate = subscriptionUntilDate
                 self.rank = rank
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipant", [("flags", self.flags as Any), ("userId", self.userId as Any), ("date", self.date as Any), ("subscriptionUntilDate", self.subscriptionUntilDate as Any), ("rank", self.rank as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipant", [("flags", ConstructorParameterDescription(self.flags)), ("userId", ConstructorParameterDescription(self.userId)), ("date", ConstructorParameterDescription(self.date)), ("subscriptionUntilDate", ConstructorParameterDescription(self.subscriptionUntilDate)), ("rank", ConstructorParameterDescription(self.rank))])
             }
         }
         public class Cons_channelParticipantAdmin: TypeConstructorDescription {
@@ -208,8 +208,8 @@ public extension Api {
                 self.adminRights = adminRights
                 self.rank = rank
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantAdmin", [("flags", self.flags as Any), ("userId", self.userId as Any), ("inviterId", self.inviterId as Any), ("promotedBy", self.promotedBy as Any), ("date", self.date as Any), ("adminRights", self.adminRights as Any), ("rank", self.rank as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantAdmin", [("flags", ConstructorParameterDescription(self.flags)), ("userId", ConstructorParameterDescription(self.userId)), ("inviterId", ConstructorParameterDescription(self.inviterId)), ("promotedBy", ConstructorParameterDescription(self.promotedBy)), ("date", ConstructorParameterDescription(self.date)), ("adminRights", ConstructorParameterDescription(self.adminRights)), ("rank", ConstructorParameterDescription(self.rank))])
             }
         }
         public class Cons_channelParticipantBanned: TypeConstructorDescription {
@@ -227,8 +227,8 @@ public extension Api {
                 self.bannedRights = bannedRights
                 self.rank = rank
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantBanned", [("flags", self.flags as Any), ("peer", self.peer as Any), ("kickedBy", self.kickedBy as Any), ("date", self.date as Any), ("bannedRights", self.bannedRights as Any), ("rank", self.rank as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantBanned", [("flags", ConstructorParameterDescription(self.flags)), ("peer", ConstructorParameterDescription(self.peer)), ("kickedBy", ConstructorParameterDescription(self.kickedBy)), ("date", ConstructorParameterDescription(self.date)), ("bannedRights", ConstructorParameterDescription(self.bannedRights)), ("rank", ConstructorParameterDescription(self.rank))])
             }
         }
         public class Cons_channelParticipantCreator: TypeConstructorDescription {
@@ -242,8 +242,8 @@ public extension Api {
                 self.adminRights = adminRights
                 self.rank = rank
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantCreator", [("flags", self.flags as Any), ("userId", self.userId as Any), ("adminRights", self.adminRights as Any), ("rank", self.rank as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantCreator", [("flags", ConstructorParameterDescription(self.flags)), ("userId", ConstructorParameterDescription(self.userId)), ("adminRights", ConstructorParameterDescription(self.adminRights)), ("rank", ConstructorParameterDescription(self.rank))])
             }
         }
         public class Cons_channelParticipantLeft: TypeConstructorDescription {
@@ -251,8 +251,8 @@ public extension Api {
             public init(peer: Api.Peer) {
                 self.peer = peer
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantLeft", [("peer", self.peer as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantLeft", [("peer", ConstructorParameterDescription(self.peer))])
             }
         }
         public class Cons_channelParticipantSelf: TypeConstructorDescription {
@@ -270,8 +270,8 @@ public extension Api {
                 self.subscriptionUntilDate = subscriptionUntilDate
                 self.rank = rank
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantSelf", [("flags", self.flags as Any), ("userId", self.userId as Any), ("inviterId", self.inviterId as Any), ("date", self.date as Any), ("subscriptionUntilDate", self.subscriptionUntilDate as Any), ("rank", self.rank as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantSelf", [("flags", ConstructorParameterDescription(self.flags)), ("userId", ConstructorParameterDescription(self.userId)), ("inviterId", ConstructorParameterDescription(self.inviterId)), ("date", ConstructorParameterDescription(self.date)), ("subscriptionUntilDate", ConstructorParameterDescription(self.subscriptionUntilDate)), ("rank", ConstructorParameterDescription(self.rank))])
             }
         }
         case channelParticipant(Cons_channelParticipant)
@@ -361,20 +361,20 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .channelParticipant(let _data):
-                return ("channelParticipant", [("flags", _data.flags as Any), ("userId", _data.userId as Any), ("date", _data.date as Any), ("subscriptionUntilDate", _data.subscriptionUntilDate as Any), ("rank", _data.rank as Any)])
+                return ("channelParticipant", [("flags", ConstructorParameterDescription(_data.flags)), ("userId", ConstructorParameterDescription(_data.userId)), ("date", ConstructorParameterDescription(_data.date)), ("subscriptionUntilDate", ConstructorParameterDescription(_data.subscriptionUntilDate)), ("rank", ConstructorParameterDescription(_data.rank))])
             case .channelParticipantAdmin(let _data):
-                return ("channelParticipantAdmin", [("flags", _data.flags as Any), ("userId", _data.userId as Any), ("inviterId", _data.inviterId as Any), ("promotedBy", _data.promotedBy as Any), ("date", _data.date as Any), ("adminRights", _data.adminRights as Any), ("rank", _data.rank as Any)])
+                return ("channelParticipantAdmin", [("flags", ConstructorParameterDescription(_data.flags)), ("userId", ConstructorParameterDescription(_data.userId)), ("inviterId", ConstructorParameterDescription(_data.inviterId)), ("promotedBy", ConstructorParameterDescription(_data.promotedBy)), ("date", ConstructorParameterDescription(_data.date)), ("adminRights", ConstructorParameterDescription(_data.adminRights)), ("rank", ConstructorParameterDescription(_data.rank))])
             case .channelParticipantBanned(let _data):
-                return ("channelParticipantBanned", [("flags", _data.flags as Any), ("peer", _data.peer as Any), ("kickedBy", _data.kickedBy as Any), ("date", _data.date as Any), ("bannedRights", _data.bannedRights as Any), ("rank", _data.rank as Any)])
+                return ("channelParticipantBanned", [("flags", ConstructorParameterDescription(_data.flags)), ("peer", ConstructorParameterDescription(_data.peer)), ("kickedBy", ConstructorParameterDescription(_data.kickedBy)), ("date", ConstructorParameterDescription(_data.date)), ("bannedRights", ConstructorParameterDescription(_data.bannedRights)), ("rank", ConstructorParameterDescription(_data.rank))])
             case .channelParticipantCreator(let _data):
-                return ("channelParticipantCreator", [("flags", _data.flags as Any), ("userId", _data.userId as Any), ("adminRights", _data.adminRights as Any), ("rank", _data.rank as Any)])
+                return ("channelParticipantCreator", [("flags", ConstructorParameterDescription(_data.flags)), ("userId", ConstructorParameterDescription(_data.userId)), ("adminRights", ConstructorParameterDescription(_data.adminRights)), ("rank", ConstructorParameterDescription(_data.rank))])
             case .channelParticipantLeft(let _data):
-                return ("channelParticipantLeft", [("peer", _data.peer as Any)])
+                return ("channelParticipantLeft", [("peer", ConstructorParameterDescription(_data.peer))])
             case .channelParticipantSelf(let _data):
-                return ("channelParticipantSelf", [("flags", _data.flags as Any), ("userId", _data.userId as Any), ("inviterId", _data.inviterId as Any), ("date", _data.date as Any), ("subscriptionUntilDate", _data.subscriptionUntilDate as Any), ("rank", _data.rank as Any)])
+                return ("channelParticipantSelf", [("flags", ConstructorParameterDescription(_data.flags)), ("userId", ConstructorParameterDescription(_data.userId)), ("inviterId", ConstructorParameterDescription(_data.inviterId)), ("date", ConstructorParameterDescription(_data.date)), ("subscriptionUntilDate", ConstructorParameterDescription(_data.subscriptionUntilDate)), ("rank", ConstructorParameterDescription(_data.rank))])
             }
         }
 
@@ -386,18 +386,18 @@ public extension Api {
             var _3: Int32?
             _3 = reader.readInt32()
             var _4: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _4 = reader.readInt32()
             }
             var _5: String?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _5 = parseString(reader)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.ChannelParticipant.channelParticipant(Cons_channelParticipant(flags: _1!, userId: _2!, date: _3!, subscriptionUntilDate: _4, rank: _5))
             }
@@ -411,7 +411,7 @@ public extension Api {
             var _2: Int64?
             _2 = reader.readInt64()
             var _3: Int64?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _3 = reader.readInt64()
             }
             var _4: Int64?
@@ -423,16 +423,16 @@ public extension Api {
                 _6 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
             }
             var _7: String?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _7 = parseString(reader)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 2) == 0) || _7 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _7 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
                 return Api.ChannelParticipant.channelParticipantAdmin(Cons_channelParticipantAdmin(flags: _1!, userId: _2!, inviterId: _3, promotedBy: _4!, date: _5!, adminRights: _6!, rank: _7))
             }
@@ -456,7 +456,7 @@ public extension Api {
                 _5 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
             }
             var _6: String?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _6 = parseString(reader)
             }
             let _c1 = _1 != nil
@@ -464,7 +464,7 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.ChannelParticipant.channelParticipantBanned(Cons_channelParticipantBanned(flags: _1!, peer: _2!, kickedBy: _3!, date: _4!, bannedRights: _5!, rank: _6))
             }
@@ -482,13 +482,13 @@ public extension Api {
                 _3 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
             }
             var _4: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _4 = parseString(reader)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.ChannelParticipant.channelParticipantCreator(Cons_channelParticipantCreator(flags: _1!, userId: _2!, adminRights: _3!, rank: _4))
             }
@@ -519,19 +519,19 @@ public extension Api {
             var _4: Int32?
             _4 = reader.readInt32()
             var _5: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _5 = reader.readInt32()
             }
             var _6: String?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _6 = parseString(reader)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.ChannelParticipant.channelParticipantSelf(Cons_channelParticipantSelf(flags: _1!, userId: _2!, inviterId: _3!, date: _4!, subscriptionUntilDate: _5, rank: _6))
             }
@@ -548,8 +548,8 @@ public extension Api {
             public init(q: String) {
                 self.q = q
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantsBanned", [("q", self.q as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantsBanned", [("q", ConstructorParameterDescription(self.q))])
             }
         }
         public class Cons_channelParticipantsContacts: TypeConstructorDescription {
@@ -557,8 +557,8 @@ public extension Api {
             public init(q: String) {
                 self.q = q
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantsContacts", [("q", self.q as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantsContacts", [("q", ConstructorParameterDescription(self.q))])
             }
         }
         public class Cons_channelParticipantsKicked: TypeConstructorDescription {
@@ -566,8 +566,8 @@ public extension Api {
             public init(q: String) {
                 self.q = q
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantsKicked", [("q", self.q as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantsKicked", [("q", ConstructorParameterDescription(self.q))])
             }
         }
         public class Cons_channelParticipantsMentions: TypeConstructorDescription {
@@ -579,8 +579,8 @@ public extension Api {
                 self.q = q
                 self.topMsgId = topMsgId
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantsMentions", [("flags", self.flags as Any), ("q", self.q as Any), ("topMsgId", self.topMsgId as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantsMentions", [("flags", ConstructorParameterDescription(self.flags)), ("q", ConstructorParameterDescription(self.q)), ("topMsgId", ConstructorParameterDescription(self.topMsgId))])
             }
         }
         public class Cons_channelParticipantsSearch: TypeConstructorDescription {
@@ -588,8 +588,8 @@ public extension Api {
             public init(q: String) {
                 self.q = q
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelParticipantsSearch", [("q", self.q as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelParticipantsSearch", [("q", ConstructorParameterDescription(self.q))])
             }
         }
         case channelParticipantsAdmins
@@ -657,24 +657,24 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .channelParticipantsAdmins:
                 return ("channelParticipantsAdmins", [])
             case .channelParticipantsBanned(let _data):
-                return ("channelParticipantsBanned", [("q", _data.q as Any)])
+                return ("channelParticipantsBanned", [("q", ConstructorParameterDescription(_data.q))])
             case .channelParticipantsBots:
                 return ("channelParticipantsBots", [])
             case .channelParticipantsContacts(let _data):
-                return ("channelParticipantsContacts", [("q", _data.q as Any)])
+                return ("channelParticipantsContacts", [("q", ConstructorParameterDescription(_data.q))])
             case .channelParticipantsKicked(let _data):
-                return ("channelParticipantsKicked", [("q", _data.q as Any)])
+                return ("channelParticipantsKicked", [("q", ConstructorParameterDescription(_data.q))])
             case .channelParticipantsMentions(let _data):
-                return ("channelParticipantsMentions", [("flags", _data.flags as Any), ("q", _data.q as Any), ("topMsgId", _data.topMsgId as Any)])
+                return ("channelParticipantsMentions", [("flags", ConstructorParameterDescription(_data.flags)), ("q", ConstructorParameterDescription(_data.q)), ("topMsgId", ConstructorParameterDescription(_data.topMsgId))])
             case .channelParticipantsRecent:
                 return ("channelParticipantsRecent", [])
             case .channelParticipantsSearch(let _data):
-                return ("channelParticipantsSearch", [("q", _data.q as Any)])
+                return ("channelParticipantsSearch", [("q", ConstructorParameterDescription(_data.q))])
             }
         }
 
@@ -721,16 +721,16 @@ public extension Api {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _2 = parseString(reader)
             }
             var _3: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _3 = reader.readInt32()
             }
             let _c1 = _1 != nil
-            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _2 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.ChannelParticipantsFilter.channelParticipantsMentions(Cons_channelParticipantsMentions(flags: _1!, q: _2, topMsgId: _3))
             }
@@ -805,8 +805,8 @@ public extension Api {
                 self.sendPaidMessagesStars = sendPaidMessagesStars
                 self.linkedMonoforumId = linkedMonoforumId
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channel", [("flags", self.flags as Any), ("flags2", self.flags2 as Any), ("id", self.id as Any), ("accessHash", self.accessHash as Any), ("title", self.title as Any), ("username", self.username as Any), ("photo", self.photo as Any), ("date", self.date as Any), ("restrictionReason", self.restrictionReason as Any), ("adminRights", self.adminRights as Any), ("bannedRights", self.bannedRights as Any), ("defaultBannedRights", self.defaultBannedRights as Any), ("participantsCount", self.participantsCount as Any), ("usernames", self.usernames as Any), ("storiesMaxId", self.storiesMaxId as Any), ("color", self.color as Any), ("profileColor", self.profileColor as Any), ("emojiStatus", self.emojiStatus as Any), ("level", self.level as Any), ("subscriptionUntilDate", self.subscriptionUntilDate as Any), ("botVerificationIcon", self.botVerificationIcon as Any), ("sendPaidMessagesStars", self.sendPaidMessagesStars as Any), ("linkedMonoforumId", self.linkedMonoforumId as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channel", [("flags", ConstructorParameterDescription(self.flags)), ("flags2", ConstructorParameterDescription(self.flags2)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("title", ConstructorParameterDescription(self.title)), ("username", ConstructorParameterDescription(self.username)), ("photo", ConstructorParameterDescription(self.photo)), ("date", ConstructorParameterDescription(self.date)), ("restrictionReason", ConstructorParameterDescription(self.restrictionReason)), ("adminRights", ConstructorParameterDescription(self.adminRights)), ("bannedRights", ConstructorParameterDescription(self.bannedRights)), ("defaultBannedRights", ConstructorParameterDescription(self.defaultBannedRights)), ("participantsCount", ConstructorParameterDescription(self.participantsCount)), ("usernames", ConstructorParameterDescription(self.usernames)), ("storiesMaxId", ConstructorParameterDescription(self.storiesMaxId)), ("color", ConstructorParameterDescription(self.color)), ("profileColor", ConstructorParameterDescription(self.profileColor)), ("emojiStatus", ConstructorParameterDescription(self.emojiStatus)), ("level", ConstructorParameterDescription(self.level)), ("subscriptionUntilDate", ConstructorParameterDescription(self.subscriptionUntilDate)), ("botVerificationIcon", ConstructorParameterDescription(self.botVerificationIcon)), ("sendPaidMessagesStars", ConstructorParameterDescription(self.sendPaidMessagesStars)), ("linkedMonoforumId", ConstructorParameterDescription(self.linkedMonoforumId))])
             }
         }
         public class Cons_channelForbidden: TypeConstructorDescription {
@@ -822,8 +822,8 @@ public extension Api {
                 self.title = title
                 self.untilDate = untilDate
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelForbidden", [("flags", self.flags as Any), ("id", self.id as Any), ("accessHash", self.accessHash as Any), ("title", self.title as Any), ("untilDate", self.untilDate as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelForbidden", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("title", ConstructorParameterDescription(self.title)), ("untilDate", ConstructorParameterDescription(self.untilDate))])
             }
         }
         public class Cons_chat: TypeConstructorDescription {
@@ -849,8 +849,8 @@ public extension Api {
                 self.adminRights = adminRights
                 self.defaultBannedRights = defaultBannedRights
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chat", [("flags", self.flags as Any), ("id", self.id as Any), ("title", self.title as Any), ("photo", self.photo as Any), ("participantsCount", self.participantsCount as Any), ("date", self.date as Any), ("version", self.version as Any), ("migratedTo", self.migratedTo as Any), ("adminRights", self.adminRights as Any), ("defaultBannedRights", self.defaultBannedRights as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chat", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("title", ConstructorParameterDescription(self.title)), ("photo", ConstructorParameterDescription(self.photo)), ("participantsCount", ConstructorParameterDescription(self.participantsCount)), ("date", ConstructorParameterDescription(self.date)), ("version", ConstructorParameterDescription(self.version)), ("migratedTo", ConstructorParameterDescription(self.migratedTo)), ("adminRights", ConstructorParameterDescription(self.adminRights)), ("defaultBannedRights", ConstructorParameterDescription(self.defaultBannedRights))])
             }
         }
         public class Cons_chatEmpty: TypeConstructorDescription {
@@ -858,8 +858,8 @@ public extension Api {
             public init(id: Int64) {
                 self.id = id
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatEmpty", [("id", self.id as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatEmpty", [("id", ConstructorParameterDescription(self.id))])
             }
         }
         public class Cons_chatForbidden: TypeConstructorDescription {
@@ -869,8 +869,8 @@ public extension Api {
                 self.id = id
                 self.title = title
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatForbidden", [("id", self.id as Any), ("title", self.title as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatForbidden", [("id", ConstructorParameterDescription(self.id)), ("title", ConstructorParameterDescription(self.title))])
             }
         }
         case channel(Cons_channel)
@@ -1000,18 +1000,18 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .channel(let _data):
-                return ("channel", [("flags", _data.flags as Any), ("flags2", _data.flags2 as Any), ("id", _data.id as Any), ("accessHash", _data.accessHash as Any), ("title", _data.title as Any), ("username", _data.username as Any), ("photo", _data.photo as Any), ("date", _data.date as Any), ("restrictionReason", _data.restrictionReason as Any), ("adminRights", _data.adminRights as Any), ("bannedRights", _data.bannedRights as Any), ("defaultBannedRights", _data.defaultBannedRights as Any), ("participantsCount", _data.participantsCount as Any), ("usernames", _data.usernames as Any), ("storiesMaxId", _data.storiesMaxId as Any), ("color", _data.color as Any), ("profileColor", _data.profileColor as Any), ("emojiStatus", _data.emojiStatus as Any), ("level", _data.level as Any), ("subscriptionUntilDate", _data.subscriptionUntilDate as Any), ("botVerificationIcon", _data.botVerificationIcon as Any), ("sendPaidMessagesStars", _data.sendPaidMessagesStars as Any), ("linkedMonoforumId", _data.linkedMonoforumId as Any)])
+                return ("channel", [("flags", ConstructorParameterDescription(_data.flags)), ("flags2", ConstructorParameterDescription(_data.flags2)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title)), ("username", ConstructorParameterDescription(_data.username)), ("photo", ConstructorParameterDescription(_data.photo)), ("date", ConstructorParameterDescription(_data.date)), ("restrictionReason", ConstructorParameterDescription(_data.restrictionReason)), ("adminRights", ConstructorParameterDescription(_data.adminRights)), ("bannedRights", ConstructorParameterDescription(_data.bannedRights)), ("defaultBannedRights", ConstructorParameterDescription(_data.defaultBannedRights)), ("participantsCount", ConstructorParameterDescription(_data.participantsCount)), ("usernames", ConstructorParameterDescription(_data.usernames)), ("storiesMaxId", ConstructorParameterDescription(_data.storiesMaxId)), ("color", ConstructorParameterDescription(_data.color)), ("profileColor", ConstructorParameterDescription(_data.profileColor)), ("emojiStatus", ConstructorParameterDescription(_data.emojiStatus)), ("level", ConstructorParameterDescription(_data.level)), ("subscriptionUntilDate", ConstructorParameterDescription(_data.subscriptionUntilDate)), ("botVerificationIcon", ConstructorParameterDescription(_data.botVerificationIcon)), ("sendPaidMessagesStars", ConstructorParameterDescription(_data.sendPaidMessagesStars)), ("linkedMonoforumId", ConstructorParameterDescription(_data.linkedMonoforumId))])
             case .channelForbidden(let _data):
-                return ("channelForbidden", [("flags", _data.flags as Any), ("id", _data.id as Any), ("accessHash", _data.accessHash as Any), ("title", _data.title as Any), ("untilDate", _data.untilDate as Any)])
+                return ("channelForbidden", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title)), ("untilDate", ConstructorParameterDescription(_data.untilDate))])
             case .chat(let _data):
-                return ("chat", [("flags", _data.flags as Any), ("id", _data.id as Any), ("title", _data.title as Any), ("photo", _data.photo as Any), ("participantsCount", _data.participantsCount as Any), ("date", _data.date as Any), ("version", _data.version as Any), ("migratedTo", _data.migratedTo as Any), ("adminRights", _data.adminRights as Any), ("defaultBannedRights", _data.defaultBannedRights as Any)])
+                return ("chat", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("title", ConstructorParameterDescription(_data.title)), ("photo", ConstructorParameterDescription(_data.photo)), ("participantsCount", ConstructorParameterDescription(_data.participantsCount)), ("date", ConstructorParameterDescription(_data.date)), ("version", ConstructorParameterDescription(_data.version)), ("migratedTo", ConstructorParameterDescription(_data.migratedTo)), ("adminRights", ConstructorParameterDescription(_data.adminRights)), ("defaultBannedRights", ConstructorParameterDescription(_data.defaultBannedRights))])
             case .chatEmpty(let _data):
-                return ("chatEmpty", [("id", _data.id as Any)])
+                return ("chatEmpty", [("id", ConstructorParameterDescription(_data.id))])
             case .chatForbidden(let _data):
-                return ("chatForbidden", [("id", _data.id as Any), ("title", _data.title as Any)])
+                return ("chatForbidden", [("id", ConstructorParameterDescription(_data.id)), ("title", ConstructorParameterDescription(_data.title))])
             }
         }
 
@@ -1023,13 +1023,13 @@ public extension Api {
             var _3: Int64?
             _3 = reader.readInt64()
             var _4: Int64?
-            if Int(_1!) & Int(1 << 13) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 13) != 0 {
                 _4 = reader.readInt64()
             }
             var _5: String?
             _5 = parseString(reader)
             var _6: String?
-            if Int(_1!) & Int(1 << 6) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
                 _6 = parseString(reader)
             }
             var _7: Api.ChatPhoto?
@@ -1039,106 +1039,106 @@ public extension Api {
             var _8: Int32?
             _8 = reader.readInt32()
             var _9: [Api.RestrictionReason]?
-            if Int(_1!) & Int(1 << 9) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 9) != 0 {
                 if let _ = reader.readInt32() {
                     _9 = Api.parseVector(reader, elementSignature: 0, elementType: Api.RestrictionReason.self)
                 }
             }
             var _10: Api.ChatAdminRights?
-            if Int(_1!) & Int(1 << 14) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 14) != 0 {
                 if let signature = reader.readInt32() {
                     _10 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
                 }
             }
             var _11: Api.ChatBannedRights?
-            if Int(_1!) & Int(1 << 15) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 15) != 0 {
                 if let signature = reader.readInt32() {
                     _11 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
                 }
             }
             var _12: Api.ChatBannedRights?
-            if Int(_1!) & Int(1 << 18) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 18) != 0 {
                 if let signature = reader.readInt32() {
                     _12 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
                 }
             }
             var _13: Int32?
-            if Int(_1!) & Int(1 << 17) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 17) != 0 {
                 _13 = reader.readInt32()
             }
             var _14: [Api.Username]?
-            if Int(_2!) & Int(1 << 0) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 0) != 0 {
                 if let _ = reader.readInt32() {
                     _14 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Username.self)
                 }
             }
             var _15: Api.RecentStory?
-            if Int(_2!) & Int(1 << 4) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 4) != 0 {
                 if let signature = reader.readInt32() {
                     _15 = Api.parse(reader, signature: signature) as? Api.RecentStory
                 }
             }
             var _16: Api.PeerColor?
-            if Int(_2!) & Int(1 << 7) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 7) != 0 {
                 if let signature = reader.readInt32() {
                     _16 = Api.parse(reader, signature: signature) as? Api.PeerColor
                 }
             }
             var _17: Api.PeerColor?
-            if Int(_2!) & Int(1 << 8) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 8) != 0 {
                 if let signature = reader.readInt32() {
                     _17 = Api.parse(reader, signature: signature) as? Api.PeerColor
                 }
             }
             var _18: Api.EmojiStatus?
-            if Int(_2!) & Int(1 << 9) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 9) != 0 {
                 if let signature = reader.readInt32() {
                     _18 = Api.parse(reader, signature: signature) as? Api.EmojiStatus
                 }
             }
             var _19: Int32?
-            if Int(_2!) & Int(1 << 10) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 10) != 0 {
                 _19 = reader.readInt32()
             }
             var _20: Int32?
-            if Int(_2!) & Int(1 << 11) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 11) != 0 {
                 _20 = reader.readInt32()
             }
             var _21: Int64?
-            if Int(_2!) & Int(1 << 13) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 13) != 0 {
                 _21 = reader.readInt64()
             }
             var _22: Int64?
-            if Int(_2!) & Int(1 << 14) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 14) != 0 {
                 _22 = reader.readInt64()
             }
             var _23: Int64?
-            if Int(_2!) & Int(1 << 18) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 18) != 0 {
                 _23 = reader.readInt64()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 13) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 13) == 0) || _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 6) == 0) || _6 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _6 != nil
             let _c7 = _7 != nil
             let _c8 = _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 9) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 14) == 0) || _10 != nil
-            let _c11 = (Int(_1!) & Int(1 << 15) == 0) || _11 != nil
-            let _c12 = (Int(_1!) & Int(1 << 18) == 0) || _12 != nil
-            let _c13 = (Int(_1!) & Int(1 << 17) == 0) || _13 != nil
-            let _c14 = (Int(_2!) & Int(1 << 0) == 0) || _14 != nil
-            let _c15 = (Int(_2!) & Int(1 << 4) == 0) || _15 != nil
-            let _c16 = (Int(_2!) & Int(1 << 7) == 0) || _16 != nil
-            let _c17 = (Int(_2!) & Int(1 << 8) == 0) || _17 != nil
-            let _c18 = (Int(_2!) & Int(1 << 9) == 0) || _18 != nil
-            let _c19 = (Int(_2!) & Int(1 << 10) == 0) || _19 != nil
-            let _c20 = (Int(_2!) & Int(1 << 11) == 0) || _20 != nil
-            let _c21 = (Int(_2!) & Int(1 << 13) == 0) || _21 != nil
-            let _c22 = (Int(_2!) & Int(1 << 14) == 0) || _22 != nil
-            let _c23 = (Int(_2!) & Int(1 << 18) == 0) || _23 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 9) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _10 != nil
+            let _c11 = (Int(_1 ?? 0) & Int(1 << 15) == 0) || _11 != nil
+            let _c12 = (Int(_1 ?? 0) & Int(1 << 18) == 0) || _12 != nil
+            let _c13 = (Int(_1 ?? 0) & Int(1 << 17) == 0) || _13 != nil
+            let _c14 = (Int(_2 ?? 0) & Int(1 << 0) == 0) || _14 != nil
+            let _c15 = (Int(_2 ?? 0) & Int(1 << 4) == 0) || _15 != nil
+            let _c16 = (Int(_2 ?? 0) & Int(1 << 7) == 0) || _16 != nil
+            let _c17 = (Int(_2 ?? 0) & Int(1 << 8) == 0) || _17 != nil
+            let _c18 = (Int(_2 ?? 0) & Int(1 << 9) == 0) || _18 != nil
+            let _c19 = (Int(_2 ?? 0) & Int(1 << 10) == 0) || _19 != nil
+            let _c20 = (Int(_2 ?? 0) & Int(1 << 11) == 0) || _20 != nil
+            let _c21 = (Int(_2 ?? 0) & Int(1 << 13) == 0) || _21 != nil
+            let _c22 = (Int(_2 ?? 0) & Int(1 << 14) == 0) || _22 != nil
+            let _c23 = (Int(_2 ?? 0) & Int(1 << 18) == 0) || _23 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 {
                 return Api.Chat.channel(Cons_channel(flags: _1!, flags2: _2!, id: _3!, accessHash: _4, title: _5!, username: _6, photo: _7!, date: _8!, restrictionReason: _9, adminRights: _10, bannedRights: _11, defaultBannedRights: _12, participantsCount: _13, usernames: _14, storiesMaxId: _15, color: _16, profileColor: _17, emojiStatus: _18, level: _19, subscriptionUntilDate: _20, botVerificationIcon: _21, sendPaidMessagesStars: _22, linkedMonoforumId: _23))
             }
@@ -1156,14 +1156,14 @@ public extension Api {
             var _4: String?
             _4 = parseString(reader)
             var _5: Int32?
-            if Int(_1!) & Int(1 << 16) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 16) != 0 {
                 _5 = reader.readInt32()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 16) == 0) || _5 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 16) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.Chat.channelForbidden(Cons_channelForbidden(flags: _1!, id: _2!, accessHash: _3!, title: _4!, untilDate: _5))
             }
@@ -1189,19 +1189,19 @@ public extension Api {
             var _7: Int32?
             _7 = reader.readInt32()
             var _8: Api.InputChannel?
-            if Int(_1!) & Int(1 << 6) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
                 if let signature = reader.readInt32() {
                     _8 = Api.parse(reader, signature: signature) as? Api.InputChannel
                 }
             }
             var _9: Api.ChatAdminRights?
-            if Int(_1!) & Int(1 << 14) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 14) != 0 {
                 if let signature = reader.readInt32() {
                     _9 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
                 }
             }
             var _10: Api.ChatBannedRights?
-            if Int(_1!) & Int(1 << 18) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 18) != 0 {
                 if let signature = reader.readInt32() {
                     _10 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
                 }
@@ -1213,9 +1213,9 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 6) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 14) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 18) == 0) || _10 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 18) == 0) || _10 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 {
                 return Api.Chat.chat(Cons_chat(flags: _1!, id: _2!, title: _3!, photo: _4!, participantsCount: _5!, date: _6!, version: _7!, migratedTo: _8, adminRights: _9, defaultBannedRights: _10))
             }
@@ -1257,8 +1257,8 @@ public extension Api {
             public init(flags: Int32) {
                 self.flags = flags
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatAdminRights", [("flags", self.flags as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatAdminRights", [("flags", ConstructorParameterDescription(self.flags))])
             }
         }
         case chatAdminRights(Cons_chatAdminRights)
@@ -1274,10 +1274,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .chatAdminRights(let _data):
-                return ("chatAdminRights", [("flags", _data.flags as Any)])
+                return ("chatAdminRights", [("flags", ConstructorParameterDescription(_data.flags))])
             }
         }
 
@@ -1305,8 +1305,8 @@ public extension Api {
                 self.invitesCount = invitesCount
                 self.revokedInvitesCount = revokedInvitesCount
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatAdminWithInvites", [("adminId", self.adminId as Any), ("invitesCount", self.invitesCount as Any), ("revokedInvitesCount", self.revokedInvitesCount as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatAdminWithInvites", [("adminId", ConstructorParameterDescription(self.adminId)), ("invitesCount", ConstructorParameterDescription(self.invitesCount)), ("revokedInvitesCount", ConstructorParameterDescription(self.revokedInvitesCount))])
             }
         }
         case chatAdminWithInvites(Cons_chatAdminWithInvites)
@@ -1324,10 +1324,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .chatAdminWithInvites(let _data):
-                return ("chatAdminWithInvites", [("adminId", _data.adminId as Any), ("invitesCount", _data.invitesCount as Any), ("revokedInvitesCount", _data.revokedInvitesCount as Any)])
+                return ("chatAdminWithInvites", [("adminId", ConstructorParameterDescription(_data.adminId)), ("invitesCount", ConstructorParameterDescription(_data.invitesCount)), ("revokedInvitesCount", ConstructorParameterDescription(_data.revokedInvitesCount))])
             }
         }
 
@@ -1359,8 +1359,8 @@ public extension Api {
                 self.flags = flags
                 self.untilDate = untilDate
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatBannedRights", [("flags", self.flags as Any), ("untilDate", self.untilDate as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatBannedRights", [("flags", ConstructorParameterDescription(self.flags)), ("untilDate", ConstructorParameterDescription(self.untilDate))])
             }
         }
         case chatBannedRights(Cons_chatBannedRights)
@@ -1377,10 +1377,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .chatBannedRights(let _data):
-                return ("chatBannedRights", [("flags", _data.flags as Any), ("untilDate", _data.untilDate as Any)])
+                return ("chatBannedRights", [("flags", ConstructorParameterDescription(_data.flags)), ("untilDate", ConstructorParameterDescription(_data.untilDate))])
             }
         }
 
@@ -1499,8 +1499,8 @@ public extension Api {
                 self.sendPaidMessagesStars = sendPaidMessagesStars
                 self.mainTab = mainTab
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("channelFull", [("flags", self.flags as Any), ("flags2", self.flags2 as Any), ("id", self.id as Any), ("about", self.about as Any), ("participantsCount", self.participantsCount as Any), ("adminsCount", self.adminsCount as Any), ("kickedCount", self.kickedCount as Any), ("bannedCount", self.bannedCount as Any), ("onlineCount", self.onlineCount as Any), ("readInboxMaxId", self.readInboxMaxId as Any), ("readOutboxMaxId", self.readOutboxMaxId as Any), ("unreadCount", self.unreadCount as Any), ("chatPhoto", self.chatPhoto as Any), ("notifySettings", self.notifySettings as Any), ("exportedInvite", self.exportedInvite as Any), ("botInfo", self.botInfo as Any), ("migratedFromChatId", self.migratedFromChatId as Any), ("migratedFromMaxId", self.migratedFromMaxId as Any), ("pinnedMsgId", self.pinnedMsgId as Any), ("stickerset", self.stickerset as Any), ("availableMinId", self.availableMinId as Any), ("folderId", self.folderId as Any), ("linkedChatId", self.linkedChatId as Any), ("location", self.location as Any), ("slowmodeSeconds", self.slowmodeSeconds as Any), ("slowmodeNextSendDate", self.slowmodeNextSendDate as Any), ("statsDc", self.statsDc as Any), ("pts", self.pts as Any), ("call", self.call as Any), ("ttlPeriod", self.ttlPeriod as Any), ("pendingSuggestions", self.pendingSuggestions as Any), ("groupcallDefaultJoinAs", self.groupcallDefaultJoinAs as Any), ("themeEmoticon", self.themeEmoticon as Any), ("requestsPending", self.requestsPending as Any), ("recentRequesters", self.recentRequesters as Any), ("defaultSendAs", self.defaultSendAs as Any), ("availableReactions", self.availableReactions as Any), ("reactionsLimit", self.reactionsLimit as Any), ("stories", self.stories as Any), ("wallpaper", self.wallpaper as Any), ("boostsApplied", self.boostsApplied as Any), ("boostsUnrestrict", self.boostsUnrestrict as Any), ("emojiset", self.emojiset as Any), ("botVerification", self.botVerification as Any), ("stargiftsCount", self.stargiftsCount as Any), ("sendPaidMessagesStars", self.sendPaidMessagesStars as Any), ("mainTab", self.mainTab as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("channelFull", [("flags", ConstructorParameterDescription(self.flags)), ("flags2", ConstructorParameterDescription(self.flags2)), ("id", ConstructorParameterDescription(self.id)), ("about", ConstructorParameterDescription(self.about)), ("participantsCount", ConstructorParameterDescription(self.participantsCount)), ("adminsCount", ConstructorParameterDescription(self.adminsCount)), ("kickedCount", ConstructorParameterDescription(self.kickedCount)), ("bannedCount", ConstructorParameterDescription(self.bannedCount)), ("onlineCount", ConstructorParameterDescription(self.onlineCount)), ("readInboxMaxId", ConstructorParameterDescription(self.readInboxMaxId)), ("readOutboxMaxId", ConstructorParameterDescription(self.readOutboxMaxId)), ("unreadCount", ConstructorParameterDescription(self.unreadCount)), ("chatPhoto", ConstructorParameterDescription(self.chatPhoto)), ("notifySettings", ConstructorParameterDescription(self.notifySettings)), ("exportedInvite", ConstructorParameterDescription(self.exportedInvite)), ("botInfo", ConstructorParameterDescription(self.botInfo)), ("migratedFromChatId", ConstructorParameterDescription(self.migratedFromChatId)), ("migratedFromMaxId", ConstructorParameterDescription(self.migratedFromMaxId)), ("pinnedMsgId", ConstructorParameterDescription(self.pinnedMsgId)), ("stickerset", ConstructorParameterDescription(self.stickerset)), ("availableMinId", ConstructorParameterDescription(self.availableMinId)), ("folderId", ConstructorParameterDescription(self.folderId)), ("linkedChatId", ConstructorParameterDescription(self.linkedChatId)), ("location", ConstructorParameterDescription(self.location)), ("slowmodeSeconds", ConstructorParameterDescription(self.slowmodeSeconds)), ("slowmodeNextSendDate", ConstructorParameterDescription(self.slowmodeNextSendDate)), ("statsDc", ConstructorParameterDescription(self.statsDc)), ("pts", ConstructorParameterDescription(self.pts)), ("call", ConstructorParameterDescription(self.call)), ("ttlPeriod", ConstructorParameterDescription(self.ttlPeriod)), ("pendingSuggestions", ConstructorParameterDescription(self.pendingSuggestions)), ("groupcallDefaultJoinAs", ConstructorParameterDescription(self.groupcallDefaultJoinAs)), ("themeEmoticon", ConstructorParameterDescription(self.themeEmoticon)), ("requestsPending", ConstructorParameterDescription(self.requestsPending)), ("recentRequesters", ConstructorParameterDescription(self.recentRequesters)), ("defaultSendAs", ConstructorParameterDescription(self.defaultSendAs)), ("availableReactions", ConstructorParameterDescription(self.availableReactions)), ("reactionsLimit", ConstructorParameterDescription(self.reactionsLimit)), ("stories", ConstructorParameterDescription(self.stories)), ("wallpaper", ConstructorParameterDescription(self.wallpaper)), ("boostsApplied", ConstructorParameterDescription(self.boostsApplied)), ("boostsUnrestrict", ConstructorParameterDescription(self.boostsUnrestrict)), ("emojiset", ConstructorParameterDescription(self.emojiset)), ("botVerification", ConstructorParameterDescription(self.botVerification)), ("stargiftsCount", ConstructorParameterDescription(self.stargiftsCount)), ("sendPaidMessagesStars", ConstructorParameterDescription(self.sendPaidMessagesStars)), ("mainTab", ConstructorParameterDescription(self.mainTab))])
             }
         }
         public class Cons_chatFull: TypeConstructorDescription {
@@ -1542,8 +1542,8 @@ public extension Api {
                 self.availableReactions = availableReactions
                 self.reactionsLimit = reactionsLimit
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatFull", [("flags", self.flags as Any), ("id", self.id as Any), ("about", self.about as Any), ("participants", self.participants as Any), ("chatPhoto", self.chatPhoto as Any), ("notifySettings", self.notifySettings as Any), ("exportedInvite", self.exportedInvite as Any), ("botInfo", self.botInfo as Any), ("pinnedMsgId", self.pinnedMsgId as Any), ("folderId", self.folderId as Any), ("call", self.call as Any), ("ttlPeriod", self.ttlPeriod as Any), ("groupcallDefaultJoinAs", self.groupcallDefaultJoinAs as Any), ("themeEmoticon", self.themeEmoticon as Any), ("requestsPending", self.requestsPending as Any), ("recentRequesters", self.recentRequesters as Any), ("availableReactions", self.availableReactions as Any), ("reactionsLimit", self.reactionsLimit as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatFull", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("about", ConstructorParameterDescription(self.about)), ("participants", ConstructorParameterDescription(self.participants)), ("chatPhoto", ConstructorParameterDescription(self.chatPhoto)), ("notifySettings", ConstructorParameterDescription(self.notifySettings)), ("exportedInvite", ConstructorParameterDescription(self.exportedInvite)), ("botInfo", ConstructorParameterDescription(self.botInfo)), ("pinnedMsgId", ConstructorParameterDescription(self.pinnedMsgId)), ("folderId", ConstructorParameterDescription(self.folderId)), ("call", ConstructorParameterDescription(self.call)), ("ttlPeriod", ConstructorParameterDescription(self.ttlPeriod)), ("groupcallDefaultJoinAs", ConstructorParameterDescription(self.groupcallDefaultJoinAs)), ("themeEmoticon", ConstructorParameterDescription(self.themeEmoticon)), ("requestsPending", ConstructorParameterDescription(self.requestsPending)), ("recentRequesters", ConstructorParameterDescription(self.recentRequesters)), ("availableReactions", ConstructorParameterDescription(self.availableReactions)), ("reactionsLimit", ConstructorParameterDescription(self.reactionsLimit))])
             }
         }
         case channelFull(Cons_channelFull)
@@ -1747,12 +1747,12 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .channelFull(let _data):
-                return ("channelFull", [("flags", _data.flags as Any), ("flags2", _data.flags2 as Any), ("id", _data.id as Any), ("about", _data.about as Any), ("participantsCount", _data.participantsCount as Any), ("adminsCount", _data.adminsCount as Any), ("kickedCount", _data.kickedCount as Any), ("bannedCount", _data.bannedCount as Any), ("onlineCount", _data.onlineCount as Any), ("readInboxMaxId", _data.readInboxMaxId as Any), ("readOutboxMaxId", _data.readOutboxMaxId as Any), ("unreadCount", _data.unreadCount as Any), ("chatPhoto", _data.chatPhoto as Any), ("notifySettings", _data.notifySettings as Any), ("exportedInvite", _data.exportedInvite as Any), ("botInfo", _data.botInfo as Any), ("migratedFromChatId", _data.migratedFromChatId as Any), ("migratedFromMaxId", _data.migratedFromMaxId as Any), ("pinnedMsgId", _data.pinnedMsgId as Any), ("stickerset", _data.stickerset as Any), ("availableMinId", _data.availableMinId as Any), ("folderId", _data.folderId as Any), ("linkedChatId", _data.linkedChatId as Any), ("location", _data.location as Any), ("slowmodeSeconds", _data.slowmodeSeconds as Any), ("slowmodeNextSendDate", _data.slowmodeNextSendDate as Any), ("statsDc", _data.statsDc as Any), ("pts", _data.pts as Any), ("call", _data.call as Any), ("ttlPeriod", _data.ttlPeriod as Any), ("pendingSuggestions", _data.pendingSuggestions as Any), ("groupcallDefaultJoinAs", _data.groupcallDefaultJoinAs as Any), ("themeEmoticon", _data.themeEmoticon as Any), ("requestsPending", _data.requestsPending as Any), ("recentRequesters", _data.recentRequesters as Any), ("defaultSendAs", _data.defaultSendAs as Any), ("availableReactions", _data.availableReactions as Any), ("reactionsLimit", _data.reactionsLimit as Any), ("stories", _data.stories as Any), ("wallpaper", _data.wallpaper as Any), ("boostsApplied", _data.boostsApplied as Any), ("boostsUnrestrict", _data.boostsUnrestrict as Any), ("emojiset", _data.emojiset as Any), ("botVerification", _data.botVerification as Any), ("stargiftsCount", _data.stargiftsCount as Any), ("sendPaidMessagesStars", _data.sendPaidMessagesStars as Any), ("mainTab", _data.mainTab as Any)])
+                return ("channelFull", [("flags", ConstructorParameterDescription(_data.flags)), ("flags2", ConstructorParameterDescription(_data.flags2)), ("id", ConstructorParameterDescription(_data.id)), ("about", ConstructorParameterDescription(_data.about)), ("participantsCount", ConstructorParameterDescription(_data.participantsCount)), ("adminsCount", ConstructorParameterDescription(_data.adminsCount)), ("kickedCount", ConstructorParameterDescription(_data.kickedCount)), ("bannedCount", ConstructorParameterDescription(_data.bannedCount)), ("onlineCount", ConstructorParameterDescription(_data.onlineCount)), ("readInboxMaxId", ConstructorParameterDescription(_data.readInboxMaxId)), ("readOutboxMaxId", ConstructorParameterDescription(_data.readOutboxMaxId)), ("unreadCount", ConstructorParameterDescription(_data.unreadCount)), ("chatPhoto", ConstructorParameterDescription(_data.chatPhoto)), ("notifySettings", ConstructorParameterDescription(_data.notifySettings)), ("exportedInvite", ConstructorParameterDescription(_data.exportedInvite)), ("botInfo", ConstructorParameterDescription(_data.botInfo)), ("migratedFromChatId", ConstructorParameterDescription(_data.migratedFromChatId)), ("migratedFromMaxId", ConstructorParameterDescription(_data.migratedFromMaxId)), ("pinnedMsgId", ConstructorParameterDescription(_data.pinnedMsgId)), ("stickerset", ConstructorParameterDescription(_data.stickerset)), ("availableMinId", ConstructorParameterDescription(_data.availableMinId)), ("folderId", ConstructorParameterDescription(_data.folderId)), ("linkedChatId", ConstructorParameterDescription(_data.linkedChatId)), ("location", ConstructorParameterDescription(_data.location)), ("slowmodeSeconds", ConstructorParameterDescription(_data.slowmodeSeconds)), ("slowmodeNextSendDate", ConstructorParameterDescription(_data.slowmodeNextSendDate)), ("statsDc", ConstructorParameterDescription(_data.statsDc)), ("pts", ConstructorParameterDescription(_data.pts)), ("call", ConstructorParameterDescription(_data.call)), ("ttlPeriod", ConstructorParameterDescription(_data.ttlPeriod)), ("pendingSuggestions", ConstructorParameterDescription(_data.pendingSuggestions)), ("groupcallDefaultJoinAs", ConstructorParameterDescription(_data.groupcallDefaultJoinAs)), ("themeEmoticon", ConstructorParameterDescription(_data.themeEmoticon)), ("requestsPending", ConstructorParameterDescription(_data.requestsPending)), ("recentRequesters", ConstructorParameterDescription(_data.recentRequesters)), ("defaultSendAs", ConstructorParameterDescription(_data.defaultSendAs)), ("availableReactions", ConstructorParameterDescription(_data.availableReactions)), ("reactionsLimit", ConstructorParameterDescription(_data.reactionsLimit)), ("stories", ConstructorParameterDescription(_data.stories)), ("wallpaper", ConstructorParameterDescription(_data.wallpaper)), ("boostsApplied", ConstructorParameterDescription(_data.boostsApplied)), ("boostsUnrestrict", ConstructorParameterDescription(_data.boostsUnrestrict)), ("emojiset", ConstructorParameterDescription(_data.emojiset)), ("botVerification", ConstructorParameterDescription(_data.botVerification)), ("stargiftsCount", ConstructorParameterDescription(_data.stargiftsCount)), ("sendPaidMessagesStars", ConstructorParameterDescription(_data.sendPaidMessagesStars)), ("mainTab", ConstructorParameterDescription(_data.mainTab))])
             case .chatFull(let _data):
-                return ("chatFull", [("flags", _data.flags as Any), ("id", _data.id as Any), ("about", _data.about as Any), ("participants", _data.participants as Any), ("chatPhoto", _data.chatPhoto as Any), ("notifySettings", _data.notifySettings as Any), ("exportedInvite", _data.exportedInvite as Any), ("botInfo", _data.botInfo as Any), ("pinnedMsgId", _data.pinnedMsgId as Any), ("folderId", _data.folderId as Any), ("call", _data.call as Any), ("ttlPeriod", _data.ttlPeriod as Any), ("groupcallDefaultJoinAs", _data.groupcallDefaultJoinAs as Any), ("themeEmoticon", _data.themeEmoticon as Any), ("requestsPending", _data.requestsPending as Any), ("recentRequesters", _data.recentRequesters as Any), ("availableReactions", _data.availableReactions as Any), ("reactionsLimit", _data.reactionsLimit as Any)])
+                return ("chatFull", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("about", ConstructorParameterDescription(_data.about)), ("participants", ConstructorParameterDescription(_data.participants)), ("chatPhoto", ConstructorParameterDescription(_data.chatPhoto)), ("notifySettings", ConstructorParameterDescription(_data.notifySettings)), ("exportedInvite", ConstructorParameterDescription(_data.exportedInvite)), ("botInfo", ConstructorParameterDescription(_data.botInfo)), ("pinnedMsgId", ConstructorParameterDescription(_data.pinnedMsgId)), ("folderId", ConstructorParameterDescription(_data.folderId)), ("call", ConstructorParameterDescription(_data.call)), ("ttlPeriod", ConstructorParameterDescription(_data.ttlPeriod)), ("groupcallDefaultJoinAs", ConstructorParameterDescription(_data.groupcallDefaultJoinAs)), ("themeEmoticon", ConstructorParameterDescription(_data.themeEmoticon)), ("requestsPending", ConstructorParameterDescription(_data.requestsPending)), ("recentRequesters", ConstructorParameterDescription(_data.recentRequesters)), ("availableReactions", ConstructorParameterDescription(_data.availableReactions)), ("reactionsLimit", ConstructorParameterDescription(_data.reactionsLimit))])
             }
         }
 
@@ -1766,23 +1766,23 @@ public extension Api {
             var _4: String?
             _4 = parseString(reader)
             var _5: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _5 = reader.readInt32()
             }
             var _6: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _6 = reader.readInt32()
             }
             var _7: Int32?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _7 = reader.readInt32()
             }
             var _8: Int32?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _8 = reader.readInt32()
             }
             var _9: Int32?
-            if Int(_1!) & Int(1 << 13) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 13) != 0 {
                 _9 = reader.readInt32()
             }
             var _10: Int32?
@@ -1800,7 +1800,7 @@ public extension Api {
                 _14 = Api.parse(reader, signature: signature) as? Api.PeerNotifySettings
             }
             var _15: Api.ExportedChatInvite?
-            if Int(_1!) & Int(1 << 23) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 23) != 0 {
                 if let signature = reader.readInt32() {
                     _15 = Api.parse(reader, signature: signature) as? Api.ExportedChatInvite
                 }
@@ -1810,149 +1810,149 @@ public extension Api {
                 _16 = Api.parseVector(reader, elementSignature: 0, elementType: Api.BotInfo.self)
             }
             var _17: Int64?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 _17 = reader.readInt64()
             }
             var _18: Int32?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 _18 = reader.readInt32()
             }
             var _19: Int32?
-            if Int(_1!) & Int(1 << 5) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
                 _19 = reader.readInt32()
             }
             var _20: Api.StickerSet?
-            if Int(_1!) & Int(1 << 8) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 8) != 0 {
                 if let signature = reader.readInt32() {
                     _20 = Api.parse(reader, signature: signature) as? Api.StickerSet
                 }
             }
             var _21: Int32?
-            if Int(_1!) & Int(1 << 9) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 9) != 0 {
                 _21 = reader.readInt32()
             }
             var _22: Int32?
-            if Int(_1!) & Int(1 << 11) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 11) != 0 {
                 _22 = reader.readInt32()
             }
             var _23: Int64?
-            if Int(_1!) & Int(1 << 14) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 14) != 0 {
                 _23 = reader.readInt64()
             }
             var _24: Api.ChannelLocation?
-            if Int(_1!) & Int(1 << 15) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 15) != 0 {
                 if let signature = reader.readInt32() {
                     _24 = Api.parse(reader, signature: signature) as? Api.ChannelLocation
                 }
             }
             var _25: Int32?
-            if Int(_1!) & Int(1 << 17) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 17) != 0 {
                 _25 = reader.readInt32()
             }
             var _26: Int32?
-            if Int(_1!) & Int(1 << 18) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 18) != 0 {
                 _26 = reader.readInt32()
             }
             var _27: Int32?
-            if Int(_1!) & Int(1 << 12) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 12) != 0 {
                 _27 = reader.readInt32()
             }
             var _28: Int32?
             _28 = reader.readInt32()
             var _29: Api.InputGroupCall?
-            if Int(_1!) & Int(1 << 21) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 21) != 0 {
                 if let signature = reader.readInt32() {
                     _29 = Api.parse(reader, signature: signature) as? Api.InputGroupCall
                 }
             }
             var _30: Int32?
-            if Int(_1!) & Int(1 << 24) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 24) != 0 {
                 _30 = reader.readInt32()
             }
             var _31: [String]?
-            if Int(_1!) & Int(1 << 25) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 25) != 0 {
                 if let _ = reader.readInt32() {
                     _31 = Api.parseVector(reader, elementSignature: -1255641564, elementType: String.self)
                 }
             }
             var _32: Api.Peer?
-            if Int(_1!) & Int(1 << 26) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 26) != 0 {
                 if let signature = reader.readInt32() {
                     _32 = Api.parse(reader, signature: signature) as? Api.Peer
                 }
             }
             var _33: String?
-            if Int(_1!) & Int(1 << 27) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 27) != 0 {
                 _33 = parseString(reader)
             }
             var _34: Int32?
-            if Int(_1!) & Int(1 << 28) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 28) != 0 {
                 _34 = reader.readInt32()
             }
             var _35: [Int64]?
-            if Int(_1!) & Int(1 << 28) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 28) != 0 {
                 if let _ = reader.readInt32() {
                     _35 = Api.parseVector(reader, elementSignature: 570911930, elementType: Int64.self)
                 }
             }
             var _36: Api.Peer?
-            if Int(_1!) & Int(1 << 29) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 29) != 0 {
                 if let signature = reader.readInt32() {
                     _36 = Api.parse(reader, signature: signature) as? Api.Peer
                 }
             }
             var _37: Api.ChatReactions?
-            if Int(_1!) & Int(1 << 30) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 30) != 0 {
                 if let signature = reader.readInt32() {
                     _37 = Api.parse(reader, signature: signature) as? Api.ChatReactions
                 }
             }
             var _38: Int32?
-            if Int(_2!) & Int(1 << 13) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 13) != 0 {
                 _38 = reader.readInt32()
             }
             var _39: Api.PeerStories?
-            if Int(_2!) & Int(1 << 4) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 4) != 0 {
                 if let signature = reader.readInt32() {
                     _39 = Api.parse(reader, signature: signature) as? Api.PeerStories
                 }
             }
             var _40: Api.WallPaper?
-            if Int(_2!) & Int(1 << 7) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 7) != 0 {
                 if let signature = reader.readInt32() {
                     _40 = Api.parse(reader, signature: signature) as? Api.WallPaper
                 }
             }
             var _41: Int32?
-            if Int(_2!) & Int(1 << 8) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 8) != 0 {
                 _41 = reader.readInt32()
             }
             var _42: Int32?
-            if Int(_2!) & Int(1 << 9) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 9) != 0 {
                 _42 = reader.readInt32()
             }
             var _43: Api.StickerSet?
-            if Int(_2!) & Int(1 << 10) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 10) != 0 {
                 if let signature = reader.readInt32() {
                     _43 = Api.parse(reader, signature: signature) as? Api.StickerSet
                 }
             }
             var _44: Api.BotVerification?
-            if Int(_2!) & Int(1 << 17) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 17) != 0 {
                 if let signature = reader.readInt32() {
                     _44 = Api.parse(reader, signature: signature) as? Api.BotVerification
                 }
             }
             var _45: Int32?
-            if Int(_2!) & Int(1 << 18) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 18) != 0 {
                 _45 = reader.readInt32()
             }
             var _46: Int64?
-            if Int(_2!) & Int(1 << 21) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 21) != 0 {
                 _46 = reader.readInt64()
             }
             var _47: Api.ProfileTab?
-            if Int(_2!) & Int(1 << 22) != 0 {
+            if Int(_2 ?? 0) & Int(1 << 22) != 0 {
                 if let signature = reader.readInt32() {
                     _47 = Api.parse(reader, signature: signature) as? Api.ProfileTab
                 }
@@ -1961,49 +1961,49 @@ public extension Api {
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 2) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 2) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 13) == 0) || _9 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 13) == 0) || _9 != nil
             let _c10 = _10 != nil
             let _c11 = _11 != nil
             let _c12 = _12 != nil
             let _c13 = _13 != nil
             let _c14 = _14 != nil
-            let _c15 = (Int(_1!) & Int(1 << 23) == 0) || _15 != nil
+            let _c15 = (Int(_1 ?? 0) & Int(1 << 23) == 0) || _15 != nil
             let _c16 = _16 != nil
-            let _c17 = (Int(_1!) & Int(1 << 4) == 0) || _17 != nil
-            let _c18 = (Int(_1!) & Int(1 << 4) == 0) || _18 != nil
-            let _c19 = (Int(_1!) & Int(1 << 5) == 0) || _19 != nil
-            let _c20 = (Int(_1!) & Int(1 << 8) == 0) || _20 != nil
-            let _c21 = (Int(_1!) & Int(1 << 9) == 0) || _21 != nil
-            let _c22 = (Int(_1!) & Int(1 << 11) == 0) || _22 != nil
-            let _c23 = (Int(_1!) & Int(1 << 14) == 0) || _23 != nil
-            let _c24 = (Int(_1!) & Int(1 << 15) == 0) || _24 != nil
-            let _c25 = (Int(_1!) & Int(1 << 17) == 0) || _25 != nil
-            let _c26 = (Int(_1!) & Int(1 << 18) == 0) || _26 != nil
-            let _c27 = (Int(_1!) & Int(1 << 12) == 0) || _27 != nil
+            let _c17 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _17 != nil
+            let _c18 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _18 != nil
+            let _c19 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _19 != nil
+            let _c20 = (Int(_1 ?? 0) & Int(1 << 8) == 0) || _20 != nil
+            let _c21 = (Int(_1 ?? 0) & Int(1 << 9) == 0) || _21 != nil
+            let _c22 = (Int(_1 ?? 0) & Int(1 << 11) == 0) || _22 != nil
+            let _c23 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _23 != nil
+            let _c24 = (Int(_1 ?? 0) & Int(1 << 15) == 0) || _24 != nil
+            let _c25 = (Int(_1 ?? 0) & Int(1 << 17) == 0) || _25 != nil
+            let _c26 = (Int(_1 ?? 0) & Int(1 << 18) == 0) || _26 != nil
+            let _c27 = (Int(_1 ?? 0) & Int(1 << 12) == 0) || _27 != nil
             let _c28 = _28 != nil
-            let _c29 = (Int(_1!) & Int(1 << 21) == 0) || _29 != nil
-            let _c30 = (Int(_1!) & Int(1 << 24) == 0) || _30 != nil
-            let _c31 = (Int(_1!) & Int(1 << 25) == 0) || _31 != nil
-            let _c32 = (Int(_1!) & Int(1 << 26) == 0) || _32 != nil
-            let _c33 = (Int(_1!) & Int(1 << 27) == 0) || _33 != nil
-            let _c34 = (Int(_1!) & Int(1 << 28) == 0) || _34 != nil
-            let _c35 = (Int(_1!) & Int(1 << 28) == 0) || _35 != nil
-            let _c36 = (Int(_1!) & Int(1 << 29) == 0) || _36 != nil
-            let _c37 = (Int(_1!) & Int(1 << 30) == 0) || _37 != nil
-            let _c38 = (Int(_2!) & Int(1 << 13) == 0) || _38 != nil
-            let _c39 = (Int(_2!) & Int(1 << 4) == 0) || _39 != nil
-            let _c40 = (Int(_2!) & Int(1 << 7) == 0) || _40 != nil
-            let _c41 = (Int(_2!) & Int(1 << 8) == 0) || _41 != nil
-            let _c42 = (Int(_2!) & Int(1 << 9) == 0) || _42 != nil
-            let _c43 = (Int(_2!) & Int(1 << 10) == 0) || _43 != nil
-            let _c44 = (Int(_2!) & Int(1 << 17) == 0) || _44 != nil
-            let _c45 = (Int(_2!) & Int(1 << 18) == 0) || _45 != nil
-            let _c46 = (Int(_2!) & Int(1 << 21) == 0) || _46 != nil
-            let _c47 = (Int(_2!) & Int(1 << 22) == 0) || _47 != nil
+            let _c29 = (Int(_1 ?? 0) & Int(1 << 21) == 0) || _29 != nil
+            let _c30 = (Int(_1 ?? 0) & Int(1 << 24) == 0) || _30 != nil
+            let _c31 = (Int(_1 ?? 0) & Int(1 << 25) == 0) || _31 != nil
+            let _c32 = (Int(_1 ?? 0) & Int(1 << 26) == 0) || _32 != nil
+            let _c33 = (Int(_1 ?? 0) & Int(1 << 27) == 0) || _33 != nil
+            let _c34 = (Int(_1 ?? 0) & Int(1 << 28) == 0) || _34 != nil
+            let _c35 = (Int(_1 ?? 0) & Int(1 << 28) == 0) || _35 != nil
+            let _c36 = (Int(_1 ?? 0) & Int(1 << 29) == 0) || _36 != nil
+            let _c37 = (Int(_1 ?? 0) & Int(1 << 30) == 0) || _37 != nil
+            let _c38 = (Int(_2 ?? 0) & Int(1 << 13) == 0) || _38 != nil
+            let _c39 = (Int(_2 ?? 0) & Int(1 << 4) == 0) || _39 != nil
+            let _c40 = (Int(_2 ?? 0) & Int(1 << 7) == 0) || _40 != nil
+            let _c41 = (Int(_2 ?? 0) & Int(1 << 8) == 0) || _41 != nil
+            let _c42 = (Int(_2 ?? 0) & Int(1 << 9) == 0) || _42 != nil
+            let _c43 = (Int(_2 ?? 0) & Int(1 << 10) == 0) || _43 != nil
+            let _c44 = (Int(_2 ?? 0) & Int(1 << 17) == 0) || _44 != nil
+            let _c45 = (Int(_2 ?? 0) & Int(1 << 18) == 0) || _45 != nil
+            let _c46 = (Int(_2 ?? 0) & Int(1 << 21) == 0) || _46 != nil
+            let _c47 = (Int(_2 ?? 0) & Int(1 << 22) == 0) || _47 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 && _c24 && _c25 && _c26 && _c27 && _c28 && _c29 && _c30 && _c31 && _c32 && _c33 && _c34 && _c35 && _c36 && _c37 && _c38 && _c39 && _c40 && _c41 && _c42 && _c43 && _c44 && _c45 && _c46 && _c47 {
                 return Api.ChatFull.channelFull(Cons_channelFull(flags: _1!, flags2: _2!, id: _3!, about: _4!, participantsCount: _5, adminsCount: _6, kickedCount: _7, bannedCount: _8, onlineCount: _9, readInboxMaxId: _10!, readOutboxMaxId: _11!, unreadCount: _12!, chatPhoto: _13!, notifySettings: _14!, exportedInvite: _15, botInfo: _16!, migratedFromChatId: _17, migratedFromMaxId: _18, pinnedMsgId: _19, stickerset: _20, availableMinId: _21, folderId: _22, linkedChatId: _23, location: _24, slowmodeSeconds: _25, slowmodeNextSendDate: _26, statsDc: _27, pts: _28!, call: _29, ttlPeriod: _30, pendingSuggestions: _31, groupcallDefaultJoinAs: _32, themeEmoticon: _33, requestsPending: _34, recentRequesters: _35, defaultSendAs: _36, availableReactions: _37, reactionsLimit: _38, stories: _39, wallpaper: _40, boostsApplied: _41, boostsUnrestrict: _42, emojiset: _43, botVerification: _44, stargiftsCount: _45, sendPaidMessagesStars: _46, mainTab: _47))
             }
@@ -2023,7 +2023,7 @@ public extension Api {
                 _4 = Api.parse(reader, signature: signature) as? Api.ChatParticipants
             }
             var _5: Api.Photo?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _5 = Api.parse(reader, signature: signature) as? Api.Photo
                 }
@@ -2033,83 +2033,83 @@ public extension Api {
                 _6 = Api.parse(reader, signature: signature) as? Api.PeerNotifySettings
             }
             var _7: Api.ExportedChatInvite?
-            if Int(_1!) & Int(1 << 13) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 13) != 0 {
                 if let signature = reader.readInt32() {
                     _7 = Api.parse(reader, signature: signature) as? Api.ExportedChatInvite
                 }
             }
             var _8: [Api.BotInfo]?
-            if Int(_1!) & Int(1 << 3) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
                 if let _ = reader.readInt32() {
                     _8 = Api.parseVector(reader, elementSignature: 0, elementType: Api.BotInfo.self)
                 }
             }
             var _9: Int32?
-            if Int(_1!) & Int(1 << 6) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
                 _9 = reader.readInt32()
             }
             var _10: Int32?
-            if Int(_1!) & Int(1 << 11) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 11) != 0 {
                 _10 = reader.readInt32()
             }
             var _11: Api.InputGroupCall?
-            if Int(_1!) & Int(1 << 12) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 12) != 0 {
                 if let signature = reader.readInt32() {
                     _11 = Api.parse(reader, signature: signature) as? Api.InputGroupCall
                 }
             }
             var _12: Int32?
-            if Int(_1!) & Int(1 << 14) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 14) != 0 {
                 _12 = reader.readInt32()
             }
             var _13: Api.Peer?
-            if Int(_1!) & Int(1 << 15) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 15) != 0 {
                 if let signature = reader.readInt32() {
                     _13 = Api.parse(reader, signature: signature) as? Api.Peer
                 }
             }
             var _14: String?
-            if Int(_1!) & Int(1 << 16) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 16) != 0 {
                 _14 = parseString(reader)
             }
             var _15: Int32?
-            if Int(_1!) & Int(1 << 17) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 17) != 0 {
                 _15 = reader.readInt32()
             }
             var _16: [Int64]?
-            if Int(_1!) & Int(1 << 17) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 17) != 0 {
                 if let _ = reader.readInt32() {
                     _16 = Api.parseVector(reader, elementSignature: 570911930, elementType: Int64.self)
                 }
             }
             var _17: Api.ChatReactions?
-            if Int(_1!) & Int(1 << 18) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 18) != 0 {
                 if let signature = reader.readInt32() {
                     _17 = Api.parse(reader, signature: signature) as? Api.ChatReactions
                 }
             }
             var _18: Int32?
-            if Int(_1!) & Int(1 << 20) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 20) != 0 {
                 _18 = reader.readInt32()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _5 != nil
             let _c6 = _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 13) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 3) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 6) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 11) == 0) || _10 != nil
-            let _c11 = (Int(_1!) & Int(1 << 12) == 0) || _11 != nil
-            let _c12 = (Int(_1!) & Int(1 << 14) == 0) || _12 != nil
-            let _c13 = (Int(_1!) & Int(1 << 15) == 0) || _13 != nil
-            let _c14 = (Int(_1!) & Int(1 << 16) == 0) || _14 != nil
-            let _c15 = (Int(_1!) & Int(1 << 17) == 0) || _15 != nil
-            let _c16 = (Int(_1!) & Int(1 << 17) == 0) || _16 != nil
-            let _c17 = (Int(_1!) & Int(1 << 18) == 0) || _17 != nil
-            let _c18 = (Int(_1!) & Int(1 << 20) == 0) || _18 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 13) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 11) == 0) || _10 != nil
+            let _c11 = (Int(_1 ?? 0) & Int(1 << 12) == 0) || _11 != nil
+            let _c12 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _12 != nil
+            let _c13 = (Int(_1 ?? 0) & Int(1 << 15) == 0) || _13 != nil
+            let _c14 = (Int(_1 ?? 0) & Int(1 << 16) == 0) || _14 != nil
+            let _c15 = (Int(_1 ?? 0) & Int(1 << 17) == 0) || _15 != nil
+            let _c16 = (Int(_1 ?? 0) & Int(1 << 17) == 0) || _16 != nil
+            let _c17 = (Int(_1 ?? 0) & Int(1 << 18) == 0) || _17 != nil
+            let _c18 = (Int(_1 ?? 0) & Int(1 << 20) == 0) || _18 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 {
                 return Api.ChatFull.chatFull(Cons_chatFull(flags: _1!, id: _2!, about: _3!, participants: _4!, chatPhoto: _5, notifySettings: _6!, exportedInvite: _7, botInfo: _8, pinnedMsgId: _9, folderId: _10, call: _11, ttlPeriod: _12, groupcallDefaultJoinAs: _13, themeEmoticon: _14, requestsPending: _15, recentRequesters: _16, availableReactions: _17, reactionsLimit: _18))
             }
@@ -2144,8 +2144,8 @@ public extension Api {
                 self.subscriptionFormId = subscriptionFormId
                 self.botVerification = botVerification
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatInvite", [("flags", self.flags as Any), ("title", self.title as Any), ("about", self.about as Any), ("photo", self.photo as Any), ("participantsCount", self.participantsCount as Any), ("participants", self.participants as Any), ("color", self.color as Any), ("subscriptionPricing", self.subscriptionPricing as Any), ("subscriptionFormId", self.subscriptionFormId as Any), ("botVerification", self.botVerification as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatInvite", [("flags", ConstructorParameterDescription(self.flags)), ("title", ConstructorParameterDescription(self.title)), ("about", ConstructorParameterDescription(self.about)), ("photo", ConstructorParameterDescription(self.photo)), ("participantsCount", ConstructorParameterDescription(self.participantsCount)), ("participants", ConstructorParameterDescription(self.participants)), ("color", ConstructorParameterDescription(self.color)), ("subscriptionPricing", ConstructorParameterDescription(self.subscriptionPricing)), ("subscriptionFormId", ConstructorParameterDescription(self.subscriptionFormId)), ("botVerification", ConstructorParameterDescription(self.botVerification))])
             }
         }
         public class Cons_chatInviteAlready: TypeConstructorDescription {
@@ -2153,8 +2153,8 @@ public extension Api {
             public init(chat: Api.Chat) {
                 self.chat = chat
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatInviteAlready", [("chat", self.chat as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatInviteAlready", [("chat", ConstructorParameterDescription(self.chat))])
             }
         }
         public class Cons_chatInvitePeek: TypeConstructorDescription {
@@ -2164,8 +2164,8 @@ public extension Api {
                 self.chat = chat
                 self.expires = expires
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("chatInvitePeek", [("chat", self.chat as Any), ("expires", self.expires as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("chatInvitePeek", [("chat", ConstructorParameterDescription(self.chat)), ("expires", ConstructorParameterDescription(self.expires))])
             }
         }
         case chatInvite(Cons_chatInvite)
@@ -2219,14 +2219,14 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .chatInvite(let _data):
-                return ("chatInvite", [("flags", _data.flags as Any), ("title", _data.title as Any), ("about", _data.about as Any), ("photo", _data.photo as Any), ("participantsCount", _data.participantsCount as Any), ("participants", _data.participants as Any), ("color", _data.color as Any), ("subscriptionPricing", _data.subscriptionPricing as Any), ("subscriptionFormId", _data.subscriptionFormId as Any), ("botVerification", _data.botVerification as Any)])
+                return ("chatInvite", [("flags", ConstructorParameterDescription(_data.flags)), ("title", ConstructorParameterDescription(_data.title)), ("about", ConstructorParameterDescription(_data.about)), ("photo", ConstructorParameterDescription(_data.photo)), ("participantsCount", ConstructorParameterDescription(_data.participantsCount)), ("participants", ConstructorParameterDescription(_data.participants)), ("color", ConstructorParameterDescription(_data.color)), ("subscriptionPricing", ConstructorParameterDescription(_data.subscriptionPricing)), ("subscriptionFormId", ConstructorParameterDescription(_data.subscriptionFormId)), ("botVerification", ConstructorParameterDescription(_data.botVerification))])
             case .chatInviteAlready(let _data):
-                return ("chatInviteAlready", [("chat", _data.chat as Any)])
+                return ("chatInviteAlready", [("chat", ConstructorParameterDescription(_data.chat))])
             case .chatInvitePeek(let _data):
-                return ("chatInvitePeek", [("chat", _data.chat as Any), ("expires", _data.expires as Any)])
+                return ("chatInvitePeek", [("chat", ConstructorParameterDescription(_data.chat)), ("expires", ConstructorParameterDescription(_data.expires))])
             }
         }
 
@@ -2236,7 +2236,7 @@ public extension Api {
             var _2: String?
             _2 = parseString(reader)
             var _3: String?
-            if Int(_1!) & Int(1 << 5) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
                 _3 = parseString(reader)
             }
             var _4: Api.Photo?
@@ -2246,7 +2246,7 @@ public extension Api {
             var _5: Int32?
             _5 = reader.readInt32()
             var _6: [Api.User]?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 if let _ = reader.readInt32() {
                     _6 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
                 }
@@ -2254,31 +2254,31 @@ public extension Api {
             var _7: Int32?
             _7 = reader.readInt32()
             var _8: Api.StarsSubscriptionPricing?
-            if Int(_1!) & Int(1 << 10) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 10) != 0 {
                 if let signature = reader.readInt32() {
                     _8 = Api.parse(reader, signature: signature) as? Api.StarsSubscriptionPricing
                 }
             }
             var _9: Int64?
-            if Int(_1!) & Int(1 << 12) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 12) != 0 {
                 _9 = reader.readInt64()
             }
             var _10: Api.BotVerification?
-            if Int(_1!) & Int(1 << 13) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 13) != 0 {
                 if let signature = reader.readInt32() {
                     _10 = Api.parse(reader, signature: signature) as? Api.BotVerification
                 }
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 5) == 0) || _3 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 4) == 0) || _6 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _6 != nil
             let _c7 = _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 10) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 12) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 13) == 0) || _10 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 10) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 12) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 13) == 0) || _10 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 {
                 return Api.ChatInvite.chatInvite(Cons_chatInvite(flags: _1!, title: _2!, about: _3, photo: _4!, participantsCount: _5!, participants: _6, color: _7!, subscriptionPricing: _8, subscriptionFormId: _9, botVerification: _10))
             }

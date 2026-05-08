@@ -12,7 +12,7 @@ public enum UpdateChatRankError {
     case notParticipant
 }
 
-func _internal_updateChatRank(account: Account, peerId: PeerId, userId: PeerId, rank: String?) -> Signal<(ChannelParticipant?, RenderedChannelParticipant)?, UpdateChatRankError> {
+func _internal_updateChatRank(account: Account, peerId: PeerId, userId: PeerId, messageId: MessageId?, rank: String?) -> Signal<(ChannelParticipant?, RenderedChannelParticipant)?, UpdateChatRankError> {
     return account.postbox.transaction { transaction -> Signal<(ChannelParticipant?, RenderedChannelParticipant)?, UpdateChatRankError> in
         if let user = transaction.getPeer(userId), let inputUser = apiInputPeer(user), let peer = transaction.getPeer(peerId), let inputPeer = apiInputPeer(peer) {
             let currentParticipant: Signal<ChannelParticipant?, NoError>
@@ -57,19 +57,42 @@ func _internal_updateChatRank(account: Account, peerId: PeerId, userId: PeerId, 
                             return nil
                         } else {
                             let updatedParticipant = currentParticipant?.withUpdated(rank: rank) ?? .member(id: userId, invitedAt: 0, adminInfo: nil, banInfo: nil, rank: rank, subscriptionUntilDate: nil)
-                            
-                            var peers: [PeerId: Peer] = [:]
+                            var peers: [EnginePeer.Id: EnginePeer] = [:]
                             var presences: [PeerId: PeerPresence] = [:]
-                            peers[user.id] = user
+                            peers[user.id] = EnginePeer(user)
                             if let presence = transaction.getPeerPresence(peerId: user.id) {
                                 presences[user.id] = presence
                             }
                             if case let .member(_, _, maybeAdminInfo, _, _, _) = updatedParticipant, let adminInfo = maybeAdminInfo {
                                 if let peer = transaction.getPeer(adminInfo.promotedBy) {
-                                    peers[peer.id] = peer
+                                    peers[peer.id] = EnginePeer(peer)
                                 }
                             }
-                            return (currentParticipant, RenderedChannelParticipant(participant: updatedParticipant, peer: user, peers: peers, presences: presences))
+                            let historyView = transaction.getMessagesHistoryViewState(input: .single(peerId: peerId, threadId: nil), ignoreMessagesInTimestampRange: nil, ignoreMessageIds: Set(), count: 50, clipHoles: true, anchor: .upperBound, namespaces: .just(Set([Namespaces.Message.Cloud])))
+                            var messageIds: [MessageId] = []
+                            if let messageId {
+                                messageIds.append(messageId)
+                            }
+                            for entry in historyView.entries {
+                                if entry.message.id != messageId, let author = entry.message.author, author.id == userId {
+                                    messageIds.append(entry.message.id)
+                                }
+                            }
+                            for messageId in messageIds {
+                                transaction.updateMessage(messageId, update: { currentMessage in
+                                    var storeForwardInfo: StoreMessageForwardInfo?
+                                    if let forwardInfo = currentMessage.forwardInfo {
+                                        storeForwardInfo = StoreMessageForwardInfo(authorId: forwardInfo.author?.id, sourceId: forwardInfo.source?.id, sourceMessageId: forwardInfo.sourceMessageId, date: forwardInfo.date, authorSignature: forwardInfo.authorSignature, psaType: forwardInfo.psaType, flags: forwardInfo.flags)
+                                    }
+                                    var attributes = currentMessage.attributes
+                                    attributes.removeAll(where: { $0 is ParticipantRankMessageAttribute })
+                                    if let rank, !rank.isEmpty {
+                                        attributes.append(ParticipantRankMessageAttribute(rank: rank))
+                                    }
+                                    return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+                                })
+                            }
+                            return (currentParticipant, RenderedChannelParticipant(participant: updatedParticipant, peer: EnginePeer(user), peers: peers, presences: presences))
                         }
                     }
                     |> castError(UpdateChatRankError.self)

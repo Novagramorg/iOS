@@ -2,7 +2,6 @@ import Foundation
 import UIKit
 import Display
 import ComponentFlow
-import Postbox
 import TelegramCore
 import AccountContext
 import PlainButtonComponent
@@ -693,7 +692,7 @@ final class VideoChatParticipantsComponent: Component {
         
         private var appliedGridIsEmpty: Bool = true
         
-        private var isPinchToZoomActive: Bool = false
+        private(set) var isPinchToZoomActive: Bool = false
         
         private var stopRequestingNonCentralVideo: Bool = false
         private var stopRequestingNonCentralVideoTimer: Foundation.Timer?

@@ -310,6 +310,8 @@ public class GlassBackgroundView: UIView {
     }
     
     private let legacyView: LegacyGlassView?
+    private let legacyHighlightContainerView: UIView?
+    private var glassHighlightRecognizer: GlassHighlightGestureRecognizer?
     
     private let nativeView: UIVisualEffectView?
     private let nativeViewClippingContext: ClippingShapeContext?
@@ -339,6 +341,7 @@ public class GlassBackgroundView: UIView {
     public override init(frame: CGRect) {
         if #available(iOS 26.0, *), !GlassBackgroundView.useCustomGlassImpl {
             self.legacyView = nil
+            self.legacyHighlightContainerView = nil
             
             let glassEffect = UIGlassEffect(style: .regular)
             glassEffect.isInteractive = false
@@ -355,6 +358,10 @@ public class GlassBackgroundView: UIView {
             self.shadowView = nil
         } else {
             self.legacyView = LegacyGlassView(frame: CGRect())
+            let legacyHighlightContainerView = UIView()
+            legacyHighlightContainerView.isUserInteractionEnabled = false
+            legacyHighlightContainerView.clipsToBounds = true
+            self.legacyHighlightContainerView = legacyHighlightContainerView
             self.nativeView = nil
             self.nativeViewClippingContext = nil
             self.nativeParamsView = nil
@@ -384,16 +391,27 @@ public class GlassBackgroundView: UIView {
         }
         if let legacyView = self.legacyView {
             self.addSubview(legacyView)
+            let glassHighlightRecognizer = GlassHighlightGestureRecognizer(target: self, action: #selector(self.onHighlightGesture(_:)))
+            glassHighlightRecognizer.highlightContainerView = self.legacyHighlightContainerView
+            self.glassHighlightRecognizer = glassHighlightRecognizer
+            self.addGestureRecognizer(glassHighlightRecognizer)
+            glassHighlightRecognizer.isEnabled = false
         }
         if let foregroundView = self.foregroundView {
             self.addSubview(foregroundView)
             foregroundView.mask = self.maskContainerView
         }
         self.addSubview(self.contentContainer)
+        if let legacyHighlightContainerView = self.legacyHighlightContainerView {
+            self.addSubview(legacyHighlightContainerView)
+        }
     }
     
     required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    @objc private func onHighlightGesture(_ recognizer: GlassHighlightGestureRecognizer) {
     }
     
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -420,6 +438,10 @@ public class GlassBackgroundView: UIView {
     
     public func update(size: CGSize, cornerRadius: CGFloat, isDark: Bool, tintColor: TintColor, isInteractive: Bool = false, isVisible: Bool = true, transition: ComponentTransition) {
         let shape: Shape = .roundedRect(cornerRadius: cornerRadius)
+        
+        if let glassHighlightRecognizer = self.glassHighlightRecognizer {
+            glassHighlightRecognizer.isEnabled = isInteractive
+        }
         
         if let nativeView = self.nativeView, let nativeViewClippingContext = self.nativeViewClippingContext, (nativeView.bounds.size != size || nativeViewClippingContext.shape != shape) {
             
@@ -455,6 +477,16 @@ public class GlassBackgroundView: UIView {
             }
             transition.setFrame(view: legacyView, frame: CGRect(origin: CGPoint(), size: size))
             transition.setAlpha(view: legacyView, alpha: isVisible ? 1.0 : 0.0)
+            
+            transition.setPosition(view: self.contentView, position: CGPoint(x: size.width * 0.5, y: size.height * 0.5))
+            transition.setBounds(view: self.contentView, bounds: CGRect(origin: CGPoint(), size: size))
+        }
+        if let legacyHighlightContainerView = self.legacyHighlightContainerView {
+            transition.setFrame(view: legacyHighlightContainerView, frame: CGRect(origin: CGPoint(), size: size))
+            switch shape {
+            case let .roundedRect(cornerRadius):
+                transition.setCornerRadius(layer: legacyHighlightContainerView.layer, cornerRadius: cornerRadius)
+            }
         }
         
         let shadowInset: CGFloat = 32.0
@@ -509,18 +541,7 @@ public class GlassBackgroundView: UIView {
             }
             
             if let shadowView = self.shadowView {
-                let shadowInnerInset: CGFloat = 0.5
-                shadowView.image = generateImage(CGSize(width: shadowInset * 2.0 + outerCornerRadius * 2.0, height: shadowInset * 2.0 + outerCornerRadius * 2.0), rotatedContext: { size, context in
-                    context.clear(CGRect(origin: CGPoint(), size: size))
-                    
-                    context.setFillColor(UIColor.black.cgColor)
-                    context.setShadow(offset: CGSize(width: 0.0, height: 1.0), blur: 40.0, color: UIColor(white: 0.0, alpha: 0.04).cgColor)
-                    context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
-                    
-                    context.setFillColor(UIColor.clear.cgColor)
-                    context.setBlendMode(.copy)
-                    context.fillEllipse(in: CGRect(origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset), size: CGSize(width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0, height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0)))
-                })?.stretchableImage(withLeftCapWidth: Int(shadowInset + outerCornerRadius), topCapHeight: Int(shadowInset + outerCornerRadius))
+                shadowView.image = Self.generateLegacyShadowImage(cornerRadius: outerCornerRadius, shadowInset: shadowInset)
                 transition.setAlpha(view: shadowView, alpha: isVisible ? 1.0 : 0.0)
             }
             
@@ -548,6 +569,9 @@ public class GlassBackgroundView: UIView {
                     }
                 }
                 foregroundView.image = GlassBackgroundView.generateLegacyGlassImage(size: CGSize(width: outerCornerRadius * 2.0, height: outerCornerRadius * 2.0), inset: shadowInset, borderWidthFactor: borderWidthFactor, isDark: isDark, fillColor: fillColor)
+                #if DEBUG
+                //foregroundView.image = nil
+                #endif
                 transition.setAlpha(view: foregroundView, alpha: isVisible ? 1.0 : 0.0)
             } else {
                 if let nativeParamsView = self.nativeParamsView, let nativeView = self.nativeView {
@@ -666,10 +690,10 @@ public final class GlassBackgroundContainerView: UIView {
         }
     }
     
-    public override init(frame: CGRect) {
+    public init(spacing: CGFloat = 7.0) {
         if #available(iOS 26.0, *), !GlassBackgroundView.useCustomGlassImpl {
             let effect = UIGlassContainerEffect()
-            effect.spacing = 7.0
+            effect.spacing = spacing
             let nativeView = UIVisualEffectView(effect: effect)
             self.nativeView = nativeView
             
@@ -684,7 +708,7 @@ public final class GlassBackgroundContainerView: UIView {
             self.legacyView = ContentView()
         }
         
-        super.init(frame: frame)
+        super.init(frame: CGRect())
         
         if let nativeParamsView = self.nativeParamsView {
             self.addSubview(nativeParamsView)
@@ -717,6 +741,31 @@ public final class GlassBackgroundContainerView: UIView {
         }
         for view in self.contentView.subviews.reversed() {
             if let result = view.hitTest(self.convert(point, to: view), with: event), result.isUserInteractionEnabled {
+                
+                #if DEBUG
+                func findMatrix(layer: CALayer) -> AnyObject? {
+                    for filter in layer.filters ?? [] {
+                        if "\(filter)".contains("vibrantColorMatrix") {
+                            return filter as AnyObject
+                        }
+                    }
+                    
+                    for sublayer in layer.sublayers ?? [] {
+                        if let result = findMatrix(layer: sublayer) {
+                            return result
+                        }
+                    }
+                    return nil
+                }
+                
+                /*if let filter = findMatrix(layer: self.layer) as? NSObject {
+                    var matrix: [Float32] = .init(repeating: 0, count: 20)
+                    let matrixValues = filter.value(forKey: "inputColorMatrix") as! NSValue
+                    matrixValues.getValue(&matrix, size: 4 * 20)
+                    assert(true)
+                }*/
+                #endif
+                
                 return result
             }
         }
@@ -807,6 +856,35 @@ private extension CGContext {
 }
 
 public extension GlassBackgroundView {
+    static func generateLegacyShadowImage(cornerRadius: CGFloat, shadowInset: CGFloat = 32.0, shadowIntensity: CGFloat = 0.04, shadowBlur: CGFloat = 40.0) -> UIImage? {
+        let shadowInnerInset: CGFloat = 0.5
+        let diameter = max(1.0, cornerRadius * 2.0)
+        let size = CGSize(width: shadowInset * 2.0 + diameter, height: shadowInset * 2.0 + diameter)
+        
+        return generateImage(size, rotatedContext: { size, context in
+            context.clear(CGRect(origin: CGPoint(), size: size))
+            
+            let shadowRect = CGRect(
+                origin: CGPoint(x: shadowInset + shadowInnerInset, y: shadowInset + shadowInnerInset),
+                size: CGSize(
+                    width: size.width - shadowInset * 2.0 - shadowInnerInset * 2.0,
+                    height: size.height - shadowInset * 2.0 - shadowInnerInset * 2.0
+                )
+            )
+            
+            context.setFillColor(UIColor.black.cgColor)
+            context.setShadow(offset: CGSize(width: 0.0, height: 1.0), blur: shadowBlur, color: UIColor(white: 0.0, alpha: shadowIntensity).cgColor)
+            context.fillEllipse(in: shadowRect)
+            
+            context.setFillColor(UIColor.clear.cgColor)
+            context.setBlendMode(.copy)
+            context.fillEllipse(in: shadowRect)
+        })?.stretchableImage(
+            withLeftCapWidth: Int(shadowInset + cornerRadius),
+            topCapHeight: Int(shadowInset + cornerRadius)
+        )
+    }
+    
     static func generateLegacyGlassImage(size: CGSize, inset: CGFloat, borderWidthFactor: CGFloat = 1.0, isDark: Bool, fillColor: UIColor) -> UIImage {
         var size = size
         if size == .zero {
@@ -1087,19 +1165,22 @@ public final class GlassBackgroundComponent: Component {
     private let isDark: Bool
     private let tintColor: GlassBackgroundView.TintColor
     private let isInteractive: Bool
+    private let isVisible: Bool
     
     public init(
         size: CGSize,
         cornerRadius: CGFloat,
         isDark: Bool,
         tintColor: GlassBackgroundView.TintColor,
-        isInteractive: Bool = false
+        isInteractive: Bool = false,
+        isVisible: Bool = true
     ) {
         self.size = size
         self.cornerRadius = cornerRadius
         self.isDark = isDark
         self.tintColor = tintColor
         self.isInteractive = isInteractive
+        self.isVisible = isVisible
     }
     
     public static func == (lhs: GlassBackgroundComponent, rhs: GlassBackgroundComponent) -> Bool {
@@ -1118,12 +1199,15 @@ public final class GlassBackgroundComponent: Component {
         if lhs.isInteractive != rhs.isInteractive {
             return false
         }
+        if lhs.isVisible != rhs.isVisible {
+            return false
+        }
         return true
     }
     
     public final class View: GlassBackgroundView {
         func update(component: GlassBackgroundComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-            self.update(size: component.size, cornerRadius: component.cornerRadius, isDark: component.isDark, tintColor: component.tintColor, isInteractive: component.isInteractive, transition: transition)
+            self.update(size: component.size, cornerRadius: component.cornerRadius, isDark: component.isDark, tintColor: component.tintColor, isInteractive: component.isInteractive, isVisible: component.isVisible, transition: transition)
             
             return component.size
         }

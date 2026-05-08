@@ -4,9 +4,34 @@ import Postbox
 import SwiftSignalKit
 import MtProtoKit
 
+func pollCloudMediaToInputMedia(_ media: Media) -> Api.InputMedia? {
+    if let image = media as? TelegramMediaImage,
+       let reference = image.reference,
+       case let .cloud(id, accessHash, maybeFileReference) = reference {
+        let fileReference = maybeFileReference ?? Data()
+        return .inputMediaPhoto(.init(flags: 0, id: .inputPhoto(.init(id: id, accessHash: accessHash, fileReference: Buffer(data: fileReference))), ttlSeconds: nil, video: nil))
+    } else if let file = media as? TelegramMediaFile,
+              let resource = file.resource as? CloudDocumentMediaResource {
+        return .inputMediaDocument(.init(flags: 0, id: .inputDocument(.init(id: resource.fileId, accessHash: resource.accessHash, fileReference: Buffer(data: resource.fileReference ?? Data()))), videoCover: nil, videoTimestamp: nil, ttlSeconds: nil, query: nil))
+    } else if let map = media as? TelegramMediaMap {
+        var geoFlags: Int32 = 0
+        if map.accuracyRadius != nil {
+            geoFlags |= 1 << 0
+        }
+        let geoPoint = Api.InputGeoPoint.inputGeoPoint(.init(flags: geoFlags, lat: map.latitude, long: map.longitude, accuracyRadius: map.accuracyRadius.flatMap({ Int32($0) })))
+        if let venue = map.venue {
+            return .inputMediaVenue(.init(geoPoint: geoPoint, title: venue.title, address: venue.address ?? "", provider: venue.provider ?? "", venueId: venue.id ?? "", venueType: venue.type ?? ""))
+        } else {
+            return .inputMediaGeoPoint(.init(geoPoint: geoPoint))
+        }
+    }
+    return nil
+}
+
 
 public enum RequestMessageSelectPollOptionError {
     case generic
+    case restrictedToSubscribers
 }
 
 func _internal_requestMessageSelectPollOption(account: Account, messageId: MessageId, opaqueIdentifiers: [Data]) -> Signal<TelegramMediaPoll?, RequestMessageSelectPollOptionError> {
@@ -16,7 +41,10 @@ func _internal_requestMessageSelectPollOption(account: Account, messageId: Messa
     |> mapToSignal { peer in
         if let inputPeer = apiInputPeer(peer) {
             return account.network.request(Api.functions.messages.sendVote(peer: inputPeer, msgId: messageId.id, options: opaqueIdentifiers.map { Buffer(data: $0) }))
-            |> mapError { _ -> RequestMessageSelectPollOptionError in
+            |> mapError { error -> RequestMessageSelectPollOptionError in
+                if error.errorDescription == "POLL_MEMBER_RESTRICTED" {
+                    return .restrictedToSubscribers
+                }
                 return .generic
             }
             |> mapToSignal { result -> Signal<TelegramMediaPoll?, RequestMessageSelectPollOptionError> in
@@ -34,7 +62,7 @@ func _internal_requestMessageSelectPollOption(account: Account, messageId: Messa
                                 if let poll = poll {
                                     switch poll {
                                     case let .poll(pollData):
-                                        let (flags, question, answers, closePeriod) = (pollData.flags, pollData.question, pollData.answers, pollData.closePeriod)
+                                        let (flags, question, answers, closePeriod, closeDate, pollHash, countries) = (pollData.flags, pollData.question, pollData.answers, pollData.closePeriod, pollData.closeDate, pollData.hash, pollData.countriesIso2)
                                         let publicity: TelegramMediaPollPublicity
                                         if (flags & (1 << 1)) != 0 {
                                             publicity = .public
@@ -43,10 +71,15 @@ func _internal_requestMessageSelectPollOption(account: Account, messageId: Messa
                                         }
                                         let kind: TelegramMediaPollKind
                                         if (flags & (1 << 3)) != 0 {
-                                            kind = .quiz
+                                            kind = .quiz(multipleAnswers: (flags & (1 << 2)) != 0)
                                         } else {
                                             kind = .poll(multipleAnswers: (flags & (1 << 2)) != 0)
                                         }
+                                        let openAnswers = (flags & (1 << 6)) != 0
+                                        let revotingDisabled = (flags & (1 << 7)) != 0
+                                        let shuffleAnswers = (flags & (1 << 8)) != 0
+                                        let hideResultsUntilClose = (flags & (1 << 9)) != 0
+                                        let restrictToSubscribers = (flags & (1 << 11)) != 0
                                         let questionText: String
                                         let questionEntities: [MessageTextEntity]
                                         switch question {
@@ -55,7 +88,7 @@ func _internal_requestMessageSelectPollOption(account: Account, messageId: Messa
                                             questionText = text
                                             questionEntities = messageTextEntitiesFromApiEntities(entities)
                                         }
-                                        resultPoll = TelegramMediaPoll(pollId: pollId, publicity: publicity, kind: kind, text: questionText, textEntities: questionEntities, options: answers.map(TelegramMediaPollOption.init(apiOption:)), correctAnswers: nil, results: TelegramMediaPollResults(apiResults: results), isClosed: (flags & (1 << 0)) != 0, deadlineTimeout: closePeriod)
+                                        resultPoll = TelegramMediaPoll(pollId: pollId, publicity: publicity, kind: kind, text: questionText, textEntities: questionEntities, options: answers.map(TelegramMediaPollOption.init(apiOption:)), correctAnswers: nil, results: TelegramMediaPollResults(apiResults: results), isClosed: (flags & (1 << 0)) != 0, deadlineTimeout: closePeriod, deadlineDate: closeDate, pollHash: pollHash, openAnswers: openAnswers, revotingDisabled: revotingDisabled, shuffleAnswers: shuffleAnswers, hideResultsUntilClose: hideResultsUntilClose, attachedMedia: resultPoll?.attachedMedia, restrictToSubscribers: restrictToSubscribers, countries: countries ?? [])
                                     }
                                 }
                                 
@@ -89,6 +122,65 @@ func _internal_requestMessageSelectPollOption(account: Account, messageId: Messa
     }
 }
 
+public enum AddPollOptionError {
+    case generic
+}
+
+func _internal_addPollOption(account: Account, messageId: MessageId, text: String, entities: [MessageTextEntity], mediaReference: AnyMediaReference?) -> Signal<Never, AddPollOptionError> {
+    return account.postbox.loadedPeerWithId(messageId.peerId)
+    |> take(1)
+    |> castError(AddPollOptionError.self)
+    |> mapToSignal { peer in
+        if let inputPeer = apiInputPeer(peer) {
+            let inputMedia = mediaReference.flatMap { pollCloudMediaToInputMedia($0.media) }
+            let flags: Int32 = inputMedia != nil ? (1 << 0) : 0
+            let apiAnswer: Api.PollAnswer = .inputPollAnswer(.init(flags: flags, text: .textWithEntities(.init(text: text, entities: apiEntitiesFromMessageTextEntities(entities, associatedPeers: SimpleDictionary()))), media: inputMedia))
+            return account.network.request(Api.functions.messages.addPollAnswer(peer: inputPeer, msgId: messageId.id, answer: apiAnswer))
+            |> mapError { _ -> AddPollOptionError in
+                return .generic
+            }
+            |> mapToSignal { result -> Signal<TelegramMediaPoll?, AddPollOptionError> in
+                return account.postbox.transaction { transaction -> TelegramMediaPoll? in
+                    account.stateManager.addUpdates(result)
+                    return nil
+                }
+                |> castError(AddPollOptionError.self)
+            }
+        } else {
+            return .single(nil)
+        }
+    }
+    |> ignoreValues
+}
+
+public enum DeletePollOptionError {
+    case generic
+}
+
+func _internal_deletePollOption(account: Account, messageId: MessageId, opaqueIdentifier: Data) -> Signal<Never, DeletePollOptionError> {
+    return account.postbox.loadedPeerWithId(messageId.peerId)
+    |> take(1)
+    |> castError(DeletePollOptionError.self)
+    |> mapToSignal { peer in
+        if let inputPeer = apiInputPeer(peer) {
+            return account.network.request(Api.functions.messages.deletePollAnswer(peer: inputPeer, msgId: messageId.id, option: Buffer(data: opaqueIdentifier)))
+            |> mapError { _ -> DeletePollOptionError in
+                return .generic
+            }
+            |> mapToSignal { result -> Signal<TelegramMediaPoll?, DeletePollOptionError> in
+                return account.postbox.transaction { transaction -> TelegramMediaPoll? in
+                    account.stateManager.addUpdates(result)
+                    return nil
+                }
+                |> castError(DeletePollOptionError.self)
+            }
+        } else {
+            return .single(nil)
+        }
+    }
+    |> ignoreValues
+}
+
 func _internal_requestClosePoll(postbox: Postbox, network: Network, stateManager: AccountStateManager, messageId: MessageId) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> (TelegramMediaPoll, Api.InputPeer)? in
         guard let inputPeer = transaction.getPeer(messageId.peerId).flatMap(apiInputPeer) else {
@@ -117,8 +209,11 @@ func _internal_requestClosePoll(postbox: Postbox, network: Network, stateManager
             if multipleAnswers {
                 pollFlags |= 1 << 2
             }
-        case .quiz:
+        case let .quiz(multipleAnswers):
             pollFlags |= 1 << 3
+            if multipleAnswers {
+                pollFlags |= 1 << 2
+            }
         }
         switch poll.publicity {
         case .anonymous:
@@ -127,18 +222,46 @@ func _internal_requestClosePoll(postbox: Postbox, network: Network, stateManager
             pollFlags |= 1 << 1
         }
         var pollMediaFlags: Int32 = 0
-        var correctAnswers: [Buffer]?
+        var correctAnswersIndices: [Int32]?
         if let correctAnswersValue = poll.correctAnswers {
             pollMediaFlags |= 1 << 0
-            correctAnswers = correctAnswersValue.map { Buffer(data: $0) }
+            
+            var indices: [Int32] = []
+            for i in 0 ..< poll.options.count {
+                if correctAnswersValue.contains(where: { poll.options[i].opaqueIdentifier == $0 }) {
+                    indices.append(Int32(i))
+                }
+            }
+            correctAnswersIndices = indices
         }
-        
+
         pollFlags |= 1 << 0
-        
+
         if poll.deadlineTimeout != nil {
             pollFlags |= 1 << 4
         }
-        
+        if poll.deadlineDate != nil {
+            pollFlags |= 1 << 5
+        }
+        if poll.openAnswers {
+            pollFlags |= 1 << 6
+        }
+        if poll.revotingDisabled {
+            pollFlags |= 1 << 7
+        }
+        if poll.shuffleAnswers {
+            pollFlags |= 1 << 8
+        }
+        if poll.hideResultsUntilClose {
+            pollFlags |= 1 << 9
+        }
+        if poll.restrictToSubscribers {
+            pollFlags |= 1 << 11
+        }
+        if !poll.countries.isEmpty {
+            pollFlags |= 1 << 12
+        }
+
         var mappedSolution: String?
         var mappedSolutionEntities: [Api.MessageEntity]?
         if let solution = poll.results.solution {
@@ -147,7 +270,7 @@ func _internal_requestClosePoll(postbox: Postbox, network: Network, stateManager
             pollMediaFlags |= 1 << 1
         }
         
-        return network.request(Api.functions.messages.editMessage(flags: flags, peer: inputPeer, id: messageId.id, message: nil, media: .inputMediaPoll(.init(flags: pollMediaFlags, poll: .poll(.init(id: poll.pollId.id, flags: pollFlags, question: .textWithEntities(.init(text: poll.text, entities: apiEntitiesFromMessageTextEntities(poll.textEntities, associatedPeers: SimpleDictionary()))), answers: poll.options.map({ $0.apiOption }), closePeriod: poll.deadlineTimeout, closeDate: nil)), correctAnswers: correctAnswers, solution: mappedSolution, solutionEntities: mappedSolutionEntities)), replyMarkup: nil, entities: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, quickReplyShortcutId: nil))
+        return network.request(Api.functions.messages.editMessage(flags: flags, peer: inputPeer, id: messageId.id, message: nil, media: .inputMediaPoll(.init(flags: pollMediaFlags, poll: .poll(.init(id: poll.pollId.id, flags: pollFlags, question: .textWithEntities(.init(text: poll.text, entities: apiEntitiesFromMessageTextEntities(poll.textEntities, associatedPeers: SimpleDictionary()))), answers: poll.options.map({ $0.apiOption }), closePeriod: poll.deadlineTimeout, closeDate: poll.deadlineDate, countriesIso2: poll.countries, hash: 0)), correctAnswers: correctAnswersIndices, attachedMedia: nil, solution: mappedSolution, solutionEntities: mappedSolutionEntities, solutionMedia: nil)), replyMarkup: nil, entities: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, quickReplyShortcutId: nil))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.Updates?, NoError> in
             return .single(nil)
@@ -209,12 +332,12 @@ private final class PollResultsOptionContext {
     private var canLoadMore: Bool = true
     private var nextOffset: String?
     private var results: [PollResultsOptionState.Voter] = []
-    private var count: Int
+    private var count: Int?
     private var populateCache: Bool = true
     
     let state = Promise<PollResultsOptionState>()
     
-    init(queue: Queue, account: Account, pollId: MediaId, messageId: MessageId, opaqueIdentifier: Data, count: Int) {
+    init(queue: Queue, account: Account, pollId: MediaId, messageId: MessageId, opaqueIdentifier: Data, count: Int?) {
         self.queue = queue
         self.account = account
         self.pollId = pollId
@@ -385,7 +508,7 @@ public struct PollResultsOptionState: Equatable {
     public var isLoadingMore: Bool
     public var hasLoadedOnce: Bool
     public var canLoadMore: Bool
-    public var count: Int
+    public var count: Int?
 }
 
 public struct PollResultsState: Equatable {
@@ -403,11 +526,11 @@ private final class PollResultsContextImpl {
         self.queue = queue
         
         for option in poll.options {
-            var count = 0
+            var count: Int?
             if let voters = poll.results.voters {
                 for voter in voters {
                     if voter.opaqueIdentifier == option.opaqueIdentifier {
-                        count = Int(voter.count)
+                        count = voter.count.flatMap(Int.init)
                     }
                 }
             }

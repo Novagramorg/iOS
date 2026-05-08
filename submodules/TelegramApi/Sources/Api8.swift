@@ -25,8 +25,8 @@ public extension Api {
                 self.presentation = presentation
                 self.paidStarsTotal = paidStarsTotal
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("groupCallParticipant", [("flags", self.flags as Any), ("peer", self.peer as Any), ("date", self.date as Any), ("activeDate", self.activeDate as Any), ("source", self.source as Any), ("volume", self.volume as Any), ("about", self.about as Any), ("raiseHandRating", self.raiseHandRating as Any), ("video", self.video as Any), ("presentation", self.presentation as Any), ("paidStarsTotal", self.paidStarsTotal as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("groupCallParticipant", [("flags", ConstructorParameterDescription(self.flags)), ("peer", ConstructorParameterDescription(self.peer)), ("date", ConstructorParameterDescription(self.date)), ("activeDate", ConstructorParameterDescription(self.activeDate)), ("source", ConstructorParameterDescription(self.source)), ("volume", ConstructorParameterDescription(self.volume)), ("about", ConstructorParameterDescription(self.about)), ("raiseHandRating", ConstructorParameterDescription(self.raiseHandRating)), ("video", ConstructorParameterDescription(self.video)), ("presentation", ConstructorParameterDescription(self.presentation)), ("paidStarsTotal", ConstructorParameterDescription(self.paidStarsTotal))])
             }
         }
         case groupCallParticipant(Cons_groupCallParticipant)
@@ -66,10 +66,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .groupCallParticipant(let _data):
-                return ("groupCallParticipant", [("flags", _data.flags as Any), ("peer", _data.peer as Any), ("date", _data.date as Any), ("activeDate", _data.activeDate as Any), ("source", _data.source as Any), ("volume", _data.volume as Any), ("about", _data.about as Any), ("raiseHandRating", _data.raiseHandRating as Any), ("video", _data.video as Any), ("presentation", _data.presentation as Any), ("paidStarsTotal", _data.paidStarsTotal as Any)])
+                return ("groupCallParticipant", [("flags", ConstructorParameterDescription(_data.flags)), ("peer", ConstructorParameterDescription(_data.peer)), ("date", ConstructorParameterDescription(_data.date)), ("activeDate", ConstructorParameterDescription(_data.activeDate)), ("source", ConstructorParameterDescription(_data.source)), ("volume", ConstructorParameterDescription(_data.volume)), ("about", ConstructorParameterDescription(_data.about)), ("raiseHandRating", ConstructorParameterDescription(_data.raiseHandRating)), ("video", ConstructorParameterDescription(_data.video)), ("presentation", ConstructorParameterDescription(_data.presentation)), ("paidStarsTotal", ConstructorParameterDescription(_data.paidStarsTotal))])
             }
         }
 
@@ -83,50 +83,50 @@ public extension Api {
             var _3: Int32?
             _3 = reader.readInt32()
             var _4: Int32?
-            if Int(_1!) & Int(1 << 3) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
                 _4 = reader.readInt32()
             }
             var _5: Int32?
             _5 = reader.readInt32()
             var _6: Int32?
-            if Int(_1!) & Int(1 << 7) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 7) != 0 {
                 _6 = reader.readInt32()
             }
             var _7: String?
-            if Int(_1!) & Int(1 << 11) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 11) != 0 {
                 _7 = parseString(reader)
             }
             var _8: Int64?
-            if Int(_1!) & Int(1 << 13) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 13) != 0 {
                 _8 = reader.readInt64()
             }
             var _9: Api.GroupCallParticipantVideo?
-            if Int(_1!) & Int(1 << 6) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
                 if let signature = reader.readInt32() {
                     _9 = Api.parse(reader, signature: signature) as? Api.GroupCallParticipantVideo
                 }
             }
             var _10: Api.GroupCallParticipantVideo?
-            if Int(_1!) & Int(1 << 14) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 14) != 0 {
                 if let signature = reader.readInt32() {
                     _10 = Api.parse(reader, signature: signature) as? Api.GroupCallParticipantVideo
                 }
             }
             var _11: Int64?
-            if Int(_1!) & Int(1 << 16) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 16) != 0 {
                 _11 = reader.readInt64()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 7) == 0) || _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 11) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 13) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 6) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 14) == 0) || _10 != nil
-            let _c11 = (Int(_1!) & Int(1 << 16) == 0) || _11 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 7) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 11) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 13) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _10 != nil
+            let _c11 = (Int(_1 ?? 0) & Int(1 << 16) == 0) || _11 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
                 return Api.GroupCallParticipant.groupCallParticipant(Cons_groupCallParticipant(flags: _1!, peer: _2!, date: _3!, activeDate: _4, source: _5!, volume: _6, about: _7, raiseHandRating: _8, video: _9, presentation: _10, paidStarsTotal: _11))
             }
@@ -149,8 +149,8 @@ public extension Api {
                 self.sourceGroups = sourceGroups
                 self.audioSource = audioSource
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("groupCallParticipantVideo", [("flags", self.flags as Any), ("endpoint", self.endpoint as Any), ("sourceGroups", self.sourceGroups as Any), ("audioSource", self.audioSource as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("groupCallParticipantVideo", [("flags", ConstructorParameterDescription(self.flags)), ("endpoint", ConstructorParameterDescription(self.endpoint)), ("sourceGroups", ConstructorParameterDescription(self.sourceGroups)), ("audioSource", ConstructorParameterDescription(self.audioSource))])
             }
         }
         case groupCallParticipantVideo(Cons_groupCallParticipantVideo)
@@ -175,10 +175,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .groupCallParticipantVideo(let _data):
-                return ("groupCallParticipantVideo", [("flags", _data.flags as Any), ("endpoint", _data.endpoint as Any), ("sourceGroups", _data.sourceGroups as Any), ("audioSource", _data.audioSource as Any)])
+                return ("groupCallParticipantVideo", [("flags", ConstructorParameterDescription(_data.flags)), ("endpoint", ConstructorParameterDescription(_data.endpoint)), ("sourceGroups", ConstructorParameterDescription(_data.sourceGroups)), ("audioSource", ConstructorParameterDescription(_data.audioSource))])
             }
         }
 
@@ -192,13 +192,13 @@ public extension Api {
                 _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.GroupCallParticipantVideoSourceGroup.self)
             }
             var _4: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _4 = reader.readInt32()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.GroupCallParticipantVideo.groupCallParticipantVideo(Cons_groupCallParticipantVideo(flags: _1!, endpoint: _2!, sourceGroups: _3!, audioSource: _4))
             }
@@ -217,8 +217,8 @@ public extension Api {
                 self.semantics = semantics
                 self.sources = sources
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("groupCallParticipantVideoSourceGroup", [("semantics", self.semantics as Any), ("sources", self.sources as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("groupCallParticipantVideoSourceGroup", [("semantics", ConstructorParameterDescription(self.semantics)), ("sources", ConstructorParameterDescription(self.sources))])
             }
         }
         case groupCallParticipantVideoSourceGroup(Cons_groupCallParticipantVideoSourceGroup)
@@ -239,10 +239,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .groupCallParticipantVideoSourceGroup(let _data):
-                return ("groupCallParticipantVideoSourceGroup", [("semantics", _data.semantics as Any), ("sources", _data.sources as Any)])
+                return ("groupCallParticipantVideoSourceGroup", [("semantics", ConstructorParameterDescription(_data.semantics)), ("sources", ConstructorParameterDescription(_data.sources))])
             }
         }
 
@@ -275,8 +275,8 @@ public extension Api {
                 self.scale = scale
                 self.lastTimestampMs = lastTimestampMs
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("groupCallStreamChannel", [("channel", self.channel as Any), ("scale", self.scale as Any), ("lastTimestampMs", self.lastTimestampMs as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("groupCallStreamChannel", [("channel", ConstructorParameterDescription(self.channel)), ("scale", ConstructorParameterDescription(self.scale)), ("lastTimestampMs", ConstructorParameterDescription(self.lastTimestampMs))])
             }
         }
         case groupCallStreamChannel(Cons_groupCallStreamChannel)
@@ -294,10 +294,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .groupCallStreamChannel(let _data):
-                return ("groupCallStreamChannel", [("channel", _data.channel as Any), ("scale", _data.scale as Any), ("lastTimestampMs", _data.lastTimestampMs as Any)])
+                return ("groupCallStreamChannel", [("channel", ConstructorParameterDescription(_data.channel)), ("scale", ConstructorParameterDescription(_data.scale)), ("lastTimestampMs", ConstructorParameterDescription(_data.lastTimestampMs))])
             }
         }
 
@@ -331,8 +331,8 @@ public extension Api {
                 self.userId = userId
                 self.score = score
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("highScore", [("pos", self.pos as Any), ("userId", self.userId as Any), ("score", self.score as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("highScore", [("pos", ConstructorParameterDescription(self.pos)), ("userId", ConstructorParameterDescription(self.userId)), ("score", ConstructorParameterDescription(self.score))])
             }
         }
         case highScore(Cons_highScore)
@@ -350,10 +350,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .highScore(let _data):
-                return ("highScore", [("pos", _data.pos as Any), ("userId", _data.userId as Any), ("score", _data.score as Any)])
+                return ("highScore", [("pos", ConstructorParameterDescription(_data.pos)), ("userId", ConstructorParameterDescription(_data.userId)), ("score", ConstructorParameterDescription(_data.score))])
             }
         }
 
@@ -385,8 +385,8 @@ public extension Api {
                 self.userId = userId
                 self.clientId = clientId
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("importedContact", [("userId", self.userId as Any), ("clientId", self.clientId as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("importedContact", [("userId", ConstructorParameterDescription(self.userId)), ("clientId", ConstructorParameterDescription(self.clientId))])
             }
         }
         case importedContact(Cons_importedContact)
@@ -403,10 +403,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .importedContact(let _data):
-                return ("importedContact", [("userId", _data.userId as Any), ("clientId", _data.clientId as Any)])
+                return ("importedContact", [("userId", ConstructorParameterDescription(_data.userId)), ("clientId", ConstructorParameterDescription(_data.clientId))])
             }
         }
 
@@ -435,8 +435,8 @@ public extension Api {
                 self.text = text
                 self.startParam = startParam
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inlineBotSwitchPM", [("text", self.text as Any), ("startParam", self.startParam as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inlineBotSwitchPM", [("text", ConstructorParameterDescription(self.text)), ("startParam", ConstructorParameterDescription(self.startParam))])
             }
         }
         case inlineBotSwitchPM(Cons_inlineBotSwitchPM)
@@ -453,10 +453,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inlineBotSwitchPM(let _data):
-                return ("inlineBotSwitchPM", [("text", _data.text as Any), ("startParam", _data.startParam as Any)])
+                return ("inlineBotSwitchPM", [("text", ConstructorParameterDescription(_data.text)), ("startParam", ConstructorParameterDescription(_data.startParam))])
             }
         }
 
@@ -485,8 +485,8 @@ public extension Api {
                 self.text = text
                 self.url = url
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inlineBotWebView", [("text", self.text as Any), ("url", self.url as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inlineBotWebView", [("text", ConstructorParameterDescription(self.text)), ("url", ConstructorParameterDescription(self.url))])
             }
         }
         case inlineBotWebView(Cons_inlineBotWebView)
@@ -503,10 +503,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inlineBotWebView(let _data):
-                return ("inlineBotWebView", [("text", _data.text as Any), ("url", _data.url as Any)])
+                return ("inlineBotWebView", [("text", ConstructorParameterDescription(_data.text)), ("url", ConstructorParameterDescription(_data.url))])
             }
         }
 
@@ -570,7 +570,7 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inlineQueryPeerTypeBotPM:
                 return ("inlineQueryPeerTypeBotPM", [])
@@ -608,6 +608,114 @@ public extension Api {
     }
 }
 public extension Api {
+    enum InputAiComposeTone: TypeConstructorDescription {
+        public class Cons_inputAiComposeToneDefault: TypeConstructorDescription {
+            public var tone: String
+            public init(tone: String) {
+                self.tone = tone
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputAiComposeToneDefault", [("tone", ConstructorParameterDescription(self.tone))])
+            }
+        }
+        public class Cons_inputAiComposeToneID: TypeConstructorDescription {
+            public var id: Int64
+            public var accessHash: Int64
+            public init(id: Int64, accessHash: Int64) {
+                self.id = id
+                self.accessHash = accessHash
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputAiComposeToneID", [("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash))])
+            }
+        }
+        public class Cons_inputAiComposeToneSlug: TypeConstructorDescription {
+            public var slug: String
+            public init(slug: String) {
+                self.slug = slug
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputAiComposeToneSlug", [("slug", ConstructorParameterDescription(self.slug))])
+            }
+        }
+        case inputAiComposeToneDefault(Cons_inputAiComposeToneDefault)
+        case inputAiComposeToneID(Cons_inputAiComposeToneID)
+        case inputAiComposeToneSlug(Cons_inputAiComposeToneSlug)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .inputAiComposeToneDefault(let _data):
+                if boxed {
+                    buffer.appendInt32(535407039)
+                }
+                serializeString(_data.tone, buffer: buffer, boxed: false)
+                break
+            case .inputAiComposeToneID(let _data):
+                if boxed {
+                    buffer.appendInt32(125026432)
+                }
+                serializeInt64(_data.id, buffer: buffer, boxed: false)
+                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
+                break
+            case .inputAiComposeToneSlug(let _data):
+                if boxed {
+                    buffer.appendInt32(530584407)
+                }
+                serializeString(_data.slug, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .inputAiComposeToneDefault(let _data):
+                return ("inputAiComposeToneDefault", [("tone", ConstructorParameterDescription(_data.tone))])
+            case .inputAiComposeToneID(let _data):
+                return ("inputAiComposeToneID", [("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash))])
+            case .inputAiComposeToneSlug(let _data):
+                return ("inputAiComposeToneSlug", [("slug", ConstructorParameterDescription(_data.slug))])
+            }
+        }
+
+        public static func parse_inputAiComposeToneDefault(_ reader: BufferReader) -> InputAiComposeTone? {
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputAiComposeTone.inputAiComposeToneDefault(Cons_inputAiComposeToneDefault(tone: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputAiComposeToneID(_ reader: BufferReader) -> InputAiComposeTone? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.InputAiComposeTone.inputAiComposeToneID(Cons_inputAiComposeToneID(id: _1!, accessHash: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputAiComposeToneSlug(_ reader: BufferReader) -> InputAiComposeTone? {
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputAiComposeTone.inputAiComposeToneSlug(Cons_inputAiComposeToneSlug(slug: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     enum InputAppEvent: TypeConstructorDescription {
         public class Cons_inputAppEvent: TypeConstructorDescription {
             public var time: Double
@@ -620,8 +728,8 @@ public extension Api {
                 self.peer = peer
                 self.data = data
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputAppEvent", [("time", self.time as Any), ("type", self.type as Any), ("peer", self.peer as Any), ("data", self.data as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputAppEvent", [("time", ConstructorParameterDescription(self.time)), ("type", ConstructorParameterDescription(self.type)), ("peer", ConstructorParameterDescription(self.peer)), ("data", ConstructorParameterDescription(self.data))])
             }
         }
         case inputAppEvent(Cons_inputAppEvent)
@@ -640,10 +748,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inputAppEvent(let _data):
-                return ("inputAppEvent", [("time", _data.time as Any), ("type", _data.type as Any), ("peer", _data.peer as Any), ("data", _data.data as Any)])
+                return ("inputAppEvent", [("time", ConstructorParameterDescription(_data.time)), ("type", ConstructorParameterDescription(_data.type)), ("peer", ConstructorParameterDescription(_data.peer)), ("data", ConstructorParameterDescription(_data.data))])
             }
         }
 
@@ -680,8 +788,8 @@ public extension Api {
                 self.id = id
                 self.accessHash = accessHash
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotAppID", [("id", self.id as Any), ("accessHash", self.accessHash as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotAppID", [("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash))])
             }
         }
         public class Cons_inputBotAppShortName: TypeConstructorDescription {
@@ -691,8 +799,8 @@ public extension Api {
                 self.botId = botId
                 self.shortName = shortName
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotAppShortName", [("botId", self.botId as Any), ("shortName", self.shortName as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotAppShortName", [("botId", ConstructorParameterDescription(self.botId)), ("shortName", ConstructorParameterDescription(self.shortName))])
             }
         }
         case inputBotAppID(Cons_inputBotAppID)
@@ -717,12 +825,12 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inputBotAppID(let _data):
-                return ("inputBotAppID", [("id", _data.id as Any), ("accessHash", _data.accessHash as Any)])
+                return ("inputBotAppID", [("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash))])
             case .inputBotAppShortName(let _data):
-                return ("inputBotAppShortName", [("botId", _data.botId as Any), ("shortName", _data.shortName as Any)])
+                return ("inputBotAppShortName", [("botId", ConstructorParameterDescription(_data.botId)), ("shortName", ConstructorParameterDescription(_data.shortName))])
             }
         }
 
@@ -767,8 +875,8 @@ public extension Api {
                 self.flags = flags
                 self.replyMarkup = replyMarkup
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageGame", [("flags", self.flags as Any), ("replyMarkup", self.replyMarkup as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageGame", [("flags", ConstructorParameterDescription(self.flags)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
             }
         }
         public class Cons_inputBotInlineMessageMediaAuto: TypeConstructorDescription {
@@ -782,8 +890,8 @@ public extension Api {
                 self.entities = entities
                 self.replyMarkup = replyMarkup
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageMediaAuto", [("flags", self.flags as Any), ("message", self.message as Any), ("entities", self.entities as Any), ("replyMarkup", self.replyMarkup as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageMediaAuto", [("flags", ConstructorParameterDescription(self.flags)), ("message", ConstructorParameterDescription(self.message)), ("entities", ConstructorParameterDescription(self.entities)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
             }
         }
         public class Cons_inputBotInlineMessageMediaContact: TypeConstructorDescription {
@@ -801,8 +909,8 @@ public extension Api {
                 self.vcard = vcard
                 self.replyMarkup = replyMarkup
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageMediaContact", [("flags", self.flags as Any), ("phoneNumber", self.phoneNumber as Any), ("firstName", self.firstName as Any), ("lastName", self.lastName as Any), ("vcard", self.vcard as Any), ("replyMarkup", self.replyMarkup as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageMediaContact", [("flags", ConstructorParameterDescription(self.flags)), ("phoneNumber", ConstructorParameterDescription(self.phoneNumber)), ("firstName", ConstructorParameterDescription(self.firstName)), ("lastName", ConstructorParameterDescription(self.lastName)), ("vcard", ConstructorParameterDescription(self.vcard)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
             }
         }
         public class Cons_inputBotInlineMessageMediaGeo: TypeConstructorDescription {
@@ -820,8 +928,8 @@ public extension Api {
                 self.proximityNotificationRadius = proximityNotificationRadius
                 self.replyMarkup = replyMarkup
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageMediaGeo", [("flags", self.flags as Any), ("geoPoint", self.geoPoint as Any), ("heading", self.heading as Any), ("period", self.period as Any), ("proximityNotificationRadius", self.proximityNotificationRadius as Any), ("replyMarkup", self.replyMarkup as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageMediaGeo", [("flags", ConstructorParameterDescription(self.flags)), ("geoPoint", ConstructorParameterDescription(self.geoPoint)), ("heading", ConstructorParameterDescription(self.heading)), ("period", ConstructorParameterDescription(self.period)), ("proximityNotificationRadius", ConstructorParameterDescription(self.proximityNotificationRadius)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
             }
         }
         public class Cons_inputBotInlineMessageMediaInvoice: TypeConstructorDescription {
@@ -845,8 +953,8 @@ public extension Api {
                 self.providerData = providerData
                 self.replyMarkup = replyMarkup
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageMediaInvoice", [("flags", self.flags as Any), ("title", self.title as Any), ("description", self.description as Any), ("photo", self.photo as Any), ("invoice", self.invoice as Any), ("payload", self.payload as Any), ("provider", self.provider as Any), ("providerData", self.providerData as Any), ("replyMarkup", self.replyMarkup as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageMediaInvoice", [("flags", ConstructorParameterDescription(self.flags)), ("title", ConstructorParameterDescription(self.title)), ("description", ConstructorParameterDescription(self.description)), ("photo", ConstructorParameterDescription(self.photo)), ("invoice", ConstructorParameterDescription(self.invoice)), ("payload", ConstructorParameterDescription(self.payload)), ("provider", ConstructorParameterDescription(self.provider)), ("providerData", ConstructorParameterDescription(self.providerData)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
             }
         }
         public class Cons_inputBotInlineMessageMediaVenue: TypeConstructorDescription {
@@ -868,8 +976,8 @@ public extension Api {
                 self.venueType = venueType
                 self.replyMarkup = replyMarkup
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageMediaVenue", [("flags", self.flags as Any), ("geoPoint", self.geoPoint as Any), ("title", self.title as Any), ("address", self.address as Any), ("provider", self.provider as Any), ("venueId", self.venueId as Any), ("venueType", self.venueType as Any), ("replyMarkup", self.replyMarkup as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageMediaVenue", [("flags", ConstructorParameterDescription(self.flags)), ("geoPoint", ConstructorParameterDescription(self.geoPoint)), ("title", ConstructorParameterDescription(self.title)), ("address", ConstructorParameterDescription(self.address)), ("provider", ConstructorParameterDescription(self.provider)), ("venueId", ConstructorParameterDescription(self.venueId)), ("venueType", ConstructorParameterDescription(self.venueType)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
             }
         }
         public class Cons_inputBotInlineMessageMediaWebPage: TypeConstructorDescription {
@@ -885,8 +993,8 @@ public extension Api {
                 self.url = url
                 self.replyMarkup = replyMarkup
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageMediaWebPage", [("flags", self.flags as Any), ("message", self.message as Any), ("entities", self.entities as Any), ("url", self.url as Any), ("replyMarkup", self.replyMarkup as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageMediaWebPage", [("flags", ConstructorParameterDescription(self.flags)), ("message", ConstructorParameterDescription(self.message)), ("entities", ConstructorParameterDescription(self.entities)), ("url", ConstructorParameterDescription(self.url)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
             }
         }
         public class Cons_inputBotInlineMessageText: TypeConstructorDescription {
@@ -900,8 +1008,8 @@ public extension Api {
                 self.entities = entities
                 self.replyMarkup = replyMarkup
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageText", [("flags", self.flags as Any), ("message", self.message as Any), ("entities", self.entities as Any), ("replyMarkup", self.replyMarkup as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageText", [("flags", ConstructorParameterDescription(self.flags)), ("message", ConstructorParameterDescription(self.message)), ("entities", ConstructorParameterDescription(self.entities)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
             }
         }
         case inputBotInlineMessageGame(Cons_inputBotInlineMessageGame)
@@ -1044,24 +1152,24 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inputBotInlineMessageGame(let _data):
-                return ("inputBotInlineMessageGame", [("flags", _data.flags as Any), ("replyMarkup", _data.replyMarkup as Any)])
+                return ("inputBotInlineMessageGame", [("flags", ConstructorParameterDescription(_data.flags)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
             case .inputBotInlineMessageMediaAuto(let _data):
-                return ("inputBotInlineMessageMediaAuto", [("flags", _data.flags as Any), ("message", _data.message as Any), ("entities", _data.entities as Any), ("replyMarkup", _data.replyMarkup as Any)])
+                return ("inputBotInlineMessageMediaAuto", [("flags", ConstructorParameterDescription(_data.flags)), ("message", ConstructorParameterDescription(_data.message)), ("entities", ConstructorParameterDescription(_data.entities)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
             case .inputBotInlineMessageMediaContact(let _data):
-                return ("inputBotInlineMessageMediaContact", [("flags", _data.flags as Any), ("phoneNumber", _data.phoneNumber as Any), ("firstName", _data.firstName as Any), ("lastName", _data.lastName as Any), ("vcard", _data.vcard as Any), ("replyMarkup", _data.replyMarkup as Any)])
+                return ("inputBotInlineMessageMediaContact", [("flags", ConstructorParameterDescription(_data.flags)), ("phoneNumber", ConstructorParameterDescription(_data.phoneNumber)), ("firstName", ConstructorParameterDescription(_data.firstName)), ("lastName", ConstructorParameterDescription(_data.lastName)), ("vcard", ConstructorParameterDescription(_data.vcard)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
             case .inputBotInlineMessageMediaGeo(let _data):
-                return ("inputBotInlineMessageMediaGeo", [("flags", _data.flags as Any), ("geoPoint", _data.geoPoint as Any), ("heading", _data.heading as Any), ("period", _data.period as Any), ("proximityNotificationRadius", _data.proximityNotificationRadius as Any), ("replyMarkup", _data.replyMarkup as Any)])
+                return ("inputBotInlineMessageMediaGeo", [("flags", ConstructorParameterDescription(_data.flags)), ("geoPoint", ConstructorParameterDescription(_data.geoPoint)), ("heading", ConstructorParameterDescription(_data.heading)), ("period", ConstructorParameterDescription(_data.period)), ("proximityNotificationRadius", ConstructorParameterDescription(_data.proximityNotificationRadius)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
             case .inputBotInlineMessageMediaInvoice(let _data):
-                return ("inputBotInlineMessageMediaInvoice", [("flags", _data.flags as Any), ("title", _data.title as Any), ("description", _data.description as Any), ("photo", _data.photo as Any), ("invoice", _data.invoice as Any), ("payload", _data.payload as Any), ("provider", _data.provider as Any), ("providerData", _data.providerData as Any), ("replyMarkup", _data.replyMarkup as Any)])
+                return ("inputBotInlineMessageMediaInvoice", [("flags", ConstructorParameterDescription(_data.flags)), ("title", ConstructorParameterDescription(_data.title)), ("description", ConstructorParameterDescription(_data.description)), ("photo", ConstructorParameterDescription(_data.photo)), ("invoice", ConstructorParameterDescription(_data.invoice)), ("payload", ConstructorParameterDescription(_data.payload)), ("provider", ConstructorParameterDescription(_data.provider)), ("providerData", ConstructorParameterDescription(_data.providerData)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
             case .inputBotInlineMessageMediaVenue(let _data):
-                return ("inputBotInlineMessageMediaVenue", [("flags", _data.flags as Any), ("geoPoint", _data.geoPoint as Any), ("title", _data.title as Any), ("address", _data.address as Any), ("provider", _data.provider as Any), ("venueId", _data.venueId as Any), ("venueType", _data.venueType as Any), ("replyMarkup", _data.replyMarkup as Any)])
+                return ("inputBotInlineMessageMediaVenue", [("flags", ConstructorParameterDescription(_data.flags)), ("geoPoint", ConstructorParameterDescription(_data.geoPoint)), ("title", ConstructorParameterDescription(_data.title)), ("address", ConstructorParameterDescription(_data.address)), ("provider", ConstructorParameterDescription(_data.provider)), ("venueId", ConstructorParameterDescription(_data.venueId)), ("venueType", ConstructorParameterDescription(_data.venueType)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
             case .inputBotInlineMessageMediaWebPage(let _data):
-                return ("inputBotInlineMessageMediaWebPage", [("flags", _data.flags as Any), ("message", _data.message as Any), ("entities", _data.entities as Any), ("url", _data.url as Any), ("replyMarkup", _data.replyMarkup as Any)])
+                return ("inputBotInlineMessageMediaWebPage", [("flags", ConstructorParameterDescription(_data.flags)), ("message", ConstructorParameterDescription(_data.message)), ("entities", ConstructorParameterDescription(_data.entities)), ("url", ConstructorParameterDescription(_data.url)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
             case .inputBotInlineMessageText(let _data):
-                return ("inputBotInlineMessageText", [("flags", _data.flags as Any), ("message", _data.message as Any), ("entities", _data.entities as Any), ("replyMarkup", _data.replyMarkup as Any)])
+                return ("inputBotInlineMessageText", [("flags", ConstructorParameterDescription(_data.flags)), ("message", ConstructorParameterDescription(_data.message)), ("entities", ConstructorParameterDescription(_data.entities)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
             }
         }
 
@@ -1069,13 +1177,13 @@ public extension Api {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: Api.ReplyMarkup?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _2 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
             }
             let _c1 = _1 != nil
-            let _c2 = (Int(_1!) & Int(1 << 2) == 0) || _2 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _2 != nil
             if _c1 && _c2 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageGame(Cons_inputBotInlineMessageGame(flags: _1!, replyMarkup: _2))
             }
@@ -1089,21 +1197,21 @@ public extension Api {
             var _2: String?
             _2 = parseString(reader)
             var _3: [Api.MessageEntity]?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 if let _ = reader.readInt32() {
                     _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.MessageEntity.self)
                 }
             }
             var _4: Api.ReplyMarkup?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _4 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageMediaAuto(Cons_inputBotInlineMessageMediaAuto(flags: _1!, message: _2!, entities: _3, replyMarkup: _4))
             }
@@ -1123,7 +1231,7 @@ public extension Api {
             var _5: String?
             _5 = parseString(reader)
             var _6: Api.ReplyMarkup?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _6 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
@@ -1133,7 +1241,7 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageMediaContact(Cons_inputBotInlineMessageMediaContact(flags: _1!, phoneNumber: _2!, firstName: _3!, lastName: _4!, vcard: _5!, replyMarkup: _6))
             }
@@ -1149,29 +1257,29 @@ public extension Api {
                 _2 = Api.parse(reader, signature: signature) as? Api.InputGeoPoint
             }
             var _3: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _3 = reader.readInt32()
             }
             var _4: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _4 = reader.readInt32()
             }
             var _5: Int32?
-            if Int(_1!) & Int(1 << 3) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
                 _5 = reader.readInt32()
             }
             var _6: Api.ReplyMarkup?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _6 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 3) == 0) || _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 2) == 0) || _6 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageMediaGeo(Cons_inputBotInlineMessageMediaGeo(flags: _1!, geoPoint: _2!, heading: _3, period: _4, proximityNotificationRadius: _5, replyMarkup: _6))
             }
@@ -1187,7 +1295,7 @@ public extension Api {
             var _3: String?
             _3 = parseString(reader)
             var _4: Api.InputWebDocument?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 if let signature = reader.readInt32() {
                     _4 = Api.parse(reader, signature: signature) as? Api.InputWebDocument
                 }
@@ -1205,7 +1313,7 @@ public extension Api {
                 _8 = Api.parse(reader, signature: signature) as? Api.DataJSON
             }
             var _9: Api.ReplyMarkup?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _9 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
@@ -1213,12 +1321,12 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
             let _c8 = _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 2) == 0) || _9 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _9 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageMediaInvoice(Cons_inputBotInlineMessageMediaInvoice(flags: _1!, title: _2!, description: _3!, photo: _4, invoice: _5!, payload: _6!, provider: _7!, providerData: _8!, replyMarkup: _9))
             }
@@ -1244,7 +1352,7 @@ public extension Api {
             var _7: String?
             _7 = parseString(reader)
             var _8: Api.ReplyMarkup?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _8 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
@@ -1256,7 +1364,7 @@ public extension Api {
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 2) == 0) || _8 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _8 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageMediaVenue(Cons_inputBotInlineMessageMediaVenue(flags: _1!, geoPoint: _2!, title: _3!, address: _4!, provider: _5!, venueId: _6!, venueType: _7!, replyMarkup: _8))
             }
@@ -1270,7 +1378,7 @@ public extension Api {
             var _2: String?
             _2 = parseString(reader)
             var _3: [Api.MessageEntity]?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 if let _ = reader.readInt32() {
                     _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.MessageEntity.self)
                 }
@@ -1278,16 +1386,16 @@ public extension Api {
             var _4: String?
             _4 = parseString(reader)
             var _5: Api.ReplyMarkup?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _5 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _3 != nil
             let _c4 = _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageMediaWebPage(Cons_inputBotInlineMessageMediaWebPage(flags: _1!, message: _2!, entities: _3, url: _4!, replyMarkup: _5))
             }
@@ -1301,21 +1409,21 @@ public extension Api {
             var _2: String?
             _2 = parseString(reader)
             var _3: [Api.MessageEntity]?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 if let _ = reader.readInt32() {
                     _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.MessageEntity.self)
                 }
             }
             var _4: Api.ReplyMarkup?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _4 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageText(Cons_inputBotInlineMessageText(flags: _1!, message: _2!, entities: _3, replyMarkup: _4))
             }
@@ -1336,8 +1444,8 @@ public extension Api {
                 self.id = id
                 self.accessHash = accessHash
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageID", [("dcId", self.dcId as Any), ("id", self.id as Any), ("accessHash", self.accessHash as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageID", [("dcId", ConstructorParameterDescription(self.dcId)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash))])
             }
         }
         public class Cons_inputBotInlineMessageID64: TypeConstructorDescription {
@@ -1351,8 +1459,8 @@ public extension Api {
                 self.id = id
                 self.accessHash = accessHash
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineMessageID64", [("dcId", self.dcId as Any), ("ownerId", self.ownerId as Any), ("id", self.id as Any), ("accessHash", self.accessHash as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineMessageID64", [("dcId", ConstructorParameterDescription(self.dcId)), ("ownerId", ConstructorParameterDescription(self.ownerId)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash))])
             }
         }
         case inputBotInlineMessageID(Cons_inputBotInlineMessageID)
@@ -1380,12 +1488,12 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inputBotInlineMessageID(let _data):
-                return ("inputBotInlineMessageID", [("dcId", _data.dcId as Any), ("id", _data.id as Any), ("accessHash", _data.accessHash as Any)])
+                return ("inputBotInlineMessageID", [("dcId", ConstructorParameterDescription(_data.dcId)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash))])
             case .inputBotInlineMessageID64(let _data):
-                return ("inputBotInlineMessageID64", [("dcId", _data.dcId as Any), ("ownerId", _data.ownerId as Any), ("id", _data.id as Any), ("accessHash", _data.accessHash as Any)])
+                return ("inputBotInlineMessageID64", [("dcId", ConstructorParameterDescription(_data.dcId)), ("ownerId", ConstructorParameterDescription(_data.ownerId)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash))])
             }
         }
 
@@ -1451,8 +1559,8 @@ public extension Api {
                 self.content = content
                 self.sendMessage = sendMessage
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineResult", [("flags", self.flags as Any), ("id", self.id as Any), ("type", self.type as Any), ("title", self.title as Any), ("description", self.description as Any), ("url", self.url as Any), ("thumb", self.thumb as Any), ("content", self.content as Any), ("sendMessage", self.sendMessage as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineResult", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("type", ConstructorParameterDescription(self.type)), ("title", ConstructorParameterDescription(self.title)), ("description", ConstructorParameterDescription(self.description)), ("url", ConstructorParameterDescription(self.url)), ("thumb", ConstructorParameterDescription(self.thumb)), ("content", ConstructorParameterDescription(self.content)), ("sendMessage", ConstructorParameterDescription(self.sendMessage))])
             }
         }
         public class Cons_inputBotInlineResultDocument: TypeConstructorDescription {
@@ -1472,8 +1580,8 @@ public extension Api {
                 self.document = document
                 self.sendMessage = sendMessage
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineResultDocument", [("flags", self.flags as Any), ("id", self.id as Any), ("type", self.type as Any), ("title", self.title as Any), ("description", self.description as Any), ("document", self.document as Any), ("sendMessage", self.sendMessage as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineResultDocument", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("type", ConstructorParameterDescription(self.type)), ("title", ConstructorParameterDescription(self.title)), ("description", ConstructorParameterDescription(self.description)), ("document", ConstructorParameterDescription(self.document)), ("sendMessage", ConstructorParameterDescription(self.sendMessage))])
             }
         }
         public class Cons_inputBotInlineResultGame: TypeConstructorDescription {
@@ -1485,8 +1593,8 @@ public extension Api {
                 self.shortName = shortName
                 self.sendMessage = sendMessage
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineResultGame", [("id", self.id as Any), ("shortName", self.shortName as Any), ("sendMessage", self.sendMessage as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineResultGame", [("id", ConstructorParameterDescription(self.id)), ("shortName", ConstructorParameterDescription(self.shortName)), ("sendMessage", ConstructorParameterDescription(self.sendMessage))])
             }
         }
         public class Cons_inputBotInlineResultPhoto: TypeConstructorDescription {
@@ -1500,8 +1608,8 @@ public extension Api {
                 self.photo = photo
                 self.sendMessage = sendMessage
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBotInlineResultPhoto", [("id", self.id as Any), ("type", self.type as Any), ("photo", self.photo as Any), ("sendMessage", self.sendMessage as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputBotInlineResultPhoto", [("id", ConstructorParameterDescription(self.id)), ("type", ConstructorParameterDescription(self.type)), ("photo", ConstructorParameterDescription(self.photo)), ("sendMessage", ConstructorParameterDescription(self.sendMessage))])
             }
         }
         case inputBotInlineResult(Cons_inputBotInlineResult)
@@ -1571,16 +1679,16 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .inputBotInlineResult(let _data):
-                return ("inputBotInlineResult", [("flags", _data.flags as Any), ("id", _data.id as Any), ("type", _data.type as Any), ("title", _data.title as Any), ("description", _data.description as Any), ("url", _data.url as Any), ("thumb", _data.thumb as Any), ("content", _data.content as Any), ("sendMessage", _data.sendMessage as Any)])
+                return ("inputBotInlineResult", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("type", ConstructorParameterDescription(_data.type)), ("title", ConstructorParameterDescription(_data.title)), ("description", ConstructorParameterDescription(_data.description)), ("url", ConstructorParameterDescription(_data.url)), ("thumb", ConstructorParameterDescription(_data.thumb)), ("content", ConstructorParameterDescription(_data.content)), ("sendMessage", ConstructorParameterDescription(_data.sendMessage))])
             case .inputBotInlineResultDocument(let _data):
-                return ("inputBotInlineResultDocument", [("flags", _data.flags as Any), ("id", _data.id as Any), ("type", _data.type as Any), ("title", _data.title as Any), ("description", _data.description as Any), ("document", _data.document as Any), ("sendMessage", _data.sendMessage as Any)])
+                return ("inputBotInlineResultDocument", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("type", ConstructorParameterDescription(_data.type)), ("title", ConstructorParameterDescription(_data.title)), ("description", ConstructorParameterDescription(_data.description)), ("document", ConstructorParameterDescription(_data.document)), ("sendMessage", ConstructorParameterDescription(_data.sendMessage))])
             case .inputBotInlineResultGame(let _data):
-                return ("inputBotInlineResultGame", [("id", _data.id as Any), ("shortName", _data.shortName as Any), ("sendMessage", _data.sendMessage as Any)])
+                return ("inputBotInlineResultGame", [("id", ConstructorParameterDescription(_data.id)), ("shortName", ConstructorParameterDescription(_data.shortName)), ("sendMessage", ConstructorParameterDescription(_data.sendMessage))])
             case .inputBotInlineResultPhoto(let _data):
-                return ("inputBotInlineResultPhoto", [("id", _data.id as Any), ("type", _data.type as Any), ("photo", _data.photo as Any), ("sendMessage", _data.sendMessage as Any)])
+                return ("inputBotInlineResultPhoto", [("id", ConstructorParameterDescription(_data.id)), ("type", ConstructorParameterDescription(_data.type)), ("photo", ConstructorParameterDescription(_data.photo)), ("sendMessage", ConstructorParameterDescription(_data.sendMessage))])
             }
         }
 
@@ -1592,25 +1700,25 @@ public extension Api {
             var _3: String?
             _3 = parseString(reader)
             var _4: String?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _4 = parseString(reader)
             }
             var _5: String?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _5 = parseString(reader)
             }
             var _6: String?
-            if Int(_1!) & Int(1 << 3) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
                 _6 = parseString(reader)
             }
             var _7: Api.InputWebDocument?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 if let signature = reader.readInt32() {
                     _7 = Api.parse(reader, signature: signature) as? Api.InputWebDocument
                 }
             }
             var _8: Api.InputWebDocument?
-            if Int(_1!) & Int(1 << 5) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
                 if let signature = reader.readInt32() {
                     _8 = Api.parse(reader, signature: signature) as? Api.InputWebDocument
                 }
@@ -1622,11 +1730,11 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 3) == 0) || _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 4) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 5) == 0) || _8 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _8 != nil
             let _c9 = _9 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
                 return Api.InputBotInlineResult.inputBotInlineResult(Cons_inputBotInlineResult(flags: _1!, id: _2!, type: _3!, title: _4, description: _5, url: _6, thumb: _7, content: _8, sendMessage: _9!))
@@ -1643,11 +1751,11 @@ public extension Api {
             var _3: String?
             _3 = parseString(reader)
             var _4: String?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _4 = parseString(reader)
             }
             var _5: String?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _5 = parseString(reader)
             }
             var _6: Api.InputDocument?
@@ -1661,8 +1769,8 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 1) == 0) || _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 2) == 0) || _5 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
@@ -1710,72 +1818,6 @@ public extension Api {
             let _c4 = _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.InputBotInlineResult.inputBotInlineResultPhoto(Cons_inputBotInlineResultPhoto(id: _1!, type: _2!, photo: _3!, sendMessage: _4!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum InputBusinessAwayMessage: TypeConstructorDescription {
-        public class Cons_inputBusinessAwayMessage: TypeConstructorDescription {
-            public var flags: Int32
-            public var shortcutId: Int32
-            public var schedule: Api.BusinessAwayMessageSchedule
-            public var recipients: Api.InputBusinessRecipients
-            public init(flags: Int32, shortcutId: Int32, schedule: Api.BusinessAwayMessageSchedule, recipients: Api.InputBusinessRecipients) {
-                self.flags = flags
-                self.shortcutId = shortcutId
-                self.schedule = schedule
-                self.recipients = recipients
-            }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("inputBusinessAwayMessage", [("flags", self.flags as Any), ("shortcutId", self.shortcutId as Any), ("schedule", self.schedule as Any), ("recipients", self.recipients as Any)])
-            }
-        }
-        case inputBusinessAwayMessage(Cons_inputBusinessAwayMessage)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .inputBusinessAwayMessage(let _data):
-                if boxed {
-                    buffer.appendInt32(-2094959136)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeInt32(_data.shortcutId, buffer: buffer, boxed: false)
-                _data.schedule.serialize(buffer, true)
-                _data.recipients.serialize(buffer, true)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .inputBusinessAwayMessage(let _data):
-                return ("inputBusinessAwayMessage", [("flags", _data.flags as Any), ("shortcutId", _data.shortcutId as Any), ("schedule", _data.schedule as Any), ("recipients", _data.recipients as Any)])
-            }
-        }
-
-        public static func parse_inputBusinessAwayMessage(_ reader: BufferReader) -> InputBusinessAwayMessage? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int32?
-            _2 = reader.readInt32()
-            var _3: Api.BusinessAwayMessageSchedule?
-            if let signature = reader.readInt32() {
-                _3 = Api.parse(reader, signature: signature) as? Api.BusinessAwayMessageSchedule
-            }
-            var _4: Api.InputBusinessRecipients?
-            if let signature = reader.readInt32() {
-                _4 = Api.parse(reader, signature: signature) as? Api.InputBusinessRecipients
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.InputBusinessAwayMessage.inputBusinessAwayMessage(Cons_inputBusinessAwayMessage(flags: _1!, shortcutId: _2!, schedule: _3!, recipients: _4!))
             }
             else {
                 return nil

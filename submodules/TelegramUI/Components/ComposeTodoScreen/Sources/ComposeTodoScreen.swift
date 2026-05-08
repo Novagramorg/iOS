@@ -3,7 +3,6 @@ import UIKit
 import Display
 import AccountContext
 import TelegramCore
-import Postbox
 import SwiftSignalKit
 import TelegramPresentationData
 import ComponentFlow
@@ -30,6 +29,7 @@ import ListComposePollOptionComponent
 import Markdown
 import PresentationDataUtils
 import GlassBarButtonComponent
+import EdgeEffect
 
 final class ComposeTodoScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -71,6 +71,9 @@ final class ComposeTodoScreenComponent: Component {
     
     final class View: UIView, UIScrollViewDelegate {
         private let scrollView: UIScrollView
+        
+        private var topEdgeEffectView: EdgeEffectView
+        private var bottomEdgeEffectView: EdgeEffectView
         
         private let todoTextSection = ComponentView<Empty>()
         
@@ -132,6 +135,9 @@ final class ComposeTodoScreenComponent: Component {
             self.scrollView.contentInsetAdjustmentBehavior = .never
             self.scrollView.alwaysBounceVertical = true
             
+            self.topEdgeEffectView = EdgeEffectView()
+            self.bottomEdgeEffectView = EdgeEffectView()
+            
             self.todoItemsSectionContainer = ListSectionContentView(frame: CGRect())
             self.todoItemsSectionContainer.automaticallyLayoutExternalContentBackgroundView = false
             
@@ -139,6 +145,9 @@ final class ComposeTodoScreenComponent: Component {
             
             self.scrollView.delegate = self
             self.addSubview(self.scrollView)
+            
+            self.addSubview(self.topEdgeEffectView)
+            self.addSubview(self.bottomEdgeEffectView)
             
             let reorderRecognizer = ReorderGestureRecognizer(
                 shouldBegin: { [weak self] point in
@@ -195,7 +204,7 @@ final class ComposeTodoScreenComponent: Component {
             for (id, itemView) in self.todoItemsSectionContainer.itemViews {
                 if let view = itemView.contents.view as? ListComposePollOptionComponent.View, !view.isRevealed && !view.currentText.isEmpty {
                     let viewFrame = view.convert(view.bounds, to: self.todoItemsSectionContainer)
-                    let iconFrame = CGRect(origin: CGPoint(x: viewFrame.maxX - 40.0, y: viewFrame.minY), size: CGSize(width: viewFrame.height, height: viewFrame.height))
+                    let iconFrame = CGRect(origin: CGPoint(x: viewFrame.minX, y: viewFrame.minY), size: CGSize(width: 50.0, height: viewFrame.height))
                     if iconFrame.contains(localPoint) {
                         return (id, itemView.contents)
                     }
@@ -461,7 +470,6 @@ final class ComposeTodoScreenComponent: Component {
                     mode: .standard(.default),
                     chatLocation: .peer(id: component.context.account.peerId),
                     subject: nil,
-                    peerNearbyData: nil,
                     greetingData: nil,
                     pendingUnpinnedAllMessages: false,
                     activeGroupCallInfo: nil,
@@ -752,10 +760,10 @@ final class ComposeTodoScreenComponent: Component {
             self.component = component
             self.state = state
             
-            let topInset: CGFloat = 24.0
+            let topInset: CGFloat = 8.0
             let bottomInset: CGFloat = 8.0
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
-            let sectionSpacing: CGFloat = 24.0
+            let sectionSpacing: CGFloat = 30.0
             
             if themeUpdated {
                 self.backgroundColor = theme.list.blocksBackgroundColor
@@ -776,7 +784,6 @@ final class ComposeTodoScreenComponent: Component {
             todoTextSectionItems.append(AnyComponentWithIdentity(id: 0, component: AnyComponent(ListComposePollOptionComponent(
                 externalState: self.todoTextInputState,
                 context: component.context,
-                style: .glass,
                 theme: theme,
                 strings: environment.strings,
                 isEnabled: canEdit,
@@ -866,7 +873,6 @@ final class ComposeTodoScreenComponent: Component {
                 todoItemsSectionItems.append(AnyComponentWithIdentity(id: todoItem.id, component: AnyComponent(ListComposePollOptionComponent(
                     externalState: todoItem.textInputState,
                     context: component.context,
-                    style: .glass,
                     theme: theme,
                     strings: environment.strings,
                     isEnabled: isEnabled,
@@ -875,7 +881,9 @@ final class ComposeTodoScreenComponent: Component {
                     },
                     assumeIsEditing: self.inputMediaNodeTargetTag === todoItem.textFieldTag,
                     characterLimit: component.initialData.maxTodoItemLength,
+                    hasLeftInset: true,
                     canReorder: isEnabled,
+                    canAdd: isEnabled && i != 0 && i < component.initialData.maxTodoItemsCount,
                     emptyLineHandling: .notAllowed,
                     returnKeyAction: { [weak self] in
                         guard let self else {
@@ -963,6 +971,12 @@ final class ComposeTodoScreenComponent: Component {
                                 self.state?.updated()
                             }
                         }
+                    },
+                    present: { [weak self] c in
+                        guard let controller = self?.environment?.controller() else {
+                            return
+                        }
+                        controller.present(c, in: .window(.root))
                     },
                     tag: todoItem.textFieldTag
                 ))))
@@ -1623,8 +1637,8 @@ final class ComposeTodoScreenComponent: Component {
                         }
                         if let input = self.validatedInput() {
                             controller.completion(input)
+                            controller.dismiss()
                         }
-                        controller.dismiss()
                     }
                 )),
                 environment: {},
@@ -1651,6 +1665,15 @@ final class ComposeTodoScreenComponent: Component {
             for i in 0 ..< self.todoItems.count {
                 self.todoItems[i].resetText = nil
             }
+            
+            let edgeEffectHeight: CGFloat = 88.0
+            let topEdgeEffectFrame = CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
+            self.topEdgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
+            
+            let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: availableSize.height - edgeEffectHeight - environment.additionalInsets.bottom), size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.bottomEdgeEffectView, frame: bottomEdgeEffectFrame)
+            self.bottomEdgeEffectView.update(content: theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: bottomEdgeEffectFrame, edge: .bottom, edgeSize: bottomEdgeEffectFrame.height, transition: transition)
             
             return availableSize
         }
@@ -1751,7 +1774,7 @@ public class ComposeTodoScreen: ViewControllerComponentContainer, AttachmentCont
             peer: peer,
             initialData: initialData,
             completion: completion
-        ), navigationBarAppearance: .default, theme: .default)
+        ), navigationBarAppearance: .transparent, theme: .default)
         
         self._hasGlassStyle = true
         

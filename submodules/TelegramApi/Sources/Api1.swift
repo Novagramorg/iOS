@@ -5,8 +5,8 @@ public extension Api {
             public init(days: Int32) {
                 self.days = days
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("accountDaysTTL", [("days", self.days as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("accountDaysTTL", [("days", ConstructorParameterDescription(self.days))])
             }
         }
         case accountDaysTTL(Cons_accountDaysTTL)
@@ -22,10 +22,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .accountDaysTTL(let _data):
-                return ("accountDaysTTL", [("days", _data.days as Any)])
+                return ("accountDaysTTL", [("days", ConstructorParameterDescription(_data.days))])
             }
         }
 
@@ -35,6 +35,221 @@ public extension Api {
             let _c1 = _1 != nil
             if _c1 {
                 return Api.AccountDaysTTL.accountDaysTTL(Cons_accountDaysTTL(days: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum AiComposeTone: TypeConstructorDescription {
+        public class Cons_aiComposeTone: TypeConstructorDescription {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var slug: String
+            public var title: String
+            public var emojiId: Int64?
+            public var prompt: String?
+            public var installsCount: Int32?
+            public var authorId: Int64?
+            public var exampleEnglish: Api.AiComposeToneExample?
+            public init(flags: Int32, id: Int64, accessHash: Int64, slug: String, title: String, emojiId: Int64?, prompt: String?, installsCount: Int32?, authorId: Int64?, exampleEnglish: Api.AiComposeToneExample?) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.slug = slug
+                self.title = title
+                self.emojiId = emojiId
+                self.prompt = prompt
+                self.installsCount = installsCount
+                self.authorId = authorId
+                self.exampleEnglish = exampleEnglish
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("aiComposeTone", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("slug", ConstructorParameterDescription(self.slug)), ("title", ConstructorParameterDescription(self.title)), ("emojiId", ConstructorParameterDescription(self.emojiId)), ("prompt", ConstructorParameterDescription(self.prompt)), ("installsCount", ConstructorParameterDescription(self.installsCount)), ("authorId", ConstructorParameterDescription(self.authorId)), ("exampleEnglish", ConstructorParameterDescription(self.exampleEnglish))])
+            }
+        }
+        public class Cons_aiComposeToneDefault: TypeConstructorDescription {
+            public var tone: String
+            public var emojiId: Int64
+            public var title: String
+            public init(tone: String, emojiId: Int64, title: String) {
+                self.tone = tone
+                self.emojiId = emojiId
+                self.title = title
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("aiComposeToneDefault", [("tone", ConstructorParameterDescription(self.tone)), ("emojiId", ConstructorParameterDescription(self.emojiId)), ("title", ConstructorParameterDescription(self.title))])
+            }
+        }
+        case aiComposeTone(Cons_aiComposeTone)
+        case aiComposeToneDefault(Cons_aiComposeToneDefault)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .aiComposeTone(let _data):
+                if boxed {
+                    buffer.appendInt32(-805945687)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.id, buffer: buffer, boxed: false)
+                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
+                serializeString(_data.slug, buffer: buffer, boxed: false)
+                serializeString(_data.title, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    serializeInt64(_data.emojiId!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    serializeString(_data.prompt!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeInt32(_data.installsCount!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 3) != 0 {
+                    serializeInt64(_data.authorId!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 5) != 0 {
+                    _data.exampleEnglish!.serialize(buffer, true)
+                }
+                break
+            case .aiComposeToneDefault(let _data):
+                if boxed {
+                    buffer.appendInt32(-1683135468)
+                }
+                serializeString(_data.tone, buffer: buffer, boxed: false)
+                serializeInt64(_data.emojiId, buffer: buffer, boxed: false)
+                serializeString(_data.title, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .aiComposeTone(let _data):
+                return ("aiComposeTone", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("slug", ConstructorParameterDescription(_data.slug)), ("title", ConstructorParameterDescription(_data.title)), ("emojiId", ConstructorParameterDescription(_data.emojiId)), ("prompt", ConstructorParameterDescription(_data.prompt)), ("installsCount", ConstructorParameterDescription(_data.installsCount)), ("authorId", ConstructorParameterDescription(_data.authorId)), ("exampleEnglish", ConstructorParameterDescription(_data.exampleEnglish))])
+            case .aiComposeToneDefault(let _data):
+                return ("aiComposeToneDefault", [("tone", ConstructorParameterDescription(_data.tone)), ("emojiId", ConstructorParameterDescription(_data.emojiId)), ("title", ConstructorParameterDescription(_data.title))])
+            }
+        }
+
+        public static func parse_aiComposeTone(_ reader: BufferReader) -> AiComposeTone? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: String?
+            _4 = parseString(reader)
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Int64?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                _6 = reader.readInt64()
+            }
+            var _7: String?
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
+                _7 = parseString(reader)
+            }
+            var _8: Int32?
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
+                _8 = reader.readInt32()
+            }
+            var _9: Int64?
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
+                _9 = reader.readInt64()
+            }
+            var _10: Api.AiComposeToneExample?
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
+                if let signature = reader.readInt32() {
+                    _10 = Api.parse(reader, signature: signature) as? Api.AiComposeToneExample
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _10 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 {
+                return Api.AiComposeTone.aiComposeTone(Cons_aiComposeTone(flags: _1!, id: _2!, accessHash: _3!, slug: _4!, title: _5!, emojiId: _6, prompt: _7, installsCount: _8, authorId: _9, exampleEnglish: _10))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_aiComposeToneDefault(_ reader: BufferReader) -> AiComposeTone? {
+            var _1: String?
+            _1 = parseString(reader)
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: String?
+            _3 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.AiComposeTone.aiComposeToneDefault(Cons_aiComposeToneDefault(tone: _1!, emojiId: _2!, title: _3!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum AiComposeToneExample: TypeConstructorDescription {
+        public class Cons_aiComposeToneExample: TypeConstructorDescription {
+            public var from: Api.TextWithEntities
+            public var to: Api.TextWithEntities
+            public init(from: Api.TextWithEntities, to: Api.TextWithEntities) {
+                self.from = from
+                self.to = to
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("aiComposeToneExample", [("from", ConstructorParameterDescription(self.from)), ("to", ConstructorParameterDescription(self.to))])
+            }
+        }
+        case aiComposeToneExample(Cons_aiComposeToneExample)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .aiComposeToneExample(let _data):
+                if boxed {
+                    buffer.appendInt32(-237623060)
+                }
+                _data.from.serialize(buffer, true)
+                _data.to.serialize(buffer, true)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .aiComposeToneExample(let _data):
+                return ("aiComposeToneExample", [("from", ConstructorParameterDescription(_data.from)), ("to", ConstructorParameterDescription(_data.to))])
+            }
+        }
+
+        public static func parse_aiComposeToneExample(_ reader: BufferReader) -> AiComposeToneExample? {
+            var _1: Api.TextWithEntities?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            }
+            var _2: Api.TextWithEntities?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.AiComposeToneExample.aiComposeToneExample(Cons_aiComposeToneExample(from: _1!, to: _2!))
             }
             else {
                 return nil
@@ -57,8 +272,8 @@ public extension Api {
                 self.peerTypes = peerTypes
                 self.icons = icons
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("attachMenuBot", [("flags", self.flags as Any), ("botId", self.botId as Any), ("shortName", self.shortName as Any), ("peerTypes", self.peerTypes as Any), ("icons", self.icons as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("attachMenuBot", [("flags", ConstructorParameterDescription(self.flags)), ("botId", ConstructorParameterDescription(self.botId)), ("shortName", ConstructorParameterDescription(self.shortName)), ("peerTypes", ConstructorParameterDescription(self.peerTypes)), ("icons", ConstructorParameterDescription(self.icons))])
             }
         }
         case attachMenuBot(Cons_attachMenuBot)
@@ -88,10 +303,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .attachMenuBot(let _data):
-                return ("attachMenuBot", [("flags", _data.flags as Any), ("botId", _data.botId as Any), ("shortName", _data.shortName as Any), ("peerTypes", _data.peerTypes as Any), ("icons", _data.icons as Any)])
+                return ("attachMenuBot", [("flags", ConstructorParameterDescription(_data.flags)), ("botId", ConstructorParameterDescription(_data.botId)), ("shortName", ConstructorParameterDescription(_data.shortName)), ("peerTypes", ConstructorParameterDescription(_data.peerTypes)), ("icons", ConstructorParameterDescription(_data.icons))])
             }
         }
 
@@ -103,7 +318,7 @@ public extension Api {
             var _3: String?
             _3 = parseString(reader)
             var _4: [Api.AttachMenuPeerType]?
-            if Int(_1!) & Int(1 << 3) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
                 if let _ = reader.readInt32() {
                     _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.AttachMenuPeerType.self)
                 }
@@ -115,7 +330,7 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 3) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _4 != nil
             let _c5 = _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.AttachMenuBot.attachMenuBot(Cons_attachMenuBot(flags: _1!, botId: _2!, shortName: _3!, peerTypes: _4, icons: _5!))
@@ -139,8 +354,8 @@ public extension Api {
                 self.icon = icon
                 self.colors = colors
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("attachMenuBotIcon", [("flags", self.flags as Any), ("name", self.name as Any), ("icon", self.icon as Any), ("colors", self.colors as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("attachMenuBotIcon", [("flags", ConstructorParameterDescription(self.flags)), ("name", ConstructorParameterDescription(self.name)), ("icon", ConstructorParameterDescription(self.icon)), ("colors", ConstructorParameterDescription(self.colors))])
             }
         }
         case attachMenuBotIcon(Cons_attachMenuBotIcon)
@@ -165,10 +380,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .attachMenuBotIcon(let _data):
-                return ("attachMenuBotIcon", [("flags", _data.flags as Any), ("name", _data.name as Any), ("icon", _data.icon as Any), ("colors", _data.colors as Any)])
+                return ("attachMenuBotIcon", [("flags", ConstructorParameterDescription(_data.flags)), ("name", ConstructorParameterDescription(_data.name)), ("icon", ConstructorParameterDescription(_data.icon)), ("colors", ConstructorParameterDescription(_data.colors))])
             }
         }
 
@@ -182,7 +397,7 @@ public extension Api {
                 _3 = Api.parse(reader, signature: signature) as? Api.Document
             }
             var _4: [Api.AttachMenuBotIconColor]?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 if let _ = reader.readInt32() {
                     _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.AttachMenuBotIconColor.self)
                 }
@@ -190,7 +405,7 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.AttachMenuBotIcon.attachMenuBotIcon(Cons_attachMenuBotIcon(flags: _1!, name: _2!, icon: _3!, colors: _4))
             }
@@ -209,8 +424,8 @@ public extension Api {
                 self.name = name
                 self.color = color
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("attachMenuBotIconColor", [("name", self.name as Any), ("color", self.color as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("attachMenuBotIconColor", [("name", ConstructorParameterDescription(self.name)), ("color", ConstructorParameterDescription(self.color))])
             }
         }
         case attachMenuBotIconColor(Cons_attachMenuBotIconColor)
@@ -227,10 +442,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .attachMenuBotIconColor(let _data):
-                return ("attachMenuBotIconColor", [("name", _data.name as Any), ("color", _data.color as Any)])
+                return ("attachMenuBotIconColor", [("name", ConstructorParameterDescription(_data.name)), ("color", ConstructorParameterDescription(_data.color))])
             }
         }
 
@@ -261,8 +476,8 @@ public extension Api {
                 self.bots = bots
                 self.users = users
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("attachMenuBots", [("hash", self.hash as Any), ("bots", self.bots as Any), ("users", self.users as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("attachMenuBots", [("hash", ConstructorParameterDescription(self.hash)), ("bots", ConstructorParameterDescription(self.bots)), ("users", ConstructorParameterDescription(self.users))])
             }
         }
         case attachMenuBots(Cons_attachMenuBots)
@@ -294,10 +509,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .attachMenuBots(let _data):
-                return ("attachMenuBots", [("hash", _data.hash as Any), ("bots", _data.bots as Any), ("users", _data.users as Any)])
+                return ("attachMenuBots", [("hash", ConstructorParameterDescription(_data.hash)), ("bots", ConstructorParameterDescription(_data.bots)), ("users", ConstructorParameterDescription(_data.users))])
             case .attachMenuBotsNotModified:
                 return ("attachMenuBotsNotModified", [])
             }
@@ -338,8 +553,8 @@ public extension Api {
                 self.bot = bot
                 self.users = users
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("attachMenuBotsBot", [("bot", self.bot as Any), ("users", self.users as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("attachMenuBotsBot", [("bot", ConstructorParameterDescription(self.bot)), ("users", ConstructorParameterDescription(self.users))])
             }
         }
         case attachMenuBotsBot(Cons_attachMenuBotsBot)
@@ -360,10 +575,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .attachMenuBotsBot(let _data):
-                return ("attachMenuBotsBot", [("bot", _data.bot as Any), ("users", _data.users as Any)])
+                return ("attachMenuBotsBot", [("bot", ConstructorParameterDescription(_data.bot)), ("users", ConstructorParameterDescription(_data.users))])
             }
         }
 
@@ -425,7 +640,7 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .attachMenuPeerTypeBotPM:
                 return ("attachMenuPeerTypeBotPM", [])
@@ -468,8 +683,8 @@ public extension Api {
                 self.amount = amount
                 self.date = date
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("auctionBidLevel", [("pos", self.pos as Any), ("amount", self.amount as Any), ("date", self.date as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("auctionBidLevel", [("pos", ConstructorParameterDescription(self.pos)), ("amount", ConstructorParameterDescription(self.amount)), ("date", ConstructorParameterDescription(self.date))])
             }
         }
         case auctionBidLevel(Cons_auctionBidLevel)
@@ -487,10 +702,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .auctionBidLevel(let _data):
-                return ("auctionBidLevel", [("pos", _data.pos as Any), ("amount", _data.amount as Any), ("date", _data.date as Any)])
+                return ("auctionBidLevel", [("pos", ConstructorParameterDescription(_data.pos)), ("amount", ConstructorParameterDescription(_data.amount)), ("date", ConstructorParameterDescription(_data.date))])
             }
         }
 
@@ -544,8 +759,8 @@ public extension Api {
                 self.country = country
                 self.region = region
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("authorization", [("flags", self.flags as Any), ("hash", self.hash as Any), ("deviceModel", self.deviceModel as Any), ("platform", self.platform as Any), ("systemVersion", self.systemVersion as Any), ("apiId", self.apiId as Any), ("appName", self.appName as Any), ("appVersion", self.appVersion as Any), ("dateCreated", self.dateCreated as Any), ("dateActive", self.dateActive as Any), ("ip", self.ip as Any), ("country", self.country as Any), ("region", self.region as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("authorization", [("flags", ConstructorParameterDescription(self.flags)), ("hash", ConstructorParameterDescription(self.hash)), ("deviceModel", ConstructorParameterDescription(self.deviceModel)), ("platform", ConstructorParameterDescription(self.platform)), ("systemVersion", ConstructorParameterDescription(self.systemVersion)), ("apiId", ConstructorParameterDescription(self.apiId)), ("appName", ConstructorParameterDescription(self.appName)), ("appVersion", ConstructorParameterDescription(self.appVersion)), ("dateCreated", ConstructorParameterDescription(self.dateCreated)), ("dateActive", ConstructorParameterDescription(self.dateActive)), ("ip", ConstructorParameterDescription(self.ip)), ("country", ConstructorParameterDescription(self.country)), ("region", ConstructorParameterDescription(self.region))])
             }
         }
         case authorization(Cons_authorization)
@@ -573,10 +788,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .authorization(let _data):
-                return ("authorization", [("flags", _data.flags as Any), ("hash", _data.hash as Any), ("deviceModel", _data.deviceModel as Any), ("platform", _data.platform as Any), ("systemVersion", _data.systemVersion as Any), ("apiId", _data.apiId as Any), ("appName", _data.appName as Any), ("appVersion", _data.appVersion as Any), ("dateCreated", _data.dateCreated as Any), ("dateActive", _data.dateActive as Any), ("ip", _data.ip as Any), ("country", _data.country as Any), ("region", _data.region as Any)])
+                return ("authorization", [("flags", ConstructorParameterDescription(_data.flags)), ("hash", ConstructorParameterDescription(_data.hash)), ("deviceModel", ConstructorParameterDescription(_data.deviceModel)), ("platform", ConstructorParameterDescription(_data.platform)), ("systemVersion", ConstructorParameterDescription(_data.systemVersion)), ("apiId", ConstructorParameterDescription(_data.apiId)), ("appName", ConstructorParameterDescription(_data.appName)), ("appVersion", ConstructorParameterDescription(_data.appVersion)), ("dateCreated", ConstructorParameterDescription(_data.dateCreated)), ("dateActive", ConstructorParameterDescription(_data.dateActive)), ("ip", ConstructorParameterDescription(_data.ip)), ("country", ConstructorParameterDescription(_data.country)), ("region", ConstructorParameterDescription(_data.region))])
             }
         }
 
@@ -648,8 +863,8 @@ public extension Api {
                 self.smallQueueActiveOperationsMax = smallQueueActiveOperationsMax
                 self.largeQueueActiveOperationsMax = largeQueueActiveOperationsMax
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("autoDownloadSettings", [("flags", self.flags as Any), ("photoSizeMax", self.photoSizeMax as Any), ("videoSizeMax", self.videoSizeMax as Any), ("fileSizeMax", self.fileSizeMax as Any), ("videoUploadMaxbitrate", self.videoUploadMaxbitrate as Any), ("smallQueueActiveOperationsMax", self.smallQueueActiveOperationsMax as Any), ("largeQueueActiveOperationsMax", self.largeQueueActiveOperationsMax as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("autoDownloadSettings", [("flags", ConstructorParameterDescription(self.flags)), ("photoSizeMax", ConstructorParameterDescription(self.photoSizeMax)), ("videoSizeMax", ConstructorParameterDescription(self.videoSizeMax)), ("fileSizeMax", ConstructorParameterDescription(self.fileSizeMax)), ("videoUploadMaxbitrate", ConstructorParameterDescription(self.videoUploadMaxbitrate)), ("smallQueueActiveOperationsMax", ConstructorParameterDescription(self.smallQueueActiveOperationsMax)), ("largeQueueActiveOperationsMax", ConstructorParameterDescription(self.largeQueueActiveOperationsMax))])
             }
         }
         case autoDownloadSettings(Cons_autoDownloadSettings)
@@ -671,10 +886,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .autoDownloadSettings(let _data):
-                return ("autoDownloadSettings", [("flags", _data.flags as Any), ("photoSizeMax", _data.photoSizeMax as Any), ("videoSizeMax", _data.videoSizeMax as Any), ("fileSizeMax", _data.fileSizeMax as Any), ("videoUploadMaxbitrate", _data.videoUploadMaxbitrate as Any), ("smallQueueActiveOperationsMax", _data.smallQueueActiveOperationsMax as Any), ("largeQueueActiveOperationsMax", _data.largeQueueActiveOperationsMax as Any)])
+                return ("autoDownloadSettings", [("flags", ConstructorParameterDescription(_data.flags)), ("photoSizeMax", ConstructorParameterDescription(_data.photoSizeMax)), ("videoSizeMax", ConstructorParameterDescription(_data.videoSizeMax)), ("fileSizeMax", ConstructorParameterDescription(_data.fileSizeMax)), ("videoUploadMaxbitrate", ConstructorParameterDescription(_data.videoUploadMaxbitrate)), ("smallQueueActiveOperationsMax", ConstructorParameterDescription(_data.smallQueueActiveOperationsMax)), ("largeQueueActiveOperationsMax", ConstructorParameterDescription(_data.largeQueueActiveOperationsMax))])
             }
         }
 
@@ -718,8 +933,8 @@ public extension Api {
                 self.peer = peer
                 self.settings = settings
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("autoSaveException", [("peer", self.peer as Any), ("settings", self.settings as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("autoSaveException", [("peer", ConstructorParameterDescription(self.peer)), ("settings", ConstructorParameterDescription(self.settings))])
             }
         }
         case autoSaveException(Cons_autoSaveException)
@@ -736,10 +951,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .autoSaveException(let _data):
-                return ("autoSaveException", [("peer", _data.peer as Any), ("settings", _data.settings as Any)])
+                return ("autoSaveException", [("peer", ConstructorParameterDescription(_data.peer)), ("settings", ConstructorParameterDescription(_data.settings))])
             }
         }
 
@@ -772,8 +987,8 @@ public extension Api {
                 self.flags = flags
                 self.videoMaxSize = videoMaxSize
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("autoSaveSettings", [("flags", self.flags as Any), ("videoMaxSize", self.videoMaxSize as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("autoSaveSettings", [("flags", ConstructorParameterDescription(self.flags)), ("videoMaxSize", ConstructorParameterDescription(self.videoMaxSize))])
             }
         }
         case autoSaveSettings(Cons_autoSaveSettings)
@@ -792,10 +1007,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .autoSaveSettings(let _data):
-                return ("autoSaveSettings", [("flags", _data.flags as Any), ("videoMaxSize", _data.videoMaxSize as Any)])
+                return ("autoSaveSettings", [("flags", ConstructorParameterDescription(_data.flags)), ("videoMaxSize", ConstructorParameterDescription(_data.videoMaxSize))])
             }
         }
 
@@ -803,11 +1018,11 @@ public extension Api {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: Int64?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _2 = reader.readInt64()
             }
             let _c1 = _1 != nil
-            let _c2 = (Int(_1!) & Int(1 << 2) == 0) || _2 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _2 != nil
             if _c1 && _c2 {
                 return Api.AutoSaveSettings.autoSaveSettings(Cons_autoSaveSettings(flags: _1!, videoMaxSize: _2))
             }
@@ -834,8 +1049,8 @@ public extension Api {
                 self.effectStickerId = effectStickerId
                 self.effectAnimationId = effectAnimationId
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("availableEffect", [("flags", self.flags as Any), ("id", self.id as Any), ("emoticon", self.emoticon as Any), ("staticIconId", self.staticIconId as Any), ("effectStickerId", self.effectStickerId as Any), ("effectAnimationId", self.effectAnimationId as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("availableEffect", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("emoticon", ConstructorParameterDescription(self.emoticon)), ("staticIconId", ConstructorParameterDescription(self.staticIconId)), ("effectStickerId", ConstructorParameterDescription(self.effectStickerId)), ("effectAnimationId", ConstructorParameterDescription(self.effectAnimationId))])
             }
         }
         case availableEffect(Cons_availableEffect)
@@ -860,10 +1075,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .availableEffect(let _data):
-                return ("availableEffect", [("flags", _data.flags as Any), ("id", _data.id as Any), ("emoticon", _data.emoticon as Any), ("staticIconId", _data.staticIconId as Any), ("effectStickerId", _data.effectStickerId as Any), ("effectAnimationId", _data.effectAnimationId as Any)])
+                return ("availableEffect", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("emoticon", ConstructorParameterDescription(_data.emoticon)), ("staticIconId", ConstructorParameterDescription(_data.staticIconId)), ("effectStickerId", ConstructorParameterDescription(_data.effectStickerId)), ("effectAnimationId", ConstructorParameterDescription(_data.effectAnimationId))])
             }
         }
 
@@ -875,21 +1090,21 @@ public extension Api {
             var _3: String?
             _3 = parseString(reader)
             var _4: Int64?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _4 = reader.readInt64()
             }
             var _5: Int64?
             _5 = reader.readInt64()
             var _6: Int64?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _6 = reader.readInt64()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 1) == 0) || _6 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _6 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
                 return Api.AvailableEffect.availableEffect(Cons_availableEffect(flags: _1!, id: _2!, emoticon: _3!, staticIconId: _4, effectStickerId: _5!, effectAnimationId: _6))
             }
@@ -924,8 +1139,8 @@ public extension Api {
                 self.aroundAnimation = aroundAnimation
                 self.centerIcon = centerIcon
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("availableReaction", [("flags", self.flags as Any), ("reaction", self.reaction as Any), ("title", self.title as Any), ("staticIcon", self.staticIcon as Any), ("appearAnimation", self.appearAnimation as Any), ("selectAnimation", self.selectAnimation as Any), ("activateAnimation", self.activateAnimation as Any), ("effectAnimation", self.effectAnimation as Any), ("aroundAnimation", self.aroundAnimation as Any), ("centerIcon", self.centerIcon as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("availableReaction", [("flags", ConstructorParameterDescription(self.flags)), ("reaction", ConstructorParameterDescription(self.reaction)), ("title", ConstructorParameterDescription(self.title)), ("staticIcon", ConstructorParameterDescription(self.staticIcon)), ("appearAnimation", ConstructorParameterDescription(self.appearAnimation)), ("selectAnimation", ConstructorParameterDescription(self.selectAnimation)), ("activateAnimation", ConstructorParameterDescription(self.activateAnimation)), ("effectAnimation", ConstructorParameterDescription(self.effectAnimation)), ("aroundAnimation", ConstructorParameterDescription(self.aroundAnimation)), ("centerIcon", ConstructorParameterDescription(self.centerIcon))])
             }
         }
         case availableReaction(Cons_availableReaction)
@@ -954,10 +1169,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .availableReaction(let _data):
-                return ("availableReaction", [("flags", _data.flags as Any), ("reaction", _data.reaction as Any), ("title", _data.title as Any), ("staticIcon", _data.staticIcon as Any), ("appearAnimation", _data.appearAnimation as Any), ("selectAnimation", _data.selectAnimation as Any), ("activateAnimation", _data.activateAnimation as Any), ("effectAnimation", _data.effectAnimation as Any), ("aroundAnimation", _data.aroundAnimation as Any), ("centerIcon", _data.centerIcon as Any)])
+                return ("availableReaction", [("flags", ConstructorParameterDescription(_data.flags)), ("reaction", ConstructorParameterDescription(_data.reaction)), ("title", ConstructorParameterDescription(_data.title)), ("staticIcon", ConstructorParameterDescription(_data.staticIcon)), ("appearAnimation", ConstructorParameterDescription(_data.appearAnimation)), ("selectAnimation", ConstructorParameterDescription(_data.selectAnimation)), ("activateAnimation", ConstructorParameterDescription(_data.activateAnimation)), ("effectAnimation", ConstructorParameterDescription(_data.effectAnimation)), ("aroundAnimation", ConstructorParameterDescription(_data.aroundAnimation)), ("centerIcon", ConstructorParameterDescription(_data.centerIcon))])
             }
         }
 
@@ -989,13 +1204,13 @@ public extension Api {
                 _8 = Api.parse(reader, signature: signature) as? Api.Document
             }
             var _9: Api.Document?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 if let signature = reader.readInt32() {
                     _9 = Api.parse(reader, signature: signature) as? Api.Document
                 }
             }
             var _10: Api.Document?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 if let signature = reader.readInt32() {
                     _10 = Api.parse(reader, signature: signature) as? Api.Document
                 }
@@ -1008,8 +1223,8 @@ public extension Api {
             let _c6 = _6 != nil
             let _c7 = _7 != nil
             let _c8 = _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 1) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 1) == 0) || _10 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _10 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 {
                 return Api.AvailableReaction.availableReaction(Cons_availableReaction(flags: _1!, reaction: _2!, title: _3!, staticIcon: _4!, appearAnimation: _5!, selectAnimation: _6!, activateAnimation: _7!, effectAnimation: _8!, aroundAnimation: _9, centerIcon: _10))
             }
@@ -1028,8 +1243,8 @@ public extension Api {
                 self.url = url
                 self.name = name
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("bankCardOpenUrl", [("url", self.url as Any), ("name", self.name as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("bankCardOpenUrl", [("url", ConstructorParameterDescription(self.url)), ("name", ConstructorParameterDescription(self.name))])
             }
         }
         case bankCardOpenUrl(Cons_bankCardOpenUrl)
@@ -1046,10 +1261,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .bankCardOpenUrl(let _data):
-                return ("bankCardOpenUrl", [("url", _data.url as Any), ("name", _data.name as Any)])
+                return ("bankCardOpenUrl", [("url", ConstructorParameterDescription(_data.url)), ("name", ConstructorParameterDescription(_data.name))])
             }
         }
 
@@ -1107,7 +1322,7 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .baseThemeArctic:
                 return ("baseThemeArctic", [])
@@ -1152,8 +1367,8 @@ public extension Api {
                 self.month = month
                 self.year = year
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("birthday", [("flags", self.flags as Any), ("day", self.day as Any), ("month", self.month as Any), ("year", self.year as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("birthday", [("flags", ConstructorParameterDescription(self.flags)), ("day", ConstructorParameterDescription(self.day)), ("month", ConstructorParameterDescription(self.month)), ("year", ConstructorParameterDescription(self.year))])
             }
         }
         case birthday(Cons_birthday)
@@ -1174,10 +1389,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .birthday(let _data):
-                return ("birthday", [("flags", _data.flags as Any), ("day", _data.day as Any), ("month", _data.month as Any), ("year", _data.year as Any)])
+                return ("birthday", [("flags", ConstructorParameterDescription(_data.flags)), ("day", ConstructorParameterDescription(_data.day)), ("month", ConstructorParameterDescription(_data.month)), ("year", ConstructorParameterDescription(_data.year))])
             }
         }
 
@@ -1189,13 +1404,13 @@ public extension Api {
             var _3: Int32?
             _3 = reader.readInt32()
             var _4: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _4 = reader.readInt32()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 0) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.Birthday.birthday(Cons_birthday(flags: _1!, day: _2!, month: _3!, year: _4))
             }
@@ -1225,7 +1440,7 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .boolFalse:
                 return ("boolFalse", [])
@@ -1265,8 +1480,8 @@ public extension Api {
                 self.multiplier = multiplier
                 self.stars = stars
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("boost", [("flags", self.flags as Any), ("id", self.id as Any), ("userId", self.userId as Any), ("giveawayMsgId", self.giveawayMsgId as Any), ("date", self.date as Any), ("expires", self.expires as Any), ("usedGiftSlug", self.usedGiftSlug as Any), ("multiplier", self.multiplier as Any), ("stars", self.stars as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("boost", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("userId", ConstructorParameterDescription(self.userId)), ("giveawayMsgId", ConstructorParameterDescription(self.giveawayMsgId)), ("date", ConstructorParameterDescription(self.date)), ("expires", ConstructorParameterDescription(self.expires)), ("usedGiftSlug", ConstructorParameterDescription(self.usedGiftSlug)), ("multiplier", ConstructorParameterDescription(self.multiplier)), ("stars", ConstructorParameterDescription(self.stars))])
             }
         }
         case boost(Cons_boost)
@@ -1300,10 +1515,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .boost(let _data):
-                return ("boost", [("flags", _data.flags as Any), ("id", _data.id as Any), ("userId", _data.userId as Any), ("giveawayMsgId", _data.giveawayMsgId as Any), ("date", _data.date as Any), ("expires", _data.expires as Any), ("usedGiftSlug", _data.usedGiftSlug as Any), ("multiplier", _data.multiplier as Any), ("stars", _data.stars as Any)])
+                return ("boost", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("userId", ConstructorParameterDescription(_data.userId)), ("giveawayMsgId", ConstructorParameterDescription(_data.giveawayMsgId)), ("date", ConstructorParameterDescription(_data.date)), ("expires", ConstructorParameterDescription(_data.expires)), ("usedGiftSlug", ConstructorParameterDescription(_data.usedGiftSlug)), ("multiplier", ConstructorParameterDescription(_data.multiplier)), ("stars", ConstructorParameterDescription(_data.stars))])
             }
         }
 
@@ -1313,11 +1528,11 @@ public extension Api {
             var _2: String?
             _2 = parseString(reader)
             var _3: Int64?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _3 = reader.readInt64()
             }
             var _4: Int32?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _4 = reader.readInt32()
             }
             var _5: Int32?
@@ -1325,233 +1540,28 @@ public extension Api {
             var _6: Int32?
             _6 = reader.readInt32()
             var _7: String?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 _7 = parseString(reader)
             }
             var _8: Int32?
-            if Int(_1!) & Int(1 << 5) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
                 _8 = reader.readInt32()
             }
             var _9: Int64?
-            if Int(_1!) & Int(1 << 6) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
                 _9 = reader.readInt64()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 4) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 5) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 6) == 0) || _9 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _9 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
                 return Api.Boost.boost(Cons_boost(flags: _1!, id: _2!, userId: _3, giveawayMsgId: _4, date: _5!, expires: _6!, usedGiftSlug: _7, multiplier: _8, stars: _9))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum BotApp: TypeConstructorDescription {
-        public class Cons_botApp: TypeConstructorDescription {
-            public var flags: Int32
-            public var id: Int64
-            public var accessHash: Int64
-            public var shortName: String
-            public var title: String
-            public var description: String
-            public var photo: Api.Photo
-            public var document: Api.Document?
-            public var hash: Int64
-            public init(flags: Int32, id: Int64, accessHash: Int64, shortName: String, title: String, description: String, photo: Api.Photo, document: Api.Document?, hash: Int64) {
-                self.flags = flags
-                self.id = id
-                self.accessHash = accessHash
-                self.shortName = shortName
-                self.title = title
-                self.description = description
-                self.photo = photo
-                self.document = document
-                self.hash = hash
-            }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("botApp", [("flags", self.flags as Any), ("id", self.id as Any), ("accessHash", self.accessHash as Any), ("shortName", self.shortName as Any), ("title", self.title as Any), ("description", self.description as Any), ("photo", self.photo as Any), ("document", self.document as Any), ("hash", self.hash as Any)])
-            }
-        }
-        case botApp(Cons_botApp)
-        case botAppNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .botApp(let _data):
-                if boxed {
-                    buffer.appendInt32(-1778593322)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeInt64(_data.id, buffer: buffer, boxed: false)
-                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
-                serializeString(_data.shortName, buffer: buffer, boxed: false)
-                serializeString(_data.title, buffer: buffer, boxed: false)
-                serializeString(_data.description, buffer: buffer, boxed: false)
-                _data.photo.serialize(buffer, true)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    _data.document!.serialize(buffer, true)
-                }
-                serializeInt64(_data.hash, buffer: buffer, boxed: false)
-                break
-            case .botAppNotModified:
-                if boxed {
-                    buffer.appendInt32(1571189943)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .botApp(let _data):
-                return ("botApp", [("flags", _data.flags as Any), ("id", _data.id as Any), ("accessHash", _data.accessHash as Any), ("shortName", _data.shortName as Any), ("title", _data.title as Any), ("description", _data.description as Any), ("photo", _data.photo as Any), ("document", _data.document as Any), ("hash", _data.hash as Any)])
-            case .botAppNotModified:
-                return ("botAppNotModified", [])
-            }
-        }
-
-        public static func parse_botApp(_ reader: BufferReader) -> BotApp? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: Int64?
-            _3 = reader.readInt64()
-            var _4: String?
-            _4 = parseString(reader)
-            var _5: String?
-            _5 = parseString(reader)
-            var _6: String?
-            _6 = parseString(reader)
-            var _7: Api.Photo?
-            if let signature = reader.readInt32() {
-                _7 = Api.parse(reader, signature: signature) as? Api.Photo
-            }
-            var _8: Api.Document?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                if let signature = reader.readInt32() {
-                    _8 = Api.parse(reader, signature: signature) as? Api.Document
-                }
-            }
-            var _9: Int64?
-            _9 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = _5 != nil
-            let _c6 = _6 != nil
-            let _c7 = _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 0) == 0) || _8 != nil
-            let _c9 = _9 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
-                return Api.BotApp.botApp(Cons_botApp(flags: _1!, id: _2!, accessHash: _3!, shortName: _4!, title: _5!, description: _6!, photo: _7!, document: _8, hash: _9!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_botAppNotModified(_ reader: BufferReader) -> BotApp? {
-            return Api.BotApp.botAppNotModified
-        }
-    }
-}
-public extension Api {
-    enum BotAppSettings: TypeConstructorDescription {
-        public class Cons_botAppSettings: TypeConstructorDescription {
-            public var flags: Int32
-            public var placeholderPath: Buffer?
-            public var backgroundColor: Int32?
-            public var backgroundDarkColor: Int32?
-            public var headerColor: Int32?
-            public var headerDarkColor: Int32?
-            public init(flags: Int32, placeholderPath: Buffer?, backgroundColor: Int32?, backgroundDarkColor: Int32?, headerColor: Int32?, headerDarkColor: Int32?) {
-                self.flags = flags
-                self.placeholderPath = placeholderPath
-                self.backgroundColor = backgroundColor
-                self.backgroundDarkColor = backgroundDarkColor
-                self.headerColor = headerColor
-                self.headerDarkColor = headerDarkColor
-            }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("botAppSettings", [("flags", self.flags as Any), ("placeholderPath", self.placeholderPath as Any), ("backgroundColor", self.backgroundColor as Any), ("backgroundDarkColor", self.backgroundDarkColor as Any), ("headerColor", self.headerColor as Any), ("headerDarkColor", self.headerDarkColor as Any)])
-            }
-        }
-        case botAppSettings(Cons_botAppSettings)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .botAppSettings(let _data):
-                if boxed {
-                    buffer.appendInt32(-912582320)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeBytes(_data.placeholderPath!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 1) != 0 {
-                    serializeInt32(_data.backgroundColor!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 2) != 0 {
-                    serializeInt32(_data.backgroundDarkColor!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 3) != 0 {
-                    serializeInt32(_data.headerColor!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 4) != 0 {
-                    serializeInt32(_data.headerDarkColor!, buffer: buffer, boxed: false)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, Any)]) {
-            switch self {
-            case .botAppSettings(let _data):
-                return ("botAppSettings", [("flags", _data.flags as Any), ("placeholderPath", _data.placeholderPath as Any), ("backgroundColor", _data.backgroundColor as Any), ("backgroundDarkColor", _data.backgroundDarkColor as Any), ("headerColor", _data.headerColor as Any), ("headerDarkColor", _data.headerDarkColor as Any)])
-            }
-        }
-
-        public static func parse_botAppSettings(_ reader: BufferReader) -> BotAppSettings? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Buffer?
-            if Int(_1!) & Int(1 << 0) != 0 {
-                _2 = parseBytes(reader)
-            }
-            var _3: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
-                _3 = reader.readInt32()
-            }
-            var _4: Int32?
-            if Int(_1!) & Int(1 << 2) != 0 {
-                _4 = reader.readInt32()
-            }
-            var _5: Int32?
-            if Int(_1!) & Int(1 << 3) != 0 {
-                _5 = reader.readInt32()
-            }
-            var _6: Int32?
-            if Int(_1!) & Int(1 << 4) != 0 {
-                _6 = reader.readInt32()
-            }
-            let _c1 = _1 != nil
-            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 1) == 0) || _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 3) == 0) || _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 4) == 0) || _6 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
-                return Api.BotAppSettings.botAppSettings(Cons_botAppSettings(flags: _1!, placeholderPath: _2, backgroundColor: _3, backgroundDarkColor: _4, headerColor: _5, headerDarkColor: _6))
             }
             else {
                 return nil

@@ -424,6 +424,12 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
             self.text = self.presentationData.strings.Camera_CollageReorderingInfo
             self.targetSelectionIndex = nil
             icon = UIImage(bundleImageName: "Chat/Context Menu/Tip")
+        case .deleteReaction:
+            self.action = nil
+            self.text = self.presentationData.strings.Chat_DeleteReactionInfo
+            self.targetSelectionIndex = nil
+            icon = nil
+            isUserInteractionEnabled = false
         }
         
         self.iconNode = ASImageNode()
@@ -438,10 +444,10 @@ final class InnerTextSelectionTipContainerNode: ASDisplayNode {
         
         super.init()
         
-        let textSelectionNode = TextSelectionNode(theme: TextSelectionTheme(selection: presentationData.theme.contextMenu.primaryColor.withAlphaComponent(0.15), knob: presentationData.theme.contextMenu.primaryColor, knobDiameter: 8.0, isDark: presentationData.theme.overallDarkAppearance), strings: presentationData.strings, textNode: self.textNode.textNode, updateIsActive: { _ in
+        let textSelectionNode = TextSelectionNode(theme: TextSelectionTheme(selection: presentationData.theme.contextMenu.primaryColor.withAlphaComponent(0.15), knob: presentationData.theme.contextMenu.primaryColor, knobDiameter: 8.0, isDark: presentationData.theme.overallDarkAppearance), strings: presentationData.strings, textNodeOrView: .node(self.textNode.textNode), updateIsActive: { _ in
         }, present: { _, _ in
-        }, rootNode: { [weak self] in
-            return self
+        }, rootView: { [weak self] in
+            return self?.view
         }, performAction: { _, _ in
         })
         self.textSelectionNode = textSelectionNode

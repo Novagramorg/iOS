@@ -18,6 +18,7 @@ enum ChatListNodeEntryId: Hashable {
     case SectionHeader
     case Notice
     case additionalCategory(Int)
+    case TopPeer(EnginePeer.Id)
 }
 
 enum ChatListNodeEntrySortIndex: Comparable {
@@ -25,6 +26,7 @@ enum ChatListNodeEntrySortIndex: Comparable {
     case additionalCategory(Int)
     case sectionHeader
     case contact(id: EnginePeer.Id, presence: EnginePeer.Presence)
+    case topPeer(Int)
     
     static func <(lhs: ChatListNodeEntrySortIndex, rhs: ChatListNodeEntrySortIndex) -> Bool {
         switch lhs {
@@ -33,6 +35,8 @@ enum ChatListNodeEntrySortIndex: Comparable {
             case let .index(rhsIndex):
                 return lhsIndex < rhsIndex
             case .additionalCategory:
+                return false
+            case .topPeer:
                 return false
             case .sectionHeader:
                 return true
@@ -43,6 +47,8 @@ enum ChatListNodeEntrySortIndex: Comparable {
             switch rhs {
             case let .additionalCategory(rhsIndex):
                 return lhsIndex < rhsIndex
+            case .topPeer:
+                return true
             case .index:
                 return true
             case .sectionHeader:
@@ -50,9 +56,18 @@ enum ChatListNodeEntrySortIndex: Comparable {
             case .contact:
                 return true
             }
+        case let .topPeer(lhsIndex):
+            switch rhs {
+            case .additionalCategory:
+                return false
+            case let .topPeer(rhsIndex):
+                return lhsIndex < rhsIndex
+            case .index, .sectionHeader, .contact:
+                return true
+            }
         case .sectionHeader:
             switch rhs {
-            case .additionalCategory, .index, .sectionHeader:
+            case .additionalCategory, .topPeer, .index, .sectionHeader:
                 return false
             case .contact:
                 return true
@@ -93,6 +108,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
         var presence: EnginePeer.Presence?
         var hasUnseenMentions: Bool
         var hasUnseenReactions: Bool
+        var hasUnseenPollVotes: Bool
         var editing: Bool
         var hasActiveRevealControls: Bool
         var selected: Bool
@@ -121,6 +137,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             presence: EnginePeer.Presence?,
             hasUnseenMentions: Bool,
             hasUnseenReactions: Bool,
+            hasUnseenPollVotes: Bool,
             editing: Bool,
             hasActiveRevealControls: Bool,
             selected: Bool,
@@ -148,6 +165,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             self.presence = presence
             self.hasUnseenMentions = hasUnseenMentions
             self.hasUnseenReactions = hasUnseenReactions
+            self.hasUnseenPollVotes = hasUnseenPollVotes
             self.editing = editing
             self.hasActiveRevealControls = hasActiveRevealControls
             self.selected = selected
@@ -236,6 +254,9 @@ enum ChatListNodeEntry: Comparable, Identifiable {
                 return false
             }
             if lhs.hasUnseenReactions != rhs.hasUnseenReactions {
+                return false
+            }
+            if lhs.hasUnseenPollVotes != rhs.hasUnseenPollVotes {
                 return false
             }
             if let lhsInputActivities = lhs.inputActivities, let rhsInputActivities = rhs.inputActivities {
@@ -399,6 +420,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
     case EmptyIntro(presentationData: ChatListPresentationData)
     case SectionHeader(presentationData: ChatListPresentationData, displayHide: Bool)
     case AdditionalCategory(index: Int, id: Int, title: String, image: UIImage?, appearance: ChatListNodeAdditionalCategory.Appearance, selected: Bool, presentationData: ChatListPresentationData)
+    case TopPeer(index: Int, peer: EnginePeer)
     
     var sortIndex: ChatListNodeEntrySortIndex {
         switch self {
@@ -420,6 +442,8 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             return .sectionHeader
         case let .AdditionalCategory(index, _, _, _, _, _, _):
             return .additionalCategory(index)
+        case let .TopPeer(index, _):
+            return .topPeer(index)
         }
     }
     
@@ -448,6 +472,8 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             return .SectionHeader
         case let .AdditionalCategory(_, id, _, _, _, _, _):
             return .additionalCategory(id)
+        case let .TopPeer(_, peer):
+            return .TopPeer(peer.id)
         }
     }
     
@@ -541,6 +567,12 @@ enum ChatListNodeEntry: Comparable, Identifiable {
                     if lhsPresentationData !== rhsPresentationData {
                         return false
                     }
+                    return true
+                } else {
+                    return false
+                }
+            case let .TopPeer(index, peer):
+                if case .TopPeer(index, peer) = rhs {
                     return true
                 } else {
                     return false
@@ -732,6 +764,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
             presence: entry.presence,
             hasUnseenMentions: entry.hasUnseenMentions,
             hasUnseenReactions: entry.hasUnseenReactions,
+            hasUnseenPollVotes: entry.hasUnseenPollVotes,
             editing: state.editing,
             hasActiveRevealControls: hasActiveRevealControls,
             selected: isSelected,
@@ -790,6 +823,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                         presence: nil,
                         hasUnseenMentions: false,
                         hasUnseenReactions: false,
+                        hasUnseenPollVotes: false,
                         editing: state.editing,
                         hasActiveRevealControls: false,
                         selected: state.selectedPeerIds.contains(peer.0.id),
@@ -825,6 +859,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                 presence: nil,
                 hasUnseenMentions: false,
                 hasUnseenReactions: false,
+                hasUnseenPollVotes: false,
                 editing: state.editing,
                 hasActiveRevealControls: false,
                 selected: state.selectedPeerIds.contains(savedMessagesPeer.id),
@@ -881,6 +916,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                         presence: item.item.presence,
                         hasUnseenMentions: item.item.hasUnseenMentions,
                         hasUnseenReactions: item.item.hasUnseenReactions,
+                        hasUnseenPollVotes: item.item.hasUnseenPollVotes,
                         editing: state.editing,
                         hasActiveRevealControls: ChatListNodeState.ItemId(peerId: peerId, threadId: threadId) == state.peerIdWithRevealedOptions,
                         selected: isSelected,
@@ -946,10 +982,16 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
         }
         
         if !view.hasLater {
-            if case let .peers(_, _, additionalCategories, _, _, _) = mode {
+            if case let .peers(_, _, additionalCategories, topPeers, _, _, _) = mode {
                 var index = 0
                 for category in additionalCategories.reversed() {
                     result.append(.AdditionalCategory(index: index, id: category.id, title: category.title, image: category.icon, appearance: category.appearance, selected: state.selectedAdditionalCategoryIds.contains(category.id), presentationData: state.presentationData))
+                    index += 1
+                }
+                
+                index = 0
+                for topPeer in topPeers {
+                    result.append(.TopPeer(index: index, peer: topPeer))
                     index += 1
                 }
             } else if case let .peerType(types, hasCreate) = mode, !result.isEmpty && hasCreate {

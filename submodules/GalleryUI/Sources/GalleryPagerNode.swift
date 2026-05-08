@@ -3,7 +3,6 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import SwiftSignalKit
-import Postbox
 
 private func edgeWidth(width: CGFloat) -> CGFloat {
     return min(44.0, floor(width / 6.0))
@@ -89,7 +88,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
     private let leftFadeNode: ASDisplayNode
     private let rightFadeNode: ASDisplayNode
     private var highlightedSide: Bool?
-    private var activeSide: Bool?
+    private var activeSide: GalleryItemNode.ActiveEdge?
     private var canPerformSideNavigationAction: Bool = false
     private var sideActionInitialPosition: CGPoint?
     
@@ -128,6 +127,20 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
     private var pagingEnabledDisposable: Disposable?
     
     private var edgeLongTapTimer: Foundation.Timer?
+
+    private func isInteractiveControlView(_ view: UIView?) -> Bool {
+        var currentView = view
+        while let view = currentView {
+            if view is UIControl {
+                return true
+            }
+            if let _ = view.asyncdisplaykit_node as? ASButtonNode {
+                return true
+            }
+            currentView = view.superview
+        }
+        return false
+    }
     
     public init(pageGap: CGFloat, disableTapNavigation: Bool) {
         self.pageGap = pageGap
@@ -208,6 +221,10 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
                 activeSide = true
             }
             
+            if activeSide == nil, let centralIndex = strongSelf.centralItemIndex, let itemNode = strongSelf.visibleItemNode(at: centralIndex), itemNode.hasActiveEdgeAction(edge: .middle) {
+                activeSide = true
+            }
+            
             if !strongSelf.pagingEnabled {
                 highlightedSide = nil
             }
@@ -216,7 +233,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
                 return .fail
             }
             
-            if let result = strongSelf.hitTest(point, with: nil), let _ = result.asyncdisplaykit_node as? ASButtonNode {
+            if strongSelf.isInteractiveControlView(strongSelf.hitTest(point, with: nil)) {
                 return .fail
             }
             
@@ -233,7 +250,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
             let size = strongSelf.bounds
             
             var highlightedSide: Bool?
-            var activeSide: Bool?
+            var activeSide: GalleryItemNode.ActiveEdge?
             if let point {
                 if point.x < edgeWidth(width: size.width) {
                     if strongSelf.canGoToPreviousItem() {
@@ -249,9 +266,11 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
                     }
                 }
                 if point.x < activeEdgeWidth(width: size.width), let centralIndex = strongSelf.centralItemIndex, let itemNode = strongSelf.visibleItemNode(at: centralIndex), itemNode.hasActiveEdgeAction(edge: .left) {
-                    activeSide = false
+                    activeSide = .left
                 } else if point.x > 0.0, let centralIndex = strongSelf.centralItemIndex, let itemNode = strongSelf.visibleItemNode(at: centralIndex), itemNode.hasActiveEdgeAction(edge: .right) {
-                    activeSide = true
+                    activeSide = .right
+                } else if let centralIndex = strongSelf.centralItemIndex, let itemNode = strongSelf.visibleItemNode(at: centralIndex), itemNode.hasActiveEdgeAction(edge: .middle) {
+                    activeSide = .middle
                 }
             }
             
@@ -303,7 +322,7 @@ public final class GalleryPagerNode: ASDisplayNode, ASScrollViewDelegate, ASGest
                                 return
                             }
                             if let centralIndex = self.centralItemIndex, let itemNode = self.visibleItemNode(at: centralIndex) {
-                                itemNode.setActiveEdgeAction(edge: activeSide ? .right : .left)
+                                itemNode.setActiveEdgeAction(edge: activeSide)
                             }
                             
                             self.canPerformSideNavigationAction = false

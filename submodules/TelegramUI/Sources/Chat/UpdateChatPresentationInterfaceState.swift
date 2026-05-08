@@ -29,7 +29,7 @@ func updateChatPresentationInterfaceStateImpl(
     completion externalCompletion: @escaping (ContainedViewLayoutTransition) -> Void
 ) {
     var transition = transition
-    if !selfController.didAppear {
+    if !selfController.enableAnimations {
         transition = .immediate
     }
     
@@ -50,7 +50,7 @@ func updateChatPresentationInterfaceStateImpl(
                         $0.withUpdatedReplyMessageSubject(ChatInterfaceState.ReplyMessageSubject(
                             messageId: keyboardButtonsMessage.id,
                             quote: nil,
-                            todoItemId: nil
+                            innerSubject: nil
                         )).withUpdatedMessageActionsState({ value in
                         var value = value
                         value.processedSetupReplyMessageId = keyboardButtonsMessage.id
@@ -74,7 +74,7 @@ func updateChatPresentationInterfaceStateImpl(
             temporaryChatPresentationInterfaceState = temporaryChatPresentationInterfaceState.updatedInterfaceState({ $0.withUpdatedReplyMessageSubject(ChatInterfaceState.ReplyMessageSubject(
                 messageId: keyboardButtonsMessage.id,
                 quote: nil,
-                todoItemId: nil
+                innerSubject: nil
             )).withUpdatedMessageActionsState({ value in
                 var value = value
                 value.processedSetupReplyMessageId = keyboardButtonsMessage.id
@@ -95,7 +95,7 @@ func updateChatPresentationInterfaceStateImpl(
             guard let selfController, value else {
                 return
             }
-            selfController.present(textAlertController(context: selfController.context, updatedPresentationData: selfController.updatedPresentationData, title: nil, text: selfController.presentationData.strings.Conversation_ShareInlineBotLocationConfirmation, actions: [TextAlertAction(type: .defaultAction, title: selfController.presentationData.strings.Common_Cancel, action: {
+            selfController.present(textAlertController(context: selfController.context, updatedPresentationData: selfController.updatedPresentationData, title: nil, text: selfController.presentationData.strings.Conversation_ShareInlineBotLocationConfirmation, actions: [TextAlertAction(type: .genericAction, title: selfController.presentationData.strings.Common_Cancel, action: {
             }), TextAlertAction(type: .defaultAction, title: selfController.presentationData.strings.Common_OK, action: { [weak selfController] in
                 guard let selfController else {
                     return
@@ -152,7 +152,7 @@ func updateChatPresentationInterfaceStateImpl(
                 case .generic:
                     break
                 case let .inlineBotLocationRequest(peerId):
-                    selfController.present(textAlertController(context: selfController.context, updatedPresentationData: selfController.updatedPresentationData, title: nil, text: selfController.presentationData.strings.Conversation_ShareInlineBotLocationConfirmation, actions: [TextAlertAction(type: .defaultAction, title: selfController.presentationData.strings.Common_Cancel, action: { [weak selfController] in
+                    selfController.present(textAlertController(context: selfController.context, updatedPresentationData: selfController.updatedPresentationData, title: nil, text: selfController.presentationData.strings.Conversation_ShareInlineBotLocationConfirmation, actions: [TextAlertAction(type: .genericAction, title: selfController.presentationData.strings.Common_Cancel, action: { [weak selfController] in
                         guard let selfController else {
                             return
                         }

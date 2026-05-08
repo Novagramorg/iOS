@@ -2,7 +2,6 @@ import Foundation
 import UIKit
 import Display
 import AsyncDisplayKit
-import Postbox
 import TelegramCore
 import SwiftSignalKit
 import AccountContext
@@ -208,7 +207,7 @@ public final class MediaGroupsScreen: ViewController, AttachmentContainable {
             self.containerNode = ASDisplayNode()
             self.backgroundNode = NavigationBackgroundNode(color: self.presentationData.theme.rootController.tabBar.backgroundColor)
             
-            self.listNode = ListView()
+            self.listNode = ListViewImpl()
 
             super.init()
             

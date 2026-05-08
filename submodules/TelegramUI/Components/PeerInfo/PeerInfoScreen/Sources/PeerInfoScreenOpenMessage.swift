@@ -76,7 +76,7 @@ extension PeerInfoScreenNode {
         }, openAd: { _ in
         }, addContact: { [weak self] phoneNumber in
             if let strongSelf = self {
-                strongSelf.context.sharedContext.openAddContact(context: strongSelf.context, firstName: "", lastName: "", phoneNumber: phoneNumber, label: defaultContactLabel, present: { [weak self] controller, arguments in
+                strongSelf.context.sharedContext.openAddContact(context: strongSelf.context, peer: nil, firstName: "", lastName: "", phoneNumber: phoneNumber, label: defaultContactLabel, present: { [weak self] controller, arguments in
                     self?.controller?.present(controller, in: .window(.root), with: arguments)
                 }, pushController: { [weak self] controller in
                     if let strongSelf = self {
@@ -123,7 +123,7 @@ extension PeerInfoScreenNode {
                             strongSelf.enqueueMediaMessageDisposable.set((legacyAssetPickerEnqueueMessages(context: strongSelf.context, account: strongSelf.context.account, signals: signals!)
                             |> deliverOnMainQueue).startStrict(next: { [weak self] messages in
                                 if let strongSelf = self {
-                                    let _ = enqueueMessages(account: strongSelf.context.account, peerId: strongSelf.peerId, messages: messages.map { $0.message.withUpdatedReplyToMessageId(.init(messageId: message.id, quote: nil, todoItemId: nil)) }).startStandalone()
+                                    let _ = enqueueMessages(account: strongSelf.context.account, peerId: strongSelf.peerId, messages: messages.map { $0.message.withUpdatedReplyToMessageId(.init(messageId: message.id, quote: nil, innerSubject: nil)) }).startStandalone()
                                 }
                             }))
                         }

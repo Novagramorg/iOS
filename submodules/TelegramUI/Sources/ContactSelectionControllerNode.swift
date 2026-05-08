@@ -1,7 +1,6 @@
 import Display
 import UIKit
 import AsyncDisplayKit
-import Postbox
 import TelegramCore
 import SwiftSignalKit
 import TelegramPresentationData
@@ -158,7 +157,7 @@ final class ContactSelectionControllerNode: ASDisplayNode {
             onlyWriteable: false,
             isGroupInvitation: false,
             isPeerEnabled: { peer in
-                return isPeerEnabled(.peer(peer: peer._asPeer(), isGlobal: false, participantCount: nil))
+                return isPeerEnabled(.peer(peer: peer, isGlobal: false, participantCount: nil))
             },
             displayCallIcons: displayCallIcons,
             contextAction: multipleSelection ? { peer, node, gesture, _, _ in
@@ -228,7 +227,7 @@ final class ContactSelectionControllerNode: ASDisplayNode {
                 strongSelf.contactListNode.updateSelectionState { state in
                     let peerId = ContactListPeerId.peer(peer.id)
                     let state = state ?? ContactListNodeGroupSelectionState()
-                    return state.withToggledPeerId(peerId).withSelectedPeerMap([peerId: ContactListPeer.peer(peer: peer._asPeer(), isGlobal: false, participantCount: nil)])
+                    return state.withToggledPeerId(peerId).withSelectedPeerMap([peerId: ContactListPeer.peer(peer: peer, isGlobal: false, participantCount: nil)])
                 }
             }
         }
@@ -305,7 +304,7 @@ final class ContactSelectionControllerNode: ASDisplayNode {
         let topEdgeEffectHeight: CGFloat = 80.0
         let topEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: 0.0), size: CGSize(width: layout.size.width, height: topEdgeEffectHeight))
         transition.updateFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
-        self.topEdgeEffectView.update(content: self.presentationData.theme.list.blocksBackgroundColor, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
+        self.topEdgeEffectView.update(content: self.presentationData.theme.list.modalBlocksBackgroundColor, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: ComponentTransition(transition))
         
         let bottomEdgeEffectHeight: CGFloat = 88.0
         let bottomEdgeEffectFrame = CGRect(origin: CGPoint(x: 0.0, y: layout.size.height - bottomEdgeEffectHeight - layout.additionalInsets.bottom), size: CGSize(width: layout.size.width, height: bottomEdgeEffectHeight))

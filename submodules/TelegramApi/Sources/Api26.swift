@@ -7,8 +7,8 @@ public extension Api {
                 self.amount = amount
                 self.nanos = nanos
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsAmount", [("amount", self.amount as Any), ("nanos", self.nanos as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsAmount", [("amount", ConstructorParameterDescription(self.amount)), ("nanos", ConstructorParameterDescription(self.nanos))])
             }
         }
         public class Cons_starsTonAmount: TypeConstructorDescription {
@@ -16,8 +16,8 @@ public extension Api {
             public init(amount: Int64) {
                 self.amount = amount
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsTonAmount", [("amount", self.amount as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsTonAmount", [("amount", ConstructorParameterDescription(self.amount))])
             }
         }
         case starsAmount(Cons_starsAmount)
@@ -41,12 +41,12 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsAmount(let _data):
-                return ("starsAmount", [("amount", _data.amount as Any), ("nanos", _data.nanos as Any)])
+                return ("starsAmount", [("amount", ConstructorParameterDescription(_data.amount)), ("nanos", ConstructorParameterDescription(_data.nanos))])
             case .starsTonAmount(let _data):
-                return ("starsTonAmount", [("amount", _data.amount as Any)])
+                return ("starsTonAmount", [("amount", ConstructorParameterDescription(_data.amount))])
             }
         }
 
@@ -92,8 +92,8 @@ public extension Api {
                 self.currency = currency
                 self.amount = amount
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsGiftOption", [("flags", self.flags as Any), ("stars", self.stars as Any), ("storeProduct", self.storeProduct as Any), ("currency", self.currency as Any), ("amount", self.amount as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsGiftOption", [("flags", ConstructorParameterDescription(self.flags)), ("stars", ConstructorParameterDescription(self.stars)), ("storeProduct", ConstructorParameterDescription(self.storeProduct)), ("currency", ConstructorParameterDescription(self.currency)), ("amount", ConstructorParameterDescription(self.amount))])
             }
         }
         case starsGiftOption(Cons_starsGiftOption)
@@ -115,10 +115,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsGiftOption(let _data):
-                return ("starsGiftOption", [("flags", _data.flags as Any), ("stars", _data.stars as Any), ("storeProduct", _data.storeProduct as Any), ("currency", _data.currency as Any), ("amount", _data.amount as Any)])
+                return ("starsGiftOption", [("flags", ConstructorParameterDescription(_data.flags)), ("stars", ConstructorParameterDescription(_data.stars)), ("storeProduct", ConstructorParameterDescription(_data.storeProduct)), ("currency", ConstructorParameterDescription(_data.currency)), ("amount", ConstructorParameterDescription(_data.amount))])
             }
         }
 
@@ -128,7 +128,7 @@ public extension Api {
             var _2: Int64?
             _2 = reader.readInt64()
             var _3: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _3 = parseString(reader)
             }
             var _4: String?
@@ -137,7 +137,7 @@ public extension Api {
             _5 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
@@ -168,8 +168,8 @@ public extension Api {
                 self.amount = amount
                 self.winners = winners
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsGiveawayOption", [("flags", self.flags as Any), ("stars", self.stars as Any), ("yearlyBoosts", self.yearlyBoosts as Any), ("storeProduct", self.storeProduct as Any), ("currency", self.currency as Any), ("amount", self.amount as Any), ("winners", self.winners as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsGiveawayOption", [("flags", ConstructorParameterDescription(self.flags)), ("stars", ConstructorParameterDescription(self.stars)), ("yearlyBoosts", ConstructorParameterDescription(self.yearlyBoosts)), ("storeProduct", ConstructorParameterDescription(self.storeProduct)), ("currency", ConstructorParameterDescription(self.currency)), ("amount", ConstructorParameterDescription(self.amount)), ("winners", ConstructorParameterDescription(self.winners))])
             }
         }
         case starsGiveawayOption(Cons_starsGiveawayOption)
@@ -197,10 +197,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsGiveawayOption(let _data):
-                return ("starsGiveawayOption", [("flags", _data.flags as Any), ("stars", _data.stars as Any), ("yearlyBoosts", _data.yearlyBoosts as Any), ("storeProduct", _data.storeProduct as Any), ("currency", _data.currency as Any), ("amount", _data.amount as Any), ("winners", _data.winners as Any)])
+                return ("starsGiveawayOption", [("flags", ConstructorParameterDescription(_data.flags)), ("stars", ConstructorParameterDescription(_data.stars)), ("yearlyBoosts", ConstructorParameterDescription(_data.yearlyBoosts)), ("storeProduct", ConstructorParameterDescription(_data.storeProduct)), ("currency", ConstructorParameterDescription(_data.currency)), ("amount", ConstructorParameterDescription(_data.amount)), ("winners", ConstructorParameterDescription(_data.winners))])
             }
         }
 
@@ -212,7 +212,7 @@ public extension Api {
             var _3: Int32?
             _3 = reader.readInt32()
             var _4: String?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _4 = parseString(reader)
             }
             var _5: String?
@@ -226,7 +226,7 @@ public extension Api {
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
-            let _c4 = (Int(_1!) & Int(1 << 2) == 0) || _4 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
@@ -250,8 +250,8 @@ public extension Api {
                 self.users = users
                 self.perUserStars = perUserStars
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsGiveawayWinnersOption", [("flags", self.flags as Any), ("users", self.users as Any), ("perUserStars", self.perUserStars as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsGiveawayWinnersOption", [("flags", ConstructorParameterDescription(self.flags)), ("users", ConstructorParameterDescription(self.users)), ("perUserStars", ConstructorParameterDescription(self.perUserStars))])
             }
         }
         case starsGiveawayWinnersOption(Cons_starsGiveawayWinnersOption)
@@ -269,10 +269,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsGiveawayWinnersOption(let _data):
-                return ("starsGiveawayWinnersOption", [("flags", _data.flags as Any), ("users", _data.users as Any), ("perUserStars", _data.perUserStars as Any)])
+                return ("starsGiveawayWinnersOption", [("flags", ConstructorParameterDescription(_data.flags)), ("users", ConstructorParameterDescription(_data.users)), ("perUserStars", ConstructorParameterDescription(_data.perUserStars))])
             }
         }
 
@@ -310,8 +310,8 @@ public extension Api {
                 self.stars = stars
                 self.nextLevelStars = nextLevelStars
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsRating", [("flags", self.flags as Any), ("level", self.level as Any), ("currentLevelStars", self.currentLevelStars as Any), ("stars", self.stars as Any), ("nextLevelStars", self.nextLevelStars as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsRating", [("flags", ConstructorParameterDescription(self.flags)), ("level", ConstructorParameterDescription(self.level)), ("currentLevelStars", ConstructorParameterDescription(self.currentLevelStars)), ("stars", ConstructorParameterDescription(self.stars)), ("nextLevelStars", ConstructorParameterDescription(self.nextLevelStars))])
             }
         }
         case starsRating(Cons_starsRating)
@@ -333,10 +333,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsRating(let _data):
-                return ("starsRating", [("flags", _data.flags as Any), ("level", _data.level as Any), ("currentLevelStars", _data.currentLevelStars as Any), ("stars", _data.stars as Any), ("nextLevelStars", _data.nextLevelStars as Any)])
+                return ("starsRating", [("flags", ConstructorParameterDescription(_data.flags)), ("level", ConstructorParameterDescription(_data.level)), ("currentLevelStars", ConstructorParameterDescription(_data.currentLevelStars)), ("stars", ConstructorParameterDescription(_data.stars)), ("nextLevelStars", ConstructorParameterDescription(_data.nextLevelStars))])
             }
         }
 
@@ -350,14 +350,14 @@ public extension Api {
             var _4: Int64?
             _4 = reader.readInt64()
             var _5: Int64?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _5 = reader.readInt64()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 0) == 0) || _5 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.StarsRating.starsRating(Cons_starsRating(flags: _1!, level: _2!, currentLevelStars: _3!, stars: _4!, nextLevelStars: _5))
             }
@@ -382,8 +382,8 @@ public extension Api {
                 self.overallRevenue = overallRevenue
                 self.nextWithdrawalAt = nextWithdrawalAt
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsRevenueStatus", [("flags", self.flags as Any), ("currentBalance", self.currentBalance as Any), ("availableBalance", self.availableBalance as Any), ("overallRevenue", self.overallRevenue as Any), ("nextWithdrawalAt", self.nextWithdrawalAt as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsRevenueStatus", [("flags", ConstructorParameterDescription(self.flags)), ("currentBalance", ConstructorParameterDescription(self.currentBalance)), ("availableBalance", ConstructorParameterDescription(self.availableBalance)), ("overallRevenue", ConstructorParameterDescription(self.overallRevenue)), ("nextWithdrawalAt", ConstructorParameterDescription(self.nextWithdrawalAt))])
             }
         }
         case starsRevenueStatus(Cons_starsRevenueStatus)
@@ -405,10 +405,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsRevenueStatus(let _data):
-                return ("starsRevenueStatus", [("flags", _data.flags as Any), ("currentBalance", _data.currentBalance as Any), ("availableBalance", _data.availableBalance as Any), ("overallRevenue", _data.overallRevenue as Any), ("nextWithdrawalAt", _data.nextWithdrawalAt as Any)])
+                return ("starsRevenueStatus", [("flags", ConstructorParameterDescription(_data.flags)), ("currentBalance", ConstructorParameterDescription(_data.currentBalance)), ("availableBalance", ConstructorParameterDescription(_data.availableBalance)), ("overallRevenue", ConstructorParameterDescription(_data.overallRevenue)), ("nextWithdrawalAt", ConstructorParameterDescription(_data.nextWithdrawalAt))])
             }
         }
 
@@ -428,14 +428,14 @@ public extension Api {
                 _4 = Api.parse(reader, signature: signature) as? Api.StarsAmount
             }
             var _5: Int32?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _5 = reader.readInt32()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
-            let _c5 = (Int(_1!) & Int(1 << 1) == 0) || _5 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.StarsRevenueStatus.starsRevenueStatus(Cons_starsRevenueStatus(flags: _1!, currentBalance: _2!, availableBalance: _3!, overallRevenue: _4!, nextWithdrawalAt: _5))
             }
@@ -468,8 +468,8 @@ public extension Api {
                 self.photo = photo
                 self.invoiceSlug = invoiceSlug
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsSubscription", [("flags", self.flags as Any), ("id", self.id as Any), ("peer", self.peer as Any), ("untilDate", self.untilDate as Any), ("pricing", self.pricing as Any), ("chatInviteHash", self.chatInviteHash as Any), ("title", self.title as Any), ("photo", self.photo as Any), ("invoiceSlug", self.invoiceSlug as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsSubscription", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("peer", ConstructorParameterDescription(self.peer)), ("untilDate", ConstructorParameterDescription(self.untilDate)), ("pricing", ConstructorParameterDescription(self.pricing)), ("chatInviteHash", ConstructorParameterDescription(self.chatInviteHash)), ("title", ConstructorParameterDescription(self.title)), ("photo", ConstructorParameterDescription(self.photo)), ("invoiceSlug", ConstructorParameterDescription(self.invoiceSlug))])
             }
         }
         case starsSubscription(Cons_starsSubscription)
@@ -501,10 +501,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsSubscription(let _data):
-                return ("starsSubscription", [("flags", _data.flags as Any), ("id", _data.id as Any), ("peer", _data.peer as Any), ("untilDate", _data.untilDate as Any), ("pricing", _data.pricing as Any), ("chatInviteHash", _data.chatInviteHash as Any), ("title", _data.title as Any), ("photo", _data.photo as Any), ("invoiceSlug", _data.invoiceSlug as Any)])
+                return ("starsSubscription", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("peer", ConstructorParameterDescription(_data.peer)), ("untilDate", ConstructorParameterDescription(_data.untilDate)), ("pricing", ConstructorParameterDescription(_data.pricing)), ("chatInviteHash", ConstructorParameterDescription(_data.chatInviteHash)), ("title", ConstructorParameterDescription(_data.title)), ("photo", ConstructorParameterDescription(_data.photo)), ("invoiceSlug", ConstructorParameterDescription(_data.invoiceSlug))])
             }
         }
 
@@ -524,21 +524,21 @@ public extension Api {
                 _5 = Api.parse(reader, signature: signature) as? Api.StarsSubscriptionPricing
             }
             var _6: String?
-            if Int(_1!) & Int(1 << 3) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
                 _6 = parseString(reader)
             }
             var _7: String?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 _7 = parseString(reader)
             }
             var _8: Api.WebDocument?
-            if Int(_1!) & Int(1 << 5) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
                 if let signature = reader.readInt32() {
                     _8 = Api.parse(reader, signature: signature) as? Api.WebDocument
                 }
             }
             var _9: String?
-            if Int(_1!) & Int(1 << 6) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
                 _9 = parseString(reader)
             }
             let _c1 = _1 != nil
@@ -546,10 +546,10 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 3) == 0) || _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 4) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 5) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 6) == 0) || _9 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _9 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
                 return Api.StarsSubscription.starsSubscription(Cons_starsSubscription(flags: _1!, id: _2!, peer: _3!, untilDate: _4!, pricing: _5!, chatInviteHash: _6, title: _7, photo: _8, invoiceSlug: _9))
             }
@@ -568,8 +568,8 @@ public extension Api {
                 self.period = period
                 self.amount = amount
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsSubscriptionPricing", [("period", self.period as Any), ("amount", self.amount as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsSubscriptionPricing", [("period", ConstructorParameterDescription(self.period)), ("amount", ConstructorParameterDescription(self.amount))])
             }
         }
         case starsSubscriptionPricing(Cons_starsSubscriptionPricing)
@@ -586,10 +586,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsSubscriptionPricing(let _data):
-                return ("starsSubscriptionPricing", [("period", _data.period as Any), ("amount", _data.amount as Any)])
+                return ("starsSubscriptionPricing", [("period", ConstructorParameterDescription(_data.period)), ("amount", ConstructorParameterDescription(_data.amount))])
             }
         }
 
@@ -624,8 +624,8 @@ public extension Api {
                 self.currency = currency
                 self.amount = amount
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsTopupOption", [("flags", self.flags as Any), ("stars", self.stars as Any), ("storeProduct", self.storeProduct as Any), ("currency", self.currency as Any), ("amount", self.amount as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsTopupOption", [("flags", ConstructorParameterDescription(self.flags)), ("stars", ConstructorParameterDescription(self.stars)), ("storeProduct", ConstructorParameterDescription(self.storeProduct)), ("currency", ConstructorParameterDescription(self.currency)), ("amount", ConstructorParameterDescription(self.amount))])
             }
         }
         case starsTopupOption(Cons_starsTopupOption)
@@ -647,10 +647,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsTopupOption(let _data):
-                return ("starsTopupOption", [("flags", _data.flags as Any), ("stars", _data.stars as Any), ("storeProduct", _data.storeProduct as Any), ("currency", _data.currency as Any), ("amount", _data.amount as Any)])
+                return ("starsTopupOption", [("flags", ConstructorParameterDescription(_data.flags)), ("stars", ConstructorParameterDescription(_data.stars)), ("storeProduct", ConstructorParameterDescription(_data.storeProduct)), ("currency", ConstructorParameterDescription(_data.currency)), ("amount", ConstructorParameterDescription(_data.amount))])
             }
         }
 
@@ -660,7 +660,7 @@ public extension Api {
             var _2: Int64?
             _2 = reader.readInt64()
             var _3: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _3 = parseString(reader)
             }
             var _4: String?
@@ -669,7 +669,7 @@ public extension Api {
             _5 = reader.readInt64()
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
@@ -734,8 +734,8 @@ public extension Api {
                 self.adsProceedsFromDate = adsProceedsFromDate
                 self.adsProceedsToDate = adsProceedsToDate
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsTransaction", [("flags", self.flags as Any), ("id", self.id as Any), ("amount", self.amount as Any), ("date", self.date as Any), ("peer", self.peer as Any), ("title", self.title as Any), ("description", self.description as Any), ("photo", self.photo as Any), ("transactionDate", self.transactionDate as Any), ("transactionUrl", self.transactionUrl as Any), ("botPayload", self.botPayload as Any), ("msgId", self.msgId as Any), ("extendedMedia", self.extendedMedia as Any), ("subscriptionPeriod", self.subscriptionPeriod as Any), ("giveawayPostId", self.giveawayPostId as Any), ("stargift", self.stargift as Any), ("floodskipNumber", self.floodskipNumber as Any), ("starrefCommissionPermille", self.starrefCommissionPermille as Any), ("starrefPeer", self.starrefPeer as Any), ("starrefAmount", self.starrefAmount as Any), ("paidMessages", self.paidMessages as Any), ("premiumGiftMonths", self.premiumGiftMonths as Any), ("adsProceedsFromDate", self.adsProceedsFromDate as Any), ("adsProceedsToDate", self.adsProceedsToDate as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsTransaction", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("amount", ConstructorParameterDescription(self.amount)), ("date", ConstructorParameterDescription(self.date)), ("peer", ConstructorParameterDescription(self.peer)), ("title", ConstructorParameterDescription(self.title)), ("description", ConstructorParameterDescription(self.description)), ("photo", ConstructorParameterDescription(self.photo)), ("transactionDate", ConstructorParameterDescription(self.transactionDate)), ("transactionUrl", ConstructorParameterDescription(self.transactionUrl)), ("botPayload", ConstructorParameterDescription(self.botPayload)), ("msgId", ConstructorParameterDescription(self.msgId)), ("extendedMedia", ConstructorParameterDescription(self.extendedMedia)), ("subscriptionPeriod", ConstructorParameterDescription(self.subscriptionPeriod)), ("giveawayPostId", ConstructorParameterDescription(self.giveawayPostId)), ("stargift", ConstructorParameterDescription(self.stargift)), ("floodskipNumber", ConstructorParameterDescription(self.floodskipNumber)), ("starrefCommissionPermille", ConstructorParameterDescription(self.starrefCommissionPermille)), ("starrefPeer", ConstructorParameterDescription(self.starrefPeer)), ("starrefAmount", ConstructorParameterDescription(self.starrefAmount)), ("paidMessages", ConstructorParameterDescription(self.paidMessages)), ("premiumGiftMonths", ConstructorParameterDescription(self.premiumGiftMonths)), ("adsProceedsFromDate", ConstructorParameterDescription(self.adsProceedsFromDate)), ("adsProceedsToDate", ConstructorParameterDescription(self.adsProceedsToDate))])
             }
         }
         case starsTransaction(Cons_starsTransaction)
@@ -816,10 +816,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsTransaction(let _data):
-                return ("starsTransaction", [("flags", _data.flags as Any), ("id", _data.id as Any), ("amount", _data.amount as Any), ("date", _data.date as Any), ("peer", _data.peer as Any), ("title", _data.title as Any), ("description", _data.description as Any), ("photo", _data.photo as Any), ("transactionDate", _data.transactionDate as Any), ("transactionUrl", _data.transactionUrl as Any), ("botPayload", _data.botPayload as Any), ("msgId", _data.msgId as Any), ("extendedMedia", _data.extendedMedia as Any), ("subscriptionPeriod", _data.subscriptionPeriod as Any), ("giveawayPostId", _data.giveawayPostId as Any), ("stargift", _data.stargift as Any), ("floodskipNumber", _data.floodskipNumber as Any), ("starrefCommissionPermille", _data.starrefCommissionPermille as Any), ("starrefPeer", _data.starrefPeer as Any), ("starrefAmount", _data.starrefAmount as Any), ("paidMessages", _data.paidMessages as Any), ("premiumGiftMonths", _data.premiumGiftMonths as Any), ("adsProceedsFromDate", _data.adsProceedsFromDate as Any), ("adsProceedsToDate", _data.adsProceedsToDate as Any)])
+                return ("starsTransaction", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("amount", ConstructorParameterDescription(_data.amount)), ("date", ConstructorParameterDescription(_data.date)), ("peer", ConstructorParameterDescription(_data.peer)), ("title", ConstructorParameterDescription(_data.title)), ("description", ConstructorParameterDescription(_data.description)), ("photo", ConstructorParameterDescription(_data.photo)), ("transactionDate", ConstructorParameterDescription(_data.transactionDate)), ("transactionUrl", ConstructorParameterDescription(_data.transactionUrl)), ("botPayload", ConstructorParameterDescription(_data.botPayload)), ("msgId", ConstructorParameterDescription(_data.msgId)), ("extendedMedia", ConstructorParameterDescription(_data.extendedMedia)), ("subscriptionPeriod", ConstructorParameterDescription(_data.subscriptionPeriod)), ("giveawayPostId", ConstructorParameterDescription(_data.giveawayPostId)), ("stargift", ConstructorParameterDescription(_data.stargift)), ("floodskipNumber", ConstructorParameterDescription(_data.floodskipNumber)), ("starrefCommissionPermille", ConstructorParameterDescription(_data.starrefCommissionPermille)), ("starrefPeer", ConstructorParameterDescription(_data.starrefPeer)), ("starrefAmount", ConstructorParameterDescription(_data.starrefAmount)), ("paidMessages", ConstructorParameterDescription(_data.paidMessages)), ("premiumGiftMonths", ConstructorParameterDescription(_data.premiumGiftMonths)), ("adsProceedsFromDate", ConstructorParameterDescription(_data.adsProceedsFromDate)), ("adsProceedsToDate", ConstructorParameterDescription(_data.adsProceedsToDate))])
             }
         }
 
@@ -839,89 +839,89 @@ public extension Api {
                 _5 = Api.parse(reader, signature: signature) as? Api.StarsTransactionPeer
             }
             var _6: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _6 = parseString(reader)
             }
             var _7: String?
-            if Int(_1!) & Int(1 << 1) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
                 _7 = parseString(reader)
             }
             var _8: Api.WebDocument?
-            if Int(_1!) & Int(1 << 2) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 if let signature = reader.readInt32() {
                     _8 = Api.parse(reader, signature: signature) as? Api.WebDocument
                 }
             }
             var _9: Int32?
-            if Int(_1!) & Int(1 << 5) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
                 _9 = reader.readInt32()
             }
             var _10: String?
-            if Int(_1!) & Int(1 << 5) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
                 _10 = parseString(reader)
             }
             var _11: Buffer?
-            if Int(_1!) & Int(1 << 7) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 7) != 0 {
                 _11 = parseBytes(reader)
             }
             var _12: Int32?
-            if Int(_1!) & Int(1 << 8) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 8) != 0 {
                 _12 = reader.readInt32()
             }
             var _13: [Api.MessageMedia]?
-            if Int(_1!) & Int(1 << 9) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 9) != 0 {
                 if let _ = reader.readInt32() {
                     _13 = Api.parseVector(reader, elementSignature: 0, elementType: Api.MessageMedia.self)
                 }
             }
             var _14: Int32?
-            if Int(_1!) & Int(1 << 12) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 12) != 0 {
                 _14 = reader.readInt32()
             }
             var _15: Int32?
-            if Int(_1!) & Int(1 << 13) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 13) != 0 {
                 _15 = reader.readInt32()
             }
             var _16: Api.StarGift?
-            if Int(_1!) & Int(1 << 14) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 14) != 0 {
                 if let signature = reader.readInt32() {
                     _16 = Api.parse(reader, signature: signature) as? Api.StarGift
                 }
             }
             var _17: Int32?
-            if Int(_1!) & Int(1 << 15) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 15) != 0 {
                 _17 = reader.readInt32()
             }
             var _18: Int32?
-            if Int(_1!) & Int(1 << 16) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 16) != 0 {
                 _18 = reader.readInt32()
             }
             var _19: Api.Peer?
-            if Int(_1!) & Int(1 << 17) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 17) != 0 {
                 if let signature = reader.readInt32() {
                     _19 = Api.parse(reader, signature: signature) as? Api.Peer
                 }
             }
             var _20: Api.StarsAmount?
-            if Int(_1!) & Int(1 << 17) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 17) != 0 {
                 if let signature = reader.readInt32() {
                     _20 = Api.parse(reader, signature: signature) as? Api.StarsAmount
                 }
             }
             var _21: Int32?
-            if Int(_1!) & Int(1 << 19) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 19) != 0 {
                 _21 = reader.readInt32()
             }
             var _22: Int32?
-            if Int(_1!) & Int(1 << 20) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 20) != 0 {
                 _22 = reader.readInt32()
             }
             var _23: Int32?
-            if Int(_1!) & Int(1 << 23) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 23) != 0 {
                 _23 = reader.readInt32()
             }
             var _24: Int32?
-            if Int(_1!) & Int(1 << 23) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 23) != 0 {
                 _24 = reader.readInt32()
             }
             let _c1 = _1 != nil
@@ -929,25 +929,25 @@ public extension Api {
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
-            let _c6 = (Int(_1!) & Int(1 << 0) == 0) || _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 1) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 2) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 5) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 5) == 0) || _10 != nil
-            let _c11 = (Int(_1!) & Int(1 << 7) == 0) || _11 != nil
-            let _c12 = (Int(_1!) & Int(1 << 8) == 0) || _12 != nil
-            let _c13 = (Int(_1!) & Int(1 << 9) == 0) || _13 != nil
-            let _c14 = (Int(_1!) & Int(1 << 12) == 0) || _14 != nil
-            let _c15 = (Int(_1!) & Int(1 << 13) == 0) || _15 != nil
-            let _c16 = (Int(_1!) & Int(1 << 14) == 0) || _16 != nil
-            let _c17 = (Int(_1!) & Int(1 << 15) == 0) || _17 != nil
-            let _c18 = (Int(_1!) & Int(1 << 16) == 0) || _18 != nil
-            let _c19 = (Int(_1!) & Int(1 << 17) == 0) || _19 != nil
-            let _c20 = (Int(_1!) & Int(1 << 17) == 0) || _20 != nil
-            let _c21 = (Int(_1!) & Int(1 << 19) == 0) || _21 != nil
-            let _c22 = (Int(_1!) & Int(1 << 20) == 0) || _22 != nil
-            let _c23 = (Int(_1!) & Int(1 << 23) == 0) || _23 != nil
-            let _c24 = (Int(_1!) & Int(1 << 23) == 0) || _24 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _10 != nil
+            let _c11 = (Int(_1 ?? 0) & Int(1 << 7) == 0) || _11 != nil
+            let _c12 = (Int(_1 ?? 0) & Int(1 << 8) == 0) || _12 != nil
+            let _c13 = (Int(_1 ?? 0) & Int(1 << 9) == 0) || _13 != nil
+            let _c14 = (Int(_1 ?? 0) & Int(1 << 12) == 0) || _14 != nil
+            let _c15 = (Int(_1 ?? 0) & Int(1 << 13) == 0) || _15 != nil
+            let _c16 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _16 != nil
+            let _c17 = (Int(_1 ?? 0) & Int(1 << 15) == 0) || _17 != nil
+            let _c18 = (Int(_1 ?? 0) & Int(1 << 16) == 0) || _18 != nil
+            let _c19 = (Int(_1 ?? 0) & Int(1 << 17) == 0) || _19 != nil
+            let _c20 = (Int(_1 ?? 0) & Int(1 << 17) == 0) || _20 != nil
+            let _c21 = (Int(_1 ?? 0) & Int(1 << 19) == 0) || _21 != nil
+            let _c22 = (Int(_1 ?? 0) & Int(1 << 20) == 0) || _22 != nil
+            let _c23 = (Int(_1 ?? 0) & Int(1 << 23) == 0) || _23 != nil
+            let _c24 = (Int(_1 ?? 0) & Int(1 << 23) == 0) || _24 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 && _c24 {
                 return Api.StarsTransaction.starsTransaction(Cons_starsTransaction(flags: _1!, id: _2!, amount: _3!, date: _4!, peer: _5!, title: _6, description: _7, photo: _8, transactionDate: _9, transactionUrl: _10, botPayload: _11, msgId: _12, extendedMedia: _13, subscriptionPeriod: _14, giveawayPostId: _15, stargift: _16, floodskipNumber: _17, starrefCommissionPermille: _18, starrefPeer: _19, starrefAmount: _20, paidMessages: _21, premiumGiftMonths: _22, adsProceedsFromDate: _23, adsProceedsToDate: _24))
             }
@@ -964,8 +964,8 @@ public extension Api {
             public init(peer: Api.Peer) {
                 self.peer = peer
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("starsTransactionPeer", [("peer", self.peer as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("starsTransactionPeer", [("peer", ConstructorParameterDescription(self.peer))])
             }
         }
         case starsTransactionPeer(Cons_starsTransactionPeer)
@@ -1023,10 +1023,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .starsTransactionPeer(let _data):
-                return ("starsTransactionPeer", [("peer", _data.peer as Any)])
+                return ("starsTransactionPeer", [("peer", ConstructorParameterDescription(_data.peer))])
             case .starsTransactionPeerAPI:
                 return ("starsTransactionPeerAPI", [])
             case .starsTransactionPeerAds:
@@ -1089,8 +1089,8 @@ public extension Api {
                 self.current = current
                 self.previous = previous
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsAbsValueAndPrev", [("current", self.current as Any), ("previous", self.previous as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsAbsValueAndPrev", [("current", ConstructorParameterDescription(self.current)), ("previous", ConstructorParameterDescription(self.previous))])
             }
         }
         case statsAbsValueAndPrev(Cons_statsAbsValueAndPrev)
@@ -1107,10 +1107,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .statsAbsValueAndPrev(let _data):
-                return ("statsAbsValueAndPrev", [("current", _data.current as Any), ("previous", _data.previous as Any)])
+                return ("statsAbsValueAndPrev", [("current", ConstructorParameterDescription(_data.current)), ("previous", ConstructorParameterDescription(_data.previous))])
             }
         }
 
@@ -1139,8 +1139,8 @@ public extension Api {
                 self.minDate = minDate
                 self.maxDate = maxDate
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsDateRangeDays", [("minDate", self.minDate as Any), ("maxDate", self.maxDate as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsDateRangeDays", [("minDate", ConstructorParameterDescription(self.minDate)), ("maxDate", ConstructorParameterDescription(self.maxDate))])
             }
         }
         case statsDateRangeDays(Cons_statsDateRangeDays)
@@ -1157,10 +1157,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .statsDateRangeDays(let _data):
-                return ("statsDateRangeDays", [("minDate", _data.minDate as Any), ("maxDate", _data.maxDate as Any)])
+                return ("statsDateRangeDays", [("minDate", ConstructorParameterDescription(_data.minDate)), ("maxDate", ConstructorParameterDescription(_data.maxDate))])
             }
         }
 
@@ -1191,8 +1191,8 @@ public extension Api {
                 self.json = json
                 self.zoomToken = zoomToken
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsGraph", [("flags", self.flags as Any), ("json", self.json as Any), ("zoomToken", self.zoomToken as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsGraph", [("flags", ConstructorParameterDescription(self.flags)), ("json", ConstructorParameterDescription(self.json)), ("zoomToken", ConstructorParameterDescription(self.zoomToken))])
             }
         }
         public class Cons_statsGraphAsync: TypeConstructorDescription {
@@ -1200,8 +1200,8 @@ public extension Api {
             public init(token: String) {
                 self.token = token
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsGraphAsync", [("token", self.token as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsGraphAsync", [("token", ConstructorParameterDescription(self.token))])
             }
         }
         public class Cons_statsGraphError: TypeConstructorDescription {
@@ -1209,8 +1209,8 @@ public extension Api {
             public init(error: String) {
                 self.error = error
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsGraphError", [("error", self.error as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsGraphError", [("error", ConstructorParameterDescription(self.error))])
             }
         }
         case statsGraph(Cons_statsGraph)
@@ -1244,14 +1244,14 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .statsGraph(let _data):
-                return ("statsGraph", [("flags", _data.flags as Any), ("json", _data.json as Any), ("zoomToken", _data.zoomToken as Any)])
+                return ("statsGraph", [("flags", ConstructorParameterDescription(_data.flags)), ("json", ConstructorParameterDescription(_data.json)), ("zoomToken", ConstructorParameterDescription(_data.zoomToken))])
             case .statsGraphAsync(let _data):
-                return ("statsGraphAsync", [("token", _data.token as Any)])
+                return ("statsGraphAsync", [("token", ConstructorParameterDescription(_data.token))])
             case .statsGraphError(let _data):
-                return ("statsGraphError", [("error", _data.error as Any)])
+                return ("statsGraphError", [("error", ConstructorParameterDescription(_data.error))])
             }
         }
 
@@ -1263,12 +1263,12 @@ public extension Api {
                 _2 = Api.parse(reader, signature: signature) as? Api.DataJSON
             }
             var _3: String?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _3 = parseString(reader)
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_1!) & Int(1 << 0) == 0) || _3 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.StatsGraph.statsGraph(Cons_statsGraph(flags: _1!, json: _2!, zoomToken: _3))
             }
@@ -1313,8 +1313,8 @@ public extension Api {
                 self.kicked = kicked
                 self.banned = banned
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsGroupTopAdmin", [("userId", self.userId as Any), ("deleted", self.deleted as Any), ("kicked", self.kicked as Any), ("banned", self.banned as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsGroupTopAdmin", [("userId", ConstructorParameterDescription(self.userId)), ("deleted", ConstructorParameterDescription(self.deleted)), ("kicked", ConstructorParameterDescription(self.kicked)), ("banned", ConstructorParameterDescription(self.banned))])
             }
         }
         case statsGroupTopAdmin(Cons_statsGroupTopAdmin)
@@ -1333,10 +1333,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .statsGroupTopAdmin(let _data):
-                return ("statsGroupTopAdmin", [("userId", _data.userId as Any), ("deleted", _data.deleted as Any), ("kicked", _data.kicked as Any), ("banned", _data.banned as Any)])
+                return ("statsGroupTopAdmin", [("userId", ConstructorParameterDescription(_data.userId)), ("deleted", ConstructorParameterDescription(_data.deleted)), ("kicked", ConstructorParameterDescription(_data.kicked)), ("banned", ConstructorParameterDescription(_data.banned))])
             }
         }
 
@@ -1371,8 +1371,8 @@ public extension Api {
                 self.userId = userId
                 self.invitations = invitations
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsGroupTopInviter", [("userId", self.userId as Any), ("invitations", self.invitations as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsGroupTopInviter", [("userId", ConstructorParameterDescription(self.userId)), ("invitations", ConstructorParameterDescription(self.invitations))])
             }
         }
         case statsGroupTopInviter(Cons_statsGroupTopInviter)
@@ -1389,10 +1389,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .statsGroupTopInviter(let _data):
-                return ("statsGroupTopInviter", [("userId", _data.userId as Any), ("invitations", _data.invitations as Any)])
+                return ("statsGroupTopInviter", [("userId", ConstructorParameterDescription(_data.userId)), ("invitations", ConstructorParameterDescription(_data.invitations))])
             }
         }
 
@@ -1423,8 +1423,8 @@ public extension Api {
                 self.messages = messages
                 self.avgChars = avgChars
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsGroupTopPoster", [("userId", self.userId as Any), ("messages", self.messages as Any), ("avgChars", self.avgChars as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsGroupTopPoster", [("userId", ConstructorParameterDescription(self.userId)), ("messages", ConstructorParameterDescription(self.messages)), ("avgChars", ConstructorParameterDescription(self.avgChars))])
             }
         }
         case statsGroupTopPoster(Cons_statsGroupTopPoster)
@@ -1442,10 +1442,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .statsGroupTopPoster(let _data):
-                return ("statsGroupTopPoster", [("userId", _data.userId as Any), ("messages", _data.messages as Any), ("avgChars", _data.avgChars as Any)])
+                return ("statsGroupTopPoster", [("userId", ConstructorParameterDescription(_data.userId)), ("messages", ConstructorParameterDescription(_data.messages)), ("avgChars", ConstructorParameterDescription(_data.avgChars))])
             }
         }
 
@@ -1477,8 +1477,8 @@ public extension Api {
                 self.part = part
                 self.total = total
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsPercentValue", [("part", self.part as Any), ("total", self.total as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsPercentValue", [("part", ConstructorParameterDescription(self.part)), ("total", ConstructorParameterDescription(self.total))])
             }
         }
         case statsPercentValue(Cons_statsPercentValue)
@@ -1495,10 +1495,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .statsPercentValue(let _data):
-                return ("statsPercentValue", [("part", _data.part as Any), ("total", _data.total as Any)])
+                return ("statsPercentValue", [("part", ConstructorParameterDescription(_data.part)), ("total", ConstructorParameterDescription(_data.total))])
             }
         }
 
@@ -1525,8 +1525,8 @@ public extension Api {
             public init(url: String) {
                 self.url = url
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("statsURL", [("url", self.url as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("statsURL", [("url", ConstructorParameterDescription(self.url))])
             }
         }
         case statsURL(Cons_statsURL)
@@ -1542,10 +1542,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .statsURL(let _data):
-                return ("statsURL", [("url", _data.url as Any)])
+                return ("statsURL", [("url", ConstructorParameterDescription(_data.url))])
             }
         }
 
@@ -1571,8 +1571,8 @@ public extension Api {
                 self.documentId = documentId
                 self.keyword = keyword
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("stickerKeyword", [("documentId", self.documentId as Any), ("keyword", self.keyword as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("stickerKeyword", [("documentId", ConstructorParameterDescription(self.documentId)), ("keyword", ConstructorParameterDescription(self.keyword))])
             }
         }
         case stickerKeyword(Cons_stickerKeyword)
@@ -1593,10 +1593,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .stickerKeyword(let _data):
-                return ("stickerKeyword", [("documentId", _data.documentId as Any), ("keyword", _data.keyword as Any)])
+                return ("stickerKeyword", [("documentId", ConstructorParameterDescription(_data.documentId)), ("keyword", ConstructorParameterDescription(_data.keyword))])
             }
         }
 
@@ -1627,8 +1627,8 @@ public extension Api {
                 self.emoticon = emoticon
                 self.documents = documents
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("stickerPack", [("emoticon", self.emoticon as Any), ("documents", self.documents as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("stickerPack", [("emoticon", ConstructorParameterDescription(self.emoticon)), ("documents", ConstructorParameterDescription(self.documents))])
             }
         }
         case stickerPack(Cons_stickerPack)
@@ -1649,10 +1649,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .stickerPack(let _data):
-                return ("stickerPack", [("emoticon", _data.emoticon as Any), ("documents", _data.documents as Any)])
+                return ("stickerPack", [("emoticon", ConstructorParameterDescription(_data.emoticon)), ("documents", ConstructorParameterDescription(_data.documents))])
             }
         }
 
@@ -1703,8 +1703,8 @@ public extension Api {
                 self.count = count
                 self.hash = hash
             }
-            public func descriptionFields() -> (String, [(String, Any)]) {
-                return ("stickerSet", [("flags", self.flags as Any), ("installedDate", self.installedDate as Any), ("id", self.id as Any), ("accessHash", self.accessHash as Any), ("title", self.title as Any), ("shortName", self.shortName as Any), ("thumbs", self.thumbs as Any), ("thumbDcId", self.thumbDcId as Any), ("thumbVersion", self.thumbVersion as Any), ("thumbDocumentId", self.thumbDocumentId as Any), ("count", self.count as Any), ("hash", self.hash as Any)])
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("stickerSet", [("flags", ConstructorParameterDescription(self.flags)), ("installedDate", ConstructorParameterDescription(self.installedDate)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("title", ConstructorParameterDescription(self.title)), ("shortName", ConstructorParameterDescription(self.shortName)), ("thumbs", ConstructorParameterDescription(self.thumbs)), ("thumbDcId", ConstructorParameterDescription(self.thumbDcId)), ("thumbVersion", ConstructorParameterDescription(self.thumbVersion)), ("thumbDocumentId", ConstructorParameterDescription(self.thumbDocumentId)), ("count", ConstructorParameterDescription(self.count)), ("hash", ConstructorParameterDescription(self.hash))])
             }
         }
         case stickerSet(Cons_stickerSet)
@@ -1745,10 +1745,10 @@ public extension Api {
             }
         }
 
-        public func descriptionFields() -> (String, [(String, Any)]) {
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .stickerSet(let _data):
-                return ("stickerSet", [("flags", _data.flags as Any), ("installedDate", _data.installedDate as Any), ("id", _data.id as Any), ("accessHash", _data.accessHash as Any), ("title", _data.title as Any), ("shortName", _data.shortName as Any), ("thumbs", _data.thumbs as Any), ("thumbDcId", _data.thumbDcId as Any), ("thumbVersion", _data.thumbVersion as Any), ("thumbDocumentId", _data.thumbDocumentId as Any), ("count", _data.count as Any), ("hash", _data.hash as Any)])
+                return ("stickerSet", [("flags", ConstructorParameterDescription(_data.flags)), ("installedDate", ConstructorParameterDescription(_data.installedDate)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title)), ("shortName", ConstructorParameterDescription(_data.shortName)), ("thumbs", ConstructorParameterDescription(_data.thumbs)), ("thumbDcId", ConstructorParameterDescription(_data.thumbDcId)), ("thumbVersion", ConstructorParameterDescription(_data.thumbVersion)), ("thumbDocumentId", ConstructorParameterDescription(_data.thumbDocumentId)), ("count", ConstructorParameterDescription(_data.count)), ("hash", ConstructorParameterDescription(_data.hash))])
             }
         }
 
@@ -1756,7 +1756,7 @@ public extension Api {
             var _1: Int32?
             _1 = reader.readInt32()
             var _2: Int32?
-            if Int(_1!) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
                 _2 = reader.readInt32()
             }
             var _3: Int64?
@@ -1768,21 +1768,21 @@ public extension Api {
             var _6: String?
             _6 = parseString(reader)
             var _7: [Api.PhotoSize]?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 if let _ = reader.readInt32() {
                     _7 = Api.parseVector(reader, elementSignature: 0, elementType: Api.PhotoSize.self)
                 }
             }
             var _8: Int32?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 _8 = reader.readInt32()
             }
             var _9: Int32?
-            if Int(_1!) & Int(1 << 4) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
                 _9 = reader.readInt32()
             }
             var _10: Int64?
-            if Int(_1!) & Int(1 << 8) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 8) != 0 {
                 _10 = reader.readInt64()
             }
             var _11: Int32?
@@ -1790,15 +1790,15 @@ public extension Api {
             var _12: Int32?
             _12 = reader.readInt32()
             let _c1 = _1 != nil
-            let _c2 = (Int(_1!) & Int(1 << 0) == 0) || _2 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _2 != nil
             let _c3 = _3 != nil
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = _6 != nil
-            let _c7 = (Int(_1!) & Int(1 << 4) == 0) || _7 != nil
-            let _c8 = (Int(_1!) & Int(1 << 4) == 0) || _8 != nil
-            let _c9 = (Int(_1!) & Int(1 << 4) == 0) || _9 != nil
-            let _c10 = (Int(_1!) & Int(1 << 8) == 0) || _10 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _9 != nil
+            let _c10 = (Int(_1 ?? 0) & Int(1 << 8) == 0) || _10 != nil
             let _c11 = _11 != nil
             let _c12 = _12 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 {

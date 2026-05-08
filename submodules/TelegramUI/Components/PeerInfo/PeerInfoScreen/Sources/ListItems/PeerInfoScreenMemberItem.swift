@@ -20,7 +20,7 @@ enum PeerInfoScreenMemberItemAction {
 final class PeerInfoScreenMemberItem: PeerInfoScreenItem {
     let id: AnyHashable
     let context: ItemListPeerItem.Context
-    let enclosingPeer: Peer?
+    let enclosingPeer: EnginePeer?
     let member: PeerInfoMember
     let badge: String?
     let isAccount: Bool
@@ -31,7 +31,7 @@ final class PeerInfoScreenMemberItem: PeerInfoScreenItem {
     init(
         id: AnyHashable,
         context: ItemListPeerItem.Context,
-        enclosingPeer: Peer?,
+        enclosingPeer: EnginePeer?,
         member: PeerInfoMember,
         badge: String? = nil,
         isAccount: Bool,
@@ -147,7 +147,15 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
             case .admin:
                 label = presentationData.strings.GroupInfo_LabelAdmin
             case .member:
-                if item.member.id == item.context.accountPeerId, let enclosingPeer = item.enclosingPeer as? TelegramChannel, enclosingPeer.hasPermission(.editRank) {
+                var canEditRank = false
+                if item.member.id == item.context.accountPeerId {
+                    if case let .channel(channel) = item.enclosingPeer, channel.hasPermission(.editRank) {
+                        canEditRank = true
+                    } else if case let .legacyGroup(group) = item.enclosingPeer, !group.hasBannedPermission(.banEditRank) {
+                        canEditRank = true
+                    }
+                }
+                if canEditRank {
                     label = presentationData.strings.GroupInfo_AddRank
                     labelColor = presentationData.theme.list.itemAccentColor
                 } else {
@@ -170,13 +178,13 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
         let actions = availableActionsForMemberOfPeer(accountPeerId: item.context.accountPeerId, peer: item.enclosingPeer, member: item.member)
         
         var options: [ItemListPeerItemRevealOption] = []
-        if actions.contains(.promote) && item.enclosingPeer is TelegramChannel {
+        if actions.contains(.promote), case .channel = item.enclosingPeer {
             options.append(ItemListPeerItemRevealOption(type: .neutral, title: presentationData.strings.GroupInfo_ActionPromote, action: {
                 item.action?(.promote)
             }))
         }
         if actions.contains(.restrict) {
-            if item.enclosingPeer is TelegramChannel {
+            if case .channel = item.enclosingPeer {
                 options.append(ItemListPeerItemRevealOption(type: .warning, title: presentationData.strings.GroupInfo_ActionRestrict, action: {
                     item.action?(.restrict)
                 }))
@@ -212,7 +220,7 @@ private final class PeerInfoScreenMemberItemNode: PeerInfoScreenItemNode {
             itemText = .presence
         }
         
-        let peerItem = ItemListPeerItem(presentationData: ItemListPresentationData(presentationData), systemStyle: .glass, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, context: item.context, peer: EnginePeer(item.member.peer), height: itemHeight, presence: item.member.presence.flatMap(EnginePeer.Presence.init), text: itemText, label: itemLabel, editing: ItemListPeerItemEditing(editable: !options.isEmpty, editing: false, revealed: nil), revealOptions: ItemListPeerItemRevealOptions(options: options), switchValue: nil, enabled: true, selectable: false, animateFirstAvatarTransition: !item.isAccount, sectionId: 0, action: nil, setPeerIdWithRevealedOptions: { lhs, rhs in
+        let peerItem = ItemListPeerItem(presentationData: ItemListPresentationData(presentationData), systemStyle: .glass, dateTimeFormat: presentationData.dateTimeFormat, nameDisplayOrder: presentationData.nameDisplayOrder, context: item.context, peer: item.member.peer, height: itemHeight, presence: item.member.presence.flatMap(EnginePeer.Presence.init), text: itemText, label: itemLabel, editing: ItemListPeerItemEditing(editable: !options.isEmpty, editing: false, revealed: nil), revealOptions: ItemListPeerItemRevealOptions(options: options), switchValue: nil, enabled: true, selectable: false, animateFirstAvatarTransition: !item.isAccount, sectionId: 0, action: nil, setPeerIdWithRevealedOptions: { lhs, rhs in
             
         }, removePeer: { _ in
             

@@ -4,7 +4,6 @@ import AsyncDisplayKit
 import Display
 import ComponentFlow
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import Markdown
 import TextFormat
@@ -509,6 +508,7 @@ private final class EmojiGameStakeSheetComponent: CombinedComponent {
                         theme: theme,
                         statusBarHeight: environment.statusBarHeight,
                         safeInsets: environment.safeInsets,
+                        inputHeight: 0.0,
                         metrics: environment.metrics,
                         deviceMetrics: environment.deviceMetrics,
                         isDisplaying: environment.value.isVisible,

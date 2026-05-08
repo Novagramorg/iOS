@@ -266,6 +266,7 @@ final class QuickReplySetupScreenComponent: Component {
                         presence: nil,
                         hasUnseenMentions: false,
                         hasUnseenReactions: false,
+                        hasUnseenPollVotes: false,
                         draftState: nil,
                         mediaDraftContentType: nil,
                         inputActivities: nil,
@@ -301,7 +302,7 @@ final class QuickReplySetupScreenComponent: Component {
         }
     }
     
-    private final class ContentListNode: ListView {
+    private final class ContentListNode: ListViewImpl {
         weak var parentView: View?
         let context: AccountContext
         var presentationData: PresentationData
@@ -1063,7 +1064,9 @@ final class QuickReplySetupScreenComponent: Component {
                         let timingFunction: String
                         switch curve {
                         case .easeInOut:
-                            timingFunction = CAMediaTimingFunctionName.easeOut.rawValue
+                            timingFunction = CAMediaTimingFunctionName.easeInEaseOut.rawValue
+                        case .easeIn:
+                            timingFunction = CAMediaTimingFunctionName.easeIn.rawValue
                         case .linear:
                             timingFunction = CAMediaTimingFunctionName.linear.rawValue
                         case .spring:

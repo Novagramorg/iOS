@@ -2067,6 +2067,7 @@
 "StickerPack.Share" = "Share";
 "StickerPack.Send" = "Send Sticker";
 "StickerPack.AddSticker" = "Add Sticker";
+"StickerPack.RemoveStickerSet" = "Remove Sticker Set";
 
 "StickerPack.RemoveStickerCount_1" = "Remove 1 Sticker";
 "StickerPack.RemoveStickerCount_2" = "Remove 2 Stickers";
@@ -2706,6 +2707,7 @@ Unused sets are archived when you add more.";
 "Channel.AdminLog.AddMembers" = "Add Members";
 "Channel.AdminLog.SendPolls" = "Send Polls";
 "Channel.AdminLog.ManageTopics" = "Manage Topics";
+"Channel.AdminLog.SendReactions" = "Send Reactions";
 
 "Channel.AdminLog.CanChangeInfo" = "Change Info";
 "Channel.AdminLog.CanSendMessages" = "Post Messages";
@@ -8771,6 +8773,7 @@ Sorry for the inconvenience.";
 "Premium.CurrentPlan" = "your current plan";
 "Premium.UpgradeFor" = "Upgrade for %@ / month";
 "Premium.UpgradeForAnnual" = "Upgrade for %@ / year";
+"Premium.UpgradeForBiannual" = "Upgrade for %@ / 2 years";
 
 "ChatList.PremiumAnnualDiscountTitle" = "Telegram Premium with a discount of %@";
 "ChatList.PremiumAnnualDiscountText" = "Sign up for the annual payment plan for Telegram Premium now to get the discount.";
@@ -15733,6 +15736,7 @@ Error: %8$@";
 
 "AuthConfirmation.Title" = "Log in to **%@**";
 "AuthConfirmation.Description" = "This site will receive your **name**,\n**username** and **profile photo**.";
+"AuthConfirmation.DescriptionApp" = "This app will receive your **name**,\n**username** and **profile photo**.";
 "AuthConfirmation.Device" = "Device";
 "AuthConfirmation.IpAddress" ="IP Address";
 "AuthConfirmation.Info" ="This login attempt came from the device above.";
@@ -15846,6 +15850,7 @@ Error: %8$@";
 
 "AuthConfirmation.Emoji.Title" = "Tap the emoji shown\non your other device";
 "AuthConfirmation.Emoji.Description" = "Telegram wants to make sure it's really you.";
+"AuthConfirmation.Emoji.DescriptionFirst" = "Telegram wants to make sure it's really you trying to log in to **%@**.";
 
 "Chat.TagPlaceholder" = "Tag";
 
@@ -15891,6 +15896,7 @@ Error: %8$@";
 "GroupPermission.AddException" = "Add Exception";
 
 "GroupInfo.ActionSend" = "Send Message";
+"GroupInfo.ActionAddRank" = "Add Member Tag";
 "GroupInfo.ActionEditRank" = "Edit Member Tag";
 "GroupInfo.ActionEditAdminRank" = "Edit Admin Tag";
 "GroupInfo.ActionEditAdmin" = "Edit Admin Rights";
@@ -15954,3 +15960,349 @@ Error: %8$@";
 "OAUTH_REQUEST" = "Login request for %1$@, location: %2$@";
 
 "GroupInfo.AddRank" = "Add Tag";
+
+"Channel.Management.DismissAdmin" = "Dismiss";
+
+"Attachment.ScanDocument" = "Scan Document";
+
+"Month.NomJanuary" = "January";
+"Month.NomFebruary" = "February";
+"Month.NomMarch" = "March";
+"Month.NomApril" = "April";
+"Month.NomMay" = "May";
+"Month.NomJune" = "June";
+"Month.NomJuly" = "July";
+"Month.NomAugust" = "August";
+"Month.NomSeptember" = "September";
+"Month.NomOctober" = "October";
+"Month.NomNovember" = "November";
+"Month.NomDecember" = "December";
+
+"ChannelMessages.LinkTitle" = "LINK TO DIRECT MESSAGES";
+"Chat.ContactChannel" = "CONTACT CHANNEL";
+
+"TextProcessingStyle.Neutral" = "Neutral";
+
+"Notification.PollAddedOption" = "%1$@ added the option \"%2$@\" to the poll";
+"Notification.PollAddedOptionYou" = "You added the option \"%1$@\" to the poll";
+
+"Notification.PollDeletedOption" = "%1$@ deleted the option \"%2$@\" from the poll";
+"Notification.PollDeletedOptionYou" = "You deleted the option \"%1$@\" from the poll";
+
+"Notification.ManagedBotCreated" = "%@ bot created";
+
+"Chat.PollOptionAddedTimestamp.Date" = "Added by %1$@ %2$@";
+"Chat.PollOptionAddedTimestamp.TodayAt" = "Added by %1$@ today at %2$@";
+"Chat.PollOptionAddedTimestamp.YesterdayAt" = "Added by %1$@ yesterday at %2$@";
+
+"Chat.PollOptionAddedTimestampYou.Date" = "Added by you %1$@";
+"Chat.PollOptionAddedTimestampYou.TodayAt" = "Added by you today at %1$@";
+"Chat.PollOptionAddedTimestampYou.YesterdayAt" = "Added by you yesterday at %1$@";
+
+"MessagePoll.EndsIn" = "ends in %@";
+"MessagePoll.EndsInDays_1" = "ends in %@ day";
+"MessagePoll.EndsInDays_any" = "ends in %@ days";
+
+"MessagePoll.ResultsIn" = "results in %@";
+"MessagePoll.ResultsInDays_1" = "results in %@ day";
+"MessagePoll.ResultsInDays_any" = "results in %@ days";
+
+"Premium.AiTools" = "AI Tools";
+"Premium.AiToolsInfo" = "Transform your messages and entire chats in your preferred style and language.";
+
+"Message.LivePhoto" = "Live Photo";
+
+"Attachment.Sticker" = "Sticker";
+"Attachment.Audio" = "Audio";
+
+"Chat.ReplyPanel.ReplyToPollOption" = "Reply to Poll Option";
+
+"SharedMedia.PollCount_1" = "1 poll";
+"SharedMedia.PollCount_any" = "%@ polls";
+
+"PeerInfo.PanePolls" = "Polls";
+
+"MediaPlayer.SavedMusic.RemoveFromProfileShort" = "Remove from Profile";
+
+"Gift.Store.ShowStarsListings" = "Show listings for stars only";
+"Gift.Store.AllListings" = "All Listings";
+"Gift.Store.StarsOnlyListings" = "For Stars Only";
+
+"MessagePoll.ViewVotes" = "View Votes (%@)";
+"MessagePoll.ViewVote_1" = "%@ vote >";
+"MessagePoll.ViewVote_any" = "%@ votes >";
+"MessagePoll.BackToVote" = "< Vote";
+"MessagePoll.Explanation" = "Explanation";
+
+"Chat.Poll.ReplyToOption" = "Reply to Option";
+"Chat.Poll.VoteOption" = "Vote";
+"Chat.Poll.RetractOptionVote" = "Retract Vote";
+"Chat.Poll.RemoveOption" = "Remove";
+
+"Chat.Poll.ContextMenu.SectionOption" = "Option";
+"Chat.Poll.ContextMenu.SectionPoll" = "Poll";
+"Chat.Poll.ContextMenu.SectionsInfo" = "You're viewing actions for one option.\nYou can switch to actions for the list.";
+
+"CreatePoll.Deadline.Title" = "Deadline";
+"CreatePoll.Deadline.SetDeadline" = "Set Deadline";
+
+"Attachment.File.PollSubtitle.Description" = "Add file to the poll description";
+"Attachment.File.PollSubtitle.Explanation" = "Add file to the quiz explanation";
+
+"Location.PollSubtitle.Description" = "Add location to the poll description";
+"Location.PollSubtitle.Explanation" = "Add location to the quiz explanation";
+"Location.PollSubtitle.PollOption" = "Add location to this option";
+
+"MediaPicker.PollSubtitle.Description" = "Add media to the poll description";
+"MediaPicker.PollSubtitle.Explanation" = "Add media to the quiz explanation";
+"MediaPicker.PollSubtitle.PollOption" = "Add media to this option";
+
+"StickerPicker.Title" = "Sticker";
+"StickerPicker.PollSubtitle.PollOption" = "Add sticker to this option";
+
+"Chat.Poll.HiddenResultsTooltip" = "Results will appear after the poll ends";
+
+"CreatePoll.DescriptionPlaceholder" = "Add Description (optional)";
+"CreatePoll.OptionsTitle" = "OPTIONS";
+
+"CreatePoll.SettingsTitle" = "SETTINGS";
+"CreatePoll.ShowWhoVoted" = "Show Who Voted";
+"CreatePoll.ShowWhoVotedInfo" = "Display voter names on each option";
+"CreatePoll.MultiAnswer" = "Allow Multiple Answers";
+"CreatePoll.MultiAnswerInfo" = "Voters can select more than one option";
+"CreatePoll.AddingOptions" = "Allow Adding Options";
+"CreatePoll.AddingOptionsInfo" = "Participants can suggest new options";
+"CreatePoll.Revoting" = "Allow Revoting";
+"CreatePoll.RevotingInfo" = "Voters can change their vote";
+"CreatePoll.ShuffleOptions" = "Shuffle Options";
+"CreatePoll.ShuffleOptionsInfo" = "Answers appear in random order for each voter";
+"CreatePoll.EnableQuiz" = "Set Correct Answer";
+"CreatePoll.EnableQuizInfo" = "Mark one option as the right answer";
+"CreatePoll.EnableQuizMultiInfo" = "Mark one or more options as the right answer";
+"CreatePoll.LimitDuration" = "Limit Duration";
+"CreatePoll.LimitDurationInfo" = "Automatically close the poll at set time";
+"CreatePoll.LimitDuration.Duration" = "Duration";
+"CreatePoll.LimitDuration.PollEnds" = "Poll Ends";
+"CreatePoll.LimitDuration.HideResults" = "Hide Results";
+"CreatePoll.LimitDuration.HideResultsInfo" = "If you switch this on, results will be visible only after the poll closes.";
+"CreatePoll.MediaUploading.Title" = "Please Wait";
+"CreatePoll.MediaUploading.Text" = "Poll media is still uploading...";
+"CreatePoll.DiscardPoll" = "Discard Poll?";
+
+"CreatePoll.Media.Replace" = "Replace";
+"CreatePoll.Media.Delete" = "Delete";
+"CreatePoll.TimeLimit.Custom" = "Custom";
+
+"MediaPicker.LivePhoto.Live" = "Live";
+"MediaPicker.LivePhoto.Loop" = "Loop";
+"MediaPicker.LivePhoto.Bounce" = "Bounce";
+"MediaPicker.LivePhoto.LiveOff" = "Live Off";
+
+"MediaPicker.LivePhoto.Tooltip.Live" = "Live Photo turned on";
+"MediaPicker.LivePhoto.Tooltip.Loop" = "Live Photo with Loop effect turned on";
+"MediaPicker.LivePhoto.Tooltip.Bounce" = "Live Photo with Bounce effect turned on";
+"MediaPicker.LivePhoto.Tooltip.LiveOff" = "Live Photo turned off";
+
+"AuthConfirmation.UnverifiedApp" = "Unverified App";
+
+"Chat.ManagedBot.CreatedTitle" = "**%@** is ready!";
+"Chat.ManagedBot.CreatedText" = "Tap **Start** below to test your new chatbot. Its behavior is defined by **%@**.";
+"Chat.CreateBotLink" = "Create Bot";
+
+"Chat.InlineTopicMenu.TabAll" = "All";
+
+"CreateBot.Title" = "Create Bot";
+"CreateBot.Text" = "[%@]() wound like to create and manage a chatbot on your behalf.";
+"CreateBot.SectionName" = "BOT NAME";
+"CreateBot.SectionUsername" = "BOT USERNAME";
+"CreateBot.NamePlaceholder" = "Name";
+"CreateBot.UsernameStatus.Checking" = "Checking...";
+"CreateBot.UsernameStatus.Invalid" = "You can only use **a-z**, **0-9** and underscores.";
+"CreateBot.UsernameStatus.Taken" = "This username is already taken.";
+"CreateBot.UsernameStatus.Short" = "A username must have at least 5 characters.";
+"CreateBot.UsernameStatus.Number" = "A username can't start with a number";
+"CreateBot.UsernameStatus.LimitExceeded_1" = "You can't create more than %d bot.";
+"CreateBot.UsernameStatus.LimitExceeded_any" = "You can't create more than %d bots.";
+"CreateBot.UsernameStatus.Link" = "Link: t.me/%@";
+"CreateBot.UnsavedAlert.Title" = "Unsaved Changes";
+"CreateBot.UnsavedAlert.Text" = "You have not finished creating a bot.";
+"CreateBot.UnsavedAlert.Discard" = "Discard";
+"CreateBot.ActionButton" = "Create";
+"CreateBot.InputBadge" = "edit";
+
+"PeerInfo.ManagedBotFooter" = "Created and managed by [@%@]()";
+
+"Conversation.ReadAllPollVotes" = "Read All Poll Votes";
+"Chat.PanelSetBotPhoto" = "Set Profile Photo";
+
+"TextProcessing.TitleEdit" = "AI Editor";
+"TextProcessing.TitleTranslate" = "Translation";
+"TextProcessing.TabTranslate" = "Translate";
+"TextProcessing.TabStylize" = "Style";
+"TextProcessing.TabFix" = "Fix";
+"TextProcessing.ActionTitleNonPremium" = "Increase Limit";
+"TextProcessing.ActionValueNonPremium" = "X50";
+"TextProcessing.ActionApply" = "Apply";
+"TextProcessing.ActionClose" = "Close";
+"TextProcessing.LimitToast.Title" = "Daily limit reached";
+"TextProcessing.LimitToast.Text" = "Get **Telegram Premium** for **50x** more text edits per day.";
+"TextProcessing.Emojify" = "Emojify";
+"TextProcessing.TextExpand" = "more";
+"TextProcessing.TextCollapse" = "less";
+"TextProcessing.Translate.FromLanguage" = "From {}";
+"TextProcessing.Translate.ToLanguage" = "To {}";
+"TextProcessing.OriginalBadge" = "Original:";
+"TextProcessing.OriginalStyleBadge" = "Original";
+"TextProcessing.ResultBadge" = "Result";
+"TextProcessing.Translate.LanguageStyle" = "%1$@ (%2$@)";
+"TextProcessing.StyleTooltip" = "Select Style";
+"TextProcessing.AlertCreatorDeleteStyle.Title" = "Delete Style";
+"TextProcessing.AlertCreatorDeleteStyle.Text" = "Are you sure you want to delete this style? It will be removed for everyone who installed it.";
+"TextProcessing.AlertDeleteStyle.Title" = "Delete Style";
+"TextProcessing.AlertDeleteStyle.Text" = "Are you sure you want to delete this style?";
+"TextProcessing.StyleMenu.Edit" = "Edit Style";
+"TextProcessing.StyleMenu.Share" = "Share Style";
+"TextProcessing.StyleMenu.Delete" = "Delete Style";
+"TextProcessing.StyleMenu.ButtonClose" = "Close";
+"TextProcessing.StyleMenu.ButtonAdd" = "Add Style";
+"TextProcessing.StylePreview.ExampleHeader" = "EXAMPLE";
+"TextProcessing.StylePreview.ExampleHeaderRefresh" = "ANOTHER EXAMPLE";
+"TextProcessing.StylePreview.Subtitle" = "Add this style to instantly\nrewrite your messages.";
+"TextProcessing.StylePreview.Before" = "Before";
+"TextProcessing.StylePreview.After" = "After";
+"TextProcessing.AlertTooManyStyles.Title" = "Too Many Styles";
+"TextProcessing.AlertTooManyStyles.Text" = "Please delete some of your saved styles to create a new one.";
+"TextProcessing.ToastStyleCreated.Title" = "%@ style created!";
+"TextProcessing.ToastStyleCreated.Text" = "Press and hold a style to edit or share the link.";
+"TextProcessing.StyleList.Add" = "Add Style";
+"TextProcessing.StyleFooterAuthor" = "Style by [%@]()";
+"TextProcessing.StyleFooterUserCount_1" = "Used by 1 person";
+"TextProcessing.StyleFooterUserCount_any" = "Used by %d people";
+"TextProcessing.StyleFooterCreatedByFormat" = "%1$@. %2$@";
+"TextProcessing.StyleFooterCreatedBy" = "Created by [%@]()";
+"TextProcessing.StyleFooterCreatedBySimpleFormat" = "%@.";
+"TextProcessing.EditStyle.NamePlaceholder" = "Style Name (for example, \"Pirate\")";
+"TextProcessing.EditStyle.TextPlaceholder" = "Instructions (for example, \"Write like a swashbuckling pirate. Use arr, ye, matey, and talk about treasure, the sea, and rum\")";
+"TextProcessing.EditStyle.TitleCreate" = "New Style";
+"TextProcessing.EditStyle.TitleEdit" = "Edit Style";
+"TextProcessing.EditStyle.ActionCreate" = "Create";
+"TextProcessing.EditStyle.ActionEdit" = "Save";
+"TextProcessing.EditStyle.Delete" = "Delete Style";
+"TextProcessing.EditStyle.AddLink" = "Add a link to my account";
+"TextProcessing.ToastStyleAdded.Title" = "Style Added";
+"TextProcessing.ToastStyleAdded.Text" = "Tap 'AI' → '%@' when typing your next long message.";
+
+"Bot.AlertCanNotCreateBots" = "%@ can't manage other bots.";
+
+"MediaPlayer.PlaylistTitle" = "%@'s Playlist";
+"MediaPlayer.PlaylistYourTitle" = "Your Playlist";
+
+"MediaPlayer.AudioForwardedToSavedMesagesTooltip" = "Audio forwarded to Saved Messages.";
+
+"Attachment.ProfileMusic" = "PROFILE MUSIC";
+"Attachment.ChatsMusic" = "YOUR CHATS";
+"Attachment.PublicMusic" = "PUBLIC CHATS";
+
+"PeerInfo.UnofficialSecurityRisk" = "%@ uses an unofficial Telegram client – messages to this user may be less secure.";
+
+"Gallery.Live" = "LIVE";
+
+"CreatePoll.QuestionNeeded" = "Enter a question";
+"CreatePoll.OptionsNeeded" = "Add at least two options";
+"CreatePoll.OptionsNeededOne" = "Add at least one option";
+"CreatePoll.QuizCorrectOptionNeeded" = "Select a correct option";
+"CreatePoll.QuizCorrectOptionNeededMultiple" = "Select at least one correct option";
+"CreatePoll.QuizCountryNeeded" = "Select at least one country";
+
+"Stars.Intro.Transaction.Commission.Title" = "%@ commission";
+
+"Conversation.ViewPollStats" = "View Statistics";
+"PollStats.Title" = "Poll Stats";
+"PollStats.GraphHeader" = "VOTE TIMELINE";
+
+"CreatePoll.RestrictToSubscribers" = "Restrict to Subscribers";
+"CreatePoll.RestrictToSubscribersInfo" = "Only subscribers who joined 24+ hours ago can vote";
+
+"CreatePoll.LimitCountry" = "Limit by Country";
+"CreatePoll.LimitCountryInfo" = "Only users from selected countries can vote";
+"CreatePoll.AllowedCountries" = "Allowed Countries";
+"CreatePoll.AllowedCountries.Countries_1" = "%@ country";
+"CreatePoll.AllowedCountries.Countries_any" = "%@ countries";
+
+"Chat.Poll.Restriction.Subscribers" = "Only subscribers of **%@** can vote.";
+"Chat.Poll.Restriction.Subscribers.TimeLimit" = "Only subscribers who joined more than **24 hours** ago can vote.";
+"Chat.Poll.Restriction.Country" = "Only users from %@ can vote.";
+"Chat.Poll.Restriction.SubscribersCountry" = "Only subscribers of **%@** from %@ can vote.";
+"Chat.Poll.Restriction.Country.CountriesDelimiter" = ", ";
+"Chat.Poll.Restriction.Country.CountriesLastDelimiter" = " and ";
+
+"Conversation.MessageGuestChatForUser" = "for %@";
+
+"Settings.About.PrivacyHelpEmpty" = "A few words about you.";
+"Settings.About.PrivacyHelpEveryone" = "Everyone can see your bio. [Change >]()";
+"Settings.About.PrivacyHelpContacts" = "Only your contacts can see your bio. [Change >]()";
+"Settings.About.PrivacyHelpNobody" = "Nobody can see your bio. [Change >]()";
+
+"Settings.Birthday.PrivacyHelpEveryone" = "Everyone can see your birthday. [Change >]()";
+"Settings.Birthday.PrivacyHelpContacts" = "Only your contacts can see your birthday. [Change >]()";
+"Settings.Birthday.PrivacyHelpNobody" = "Nobody can see your birthday. [Change >]()";
+
+"GroupPermission.NoSendReactions" = "no reactions";
+"Channel.BanUser.PermissionSendReactions" = "Send Reactions";
+
+"Chat.AdminAction.ToastReactionsDeletedTitleSingle" = "Reaction Deleted";
+"Chat.AdminAction.ToastReactionsDeletedTextSingle" = "Reaction Deleted.";
+"Chat.AdminAction.ToastReactionsDeletedTextMultiple" = "Reactions Deleted.";
+"Chat.AdminAction.ToastMessagesAndReactionsDeletedText" = "Messages and reactions deleted.";
+
+"Premium.SignUp.SignUpNewInfo" = "Get Telegram Premium for %@";
+"Premium.SignUp.SignUpNewInfo.Days_1" = "%@ day";
+"Premium.SignUp.SignUpNewInfo.Days_any" = "%@ days";
+"Premium.SignUp.SignUpNewInfoNone" = "Get Telegram Premium";
+
+"Login.Fee.Support.NewText.Days_1" = "%@ day";
+"Login.Fee.Support.NewText.Days_any" = "%@ days";
+"Login.Fee.Support.NewText" = "Sign up for a %@ Telegram Premium subscription to help cover the SMS costs.";
+"Login.Fee.Support.NewTextNone" = "Sign up for Telegram Premium subscription to help cover the SMS costs.";
+
+"Login.Fee.GetPremiumNone" = "Get Telegram Premium";
+"Login.Fee.GetPremiumForDays" = "Get Telegram Premium for %@";
+"Login.Fee.GetPremiumForDays.Days_1" = "%@ day";
+"Login.Fee.GetPremiumForDays.Days_any" = "%@ days";
+
+"PeerInfo.DeleteReaction" = "Delete Reaction";
+"Chat.DeleteReactionInfo" = "Tap and hold to delete reaction.";
+
+"Chat.AdminActionSheet.DeleteReactionTitle" = "Delete 1 Reaction";
+"Chat.AdminActionSheet.DeleteAllMessages" = "Delete All Messages";
+"Chat.AdminActionSheet.DeleteAllReactions" = "Delete All Reactions";
+
+"Conversation.CalendarSearch.Title" = "Search";
+"Conversation.CalendarSearch.Done" = "Done";
+
+"ScheduleMessage.SilentPosting.YouEnabled" = "You will receive a silent notification";
+"ScheduleMessage.SilentPosting.YouDisabled" = "You will be notified";
+"ScheduleMessage.SilentPosting.UserEnabled" = "%@ will receive a silent notification";
+"ScheduleMessage.SilentPosting.UserDisabled" = "%@ will be notified";
+"ScheduleMessage.SilentPosting.GroupEnabled" = "Members will receive a silent notification";
+"ScheduleMessage.SilentPosting.GroupDisabled" = "Members will be notified";
+"ScheduleMessage.SilentPosting.ChannelEnabled" = "Subscribers will receive a silent notification";
+"ScheduleMessage.SilentPosting.ChannelDisabled" = "Subscribers will be notified";
+
+"Settings.ChatAutomation" = "Chat Automation";
+"Settings.ChatAutomationInfo" = "Add a bot to reply to messages on your behalf.";
+"Settings.ChatAutomationOff" = "Off";
+
+"Chat.SendReactionRestricted" = "You cannot send reactions in this chat.";
+
+"ChatbotSetup.BotInstalled" = "%@ now manages your account.";
+
+"ChatbotSetup.SetupNotCompleted.Title" = "No Bot Added";
+"ChatbotSetup.SetupNotCompleted.Text" = "You haven’t added a bot to manage your account. Leave anyway?";
+"ChatbotSetup.SetupNotCompleted.Leave" = "Leave";
+
+"Chat.SavedMessagesStatusViewAsChats" = "Tap to view as chats";
+"Chat.ToastVoiceMessageDeviceMuted" = "Device is muted.";
+
+"VideoChat.StatusPeerJoined" = "%@ joined";
+"VideoChat.StatusPeerLeft" = "%@ left";

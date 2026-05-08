@@ -134,17 +134,18 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
     private final class ItemContentNode: ASDisplayNode {
         let offsetContainerNode: ASDisplayNode
         var containingItem: ContextControllerTakeViewInfo.ContainingItem
-        
+
         var animateClippingFromContentAreaInScreenSpace: CGRect?
         var storedGlobalFrame: CGRect?
         var storedGlobalBoundsFrame: CGRect?
-        
+        var presentationScale: CGFloat = 1.0
+
         init(containingItem: ContextControllerTakeViewInfo.ContainingItem) {
             self.offsetContainerNode = ASDisplayNode()
             self.containingItem = containingItem
-            
+
             super.init()
-            
+
             self.addSubnode(self.offsetContainerNode)
         }
         
@@ -327,6 +328,7 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
         self.contentRectDebugNode.backgroundColor = UIColor.red.withAlphaComponent(0.2)
         
         self.actionsContainerNode = ASDisplayNode()
+        self.actionsContainerNode.alpha = 0.0
         self.actionsStackNode = ContextControllerActionsStackNodeImpl(
             context: self.context,
             getController: getController,
@@ -632,6 +634,21 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 }
                 let contentNodeValue = ItemContentNode(containingItem: takeInfo.containingItem)
                 contentNodeValue.animateClippingFromContentAreaInScreenSpace = takeInfo.contentAreaInScreenSpace
+
+                // Mirror any ancestor scale on the source (e.g. a sheet's container transform) onto the offset
+                // container so the extracted contents render at the same visual size as in-place — without this
+                // they pop to 1:1 when reparented into the unscaled overlay window.
+                let sourceView = takeInfo.containingItem.view
+                let modeledWidth = sourceView.bounds.width
+                if modeledWidth > 0.001 {
+                    let visualWidth = sourceView.convert(sourceView.bounds, to: nil).width
+                    let detectedScale = visualWidth / modeledWidth
+                    if abs(detectedScale - 1.0) > 0.001 {
+                        contentNodeValue.presentationScale = detectedScale
+                        contentNodeValue.offsetContainerNode.layer.transform = CATransform3DMakeScale(detectedScale, detectedScale, 1.0)
+                    }
+                }
+
                 self.scrollNode.insertSubnode(contentNodeValue, aboveSubnode: self.actionsContainerNode)
                 self.itemContentNode = contentNodeValue
                 itemContentNode = contentNodeValue
@@ -816,7 +833,11 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
         case let .reference(reference):
             if let transitionInfo = reference.transitionInfo() {
                 if let referenceView = transitionInfo.referenceView as? ContextExtractableContainer {
-                    contextExtractableContainer = (referenceView, convertFrame(transitionInfo.referenceView.bounds.inset(by: transitionInfo.insets), from: transitionInfo.referenceView, to: self.view))
+                    if #available(iOS 26.2, *) {
+                        if !"".isEmpty, transitionInfo.referenceView.bounds.width == transitionInfo.referenceView.bounds.height {
+                            contextExtractableContainer = (referenceView, convertFrame(transitionInfo.referenceView.bounds.inset(by: transitionInfo.insets), from: transitionInfo.referenceView, to: self.view))
+                        }
+                    }
                 }
                 
                 contentRect = convertFrame(transitionInfo.referenceView.bounds.inset(by: transitionInfo.insets), from: transitionInfo.referenceView, to: self.view).insetBy(dx: -2.0, dy: 0.0)
@@ -885,6 +906,14 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             } else {
                 return
             }
+        }
+        
+        if contextExtractableContainer != nil {
+            if stateTransition != nil {
+                self.actionsContainerNode.alpha = 1.0
+            }
+        } else {
+            self.actionsContainerNode.alpha = 1.0
         }
         
         var contentParentGlobalFrameOffsetX: CGFloat = 0.0
@@ -1152,6 +1181,13 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             
             if let contentNode = itemContentNode {
                 var contentFrame = CGRect(origin: CGPoint(x: contentParentGlobalFrame.minX + contentRect.minX - contentNode.containingItem.contentRect.minX, y: contentRect.minY - contentNode.containingItem.contentRect.minY + contentVerticalOffset + additionalVisibleOffsetY), size: contentNode.containingItem.view.bounds.size)
+                // contentRect.minY was derived from storedGlobalFrame.maxY (visual) minus contentRect.height (modeled);
+                // when an ancestor scale is in effect those don't cancel cleanly, leaving a (1 - scale) * (cy + ch)
+                // residue that pulls the content upward. Add it back so the content lands at the source's visual Y.
+                if contentNode.presentationScale != 1.0 {
+                    let cr = contentNode.containingItem.contentRect
+                    contentFrame.origin.y += (1.0 - contentNode.presentationScale) * (cr.minY + cr.height)
+                }
                 if case let .extracted(extracted) = self.source {
                     if extracted.adjustContentHorizontally {
                         contentFrame.origin.x = combinedActionsFrame.minX
@@ -1351,21 +1387,9 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             }
             
             if let contextExtractableContainer {
-                let positionTransition = ComponentTransition(animation: .curve(duration: 0.35, curve: .bounce(stiffness: 900.0, damping: 95.0)))
                 let transition = ComponentTransition(animation: .curve(duration: 0.5, curve: .spring))
                 
-                positionTransition.animatePosition(layer: self.actionsContainerNode.layer, from: CGPoint(
-                    x: contextExtractableContainer.sourceRect.midX - self.actionsContainerNode.frame.midX,
-                    y: contextExtractableContainer.sourceRect.midY - self.actionsContainerNode.frame.midY
-                ), to: CGPoint(), additive: true)
-                /*self.actionsContainerNode.layer.animateScale(from: 1.0, to: 1.2, duration: 0.15, timingFunction: CAMediaTimingFunctionName.easeIn.rawValue, completion: { [weak self] _ in
-                    guard let self else {
-                        return
-                    }
-                    self.actionsContainerNode.layer.animateScale(from: 1.2, to: 1.0, duration: 0.15, timingFunction: CAMediaTimingFunctionName.easeOut.rawValue)
-                })*/
-                
-                self.actionsStackNode.animateIn(fromExtractableContainer: contextExtractableContainer.container, transition: transition)
+                self.actionsStackNode.animateIn(fromExtractableContainer: contextExtractableContainer.container, fromRect: contextExtractableContainer.sourceRect.offsetBy(dx: -self.actionsContainerNode.frame.minX, dy: -self.actionsContainerNode.frame.minY), presentationData: presentationData, transition: transition)
             } else {
                 self.actionsContainerNode.layer.animateAlpha(from: 0.0, to: self.actionsContainerNode.alpha, duration: 0.05)
                 self.actionsContainerNode.layer.animateSpring(
@@ -1541,6 +1565,12 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
             switch result {
             case .default, .custom:
                 animationInContentYDistance = currentContentLocalFrame.minY - currentContentScreenFrame.minY
+                // Same modeled-vs-visual mismatch as the static contentFrame compensation: contentRect.minY (used by
+                // currentContentLocalFrame) was derived with modeled height while the source-side reference uses visual
+                // height, leaving a `ch * (1 - scale)` residue that animates the content downward on dismiss.
+                if let contentNode = itemContentNode, contentNode.presentationScale != 1.0 {
+                    animationInContentYDistance += contentNode.containingItem.contentRect.height * (1.0 - contentNode.presentationScale)
+                }
             case .dismissWithoutContent:
                 animationInContentYDistance = 0.0
                 if let contentNode = itemContentNode {
@@ -1719,20 +1749,24 @@ final class ContextControllerExtractedPresentationNode: ASDisplayNode, ContextCo
                 
                 let contextExtractableContainerView = contextExtractableContainer.container
                 
-                positionTransition.setPosition(view: self.actionsContainerNode.view, position: CGPoint(x: contextExtractableContainer.sourceRect.midX, y: contextExtractableContainer.sourceRect.midY), completion: {  _ in
+                /*positionTransition.setPosition(view: self.actionsContainerNode.view, position: CGPoint(x: contextExtractableContainer.sourceRect.midX, y: contextExtractableContainer.sourceRect.midY), completion: {  _ in
                     if completeWithActionStack {
                         restoreOverlayViews.forEach({ $0() })
                         completion()
                     }
-                })
+                })*/
                 
                 positionTransition.attachAnimation(view: self.actionsContainerNode.view, id: "animateOut", completion: { [weak self, weak contextExtractableContainerView] _ in
+                    if completeWithActionStack {
+                        restoreOverlayViews.forEach({ $0() })
+                        completion()
+                    }
                     if let self, let contextExtractableContainerView {
                         self.actionsStackNode.didAnimateOut(toExtractableContainer: contextExtractableContainerView)
                     }
                 })
                 
-                self.actionsStackNode.animateOut(toExtractableContainer: contextExtractableContainer.container, transition: transition)
+                self.actionsStackNode.animateOut(toExtractableContainer: contextExtractableContainer.container, toRect: contextExtractableContainer.sourceRect.offsetBy(dx: -self.actionsContainerNode.frame.minX, dy: -self.actionsContainerNode.frame.minY), presentationData: presentationData, transition: transition)
             } else {
                 self.actionsContainerNode.layer.animateAlpha(from: self.actionsContainerNode.alpha, to: 0.0, duration: duration, removeOnCompletion: false)
                 self.actionsContainerNode.layer.animate(

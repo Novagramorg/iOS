@@ -1,7 +1,6 @@
 import Foundation
 import TelegramPresentationData
 import AccountContext
-import Postbox
 import ChatInterfaceState
 import TelegramCore
 import SwiftSignalKit
@@ -174,7 +173,7 @@ extension ChatControllerImpl {
                                         return state.withUpdatedReplyMessageSubject(ChatInterfaceState.ReplyMessageSubject(
                                             messageId: message.id,
                                             quote: nil,
-                                            todoItemId: nil
+                                            innerSubject: nil
                                         ))
                                     })
                                     if updatedState.inputMode == .none {
@@ -195,7 +194,7 @@ extension ChatControllerImpl {
                                             return ChatInterfaceState.ReplyMessageSubject(
                                                 messageId: id,
                                                 quote: nil,
-                                                todoItemId: nil
+                                                innerSubject: nil
                                             )
                                         })
                                     })
@@ -229,7 +228,7 @@ extension ChatControllerImpl {
                             if replyMessageSubject.messageId == lastMessage?.id {
                                 updatedReplyMessageSubject = nil
                             } else if let message = strongSelf.chatDisplayNode.historyNode.messageInCurrentHistoryView(after: replyMessageSubject.messageId) {
-                                updatedReplyMessageSubject = ChatInterfaceState.ReplyMessageSubject(messageId: message.id, quote: nil, todoItemId: nil)
+                                updatedReplyMessageSubject = ChatInterfaceState.ReplyMessageSubject(messageId: message.id, quote: nil, innerSubject: nil)
                             }
                             
                             strongSelf.updateChatPresentationInterfaceState(interactive: true, { state in

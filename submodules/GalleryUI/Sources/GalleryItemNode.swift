@@ -3,7 +3,6 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import SwiftSignalKit
-import Postbox
 
 public enum GalleryItemNodeNavigationStyle {
     case light
@@ -14,6 +13,7 @@ open class GalleryItemNode: ASDisplayNode {
     public enum ActiveEdge {
         case left
         case right
+        case middle
     }
     
     private var _index: Int?

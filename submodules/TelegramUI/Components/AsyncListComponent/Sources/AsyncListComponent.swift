@@ -465,7 +465,7 @@ public final class AsyncListComponent: Component {
         private var ignoreUpdateVisibleItems: Bool = false
         
         public override init(frame: CGRect) {
-            self.listNode = ListView()
+            self.listNode = ListViewImpl()
             self.listNode.useMainQueueTransactions = true
             self.listNode.scroller.delaysContentTouches = false
             self.listNode.reorderedItemHasShadow = false
@@ -576,7 +576,7 @@ public final class AsyncListComponent: Component {
                 case let .curve(duration, curve):
                     updateSizeAndInsets.duration = duration
                     switch curve {
-                    case .linear, .easeInOut:
+                    case .linear, .easeInOut, .easeIn:
                         updateSizeAndInsets.curve = .Default(duration: duration)
                     case .spring:
                         updateSizeAndInsets.curve = .Spring(duration: duration)

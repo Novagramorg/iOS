@@ -3,7 +3,6 @@ import UIKit
 import Display
 import AccountContext
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import AsyncDisplayKit
 import TelegramStringFormatting
@@ -25,15 +24,21 @@ extension PeerInfoScreenNode {
                     guard let self, let navigationController = self.controller?.navigationController as? NavigationController else {
                         return
                     }
-                    self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(EnginePeer(member.peer))))
+                    self.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigationController, context: self.context, chatLocation: .peer(member.peer)))
                 }
             })))
         }
         
         if actions.contains(.editRank) {
-            var actionTitle: String = self.presentationData.strings.GroupInfo_ActionEditRank
+            let actionTitle: String
             if case .admin = member.role {
                 actionTitle = self.presentationData.strings.GroupInfo_ActionEditAdminRank
+            } else {
+                if let rank = member.rank, !rank.isEmpty {
+                    actionTitle = self.presentationData.strings.GroupInfo_ActionEditRank
+                } else {
+                    actionTitle = self.presentationData.strings.GroupInfo_ActionAddRank
+                }
             }
             items.append(.action(ContextMenuActionItem(text: actionTitle, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Tag"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                 c?.dismiss {
@@ -45,7 +50,7 @@ extension PeerInfoScreenNode {
             })))
         }
         
-        if actions.contains(.promote) && enclosingPeer is TelegramChannel {
+        if actions.contains(.promote), case .channel = enclosingPeer {
             var actionTitle: String = self.presentationData.strings.GroupInfo_ActionPromote
             if case .admin = member.role {
                 actionTitle = self.presentationData.strings.GroupInfo_ActionEditAdmin
@@ -61,7 +66,7 @@ extension PeerInfoScreenNode {
         }
         
         if actions.contains(.restrict) {
-            if enclosingPeer is TelegramChannel {
+            if case .channel = enclosingPeer {
                 items.append(.action(ContextMenuActionItem(text: self.presentationData.strings.GroupInfo_ActionRestrict, icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Restrict"), color: theme.contextMenu.primaryColor) }, action: { [weak self] c, _ in
                     c?.dismiss {
                         guard let self else {

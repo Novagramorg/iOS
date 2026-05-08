@@ -1,9 +1,7 @@
 import Foundation
 import UIKit
-import Postbox
 import SwiftSignalKit
 import AsyncDisplayKit
-import Postbox
 import TelegramCore
 import Display
 import TelegramUIPreferences
@@ -18,6 +16,7 @@ import TextFormat
 import WallpaperBackgroundNode
 import AnimationCache
 import MultiAnimationRenderer
+import Postbox
 
 public struct ChatInterfaceHighlightedState: Equatable {
     public struct Quote: Equatable {
@@ -32,12 +31,12 @@ public struct ChatInterfaceHighlightedState: Equatable {
     
     public let messageStableId: UInt32
     public let quote: Quote?
-    public let todoTaskId: Int32?
+    public let subject: EngineMessageReplyInnerSubject?
     
-    public init(messageStableId: UInt32, quote: Quote?, todoTaskId: Int32?) {
+    public init(messageStableId: UInt32, quote: Quote?, subject: EngineMessageReplyInnerSubject?) {
         self.messageStableId = messageStableId
         self.quote = quote
-        self.todoTaskId = todoTaskId
+        self.subject = subject
     }
 }
 
@@ -96,18 +95,18 @@ public struct NavigateToMessageParams {
             self.offset = offset
         }
     }
-    
+        
     public var timestamp: Double?
     public var quote: Quote?
-    public var todoTaskId: Int32?
+    public var subject: EngineMessageReplyInnerSubject?
     public var progress: Promise<Bool>?
     public var forceNew: Bool
     public var setupReply: Bool
     
-    public init(timestamp: Double?, quote: Quote?, todoTaskId: Int32? = nil, progress: Promise<Bool>? = nil, forceNew: Bool = false, setupReply: Bool = false) {
+    public init(timestamp: Double? = nil, quote: Quote? = nil, subject: EngineMessageReplyInnerSubject? = nil, progress: Promise<Bool>? = nil, forceNew: Bool = false, setupReply: Bool = false) {
         self.timestamp = timestamp
         self.quote = quote
-        self.todoTaskId = todoTaskId
+        self.subject = subject
         self.progress = progress
         self.forceNew = forceNew
         self.setupReply = setupReply
@@ -116,12 +115,12 @@ public struct NavigateToMessageParams {
 
 public struct OpenMessageParams {
     public var mode: ChatControllerInteractionOpenMessageMode
-    public var mediaIndex: Int?
+    public var mediaSubject: GalleryMediaSubject?
     public var progress: Promise<Bool>?
     
-    public init(mode: ChatControllerInteractionOpenMessageMode, mediaIndex: Int? = nil, progress: Promise<Bool>? = nil) {
+    public init(mode: ChatControllerInteractionOpenMessageMode, mediaSubject: GalleryMediaSubject? = nil, progress: Promise<Bool>? = nil) {
         self.mode = mode
-        self.mediaIndex = mediaIndex
+        self.mediaSubject = mediaSubject
         self.progress = progress
     }
 }
@@ -164,13 +163,20 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         public var contentNode: ContextExtractedContentContainingNode?
         public var messageNode: ASDisplayNode?
         public var progress: Promise<Bool>?
+        public var gesture: TapLongTapOrDoubleTapGestureRecognizer?
         
-        public init(message: Message? = nil, contentNode: ContextExtractedContentContainingNode? = nil, messageNode: ASDisplayNode? = nil, progress: Promise<Bool>? = nil) {
+        public init(message: Message? = nil, contentNode: ContextExtractedContentContainingNode? = nil, messageNode: ASDisplayNode? = nil, progress: Promise<Bool>? = nil, gesture: TapLongTapOrDoubleTapGestureRecognizer? = nil) {
             self.message = message
             self.contentNode = contentNode
             self.messageNode = messageNode
             self.progress = progress
+            self.gesture = gesture
         }
+    }
+    
+    public enum PollMediaSubject {
+        case option(TelegramMediaPollOption)
+        case solution(TelegramMediaPollResults.Solution)
     }
     
     public let openMessage: (Message, OpenMessageParams) -> Bool
@@ -207,6 +213,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let openHashtag: (String?, String) -> Void
     public let updateInputState: ((ChatTextInputState) -> ChatTextInputState) -> Void
     public let updateInputMode: ((ChatInputMode) -> ChatInputMode) -> Void
+    public let updatePresentationState: ((ChatPresentationInterfaceState) -> ChatPresentationInterfaceState) -> Void
     public let openMessageShareMenu: (MessageId) -> Void
     public let presentController: (ViewController, Any?) -> Void
     public let presentControllerInCurrent: (ViewController, Any?) -> Void
@@ -217,6 +224,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let openConferenceCall: (Message) -> Void
     public let longTap: (ChatControllerInteractionLongTapAction, LongTapParams?) -> Void
     public let todoItemLongTap: (Int32, LongTapParams?) -> Void
+    public let pollOptionLongTap: (Data, LongTapParams?) -> Void
     public let openCheckoutOrReceipt: (MessageId, OpenMessageParams?) -> Void
     public let openSearch: () -> Void
     public let setupReply: (MessageId) -> Void
@@ -227,6 +235,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let addContact: (String) -> Void
     public let rateCall: (Message, CallId, Bool) -> Void
     public let requestSelectMessagePollOptions: (MessageId, [Data]) -> Void
+    public let requestAddMessagePollOption: (MessageId, String, [MessageTextEntity], Data, AnyMediaReference?) -> Void
     public let requestOpenMessagePollResults: (MessageId, MediaId) -> Void
     public let openAppStorePage: () -> Void
     public let displayMessageTooltip: (MessageId, String, Bool, ASDisplayNode?, CGRect?) -> Void
@@ -234,13 +243,14 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let scheduleCurrentMessage: (ChatSendMessageActionSheetController.SendParameters?) -> Void
     public let sendScheduledMessagesNow: ([MessageId]) -> Void
     public let editScheduledMessagesTime: ([MessageId]) -> Void
-    public let performTextSelectionAction: (Message?, Bool, NSAttributedString, TextSelectionAction) -> Void
+    public let performTextSelectionAction: (Message?, Bool, NSAttributedString, [MessageTextEntity]?, TextSelectionAction) -> Void
     public let displayImportedMessageTooltip: (ASDisplayNode) -> Void
     public let displaySwipeToReplyHint: () -> Void
     public let dismissReplyMarkupMessage: (Message) -> Void
     public let openMessagePollResults: (MessageId, Data) -> Void
     public let openPollCreation: (Bool?) -> Void
-    public let displayPollSolution: (TelegramMediaPollResults.Solution, ASDisplayNode) -> Void
+    public let openPollMedia: (Message, PollMediaSubject) -> Void
+    public let displayPollSolution: (TelegramMediaPollResults.Solution?, ASDisplayNode?) -> Void
     public let displayPsa: (String, ASDisplayNode) -> Void
     public let displayDiceTooltip: (TelegramMediaDice) -> Void
     public let animateDiceSuccess: (Bool, Bool) -> Void
@@ -292,6 +302,8 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public let displayTodoToggleUnavailable: (MessageId) -> Void
     public let openStarsPurchase: (Int64?) -> Void
     public let openRankInfo: (EnginePeer, ChatRankInfoScreenRole, String) -> Void
+    public let openSetPeerAvatar: () -> Void
+    public let displayPollRestrictedToast: (EngineMessage.Id) -> Void
     
     public var canPlayMedia: Bool = false
     public var hiddenMedia: [MessageId: [Media]] = [:]
@@ -316,7 +328,8 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
     public var chatIsRotated: Bool = true
     public var canReadHistory: Bool = false
     public var summarizedMessageIds: Set<MessageId> = Set()
-    
+    public var focusedTextInputIsMedia: Bool = false
+    public var focusedPollAddOptionMessageId: MessageId?
     
     private var isOpeningMediaValue: Bool = false
     public var isOpeningMedia: Bool {
@@ -378,6 +391,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         openHashtag: @escaping (String?, String) -> Void,
         updateInputState: @escaping ((ChatTextInputState) -> ChatTextInputState) -> Void,
         updateInputMode: @escaping ((ChatInputMode) -> ChatInputMode) -> Void,
+        updatePresentationState: @escaping ((ChatPresentationInterfaceState) -> ChatPresentationInterfaceState) -> Void,
         openMessageShareMenu: @escaping (MessageId) -> Void,
         presentController: @escaping (ViewController, Any?) -> Void,
         presentControllerInCurrent: @escaping (ViewController, Any?) -> Void,
@@ -388,6 +402,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         openConferenceCall: @escaping (Message) -> Void,
         longTap: @escaping (ChatControllerInteractionLongTapAction, LongTapParams?) -> Void,
         todoItemLongTap: @escaping (Int32, LongTapParams?) -> Void,
+        pollOptionLongTap: @escaping (Data, LongTapParams?) -> Void,
         openCheckoutOrReceipt: @escaping (MessageId, OpenMessageParams?) -> Void,
         openSearch: @escaping () -> Void,
         setupReply: @escaping (MessageId) -> Void,
@@ -398,6 +413,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         addContact: @escaping (String) -> Void,
         rateCall: @escaping (Message, CallId, Bool) -> Void,
         requestSelectMessagePollOptions: @escaping (MessageId, [Data]) -> Void,
+        requestAddMessagePollOption: @escaping (MessageId, String, [MessageTextEntity], Data, AnyMediaReference?) -> Void,
         requestOpenMessagePollResults: @escaping (MessageId, MediaId) -> Void,
         openAppStorePage: @escaping () -> Void,
         displayMessageTooltip: @escaping (MessageId, String, Bool, ASDisplayNode?, CGRect?) -> Void,
@@ -405,13 +421,14 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         scheduleCurrentMessage: @escaping (ChatSendMessageActionSheetController.SendParameters?) -> Void,
         sendScheduledMessagesNow: @escaping ([MessageId]) -> Void,
         editScheduledMessagesTime: @escaping ([MessageId]) -> Void,
-        performTextSelectionAction: @escaping (Message?, Bool, NSAttributedString, TextSelectionAction) -> Void,
+        performTextSelectionAction: @escaping (Message?, Bool, NSAttributedString, [MessageTextEntity]?, TextSelectionAction) -> Void,
         displayImportedMessageTooltip: @escaping (ASDisplayNode) -> Void,
         displaySwipeToReplyHint: @escaping () -> Void,
         dismissReplyMarkupMessage: @escaping (Message) -> Void,
         openMessagePollResults: @escaping (MessageId, Data) -> Void,
         openPollCreation: @escaping (Bool?) -> Void,
-        displayPollSolution: @escaping (TelegramMediaPollResults.Solution, ASDisplayNode) -> Void,
+        openPollMedia: @escaping (Message, PollMediaSubject) -> Void,
+        displayPollSolution: @escaping (TelegramMediaPollResults.Solution?, ASDisplayNode?) -> Void,
         displayPsa: @escaping (String, ASDisplayNode) -> Void,
         displayDiceTooltip: @escaping (TelegramMediaDice) -> Void,
         animateDiceSuccess: @escaping (Bool, Bool) -> Void,
@@ -463,6 +480,8 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         displayTodoToggleUnavailable: @escaping (MessageId) -> Void,
         openStarsPurchase: @escaping (Int64?) -> Void,
         openRankInfo: @escaping (EnginePeer, ChatRankInfoScreenRole, String) -> Void,
+        openSetPeerAvatar: @escaping () -> Void,
+        displayPollRestrictedToast: @escaping (EngineMessage.Id) -> Void,
         automaticMediaDownloadSettings: MediaAutoDownloadSettings,
         pollActionState: ChatInterfacePollActionState,
         stickerSettings: ChatInterfaceStickerSettings,
@@ -502,6 +521,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         self.openHashtag = openHashtag
         self.updateInputState = updateInputState
         self.updateInputMode = updateInputMode
+        self.updatePresentationState = updatePresentationState
         self.openMessageShareMenu = openMessageShareMenu
         self.presentController = presentController
         self.presentControllerInCurrent = presentControllerInCurrent
@@ -512,6 +532,7 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         self.openConferenceCall = openConferenceCall
         self.longTap = longTap
         self.todoItemLongTap = todoItemLongTap
+        self.pollOptionLongTap = pollOptionLongTap
         self.openCheckoutOrReceipt = openCheckoutOrReceipt
         self.openSearch = openSearch
         self.setupReply = setupReply
@@ -522,8 +543,10 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         self.addContact = addContact
         self.rateCall = rateCall
         self.requestSelectMessagePollOptions = requestSelectMessagePollOptions
+        self.requestAddMessagePollOption = requestAddMessagePollOption
         self.requestOpenMessagePollResults = requestOpenMessagePollResults
         self.openPollCreation = openPollCreation
+        self.openPollMedia = openPollMedia
         self.displayPollSolution = displayPollSolution
         self.displayPsa = displayPsa
         self.openAppStorePage = openAppStorePage
@@ -588,6 +611,8 @@ public final class ChatControllerInteraction: ChatControllerInteractionProtocol 
         self.displayTodoToggleUnavailable = displayTodoToggleUnavailable
         self.openStarsPurchase = openStarsPurchase
         self.openRankInfo = openRankInfo
+        self.openSetPeerAvatar = openSetPeerAvatar
+        self.displayPollRestrictedToast = displayPollRestrictedToast
         
         self.automaticMediaDownloadSettings = automaticMediaDownloadSettings
         

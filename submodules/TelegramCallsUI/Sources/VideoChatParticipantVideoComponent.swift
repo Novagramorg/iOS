@@ -213,6 +213,10 @@ final class VideoChatParticipantVideoComponent: Component {
         private var referenceLocation: ReferenceLocation?
         private var loadingEffectView: VideoChatVideoLoadingEffectView?
         
+        public var isPinchToZoomActive: Bool {
+            return self.pinchContainerNode.isActive
+        }
+        
         override init(frame: CGRect) {
             self.backgroundGradientView = UIImageView()
             self.pinchContainerNode = PinchSourceContainerNode()
@@ -346,7 +350,7 @@ final class VideoChatParticipantVideoComponent: Component {
                 
                 if self.blurredAvatarDisposable == nil {
                     //TODO:release synchronous
-                    if let participantPeer = component.participant.peer, let imageCache = component.call.accountContext.imageCache as? DirectMediaImageCache, let peerReference = PeerReference(participantPeer._asPeer()) {
+                    if let participantPeer = component.participant.peer, let imageCache = component.call.accountContext.imageCache as? DirectMediaImageCache, let peerReference = PeerReference(participantPeer) {
                         if let result = imageCache.getAvatarImage(peer: peerReference, resource: MediaResourceReference.avatar(peer: peerReference, resource: smallProfileImage.resource), immediateThumbnail: participantPeer.profileImageRepresentations.first?.immediateThumbnailData, size: 64, synchronous: false) {
                             if let image = result.image {
                                 blurredAvatarView.image = blurredAvatarImage(image)

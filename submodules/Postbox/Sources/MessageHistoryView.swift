@@ -835,6 +835,7 @@ final class MutableMessageHistoryView: MutablePostboxView {
         }
         
         var updatedCachedPeerDataMessages = false
+        var updatedCachedPeerDataPeers = false
         var currentCachedPeerData: CachedPeerData?
         
         let additionalDatas = self.additionalDatas
@@ -848,11 +849,16 @@ final class MutableMessageHistoryView: MutablePostboxView {
                     if currentData?.messageIds != updatedData.messageIds {
                         updatedCachedPeerDataMessages = true
                     }
+                    if currentData?.peerIds != updatedData.peerIds {
+                        updatedCachedPeerDataPeers = true
+                    }
                     currentCachedPeerData = updatedData
                     updated[i] = .cachedPeerData(peerId, updatedData)
                     hasChanges = true
                 }
             case .cachedPeerDataMessages:
+                break
+            case .cachedPeerDataPeers:
                 break
             case let .message(id, currentMessages):
                 let currentGroupingKey = currentMessages.first?.groupingKey
@@ -992,6 +998,25 @@ final class MutableMessageHistoryView: MutablePostboxView {
                 }
             }
         }
+        if updatedCachedPeerDataPeers {
+            hasChanges = true
+            for i in 0 ..< additionalDatas.count {
+                switch additionalDatas[i] {
+                case let .cachedPeerDataPeers(peerId, _):
+                    var peers: [PeerId: Peer] = [:]
+                    if let cachedData = currentCachedPeerData {
+                        for id in cachedData.peerIds {
+                            if let peer = postbox.peerTable.get(id) {
+                                peers[id] = peer
+                            }
+                        }
+                    }
+                    updated[i] = .cachedPeerDataPeers(peerId, peers)
+                default:
+                    break
+                }
+            }
+        }
         
         self.additionalDatas = updated
         
@@ -1044,28 +1069,30 @@ final class MutableMessageHistoryView: MutablePostboxView {
             }
         }
         
-        switch self.peerIds {
-        case let .single(peerId, threadId):
-            let location = PeerAndThreadId(peerId: peerId, threadId: threadId)
-            if let typingDraftUpdate = transaction.updatedTypingDrafts[location] {
-                if let typingDraft = typingDraftUpdate.value, self.namespaces.contains(typingDraft.namespace) {
-                    self.typingDraft = self.renderTypingDraft(postbox: postbox, typingDraft: typingDraft)
-                } else {
-                    self.typingDraft = nil
+        if self.tag == nil {
+            switch self.peerIds {
+            case let .single(peerId, threadId):
+                let location = PeerAndThreadId(peerId: peerId, threadId: threadId)
+                if let typingDraftUpdate = transaction.updatedTypingDrafts[location] {
+                    if let typingDraft = typingDraftUpdate.value, self.namespaces.contains(typingDraft.namespace) {
+                        self.typingDraft = self.renderTypingDraft(postbox: postbox, typingDraft: typingDraft)
+                    } else {
+                        self.typingDraft = nil
+                    }
+                    hasChanges = true
                 }
-                hasChanges = true
+            case .external:
+                break
+            case .associated:
+                break
             }
-        case .external:
-            break
-        case .associated:
-            break
         }
         
         return hasChanges
     }
     
     private func reloadTypingDraft(postbox: PostboxImpl) {
-        guard case let .single(peerId, threadId) = self.peerIds else {
+        guard case let .single(peerId, threadId) = self.peerIds, self.tag == nil else {
             self.typingDraft = nil
             return
         }
@@ -1295,6 +1322,10 @@ public final class MessageHistoryView: PostboxView {
     }
     
     init(_ mutableView: MutableMessageHistoryView) {
+        if case .external = mutableView.peerIds, mutableView.tag == nil, case .not = mutableView.namespaces {
+            assert(true)
+        }
+        
         self.tag = mutableView.tag
         self.namespaces = mutableView.namespaces
         self.isAddedToChatList = mutableView.isAddedToChatList
