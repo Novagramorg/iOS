@@ -500,7 +500,9 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.blockApkFiles(presentationData.theme, "APK fayllarni bloklash", "Chatlarda .apk fayllarni yashirish (Android dasturlari)", state.blockApkFiles))
     entries.append(.protectionFooter(presentationData.theme, "Spam va zararli kontentdan himoya."))
 
-    return entries
+    // ItemListController entries should arrive in stableId order to avoid an
+    // assertion. Section visual order is controlled by stableId numbering.
+    return entries.sorted()
 }
 
 private final class FenixSettingsArguments {
