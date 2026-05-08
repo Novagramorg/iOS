@@ -250,6 +250,68 @@ PYEOF
 
 ok "Konfiguratsiya repository tayyor"
 
+# ─── Step 2.5: Pre-flight check for real-device provisioning profiles ────────
+if [ "$MODE" = "real" ]; then
+    step "Provisioning profillar tekshirilmoqda..."
+    PROV_DIR="$SCRIPT_DIR/build-input/configuration-repository/provisioning"
+    PROV_OK=1
+
+    # Check that the main Telegram.mobileprovision belongs to Vipads team and
+    # references the uz.fenixuz.dev bundle ID. If not (i.e. the leftover
+    # leaked Telegram FZ-LLC profile is still here), refuse to build.
+    if [ ! -f "$PROV_DIR/Telegram.mobileprovision" ]; then
+        warn "Telegram.mobileprovision topilmadi"
+        PROV_OK=0
+    else
+        # Decode the embedded plist and check team_id + app-id
+        PROV_PLIST=$(security cms -D -i "$PROV_DIR/Telegram.mobileprovision" 2>/dev/null)
+        PROV_TEAM=$(echo "$PROV_PLIST" | python3 -c "
+import sys, plistlib
+try:
+    p = plistlib.loads(sys.stdin.read().encode())
+    print((p.get('TeamIdentifier') or [''])[0])
+except Exception:
+    pass
+" 2>/dev/null)
+        PROV_APP_ID=$(echo "$PROV_PLIST" | python3 -c "
+import sys, plistlib
+try:
+    p = plistlib.loads(sys.stdin.read().encode())
+    ent = p.get('Entitlements', {})
+    print(ent.get('application-identifier', ''))
+except Exception:
+    pass
+" 2>/dev/null)
+
+        if [ "$PROV_TEAM" != "$VIPADS_TEAM_ID" ] || [[ "$PROV_APP_ID" != *"uz.fenixuz.dev" ]]; then
+            warn "Joriy profil Vipads emas:  team=$PROV_TEAM, app-id=$PROV_APP_ID"
+            PROV_OK=0
+        fi
+    fi
+
+    if [ "$PROV_OK" = "0" ]; then
+        echo ""
+        echo -e "${RED}Vipads MCHJ uchun provisioning profillari topilmadi.${NC}"
+        echo ""
+        echo "Bir marotabalik manual sozlash kerak (~25-35 daqiqa)."
+        echo "To'liq qo'llanma:"
+        echo ""
+        echo -e "    ${BLUE}REAL_DEVICE_SETUP.md${NC}"
+        echo ""
+        echo "Qisqacha tartib:"
+        echo "  1. https://developer.apple.com/account → Vipads MCHJ team"
+        echo "  2. App Group yarating:  group.uz.fenixuz.dev"
+        echo "  3. 7 ta Bundle ID register qiling (uz.fenixuz.dev[.Widget|.Share|...])"
+        echo "  4. iPhone UDID qo'shing:  3BFC6F79-5233-5749-90A3-3D5E512DD737"
+        echo "  5. 7 ta Development provisioning profile yarating va yuklab oling"
+        echo "  6. REAL_DEVICE_SETUP.md'dagi 'cp' buyruqlari bilan ko'chiring"
+        echo "  7. ./run.sh -r ni qaytadan ishga tushiring"
+        echo ""
+        err "Setup tugagunicha real device build mumkin emas."
+    fi
+    ok "Vipads profillari mavjud (team: $PROV_TEAM)"
+fi
+
 # ─── Step 3: Bazel build ──────────────────────────────────────────────────────
 if [ "$MODE" = "simulator" ]; then
     step "Bazel build (debug_sim_arm64, simulator)..."
