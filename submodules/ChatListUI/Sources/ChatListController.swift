@@ -279,7 +279,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 
         super.init(context: context, navigationBarPresentationData: nil)
         
-        NotificationCenter.default.addObserver(self, selector: #selector(self.proMessagerSettingsChanged), name: NSNotification.Name("ProMessagerSettingsChanged"), object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(self.proMessagerSettingsChanged), name: NSNotification.Name("FenixSettingsChanged"), object: nil)
         
         self.accessoryPanelContainer = ASDisplayNode()
         
@@ -6720,7 +6720,7 @@ private final class ChatListLocationContext {
         self.location = location
         self.parentController = parentController
         
-        self.ghostModeObserver = NotificationCenter.default.addObserver(forName: NSNotification.Name("ProMessagerSettingsChanged"), object: nil, queue: .main) { [weak self] _ in
+        self.ghostModeObserver = NotificationCenter.default.addObserver(forName: NSNotification.Name("FenixSettingsChanged"), object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             self.updateGhostModeButton()
             self.parentController?.requestLayout(transition: .animated(duration: 0.2, curve: .spring))
