@@ -5,6 +5,7 @@ import TelegramCore
 import TelegramPresentationData
 import MergeLists
 import AccountContext
+import FenixuzForeignUserBlock
 
 enum ChatListNodeEntryId: Hashable {
     case Header

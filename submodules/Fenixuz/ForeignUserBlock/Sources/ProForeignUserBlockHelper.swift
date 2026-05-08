@@ -7,7 +7,7 @@ import AccountContext
 /// Misol: "998901234567" -> "998", "79001234567" -> "7", "14155551234" -> "1"
 ///
 /// Bu funksiya eng uzun moslikni qidiradi (longest prefix match).
-func extractCountryCallingCode(from phoneNumber: String) -> String? {
+public func extractCountryCallingCode(from phoneNumber: String) -> String? {
     // Raqamni tozalash — faqat raqamlarni qoldirish
     let digits = phoneNumber.filter { $0.isNumber }
     guard !digits.isEmpty else { return nil }
@@ -224,7 +224,7 @@ func extractCountryCallingCode(from phoneNumber: String) -> String? {
 
 /// Ikki foydalanuvchining telefon raqamlari bir davlatga tegishli ekanligini tekshiradi.
 /// Agar biror raqam yo'q bo'lsa yoki country code aniqlanmasa false qaytaradi (bloklash kerak).
-func arePhoneNumbersFromSameCountry(_ phone1: String?, _ phone2: String?) -> Bool {
+public func arePhoneNumbersFromSameCountry(_ phone1: String?, _ phone2: String?) -> Bool {
     guard let p1 = phone1, let p2 = phone2 else {
         // Agar biror raqam yo'q bo'lsa — himoya sifatida bloklash
         return false
@@ -240,7 +240,7 @@ func arePhoneNumbersFromSameCountry(_ phone1: String?, _ phone2: String?) -> Boo
 
 /// Berilgan peer foreign user (boshqa davlat raqamli) ekanligini tekshiradi.
 /// Faqat 1:1 shaxsiy chatlar uchun ishlaydi (guruh, kanal, bot uchun false qaytaradi).
-func isForeignUser(peer: Peer?, myPhone: String?) -> Bool {
+public func isForeignUser(peer: Peer?, myPhone: String?) -> Bool {
     guard let user = peer as? TelegramUser else {
         // Guruh, kanal yoki bot emas — cheklov qo'llanilmaydi
         return false

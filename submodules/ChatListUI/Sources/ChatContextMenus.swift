@@ -10,6 +10,7 @@ import TelegramUIPreferences
 import OverlayStatusController
 import AlertUI
 import PresentationDataUtils
+import FenixuzChatLock
 import UndoUI
 import PremiumUI
 import TelegramPresentationData

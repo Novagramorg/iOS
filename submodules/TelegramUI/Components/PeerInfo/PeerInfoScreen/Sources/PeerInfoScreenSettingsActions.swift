@@ -17,6 +17,7 @@ import PresentationDataUtils
 import PasswordSetupUI
 import InstantPageCache
 import ContactListUI
+import FenixuzProMessager
 
 extension PeerInfoScreenNode {
     func openSettings(section: PeerInfoSettingsSection) {

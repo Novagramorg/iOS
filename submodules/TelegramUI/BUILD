@@ -52,6 +52,9 @@ swift_library(
         # AI tab hidden from UI — uncomment to re-enable
         # "//submodules/Fenixuz/AIChatbot:FenixuzAIChatbot",
         "//submodules/Fenixuz/Tasks:FenixuzTasks",
+        "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
+        "//submodules/Fenixuz/ForeignUserBlock:FenixuzForeignUserBlock",
+        "//submodules/Fenixuz/EditedHistory:FenixuzEditedHistory",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",

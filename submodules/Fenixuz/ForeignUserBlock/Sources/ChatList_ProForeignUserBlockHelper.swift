@@ -2,7 +2,7 @@ import Foundation
 
 /// ChatListUI modul uchun country code extraction (TelegramUI modulidagi nusxasi).
 /// Telefon raqamidan davlat kodini ajratadi: "998901234567" -> "998"
-func proExtractCountryCode(from digits: String) -> String? {
+public func proExtractCountryCode(from digits: String) -> String? {
     guard !digits.isEmpty else { return nil }
     
     // 3 raqamli kodlar (eng ko'p ishlatiluvchi)

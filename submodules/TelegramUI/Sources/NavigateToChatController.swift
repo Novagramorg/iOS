@@ -21,6 +21,7 @@ import SavedMessagesScreen
 import WallpaperGalleryScreen
 import ChatMessageNotificationItem
 import FaceScanScreen
+import FenixuzChatLock
 
 /// Temporarily set to a peerId after successful pincode verification so the
 /// recursive navigateToChatControllerImpl call bypasses the lock gate.

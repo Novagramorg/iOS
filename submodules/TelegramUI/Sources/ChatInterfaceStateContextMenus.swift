@@ -37,6 +37,7 @@ import ChatMessageItemView
 import ChatMessageBubbleItemNode
 import AdsInfoScreen
 import AdsReportScreen
+import FenixuzEditedHistory
  
 private struct MessageContextMenuData {
     let starStatus: Bool?
