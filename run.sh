@@ -15,6 +15,67 @@ ok()   { echo -e "${GREEN}✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
 err()  { echo -e "${RED}✗ $1${NC}"; exit 1; }
 
+# ─── Help ─────────────────────────────────────────────────────────────────────
+show_help() {
+    cat <<'HELP'
+Telegram iOS — Build & Run
+
+Usage:
+  ./run.sh                         Simulator (default: iPhone 17 Pro Max)
+  ./run.sh -s "iPhone 16 Pro"      Simulator with custom device name
+  ./run.sh -r                      Real device (auto-pick first paired iPhone)
+  ./run.sh -r -d "iPhone 13 Pro"   Real device by name
+  ./run.sh -r --udid <UDID>        Real device by UDID
+  ./run.sh -h                      Show this help
+
+Flags:
+  -s, --simulator [name]   Build for simulator (default mode).
+                           Optional name overrides default "iPhone 17 Pro Max".
+                           Env equivalent: SIM_NAME="iPhone 16 Pro" ./run.sh
+
+  -r, --real               Build for a real iPhone (Vipads MCHJ team ZDBP5RSRZF).
+                           Requires:
+                             • iPhone connected and trusted on this Mac
+                             • Apple Development cert "Azimjon Abdurasulov (DGZS4A5M4D)"
+                               in Keychain (already present on this machine)
+                             • A development provisioning profile for the bundle ID
+                               registered for the device's UDID. If missing, run.sh
+                               prints exact next steps (one-time Xcode setup).
+
+  -d, --device <name>      Real-device name to target (used with -r).
+      --udid <UDID>        Real-device UDID to target (used with -r).
+                           If neither given, the first paired iPhone is used.
+
+  -h, --help               Show this help and exit.
+
+Notes:
+  • This script is the canonical build path. Never call simctl uninstall —
+    it wipes the user session. ./run.sh installs in overwrite mode and
+    preserves login + chat history.
+  • Bazel cache lives at ~/telegram-bazel-cache (~3-8 GB, regenerable).
+HELP
+    exit 0
+}
+
+# ─── Parse args ───────────────────────────────────────────────────────────────
+MODE="simulator"           # simulator | real
+SIM_NAME="${SIM_NAME:-iPhone 17 Pro Max}"
+DEVICE_NAME=""
+DEVICE_UDID=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)         show_help ;;
+        -r|--real)         MODE="real"; shift ;;
+        -s|--simulator)    MODE="simulator"
+                           if [[ -n "$2" && "$2" != -* ]]; then SIM_NAME="$2"; shift; fi
+                           shift ;;
+        -d|--device)       DEVICE_NAME="$2"; shift 2 ;;
+        --udid)            DEVICE_UDID="$2"; shift 2 ;;
+        *)                 err "Unknown argument: $1 (run ./run.sh -h)" ;;
+    esac
+done
+
 # ─── Paths ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -29,42 +90,48 @@ if [ "$AVAIL_GB" -lt 50 ] 2>/dev/null; then
     ok "Cache tozalandi. $(df -h . | awk 'NR==2 {print $4}') bo'sh joy mavjud"
 fi
 
-CONFIG_PATH="build-system/my-config.json"
 CACHE_DIR="$HOME/telegram-bazel-cache"
-# Sim nomi env orqali override qilinishi mumkin (export SIM_NAME="iPhone 15 Pro")
-SIM_NAME="${SIM_NAME:-iPhone 17 Pro Max}"
-EXTRACT_DIR="/tmp/telegram-sim-app"
 
-# API credentials (Coding Tech HR)
+# Mode-specific paths
+if [ "$MODE" = "simulator" ]; then
+    CONFIG_PATH="build-system/my-config.json"
+    EXTRACT_DIR="/tmp/telegram-sim-app"
+else
+    CONFIG_PATH="build-system/my-device-config.json"
+    EXTRACT_DIR="/tmp/telegram-device-app"
+fi
+
+# API credentials (Coding Tech HR — used for both modes)
 API_ID="0"
 API_HASH="1351b4f50d0fc65dc724d62bd09b6c79"
-KNOWN_TEAM_ID="59VH6CVPK3"
+
+# Real Vipads MCHJ team for device builds. Simulator uses the same value but
+# disableProvisioningProfiles makes it irrelevant.
+VIPADS_TEAM_ID="ZDBP5RSRZF"
+KNOWN_TEAM_ID="$VIPADS_TEAM_ID"
 
 echo -e "${BLUE}"
 echo "╔════════════════════════════════════════╗"
-echo "║   Telegram iOS — Simulator Runner      ║"
+if [ "$MODE" = "simulator" ]; then
+    echo "║   Telegram iOS — Simulator Runner      ║"
+else
+    echo "║   Telegram iOS — Real Device Runner    ║"
+fi
 echo "╚════════════════════════════════════════╝"
 echo -e "${NC}"
 
 # ─── Step 1: Config ───────────────────────────────────────────────────────────
-step "Konfiguratsiya tekshirilmoqda..."
+step "Konfiguratsiya tekshirilmoqda... ($MODE)"
 
 if [ ! -f "$CONFIG_PATH" ]; then
-    warn "Config topilmadi. Yaratilmoqda..."
+    warn "Config topilmadi. Yaratilmoqda: $CONFIG_PATH"
 
-    TEAM_ID=$(security find-certificate -c "Apple Development" -p 2>/dev/null \
-        | openssl x509 -noout -subject 2>/dev/null \
-        | grep -oE 'OU=[A-Z0-9]{10}' | head -1 | cut -d= -f2 || echo "")
-
-    if   [ -n "$TEAM_ID" ];       then ok "Team ID Keychain dan: $TEAM_ID"
-    elif [ -n "$KNOWN_TEAM_ID" ]; then TEAM_ID="$KNOWN_TEAM_ID"; ok "Saqlangan Team ID: $TEAM_ID"
-    else TEAM_ID="SIMULATOR";          warn "Placeholder: $TEAM_ID"
-    fi
-
-    RAND_ID=$(openssl rand -hex 8)
-    BUNDLE_ID="org.${RAND_ID}.Telegram"
-
-    cat > "$CONFIG_PATH" <<EOF
+    if [ "$MODE" = "simulator" ]; then
+        # Simulator: random bundle ID + fake codesigning
+        TEAM_ID="$KNOWN_TEAM_ID"
+        RAND_ID=$(openssl rand -hex 8)
+        BUNDLE_ID="org.${RAND_ID}.Telegram"
+        cat > "$CONFIG_PATH" <<EOF
 {
     "bundle_id": "${BUNDLE_ID}",
     "api_id": "${API_ID}",
@@ -80,15 +147,34 @@ if [ ! -f "$CONFIG_PATH" ]; then
     "enable_icloud": false
 }
 EOF
-    ok "Config yaratildi: $CONFIG_PATH"
+        ok "Simulator config yaratildi"
+    else
+        # Real device: Vipads team + Fenixuz dev bundle ID
+        TEAM_ID="$VIPADS_TEAM_ID"
+        BUNDLE_ID="uz.fenixuz.dev"
+        cat > "$CONFIG_PATH" <<EOF
+{
+    "bundle_id": "${BUNDLE_ID}",
+    "api_id": "${API_ID}",
+    "api_hash": "${API_HASH}",
+    "team_id": "${TEAM_ID}",
+    "app_center_id": "0",
+    "is_internal_build": "true",
+    "is_appstore_build": "false",
+    "appstore_id": "0",
+    "app_specific_url_scheme": "tg",
+    "premium_iap_product_id": "",
+    "enable_siri": false,
+    "enable_icloud": false
+}
+EOF
+        ok "Real-device config yaratildi (Team: $TEAM_ID, Bundle: $BUNDLE_ID)"
+    fi
 else
     ok "Config topildi: $CONFIG_PATH"
 fi
 
 # ─── Step 2: Bazel topish va config repository sozlash ───────────────────────
-# generateProject va Xcode ishlatilmaydi. Python orqali to'g'ridan-to'g'ri
-# variables.bzl va provisioning/BUILD yaratamiz, keyin Bazel chaqiramiz.
-
 step "Bazel va konfiguratsiya tayyorlanmoqda..."
 
 BAZEL_PATH=$(python3 - <<'PYEOF'
@@ -113,10 +199,6 @@ sys.path.insert(0, 'build-system/Make')
 from BuildConfiguration import build_configuration_from_json
 from BazelLocation import locate_bazel
 
-def file_hash(path):
-    if not os.path.exists(path): return ''
-    return hashlib.md5(open(path,'rb').read()).hexdigest()
-
 def write_if_changed(path, content):
     """Fayl mazmuni o'zgarmasa yozmaymiz — Bazel cache saqlanadi"""
     if os.path.exists(path) and open(path).read() == content:
@@ -133,7 +215,6 @@ bazel     = locate_bazel(base_path=base_path, cache_host_or_path=None,
 repo = '{}/build-input/configuration-repository'.format(base_path)
 os.makedirs(repo, exist_ok=True)
 
-# Kerakli Bazel fayllar (bir marta yoziladi)
 for fname, content in [
     ('/WORKSPACE',   ''),
     ('/MODULE.bazel','module(\n    name = "build_configuration",\n)\n'),
@@ -143,17 +224,13 @@ for fname, content in [
     if not os.path.exists(p):
         open(p, 'w').write(content)
 
-# Bo'sh provisioning BUILD
 prov = repo + '/provisioning'
 os.makedirs(prov, exist_ok=True)
 prov_build = prov + '/BUILD'
 if not os.path.exists(prov_build):
     open(prov_build, 'w').write('exports_files([])\n')
 
-# variables.bzl — faqat o'zgarganda yozamiz (cache miss oldini olish)
 import io
-buf = io.StringIO()
-orig_write = open.__class__  # save
 tmp_path = repo + '/variables.bzl.tmp'
 config.write_to_variables_file(
     bazel_path=bazel,
@@ -173,23 +250,37 @@ PYEOF
 
 ok "Konfiguratsiya repository tayyor"
 
-# ─── Step 3: Bazel build (simulator, Xcode YO'Q) ─────────────────────────────
-step "Bazel build (debug_sim_arm64, Xcode ochmaydi)..."
+# ─── Step 3: Bazel build ──────────────────────────────────────────────────────
+if [ "$MODE" = "simulator" ]; then
+    step "Bazel build (debug_sim_arm64, simulator)..."
+else
+    step "Bazel build (debug_arm64, real device)..."
+fi
 warn "Birinchi run 10-30 daqiqa olishi mumkin..."
 
 # Hardware-aware resurs sozlamalari
 TOTAL_CORES=$(sysctl -n hw.logicalcpu)
 TOTAL_RAM_MB=$(($(sysctl -n hw.memsize) / 1024 / 1024))
-# Tizim uchun 6GB qoldiramiz, qolgani bazel uchun
 BAZEL_RAM_MB=$((TOTAL_RAM_MB - 6144))
 [ "$BAZEL_RAM_MB" -lt 4096 ] && BAZEL_RAM_MB=4096
-# Joblar = mavjud cores - 2 (UI/system)
 BAZEL_JOBS=$((TOTAL_CORES - 2))
 [ "$BAZEL_JOBS" -lt 2 ] && BAZEL_JOBS=2
 
 ok "Resurs: ${BAZEL_JOBS} jobs, ${BAZEL_RAM_MB}MB RAM ($TOTAL_CORES cores, ${TOTAL_RAM_MB}MB RAM mavjud)"
 
-# .bazelrc ni o'qib Bazel flaglarini olamiz
+# Mode-specific Bazel flags
+if [ "$MODE" = "simulator" ]; then
+    BAZEL_CPU_FLAG="--ios_multi_cpus=sim_arm64"
+    BAZEL_PROV_FLAG="--//Telegram:disableProvisioningProfiles"
+else
+    BAZEL_CPU_FLAG="--ios_multi_cpus=arm64"
+    # Real device: do NOT disable provisioning profiles. Bazel will look for
+    # local profiles in ~/Library/MobileDevice/Provisioning Profiles/ via
+    # local_provisioning_profile rule. If none match, codesigning will fail
+    # with a clear error mentioning the missing profile.
+    BAZEL_PROV_FLAG=""
+fi
+
 "$BAZEL_PATH" \
     --output_user_root="$CACHE_DIR/bazel-user-root" \
     build \
@@ -211,9 +302,9 @@ ok "Resurs: ${BAZEL_JOBS} jobs, ${BAZEL_RAM_MB}MB RAM ($TOTAL_CORES cores, ${TOT
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
     -c dbg \
-    --ios_multi_cpus=sim_arm64 \
+    $BAZEL_CPU_FLAG \
     --watchos_cpus=arm64_32 \
-    --//Telegram:disableProvisioningProfiles
+    $BAZEL_PROV_FLAG
 
 ok "Build muvaffaqiyatli tugadi"
 
@@ -221,11 +312,8 @@ ok "Build muvaffaqiyatli tugadi"
 step ".app fayl tayyorlanmoqda..."
 
 APP_PATH=""
-
-# 1) To'g'ridan-to'g'ri .app
 APP_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Telegram.app" -maxdepth 5 2>/dev/null | head -1 || true)
 
-# 2) IPA dan extract
 if [ -z "$APP_PATH" ]; then
     IPA_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Telegram.ipa" -maxdepth 5 2>/dev/null | head -1 || true)
     if [ -n "$IPA_PATH" ]; then
@@ -240,10 +328,15 @@ fi
 [ -z "$APP_PATH" ] && err ".app fayl topilmadi. bazel-bin/Telegram/ papkasini tekshiring."
 ok "App: $(basename "$APP_PATH")"
 
-# ─── Step 5: Simulator ────────────────────────────────────────────────────────
-step "'$SIM_NAME' simulatori qidirilmoqda..."
+BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist" 2>/dev/null || \
+    python3 -c "import plistlib; p=plistlib.load(open('$APP_PATH/Info.plist','rb')); print(p['CFBundleIdentifier'])")
 
-SIM_UDID=$(xcrun simctl list devices available -j 2>/dev/null | python3 -c "
+# ─── Step 5: Install & Launch ─────────────────────────────────────────────────
+if [ "$MODE" = "simulator" ]; then
+    # ─── Simulator path ───────────────────────────────────────────────────────
+    step "'$SIM_NAME' simulatori qidirilmoqda..."
+
+    SIM_UDID=$(xcrun simctl list devices available -j 2>/dev/null | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 for runtime, devices in data.get('devices', {}).items():
@@ -253,34 +346,108 @@ for runtime, devices in data.get('devices', {}).items():
             sys.exit(0)
 " 2>/dev/null || true)
 
-if [ -z "$SIM_UDID" ]; then
-    warn "'$SIM_NAME' topilmadi. Mavjud iPhone simulatorlar:"
-    xcrun simctl list devices available | grep -i iphone
-    err "Simulator topilmadi."
+    if [ -z "$SIM_UDID" ]; then
+        warn "'$SIM_NAME' topilmadi. Mavjud iPhone simulatorlar:"
+        xcrun simctl list devices available | grep -i iphone
+        err "Simulator topilmadi."
+    fi
+    ok "UDID: $SIM_UDID"
+
+    step "Simulator boot qilinmoqda..."
+    xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
+    open -a Simulator
+    ok "Simulator tayyor"
+
+    step "O'rnatilmoqda va ishga tushirilmoqda..."
+    # NOTE: we use `install` (overwrite mode), NOT `uninstall + install`.
+    # The latter wipes the user's session and chat history.
+    xcrun simctl install "$SIM_UDID" "$APP_PATH"
+    ok "O'rnatildi"
+
+    xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
+
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║  Telegram $SIM_NAME da ishlamoqda!  ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
+    echo ""
+else
+    # ─── Real device path ─────────────────────────────────────────────────────
+    step "Real iPhone qidirilmoqda..."
+
+    if [ -n "$DEVICE_UDID" ]; then
+        ok "UDID berilgan: $DEVICE_UDID"
+    else
+        # Auto-pick first paired iPhone, or filter by name if -d given
+        DEVICES_JSON=$(xcrun devicectl list devices --json-output /tmp/devicectl-list.json 2>&1 || true)
+        if [ ! -f /tmp/devicectl-list.json ]; then
+            err "devicectl ishlamadi. Xcode 15+ kerak. Tekshiring: xcrun devicectl list devices"
+        fi
+
+        DEVICE_UDID=$(python3 - <<PYEOF
+import json
+with open('/tmp/devicectl-list.json') as f:
+    data = json.load(f)
+target_name = "$DEVICE_NAME".strip()
+for dev in data.get('result', {}).get('devices', []):
+    name = dev.get('deviceProperties', {}).get('name', '')
+    udid = dev.get('hardwareProperties', {}).get('udid', '')
+    state = dev.get('connectionProperties', {}).get('pairingState', '')
+    if state != 'paired':
+        continue
+    if target_name and target_name.lower() not in name.lower():
+        continue
+    print(udid)
+    break
+PYEOF
+)
+        rm -f /tmp/devicectl-list.json
+
+        if [ -z "$DEVICE_UDID" ]; then
+            warn "Paired iPhone topilmadi. Ulangan qurilmalar:"
+            xcrun devicectl list devices
+            err "iPhone'ni Mac'ga ulang va 'Trust' bosing."
+        fi
+        ok "Topildi: $DEVICE_UDID"
+    fi
+
+    step "iPhone'ga o'rnatilmoqda..."
+    # devicectl install — overwrite mode by default, preserves app data
+    if ! xcrun devicectl device install app --device "$DEVICE_UDID" "$APP_PATH"; then
+        echo ""
+        warn "Install fail bo'ldi. Eng ko'p uchraydigan sabab — provisioning profile yo'q."
+        cat <<INSTRUCTIONS
+
+${YELLOW}Birinchi marta real device build uchun (one-time setup):${NC}
+
+  1. Xcode'ni oching:
+       open Telegram_Bazel.xcodeproj  (yoki generate qilib oling)
+
+  2. Top toolbar'da:
+       • Team: Vipads MCHJ (ZDBP5RSRZF) ni tanlang
+       • Signing: "Automatically manage signing" yoqing
+       • Destination: sizning iPhone'ingiz
+
+  3. ⌘B bilan build qiling — Xcode automatic ravishda:
+       • Bundle ID 'uz.fenixuz.dev'ni Apple Developer Portal'da register qiladi
+       • iPhone UDID'ingizni qo'shadi
+       • Development provisioning profile yaratadi va Mac'ga yuklab oladi
+
+  4. Profillar saqlanganidan keyin (~/Library/MobileDevice/Provisioning Profiles/):
+       ./run.sh -r  # endi ishlaydi
+
+INSTRUCTIONS
+        err "Setup kerak (yuqoridagi instruction'larga qarang)."
+    fi
+    ok "O'rnatildi: $BUNDLE_ID"
+
+    step "iPhone'da ishga tushirilmoqda..."
+    xcrun devicectl device process launch --device "$DEVICE_UDID" "$BUNDLE_ID" || \
+        warn "Auto-launch ishlamadi. iPhone'dan qo'lda oching."
+
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║  Telegram iPhone'ingizda ishlamoqda!   ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
+    echo ""
 fi
-ok "UDID: $SIM_UDID"
-
-# ─── Step 6: Boot ─────────────────────────────────────────────────────────────
-step "Simulator boot qilinmoqda..."
-
-# Simulator holatidan qat'iy nazar boot qilamiz (allaqachon booted bo'lsa xato e'tiborga olinmaydi)
-xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
-open -a Simulator
-ok "Simulator tayyor"
-
-# ─── Step 7: Install & Launch ─────────────────────────────────────────────────
-step "O'rnatilmoqda va ishga tushirilmoqda..."
-
-xcrun simctl install "$SIM_UDID" "$APP_PATH"
-ok "O'rnatildi"
-
-BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist" 2>/dev/null || \
-    python3 -c "import plistlib; p=plistlib.load(open('$APP_PATH/Info.plist','rb')); print(p['CFBundleIdentifier'])")
-
-xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"
-
-echo ""
-echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║  Telegram $SIM_NAME da ishlamoqda!  ║${NC}"
-echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
-echo ""
