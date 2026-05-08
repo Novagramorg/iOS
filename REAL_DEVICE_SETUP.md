@@ -25,8 +25,8 @@ App Group barcha extension'lar va asosiy app o'rtasida ma'lumot almashish uchun 
 1. Chap menu → **Identifiers**
 2. Yuqori-o'ng burchakdagi turini almashtirish dropdown → **App Groups**
 3. **+** tugmasini bosing
-4. Description: `Fenixuz Dev App Group`
-5. Identifier: **`group.uz.fenixuz.dev`** (aniq shu, hech narsa o'zgartirmang)
+4. Description: `Fenixuz App Group`
+5. Identifier: **`group.uz.fenixuz.app`** (aniq shu, hech narsa o'zgartirmang)
 6. **Continue → Register**
 
 ✅ Natija: App Group ro'yxatda paydo bo'ladi.
@@ -46,20 +46,20 @@ Har bir Bundle ID uchun shu tartib:
 - Bundle ID: **Explicit** ni tanlang, qiymatini quyidagi jadvaldan oling
 - Capabilities ostida **App Groups** ni belgilang
 - Pastda "Edit" tugmasi paydo bo'ladi (App Groups satrida) → bosing
-- `group.uz.fenixuz.dev` ni belgilang → Continue → Save
+- `group.uz.fenixuz.app` ni belgilang → Continue → Save
 - Continue → Register
 
 | # | Description | Bundle ID (Explicit) |
 |---|---|---|
-| 1 | Fenixuz Dev (main app) | `uz.fenixuz.dev` |
-| 2 | Fenixuz Dev Share Extension | `uz.fenixuz.dev.Share` |
-| 3 | Fenixuz Dev Notification Service | `uz.fenixuz.dev.NotificationService` |
-| 4 | Fenixuz Dev Notification Content | `uz.fenixuz.dev.NotificationContent` |
-| 5 | Fenixuz Dev Widget | `uz.fenixuz.dev.Widget` |
-| 6 | Fenixuz Dev Siri Intents | `uz.fenixuz.dev.SiriIntents` |
-| 7 | Fenixuz Dev Broadcast Upload | `uz.fenixuz.dev.BroadcastUpload` |
+| 1 | Fenixuz (main app) | `uz.fenixuz.app` |
+| 2 | Fenixuz Share Extension | `uz.fenixuz.app.Share` |
+| 3 | Fenixuz Notification Service | `uz.fenixuz.app.NotificationService` |
+| 4 | Fenixuz Notification Content | `uz.fenixuz.app.NotificationContent` |
+| 5 | Fenixuz Widget | `uz.fenixuz.app.Widget` |
+| 6 | Fenixuz Siri Intents | `uz.fenixuz.app.SiriIntents` |
+| 7 | Fenixuz Broadcast Upload | `uz.fenixuz.app.BroadcastUpload` |
 
-⚠ **Eng muhim:** Har bir Bundle ID'da "App Groups" capability'ni belgilab, `group.uz.fenixuz.dev`'ni tanlash. Aks holda build fail bo'ladi.
+⚠ **Eng muhim:** Har bir Bundle ID'da "App Groups" capability'ni belgilab, `group.uz.fenixuz.app`'ni tanlash. Aks holda build fail bo'ladi.
 
 ---
 
@@ -91,13 +91,13 @@ Har bir profil uchun:
 
 | # | Bundle ID tanlash | Profile Name (yozish) | Yuklab olingan fayl |
 |---|---|---|---|
-| 1 | `uz.fenixuz.dev` | `Fenixuz Dev` | `Fenixuz_Dev.mobileprovision` |
-| 2 | `uz.fenixuz.dev.Share` | `Fenixuz Dev Share` | `Fenixuz_Dev_Share.mobileprovision` |
-| 3 | `uz.fenixuz.dev.NotificationService` | `Fenixuz Dev NotificationService` | `Fenixuz_Dev_NotificationService.mobileprovision` |
-| 4 | `uz.fenixuz.dev.NotificationContent` | `Fenixuz Dev NotificationContent` | `Fenixuz_Dev_NotificationContent.mobileprovision` |
-| 5 | `uz.fenixuz.dev.Widget` | `Fenixuz Dev Widget` | `Fenixuz_Dev_Widget.mobileprovision` |
-| 6 | `uz.fenixuz.dev.SiriIntents` | `Fenixuz Dev SiriIntents` | `Fenixuz_Dev_SiriIntents.mobileprovision` |
-| 7 | `uz.fenixuz.dev.BroadcastUpload` | `Fenixuz Dev BroadcastUpload` | `Fenixuz_Dev_BroadcastUpload.mobileprovision` |
+| 1 | `uz.fenixuz.app` | `Fenixuz` | `Fenixuz.mobileprovision` |
+| 2 | `uz.fenixuz.app.Share` | `Fenixuz Share` | `Fenixuz_Share.mobileprovision` |
+| 3 | `uz.fenixuz.app.NotificationService` | `Fenixuz NotificationService` | `Fenixuz_NotificationService.mobileprovision` |
+| 4 | `uz.fenixuz.app.NotificationContent` | `Fenixuz NotificationContent` | `Fenixuz_NotificationContent.mobileprovision` |
+| 5 | `uz.fenixuz.app.Widget` | `Fenixuz Widget` | `Fenixuz_Widget.mobileprovision` |
+| 6 | `uz.fenixuz.app.SiriIntents` | `Fenixuz SiriIntents` | `Fenixuz_SiriIntents.mobileprovision` |
+| 7 | `uz.fenixuz.app.BroadcastUpload` | `Fenixuz BroadcastUpload` | `Fenixuz_BroadcastUpload.mobileprovision` |
 
 ✅ Natija: ~/Downloads/ papkasiga 7 ta `.mobileprovision` fayl yuklanadi.
 
@@ -116,21 +116,21 @@ mv build-input/configuration-repository/provisioning/*.mobileprovision \
    build-input/configuration-repository/provisioning_old_telegram_fz_llc/
 
 # Yangi Vipads profillarni Bazel kutgan nom bilan ko'chirish
-cp ~/Downloads/Fenixuz_Dev.mobileprovision                  build-input/configuration-repository/provisioning/Telegram.mobileprovision
-cp ~/Downloads/Fenixuz_Dev_Share.mobileprovision            build-input/configuration-repository/provisioning/Share.mobileprovision
-cp ~/Downloads/Fenixuz_Dev_NotificationService.mobileprovision build-input/configuration-repository/provisioning/NotificationService.mobileprovision
-cp ~/Downloads/Fenixuz_Dev_NotificationContent.mobileprovision build-input/configuration-repository/provisioning/NotificationContent.mobileprovision
-cp ~/Downloads/Fenixuz_Dev_Widget.mobileprovision           build-input/configuration-repository/provisioning/Widget.mobileprovision
-cp ~/Downloads/Fenixuz_Dev_SiriIntents.mobileprovision      build-input/configuration-repository/provisioning/Intents.mobileprovision
-cp ~/Downloads/Fenixuz_Dev_BroadcastUpload.mobileprovision  build-input/configuration-repository/provisioning/BroadcastUpload.mobileprovision
+cp ~/Downloads/Fenixuz.mobileprovision                  build-input/configuration-repository/provisioning/Telegram.mobileprovision
+cp ~/Downloads/Fenixuz_Share.mobileprovision            build-input/configuration-repository/provisioning/Share.mobileprovision
+cp ~/Downloads/Fenixuz_NotificationService.mobileprovision build-input/configuration-repository/provisioning/NotificationService.mobileprovision
+cp ~/Downloads/Fenixuz_NotificationContent.mobileprovision build-input/configuration-repository/provisioning/NotificationContent.mobileprovision
+cp ~/Downloads/Fenixuz_Widget.mobileprovision           build-input/configuration-repository/provisioning/Widget.mobileprovision
+cp ~/Downloads/Fenixuz_SiriIntents.mobileprovision      build-input/configuration-repository/provisioning/Intents.mobileprovision
+cp ~/Downloads/Fenixuz_BroadcastUpload.mobileprovision  build-input/configuration-repository/provisioning/BroadcastUpload.mobileprovision
 
 # Watch profillari (hozirgi build'da watch yo'q, lekin Bazel BUILD'i kutadi — placeholder)
-cp ~/Downloads/Fenixuz_Dev.mobileprovision build-input/configuration-repository/provisioning/WatchApp.mobileprovision
-cp ~/Downloads/Fenixuz_Dev.mobileprovision build-input/configuration-repository/provisioning/WatchExtension.mobileprovision
+cp ~/Downloads/Fenixuz.mobileprovision build-input/configuration-repository/provisioning/WatchApp.mobileprovision
+cp ~/Downloads/Fenixuz.mobileprovision build-input/configuration-repository/provisioning/WatchExtension.mobileprovision
 
 # Mac keychain'ga ham yangi profillar bilim olib qo'yamiz (codesign uchun)
 mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
-cp ~/Downloads/Fenixuz_Dev*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+cp ~/Downloads/Fenixuz*.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
 
 ls -la build-input/configuration-repository/provisioning/
 ```

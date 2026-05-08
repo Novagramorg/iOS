@@ -149,9 +149,9 @@ if [ ! -f "$CONFIG_PATH" ]; then
 EOF
         ok "Simulator config yaratildi"
     else
-        # Real device: Vipads team + Fenixuz dev bundle ID
+        # Real device: Vipads team + Fenixuz bundle ID (same as App Store)
         TEAM_ID="$VIPADS_TEAM_ID"
-        BUNDLE_ID="uz.fenixuz.dev"
+        BUNDLE_ID="uz.fenixuz.app"
         cat > "$CONFIG_PATH" <<EOF
 {
     "bundle_id": "${BUNDLE_ID}",
@@ -257,7 +257,7 @@ if [ "$MODE" = "real" ]; then
     PROV_OK=1
 
     # Check that the main Telegram.mobileprovision belongs to Vipads team and
-    # references the uz.fenixuz.dev bundle ID. If not (i.e. the leftover
+    # references the uz.fenixuz.app bundle ID. If not (i.e. the leftover
     # leaked Telegram FZ-LLC profile is still here), refuse to build.
     if [ ! -f "$PROV_DIR/Telegram.mobileprovision" ]; then
         warn "Telegram.mobileprovision topilmadi"
@@ -283,7 +283,7 @@ except Exception:
     pass
 " 2>/dev/null)
 
-        if [ "$PROV_TEAM" != "$VIPADS_TEAM_ID" ] || [[ "$PROV_APP_ID" != *"uz.fenixuz.dev" ]]; then
+        if [ "$PROV_TEAM" != "$VIPADS_TEAM_ID" ] || [[ "$PROV_APP_ID" != *"uz.fenixuz.app" ]]; then
             warn "Joriy profil Vipads emas:  team=$PROV_TEAM, app-id=$PROV_APP_ID"
             PROV_OK=0
         fi
@@ -300,8 +300,8 @@ except Exception:
         echo ""
         echo "Qisqacha tartib:"
         echo "  1. https://developer.apple.com/account → Vipads MCHJ team"
-        echo "  2. App Group yarating:  group.uz.fenixuz.dev"
-        echo "  3. 7 ta Bundle ID register qiling (uz.fenixuz.dev[.Widget|.Share|...])"
+        echo "  2. App Group yarating:  group.uz.fenixuz.app"
+        echo "  3. 7 ta Bundle ID register qiling (uz.fenixuz.app[.Widget|.Share|...])"
         echo "  4. iPhone UDID qo'shing:  3BFC6F79-5233-5749-90A3-3D5E512DD737"
         echo "  5. 7 ta Development provisioning profile yarating va yuklab oling"
         echo "  6. REAL_DEVICE_SETUP.md'dagi 'cp' buyruqlari bilan ko'chiring"
@@ -491,7 +491,7 @@ ${YELLOW}Birinchi marta real device build uchun (one-time setup):${NC}
        • Destination: sizning iPhone'ingiz
 
   3. ⌘B bilan build qiling — Xcode automatic ravishda:
-       • Bundle ID 'uz.fenixuz.dev'ni Apple Developer Portal'da register qiladi
+       • Bundle ID 'uz.fenixuz.app'ni Apple Developer Portal'da register qiladi
        • iPhone UDID'ingizni qo'shadi
        • Development provisioning profile yaratadi va Mac'ga yuklab oladi
 
