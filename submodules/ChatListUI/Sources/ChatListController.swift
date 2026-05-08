@@ -7409,8 +7409,12 @@ private final class ChatListLocationContext {
     func updateGhostModeButton() {
         if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_ghost_mode_button") ?? false {
             let isGhostModeActive = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false
-            self.ghostModeButton = AnyComponentWithIdentity(id: "ghostMode", component: AnyComponent(NavigationButtonComponent(
-                content: .text(title: isGhostModeActive ? "👻" : "👤", isBold: false),
+            // Use bundled SF-style asset instead of color emoji — emoji font is missing on
+            // some simulators (iOS 26.x) and shows as [?]. EyeLocked = ghost ON (hidden),
+            // Eye = ghost OFF (visible / normal).
+            let buttonId = isGhostModeActive ? "ghostMode-on" : "ghostMode-off"
+            self.ghostModeButton = AnyComponentWithIdentity(id: buttonId, component: AnyComponent(NavigationButtonComponent(
+                content: .icon(imageName: isGhostModeActive ? "Chat/Context Menu/EyeLocked" : "Chat/Context Menu/Eye"),
                 pressed: { [weak self] _ in
                     guard let self, let parentController = self.parentController else { return }
                     let current = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false

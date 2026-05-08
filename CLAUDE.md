@@ -1,25 +1,61 @@
 # CLAUDE.md
 
-This file provides guidance to AI assistants when working with code in this repository.
+This file provides guidance to AI assistants working with the **Fenixuz fork of Telegram-iOS**.
 
-## Build
+## Fenixuz fork — context
 
-The app is built using Bazel via the `Make.py` wrapper. There is no selective per-module build — the only supported invocation builds the full `Telegram/Telegram` target.
+- Brand: **Fenixuz** (organization: Vipads uz, Team ID `C67CF9S4VU`).
+- App Store bundle: `uz.fenixuz.app` (kept in `build-system/appstore-configuration.json` for release builds).
+- Simulator/dev bundle: `ph.telegra.Telegraph` (kept in `build-system/my-config.json`, fake codesigning).
+- All Fenixuz-specific code lives in `submodules/Fenixuz/<Feature>/` modules. Telegram source files contain at most 1–3 line `import FenixuzX` hooks. **Never** add Fenixuz feature code into Telegram-owned files (TelegramUI/Sources, ChatListUI/Sources, SettingsUI/Sources, etc.) — always create or extend a Fenixuz submodule.
 
-**Command:**
+Active Fenixuz modules (as of 2026-05-08):
 
-```sh
-python3 build-system/Make/Make.py --overrideXcodeVersion \
- --cacheDir ~/telegram-bazel-cache \
- build \
- --configurationPath build-system/appstore-configuration.json \
- --gitCodesigningRepository git@gitlab.com:peter-iakovlev/fastlanematch.git \
- --gitCodesigningType development --gitCodesigningUseCurrent --buildNumber=1 --configuration=debug_sim_arm64
+```
+submodules/Fenixuz/
+├── AIChatbot/         (FenixuzAIChatbot)        — UI hidden; module kept for future
+├── ChatLock/          (FenixuzChatLock)         — Pincode + manager
+├── EditedHistory/     (FenixuzEditedHistory)    — Edited message history viewer
+├── ForeignUserBlock/  (FenixuzForeignUserBlock) — Country code helpers
+├── ProMessager/       (FenixuzProMessager)      — "Fenixuz" Settings UI (5 controllers)
+├── SpeechToText/      (FenixuzSpeechToText)     — STT manager
+└── Tasks/             (FenixuzTasks)            — Vazifalar tab + Todo + Scheduled
 ```
 
-Add `--continueOnError` after `build` (forwards to bazel's `--keep_going`) when verifying changes that may surface errors in many files at once — it lets the full set of errors land in one pass instead of stopping at the first failing target.
+## Build — ALWAYS use `./run.sh`
 
-The build needs `TELEGRAM_CODESIGNING_GIT_PASSWORD` in the environment. It is set in `~/.zshrc` but Claude Code's bash tool does NOT source shell config by default. Prefix build commands with `source ~/.zshrc 2>/dev/null;` to pick it up.
+The canonical simulator build is **`./run.sh`** (Bazel-based, no Xcode UI). It does config → build → install → launch in one step, uses fake codesigning + `disableProvisioningProfiles`, auto-tunes resources to the host hardware (M4 Pro 24GB → 10 jobs / ~18GB RAM), enables `--keep_going`, `--disk_cache`, `--repository_cache`, and the right Swift module-cache features.
+
+**Always run builds via `./run.sh`** — do NOT invoke `Make.py` directly with `appstore-configuration.json` (that path needs the gitlab codesigning repo + `TELEGRAM_CODESIGNING_GIT_PASSWORD` env var, which we don't use for Fenixuz dev). Calling `Make.py` directly also bypasses our resource auto-tuning and hardcoded simulator/install steps.
+
+```sh
+./run.sh                                # default: iPhone 17 Pro Max
+SIM_NAME="iPhone 16 Pro" ./run.sh       # override target simulator
+```
+
+The Make.py + appstore-configuration.json + gitlab match path is reserved for the actual App Store release flow only (Phase 3) and must not be used for day-to-day iteration.
+
+### Background-friendly invocation (for AI assistants)
+
+Each iteration writes to `/tmp/run-sh-output.log` and ends with the line `Build muvaffaqiyatli tugadi` on success or `ERROR: Build did NOT complete successfully` on failure. The expected pattern is:
+
+```sh
+rm -f /tmp/run-sh-output.log && nohup bash run.sh > /tmp/run-sh-output.log 2>&1 &
+disown 2>/dev/null
+
+# then poll with:
+until grep -qE "Build muvaffaqiyatli|ERROR: Build did NOT" /tmp/run-sh-output.log; do sleep 5; done
+tail -25 /tmp/run-sh-output.log
+```
+
+First clean build ≈ 10–12 min, cache-warm incremental ≈ 1–3 min, single-file edit ≈ 30–90 s.
+
+## Known simulator quirks
+
+- **iOS 26.x simulator emoji font is broken** — `AppleColorEmoji.ttc` is missing. Color emojis render as `[?]` boxes (e.g. country flag picker, Telegram default monogram avatars, the Ghost button before we replaced its emoji with a bundled icon). Verify any emoji-bearing UI on a real device or an iOS 18 simulator before reporting "this is broken." For new Fenixuz UI, prefer SF Symbols or bundled `Item List/Icons/*` assets over color emoji in titles/buttons.
+- **Country flag rendering** in the login screen uses regional-indicator emoji and inherits the same `[?]` issue on iOS 26 simulators. It's correct on real iPhone.
+
+## Code Style Guidelines
 
 ## Code Style Guidelines
 - **Naming**: PascalCase for types, camelCase for variables/methods
