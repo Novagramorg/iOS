@@ -81,3 +81,5 @@ xcode-files
 **/.claude/settings.local.json
 **/.vscode/launch.json
 /buildbox/*
+PROJECT_LOG.md
+FENIXUZ_PLAN.md

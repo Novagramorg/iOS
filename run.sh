@@ -31,7 +31,8 @@ fi
 
 CONFIG_PATH="build-system/my-config.json"
 CACHE_DIR="$HOME/telegram-bazel-cache"
-SIM_NAME="iPhone 17 Pro"
+# Sim nomi env orqali override qilinishi mumkin (export SIM_NAME="iPhone 15 Pro")
+SIM_NAME="${SIM_NAME:-iPhone 17 Pro Max}"
 EXTRACT_DIR="/tmp/telegram-sim-app"
 
 # API credentials (Coding Tech HR)
@@ -176,21 +177,39 @@ ok "Konfiguratsiya repository tayyor"
 step "Bazel build (debug_sim_arm64, Xcode ochmaydi)..."
 warn "Birinchi run 10-30 daqiqa olishi mumkin..."
 
+# Hardware-aware resurs sozlamalari
+TOTAL_CORES=$(sysctl -n hw.logicalcpu)
+TOTAL_RAM_MB=$(($(sysctl -n hw.memsize) / 1024 / 1024))
+# Tizim uchun 6GB qoldiramiz, qolgani bazel uchun
+BAZEL_RAM_MB=$((TOTAL_RAM_MB - 6144))
+[ "$BAZEL_RAM_MB" -lt 4096 ] && BAZEL_RAM_MB=4096
+# Joblar = mavjud cores - 2 (UI/system)
+BAZEL_JOBS=$((TOTAL_CORES - 2))
+[ "$BAZEL_JOBS" -lt 2 ] && BAZEL_JOBS=2
+
+ok "Resurs: ${BAZEL_JOBS} jobs, ${BAZEL_RAM_MB}MB RAM ($TOTAL_CORES cores, ${TOTAL_RAM_MB}MB RAM mavjud)"
+
 # .bazelrc ni o'qib Bazel flaglarini olamiz
 "$BAZEL_PATH" \
     --output_user_root="$CACHE_DIR/bazel-user-root" \
     build \
     Telegram/Telegram \
+    --keep_going \
     --announce_rc \
     --features=swift.use_global_module_cache \
+    --features=swift.use_global_index_store \
+    --features=swift.skip_function_bodies_for_derived_files \
+    --features=swift.cacheable_swiftmodules \
     --verbose_failures \
     --remote_cache_async \
-    --features=swift.skip_function_bodies_for_derived_files \
-    --jobs="4" \
-    --local_ram_resources="8192" \
+    --jobs="$BAZEL_JOBS" \
+    --local_resources=memory=$BAZEL_RAM_MB \
+    --local_resources=cpu=$BAZEL_JOBS \
     --define=buildNumber=10000 \
     --define=telegramVersion=12.4 \
     --disk_cache="$CACHE_DIR" \
+    --repository_cache="$CACHE_DIR/repo-cache" \
+    --experimental_repository_cache_hardlinks \
     -c dbg \
     --ios_multi_cpus=sim_arm64 \
     --watchos_cpus=arm64_32 \

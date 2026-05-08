@@ -869,7 +869,7 @@ extension PeerInfoScreenNode {
                                 strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
                                     navigationController: navigationController,
                                     context: strongSelf.context,
-                                    chatLocation: .peer(EnginePeer(peer)),
+                                    chatLocation: .peer(peer),
                                     keepStack: .always,
                                     completion: { chatController in
                                         Queue.mainQueue().after(0.6) {
@@ -887,7 +887,7 @@ extension PeerInfoScreenNode {
                         c?.dismiss(completion: nil)
                         
                         var details = ["ID: \(peer.id.id._internalGetInt64Value())"]
-                        if let u = peer as? TelegramUser {
+                        if case let .user(u) = peer {
                             details.append("Status: \(u.botInfo != nil ? "Bot" : "User")")
                             if let username = u.username { details.append("Username: @\(username)") }
                             if let nameOrPhone = (u.nameOrPhone.isEmpty ? nil : u.nameOrPhone) { details.append("Name: \(nameOrPhone)") }
@@ -1132,7 +1132,7 @@ extension PeerInfoScreenNode {
                                 strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
                                     navigationController: navigationController,
                                     context: strongSelf.context,
-                                    chatLocation: .peer(EnginePeer(peer)),
+                                    chatLocation: .peer(peer),
                                     keepStack: .always,
                                      completion: { chatController in
                                         Queue.mainQueue().after(0.6) {
@@ -1150,7 +1150,7 @@ extension PeerInfoScreenNode {
                         c?.dismiss(completion: nil)
                         
                         var details = ["ID: \(peer.id.id._internalGetInt64Value())"]
-                        if let c = peer as? TelegramChannel {
+                        if case let .channel(c) = peer {
                             details.append("Status: \(c.info == .broadcast(TelegramChannelBroadcastInfo(flags: [])) ? "Channel" : "Group")") // simplification for label
                             if let username = c.username { details.append("Username: @\(username)") }
                             details.append("Title: \(c.title)")
@@ -1345,7 +1345,7 @@ extension PeerInfoScreenNode {
                                 strongSelf.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
                                     navigationController: navigationController,
                                     context: strongSelf.context,
-                                    chatLocation: .peer(EnginePeer(peer)),
+                                    chatLocation: .peer(peer),
                                     keepStack: .always,
                                      completion: { chatController in
                                         Queue.mainQueue().after(0.6) {
@@ -1363,7 +1363,7 @@ extension PeerInfoScreenNode {
                         c?.dismiss(completion: nil)
                         
                         var details = ["ID: \(peer.id.id._internalGetInt64Value())"]
-                        if let g = peer as? TelegramGroup {
+                        if case let .legacyGroup(g) = peer {
                             details.append("Status: Group")
                             details.append("Title: \(g.title)")
                             details.append("Members: \(g.participantCount)")
