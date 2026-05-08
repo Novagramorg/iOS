@@ -1,0 +1,1 @@
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir="$HOME/telegram-bazel-cache" generateProject --configurationPath=build-system/my-config.json --codesigningInformationPath=build-system/fake-codesigning --disableProvisioningProfiles

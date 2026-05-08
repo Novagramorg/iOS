@@ -12,12 +12,12 @@ swift_library(
     deps = [
         "//submodules/Display",
         "//submodules/AsyncDisplayKit",
-        "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/Postbox",
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
         "//submodules/TextFormat",
         "//submodules/AccountContext",
+        "//submodules/TelegramAudio",
         "//submodules/TouchDownGesture",
         "//submodules/ImageTransparency",
         "//submodules/ActivityIndicator",

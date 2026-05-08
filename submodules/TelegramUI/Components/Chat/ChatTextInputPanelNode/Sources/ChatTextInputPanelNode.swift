@@ -291,6 +291,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     // MARK: - Speech to Text
     private var sttButton: HighlightTrackingButton?
+    private var sttButtonBackgroundView: UIView?
+    private var sttButtonIconView: UIImageView?
     private var sttManager: SpeechToTextManager?
     private var isSttRecording: Bool = false
     
@@ -996,9 +998,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.glassBackgroundContainer.contentView.addSubview(self.sendActionButtons.view)
         self.glassBackgroundContainer.contentView.addSubview(self.mediaActionButtons.view)
         self.textInputContainerBackgroundView.contentView.addSubview(self.counterTextNode.view)
-        
-        // MARK: - Setup STT Button
-        self.setupSttButton()
         
         self.glassBackgroundContainer.contentView.addSubview(self.slowModeButton.view)
         
@@ -2471,6 +2470,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             } else {
                 textFieldInsets.right = 54.0
             }
+            // Add space for STT button when enabled
+            let sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
+            if sttEnabled {
+                textFieldInsets.right += 46.0  // 40 button + 6 gap
+            }
         }
         if mediaRecordingState != nil {
             textFieldInsets.left = 8.0
@@ -3236,6 +3240,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
 
         var mediaActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX + 6.0, y: textInputContainerBackgroundFrame.maxY - mediaActionButtonsSize.height), size: mediaActionButtonsSize)
+        // Push mic button right to make room for STT button
+        let sttIsEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
+        if sttIsEnabled && !(inputHasText || self.extendedSearchLayout || hasMediaDraft || interfaceState.interfaceState.forwardMessageIds != nil || hasSlowmodeButton) {
+            mediaActionButtonsFrame.origin.x += 46.0  // 40 STT button + 6 gap
+        }
         if inputHasText || self.extendedSearchLayout || hasMediaDraft || interfaceState.interfaceState.forwardMessageIds != nil || hasSlowmodeButton {
             mediaActionButtonsFrame.origin.x = width + 8.0
         }
@@ -5574,8 +5583,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private func setupSttButton() {
         let sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
         guard sttEnabled else {
-            self.sttButton?.removeFromSuperview()
-            self.sttButton = nil
+            self.removeSttButton()
             return
         }
         
@@ -5583,23 +5591,28 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return
         }
         
+        let buttonSize = CGSize(width: 40, height: 40)
+        let isDark = self.presentationInterfaceState?.theme.overallDarkAppearance ?? false
+        
+        // Single button with background and icon
         let button = HighlightTrackingButton()
-        button.frame = CGRect(x: 0, y: 0, width: 30, height: 30)
-        
-        let iconImage = self.createSttIcon(isRecording: false)
-        button.setImage(iconImage, for: .normal)
-        button.contentMode = .center
-        
+        button.frame = CGRect(origin: .zero, size: buttonSize)
+        button.backgroundColor = isDark
+            ? UIColor.white.withAlphaComponent(0.1)
+            : UIColor.black.withAlphaComponent(0.05)
+        button.layer.cornerRadius = buttonSize.width / 2.0
+        button.clipsToBounds = true
+        button.setImage(self.createSttIcon(isRecording: false), for: .normal)
         button.addTarget(self, action: #selector(self.sttButtonPressed), for: .touchUpInside)
         
         button.highligthedChanged = { [weak button] highlighted in
             if highlighted {
                 UIView.animate(withDuration: 0.15) {
                     button?.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
-                    button?.alpha = 0.65
+                    button?.alpha = 0.7
                 }
             } else {
-                UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 0, options: [], animations: {
+                UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.45, initialSpringVelocity: 0, options: [], animations: {
                     button?.transform = .identity
                     button?.alpha = 1.0
                 })
@@ -5607,18 +5620,31 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         self.sttButton = button
-        self.textInputContainerBackgroundView.contentView.addSubview(button)
+        self.sttButtonBackgroundView = button
+        
+        // Add to self.view on top of everything
+        self.view.addSubview(button)
+        self.view.bringSubviewToFront(button)
+    }
+    
+    private func removeSttButton() {
+        self.sttButton?.removeFromSuperview()
+        self.sttButton = nil
+        self.sttButtonBackgroundView?.removeFromSuperview()
+        self.sttButtonBackgroundView = nil
+        self.sttButtonIconView?.removeFromSuperview()
+        self.sttButtonIconView = nil
     }
     
     private func createSttIcon(isRecording: Bool) -> UIImage? {
         let color: UIColor
         if isRecording {
-            color = UIColor.systemRed
+            color = .white
         } else {
             color = self.presentationInterfaceState?.theme.chat.inputPanel.panelControlColor ?? UIColor.gray
         }
         
-        let config = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
         let symbolName = isRecording ? "waveform" : "waveform.and.mic"
         
         if let image = UIImage(systemName: symbolName, withConfiguration: config) {
@@ -5627,12 +5653,40 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         return nil
     }
     
+    private func updateSttButtonAppearance(isRecording: Bool) {
+        guard let button = self.sttButton else { return }
+        button.setImage(self.createSttIcon(isRecording: isRecording), for: .normal)
+        
+        if isRecording {
+            button.backgroundColor = UIColor.systemRed
+            
+            // Pulse animation
+            let pulse = CABasicAnimation(keyPath: "transform.scale")
+            pulse.fromValue = 1.0
+            pulse.toValue = 1.12
+            pulse.duration = 0.6
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            button.layer.add(pulse, forKey: "sttPulse")
+        } else {
+            let isDark = self.presentationInterfaceState?.theme.overallDarkAppearance ?? false
+            button.backgroundColor = isDark
+                ? UIColor.white.withAlphaComponent(0.1)
+                : UIColor.black.withAlphaComponent(0.05)
+            button.layer.removeAnimation(forKey: "sttPulse")
+        }
+    }
+    
+    private func stopSttRecording() {
+        self.sttManager?.stopRecording()
+        self.isSttRecording = false
+        self.updateSttButtonAppearance(isRecording: false)
+    }
+    
     @objc private func sttButtonPressed() {
         if self.isSttRecording {
-            self.sttManager?.stopRecording()
-            self.isSttRecording = false
-            self.sttButton?.setImage(self.createSttIcon(isRecording: false), for: .normal)
-            self.sttButton?.layer.removeAllAnimations()
+            self.stopSttRecording()
             return
         }
         
@@ -5650,15 +5704,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.loadTextInputNode()
             }
             
-            if let textInputNode = self.textInputNode, let _ = self.context {
+            if let textInputNode = self.textInputNode {
                 var textColor: UIColor = .black
                 var baseFontSize: CGFloat = 17.0
                 if let presentationInterfaceState = self.presentationInterfaceState {
                     textColor = presentationInterfaceState.theme.chat.inputPanel.inputTextColor
                     baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
-                }
-                if "".isEmpty {
-                    baseFontSize = 17.0
                 }
                 textInputNode.attributedText = NSAttributedString(string: text, font: Font.regular(baseFontSize), textColor: textColor)
                 self.chatInputTextNodeDidUpdateText()
@@ -5668,37 +5719,37 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.sttManager?.onStop = { [weak self] in
             guard let self = self else { return }
             self.isSttRecording = false
-            self.sttButton?.setImage(self.createSttIcon(isRecording: false), for: .normal)
-            self.sttButton?.layer.removeAllAnimations()
+            self.updateSttButtonAppearance(isRecording: false)
         }
         
-        self.sttManager?.onError = { errorMessage in
+        self.sttManager?.onError = { [weak self] errorMessage in
             print("STT Error: \(errorMessage)")
+            guard let self = self else { return }
+            
+            if self.textInputNode == nil {
+                self.loadTextInputNode()
+            }
+            
+            if let textInputNode = self.textInputNode {
+                let textColor = self.presentationInterfaceState?.theme.chat.inputPanel.inputTextColor ?? .black
+                let baseFontSize = max(17.0, self.presentationInterfaceState?.fontSize.baseDisplaySize ?? 17.0)
+                textInputNode.attributedText = NSAttributedString(string: "XATO: \(errorMessage)", font: Font.regular(baseFontSize), textColor: textColor)
+                self.chatInputTextNodeDidUpdateText()
+            }
+            
+            self.stopSttRecording()
         }
         
         self.sttManager?.toggleRecording()
         self.isSttRecording = true
-        self.sttButton?.setImage(self.createSttIcon(isRecording: true), for: .normal)
-        
-        // Subtle pulse animation
-        let pulseAnimation = CABasicAnimation(keyPath: "opacity")
-        pulseAnimation.fromValue = 1.0
-        pulseAnimation.toValue = 0.3
-        pulseAnimation.duration = 0.8
-        pulseAnimation.autoreverses = true
-        pulseAnimation.repeatCount = .infinity
-        pulseAnimation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        self.sttButton?.layer.add(pulseAnimation, forKey: "pulse")
+        self.updateSttButtonAppearance(isRecording: true)
     }
     
     private func layoutSttButton(mediaActionButtonsFrame: CGRect, textInputContainerBackgroundFrame: CGRect, inputHasText: Bool, transition: ContainedViewLayoutTransition) {
         let sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
         
         if !sttEnabled {
-            if let sttButton = self.sttButton {
-                sttButton.removeFromSuperview()
-                self.sttButton = nil
-            }
+            self.removeSttButton()
             return
         }
         
@@ -5708,33 +5759,24 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         guard let sttButton = self.sttButton else { return }
         
-        let buttonSize = CGSize(width: 30, height: 30)
-        let minimalInputHeight: CGFloat = 33.0
+        let buttonSize = CGSize(width: 40, height: 40)
         
-        // Position inside text input container, right side, before accessory buttons
-        var sttX = textInputContainerBackgroundFrame.width - self.accessoryButtonInset - buttonSize.width
-        
-        // Account for accessory buttons
-        for (_, button) in self.accessoryItemButtons {
-            sttX -= button.buttonWidth + self.accessoryButtonSpacing
-        }
-        
-        // If text is entered, also account for send button width
-        if inputHasText {
-            // Move further left when send button is visible
-        }
-        
-        let sttY = textInputContainerBackgroundFrame.height - minimalInputHeight + floor((minimalInputHeight - buttonSize.height) / 2.0)
+        // Position between text input and mic button
+        // Convert from glassBackgroundContainer coordinates to self.view coordinates
+        let containerOffset = self.glassBackgroundContainer.frame.origin
+        let sttX = textInputContainerBackgroundFrame.maxX + 6.0 + containerOffset.x
+        let sttY = mediaActionButtonsFrame.midY - buttonSize.height / 2.0 + containerOffset.y
         let sttFrame = CGRect(origin: CGPoint(x: sttX, y: sttY), size: buttonSize)
         
-        transition.updateFrame(view: sttButton, frame: sttFrame)
+        sttButton.frame = sttFrame
+        self.view.bringSubviewToFront(sttButton)
         
-        // Only show when there's no text and mic is visible
+        // Show/hide matching mic button visibility
         let shouldShow = !inputHasText && !self.extendedSearchLayout && !self.mediaActionButtons.micButton.isHidden
         let targetAlpha: CGFloat = shouldShow ? 1.0 : 0.0
         
         if !self.isSttRecording {
-            transition.updateAlpha(layer: sttButton.layer, alpha: targetAlpha)
+            sttButton.alpha = targetAlpha
         }
         sttButton.isUserInteractionEnabled = shouldShow || self.isSttRecording
     }

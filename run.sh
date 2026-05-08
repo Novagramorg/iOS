@@ -2,6 +2,8 @@
 set -e
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -184,7 +186,8 @@ warn "Birinchi run 10-30 daqiqa olishi mumkin..."
     --verbose_failures \
     --remote_cache_async \
     --features=swift.skip_function_bodies_for_derived_files \
-    --jobs="$(sysctl -n hw.logicalcpu)" \
+    --jobs="4" \
+    --local_ram_resources="8192" \
     --define=buildNumber=10000 \
     --define=telegramVersion=12.4 \
     --disk_cache="$CACHE_DIR" \
