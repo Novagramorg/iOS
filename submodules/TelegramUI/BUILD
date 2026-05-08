@@ -49,7 +49,8 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
-        "//submodules/Fenixuz/AIChatbot:FenixuzAIChatbot",
+        # AI tab hidden from UI — uncomment to re-enable
+        # "//submodules/Fenixuz/AIChatbot:FenixuzAIChatbot",
         "//submodules/Fenixuz/Tasks:FenixuzTasks",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",

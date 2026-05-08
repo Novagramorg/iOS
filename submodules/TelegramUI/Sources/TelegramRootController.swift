@@ -18,8 +18,9 @@ import TabBarUI
 import WallpaperBackgroundNode
 import ChatPresentationInterfaceState
 import CameraScreen
-import FenixuzAIChatbot
 import FenixuzTasks
+// AI tab disabled in UI — module kept at submodules/Fenixuz/AIChatbot for future
+// import FenixuzAIChatbot
 import MediaEditorScreen
 import LegacyComponents
 import LegacyMediaPickerUI
@@ -226,10 +227,14 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         
         let scheduledTasksCtrl = tasksTabController(context: self.context)
         controllers.append(scheduledTasksCtrl)
-        
-        let aiChatbotCtrl = AIChatbotTabController(context: self.context)
-        controllers.append(aiChatbotCtrl)
-        
+
+        // AI tab hidden from UI (feature paused). Re-enable by:
+        //   1. uncomment "import FenixuzAIChatbot" above
+        //   2. uncomment the 2 lines below
+        //   3. add "//submodules/Fenixuz/AIChatbot:FenixuzAIChatbot" back to TelegramUI/BUILD deps
+        // let aiChatbotCtrl = AIChatbotTabController(context: self.context)
+        // controllers.append(aiChatbotCtrl)
+
         controllers.append(chatListController)
         
         var restoreSettignsController: (ViewController & SettingsController)?
@@ -254,7 +259,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         tabBarController.setControllers(controllers, selectedIndex: restoreSettignsController != nil ? (controllers.count - 1) : (controllers.count - 2))
         
         self.contactsController = contactsController
-        self.aiChatbotController = aiChatbotCtrl
+        // AI tab disabled — self.aiChatbotController stays nil
         self.callListController = callListController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
