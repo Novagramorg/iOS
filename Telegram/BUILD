@@ -1273,10 +1273,6 @@ plist_fragment(
             <key>IntentsSupported</key>
             <array>
                 <string>INSendMessageIntent</string>
-                <string>INStartAudioCallIntent</string>
-                <string>INSearchForMessagesIntent</string>
-                <string>INSetMessageAttributeIntent</string>
-                <string>INSearchCallHistoryIntent</string>
                 <string>SelectFriendsIntent</string>
                 <string>SelectAvatarFriendsIntent</string>
             </array>
