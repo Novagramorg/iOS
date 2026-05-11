@@ -1610,10 +1610,12 @@ plist_fragment(
     <string>Telegram stores your contacts heavily encrypted in the cloud to let you connect with your friends across all your devices.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>You can use Face ID to unlock the app.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Fenixuz uses your location only when you actively share it with a chat. We never track you in the background.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>When you send your location to your friends, Telegram needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
+    <string>When you send your location to your friends, Fenixuz needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>When you send your location to your friends, Telegram needs access to show them a map.</string>
+    <string>When you send your location to your friends, Fenixuz needs access to show them a map.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>We need this so that you can record and share voice messages and videos with sound.</string>
     <key>NSMotionUsageDescription</key>
