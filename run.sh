@@ -103,7 +103,7 @@ fi
 
 # API credentials (Coding Tech HR — used for both modes)
 API_ID="0"
-API_HASH="1351b4f50d0fc65dc724d62bd09b6c79"
+API_HASH="0000000000000000000000000000000"
 
 # Real Vipads MCHJ team for device builds. Simulator uses the same value but
 # disableProvisioningProfiles makes it irrelevant.

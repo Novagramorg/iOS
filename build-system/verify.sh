@@ -7,7 +7,7 @@ export DISTRIBUTION_CODE_SIGN_IDENTITY="iPhone Distribution: Vipads MCHJ (ZDBP5R
 export DEVELOPMENT_TEAM="ZDBP5RSRZF"
 
 export API_ID="0"
-export API_HASH="1351b4f50d0fc65dc724d62bd09b6c79"
+export API_HASH="0000000000000000000000000000000"
 
 export BUNDLE_ID="uz.fenixuz.app"
 export APP_CENTER_ID="0"
