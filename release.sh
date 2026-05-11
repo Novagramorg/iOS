@@ -144,17 +144,10 @@ fi
 ok "Distribution sertifikat topildi"
 
 # ─── Pre-flight: App Store provisioning profiles ─────────────────────────────
-step "App Store provisioning profillari topilmoqda (~/Downloads)..."
+step "App Store provisioning profillari topilmoqda (~/Downloads, ~/Documents/Apple/Distribution)..."
 
-# Map App ID suffix -> Bazel-expected filename (same as run.sh)
-declare -A APPID_TO_BAZEL
-APPID_TO_BAZEL["uz.fenixuz.app"]="Telegram.mobileprovision"
-APPID_TO_BAZEL["uz.fenixuz.app.Share"]="Share.mobileprovision"
-APPID_TO_BAZEL["uz.fenixuz.app.NotificationService"]="NotificationService.mobileprovision"
-APPID_TO_BAZEL["uz.fenixuz.app.NotificationContent"]="NotificationContent.mobileprovision"
-APPID_TO_BAZEL["uz.fenixuz.app.Widget"]="Widget.mobileprovision"
-APPID_TO_BAZEL["uz.fenixuz.app.SiriIntents"]="Intents.mobileprovision"
-APPID_TO_BAZEL["uz.fenixuz.app.BroadcastUpload"]="BroadcastUpload.mobileprovision"
+# App ID suffix -> Bazel-expected filename mapping is defined inside the
+# Python heredoc below (macOS bash 3.2 has no associative arrays).
 
 # Backup current development profiles
 PROV_BACKUP="$SCRIPT_DIR/.telegram-fz-llc-backup/provisioning_dev_$(date +%Y%m%d_%H%M%S)"
@@ -169,7 +162,10 @@ PYTHON_OUT=$(python3 - <<PYEOF
 import os, glob, plistlib, subprocess, shutil, sys
 
 PROV_DIR = "$PROV_DIR"
-DOWNLOADS = os.path.expanduser("~/Downloads")
+SEARCH_DIRS = [
+    os.path.expanduser("~/Downloads"),
+    os.path.expanduser("~/Documents/Apple/Distribution"),
+]
 APPID_MAP = {
     "uz.fenixuz.app": "Telegram.mobileprovision",
     "uz.fenixuz.app.Share": "Share.mobileprovision",
@@ -182,7 +178,12 @@ APPID_MAP = {
 
 mapped = {}
 unmatched = []
-for f in sorted(glob.glob(os.path.join(DOWNLOADS, "*.mobileprovision"))):
+candidate_files = []
+for d in SEARCH_DIRS:
+    if os.path.isdir(d):
+        candidate_files.extend(sorted(glob.glob(os.path.join(d, "*.mobileprovision"))))
+
+for f in candidate_files:
     try:
         plist_xml = subprocess.check_output(["security", "cms", "-D", "-i", f])
         p = plistlib.loads(plist_xml)
@@ -268,10 +269,17 @@ config = build_configuration_from_json('$CONFIG_PATH')
 bazel  = locate_bazel(base_path=base, cache_host_or_path=None,
                       cache_dir=os.path.expanduser('~/telegram-bazel-cache'))
 repo = '{}/build-input/configuration-repository'.format(base)
+# aps_environment is empty because the uz.fenixuz.app App ID doesn't yet
+# have Push Notifications capability enabled in Apple Developer Portal.
+# Push notifications wouldn't work end-to-end anyway (Telegram's server
+# has the APNS cert for ph.telegra.Telegraph, not for us). When we want
+# push, we will: enable Push Notifications on the App ID + 6 extensions,
+# generate APNS .p8 key, regenerate the 7 App Store profiles, then set
+# aps_environment='production' here.
 config.write_to_variables_file(
     bazel_path=bazel,
     use_xcode_managed_codesigning=False,
-    aps_environment='production',
+    aps_environment='',
     path=repo + '/variables.bzl'
 )
 print("variables.bzl regenerated for appstore config")
