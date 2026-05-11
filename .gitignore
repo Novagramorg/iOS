@@ -84,5 +84,18 @@ xcode-files
 PROJECT_LOG.md
 FENIXUZ_PLAN.md
 WEBSITE_AUDIT_FENIXUZ.md
+APP_STORE_METADATA.md
 .playwright-mcp/
 .telegram-fz-llc-backup/
+
+# === Fenixuz fork: local-only secrets and tooling ===
+# Personal Telegram API credentials (api_id / api_hash) — never commit.
+# Each developer must obtain their own from https://my.telegram.org/apps
+# and copy build-system/template_minimal_development_configuration.json as a starting point.
+build-system/my-config.json
+build-system/my-device-config.json
+build-system/appstore-configuration.json
+build-system/appcenter-configuration.json
+
+# Local-only metadata / tooling drafts
+fastlane/
