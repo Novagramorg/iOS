@@ -96,6 +96,8 @@ build-system/my-config.json
 build-system/my-device-config.json
 build-system/appstore-configuration.json
 build-system/appcenter-configuration.json
+build-system/local-secrets.sh
+build-system/example-configuration/variables.bzl
 
 # Local-only metadata / tooling drafts
 fastlane/

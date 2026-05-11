@@ -101,9 +101,19 @@ else
     EXTRACT_DIR="/tmp/telegram-device-app"
 fi
 
-# API credentials (Coding Tech HR — used for both modes)
-API_ID="0"
-API_HASH="0000000000000000000000000000000"
+# API credentials — sourced from gitignored build-system/local-secrets.sh.
+# Each developer creates their own (get keys at https://my.telegram.org/apps).
+if [ -f "build-system/local-secrets.sh" ]; then
+    source build-system/local-secrets.sh
+fi
+API_ID="${API_ID:-0}"
+API_HASH="${API_HASH:-0000000000000000000000000000000}"
+if [ "$API_ID" = "0" ]; then
+    echo "ERROR: Telegram API credentials not configured."
+    echo "Create build-system/local-secrets.sh with API_ID and API_HASH"
+    echo "from https://my.telegram.org/apps, then re-run."
+    exit 1
+fi
 
 # Real Vipads MCHJ team for device builds. Simulator uses the same value but
 # disableProvisioningProfiles makes it irrelevant.

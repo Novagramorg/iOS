@@ -6,8 +6,17 @@ export DEVELOPMENT_CODE_SIGN_IDENTITY="iPhone Distribution: Vipads MCHJ (ZDBP5RS
 export DISTRIBUTION_CODE_SIGN_IDENTITY="iPhone Distribution: Vipads MCHJ (ZDBP5RSRZF)"
 export DEVELOPMENT_TEAM="ZDBP5RSRZF"
 
-export API_ID="0"
-export API_HASH="0000000000000000000000000000000"
+# API credentials sourced from gitignored local-secrets.sh (same dir).
+if [ -f "$(dirname "$0")/local-secrets.sh" ]; then
+    source "$(dirname "$0")/local-secrets.sh"
+fi
+export API_ID="${API_ID:-0}"
+export API_HASH="${API_HASH:-0000000000000000000000000000000}"
+if [ "$API_ID" = "0" ]; then
+    echo "ERROR: build-system/local-secrets.sh missing or empty." >&2
+    echo "Create it with API_ID and API_HASH from https://my.telegram.org/apps" >&2
+    exit 1
+fi
 
 export BUNDLE_ID="uz.fenixuz.app"
 export APP_CENTER_ID="0"
