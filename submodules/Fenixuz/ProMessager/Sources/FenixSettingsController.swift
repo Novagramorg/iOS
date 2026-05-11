@@ -59,7 +59,6 @@ private enum FenixEntry: ItemListNodeEntry {
     case hideFolders(PresentationTheme, String, String, Bool)
     case showStories(PresentationTheme, String, String, Bool)
     case showMutualContactSymbol(PresentationTheme, String, String, Bool)
-    case showEnablePremium(PresentationTheme, String, String, Bool)
     case interfaceFooter(PresentationTheme, String)
     
     // — Messaging Section —
@@ -86,7 +85,7 @@ private enum FenixEntry: ItemListNodeEntry {
         switch self {
         case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .chatFooter:
             return FenixSection.chat.rawValue
-        case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .showEnablePremium, .interfaceFooter:
+        case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .interfaceFooter:
             return FenixSection.interface.rawValue
         case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .messagingFooter:
             return FenixSection.messaging.rawValue
@@ -112,7 +111,6 @@ private enum FenixEntry: ItemListNodeEntry {
         case .hideFolders:               return 11
         case .showStories:               return 12
         case .showMutualContactSymbol:   return 13
-        case .showEnablePremium:         return 14
         case .interfaceFooter:           return 15
         // Messaging
         case .messagingHeader:           return 20
@@ -163,8 +161,6 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .showStories(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .showMutualContactSymbol(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .showMutualContactSymbol(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
-        case let .showEnablePremium(lhsTheme, lhsTitle, lhsText, lhsValue):
-            if case let .showEnablePremium(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .interfaceFooter(lhsTheme, lhsText):
             if case let .interfaceFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
             
@@ -222,10 +218,6 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .showMutualContactSymbol(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.2.fill", color: .blue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateShowMutualContactSymbol(val)
-            })
-        case let .showEnablePremium(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "star.fill", color: .yellow), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
-                arguments.updateShowEnablePremium(val)
             })
         case let .interfaceFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -320,7 +312,6 @@ private struct FenixSettingsState: Equatable {
     var showStories: Bool
     var showMutualContactSymbol: Bool
     var showGhostMode: Bool
-    var showEnablePremium: Bool
     var showViewFirstMessage: Bool
     var longPressCameraSelection: Bool
     var showTranslateMessages: Bool
@@ -338,7 +329,6 @@ private struct FenixSettingsState: Equatable {
         self.showStories = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_stories") as? Bool ?? true
         self.showMutualContactSymbol = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_mutual_contact_symbol") as? Bool ?? true
         self.showGhostMode = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_ghost_mode_button") ?? false
-        self.showEnablePremium = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "enable_premium") ?? false
         self.showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
         self.longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? true
         self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? true
@@ -365,9 +355,6 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.showGhostMode != rhs.showGhostMode {
-            return false
-        }
-        if lhs.showEnablePremium != rhs.showEnablePremium {
             return false
         }
         if lhs.showViewFirstMessage != rhs.showViewFirstMessage {
@@ -462,7 +449,6 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.hideFolders(presentationData.theme, "Jildlarni yashirish", "Chatlar ro'yxati tepasidagi jildlarni vaqtinchalik berkitish", state.hideFolders))
     entries.append(.showStories(presentationData.theme, "Hikoyalar paneli", "Chatlar ro'yxati tepasida hikoyalarni ko'rsatish", state.showStories))
     entries.append(.showMutualContactSymbol(presentationData.theme, "Mutual kontakt belgisi", "Kontaktlar ro'yxatida 🤝 belgisini ko'rsatish", state.showMutualContactSymbol))
-    entries.append(.showEnablePremium(presentationData.theme, "Premium ko'rinish", "Premium imkoniyatlar belgilarini ko'rsatish", state.showEnablePremium))
     entries.append(.interfaceFooter(presentationData.theme, "Faqat sizning qurilmangizga ta'sir qiladi."))
 
     // ─── CHAT ───
@@ -512,7 +498,6 @@ private final class FenixSettingsArguments {
     let updateShowStories: (Bool) -> Void
     let updateShowMutualContactSymbol: (Bool) -> Void
     let updateShowGhostMode: (Bool) -> Void
-    let updateShowEnablePremium: (Bool) -> Void
     let updateShowViewFirstMessage: (Bool) -> Void
     let updateLongPressCameraSelection: (Bool) -> Void
     let updateTranslateMessages: (Bool) -> Void
@@ -525,14 +510,13 @@ private final class FenixSettingsArguments {
     let updateBlockForeignUsers: (Bool) -> Void
     let updateBlockApkFiles: (Bool) -> Void
     
-    init(openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowEnablePremium: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
+    init(openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
         self.openCalls = openCalls
         self.updateShowDeletedMessages = updateShowDeletedMessages
         self.updateHideFolders = updateHideFolders
         self.updateShowStories = updateShowStories
         self.updateShowMutualContactSymbol = updateShowMutualContactSymbol
         self.updateShowGhostMode = updateShowGhostMode
-        self.updateShowEnablePremium = updateShowEnablePremium
         self.updateShowViewFirstMessage = updateShowViewFirstMessage
         self.updateLongPressCameraSelection = updateLongPressCameraSelection
         self.updateTranslateMessages = updateTranslateMessages
@@ -548,9 +532,6 @@ private final class FenixSettingsArguments {
 }
 
 public func fenixSettingsController(context: AccountContext) -> ViewController {
-    if context.isRealPremium {
-        UserDefaults(suiteName: "pro_messager")?.set(true, forKey: "enable_premium")
-    }
     let statePromise = ValuePromise(FenixSettingsState(), ignoreRepeated: true)
     let stateValue = Atomic(value: FenixSettingsState())
     let updateState: ((FenixSettingsState) -> FenixSettingsState) -> Void = { f in
@@ -598,18 +579,6 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         updateState { state in
             var state = state
             state.showGhostMode = value
-            return state
-        }
-    }, updateShowEnablePremium: { value in
-        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "enable_premium")
-        if value {
-            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-            let alertController = textAlertController(context: context, title: nil, text: "Bu real Telegram.org premium status emas. Dasturchi tomonidan berilgan Gift", actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})])
-            context.sharedContext.mainWindow?.present(alertController, on: .root)
-        }
-        updateState { state in
-            var state = state
-            state.showEnablePremium = value
             return state
         }
     }, updateShowViewFirstMessage: { value in

@@ -267,7 +267,7 @@ public final class AccountContextImpl: AccountContext {
     
     private var _isPremium: Bool = false
     public var isPremium: Bool {
-        return self._isPremium || (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "enable_premium") ?? false)
+        return self._isPremium
     }
     public var isRealPremium: Bool {
         return self._isPremium
