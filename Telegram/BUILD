@@ -338,6 +338,11 @@ filegroup(
     ]),
 )
 
+filegroup(
+    name = "PrivacyManifest",
+    srcs = ["Telegram-iOS/PrivacyInfo.xcprivacy"],
+)
+
 objc_library(
     name = "Main",
     module_name = "Main",
@@ -1746,6 +1751,7 @@ ios_application(
     ],
     resources = [
         ":LaunchScreen",
+        ":PrivacyManifest",
         #":DefaultAppIcon",
     ],
     frameworks = [
