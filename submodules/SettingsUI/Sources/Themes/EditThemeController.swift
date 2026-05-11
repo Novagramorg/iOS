@@ -401,7 +401,7 @@ public func editThemeController(context: AccountContext, mode: EditThemeControll
         })
     }, openFile: {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let controller = legacyICloudFilePicker(theme: presentationData.theme, mode: .import, documentTypes: ["org.telegram.Telegram-iOS.theme"], completion: { urls in
+        let controller = legacyICloudFilePicker(theme: presentationData.theme, mode: .import, documentTypes: ["uz.fenixuz.theme"], completion: { urls in
             if let url = urls.first{
                 if let data = try? Data(contentsOf: url), let theme = makePresentationTheme(data: data) {
                     if case let .file(file) = theme.chat.defaultWallpaper, file.id == 0 {
