@@ -412,9 +412,13 @@ typedef enum {
 }
 
 - (UIView *)createAnimationSnapshot {
-    UIImage *image = _glkView.snapshot;
-    UIImageView *imageView = [[UIImageView alloc] initWithFrame:_glkView.frame];
-    imageView.image = image;
+    // Fenixuz fork: snapshot the static Phoenix logo, NOT the hidden GLKView.
+    // The GLKView is hidden but its OpenGL canvas still holds the Telegram
+    // sphere texture; calling _glkView.snapshot would leak Telegram branding
+    // into the splash -> phone-entry transition animation. App Review §5.2.
+    UIImageView *imageView = [[UIImageView alloc] initWithFrame:_fenixLogoView.frame];
+    imageView.image = _fenixLogoView.image;
+    imageView.contentMode = _fenixLogoView.contentMode;
     return imageView;
 }
 
