@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
+	<string>Fenixuz needs access to speech recognition for voice message transcription.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).refresh</string>
@@ -18,12 +18,8 @@
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIcons</key>
 	<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>AppIconLLCIcon</key>
 			<dict>
 				<key>CFBundleIconFiles</key>
@@ -67,8 +63,6 @@
 		</dict>
 		<key>CFBundlePrimaryIcon</key>
 		<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleIconName</key>
 			<string>AppIconLLC</string>
 			<key>UIPrerenderedIcon</key>
@@ -77,8 +71,6 @@
 	</dict>
 	<key>CFBundleIcons~ipad</key>
 	<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 		<key>CFBundleAlternateIcons</key>
 		<dict>
 			<key>AppIconLLCIcon</key>
@@ -128,8 +120,6 @@
 		</dict>
 		<key>CFBundlePrimaryIcon</key>
 		<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleIconName</key>
 			<string>AppIconLLC</string>
 			<key>UIPrerenderedIcon</key>
@@ -151,8 +141,6 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
@@ -163,8 +151,6 @@
 			</array>
 		</dict>
 		<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
@@ -176,8 +162,6 @@
 			</array>
 		</dict>
 		<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
@@ -191,7 +175,9 @@
 	<key>CFBundleVersion</key>
 	<string>${BUILD_NUMBER}</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<true/>
+	<key>ITSEncryptionExportComplianceCode</key>
+	<string></string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>instagram</string>
@@ -232,29 +218,27 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>We need this so that you can take and share photos and videos.</string>
+	<string>Fenixuz needs camera access so you can take and share photos and videos.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Telegram stores your contacts heavily encrypted in the cloud to let you connect with your friends across all your devices.</string>
+	<string>Fenixuz stores your contacts heavily encrypted in the cloud to let you connect with your friends across all your devices.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>You can use Face ID to unlock the app.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>When you send your location to your friends, Telegram needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
+	<string>When you send your location to your friends, Fenixuz needs access to show them a map. You also need this to send locations from an Apple Watch.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>When you send your location to your friends, Telegram needs access to show them a map.</string>
+	<string>When you send your location to your friends, Fenixuz needs access to show them a map.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>We need this so that you can record and share voice messages and videos with sound.</string>
+	<string>Fenixuz needs microphone access so you can record and share voice messages and videos with sound.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>When you send your location to your friends, Telegram needs access to show them a map.</string>
+	<string>When you send your location to your friends, Fenixuz needs access to show them a map.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>We need this so that you can share photos and videos from your photo library.</string>
+	<string>Fenixuz needs photo library access so you can share photos and videos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need this so that you can share photos and videos from your photo library.</string>
+	<string>Fenixuz needs photo library access so you can share photos and videos.</string>
 	<key>NSSiriUsageDescription</key>
 	<string>You can use Siri to send messages.</string>
 	<key>NSUserActivityTypes</key>
@@ -313,24 +297,20 @@
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Telegram iOS Color Theme File</string>
+			<string>Fenixuz Theme</string>
 			<key>UTTypeIconFiles</key>
 			<array>
 				<string>BlueIcon@3x.png</string>
 			</array>
 			<key>UTTypeIdentifier</key>
-			<string>org.telegram.Telegram-iOS.theme</string>
+			<string>uz.fenixuz.theme</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ovozni matnga o'girish imkoniyati uchun kerak.</string>
 				<key>public.filename-extension</key>
 				<array>
 					<string>tgios-theme</string>
