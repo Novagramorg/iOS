@@ -281,6 +281,20 @@ typedef enum {
 - (void)loadGL
 {
 #if TARGET_OS_SIMULATOR && defined(__aarch64__)
+    // Fenixuz fork: simulator (ARM64) GLKit'ni qo'llab-quvvatlamaydi — OpenGL
+    // animatsiya'ni o'tkazib yuboramiz, lekin Fenixuz logo'ni baribir
+    // qo'shamiz (plain UIImageView, OpenGL kerak emas). Aks holda
+    // simulator'da intro screen bo'sh ko'rinadi (real device'da OK).
+    if (!_fenixLogoView) {
+        CGFloat size = 200;
+        int height = 50;
+        _fenixLogoView = [[UIImageView alloc] initWithFrame:CGRectMake(self.view.bounds.size.width / 2 - size / 2, height, size, size)];
+        _fenixLogoView.image = [UIImage imageNamed:@"fenix_logo"];
+        _fenixLogoView.contentMode = UIViewContentModeScaleAspectFit;
+        _fenixLogoView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
+        _fenixLogoView.userInteractionEnabled = NO;
+        [self.view addSubview:_fenixLogoView];
+    }
     return;
 #endif
     
@@ -313,7 +327,7 @@ typedef enum {
         [self.view addSubview:_glkView];
 
         // Fenixuz fork: hide the rotating OpenGL Telegram logo and overlay our
-        // static Phoenix logo at the same frame. The GLKView still loads (so
+        // static Fenixuz logo at the same frame. The GLKView still loads (so
         // animations like fade-in / center-shift continue to work) but it is
         // covered by the logo, giving the user a clean static brand image.
         _glkView.hidden = YES;
@@ -412,7 +426,7 @@ typedef enum {
 }
 
 - (UIView *)createAnimationSnapshot {
-    // Fenixuz fork: snapshot the static Phoenix logo, NOT the hidden GLKView.
+    // Fenixuz fork: snapshot the static Fenixuz logo, NOT the hidden GLKView.
     // The GLKView is hidden but its OpenGL canvas still holds the Telegram
     // sphere texture; calling _glkView.snapshot would leak Telegram branding
     // into the splash -> phone-entry transition animation. App Review §5.2.
@@ -577,7 +591,23 @@ typedef enum {
     
     _pageControl.frame = CGRectMake(0, pageControlY, self.view.bounds.size.width, 7);
     _glkView.frame = CGRectChangedOriginY(_glkView.frame, glViewY - statusBarHeight);
-    _fenixLogoView.frame = _glkView.frame;
+    if (_glkView != nil) {
+        _fenixLogoView.frame = _glkView.frame;
+    } else {
+        // Fenixuz fork: simulator path — _glkView never created (GLKit unsupported
+        // on ARM64 simulator). Position the logo where the GL sphere would be,
+        // using deviceScreen-derived glViewY, and keep it square (200pt) above
+        // the page text. Width = 200 keeps the Fenixuz logo visible without
+        // overlapping the headline copy below.
+        CGFloat logoSize = 200.0f;
+        _fenixLogoView.frame = CGRectMake(
+            floor((self.view.bounds.size.width - logoSize) / 2.0f),
+            glViewY - statusBarHeight,
+            logoSize,
+            logoSize
+        );
+        [self.view bringSubviewToFront:_fenixLogoView];
+    }
     
     CGFloat startButtonWidth = MIN(430.0 - 48.0, self.view.bounds.size.width - 48.0f);
     UIView *startButton = self.createStartButton(startButtonWidth);

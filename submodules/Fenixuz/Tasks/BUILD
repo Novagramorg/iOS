@@ -21,6 +21,7 @@ swift_library(
         "//submodules/ItemListUI:ItemListUI",
         "//submodules/TelegramUI/Components/Settings/QuickReplyNameAlertController:QuickReplyNameAlertController",
         "//submodules/AlertUI:AlertUI",
+        "//submodules/Fenixuz/Localization:FenixuzLocalization",
     ],
     visibility = [
         "//visibility:public",

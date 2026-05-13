@@ -7,7 +7,21 @@ This file provides guidance to AI assistants working with the **Fenixuz fork of 
 - Brand: **Fenixuz** (organization: Vipads uz, Team ID `C67CF9S4VU`).
 - App Store bundle: `uz.fenixuz.app` (kept in `build-system/appstore-configuration.json` for release builds).
 - Simulator/dev bundle: `ph.telegra.Telegraph` (kept in `build-system/my-config.json`, fake codesigning).
-- All Fenixuz-specific code lives in `submodules/Fenixuz/<Feature>/` modules. Telegram source files contain at most 1–3 line `import FenixuzX` hooks. **Never** add Fenixuz feature code into Telegram-owned files (TelegramUI/Sources, ChatListUI/Sources, SettingsUI/Sources, etc.) — always create or extend a Fenixuz submodule.
+- All Fenixuz-specific code lives in `submodules/Fenixuz/<Feature>/` modules. Telegram source files contain at most 1–3 line `import FenixuzX` hooks. **Never** add Fenixuz feature code into Telegram-owned files (TelegramUI/Sources, ChatListUI/Sources, SettingsUI/Sources, AuthorizationUI/Sources, etc.) — always create or extend a Fenixuz submodule.
+- **Every hook in a Telegram-owned file MUST be documented in `submodules/Fenixuz/HOOKS.md`.** That file is the source-of-truth index used by the AI on every `git pull upstream` to re-apply hooks. If you touch a Telegram-owned file, you also touch HOOKS.md in the same commit.
+
+### Upstream-pull conflict policy
+
+On every `git pull upstream master`:
+
+1. **Checkpoint first** — `git tag pre-pull-checkpoint-$(date +%Y%m%d-%H%M)` + `git branch backup-before-merge-$(date +%Y%m%d)` (or run the equivalent helper script). These let us roll back if the merge goes wrong.
+2. `git pull upstream master --no-rebase` — surface conflicts, do not silently absorb them.
+3. **Fenixuz hooks always win** — the lines themselves are non-negotiable. Upstream code wins for everything around them.
+4. **AI conflict resolution is manual, one file at a time.** Open `submodules/Fenixuz/HOOKS.md`, locate the hook section for the conflicting file, ask the AI assistant to re-apply that hook block at the new line position based on the upstream surroundings. Do NOT auto-merge / auto-accept either side.
+5. **Build before deleting checkpoints** — `./run.sh` must succeed, simulator must launch, demo-login auto-fill must still work. Only then drop the backup tags.
+6. **Existing safety nets:** `backup-before-merge` branch + `pre-pull-checkpoint-*` tags are kept as rollback anchors.
+
+If a hook is silently lost during a merge, the consequence is silent feature-breakage (demo auto-fill stops, custom Settings panel disappears, etc.) — this is why HOOKS.md exists and why pulls are always AI-assisted.
 
 Active Fenixuz modules (as of 2026-05-08):
 

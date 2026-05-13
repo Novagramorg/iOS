@@ -15,6 +15,24 @@ ok()   { echo -e "${GREEN}✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
 err()  { echo -e "${RED}✗ $1${NC}"; exit 1; }
 
+# ─── Auto-kill stale build processes ─────────────────────────────────────────
+# Har safar ./run.sh ishga tushganda avval eski bazel/build process'larni
+# o'chiramiz. Aks holda "Another command (pid=X) is running" deb to'xtab qoladi.
+# DIQQAT: o'zimizning run.sh process'ini kill qilmaylik.
+#
+# Pattern'lar:
+#   bazel-8.4.2  — bazel client binary (build chaqiruvchi)
+#   bazel(Telegram-iOS) — bazel JAVA server (long-lived, lock ushlab turadi)
+#   A-server.jar — server jar (yana bir nom)
+#   wrapped_clang / swift-frontend — actively running compile workers
+for pat in 'bazel-8.4.2' 'bazel(Telegram-iOS)' 'A-server.jar' 'wrapped_clang' 'swift-frontend'; do
+    pkill -9 -f "$pat" 2>/dev/null || true
+done
+# Bazel server lock fayllari stale qolmasin (server o'lganidan keyin)
+rm -f "$HOME/telegram-bazel-cache/bazel-user-root"/*/server/lock 2>/dev/null || true
+rm -f "$HOME/telegram-bazel-cache/bazel-user-root"/*/command.port 2>/dev/null || true
+sleep 1
+
 # ─── Help ─────────────────────────────────────────────────────────────────────
 show_help() {
     cat <<'HELP'
@@ -269,8 +287,28 @@ ok "Konfiguratsiya repository tayyor"
 
 # ─── Step 2.5: Pre-flight check for real-device provisioning profiles ────────
 if [ "$MODE" = "real" ]; then
-    step "Provisioning profillar tekshirilmoqda..."
     PROV_DIR="$SCRIPT_DIR/build-input/configuration-repository/provisioning"
+
+    # Avval Development profillarni avtomatik o'rnatib qo'yamiz (publish.sh dan
+    # keyin Distribution profillar qolib ketgan bo'lishi mumkin).
+    DEV_SRC="$HOME/Documents/Apple/Development"
+    if [ -d "$DEV_SRC" ] && [ -f "$DEV_SRC/Fenixuz.mobileprovision" ]; then
+        step "Development profillar joylashtirilmoqda..."
+        cp -f "$DEV_SRC/Fenixuz.mobileprovision"                       "$PROV_DIR/Telegram.mobileprovision"
+        cp -f "$DEV_SRC/Fenixuz_BroadcastUpload.mobileprovision"       "$PROV_DIR/BroadcastUpload.mobileprovision"
+        cp -f "$DEV_SRC/Fenixuz_NotificationService.mobileprovision"   "$PROV_DIR/NotificationContent.mobileprovision"
+        cp -f "$DEV_SRC/Fenixuz_NotificationService2.mobileprovision"  "$PROV_DIR/NotificationService.mobileprovision"
+        cp -f "$DEV_SRC/Fenixuz_Share.mobileprovision"                 "$PROV_DIR/Share.mobileprovision"
+        cp -f "$DEV_SRC/Fenixuz_SiriIntents.mobileprovision"           "$PROV_DIR/Intents.mobileprovision"
+        cp -f "$DEV_SRC/Fenixuz_Widget.mobileprovision"                "$PROV_DIR/Widget.mobileprovision"
+        cp -f "$DEV_SRC/Fenixuz.mobileprovision"                       "$PROV_DIR/WatchApp.mobileprovision"
+        cp -f "$DEV_SRC/Fenixuz.mobileprovision"                       "$PROV_DIR/WatchExtension.mobileprovision"
+        ok "Development profillar joylashtirildi (manba: $DEV_SRC)"
+    else
+        warn "$DEV_SRC topilmadi — mavjud profillar bilan davom etamiz"
+    fi
+
+    step "Provisioning profillar tekshirilmoqda..."
     PROV_OK=1
 
     # Check that the main Telegram.mobileprovision belongs to Vipads team and
@@ -360,12 +398,18 @@ else
     BAZEL_PROV_FLAG=""
 fi
 
+XCODE_DEV_DIR=/Applications/Xcode.app/Contents/Developer
+
 "$BAZEL_PATH" \
     --output_user_root="$CACHE_DIR/bazel-user-root" \
     build \
     Telegram/Telegram \
     --keep_going \
     --announce_rc \
+    --action_env=DEVELOPER_DIR="$XCODE_DEV_DIR" \
+    --host_action_env=DEVELOPER_DIR="$XCODE_DEV_DIR" \
+    --repo_env=DEVELOPER_DIR="$XCODE_DEV_DIR" \
+    --xcode_version=26.5.0.17F42 \
     --features=swift.use_global_module_cache \
     --features=swift.use_global_index_store \
     --features=swift.skip_function_bodies_for_derived_files \
@@ -453,7 +497,10 @@ for runtime, devices in data.get('devices', {}).items():
 
     step "Simulator boot qilinmoqda..."
     xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
-    open -a Simulator
+    # xcode-select sudo'siz bo'lsa Simulator.app system'da yo'q — Xcode ichidan to'g'ridan-to'g'ri ochamiz
+    if ! open -a Simulator 2>/dev/null; then
+        open "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app" || true
+    fi
     ok "Simulator tayyor"
 
     step "O'rnatilmoqda va ishga tushirilmoqda..."

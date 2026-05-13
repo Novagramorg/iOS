@@ -10,6 +10,7 @@ import PresentationDataUtils
 import ItemListUI
 import QuickReplyNameAlertController
 import AlertUI
+import FenixuzLocalization
 
 private enum TodoItemSection: Int32 {
     case tasks = 0
@@ -83,9 +84,10 @@ private struct TodoItemState: Equatable {
 
 private func todoItemEntries(presentationData: PresentationData, state: TodoItemState) -> [TodoItemEntry] {
     var entries: [TodoItemEntry] = []
-    
+    let l10n = FenixuzL10n(presentationData.strings)
+
     if state.tasks.isEmpty {
-        entries.append(.emptyState(presentationData.theme, "Sizda hozircha vazifalar yo'q. Yangi qo'shing."))
+        entries.append(.emptyState(presentationData.theme, l10n.tasks_items_empty))
     } else {
         for (index, task) in state.tasks.enumerated() {
             entries.append(.task(index, presentationData.theme, task))
@@ -118,8 +120,9 @@ public func todoItemController(context: AccountContext, folder: TodoFolder) -> V
         statePromise.get()
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, TodoItemArguments)) in
+            let l10n = FenixuzL10n(presentationData.strings)
             let rightButton = ItemListNavigationButton(content: .icon(.add), style: .regular, enabled: true, action: {
-                let (controller, _) = quickReplyNameAlertController(context: context, text: "Yangi Vazifa", subtext: "Vazifa nomini kiriting", value: nil, characterLimit: 200, apply: { title in
+                let (controller, _) = quickReplyNameAlertController(context: context, text: l10n.tasks_newTask_title, subtext: l10n.tasks_newTask_prompt, value: nil, characterLimit: 200, apply: { title in
                     if let title = title, !title.isEmpty {
                         TodoStorage.addTask(folderId: folder.id, title: title)
                         updateState { state in

@@ -10,6 +10,7 @@ import PresentationDataUtils
 import ItemListUI
 import QuickReplyNameAlertController
 import AlertUI
+import FenixuzLocalization
 
 private enum TodoListSection: Int32 {
     case folders = 0
@@ -84,9 +85,10 @@ private struct TodoListState: Equatable {
 
 private func todoListEntries(presentationData: PresentationData, state: TodoListState) -> [TodoListEntry] {
     var entries: [TodoListEntry] = []
-    
+    let l10n = FenixuzL10n(presentationData.strings)
+
     if state.folders.isEmpty {
-        entries.append(.emptyState(presentationData.theme, "Sizda hozircha papkalar yo'q. Yangi qo'shing."))
+        entries.append(.emptyState(presentationData.theme, l10n.tasks_folders_empty_short))
     } else {
         for (index, folder) in state.folders.enumerated() {
             let count = state.tasks.filter { $0.folderId == folder.id }.count
@@ -117,8 +119,9 @@ public func todoListController(context: AccountContext) -> ViewController {
         statePromise.get()
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, TodoListArguments)) in
+            let l10n = FenixuzL10n(presentationData.strings)
             let rightButton = ItemListNavigationButton(content: .icon(.add), style: .regular, enabled: true, action: {
-                let (controller, _) = quickReplyNameAlertController(context: context, text: "Yangi papka", subtext: "Papka nomini kiriting", value: nil, characterLimit: 100, apply: { title in
+                let (controller, _) = quickReplyNameAlertController(context: context, text: l10n.tasks_newFolder_title, subtext: l10n.tasks_newFolder_prompt, value: nil, characterLimit: 100, apply: { title in
                     if let title = title, !title.isEmpty {
                         TodoStorage.addFolder(title: title)
                         updateState { state in
@@ -130,10 +133,10 @@ public func todoListController(context: AccountContext) -> ViewController {
                 })
                 presentControllerImpl?(controller)
             })
-            
+
             let controllerState = ItemListControllerState(
                 presentationData: ItemListPresentationData(presentationData),
-                title: .text("Task List"),
+                title: .text(l10n.tasks_listTitle),
                 leftNavigationButton: nil,
                 rightNavigationButton: rightButton,
                 backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)

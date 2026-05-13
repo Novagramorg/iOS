@@ -48,6 +48,8 @@ swift_library(
         "//submodules/TelegramUI/Components/PlainButtonComponent",
         "//submodules/Utils/DeviceModel",
         "//submodules/PresentationDataUtils",
+        "//submodules/Fenixuz/AppleReview:FenixuzAppleReview",
+        "//submodules/Fenixuz/Brand:FenixuzBrand",
     ],
     visibility = [
         "//visibility:public",

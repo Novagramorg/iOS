@@ -11,6 +11,7 @@ import PresentationDataUtils
 import ItemListUI
 import CallListUI
 import AppBundle
+import FenixuzLocalization
 
 private enum FenixSection: Int32 {
     case chat = 0
@@ -20,28 +21,12 @@ private enum FenixSection: Int32 {
     case protection = 4
 }
 
-private func textStyleDisplayName(_ rawValue: String) -> String {
-    switch rawValue {
-    case "bold":          return "Qalin (Bold)"
-    case "italic":        return "Kiyshiq (Italic)"
-    case "monospace":     return "Monospace (Kod)"
-    case "strikethrough": return "Chizilgan (Strikethrough)"
-    case "underline":     return "Tagiga chizilgan (Underline)"
-    case "spoiler":       return "Spoiler"
-    default:             return "Uslubsiz (Oddiy)"
-    }
+private func textStyleDisplayName(_ rawValue: String, l10n: FenixuzL10n) -> String {
+    return l10n.textStyle_displayName(rawValue)
 }
 
-private func textStyleExampleDescription(_ rawValue: String) -> String {
-    switch rawValue {
-    case "bold":          return "Misol: Salom, bu xabar qalin (Bold) ko'rinishda yuboriladi"
-    case "italic":        return "Misol: Salom, bu xabar kiyshiq (Italic) ko'rinishda yuboriladi"
-    case "monospace":     return "Misol: Salom, bu xabar monospace (kod) ko'rinishda yuboriladi"
-    case "strikethrough": return "Misol: Salom, bu xabar chizilgan ko'rinishda yuboriladi"
-    case "underline":     return "Misol: Salom, bu xabar tagiga chizilgan ko'rinishda yuboriladi"
-    case "spoiler":       return "Misol: Salom, bu xabar spoiler ko'rinishda yuboriladi (bosib ko'rish kerak)"
-    default:             return "Uslub tanlanmagan. Xabarlar oddiy matn sifatida yuboriladi"
-    }
+private func textStyleExampleDescription(_ rawValue: String, l10n: FenixuzL10n) -> String {
+    return l10n.textStyle_example(rawValue)
 }
 
 private enum FenixEntry: ItemListNodeEntry {
@@ -257,12 +242,14 @@ private enum FenixEntry: ItemListNodeEntry {
                 arguments.openTextStyleSettings()
             })
         case let .autoText(theme, title, label):
-            let labelStyle: ItemListDisclosureLabelStyle = (label == "Yoqilgan") ? .badge(theme.list.itemAccentColor) : .text
+            let l10n = FenixuzL10n(presentationData.strings)
+            let labelStyle: ItemListDisclosureLabelStyle = (label == l10n.settings_state_enabled) ? .badge(theme.list.itemAccentColor) : .text
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "text.append", color: .teal), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
                 arguments.openAutoTextSettings()
             })
         case let .autoTranslate(theme, title, label):
-            let labelStyle: ItemListDisclosureLabelStyle = (label == "Yoqilgan") ? .badge(theme.list.itemAccentColor) : .text
+            let l10n = FenixuzL10n(presentationData.strings)
+            let labelStyle: ItemListDisclosureLabelStyle = (label == l10n.settings_state_enabled) ? .badge(theme.list.itemAccentColor) : .text
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "globe", color: .pink), title: title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
                 arguments.openAutoTranslateSettings()
             })
@@ -443,48 +430,49 @@ private func sttSupportedLanguages() -> [(String, String)] {
 
 private func fenixSettingsEntries(presentationData: PresentationData, state: FenixSettingsState) -> [FenixEntry] {
     var entries: [FenixEntry] = []
+    let l10n = FenixuzL10n(presentationData.strings)
 
-    // ─── INTERFEYS ───
-    entries.append(.interfaceHeader("INTERFEYS"))
-    entries.append(.hideFolders(presentationData.theme, "Jildlarni yashirish", "Chatlar ro'yxati tepasidagi jildlarni vaqtinchalik berkitish", state.hideFolders))
-    entries.append(.showStories(presentationData.theme, "Hikoyalar paneli", "Chatlar ro'yxati tepasida hikoyalarni ko'rsatish", state.showStories))
-    entries.append(.showMutualContactSymbol(presentationData.theme, "Mutual kontakt belgisi", "Kontaktlar ro'yxatida 🤝 belgisini ko'rsatish", state.showMutualContactSymbol))
-    entries.append(.interfaceFooter(presentationData.theme, "Faqat sizning qurilmangizga ta'sir qiladi."))
+    // ─── INTERFACE ───
+    entries.append(.interfaceHeader(l10n.settings_section_interface))
+    entries.append(.hideFolders(presentationData.theme, l10n.settings_interface_hideFolders_title, l10n.settings_interface_hideFolders_subtitle, state.hideFolders))
+    entries.append(.showStories(presentationData.theme, l10n.settings_interface_stories_title, l10n.settings_interface_stories_subtitle, state.showStories))
+    entries.append(.showMutualContactSymbol(presentationData.theme, l10n.settings_interface_mutualSymbol_title, l10n.settings_interface_mutualSymbol_subtitle, state.showMutualContactSymbol))
+    entries.append(.interfaceFooter(presentationData.theme, l10n.settings_interface_footer))
 
     // ─── CHAT ───
-    entries.append(.chatHeader("CHAT"))
-    entries.append(.deletedMessages(presentationData.theme, "O'chirilgan xabarlar", "O'chirilgan xabarlarni 🗑 belgi bilan ko'rsatish", state.showDeletedMessages))
-    entries.append(.showViewFirstMessage(presentationData.theme, "Birinchi xabarga o'tish", "Profil menyusida \"View First Message\" tugmasini qo'shish", state.showViewFirstMessage))
-    entries.append(.showGhostMode(presentationData.theme, "Ghost rejimi tugmasi", "Chatlar ro'yxati tepasida tezkor Ghost rejimi tugmasi", state.showGhostMode))
-    entries.append(.longPressCameraSelection(presentationData.theme, "Kamerani tanlash", "Video xabar tugmasini uzun bosib old/orqa kamerani tanlash", state.longPressCameraSelection))
-    entries.append(.chatFooter(presentationData.theme, "O'zgarishlar barcha chatlarga darhol qo'llaniladi."))
+    entries.append(.chatHeader(l10n.settings_section_chat))
+    entries.append(.deletedMessages(presentationData.theme, l10n.settings_chat_deletedMessages_title, l10n.settings_chat_deletedMessages_subtitle, state.showDeletedMessages))
+    entries.append(.showViewFirstMessage(presentationData.theme, l10n.settings_chat_firstMessage_title, l10n.settings_chat_firstMessage_subtitle, state.showViewFirstMessage))
+    entries.append(.showGhostMode(presentationData.theme, l10n.settings_chat_ghost_title, l10n.settings_chat_ghost_subtitle, state.showGhostMode))
+    entries.append(.longPressCameraSelection(presentationData.theme, l10n.settings_chat_camera_title, l10n.settings_chat_camera_subtitle, state.longPressCameraSelection))
+    entries.append(.chatFooter(presentationData.theme, l10n.settings_chat_footer))
 
-    // ─── XABARLAR ───
-    entries.append(.messagingHeader("XABARLAR"))
-    entries.append(.textStyle(presentationData.theme, "Yozuv uslubi", textStyleDisplayName(state.textStyle)))
+    // ─── MESSAGING ───
+    entries.append(.messagingHeader(l10n.settings_section_messaging))
+    entries.append(.textStyle(presentationData.theme, l10n.settings_messaging_textStyle_title, textStyleDisplayName(state.textStyle, l10n: l10n)))
 
-    let autoLabel = state.autoTextEnabled ? "Yoqilgan" : "O'chirilgan"
-    entries.append(.autoText(presentationData.theme, "Avto-matn qo'shimchasi", autoLabel))
+    let autoLabel = state.autoTextEnabled ? l10n.settings_state_enabled : l10n.settings_state_disabled
+    entries.append(.autoText(presentationData.theme, l10n.settings_messaging_autoText_title, autoLabel))
 
-    let translateLabel = state.autoTranslateEnabled ? "Yoqilgan" : "O'chirilgan"
-    entries.append(.autoTranslate(presentationData.theme, "Avto-tarjima", translateLabel))
+    let translateLabel = state.autoTranslateEnabled ? l10n.settings_state_enabled : l10n.settings_state_disabled
+    entries.append(.autoTranslate(presentationData.theme, l10n.settings_messaging_autoTranslate_title, translateLabel))
 
-    entries.append(.translateToggle(presentationData.theme, "Tarjima tugmasi", "Xabar context menyusida \"Translate\" ko'rsatilsin", state.showTranslateMessages))
-    entries.append(.translateMessages(presentationData.theme, "Tarjima tili"))
-    entries.append(.messagingFooter(presentationData.theme, "Yuboriladigan xabarlarning ko'rinishi va tarjimasini boshqaradi."))
+    entries.append(.translateToggle(presentationData.theme, l10n.settings_messaging_translateToggle_title, l10n.settings_messaging_translateToggle_subtitle, state.showTranslateMessages))
+    entries.append(.translateMessages(presentationData.theme, l10n.settings_messaging_translateLanguage_title))
+    entries.append(.messagingFooter(presentationData.theme, l10n.settings_messaging_footer))
 
-    // ─── OVOZ → MATN ───
-    entries.append(.sttHeader("OVOZ → MATN"))
-    entries.append(.sttEnabled(presentationData.theme, "Ovozni matnga o'girish", "Mikrofon yonida tezkor STT tugmasini ko'rsatish", state.sttEnabled))
+    // ─── VOICE → TEXT ───
+    entries.append(.sttHeader(l10n.settings_section_voice))
+    entries.append(.sttEnabled(presentationData.theme, l10n.settings_voice_stt_title, l10n.settings_voice_stt_subtitle, state.sttEnabled))
 
     let sttLangName = sttLanguageDisplayName(state.sttLanguage)
-    entries.append(.sttLanguage(presentationData.theme, "Tanish tili", sttLangName))
+    entries.append(.sttLanguage(presentationData.theme, l10n.settings_voice_sttLang_title, sttLangName))
 
-    // ─── HIMOYA ───
-    entries.append(.protectionHeader("HIMOYA"))
-    entries.append(.blockForeignUsers(presentationData.theme, "Xorijiy raqamlarni bloklash", "Boshqa davlat raqamlaridan kelgan xabarlarni avtomatik bloklash", state.blockForeignUsers))
-    entries.append(.blockApkFiles(presentationData.theme, "APK fayllarni bloklash", "Chatlarda .apk fayllarni yashirish (Android dasturlari)", state.blockApkFiles))
-    entries.append(.protectionFooter(presentationData.theme, "Spam va zararli kontentdan himoya."))
+    // ─── PROTECTION ───
+    entries.append(.protectionHeader(l10n.settings_section_protection))
+    entries.append(.blockForeignUsers(presentationData.theme, l10n.settings_protection_foreign_title, l10n.settings_protection_foreign_subtitle, state.blockForeignUsers))
+    entries.append(.blockApkFiles(presentationData.theme, l10n.settings_protection_apk_title, l10n.settings_protection_apk_subtitle, state.blockApkFiles))
+    entries.append(.protectionFooter(presentationData.theme, l10n.settings_protection_footer))
 
     // ItemListController entries should arrive in stableId order to avoid an
     // assertion. Section visual order is controlled by stableId numbering.

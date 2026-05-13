@@ -1,104 +1,155 @@
 import Foundation
-import UIKit
-import Display
-import AsyncDisplayKit
-import SwiftSignalKit
-import TelegramCore
-import AccountContext
-import TelegramPresentationData
-import PresentationDataUtils
-import ItemListUI
 
 // MARK: - Data Models
 
-public struct TodoFolder: Codable, Equatable {
+public struct TodoFolder: Equatable {
     public let id: String
     public var title: String
+    public var sortOrder: Int
     public let createdDate: Int32
-    
+
+    // Old convenience init — saqlanadi, eski callerlar buzilmaydi
     public init(title: String) {
         self.id = UUID().uuidString
         self.title = title
+        self.sortOrder = 0
         self.createdDate = Int32(Date().timeIntervalSince1970)
+    }
+
+    // Full init — SQLite layer ishlatadi
+    public init(id: String, title: String, sortOrder: Int, createdDate: Int32) {
+        self.id = id
+        self.title = title
+        self.sortOrder = sortOrder
+        self.createdDate = createdDate
     }
 }
 
-public struct TodoTask: Codable, Equatable {
+public struct TodoTask: Equatable {
     public let id: String
     public let folderId: String
     public var title: String
+    public var description: String?
+    public var dueAt: Int32?
+    public var priority: Int               // 0=none, 1=low, 2=normal, 3=high, 4=urgent
     public var isCompleted: Bool
+    public var completedAt: Int32?
+    public var sortOrder: Int
     public let createdDate: Int32
-    
+    public var updatedAt: Int32
+
+    // Old convenience init — saqlanadi, eski callerlar buzilmaydi
     public init(folderId: String, title: String) {
+        let now = Int32(Date().timeIntervalSince1970)
         self.id = UUID().uuidString
         self.folderId = folderId
         self.title = title
+        self.description = nil
+        self.dueAt = nil
+        self.priority = 0
         self.isCompleted = false
-        self.createdDate = Int32(Date().timeIntervalSince1970)
+        self.completedAt = nil
+        self.sortOrder = 0
+        self.createdDate = now
+        self.updatedAt = now
+    }
+
+    // Full init — SQLite layer ishlatadi
+    public init(
+        id: String, folderId: String, title: String,
+        description: String?, dueAt: Int32?, priority: Int,
+        isCompleted: Bool, completedAt: Int32?,
+        sortOrder: Int, createdDate: Int32, updatedAt: Int32
+    ) {
+        self.id = id
+        self.folderId = folderId
+        self.title = title
+        self.description = description
+        self.dueAt = dueAt
+        self.priority = priority
+        self.isCompleted = isCompleted
+        self.completedAt = completedAt
+        self.sortOrder = sortOrder
+        self.createdDate = createdDate
+        self.updatedAt = updatedAt
     }
 }
 
+// MARK: - Storage Facade
+//
+// Thin wrapper above TodoDatabase (SQLite). Eski public API saqlanadi —
+// mavjud controller'lar (TodoListController, TodoItemController, etc.)
+// hech qanday o'zgartirishsiz ishlay beradi. Yangi feature'lar uchun
+// TodoDatabase.shared'ni bevosita chaqirsa bo'ladi (due_at, priority,
+// search, today/upcoming views uchun).
+
 public final class TodoStorage {
-    private static let foldersKey = "todo_folders_list"
-    private static let tasksKey = "todo_tasks_list"
-    private static let suiteName = "pro_messager"
-    
+    // MARK: - Folders
+
     public static func loadFolders() -> [TodoFolder] {
-        guard let data = UserDefaults(suiteName: suiteName)?.data(forKey: foldersKey) else { return [] }
-        return (try? JSONDecoder().decode([TodoFolder].self, from: data)) ?? []
+        return TodoDatabase.shared.loadFolders()
     }
-    
-    public static func saveFolders(_ folders: [TodoFolder]) {
-        if let data = try? JSONEncoder().encode(folders) {
-            UserDefaults(suiteName: suiteName)?.set(data, forKey: foldersKey)
-        }
-    }
-    
+
     public static func addFolder(title: String) {
-        var folders = loadFolders()
-        folders.append(TodoFolder(title: title))
-        saveFolders(folders)
+        TodoDatabase.shared.addFolder(title: title)
     }
-    
+
+    public static func renameFolder(id: String, title: String) {
+        TodoDatabase.shared.updateFolderTitle(id: id, title: title)
+    }
+
     public static func removeFolder(id: String) {
-        var folders = loadFolders()
-        folders.removeAll { $0.id == id }
-        saveFolders(folders)
-        
-        var tasks = loadTasks()
-        tasks.removeAll { $0.folderId == id }
-        saveTasks(tasks)
+        TodoDatabase.shared.removeFolder(id: id)
     }
-    
+
+    // MARK: - Tasks
+
     public static func loadTasks() -> [TodoTask] {
-        guard let data = UserDefaults(suiteName: suiteName)?.data(forKey: tasksKey) else { return [] }
-        return (try? JSONDecoder().decode([TodoTask].self, from: data)) ?? []
+        return TodoDatabase.shared.loadTasks()
     }
-    
-    public static func saveTasks(_ tasks: [TodoTask]) {
-        if let data = try? JSONEncoder().encode(tasks) {
-            UserDefaults(suiteName: suiteName)?.set(data, forKey: tasksKey)
-        }
+
+    public static func loadTasks(folderId: String) -> [TodoTask] {
+        return TodoDatabase.shared.loadTasks(folderId: folderId)
     }
-    
+
+    public static func loadTasksDueToday() -> [TodoTask] {
+        return TodoDatabase.shared.loadTasksDueToday()
+    }
+
+    public static func loadTasksUpcoming() -> [TodoTask] {
+        return TodoDatabase.shared.loadTasksUpcoming()
+    }
+
     public static func addTask(folderId: String, title: String) {
-        var tasks = loadTasks()
-        tasks.append(TodoTask(folderId: folderId, title: title))
-        saveTasks(tasks)
+        _ = TodoDatabase.shared.addTask(folderId: folderId, title: title)
     }
-    
+
+    @discardableResult
+    public static func addTask(folderId: String, title: String, description: String?, dueAt: Int32?, priority: Int) -> TodoTask {
+        return TodoDatabase.shared.addTask(folderId: folderId, title: title, description: description, dueAt: dueAt, priority: priority)
+    }
+
+    public static func updateTask(id: String, title: String, description: String?, dueAt: Int32?, priority: Int) {
+        TodoDatabase.shared.updateTask(id: id, title: title, description: description, dueAt: dueAt, priority: priority)
+    }
+
     public static func toggleTask(id: String) {
-        var tasks = loadTasks()
-        if let index = tasks.firstIndex(where: { $0.id == id }) {
-            tasks[index].isCompleted.toggle()
-            saveTasks(tasks)
-        }
+        TodoDatabase.shared.toggleTask(id: id)
     }
-    
+
     public static func removeTask(id: String) {
-        var tasks = loadTasks()
-        tasks.removeAll { $0.id == id }
-        saveTasks(tasks)
+        TodoDatabase.shared.removeTask(id: id)
+    }
+
+    public static func reorderTasks(folderId: String, idsInOrder: [String]) {
+        TodoDatabase.shared.reorderTasks(folderId: folderId, idsInOrder: idsInOrder)
+    }
+
+    public static func searchTasks(query: String) -> [TodoTask] {
+        return TodoDatabase.shared.searchTasks(query: query)
+    }
+
+    public static func countActiveAndTotal(folderId: String) -> (done: Int, total: Int) {
+        return TodoDatabase.shared.countActiveAndTotal(folderId: folderId)
     }
 }

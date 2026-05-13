@@ -21,6 +21,7 @@ swift_library(
         "//submodules/ItemListUI:ItemListUI",
         "//submodules/CallListUI:CallListUI",
         "//submodules/AppBundle:AppBundle",
+        "//submodules/Fenixuz/Localization:FenixuzLocalization",
     ],
     visibility = [
         "//visibility:public",
