@@ -507,6 +507,26 @@ for runtime, devices in data.get('devices', {}).items():
     # NOTE: we use `install` (overwrite mode), NOT `uninstall + install`.
     # The latter wipes the user's session and chat history.
     xcrun simctl install "$SIM_UDID" "$APP_PATH"
+
+    # WORKAROUND: simctl install on recent macOS (Sequoia/Tahoe) sometimes
+    # fails to fully replace bundle contents when both source and existing
+    # destination files share Bazel's reproducible-build epoch (Jan 1 1980)
+    # mtime — even when content differs (e.g. Assets.car keeps the previous
+    # tab-bar icon). Mirror the freshly built .app directly to guarantee the
+    # installed copy byte-matches what we just built.
+    INSTALLED_BUNDLE=$(xcrun simctl get_app_container "$SIM_UDID" "$BUNDLE_ID" app 2>/dev/null || true)
+    if [ -n "$INSTALLED_BUNDLE" ] && [ -d "$INSTALLED_BUNDLE" ]; then
+        # Terminate first so we never rewrite a running binary mid-flight.
+        xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
+        # -aHXE = perms/owner/links/xattrs/macOS-exec; --delete prunes removed
+        # files; --ignore-times forces re-copy regardless of stat (we can't
+        # trust mtime under Bazel epoch); --whole-file disables delta-xfer
+        # which is pointless for a local copy.
+        rsync -aHXE --delete --ignore-times --whole-file \
+            "$APP_PATH/" "$INSTALLED_BUNDLE/" >/dev/null 2>&1 \
+            || warn "Bundle mirror (rsync) failed — installed app may be stale"
+    fi
+
     ok "O'rnatildi"
 
     xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID"

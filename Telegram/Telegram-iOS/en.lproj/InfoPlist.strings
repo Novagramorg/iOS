@@ -1,6 +1,6 @@
 /* Localized versions of Info.plist keys */
 
-"NSContactsUsageDescription" = "Fenixuz will continuously upload your contacts to its heavily encrypted cloud servers to let you connect with your friends across all your devices.";
+"NSContactsUsageDescription" = "With your consent, your contacts are uploaded to the Telegram cloud (operated by Telegram FZ-LLC) to help you discover friends already on FenixUz. Vipads MCHJ does not access or store your contacts. You can disable contact sync anytime in Settings → Privacy & Security.";
 "NSLocationWhenInUseUsageDescription" = "When you send your location to your friends, Fenixuz needs access to show them a map.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "When you choose to share your Live Location with friends in a chat, Fenixuz needs background access to your location to keep them updated for the duration of the live sharing.";
 "NSLocationAlwaysUsageDescription" = "When you choose to share your live location with friends in a chat, Fenixuz needs background access to your location to keep them updated for the duration of the live sharing. You also need this to send locations from an Apple Watch.";

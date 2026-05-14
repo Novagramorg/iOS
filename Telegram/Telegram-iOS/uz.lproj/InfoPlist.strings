@@ -1,6 +1,6 @@
 /* Localized versions of Info.plist keys */
 
-"NSContactsUsageDescription" = "Fenixuz barcha qurilmalaringizdan doʻstlaringiz bilan bogʻlana olishingiz uchun muntazam ravishda kontaktlaringizni kuchli shifrlanadigan bulut serverlariga yuklaydi.";
+"NSContactsUsageDescription" = "Ruxsatingiz bilan kontaktlaringiz Telegram bulutiga (Telegram FZ-LLC) yuklanadi — Fenixuz'da allaqachon mavjud do'stlaringizni topish uchun. Vipads MCHJ kontaktlaringizni olmaydi va saqlamaydi. Sinxronlashni oʻchirish: Sozlamalar → Maxfiylik va xavfsizlik.";
 "NSLocationWhenInUseUsageDescription" = "Joylashuvingizni doʻstlaringizga yuborganingizda Fenixuz ularga xaritani koʻrsatishi uchun ruxsat kerak boʻladi.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "Chatda doʻstlarga Jonli joylashuvingizni ulashishni tanlaganingizda, Fenixuz joylashuvingizni jonli ulashish davomida yangilab turishi uchun undan fonda foydalanishi kerak.";
 "NSLocationAlwaysUsageDescription" = "Chatda doʻstlarga Jonli joylashuvingizni ulashishni tanlaganingizda, Fenixuz joylashuvingizni jonli ulashish davomida yangilab turishi uchun undan fonda foydalanishi kerak. Sizga bu Apple Watchdan joylashuvlarni yuborish uchun ham kerak.";
