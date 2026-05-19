@@ -80,6 +80,7 @@ MODE="simulator"           # simulator | real
 SIM_NAME="${SIM_NAME:-iPhone 17 Pro Max}"
 DEVICE_NAME=""
 DEVICE_UDID=""
+COMPILATION_MODE="dbg"     # dbg | opt   (--prod / --release flips to opt)
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -90,6 +91,7 @@ while [[ $# -gt 0 ]]; do
                            shift ;;
         -d|--device)       DEVICE_NAME="$2"; shift 2 ;;
         --udid)            DEVICE_UDID="$2"; shift 2 ;;
+        --prod|--release)  COMPILATION_MODE="opt"; shift ;;
         *)                 err "Unknown argument: $1 (run ./run.sh -h)" ;;
     esac
 done
@@ -369,11 +371,15 @@ fi
 
 # ─── Step 3: Bazel build ──────────────────────────────────────────────────────
 if [ "$MODE" = "simulator" ]; then
-    step "Bazel build (debug_sim_arm64, simulator)..."
+    step "Bazel build (${COMPILATION_MODE}_sim_arm64, simulator)..."
 else
-    step "Bazel build (debug_arm64, real device)..."
+    step "Bazel build (${COMPILATION_MODE}_arm64, real device)..."
 fi
-warn "Birinchi run 10-30 daqiqa olishi mumkin..."
+if [ "$COMPILATION_MODE" = "opt" ]; then
+    warn "Production (-c opt) build — 20-45 daqiqa olishi mumkin (debug cache yordam bermaydi)."
+else
+    warn "Birinchi run 10-30 daqiqa olishi mumkin..."
+fi
 
 # Hardware-aware resurs sozlamalari
 TOTAL_CORES=$(sysctl -n hw.logicalcpu)
@@ -424,7 +430,7 @@ XCODE_DEV_DIR=/Applications/Xcode.app/Contents/Developer
     --disk_cache="$CACHE_DIR" \
     --repository_cache="$CACHE_DIR/repo-cache" \
     --experimental_repository_cache_hardlinks \
-    -c dbg \
+    -c $COMPILATION_MODE \
     $BAZEL_CPU_FLAG \
     --watchos_cpus=arm64_32 \
     $BAZEL_PROV_FLAG
@@ -518,11 +524,14 @@ for runtime, devices in data.get('devices', {}).items():
     if [ -n "$INSTALLED_BUNDLE" ] && [ -d "$INSTALLED_BUNDLE" ]; then
         # Terminate first so we never rewrite a running binary mid-flight.
         xcrun simctl terminate "$SIM_UDID" "$BUNDLE_ID" 2>/dev/null || true
-        # -aHXE = perms/owner/links/xattrs/macOS-exec; --delete prunes removed
-        # files; --ignore-times forces re-copy regardless of stat (we can't
-        # trust mtime under Bazel epoch); --whole-file disables delta-xfer
-        # which is pointless for a local copy.
-        rsync -aHXE --delete --ignore-times --whole-file \
+        # -aHE = perms/owner/links/macOS-exec; --extended-attributes for xattrs
+        # (the short -X flag isn't supported by macOS's legacy Apple rsync 2.6.9
+        # — it errors with "invalid option -- X" and skips the entire copy,
+        # which is why every build kept the previous Assets.car/binary).
+        # --delete prunes removed files; --ignore-times forces re-copy
+        # regardless of stat (we can't trust mtime under Bazel epoch);
+        # --whole-file disables delta-xfer (pointless for a local copy).
+        rsync -aHE --extended-attributes --delete --ignore-times --whole-file \
             "$APP_PATH/" "$INSTALLED_BUNDLE/" >/dev/null 2>&1 \
             || warn "Bundle mirror (rsync) failed — installed app may be stale"
     fi

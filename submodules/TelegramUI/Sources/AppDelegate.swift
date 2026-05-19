@@ -32,7 +32,6 @@ import TelegramAudio
 import DebugSettingsUI
 import BackgroundTasks
 import UIKitRuntimeUtils
-import StoreKit
 import PhoneNumberFormat
 import AuthorizationUI
 import ManagedFile
@@ -891,11 +890,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
         }, openSubscriptions: {
-            if #available(iOS 15, *), let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                Task {
-                    try await AppStore.showManageSubscriptions(in: scene)
-                }
-            } else if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+            // Fenixuz: IAP removed — no StoreKit-backed subscriptions exist. Always fall back to the
+            // web Manage Subscriptions page (was: AppStore.showManageSubscriptions on iOS 15+).
+            if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
         }, registerForNotifications: { completion in

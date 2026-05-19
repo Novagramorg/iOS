@@ -259,6 +259,10 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         interaction.openSettings(.language)
     }))
     
+    // Fenixuz: Apple 3.1.1 — entire payment section (Premium / Stars / TON / Business / Send Gift) is
+    // hidden. We do not sell digital goods in this fork; users buy Premium inside the official Telegram
+    // app on the App Store. Re-apply this exclusion after every upstream merge (see submodules/Fenixuz/HOOKS.md).
+    /*
     let premiumConfiguration = PremiumConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
     let isPremiumDisabled = premiumConfiguration.isPremiumDisabled
     if !isPremiumDisabled || context.isPremium {
@@ -312,6 +316,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             }))
         }
     }
+    */
     
     if let settings = data.globalSettings {
         if settings.hasPassport {

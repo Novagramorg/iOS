@@ -39,7 +39,7 @@ public struct FenixuzL10n {
     // MARK: - Tab + Tasks screens
 
     public var tab_tasks: String {
-        pick(en: "Tasks", uz: "Vazifalar", ru: "Задачи")
+        pick(en: "Todos", uz: "Vazifalar", ru: "Задачи")
     }
 
     public var tasks_segment_scheduled: String {
@@ -491,5 +491,39 @@ public struct FenixuzL10n {
                 ru: "Стиль не выбран. Сообщения будут отправлены обычным текстом"
             )
         }
+    }
+
+    // MARK: - App Store IAP compliance (Apple guideline 3.1.1)
+
+    public var iap_block_title: String {
+        pick(
+            en: "Telegram Premium",
+            uz: "Telegram Premium",
+            ru: "Telegram Premium"
+        )
+    }
+
+    public var iap_block_message: String {
+        pick(
+            en: "Premium subscriptions are not sold in this app. To subscribe to Telegram Premium, please install the official Telegram app from the App Store and subscribe there.",
+            uz: "Premium obuna bu ilovada sotilmaydi. Telegram Premium'ga obuna bo'lish uchun App Store'dan rasmiy Telegram ilovasini o'rnating va obunani o'sha yerda amalga oshiring.",
+            ru: "Premium-подписка в этом приложении не продаётся. Чтобы подписаться на Telegram Premium, установите официальное приложение Telegram из App Store и оформите подписку там."
+        )
+    }
+
+    public var iap_block_open_app_store: String {
+        pick(
+            en: "Open App Store",
+            uz: "App Store'da ochish",
+            ru: "Открыть App Store"
+        )
+    }
+
+    public var iap_block_cancel: String {
+        pick(
+            en: "Cancel",
+            uz: "Bekor qilish",
+            ru: "Отмена"
+        )
     }
 }

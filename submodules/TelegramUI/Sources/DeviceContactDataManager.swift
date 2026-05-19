@@ -511,6 +511,24 @@ private final class DeviceContactDataManagerPrivateImpl {
     init(queue: Queue, accountManager: AccountManager<TelegramAccountManagerTypes>) {
         self.queue = queue
         self.accountManager = accountManager
+        // Fenixuz: unblock the contacts-signal subscribers at init regardless of
+        // iOS permission state, so chat-detail rendering and other downstream UI
+        // never deadlock when permission is `.notDetermined`, `.denied`,
+        // `.limited`, or `.restricted`. Three init-time defaults:
+        //   1. personNameDisplayOrder ValuePromise (otherwise upstream only sets
+        //      it inside the `.allowed` branch, leaving subscribers stalled).
+        //   2. accessInitialized flag (otherwise `basicData(updated:)` and
+        //      `importable(updated:)` skip the immediate callback for new
+        //      subscribers when permission stays in `.notDetermined`).
+        //   3. importableContacts / stableIdToBasicContactData remain empty
+        //      dicts — that's the same payload the upstream else-branch
+        //      already pushes via `updateAll([:])`.
+        // The accessDisposable below still overrides these with real device
+        // data when permission becomes `.allowed`. Apple Review §5.1.1
+        // compliance: messaging must work without granting contacts (a
+        // non-essential permission).
+        self.personNameDisplayOrder.set(.firstLast)
+        self.accessInitialized = true
         self.accessDisposable = (DeviceAccess.authorizationStatus(subject: .contacts)
         |> delay(2.0, queue: .mainQueue())
         |> deliverOn(self.queue)).startStrict(next: { [weak self] authorizationStatus in

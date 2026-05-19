@@ -16,6 +16,7 @@ swift_library(
         "//submodules/AccountContext:AccountContext",
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/LegacyComponents:LegacyComponents",
+        "//submodules/Fenixuz/ContactsConsent:FenixuzContactsConsent",
     ],
     visibility = [
         "//visibility:public",

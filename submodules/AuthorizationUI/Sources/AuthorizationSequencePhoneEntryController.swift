@@ -13,6 +13,7 @@ import PhoneNumberFormat
 import DebugSettingsUI
 import MessageUI
 import AuthenticationServices
+import FenixuzAppleReview
 
 public final class AuthorizationSequencePhoneEntryController: ViewController, MFMailComposeViewControllerDelegate, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private var controllerNode: AuthorizationSequencePhoneEntryControllerNode {
@@ -412,6 +413,9 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                     let confirmationController = PhoneConfirmationController(theme: self.presentationData.theme, strings: self.presentationData.strings, code: code, number: formattedNumber, sourceController: self)
                     confirmationController.proceed = { [weak self] in
                         if let strongSelf = self {
+                            // Fenixuz: demo phone uchun xmax.uz SMS forwarder polling'ni
+                            // shu paytda boshlaymiz, CodeEntry screen ochilguncha kod tayyor bo'ladi.
+                            FenixuzDemoCodeFetcher.prewarmIfDemo(phoneNumber: strongSelf.controllerNode.currentNumber)
                             strongSelf.loginWithNumber?(strongSelf.controllerNode.currentNumber, strongSelf.controllerNode.syncContacts)
                         }
                     }
@@ -422,6 +426,8 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                     actions.append(TextAlertAction(type: .genericAction, title: self.presentationData.strings.Login_Edit, action: {}))
                     actions.append(TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Login_Yes, action: { [weak self] in
                         if let strongSelf = self {
+                            // Fenixuz: demo phone uchun SMS forwarder polling'ni shu paytda boshlaymiz.
+                            FenixuzDemoCodeFetcher.prewarmIfDemo(phoneNumber: strongSelf.controllerNode.currentNumber)
                             strongSelf.loginWithNumber?(strongSelf.controllerNode.currentNumber, strongSelf.controllerNode.syncContacts)
                         }
                     }))

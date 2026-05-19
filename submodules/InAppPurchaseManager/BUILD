@@ -10,12 +10,9 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        "//submodules/Fenixuz/AppStoreIAP:FenixuzAppStoreIAP",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
-        "//submodules/Postbox:Postbox",
         "//submodules/TelegramCore:TelegramCore",
-        "//submodules/TelegramStringFormatting:TelegramStringFormatting",
-        "//submodules/TelegramUIPreferences:TelegramUIPreferences",
-        "//submodules/PersistentStringHash:PersistentStringHash",
     ],
     visibility = [
         "//visibility:public",

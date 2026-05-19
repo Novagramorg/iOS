@@ -236,11 +236,13 @@ public func tasksTabController(context: AccountContext) -> ViewController {
 
     let initialPresentationData = context.sharedContext.currentPresentationData.with { $0 }
     controller.tabBarItem.title = FenixuzL10n(initialPresentationData.strings).tab_tasks
-    // Use the bundled PDF icon so this tab visually matches Calls / Chats /
-    // Settings. `.alwaysTemplate` forces the tab bar to tint the icon the
-    // same way it tints the others — without it the PDF renders in its
-    // original (gray) colour and looks out of place.
-    let tasksIcon = UIImage(bundleImageName: "Chat List/Tabs/IconTasks")?.withRenderingMode(.alwaysTemplate)
+    // Load the bundled PDF icon. The Contents.json already sets
+    // `template-rendering-intent: template` so iOS treats the PDF as a
+    // template; an extra `.withRenderingMode(.alwaysTemplate)` was found to
+    // suppress the icon entirely in Telegram's custom TabBarController on
+    // iOS 26. Upstream tabs (ChatList, Contacts) load the bundleImageName
+    // directly without re-asserting rendering mode — match that pattern.
+    let tasksIcon = UIImage(bundleImageName: "Chat List/Tabs/IconTasks")
     controller.tabBarItem.image = tasksIcon
     controller.tabBarItem.selectedImage = tasksIcon
     controller.navigationItem.hidesBackButton = true
