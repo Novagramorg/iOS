@@ -1697,6 +1697,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let message = messages.first else {
                 return
             }
+            if Namespaces.Message.allEphemeral.contains(message.id.namespace) {
+                return
+            }
             if case .default = reaction, strongSelf.chatLocation.peerId == strongSelf.context.account.peerId {
                 return
             }
@@ -2230,10 +2233,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 if let _ = self.presentationInterfaceState.interfaceState.mediaDraftState {
                     self.sendMediaRecording(silentPosting: silentPosting, messageEffect: messageEffect)
                 } else {
-                    self.presentPaidMessageAlertIfNeeded(count: 1, completion: { [weak self] postpone in
-                        if let self {
-                            self.chatDisplayNode.sendCurrentMessage(silentPosting: silentPosting, postpone: postpone, messageEffect: messageEffect)
+                    self.chatDisplayNode.maybeSendEphemeralMessage(sendNormally: { [weak self] in
+                        guard let self else {
+                            return
                         }
+                        self.presentPaidMessageAlertIfNeeded(count: 1, completion: { [weak self] postpone in
+                            if let self {
+                                self.chatDisplayNode.sendCurrentMessage(silentPosting: silentPosting, postpone: postpone, messageEffect: messageEffect)
+                            }
+                        })
                     })
                 }
             }
@@ -3362,6 +3370,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
         }, sendBotCommand: { [weak self] messageId, command in
             if let strongSelf = self, canSendMessagesToChat(strongSelf.presentationInterfaceState) {
+                if let messageId, Namespaces.Message.allEphemeral.contains(messageId.namespace) {
+                    return
+                }
                 strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({}, nil)
                 var postAsReply = false
                 if !command.contains("@") {
@@ -3661,6 +3672,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         }, setupReply: { [weak self] messageId in
             self?.interfaceInteraction?.setupReplyMessage(messageId, nil, { _, f in f() })
         }, canSetupReply: { [weak self] message in
+            if Namespaces.Message.allEphemeral.contains(message.id.namespace) {
+                return .none
+            }
             if message.adAttribute != nil {
                 return .none
             }
@@ -3719,7 +3733,55 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let strongSelf = self else {
                 return
             }
-            if id.namespace == Namespaces.Message.ScheduledCloud {
+            if id.namespace == Namespaces.Message.EphemeralLocal {
+                let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.Message(id: id))
+                |> deliverOnMainQueue).startStandalone(next: { [weak self] message in
+                    guard let strongSelf = self, let message else {
+                        return
+                    }
+
+                    var actions: [ContextMenuItem] = []
+                    if message.attributes.contains(where: { attribute in
+                        if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
+                            return attribute.state == .failed
+                        } else {
+                            return false
+                        }
+                    }) {
+                        actions.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.Conversation_MessageDialogRetry, icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Resend"), color: theme.actionSheet.primaryTextColor)
+                        }, action: { [weak self] _, f in
+                            if let strongSelf = self {
+                                let _ = (strongSelf.context.engine.messages.retryEphemeralOutgoingMessage(messageId: id)
+                                |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
+                                    self?.chatDisplayNode.historyNode.scrollToEndOfHistory()
+                                })
+                            }
+                            f(.dismissWithoutContent)
+                        })))
+                    }
+                    actions.append(.action(ContextMenuActionItem(text: strongSelf.presentationData.strings.Conversation_ContextMenuDelete, textColor: .destructive, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.actionSheet.destructiveActionTextColor)
+                    }, action: { [weak self] _, f in
+                        if let strongSelf = self {
+                            let _ = strongSelf.context.engine.messages.deleteMessagesInteractively(messageIds: [id], type: .forLocalPeer).startStandalone()
+                        }
+                        f(.dismissWithoutContent)
+                    })))
+
+                    strongSelf.chatDisplayNode.messageTransitionNode.dismissMessageReactionContexts()
+
+                    let controller = makeContextController(presentationData: strongSelf.presentationData, source: .extracted(ChatMessageContextExtractedContentSource(chatController: strongSelf, chatNode: strongSelf.chatDisplayNode, engine: strongSelf.context.engine, message: message, selectAll: true)), items: .single(ContextController.Items(content: .list(actions))), recognizer: nil)
+                    strongSelf.currentContextController = controller
+                    strongSelf.forEachController({ controller in
+                        if let controller = controller as? TooltipScreen {
+                            controller.dismiss()
+                        }
+                        return true
+                    })
+                    strongSelf.window?.presentInGlobalOverlay(controller)
+                })
+            } else if id.namespace == Namespaces.Message.ScheduledCloud {
                 let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Messages.MessageGroup(id: id))
                 |> deliverOnMainQueue).startStandalone(next: { messages in
                     guard let strongSelf = self, let message = messages.filter({ $0.id == id }).first else {

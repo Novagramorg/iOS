@@ -1151,6 +1151,39 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                         updatedState.addReportMessageDelivery(messageIds: [id])
                     }
                 }
+            case let .updateNewEphemeralMessage(updateNewEphemeralMessageData):
+                let apiMessage = updateNewEphemeralMessageData.message
+                if let preCachedResources = apiMessage.preCachedResources {
+                    for (resource, data) in preCachedResources {
+                        updatedState.addPreCachedResource(resource, data: data)
+                    }
+                }
+                if let preCachedStories = apiMessage.preCachedStories {
+                    for (id, story) in preCachedStories {
+                        updatedState.addPreCachedStory(id: id, story: story)
+                    }
+                }
+                updatedState.addMessages([StoreMessage(apiEphemeralMessage: apiMessage)], location: .Random)
+            case let .updateEditEphemeralMessage(updateEditEphemeralMessageData):
+                let apiMessage = updateEditEphemeralMessageData.message
+                if let preCachedResources = apiMessage.preCachedResources {
+                    for (resource, data) in preCachedResources {
+                        updatedState.addPreCachedResource(resource, data: data)
+                    }
+                }
+                if let preCachedStories = apiMessage.preCachedStories {
+                    for (id, story) in preCachedStories {
+                        updatedState.addPreCachedStory(id: id, story: story)
+                    }
+                }
+                let message = StoreMessage(apiEphemeralMessage: apiMessage)
+                if case let .Id(messageId) = message.id {
+                    updatedState.editMessage(messageId, message: message)
+                }
+            case let .updateDeleteEphemeralMessages(updateDeleteEphemeralMessagesData):
+                updatedState.deleteMessages(updateDeleteEphemeralMessagesData.ids.map { id in
+                    MessageId(peerId: updateDeleteEphemeralMessagesData.peer.peerId, namespace: Namespaces.Message.EphemeralLocal, id: id)
+                })
             case let .updateServiceNotification(updateServiceNotificationData):
                 let (flags, date, type, text, media, entities) = (updateServiceNotificationData.flags, updateServiceNotificationData.inboxDate, updateServiceNotificationData.type, updateServiceNotificationData.message, updateServiceNotificationData.media, updateServiceNotificationData.entities)
                 let popup = (flags & (1 << 0)) != 0
@@ -1889,8 +1922,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 let commands: [BotCommand] = apiCommands.map { command in
                     switch command {
                     case let .botCommand(botCommandData):
-                        let (command, description) = (botCommandData.command, botCommandData.description)
-                        return BotCommand(text: command, description: description)
+                        let (flags, command, description) = (botCommandData.flags, botCommandData.command, botCommandData.description)
+                        return BotCommand(text: command, description: description, isEphemeral: (flags & (1 << 0)) != 0)
                     }
                 }
                 updatedState.updateCachedPeerData(peer.peerId, { current in

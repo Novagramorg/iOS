@@ -2553,25 +2553,66 @@ extension ChatControllerImpl {
                     } else {
                         messageText = command
                     }
-                    let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
-                    strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
-                        if let strongSelf = self {
-                            strongSelf.chatDisplayNode.collapseInput()
                             
-                            strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil).withUpdatedComposeInputState(ChatTextInputState(inputText: NSAttributedString(string: ""))).withUpdatedComposeDisableUrlPreviews([]) }
-                            })
+                    let sendNormally: () -> Void = { [weak self] in
+                        guard let strongSelf = self else {
+                            return
                         }
-                    }, nil)
-                    var attributes: [MessageAttribute] = []
-                    let entities = generateTextEntities(messageText, enabledTypes: .all)
-                    if !entities.isEmpty {
-                        attributes.append(TextEntitiesMessageAttribute(entities: entities))
+                        let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
+                        strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
+                            if let strongSelf = self {
+                                strongSelf.chatDisplayNode.collapseInput()
+
+                                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                    $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil).withUpdatedComposeInputState(ChatTextInputState(inputText: NSAttributedString(string: ""))).withUpdatedComposeDisableUrlPreviews([]) }
+                                })
+                            }
+                        }, nil)
+                        var attributes: [MessageAttribute] = []
+                        let entities = generateTextEntities(messageText, enabledTypes: .all)
+                        if !entities.isEmpty {
+                            attributes.append(TextEntitiesMessageAttribute(entities: entities))
+                        }
+                        strongSelf.sendMessages([.message(text: messageText, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])])
+                        strongSelf.interfaceInteraction?.updateShowCommands { _ in
+                            return false
+                        }
                     }
-                    strongSelf.sendMessages([.message(text: messageText, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])])
-                    strongSelf.interfaceInteraction?.updateShowCommands { _ in
-                        return false
+
+                    guard let peerId = strongSelf.chatLocation.peerId else {
+                        sendNormally()
+                        return
                     }
+
+                    let _ = (strongSelf.context.engine.peers.peerCommands(id: peerId)
+                    |> take(1)
+                    |> deliverOnMainQueue).startStandalone(next: { [weak self] peerCommands in
+                        guard let strongSelf = self else {
+                            return
+                        }
+
+                        if let resolved = resolveEphemeralBotCommand(text: messageText, peerCommands: peerCommands, forcedBotPeerId: botPeer.id) {
+                            strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
+                                if let strongSelf = self {
+                                    strongSelf.chatDisplayNode.collapseInput()
+
+                                    strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                        $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil).withUpdatedComposeInputState(ChatTextInputState(inputText: NSAttributedString(string: ""))).withUpdatedComposeDisableUrlPreviews([]) }
+                                    })
+                                }
+                            }, nil)
+
+                            let _ = (strongSelf.context.engine.messages.sendEphemeralBotCommand(peerId: peerId, botPeerId: resolved.botPeerId, text: resolved.text, entities: resolved.entities)
+                            |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
+                                self?.chatDisplayNode.historyNode.scrollToEndOfHistory()
+                            })
+                            strongSelf.interfaceInteraction?.updateShowCommands { _ in
+                                return false
+                            }
+                        } else {
+                            sendNormally()
+                        }
+                    })
                 }
             }
         }, sendShortcut: { [weak self] shortcutId in

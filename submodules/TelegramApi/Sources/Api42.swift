@@ -5006,6 +5006,99 @@ public extension Api.functions.contacts {
         })
     }
 }
+public extension Api.functions.ephemeral {
+    static func deleteMessage(peer: Api.InputPeer, receiverId: Api.InputUser, id: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1547643631)
+        peer.serialize(buffer, true)
+        receiverId.serialize(buffer, true)
+        serializeInt32(id, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "ephemeral.deleteMessage", parameters: [("peer", ConstructorParameterDescription(peer)), ("receiverId", ConstructorParameterDescription(receiverId)), ("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.ephemeral {
+    static func getCallbackAnswer(flags: Int32, peer: Api.InputPeer, id: Int32, data: Buffer?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.BotCallbackAnswer>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1067738312)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        peer.serialize(buffer, true)
+        serializeInt32(id, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeBytes(data!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "ephemeral.getCallbackAnswer", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("id", ConstructorParameterDescription(id)), ("data", ConstructorParameterDescription(data))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.BotCallbackAnswer? in
+            let reader = BufferReader(buffer)
+            var result: Api.messages.BotCallbackAnswer?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.messages.BotCallbackAnswer
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.ephemeral {
+    static func reportMessage(peer: Api.InputPeer, id: Int32, reason: Api.ReportReason, message: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.ReportResult>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1565499612)
+        peer.serialize(buffer, true)
+        serializeInt32(id, buffer: buffer, boxed: false)
+        reason.serialize(buffer, true)
+        serializeString(message, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "ephemeral.reportMessage", parameters: [("peer", ConstructorParameterDescription(peer)), ("id", ConstructorParameterDescription(id)), ("reason", ConstructorParameterDescription(reason)), ("message", ConstructorParameterDescription(message))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.ReportResult? in
+            let reader = BufferReader(buffer)
+            var result: Api.ReportResult?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.ReportResult
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.ephemeral {
+    static func sendMessage(flags: Int32, peer: Api.InputPeer, receiverId: Api.InputUser, queryId: Int64?, message: String, entities: [Api.MessageEntity]?, media: Api.InputMedia?, replyMarkup: Api.ReplyMarkup?, richMessage: Api.InputRichMessage?, randomId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.EphemeralMessage>) {
+        let buffer = Buffer()
+        buffer.appendInt32(16714928)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        peer.serialize(buffer, true)
+        receiverId.serialize(buffer, true)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeInt64(queryId!, buffer: buffer, boxed: false)
+        }
+        serializeString(message, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 1) != 0 {
+            buffer.appendInt32(481674261)
+            buffer.appendInt32(Int32(entities!.count))
+            for item in entities! {
+                item.serialize(buffer, true)
+            }
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            media!.serialize(buffer, true)
+        }
+        if Int(flags) & Int(1 << 3) != 0 {
+            replyMarkup!.serialize(buffer, true)
+        }
+        if Int(flags) & Int(1 << 4) != 0 {
+            richMessage!.serialize(buffer, true)
+        }
+        serializeInt64(randomId, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "ephemeral.sendMessage", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("receiverId", ConstructorParameterDescription(receiverId)), ("queryId", ConstructorParameterDescription(queryId)), ("message", ConstructorParameterDescription(message)), ("entities", ConstructorParameterDescription(entities)), ("media", ConstructorParameterDescription(media)), ("replyMarkup", ConstructorParameterDescription(replyMarkup)), ("richMessage", ConstructorParameterDescription(richMessage)), ("randomId", ConstructorParameterDescription(randomId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.EphemeralMessage? in
+            let reader = BufferReader(buffer)
+            var result: Api.EphemeralMessage?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.EphemeralMessage
+            }
+            return result
+        })
+    }
+}
 public extension Api.functions.folders {
     static func editPeerFolders(folderPeers: [Api.InputFolderPeer]) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()

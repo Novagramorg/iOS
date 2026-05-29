@@ -780,7 +780,8 @@ public extension Api {
             public var botVerificationIcon: Int64?
             public var sendPaidMessagesStars: Int64?
             public var linkedMonoforumId: Int64?
-            public init(flags: Int32, flags2: Int32, id: Int64, accessHash: Int64?, title: String, username: String?, photo: Api.ChatPhoto, date: Int32, restrictionReason: [Api.RestrictionReason]?, adminRights: Api.ChatAdminRights?, bannedRights: Api.ChatBannedRights?, defaultBannedRights: Api.ChatBannedRights?, participantsCount: Int32?, usernames: [Api.Username]?, storiesMaxId: Api.RecentStory?, color: Api.PeerColor?, profileColor: Api.PeerColor?, emojiStatus: Api.EmojiStatus?, level: Int32?, subscriptionUntilDate: Int32?, botVerificationIcon: Int64?, sendPaidMessagesStars: Int64?, linkedMonoforumId: Int64?) {
+            public var linkedCommunityId: Int64?
+            public init(flags: Int32, flags2: Int32, id: Int64, accessHash: Int64?, title: String, username: String?, photo: Api.ChatPhoto, date: Int32, restrictionReason: [Api.RestrictionReason]?, adminRights: Api.ChatAdminRights?, bannedRights: Api.ChatBannedRights?, defaultBannedRights: Api.ChatBannedRights?, participantsCount: Int32?, usernames: [Api.Username]?, storiesMaxId: Api.RecentStory?, color: Api.PeerColor?, profileColor: Api.PeerColor?, emojiStatus: Api.EmojiStatus?, level: Int32?, subscriptionUntilDate: Int32?, botVerificationIcon: Int64?, sendPaidMessagesStars: Int64?, linkedMonoforumId: Int64?, linkedCommunityId: Int64?) {
                 self.flags = flags
                 self.flags2 = flags2
                 self.id = id
@@ -804,9 +805,10 @@ public extension Api {
                 self.botVerificationIcon = botVerificationIcon
                 self.sendPaidMessagesStars = sendPaidMessagesStars
                 self.linkedMonoforumId = linkedMonoforumId
+                self.linkedCommunityId = linkedCommunityId
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("channel", [("flags", ConstructorParameterDescription(self.flags)), ("flags2", ConstructorParameterDescription(self.flags2)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("title", ConstructorParameterDescription(self.title)), ("username", ConstructorParameterDescription(self.username)), ("photo", ConstructorParameterDescription(self.photo)), ("date", ConstructorParameterDescription(self.date)), ("restrictionReason", ConstructorParameterDescription(self.restrictionReason)), ("adminRights", ConstructorParameterDescription(self.adminRights)), ("bannedRights", ConstructorParameterDescription(self.bannedRights)), ("defaultBannedRights", ConstructorParameterDescription(self.defaultBannedRights)), ("participantsCount", ConstructorParameterDescription(self.participantsCount)), ("usernames", ConstructorParameterDescription(self.usernames)), ("storiesMaxId", ConstructorParameterDescription(self.storiesMaxId)), ("color", ConstructorParameterDescription(self.color)), ("profileColor", ConstructorParameterDescription(self.profileColor)), ("emojiStatus", ConstructorParameterDescription(self.emojiStatus)), ("level", ConstructorParameterDescription(self.level)), ("subscriptionUntilDate", ConstructorParameterDescription(self.subscriptionUntilDate)), ("botVerificationIcon", ConstructorParameterDescription(self.botVerificationIcon)), ("sendPaidMessagesStars", ConstructorParameterDescription(self.sendPaidMessagesStars)), ("linkedMonoforumId", ConstructorParameterDescription(self.linkedMonoforumId))])
+                return ("channel", [("flags", ConstructorParameterDescription(self.flags)), ("flags2", ConstructorParameterDescription(self.flags2)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("title", ConstructorParameterDescription(self.title)), ("username", ConstructorParameterDescription(self.username)), ("photo", ConstructorParameterDescription(self.photo)), ("date", ConstructorParameterDescription(self.date)), ("restrictionReason", ConstructorParameterDescription(self.restrictionReason)), ("adminRights", ConstructorParameterDescription(self.adminRights)), ("bannedRights", ConstructorParameterDescription(self.bannedRights)), ("defaultBannedRights", ConstructorParameterDescription(self.defaultBannedRights)), ("participantsCount", ConstructorParameterDescription(self.participantsCount)), ("usernames", ConstructorParameterDescription(self.usernames)), ("storiesMaxId", ConstructorParameterDescription(self.storiesMaxId)), ("color", ConstructorParameterDescription(self.color)), ("profileColor", ConstructorParameterDescription(self.profileColor)), ("emojiStatus", ConstructorParameterDescription(self.emojiStatus)), ("level", ConstructorParameterDescription(self.level)), ("subscriptionUntilDate", ConstructorParameterDescription(self.subscriptionUntilDate)), ("botVerificationIcon", ConstructorParameterDescription(self.botVerificationIcon)), ("sendPaidMessagesStars", ConstructorParameterDescription(self.sendPaidMessagesStars)), ("linkedMonoforumId", ConstructorParameterDescription(self.linkedMonoforumId)), ("linkedCommunityId", ConstructorParameterDescription(self.linkedCommunityId))])
             }
         }
         public class Cons_channelForbidden: TypeConstructorDescription {
@@ -883,7 +885,7 @@ public extension Api {
             switch self {
             case .channel(let _data):
                 if boxed {
-                    buffer.appendInt32(473084188)
+                    buffer.appendInt32(-727763770)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt32(_data.flags2, buffer: buffer, boxed: false)
@@ -950,6 +952,9 @@ public extension Api {
                 if Int(_data.flags2) & Int(1 << 18) != 0 {
                     serializeInt64(_data.linkedMonoforumId!, buffer: buffer, boxed: false)
                 }
+                if Int(_data.flags2) & Int(1 << 20) != 0 {
+                    serializeInt64(_data.linkedCommunityId!, buffer: buffer, boxed: false)
+                }
                 break
             case .channelForbidden(let _data):
                 if boxed {
@@ -1003,7 +1008,7 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .channel(let _data):
-                return ("channel", [("flags", ConstructorParameterDescription(_data.flags)), ("flags2", ConstructorParameterDescription(_data.flags2)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title)), ("username", ConstructorParameterDescription(_data.username)), ("photo", ConstructorParameterDescription(_data.photo)), ("date", ConstructorParameterDescription(_data.date)), ("restrictionReason", ConstructorParameterDescription(_data.restrictionReason)), ("adminRights", ConstructorParameterDescription(_data.adminRights)), ("bannedRights", ConstructorParameterDescription(_data.bannedRights)), ("defaultBannedRights", ConstructorParameterDescription(_data.defaultBannedRights)), ("participantsCount", ConstructorParameterDescription(_data.participantsCount)), ("usernames", ConstructorParameterDescription(_data.usernames)), ("storiesMaxId", ConstructorParameterDescription(_data.storiesMaxId)), ("color", ConstructorParameterDescription(_data.color)), ("profileColor", ConstructorParameterDescription(_data.profileColor)), ("emojiStatus", ConstructorParameterDescription(_data.emojiStatus)), ("level", ConstructorParameterDescription(_data.level)), ("subscriptionUntilDate", ConstructorParameterDescription(_data.subscriptionUntilDate)), ("botVerificationIcon", ConstructorParameterDescription(_data.botVerificationIcon)), ("sendPaidMessagesStars", ConstructorParameterDescription(_data.sendPaidMessagesStars)), ("linkedMonoforumId", ConstructorParameterDescription(_data.linkedMonoforumId))])
+                return ("channel", [("flags", ConstructorParameterDescription(_data.flags)), ("flags2", ConstructorParameterDescription(_data.flags2)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title)), ("username", ConstructorParameterDescription(_data.username)), ("photo", ConstructorParameterDescription(_data.photo)), ("date", ConstructorParameterDescription(_data.date)), ("restrictionReason", ConstructorParameterDescription(_data.restrictionReason)), ("adminRights", ConstructorParameterDescription(_data.adminRights)), ("bannedRights", ConstructorParameterDescription(_data.bannedRights)), ("defaultBannedRights", ConstructorParameterDescription(_data.defaultBannedRights)), ("participantsCount", ConstructorParameterDescription(_data.participantsCount)), ("usernames", ConstructorParameterDescription(_data.usernames)), ("storiesMaxId", ConstructorParameterDescription(_data.storiesMaxId)), ("color", ConstructorParameterDescription(_data.color)), ("profileColor", ConstructorParameterDescription(_data.profileColor)), ("emojiStatus", ConstructorParameterDescription(_data.emojiStatus)), ("level", ConstructorParameterDescription(_data.level)), ("subscriptionUntilDate", ConstructorParameterDescription(_data.subscriptionUntilDate)), ("botVerificationIcon", ConstructorParameterDescription(_data.botVerificationIcon)), ("sendPaidMessagesStars", ConstructorParameterDescription(_data.sendPaidMessagesStars)), ("linkedMonoforumId", ConstructorParameterDescription(_data.linkedMonoforumId)), ("linkedCommunityId", ConstructorParameterDescription(_data.linkedCommunityId))])
             case .channelForbidden(let _data):
                 return ("channelForbidden", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title)), ("untilDate", ConstructorParameterDescription(_data.untilDate))])
             case .chat(let _data):
@@ -1116,6 +1121,10 @@ public extension Api {
             if Int(_2 ?? 0) & Int(1 << 18) != 0 {
                 _23 = reader.readInt64()
             }
+            var _24: Int64?
+            if Int(_2 ?? 0) & Int(1 << 20) != 0 {
+                _24 = reader.readInt64()
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
@@ -1139,8 +1148,9 @@ public extension Api {
             let _c21 = (Int(_2 ?? 0) & Int(1 << 13) == 0) || _21 != nil
             let _c22 = (Int(_2 ?? 0) & Int(1 << 14) == 0) || _22 != nil
             let _c23 = (Int(_2 ?? 0) & Int(1 << 18) == 0) || _23 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 {
-                return Api.Chat.channel(Cons_channel(flags: _1!, flags2: _2!, id: _3!, accessHash: _4, title: _5!, username: _6, photo: _7!, date: _8!, restrictionReason: _9, adminRights: _10, bannedRights: _11, defaultBannedRights: _12, participantsCount: _13, usernames: _14, storiesMaxId: _15, color: _16, profileColor: _17, emojiStatus: _18, level: _19, subscriptionUntilDate: _20, botVerificationIcon: _21, sendPaidMessagesStars: _22, linkedMonoforumId: _23))
+            let _c24 = (Int(_2 ?? 0) & Int(1 << 20) == 0) || _24 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 && _c15 && _c16 && _c17 && _c18 && _c19 && _c20 && _c21 && _c22 && _c23 && _c24 {
+                return Api.Chat.channel(Cons_channel(flags: _1!, flags2: _2!, id: _3!, accessHash: _4, title: _5!, username: _6, photo: _7!, date: _8!, restrictionReason: _9, adminRights: _10, bannedRights: _11, defaultBannedRights: _12, participantsCount: _13, usernames: _14, storiesMaxId: _15, color: _16, profileColor: _17, emojiStatus: _18, level: _19, subscriptionUntilDate: _20, botVerificationIcon: _21, sendPaidMessagesStars: _22, linkedMonoforumId: _23, linkedCommunityId: _24))
             }
             else {
                 return nil

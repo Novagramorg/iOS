@@ -30,6 +30,7 @@ public enum Api {
         public enum channels {}
         public enum chatlists {}
         public enum contacts {}
+        public enum ephemeral {}
         public enum folders {}
         public enum fragment {}
         public enum help {}
@@ -92,7 +93,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1571189943] = { return Api.BotApp.parse_botAppNotModified($0) }
     dict[-912582320] = { return Api.BotAppSettings.parse_botAppSettings($0) }
     dict[-1892371723] = { return Api.BotBusinessConnection.parse_botBusinessConnection($0) }
-    dict[-1032140601] = { return Api.BotCommand.parse_botCommand($0) }
+    dict[-1739401518] = { return Api.BotCommand.parse_botCommand($0) }
     dict[-1180016534] = { return Api.BotCommandScope.parse_botCommandScopeChatAdmins($0) }
     dict[1877059713] = { return Api.BotCommandScope.parse_botCommandScopeChats($0) }
     dict[795652779] = { return Api.BotCommandScope.parse_botCommandScopeDefault($0) }
@@ -204,7 +205,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-531931925] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsMentions($0) }
     dict[-566281095] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsRecent($0) }
     dict[106343499] = { return Api.ChannelParticipantsFilter.parse_channelParticipantsSearch($0) }
-    dict[473084188] = { return Api.Chat.parse_channel($0) }
+    dict[-727763770] = { return Api.Chat.parse_channel($0) }
     dict[399807445] = { return Api.Chat.parse_channelForbidden($0) }
     dict[1103884886] = { return Api.Chat.parse_chat($0) }
     dict[693512293] = { return Api.Chat.parse_chatEmpty($0) }
@@ -291,6 +292,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1038136962] = { return Api.EncryptedFile.parse_encryptedFileEmpty($0) }
     dict[-317144808] = { return Api.EncryptedMessage.parse_encryptedMessage($0) }
     dict[594758406] = { return Api.EncryptedMessage.parse_encryptedMessageService($0) }
+    dict[753575776] = { return Api.EphemeralMessage.parse_ephemeralMessage($0) }
     dict[-1574126186] = { return Api.ExportedChatInvite.parse_chatInviteExported($0) }
     dict[-317687113] = { return Api.ExportedChatInvite.parse_chatInvitePublicJoinRequests($0) }
     dict[206668204] = { return Api.ExportedChatlistInvite.parse_exportedChatlistInvite($0) }
@@ -1185,6 +1187,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1887741886] = { return Api.Update.parse_updateContactsReset($0) }
     dict[-1906403213] = { return Api.Update.parse_updateDcOptions($0) }
     dict[-1020437742] = { return Api.Update.parse_updateDeleteChannelMessages($0) }
+    dict[1457257720] = { return Api.Update.parse_updateDeleteEphemeralMessages($0) }
     dict[1048963372] = { return Api.Update.parse_updateDeleteGroupCallMessages($0) }
     dict[-1576161051] = { return Api.Update.parse_updateDeleteMessages($0) }
     dict[1407644140] = { return Api.Update.parse_updateDeleteQuickReply($0) }
@@ -1197,6 +1200,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1235684802] = { return Api.Update.parse_updateDialogUnreadMark($0) }
     dict[-302247650] = { return Api.Update.parse_updateDraftMessage($0) }
     dict[457133559] = { return Api.Update.parse_updateEditChannelMessage($0) }
+    dict[1270583041] = { return Api.Update.parse_updateEditEphemeralMessage($0) }
     dict[-469536605] = { return Api.Update.parse_updateEditMessage($0) }
     dict[-73640838] = { return Api.Update.parse_updateEmojiGameInfo($0) }
     dict[386986326] = { return Api.Update.parse_updateEncryptedChatTyping($0) }
@@ -1228,6 +1232,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1306491994] = { return Api.Update.parse_updateNewBotConnection($0) }
     dict[1656358105] = { return Api.Update.parse_updateNewChannelMessage($0) }
     dict[314359194] = { return Api.Update.parse_updateNewEncryptedMessage($0) }
+    dict[549239713] = { return Api.Update.parse_updateNewEphemeralMessage($0) }
     dict[522914557] = { return Api.Update.parse_updateNewMessage($0) }
     dict[-180508905] = { return Api.Update.parse_updateNewQuickReply($0) }
     dict[967122427] = { return Api.Update.parse_updateNewScheduledMessage($0) }
@@ -1917,6 +1922,8 @@ public extension Api {
         case let _1 as Api.EncryptedFile:
             _1.serialize(buffer, boxed)
         case let _1 as Api.EncryptedMessage:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.EphemeralMessage:
             _1.serialize(buffer, boxed)
         case let _1 as Api.ExportedChatInvite:
             _1.serialize(buffer, boxed)

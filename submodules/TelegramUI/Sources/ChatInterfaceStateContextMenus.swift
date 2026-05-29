@@ -739,9 +739,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     
+    let hasEphemeralMessages = messages.contains { Namespaces.Message.allEphemeral.contains($0.id.namespace) }
     var canReply = canReplyInChat(chatPresentationInterfaceState, accountPeerId: context.account.peerId)
     var canPin = false
-    let canSelect = !isAction
+    let canSelect = !isAction && !hasEphemeralMessages
     
     let message = messages[0]
     
@@ -751,7 +752,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     
-    if Namespaces.Message.allNonRegular.contains(message.id.namespace) || message.id.peerId.isRepliesOrVerificationCodes {
+    if Namespaces.Message.allNonRegular.contains(message.id.namespace) || Namespaces.Message.allEphemeral.contains(message.id.namespace) || message.id.peerId.isRepliesOrVerificationCodes {
         canReply = false
         canPin = false
     } else if messages[0].flags.intersection([.Failed, .Unsent]).isEmpty {
@@ -2044,6 +2045,16 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
 
+        if hasEphemeralMessages {
+            if !actions.isEmpty {
+                actions.append(.separator)
+            }
+            let noAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+            actions.append(.action(ContextMenuActionItem(text: "Only you see this message. It will disappear after you log in again.", textLayout: .multiline, textFont: .small, icon: { _ in
+                return nil
+            }, action: noAction)))
+        }
+
         if !isPinnedMessages, !isReplyThreadHead, data.canSelect {
             var didAddSeparator = false
             if !selectAll || messages.count == 1 {
@@ -2552,7 +2563,13 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
                         }
                     }
                 }
-                if id.namespace == Namespaces.Message.ScheduledCloud {
+                if id.namespace == Namespaces.Message.EphemeralLocal {
+                    optionsMap[id]!.insert(.deleteLocally)
+                    if message.flags.contains(.Incoming), message.attributes.contains(where: { $0 is EphemeralMessageAttribute }) {
+                        optionsMap[id]!.insert(.report)
+                    }
+                    continue
+                } else if id.namespace == Namespaces.Message.ScheduledCloud {
                     optionsMap[id]!.insert(.sendScheduledNow)
                     if message.pendingProcessingAttribute == nil {
                         if canEditMessage(accountPeerId: accountPeerId, limitsConfiguration: limitsConfiguration, message: message, reschedule: true) {

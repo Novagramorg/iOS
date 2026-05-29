@@ -198,6 +198,36 @@ extension Api.Message {
     }
 }
 
+extension Api.EphemeralMessage {
+    var peerId: PeerId {
+        switch self {
+        case let .ephemeralMessage(messageData):
+            return messageData.peerId.peerId
+        }
+    }
+
+    var id: MessageId {
+        switch self {
+        case let .ephemeralMessage(messageData):
+            return MessageId(peerId: messageData.peerId.peerId, namespace: Namespaces.Message.EphemeralLocal, id: messageData.id)
+        }
+    }
+
+    var preCachedResources: [(MediaResource, Data)]? {
+        switch self {
+        case let .ephemeralMessage(messageData):
+            return messageData.media?.preCachedResources
+        }
+    }
+
+    var preCachedStories: [StoryId: Api.StoryItem]? {
+        switch self {
+        case let .ephemeralMessage(messageData):
+            return messageData.media?.preCachedStories
+        }
+    }
+}
+
 extension Api.Chat {
     var peerId: PeerId {
         switch self {
@@ -376,6 +406,12 @@ extension Api.Update {
             case let .updateEditMessage(updateEditMessageData):
                 let message = updateEditMessageData.message
                 return apiMessagePeerIds(message)
+            case let .updateNewEphemeralMessage(updateNewEphemeralMessageData):
+                return apiEphemeralMessagePeerIds(updateNewEphemeralMessageData.message)
+            case let .updateEditEphemeralMessage(updateEditEphemeralMessageData):
+                return apiEphemeralMessagePeerIds(updateEditEphemeralMessageData.message)
+            case let .updateDeleteEphemeralMessages(updateDeleteEphemeralMessagesData):
+                return [updateDeleteEphemeralMessagesData.peer.peerId]
             case let .updateReadChannelInbox(updateReadChannelInboxData):
                 let channelId = updateReadChannelInboxData.channelId
                 return [PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))]

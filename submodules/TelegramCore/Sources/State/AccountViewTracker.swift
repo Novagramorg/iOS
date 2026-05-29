@@ -845,6 +845,9 @@ public final class AccountViewTracker {
             var addedMessageIds: [MessageId] = []
             let timestamp = Int32(CFAbsoluteTimeGetCurrent())
             for messageId in messageIds {
+                guard messageId.namespace == Namespaces.Message.Cloud else {
+                    continue
+                }
                 let messageTimestamp = self.updatedReactionsMessageIdsAndTimestamps[messageId]
                 if messageTimestamp == nil || messageTimestamp! < timestamp - 1 * 20 || force {
                     self.updatedReactionsMessageIdsAndTimestamps[messageId] = timestamp

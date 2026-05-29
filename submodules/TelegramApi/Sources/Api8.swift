@@ -1,4 +1,86 @@
 public extension Api {
+    enum GroupCallMessage: TypeConstructorDescription {
+        public class Cons_groupCallMessage: TypeConstructorDescription {
+            public var flags: Int32
+            public var id: Int32
+            public var fromId: Api.Peer
+            public var date: Int32
+            public var message: Api.TextWithEntities
+            public var paidMessageStars: Int64?
+            public init(flags: Int32, id: Int32, fromId: Api.Peer, date: Int32, message: Api.TextWithEntities, paidMessageStars: Int64?) {
+                self.flags = flags
+                self.id = id
+                self.fromId = fromId
+                self.date = date
+                self.message = message
+                self.paidMessageStars = paidMessageStars
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("groupCallMessage", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("fromId", ConstructorParameterDescription(self.fromId)), ("date", ConstructorParameterDescription(self.date)), ("message", ConstructorParameterDescription(self.message)), ("paidMessageStars", ConstructorParameterDescription(self.paidMessageStars))])
+            }
+        }
+        case groupCallMessage(Cons_groupCallMessage)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .groupCallMessage(let _data):
+                if boxed {
+                    buffer.appendInt32(445316222)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt32(_data.id, buffer: buffer, boxed: false)
+                _data.fromId.serialize(buffer, true)
+                serializeInt32(_data.date, buffer: buffer, boxed: false)
+                _data.message.serialize(buffer, true)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeInt64(_data.paidMessageStars!, buffer: buffer, boxed: false)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .groupCallMessage(let _data):
+                return ("groupCallMessage", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("fromId", ConstructorParameterDescription(_data.fromId)), ("date", ConstructorParameterDescription(_data.date)), ("message", ConstructorParameterDescription(_data.message)), ("paidMessageStars", ConstructorParameterDescription(_data.paidMessageStars))])
+            }
+        }
+
+        public static func parse_groupCallMessage(_ reader: BufferReader) -> GroupCallMessage? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: Api.Peer?
+            if let signature = reader.readInt32() {
+                _3 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
+            var _4: Int32?
+            _4 = reader.readInt32()
+            var _5: Api.TextWithEntities?
+            if let signature = reader.readInt32() {
+                _5 = Api.parse(reader, signature: signature) as? Api.TextWithEntities
+            }
+            var _6: Int64?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _6 = reader.readInt64()
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _6 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 {
+                return Api.GroupCallMessage.groupCallMessage(Cons_groupCallMessage(flags: _1!, id: _2!, fromId: _3!, date: _4!, message: _5!, paidMessageStars: _6))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     enum GroupCallParticipant: TypeConstructorDescription {
         public class Cons_groupCallParticipant: TypeConstructorDescription {
             public var flags: Int32
@@ -1578,295 +1660,6 @@ public extension Api {
             let _c4 = _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.InputBotInlineMessageID.inputBotInlineMessageID64(Cons_inputBotInlineMessageID64(dcId: _1!, ownerId: _2!, id: _3!, accessHash: _4!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum InputBotInlineResult: TypeConstructorDescription {
-        public class Cons_inputBotInlineResult: TypeConstructorDescription {
-            public var flags: Int32
-            public var id: String
-            public var type: String
-            public var title: String?
-            public var description: String?
-            public var url: String?
-            public var thumb: Api.InputWebDocument?
-            public var content: Api.InputWebDocument?
-            public var sendMessage: Api.InputBotInlineMessage
-            public init(flags: Int32, id: String, type: String, title: String?, description: String?, url: String?, thumb: Api.InputWebDocument?, content: Api.InputWebDocument?, sendMessage: Api.InputBotInlineMessage) {
-                self.flags = flags
-                self.id = id
-                self.type = type
-                self.title = title
-                self.description = description
-                self.url = url
-                self.thumb = thumb
-                self.content = content
-                self.sendMessage = sendMessage
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputBotInlineResult", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("type", ConstructorParameterDescription(self.type)), ("title", ConstructorParameterDescription(self.title)), ("description", ConstructorParameterDescription(self.description)), ("url", ConstructorParameterDescription(self.url)), ("thumb", ConstructorParameterDescription(self.thumb)), ("content", ConstructorParameterDescription(self.content)), ("sendMessage", ConstructorParameterDescription(self.sendMessage))])
-            }
-        }
-        public class Cons_inputBotInlineResultDocument: TypeConstructorDescription {
-            public var flags: Int32
-            public var id: String
-            public var type: String
-            public var title: String?
-            public var description: String?
-            public var document: Api.InputDocument
-            public var sendMessage: Api.InputBotInlineMessage
-            public init(flags: Int32, id: String, type: String, title: String?, description: String?, document: Api.InputDocument, sendMessage: Api.InputBotInlineMessage) {
-                self.flags = flags
-                self.id = id
-                self.type = type
-                self.title = title
-                self.description = description
-                self.document = document
-                self.sendMessage = sendMessage
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputBotInlineResultDocument", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("type", ConstructorParameterDescription(self.type)), ("title", ConstructorParameterDescription(self.title)), ("description", ConstructorParameterDescription(self.description)), ("document", ConstructorParameterDescription(self.document)), ("sendMessage", ConstructorParameterDescription(self.sendMessage))])
-            }
-        }
-        public class Cons_inputBotInlineResultGame: TypeConstructorDescription {
-            public var id: String
-            public var shortName: String
-            public var sendMessage: Api.InputBotInlineMessage
-            public init(id: String, shortName: String, sendMessage: Api.InputBotInlineMessage) {
-                self.id = id
-                self.shortName = shortName
-                self.sendMessage = sendMessage
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputBotInlineResultGame", [("id", ConstructorParameterDescription(self.id)), ("shortName", ConstructorParameterDescription(self.shortName)), ("sendMessage", ConstructorParameterDescription(self.sendMessage))])
-            }
-        }
-        public class Cons_inputBotInlineResultPhoto: TypeConstructorDescription {
-            public var id: String
-            public var type: String
-            public var photo: Api.InputPhoto
-            public var sendMessage: Api.InputBotInlineMessage
-            public init(id: String, type: String, photo: Api.InputPhoto, sendMessage: Api.InputBotInlineMessage) {
-                self.id = id
-                self.type = type
-                self.photo = photo
-                self.sendMessage = sendMessage
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputBotInlineResultPhoto", [("id", ConstructorParameterDescription(self.id)), ("type", ConstructorParameterDescription(self.type)), ("photo", ConstructorParameterDescription(self.photo)), ("sendMessage", ConstructorParameterDescription(self.sendMessage))])
-            }
-        }
-        case inputBotInlineResult(Cons_inputBotInlineResult)
-        case inputBotInlineResultDocument(Cons_inputBotInlineResultDocument)
-        case inputBotInlineResultGame(Cons_inputBotInlineResultGame)
-        case inputBotInlineResultPhoto(Cons_inputBotInlineResultPhoto)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .inputBotInlineResult(let _data):
-                if boxed {
-                    buffer.appendInt32(-2000710887)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeString(_data.id, buffer: buffer, boxed: false)
-                serializeString(_data.type, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 1) != 0 {
-                    serializeString(_data.title!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 2) != 0 {
-                    serializeString(_data.description!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 3) != 0 {
-                    serializeString(_data.url!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 4) != 0 {
-                    _data.thumb!.serialize(buffer, true)
-                }
-                if Int(_data.flags) & Int(1 << 5) != 0 {
-                    _data.content!.serialize(buffer, true)
-                }
-                _data.sendMessage.serialize(buffer, true)
-                break
-            case .inputBotInlineResultDocument(let _data):
-                if boxed {
-                    buffer.appendInt32(-459324)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                serializeString(_data.id, buffer: buffer, boxed: false)
-                serializeString(_data.type, buffer: buffer, boxed: false)
-                if Int(_data.flags) & Int(1 << 1) != 0 {
-                    serializeString(_data.title!, buffer: buffer, boxed: false)
-                }
-                if Int(_data.flags) & Int(1 << 2) != 0 {
-                    serializeString(_data.description!, buffer: buffer, boxed: false)
-                }
-                _data.document.serialize(buffer, true)
-                _data.sendMessage.serialize(buffer, true)
-                break
-            case .inputBotInlineResultGame(let _data):
-                if boxed {
-                    buffer.appendInt32(1336154098)
-                }
-                serializeString(_data.id, buffer: buffer, boxed: false)
-                serializeString(_data.shortName, buffer: buffer, boxed: false)
-                _data.sendMessage.serialize(buffer, true)
-                break
-            case .inputBotInlineResultPhoto(let _data):
-                if boxed {
-                    buffer.appendInt32(-1462213465)
-                }
-                serializeString(_data.id, buffer: buffer, boxed: false)
-                serializeString(_data.type, buffer: buffer, boxed: false)
-                _data.photo.serialize(buffer, true)
-                _data.sendMessage.serialize(buffer, true)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .inputBotInlineResult(let _data):
-                return ("inputBotInlineResult", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("type", ConstructorParameterDescription(_data.type)), ("title", ConstructorParameterDescription(_data.title)), ("description", ConstructorParameterDescription(_data.description)), ("url", ConstructorParameterDescription(_data.url)), ("thumb", ConstructorParameterDescription(_data.thumb)), ("content", ConstructorParameterDescription(_data.content)), ("sendMessage", ConstructorParameterDescription(_data.sendMessage))])
-            case .inputBotInlineResultDocument(let _data):
-                return ("inputBotInlineResultDocument", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("type", ConstructorParameterDescription(_data.type)), ("title", ConstructorParameterDescription(_data.title)), ("description", ConstructorParameterDescription(_data.description)), ("document", ConstructorParameterDescription(_data.document)), ("sendMessage", ConstructorParameterDescription(_data.sendMessage))])
-            case .inputBotInlineResultGame(let _data):
-                return ("inputBotInlineResultGame", [("id", ConstructorParameterDescription(_data.id)), ("shortName", ConstructorParameterDescription(_data.shortName)), ("sendMessage", ConstructorParameterDescription(_data.sendMessage))])
-            case .inputBotInlineResultPhoto(let _data):
-                return ("inputBotInlineResultPhoto", [("id", ConstructorParameterDescription(_data.id)), ("type", ConstructorParameterDescription(_data.type)), ("photo", ConstructorParameterDescription(_data.photo)), ("sendMessage", ConstructorParameterDescription(_data.sendMessage))])
-            }
-        }
-
-        public static func parse_inputBotInlineResult(_ reader: BufferReader) -> InputBotInlineResult? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: String?
-            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
-                _4 = parseString(reader)
-            }
-            var _5: String?
-            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
-                _5 = parseString(reader)
-            }
-            var _6: String?
-            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
-                _6 = parseString(reader)
-            }
-            var _7: Api.InputWebDocument?
-            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
-                if let signature = reader.readInt32() {
-                    _7 = Api.parse(reader, signature: signature) as? Api.InputWebDocument
-                }
-            }
-            var _8: Api.InputWebDocument?
-            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
-                if let signature = reader.readInt32() {
-                    _8 = Api.parse(reader, signature: signature) as? Api.InputWebDocument
-                }
-            }
-            var _9: Api.InputBotInlineMessage?
-            if let signature = reader.readInt32() {
-                _9 = Api.parse(reader, signature: signature) as? Api.InputBotInlineMessage
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
-            let _c5 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _5 != nil
-            let _c6 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _6 != nil
-            let _c7 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _7 != nil
-            let _c8 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _8 != nil
-            let _c9 = _9 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
-                return Api.InputBotInlineResult.inputBotInlineResult(Cons_inputBotInlineResult(flags: _1!, id: _2!, type: _3!, title: _4, description: _5, url: _6, thumb: _7, content: _8, sendMessage: _9!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputBotInlineResultDocument(_ reader: BufferReader) -> InputBotInlineResult? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: String?
-            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
-                _4 = parseString(reader)
-            }
-            var _5: String?
-            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
-                _5 = parseString(reader)
-            }
-            var _6: Api.InputDocument?
-            if let signature = reader.readInt32() {
-                _6 = Api.parse(reader, signature: signature) as? Api.InputDocument
-            }
-            var _7: Api.InputBotInlineMessage?
-            if let signature = reader.readInt32() {
-                _7 = Api.parse(reader, signature: signature) as? Api.InputBotInlineMessage
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
-            let _c5 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _5 != nil
-            let _c6 = _6 != nil
-            let _c7 = _7 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
-                return Api.InputBotInlineResult.inputBotInlineResultDocument(Cons_inputBotInlineResultDocument(flags: _1!, id: _2!, type: _3!, title: _4, description: _5, document: _6!, sendMessage: _7!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputBotInlineResultGame(_ reader: BufferReader) -> InputBotInlineResult? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: Api.InputBotInlineMessage?
-            if let signature = reader.readInt32() {
-                _3 = Api.parse(reader, signature: signature) as? Api.InputBotInlineMessage
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.InputBotInlineResult.inputBotInlineResultGame(Cons_inputBotInlineResultGame(id: _1!, shortName: _2!, sendMessage: _3!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputBotInlineResultPhoto(_ reader: BufferReader) -> InputBotInlineResult? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: Api.InputPhoto?
-            if let signature = reader.readInt32() {
-                _3 = Api.parse(reader, signature: signature) as? Api.InputPhoto
-            }
-            var _4: Api.InputBotInlineMessage?
-            if let signature = reader.readInt32() {
-                _4 = Api.parse(reader, signature: signature) as? Api.InputBotInlineMessage
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.InputBotInlineResult.inputBotInlineResultPhoto(Cons_inputBotInlineResultPhoto(id: _1!, type: _2!, photo: _3!, sendMessage: _4!))
             }
             else {
                 return nil

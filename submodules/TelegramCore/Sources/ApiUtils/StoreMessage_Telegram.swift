@@ -316,6 +316,25 @@ func apiMessagePeerIds(_ message: Api.Message) -> [PeerId] {
     }
 }
 
+func apiEphemeralMessagePeerIds(_ message: Api.EphemeralMessage) -> [PeerId] {
+    switch message {
+    case let .ephemeralMessage(messageData):
+        let (_, _, fromId, peerId, receiverId, _, _, _, _, _, _) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.date, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup)
+        var result: [PeerId] = []
+
+        func appendUnique(_ peerId: PeerId) {
+            if !result.contains(peerId) {
+                result.append(peerId)
+            }
+        }
+
+        appendUnique(peerId.peerId)
+        appendUnique(fromId.peerId)
+        appendUnique(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(receiverId)))
+        return result
+    }
+}
+
 func apiMessageAssociatedMessageIds(_ message: Api.Message) -> (replyIds: ReferencedReplyMessageIds, generalIds: [MessageId])? {
     switch message {
         case let .message(messageData):
@@ -372,6 +391,79 @@ func apiMessageAssociatedMessageIds(_ message: Api.Message) -> (replyIds: Refere
             }
     }
     return nil
+}
+
+extension StoreMessage {
+    convenience init(apiEphemeralMessage: Api.EphemeralMessage) {
+        switch apiEphemeralMessage {
+        case let .ephemeralMessage(messageData):
+            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, date, text, entities, media, replyMarkup) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.date, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup)
+            let peerId = apiPeerId.peerId
+            let authorId = fromId.peerId
+
+            var attributes: [MessageAttribute] = [
+                EphemeralMessageAttribute(receiverId: receiverId)
+            ]
+            var medias: [Media] = []
+
+            if let media {
+                let (mediaValue, expirationTimer, nonPremium, hasSpoiler, webpageAttributes, videoTimestamp) = textMediaAndExpirationTimerFromApiMedia(media, peerId)
+                if let mediaValue {
+                    medias.append(mediaValue)
+
+                    if let expirationTimer, expirationTimer > 0 {
+                        attributes.append(AutoclearTimeoutMessageAttribute(timeout: expirationTimer, countdownBeginTime: nil))
+                    }
+
+                    if let nonPremium, nonPremium {
+                        attributes.append(NonPremiumMessageAttribute())
+                    }
+
+                    if let hasSpoiler, hasSpoiler {
+                        attributes.append(MediaSpoilerMessageAttribute())
+                    }
+
+                    if let videoTimestamp {
+                        attributes.append(ForwardVideoTimestampAttribute(timestamp: videoTimestamp))
+                    }
+
+                    if mediaValue is TelegramMediaWebpage, let webpageAttributes {
+                        attributes.append(WebpagePreviewMessageAttribute(leadingPreview: false, forceLargeMedia: webpageAttributes.forceLargeMedia, isManuallyAdded: webpageAttributes.isManuallyAdded, isSafe: webpageAttributes.isSafe))
+                    }
+                }
+            }
+
+            let parsedEntities = messageTextEntitiesFromApiEntities(entities ?? [])
+            attributes.append(TextEntitiesMessageAttribute(entities: parsedEntities))
+
+            if let replyMarkup {
+                attributes.append(ReplyMarkupMessageAttribute(apiMarkup: replyMarkup))
+            }
+
+            var storeFlags = StoreMessageFlags()
+            if (flags & (1 << 0)) == 0 {
+                storeFlags.insert(.Incoming)
+            }
+
+            self.init(
+                id: MessageId(peerId: peerId, namespace: Namespaces.Message.EphemeralLocal, id: id),
+                customStableId: nil,
+                globallyUniqueId: nil,
+                groupingKey: nil,
+                threadId: topMsgId.flatMap { Int64($0) },
+                timestamp: date,
+                flags: storeFlags,
+                tags: [],
+                globalTags: [],
+                localTags: [],
+                forwardInfo: nil,
+                authorId: authorId,
+                text: text,
+                attributes: attributes,
+                media: medias
+            )
+        }
+    }
 }
 
 struct ParsedMessageWebpageAttributes {

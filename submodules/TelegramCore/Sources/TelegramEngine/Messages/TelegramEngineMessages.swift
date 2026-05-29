@@ -223,6 +223,14 @@ public extension TelegramEngine {
             return _internal_sendBotGame(account: self.account, botPeerId: botPeerId, game: game, to: peerId, threadId: threadId)
         }
 
+        public func sendEphemeralBotCommand(peerId: PeerId, botPeerId: PeerId, text: String, entities: [MessageTextEntity]) -> Signal<MessageId?, NoError> {
+            return _internal_sendEphemeralBotCommand(account: self.account, peerId: peerId, botPeerId: botPeerId, text: text, entities: entities)
+        }
+
+        public func retryEphemeralOutgoingMessage(messageId: MessageId) -> Signal<MessageId?, NoError> {
+            return _internal_retryEphemeralOutgoingMessage(account: self.account, messageId: messageId)
+        }
+
         public func requestUpdatePinnedMessage(peerId: PeerId, update: PinnedMessageUpdate) -> Signal<Void, UpdatePinnedMessageError> {
             return _internal_requestUpdatePinnedMessage(account: self.account, peerId: peerId, update: update)
         }
