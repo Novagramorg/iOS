@@ -2592,6 +2592,7 @@ extension ChatControllerImpl {
                         }
 
                         if let resolved = resolveEphemeralBotCommand(text: messageText, peerCommands: peerCommands, forcedBotPeerId: botPeer.id) {
+                            let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
                             strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
                                 if let strongSelf = self {
                                     strongSelf.chatDisplayNode.collapseInput()
@@ -2602,10 +2603,13 @@ extension ChatControllerImpl {
                                 }
                             }, nil)
 
-                            let _ = (strongSelf.context.engine.messages.sendEphemeralBotCommand(peerId: peerId, botPeerId: resolved.botPeerId, text: resolved.text, entities: resolved.entities)
-                            |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
-                                self?.chatDisplayNode.historyNode.scrollToEndOfHistory()
-                            })
+                            var attributes: [MessageAttribute] = [
+                                EphemeralOutgoingMessageAttribute(botPeerId: resolved.botPeerId, randomId: 0, state: .sending)
+                            ]
+                            if !resolved.entities.isEmpty {
+                                attributes.append(TextEntitiesMessageAttribute(entities: resolved.entities))
+                            }
+                            strongSelf.sendMessages([.message(text: resolved.text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])])
                             strongSelf.interfaceInteraction?.updateShowCommands { _ in
                                 return false
                             }

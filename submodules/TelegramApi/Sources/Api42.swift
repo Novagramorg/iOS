@@ -5062,9 +5062,9 @@ public extension Api.functions.ephemeral {
     }
 }
 public extension Api.functions.ephemeral {
-    static func sendMessage(flags: Int32, peer: Api.InputPeer, receiverId: Api.InputUser, queryId: Int64?, message: String, entities: [Api.MessageEntity]?, media: Api.InputMedia?, replyMarkup: Api.ReplyMarkup?, richMessage: Api.InputRichMessage?, randomId: Int64) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.EphemeralMessage>) {
+    static func sendMessage(flags: Int32, peer: Api.InputPeer, receiverId: Api.InputUser, queryId: Int64?, message: String, entities: [Api.MessageEntity]?, media: Api.InputMedia?, replyMarkup: Api.ReplyMarkup?, richMessage: Api.InputRichMessage?, randomId: Int64, replyTo: Api.InputReplyTo?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()
-        buffer.appendInt32(16714928)
+        buffer.appendInt32(1758187679)
         serializeInt32(flags, buffer: buffer, boxed: false)
         peer.serialize(buffer, true)
         receiverId.serialize(buffer, true)
@@ -5089,11 +5089,14 @@ public extension Api.functions.ephemeral {
             richMessage!.serialize(buffer, true)
         }
         serializeInt64(randomId, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "ephemeral.sendMessage", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("receiverId", ConstructorParameterDescription(receiverId)), ("queryId", ConstructorParameterDescription(queryId)), ("message", ConstructorParameterDescription(message)), ("entities", ConstructorParameterDescription(entities)), ("media", ConstructorParameterDescription(media)), ("replyMarkup", ConstructorParameterDescription(replyMarkup)), ("richMessage", ConstructorParameterDescription(richMessage)), ("randomId", ConstructorParameterDescription(randomId))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.EphemeralMessage? in
+        if Int(flags) & Int(1 << 5) != 0 {
+            replyTo!.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "ephemeral.sendMessage", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("receiverId", ConstructorParameterDescription(receiverId)), ("queryId", ConstructorParameterDescription(queryId)), ("message", ConstructorParameterDescription(message)), ("entities", ConstructorParameterDescription(entities)), ("media", ConstructorParameterDescription(media)), ("replyMarkup", ConstructorParameterDescription(replyMarkup)), ("richMessage", ConstructorParameterDescription(richMessage)), ("randomId", ConstructorParameterDescription(randomId)), ("replyTo", ConstructorParameterDescription(replyTo))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
             let reader = BufferReader(buffer)
-            var result: Api.EphemeralMessage?
+            var result: Api.Updates?
             if let signature = reader.readInt32() {
-                result = Api.parse(reader, signature: signature) as? Api.EphemeralMessage
+                result = Api.parse(reader, signature: signature) as? Api.Updates
             }
             return result
         })

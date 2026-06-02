@@ -73,6 +73,15 @@ public extension Api {
 }
 public extension Api {
     indirect enum InputReplyTo: TypeConstructorDescription {
+        public class Cons_inputReplyToEphemeralMessage: TypeConstructorDescription {
+            public var id: Int32
+            public init(id: Int32) {
+                self.id = id
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputReplyToEphemeralMessage", [("id", ConstructorParameterDescription(self.id))])
+            }
+        }
         public class Cons_inputReplyToMessage: TypeConstructorDescription {
             public var flags: Int32
             public var replyToMsgId: Int32
@@ -120,12 +129,19 @@ public extension Api {
                 return ("inputReplyToStory", [("peer", ConstructorParameterDescription(self.peer)), ("storyId", ConstructorParameterDescription(self.storyId))])
             }
         }
+        case inputReplyToEphemeralMessage(Cons_inputReplyToEphemeralMessage)
         case inputReplyToMessage(Cons_inputReplyToMessage)
         case inputReplyToMonoForum(Cons_inputReplyToMonoForum)
         case inputReplyToStory(Cons_inputReplyToStory)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
             switch self {
+            case .inputReplyToEphemeralMessage(let _data):
+                if boxed {
+                    buffer.appendInt32(1092204894)
+                }
+                serializeInt32(_data.id, buffer: buffer, boxed: false)
+                break
             case .inputReplyToMessage(let _data):
                 if boxed {
                     buffer.appendInt32(1003796418)
@@ -179,6 +195,8 @@ public extension Api {
 
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
+            case .inputReplyToEphemeralMessage(let _data):
+                return ("inputReplyToEphemeralMessage", [("id", ConstructorParameterDescription(_data.id))])
             case .inputReplyToMessage(let _data):
                 return ("inputReplyToMessage", [("flags", ConstructorParameterDescription(_data.flags)), ("replyToMsgId", ConstructorParameterDescription(_data.replyToMsgId)), ("topMsgId", ConstructorParameterDescription(_data.topMsgId)), ("replyToPeerId", ConstructorParameterDescription(_data.replyToPeerId)), ("quoteText", ConstructorParameterDescription(_data.quoteText)), ("quoteEntities", ConstructorParameterDescription(_data.quoteEntities)), ("quoteOffset", ConstructorParameterDescription(_data.quoteOffset)), ("monoforumPeerId", ConstructorParameterDescription(_data.monoforumPeerId)), ("todoItemId", ConstructorParameterDescription(_data.todoItemId)), ("pollOption", ConstructorParameterDescription(_data.pollOption))])
             case .inputReplyToMonoForum(let _data):
@@ -188,6 +206,17 @@ public extension Api {
             }
         }
 
+        public static func parse_inputReplyToEphemeralMessage(_ reader: BufferReader) -> InputReplyTo? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputReplyTo.inputReplyToEphemeralMessage(Cons_inputReplyToEphemeralMessage(id: _1!))
+            }
+            else {
+                return nil
+            }
+        }
         public static func parse_inputReplyToMessage(_ reader: BufferReader) -> InputReplyTo? {
             var _1: Int32?
             _1 = reader.readInt32()
@@ -1389,83 +1418,6 @@ public extension Api {
             let _c5 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.InputStickerSetItem.inputStickerSetItem(Cons_inputStickerSetItem(flags: _1!, document: _2!, emoji: _3!, maskCoords: _4, keywords: _5))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum InputStickeredMedia: TypeConstructorDescription {
-        public class Cons_inputStickeredMediaDocument: TypeConstructorDescription {
-            public var id: Api.InputDocument
-            public init(id: Api.InputDocument) {
-                self.id = id
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputStickeredMediaDocument", [("id", ConstructorParameterDescription(self.id))])
-            }
-        }
-        public class Cons_inputStickeredMediaPhoto: TypeConstructorDescription {
-            public var id: Api.InputPhoto
-            public init(id: Api.InputPhoto) {
-                self.id = id
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputStickeredMediaPhoto", [("id", ConstructorParameterDescription(self.id))])
-            }
-        }
-        case inputStickeredMediaDocument(Cons_inputStickeredMediaDocument)
-        case inputStickeredMediaPhoto(Cons_inputStickeredMediaPhoto)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .inputStickeredMediaDocument(let _data):
-                if boxed {
-                    buffer.appendInt32(70813275)
-                }
-                _data.id.serialize(buffer, true)
-                break
-            case .inputStickeredMediaPhoto(let _data):
-                if boxed {
-                    buffer.appendInt32(1251549527)
-                }
-                _data.id.serialize(buffer, true)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .inputStickeredMediaDocument(let _data):
-                return ("inputStickeredMediaDocument", [("id", ConstructorParameterDescription(_data.id))])
-            case .inputStickeredMediaPhoto(let _data):
-                return ("inputStickeredMediaPhoto", [("id", ConstructorParameterDescription(_data.id))])
-            }
-        }
-
-        public static func parse_inputStickeredMediaDocument(_ reader: BufferReader) -> InputStickeredMedia? {
-            var _1: Api.InputDocument?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.InputDocument
-            }
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.InputStickeredMedia.inputStickeredMediaDocument(Cons_inputStickeredMediaDocument(id: _1!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputStickeredMediaPhoto(_ reader: BufferReader) -> InputStickeredMedia? {
-            var _1: Api.InputPhoto?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.InputPhoto
-            }
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.InputStickeredMedia.inputStickeredMediaPhoto(Cons_inputStickeredMediaPhoto(id: _1!))
             }
             else {
                 return nil

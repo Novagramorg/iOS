@@ -1800,6 +1800,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                                 break
                             case .inputReplyToMonoForum:
                                 break
+                            case .inputReplyToEphemeralMessage:
+                                break
                             }
                         }
                         inputState = SynchronizeableChatInputState(replySubject: replySubject, text: message, entities: messageTextEntitiesFromApiEntities(entities ?? []), timestamp: date, textSelection: nil, messageEffectId: messageEffectId, suggestedPost: parsedSuggestedPost)

@@ -4700,6 +4700,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 }
 
                 if let resolved = resolveEphemeralBotCommand(text: inputText, peerCommands: peerCommands) {
+                    let replyMessageSubject = self.chatPresentationInterfaceState.interfaceState.replyMessageSubject
                     self.setupSendActionOnViewUpdate({ [weak self] in
                         guard let strongSelf = self else {
                             return
@@ -4711,10 +4712,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         })
                     }, nil)
 
-                    let _ = (self.context.engine.messages.sendEphemeralBotCommand(peerId: peerId, botPeerId: resolved.botPeerId, text: resolved.text, entities: resolved.entities)
-                    |> deliverOnMainQueue).startStandalone(next: { [weak self] _ in
-                        self?.historyNode.scrollToEndOfHistory()
-                    })
+                    var attributes: [MessageAttribute] = [
+                        EphemeralOutgoingMessageAttribute(botPeerId: resolved.botPeerId, randomId: 0, state: .sending)
+                    ]
+                    if !resolved.entities.isEmpty {
+                        attributes.append(TextEntitiesMessageAttribute(entities: resolved.entities))
+                    }
+                    self.sendMessages([.message(text: resolved.text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: self.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])], nil, nil, nil, false, false)
                 } else {
                     sendNormally()
                 }

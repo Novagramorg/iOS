@@ -1,4 +1,81 @@
 public extension Api {
+    enum InputStickeredMedia: TypeConstructorDescription {
+        public class Cons_inputStickeredMediaDocument: TypeConstructorDescription {
+            public var id: Api.InputDocument
+            public init(id: Api.InputDocument) {
+                self.id = id
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputStickeredMediaDocument", [("id", ConstructorParameterDescription(self.id))])
+            }
+        }
+        public class Cons_inputStickeredMediaPhoto: TypeConstructorDescription {
+            public var id: Api.InputPhoto
+            public init(id: Api.InputPhoto) {
+                self.id = id
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputStickeredMediaPhoto", [("id", ConstructorParameterDescription(self.id))])
+            }
+        }
+        case inputStickeredMediaDocument(Cons_inputStickeredMediaDocument)
+        case inputStickeredMediaPhoto(Cons_inputStickeredMediaPhoto)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .inputStickeredMediaDocument(let _data):
+                if boxed {
+                    buffer.appendInt32(70813275)
+                }
+                _data.id.serialize(buffer, true)
+                break
+            case .inputStickeredMediaPhoto(let _data):
+                if boxed {
+                    buffer.appendInt32(1251549527)
+                }
+                _data.id.serialize(buffer, true)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .inputStickeredMediaDocument(let _data):
+                return ("inputStickeredMediaDocument", [("id", ConstructorParameterDescription(_data.id))])
+            case .inputStickeredMediaPhoto(let _data):
+                return ("inputStickeredMediaPhoto", [("id", ConstructorParameterDescription(_data.id))])
+            }
+        }
+
+        public static func parse_inputStickeredMediaDocument(_ reader: BufferReader) -> InputStickeredMedia? {
+            var _1: Api.InputDocument?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputDocument
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputStickeredMedia.inputStickeredMediaDocument(Cons_inputStickeredMediaDocument(id: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputStickeredMediaPhoto(_ reader: BufferReader) -> InputStickeredMedia? {
+            var _1: Api.InputPhoto?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.InputPhoto
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputStickeredMedia.inputStickeredMediaPhoto(Cons_inputStickeredMediaPhoto(id: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     indirect enum InputStorePaymentPurpose: TypeConstructorDescription {
         public class Cons_inputStorePaymentAuthCode: TypeConstructorDescription {
             public var flags: Int32
@@ -1535,83 +1612,6 @@ public extension Api {
             let _c1 = _1 != nil
             if _c1 {
                 return Api.JSONValue.jsonString(Cons_jsonString(value: _1!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum JoinChatBotResult: TypeConstructorDescription {
-        public class Cons_joinChatBotResultWebView: TypeConstructorDescription {
-            public var url: String
-            public init(url: String) {
-                self.url = url
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("joinChatBotResultWebView", [("url", ConstructorParameterDescription(self.url))])
-            }
-        }
-        case joinChatBotResultApproved
-        case joinChatBotResultDeclined
-        case joinChatBotResultQueued
-        case joinChatBotResultWebView(Cons_joinChatBotResultWebView)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .joinChatBotResultApproved:
-                if boxed {
-                    buffer.appendInt32(-1374344599)
-                }
-                break
-            case .joinChatBotResultDeclined:
-                if boxed {
-                    buffer.appendInt32(251265428)
-                }
-                break
-            case .joinChatBotResultQueued:
-                if boxed {
-                    buffer.appendInt32(-1734105024)
-                }
-                break
-            case .joinChatBotResultWebView(let _data):
-                if boxed {
-                    buffer.appendInt32(-689719277)
-                }
-                serializeString(_data.url, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .joinChatBotResultApproved:
-                return ("joinChatBotResultApproved", [])
-            case .joinChatBotResultDeclined:
-                return ("joinChatBotResultDeclined", [])
-            case .joinChatBotResultQueued:
-                return ("joinChatBotResultQueued", [])
-            case .joinChatBotResultWebView(let _data):
-                return ("joinChatBotResultWebView", [("url", ConstructorParameterDescription(_data.url))])
-            }
-        }
-
-        public static func parse_joinChatBotResultApproved(_ reader: BufferReader) -> JoinChatBotResult? {
-            return Api.JoinChatBotResult.joinChatBotResultApproved
-        }
-        public static func parse_joinChatBotResultDeclined(_ reader: BufferReader) -> JoinChatBotResult? {
-            return Api.JoinChatBotResult.joinChatBotResultDeclined
-        }
-        public static func parse_joinChatBotResultQueued(_ reader: BufferReader) -> JoinChatBotResult? {
-            return Api.JoinChatBotResult.joinChatBotResultQueued
-        }
-        public static func parse_joinChatBotResultWebView(_ reader: BufferReader) -> JoinChatBotResult? {
-            var _1: String?
-            _1 = parseString(reader)
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.JoinChatBotResult.joinChatBotResultWebView(Cons_joinChatBotResultWebView(url: _1!))
             }
             else {
                 return nil

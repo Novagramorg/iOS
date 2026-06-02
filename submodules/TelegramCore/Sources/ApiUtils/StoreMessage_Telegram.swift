@@ -319,7 +319,7 @@ func apiMessagePeerIds(_ message: Api.Message) -> [PeerId] {
 func apiEphemeralMessagePeerIds(_ message: Api.EphemeralMessage) -> [PeerId] {
     switch message {
     case let .ephemeralMessage(messageData):
-        let (_, _, fromId, peerId, receiverId, _, _, _, _, _, _) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.date, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup)
+        let (_, _, fromId, peerId, receiverId, _, _, _, _, _, _, replyTo) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.date, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo)
         var result: [PeerId] = []
 
         func appendUnique(_ peerId: PeerId) {
@@ -331,6 +331,30 @@ func apiEphemeralMessagePeerIds(_ message: Api.EphemeralMessage) -> [PeerId] {
         appendUnique(peerId.peerId)
         appendUnique(fromId.peerId)
         appendUnique(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(receiverId)))
+        if let replyTo {
+            switch replyTo {
+            case let .messageReplyHeader(messageReplyHeaderData):
+                if let replyToPeerId = messageReplyHeaderData.replyToPeerId {
+                    appendUnique(replyToPeerId.peerId)
+                }
+                if let replyFrom = messageReplyHeaderData.replyFrom {
+                    switch replyFrom {
+                    case let .messageFwdHeader(messageFwdHeaderData):
+                        if let fromId = messageFwdHeaderData.fromId {
+                            appendUnique(fromId.peerId)
+                        }
+                        if let savedFromPeer = messageFwdHeaderData.savedFromPeer {
+                            appendUnique(savedFromPeer.peerId)
+                        }
+                        if let savedFromId = messageFwdHeaderData.savedFromId {
+                            appendUnique(savedFromId.peerId)
+                        }
+                    }
+                }
+            case let .messageReplyStoryHeader(messageReplyStoryHeaderData):
+                appendUnique(messageReplyStoryHeaderData.peer.peerId)
+            }
+        }
         return result
     }
 }
@@ -397,7 +421,7 @@ extension StoreMessage {
     convenience init(apiEphemeralMessage: Api.EphemeralMessage) {
         switch apiEphemeralMessage {
         case let .ephemeralMessage(messageData):
-            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, date, text, entities, media, replyMarkup) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.date, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup)
+            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, date, text, entities, media, replyMarkup, replyTo) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.date, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo)
             let peerId = apiPeerId.peerId
             let authorId = fromId.peerId
 
@@ -430,6 +454,38 @@ extension StoreMessage {
                     if mediaValue is TelegramMediaWebpage, let webpageAttributes {
                         attributes.append(WebpagePreviewMessageAttribute(leadingPreview: false, forceLargeMedia: webpageAttributes.forceLargeMedia, isManuallyAdded: webpageAttributes.isManuallyAdded, isSafe: webpageAttributes.isSafe))
                     }
+                }
+            }
+
+            if let replyTo {
+                switch replyTo {
+                case let .messageReplyHeader(messageReplyHeaderData):
+                    let (innerFlags, replyToMsgId, replyToPeerId, replyHeader, replyMedia, replyToTopId, quoteText, quoteEntities, quoteOffset, todoItemId, pollOption) = (messageReplyHeaderData.flags, messageReplyHeaderData.replyToMsgId, messageReplyHeaderData.replyToPeerId, messageReplyHeaderData.replyFrom, messageReplyHeaderData.replyMedia, messageReplyHeaderData.replyToTopId, messageReplyHeaderData.quoteText, messageReplyHeaderData.quoteEntities, messageReplyHeaderData.quoteOffset, messageReplyHeaderData.todoItemId, messageReplyHeaderData.pollOption)
+                    let isQuote = (innerFlags & (1 << 9)) != 0
+                    let replyNamespace: MessageId.Namespace = (innerFlags & (1 << 13)) != 0 ? Namespaces.Message.EphemeralLocal : Namespaces.Message.Cloud
+
+                    var quote: EngineMessageReplyQuote?
+                    if quoteText != nil || replyMedia != nil {
+                        quote = EngineMessageReplyQuote(text: quoteText ?? "", offset: quoteOffset.flatMap(Int.init), entities: messageTextEntitiesFromApiEntities(quoteEntities ?? []), media: textMediaAndExpirationTimerFromApiMedia(replyMedia, peerId).media)
+                    }
+
+                    if let replyToMsgId {
+                        let replyPeerId = replyToPeerId?.peerId ?? peerId
+                        let threadMessageId = replyToTopId.flatMap { MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: $0) }
+                        var innerSubject: EngineMessageReplyInnerSubject?
+                        if let todoItemId {
+                            innerSubject = .todoItem(todoItemId)
+                        } else if let pollOption {
+                            innerSubject = .pollOption(pollOption.makeData())
+                        }
+                        attributes.append(ReplyMessageAttribute(messageId: MessageId(peerId: replyPeerId, namespace: replyNamespace, id: replyToMsgId), threadMessageId: threadMessageId, quote: quote, isQuote: isQuote, innerSubject: innerSubject))
+                    }
+                    if let replyHeader {
+                        attributes.append(QuotedReplyMessageAttribute(apiHeader: replyHeader, quote: quote, isQuote: isQuote))
+                    }
+                case let .messageReplyStoryHeader(messageReplyStoryHeaderData):
+                    let (peer, storyId) = (messageReplyStoryHeaderData.peer, messageReplyStoryHeaderData.storyId)
+                    attributes.append(ReplyStoryAttribute(storyId: StoryId(peerId: peer.peerId, id: storyId)))
                 }
             }
 

@@ -366,6 +366,25 @@ func canReplyInChat(_ chatPresentationInterfaceState: ChatPresentationInterfaceS
     return canReply
 }
 
+private func canReplyToEphemeralMessage(_ message: EngineRawMessage) -> Bool {
+    if message.id.namespace != Namespaces.Message.EphemeralLocal || message.id.id <= 0 {
+        return false
+    }
+    if message.flags.isSending || !message.flags.intersection([.Failed, .Unsent]).isEmpty {
+        return false
+    }
+    if message.attributes.contains(where: { attribute in
+        if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
+            return attribute.state == .failed
+        } else {
+            return false
+        }
+    }) {
+        return false
+    }
+    return true
+}
+
 enum ChatMessageContextMenuActionColor {
     case accent
     case destructive
@@ -745,6 +764,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     let canSelect = !isAction && !hasEphemeralMessages
     
     let message = messages[0]
+    let isReplyableEphemeralMessage = canReplyToEphemeralMessage(message)
+    let isNonReplyableEphemeralMessage = Namespaces.Message.allEphemeral.contains(message.id.namespace) && !isReplyableEphemeralMessage
     
     if case .peer = chatPresentationInterfaceState.chatLocation, let channel = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isForumOrMonoForum {
         if message.threadId == nil {
@@ -752,7 +773,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     
-    if Namespaces.Message.allNonRegular.contains(message.id.namespace) || Namespaces.Message.allEphemeral.contains(message.id.namespace) || message.id.peerId.isRepliesOrVerificationCodes {
+    if Namespaces.Message.allNonRegular.contains(message.id.namespace) || isNonReplyableEphemeralMessage || message.id.peerId.isRepliesOrVerificationCodes {
         canReply = false
         canPin = false
     } else if messages[0].flags.intersection([.Failed, .Unsent]).isEmpty {
@@ -796,7 +817,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         if !(peer is TelegramSecretChat) && messages[0].id.namespace != Namespaces.Message.Cloud {
             canPin = false
-            canReply = false
+            if !isReplyableEphemeralMessage {
+                canReply = false
+            }
         }
     }
     

@@ -3673,14 +3673,29 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self?.interfaceInteraction?.setupReplyMessage(messageId, nil, { _, f in f() })
         }, canSetupReply: { [weak self] message in
             if Namespaces.Message.allEphemeral.contains(message.id.namespace) {
-                return .none
-            }
-            if message.adAttribute != nil {
-                return .none
-            }
-            if !message.flags.contains(.Incoming) {
+                if message.id.namespace != Namespaces.Message.EphemeralLocal || message.id.id <= 0 {
+                    return .none
+                }
                 if !message.flags.intersection([.Failed, .Sending, .Unsent]).isEmpty {
                     return .none
+                }
+                if message.attributes.contains(where: { attribute in
+                    if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
+                        return attribute.state == .failed
+                    } else {
+                        return false
+                    }
+                }) {
+                    return .none
+                }
+            } else {
+                if message.adAttribute != nil {
+                    return .none
+                }
+                if !message.flags.contains(.Incoming) {
+                    if !message.flags.intersection([.Failed, .Sending, .Unsent]).isEmpty {
+                        return .none
+                    }
                 }
             }
             if let strongSelf = self {

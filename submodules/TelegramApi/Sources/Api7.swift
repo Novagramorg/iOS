@@ -524,7 +524,8 @@ public extension Api {
             public var entities: [Api.MessageEntity]?
             public var media: Api.MessageMedia?
             public var replyMarkup: Api.ReplyMarkup?
-            public init(flags: Int32, id: Int32, fromId: Api.Peer, peerId: Api.Peer, receiverId: Int64, topMsgId: Int32?, date: Int32, message: String, entities: [Api.MessageEntity]?, media: Api.MessageMedia?, replyMarkup: Api.ReplyMarkup?) {
+            public var replyTo: Api.MessageReplyHeader?
+            public init(flags: Int32, id: Int32, fromId: Api.Peer, peerId: Api.Peer, receiverId: Int64, topMsgId: Int32?, date: Int32, message: String, entities: [Api.MessageEntity]?, media: Api.MessageMedia?, replyMarkup: Api.ReplyMarkup?, replyTo: Api.MessageReplyHeader?) {
                 self.flags = flags
                 self.id = id
                 self.fromId = fromId
@@ -536,9 +537,10 @@ public extension Api {
                 self.entities = entities
                 self.media = media
                 self.replyMarkup = replyMarkup
+                self.replyTo = replyTo
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("ephemeralMessage", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("fromId", ConstructorParameterDescription(self.fromId)), ("peerId", ConstructorParameterDescription(self.peerId)), ("receiverId", ConstructorParameterDescription(self.receiverId)), ("topMsgId", ConstructorParameterDescription(self.topMsgId)), ("date", ConstructorParameterDescription(self.date)), ("message", ConstructorParameterDescription(self.message)), ("entities", ConstructorParameterDescription(self.entities)), ("media", ConstructorParameterDescription(self.media)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup))])
+                return ("ephemeralMessage", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("fromId", ConstructorParameterDescription(self.fromId)), ("peerId", ConstructorParameterDescription(self.peerId)), ("receiverId", ConstructorParameterDescription(self.receiverId)), ("topMsgId", ConstructorParameterDescription(self.topMsgId)), ("date", ConstructorParameterDescription(self.date)), ("message", ConstructorParameterDescription(self.message)), ("entities", ConstructorParameterDescription(self.entities)), ("media", ConstructorParameterDescription(self.media)), ("replyMarkup", ConstructorParameterDescription(self.replyMarkup)), ("replyTo", ConstructorParameterDescription(self.replyTo))])
             }
         }
         case ephemeralMessage(Cons_ephemeralMessage)
@@ -547,7 +549,7 @@ public extension Api {
             switch self {
             case .ephemeralMessage(let _data):
                 if boxed {
-                    buffer.appendInt32(753575776)
+                    buffer.appendInt32(-641278950)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt32(_data.id, buffer: buffer, boxed: false)
@@ -572,6 +574,9 @@ public extension Api {
                 if Int(_data.flags) & Int(1 << 4) != 0 {
                     _data.replyMarkup!.serialize(buffer, true)
                 }
+                if Int(_data.flags) & Int(1 << 6) != 0 {
+                    _data.replyTo!.serialize(buffer, true)
+                }
                 break
             }
         }
@@ -579,7 +584,7 @@ public extension Api {
         public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
             switch self {
             case .ephemeralMessage(let _data):
-                return ("ephemeralMessage", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("fromId", ConstructorParameterDescription(_data.fromId)), ("peerId", ConstructorParameterDescription(_data.peerId)), ("receiverId", ConstructorParameterDescription(_data.receiverId)), ("topMsgId", ConstructorParameterDescription(_data.topMsgId)), ("date", ConstructorParameterDescription(_data.date)), ("message", ConstructorParameterDescription(_data.message)), ("entities", ConstructorParameterDescription(_data.entities)), ("media", ConstructorParameterDescription(_data.media)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup))])
+                return ("ephemeralMessage", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("fromId", ConstructorParameterDescription(_data.fromId)), ("peerId", ConstructorParameterDescription(_data.peerId)), ("receiverId", ConstructorParameterDescription(_data.receiverId)), ("topMsgId", ConstructorParameterDescription(_data.topMsgId)), ("date", ConstructorParameterDescription(_data.date)), ("message", ConstructorParameterDescription(_data.message)), ("entities", ConstructorParameterDescription(_data.entities)), ("media", ConstructorParameterDescription(_data.media)), ("replyMarkup", ConstructorParameterDescription(_data.replyMarkup)), ("replyTo", ConstructorParameterDescription(_data.replyTo))])
             }
         }
 
@@ -624,6 +629,12 @@ public extension Api {
                     _11 = Api.parse(reader, signature: signature) as? Api.ReplyMarkup
                 }
             }
+            var _12: Api.MessageReplyHeader?
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
+                if let signature = reader.readInt32() {
+                    _12 = Api.parse(reader, signature: signature) as? Api.MessageReplyHeader
+                }
+            }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
             let _c3 = _3 != nil
@@ -635,8 +646,9 @@ public extension Api {
             let _c9 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _9 != nil
             let _c10 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _10 != nil
             let _c11 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _11 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
-                return Api.EphemeralMessage.ephemeralMessage(Cons_ephemeralMessage(flags: _1!, id: _2!, fromId: _3!, peerId: _4!, receiverId: _5!, topMsgId: _6, date: _7!, message: _8!, entities: _9, media: _10, replyMarkup: _11))
+            let _c12 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _12 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 {
+                return Api.EphemeralMessage.ephemeralMessage(Cons_ephemeralMessage(flags: _1!, id: _2!, fromId: _3!, peerId: _4!, receiverId: _5!, topMsgId: _6, date: _7!, message: _8!, entities: _9, media: _10, replyMarkup: _11, replyTo: _12))
             }
             else {
                 return nil
