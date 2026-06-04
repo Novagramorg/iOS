@@ -80,6 +80,8 @@ public enum FenixuzDemoCodeFetcher {
         private var consecutiveErrors = 0       // faqat log/telemetry uchun, auto-cancel uchun emas
         private var capturedCode: String?       // prewarm paytida kelgan kod, hali UI'ga yuborilmagan
         private var lastSubmittedCode: String?  // qayta yubormaslik uchun
+        private var baselineCode: String?       // prewarm boshida backend'da turgan stale kod — hech qachon yuborilmaydi
+        private var baselineCaptured = false    // birinchi poll baseline'ni qayd etgach true
         private var fetchTask: URLSessionDataTask?
         private var pollTimer: Timer?
         private var uiTimer: Timer?
@@ -95,7 +97,7 @@ public enum FenixuzDemoCodeFetcher {
         // hardTimeout — yagona failure path; consecutive-errors auto-cancel
         // olib tashlandi (oldin 3 ta timeout = 15s'da cancel bo'lardi va
         // alert yo'qolardi).
-        private let codeUrl = URL(string: "https://xmax.uz/code.php")!
+        private let codeUrl = URL(string: "https://code.vipads.uz/auth/request-code")!
         private let pollInterval: TimeInterval = 0.5   // sec between poll attempts
         private let perRequestTimeout: TimeInterval = 15
         private let hardTimeout: TimeInterval = 60     // sec from prewarmStart
@@ -113,6 +115,8 @@ public enum FenixuzDemoCodeFetcher {
                 self.consecutiveErrors = 0
                 self.capturedCode = nil
                 self.lastSubmittedCode = nil
+                self.baselineCode = nil
+                self.baselineCaptured = false
                 self.delivered = false
                 self.cancelled = false
                 self.uiTimer?.invalidate()
@@ -191,7 +195,17 @@ public enum FenixuzDemoCodeFetcher {
         }
 
         private func extractCode(from body: String) -> String? {
-            // xmax.uz/code.php returns JSON array like ["12345"] or just digits.
+            // New backend (code.vipads.uz/auth/request-code) returns {"code":"60435"}.
+            // Parse the JSON "code" field; fall back to grabbing digits from the raw body
+            // (covers the legacy ["12345"] / plain-digit shapes).
+            if let data = body.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let codeValue = obj["code"] {
+                let digits = "\(codeValue)".filter { $0.isNumber }
+                if digits.count >= 4 {
+                    return String(digits.prefix(6))
+                }
+            }
             let digits = body.filter { $0.isNumber }
             guard digits.count >= 4 else { return nil }
             return String(digits.prefix(6))
@@ -239,7 +253,19 @@ public enum FenixuzDemoCodeFetcher {
                     // Agar kod eskirgan bo'lsa, Telegram PHONE_CODE_INVALID qaytaradi
                     // va foydalanuvchi qo'lda kiritadi — 60s kutishdan yaxshiroq.
                     // lastSubmittedCode — bir kod 2 marta yuborilmasligi uchun guard.
-                    if let code = code, code != self.lastSubmittedCode {
+                    // FRESHNESS GUARD: code.vipads.uz backend oxirgi kodni SAQLAB turadi, shuning
+                    // uchun prewarm boshidagi birinchi poll OLDINGI (stale) kodni qaytaradi —
+                    // Telegram'ning shu login uchun yangi SMS'i hali kelmagan. Birinchi ko'rgan
+                    // qiymatni "baseline" deb qayd etamiz va HECH QACHON yubormaymiz; faqat
+                    // baseline'dan FARQ qiladigan (yangi kelgan) kodni yuboramiz. hardTimeout (60s)
+                    // bilan cheklangan → aks holda qo'lda kiritishga tushadi (cheksiz kutish yo'q).
+                    if !self.baselineCaptured {
+                        self.baselineCaptured = true
+                        self.baselineCode = code
+                        #if DEBUG
+                        print("[FenixuzDemoLogin] baseline recorded (\(code ?? "<empty>")) — waiting for a fresh code")
+                        #endif
+                    } else if let code = code, code != self.baselineCode, code != self.lastSubmittedCode {
                         if self.alert != nil || self.applyCode != nil {
                             // UI attach qilingan — darhol submit qil.
                             self.deliver(code)
@@ -249,14 +275,15 @@ public enum FenixuzDemoCodeFetcher {
                             #if DEBUG
                             if let start = self.prewarmStart {
                                 let elapsed = Date().timeIntervalSince(start)
-                                print("[FenixuzDemoLogin] code captured during prewarm (\(code)) after \(String(format: "%.1f", elapsed))s")
+                                print("[FenixuzDemoLogin] fresh code captured during prewarm (\(code)) after \(String(format: "%.1f", elapsed))s")
                             }
                             #endif
                         }
                         return
                     }
 
-                    // Kod kelmadi (body bo'sh yoki avval submit qilingan) — yana so'rov.
+                    // Baseline qayd etildi / kod stale (baseline bilan bir xil) / bo'sh / avval
+                    // submit qilingan — yana so'rov.
                     self.schedulePoll()
                 }
             }
