@@ -20,26 +20,26 @@ public final class SpeechToTextManager {
         return audioEngine.isRunning
     }
 
+    /// The language the user asked for. May be unsupported by Apple (e.g. Uzbek), in which case
+    /// `speechRecognizer` is nil and startRecording() reports a clear, actionable message.
+    private var requestedLocaleId: String = "en-US"
+
     public init() {
         let savedLocale = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "en-US"
-        let recognizer = SFSpeechRecognizer(locale: Locale(identifier: savedLocale))
-        if recognizer?.isAvailable == true {
-            self.speechRecognizer = recognizer
-        } else {
-            self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-        }
+        self.requestedLocaleId = savedLocale
+        // nil when Apple ships no recognizer for this language (e.g. Uzbek). We do NOT silently
+        // substitute en-US — that recognises the spoken language as garbage/empty with no error.
+        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: savedLocale))
     }
-    
+
     public func updateLocale(_ localeId: String) {
         if audioEngine.isRunning {
             stopRecording()
         }
-        let recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId))
-        if recognizer?.isAvailable == true {
-            self.speechRecognizer = recognizer
-        } else {
-            self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-        }
+        self.requestedLocaleId = localeId
+        // nil for languages Apple does not support — no silent language swap; startRecording()
+        // surfaces a clear message so the user knows to pick a supported language.
+        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId))
     }
     
     public func toggleRecording() {
@@ -80,8 +80,15 @@ public final class SpeechToTextManager {
     }
     
     private func startRecordingEngine() {
-        guard let speechRecognizer = self.speechRecognizer, speechRecognizer.isAvailable else {
-            self.onError?("Tanlangan til uchun ovozni aniqlash mavjud emas.")
+        guard let speechRecognizer = self.speechRecognizer else {
+            // Apple has no speech recogniser for this language at all (e.g. Uzbek).
+            let langName = SpeechToTextManager.languageName(for: self.requestedLocaleId)
+            self.onError?("«\(langName)» tili ovozdan-matnga aylantirishni qo'llab-quvvatlamaydi. Sozlamalar → Fenixuz → Ovoz tili dan qo'llab-quvvatlanadigan til (masalan, Ruscha) tanlang.")
+            self.onStop?()
+            return
+        }
+        guard speechRecognizer.isAvailable else {
+            self.onError?("Ovozdan-matnga xizmati hozir mavjud emas. Internet aloqasini tekshirib, qayta urinib ko'ring.")
             self.onStop?()
             return
         }

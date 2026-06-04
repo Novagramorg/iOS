@@ -2489,11 +2489,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             } else {
                 textFieldInsets.right = 54.0
             }
-            // Add space for STT button when enabled
-            let sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
-            if sttEnabled {
-                textFieldInsets.right += 46.0  // 40 button + 6 gap
-            }
         }
         if mediaRecordingState != nil {
             textFieldInsets.left = 8.0
@@ -2510,7 +2505,17 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 break
             }
         }
-        
+
+        // Fenixuz STT button lives on the LEFT, next to the attachment button — a stable slot
+        // that never moves when the input gains text (the old right slot collided with the send
+        // button). Reserve 46pt on the left for it, except in modes where the input transforms
+        // (voice-message recording, custom-left-action, extended search).
+        let sttButtonEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
+        let showSttButton = sttButtonEnabled && mediaRecordingState == nil && self.customLeftAction == nil && !self.extendedSearchLayout
+        if showSttButton {
+            textFieldInsets.left += 46.0  // 40 button + 6 gap
+        }
+
         var audioRecordingItemsAlpha: CGFloat = 1.0
         if interfaceState.interfaceState.mediaDraftState != nil {
             audioRecordingItemsAlpha = 0.0
@@ -3260,18 +3265,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
 
         var mediaActionButtonsFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.maxX + 6.0, y: textInputContainerBackgroundFrame.maxY - mediaActionButtonsSize.height), size: mediaActionButtonsSize)
-        // Push mic button right to make room for STT button
-        let sttIsEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
-        if sttIsEnabled && !(inputHasText || self.extendedSearchLayout || hasMediaDraft || interfaceState.interfaceState.forwardMessageIds != nil || hasSlowmodeButton || isEditingMedia) {
-            mediaActionButtonsFrame.origin.x += 46.0  // 40 STT button + 6 gap
-        }
+        // (STT button now lives on the LEFT next to the attachment button — the mic no longer
+        // needs to make room for it on the right.)
         if inputHasText || self.extendedSearchLayout || hasMediaDraft || interfaceState.interfaceState.forwardMessageIds != nil || hasSlowmodeButton || isEditingMedia {
             mediaActionButtonsFrame.origin.x = width + 8.0
         }
         transition.updateFrame(node: self.mediaActionButtons, frame: mediaActionButtonsFrame)
         
-        // MARK: - STT Button Layout
-        self.layoutSttButton(mediaActionButtonsFrame: mediaActionButtonsFrame, textInputContainerBackgroundFrame: textInputContainerBackgroundFrame, inputHasText: inputHasText, transition: transition)
+        // MARK: - STT Button Layout (left side, next to attachment button)
+        self.layoutSttButton(show: showSttButton, textInputContainerBackgroundFrame: textInputContainerBackgroundFrame, transition: transition)
         if let (rect, containerSize) = self.absoluteRect {
             self.mediaActionButtons.updateAbsoluteRect(CGRect(x: rect.origin.x + mediaActionButtonsFrame.origin.x, y: rect.origin.y + mediaActionButtonsFrame.origin.y, width: mediaActionButtonsFrame.width, height: mediaActionButtonsFrame.height), within: containerSize, transition: transition)
         }
@@ -5890,7 +5892,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.sttManager = SpeechToTextManager()
         }
         
-        let savedLocale = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "uz-UZ"
+        // Default to a supported language (matches Settings + manager defaults). Apple has no
+        // Uzbek recogniser, so a "uz-UZ" default produced empty results with no error message.
+        let savedLocale = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "en-US"
         self.sttManager?.updateLocale(savedLocale)
         
         self.sttManager?.onTextUpdate = { [weak self] text in
@@ -5911,7 +5915,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.chatInputTextNodeDidUpdateText()
             }
         }
-        
+
         self.sttManager?.onStop = { [weak self] in
             guard let self = self else { return }
             self.isSttRecording = false
@@ -5941,39 +5945,40 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.updateSttButtonAppearance(isRecording: true)
     }
     
-    private func layoutSttButton(mediaActionButtonsFrame: CGRect, textInputContainerBackgroundFrame: CGRect, inputHasText: Bool, transition: ContainedViewLayoutTransition) {
+    private func layoutSttButton(show: Bool, textInputContainerBackgroundFrame: CGRect, transition: ContainedViewLayoutTransition) {
         let sttEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "stt_enabled") as? Bool ?? true
-        
+
         if !sttEnabled {
             self.removeSttButton()
             return
         }
-        
+
         if self.sttButton == nil {
             self.setupSttButton()
         }
-        
+
         guard let sttButton = self.sttButton else { return }
-        
+
         let buttonSize = CGSize(width: 40, height: 40)
-        
-        // Position between text input and mic button
-        // Convert from glassBackgroundContainer coordinates to self.view coordinates
+
+        // Place the STT button on the LEFT, just before the text field — i.e. right after the
+        // attachment button, in the 46pt slot reserved via textFieldInsets.left. The anchor is
+        // the text field's LEFT edge, which never moves when the input gains text, so the button
+        // can no longer collide with the send button or run off the right edge.
+        // Coordinates are converted from the glass container to self.view (same as before).
         let containerOffset = self.glassBackgroundContainer.frame.origin
-        let sttX = textInputContainerBackgroundFrame.maxX + 6.0 + containerOffset.x
-        let sttY = mediaActionButtonsFrame.midY - buttonSize.height / 2.0 + containerOffset.y
-        let sttFrame = CGRect(origin: CGPoint(x: sttX, y: sttY), size: buttonSize)
-        
-        sttButton.frame = sttFrame
+        let sttX = textInputContainerBackgroundFrame.minX - 6.0 - buttonSize.width + containerOffset.x
+        let sttY = textInputContainerBackgroundFrame.maxY - buttonSize.height + containerOffset.y
+        sttButton.frame = CGRect(origin: CGPoint(x: sttX, y: sttY), size: buttonSize)
         self.view.bringSubviewToFront(sttButton)
-        
-        // Show/hide matching mic button visibility
-        let shouldShow = !inputHasText && !self.extendedSearchLayout && !self.mediaActionButtons.micButton.isHidden
-        let targetAlpha: CGFloat = shouldShow ? 1.0 : 0.0
-        
-        if !self.isSttRecording {
-            sttButton.alpha = targetAlpha
+
+        // The left slot is stable, so visibility no longer depends on the input text. Keep the
+        // button visible while recording so the user can still tap it to stop.
+        if self.isSttRecording {
+            sttButton.alpha = 1.0
+        } else {
+            sttButton.alpha = show ? 1.0 : 0.0
         }
-        sttButton.isUserInteractionEnabled = shouldShow || self.isSttRecording
+        sttButton.isUserInteractionEnabled = show || self.isSttRecording
     }
 }
