@@ -4,7 +4,8 @@ This file provides guidance to AI assistants working with the **Fenixuz fork of 
 
 ## Fenixuz fork — context
 
-- Brand: **Fenixuz** (organization: Vipads uz, Team ID `C67CF9S4VU`).
+- Brand: **Fenixuz** (organization: **Vipads MCHJ**, Apple Team ID `ZDBP5RSRZF`, Apple ID `vipadsllc@gmail.com`).
+- **Apple team rule** — every Apple reference (certs, App Store Connect, provisioning profiles, App Groups, keychain groups, `DEVELOPMENT_TEAM` in pbxproj/xcconfig) MUST point to Team ID `ZDBP5RSRZF` (Vipads MCHJ). Never a personal team. Development certs may display the individual developer's name in their label ("Apple Development: Azimjon Abdurasulov") because Apple labels Dev certs by Apple ID owner — but the **Team ID** under which they are issued is always `ZDBP5RSRZF`.
 - App Store bundle: `uz.fenixuz.app` (kept in `build-system/appstore-configuration.json` for release builds).
 - Simulator/dev bundle: `ph.telegra.Telegraph` (kept in `build-system/my-config.json`, fake codesigning).
 - All Fenixuz-specific code lives in `submodules/Fenixuz/<Feature>/` modules. Telegram source files contain at most 1–3 line `import FenixuzX` hooks. **Never** add Fenixuz feature code into Telegram-owned files (TelegramUI/Sources, ChatListUI/Sources, SettingsUI/Sources, AuthorizationUI/Sources, etc.) — always create or extend a Fenixuz submodule.

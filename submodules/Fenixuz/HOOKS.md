@@ -600,3 +600,65 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 - `submodules/Fenixuz/AppStoreIAP/` — Apple 3.1.1 IAP gate (May 2026 rejection fix)
 - `submodules/Fenixuz/Brand/` — central colour palette
 - `submodules/Fenixuz/ContactsConsent/` — Apple App Review 5.1.2 server-upload consent gate
+
+## 📌 Ghost mode button + Vazifalar tab (2026-06-04)
+
+### `submodules/ChatListUI/Sources/ChatListController.swift` — Ghost mode nav-bar button
+
+Ghost mode = read messages without sending read receipts. The chat-list nav bar shows a toggle
+button when `pro_messager` UserDefaults key `show_ghost_mode_button == true`; the active state is
+stored in `is_ghost_mode_active`. Implemented entirely inside `ChatListController` (no Fenixuz
+submodule): `ghostModeButton` property, `updateGhostModeButton()`, a `FenixSettingsChanged`
+NotificationCenter observer, and the button is appended in `rightButtons`.
+
+- **2026-06-04 icon change:** the button uses a custom Fenixuz ghost glyph
+  **`Contact List/FenixGhostIcon`** (template imageset; eyes + background are alpha holes) via
+  `NavigationButtonComponent.Content.iconTinted(imageName:accent:)`. Toggle state is shown by tint:
+  ON (active) → `theme.list.itemAccentColor`; OFF → `panelControlColor` (grey). Previously it reused
+  upstream PDF assets `Contact List/MakeVisibleIcon` / `MakeInvisibleIcon` (a person-on-a-platform
+  contact glyph that read as "block / remove person"). The ghost PNGs (@1x/@2x/@3x) were generated
+  from an owner-supplied image into
+  `submodules/TelegramUI/Images.xcassets/Contact List/FenixGhostIcon.imageset` (RGB black + source
+  alpha, template-rendering-intent).
+
+### `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift`
+
+Added two `Content` cases: `systemIcon(name: String)` (renders `UIImage(systemName:)` at pointSize 20 /
+weight .medium) and `iconTinted(imageName: String, accent: Bool)` (bundle asset tinted with
+`theme.list.itemAccentColor` when `accent`, else `panelControlColor`). The shared icon render branch now
+computes the tint colour and bakes the SF-Symbol / accent state into the icon cache key (so a toggle
+re-renders). Used by the ghost button above. Additive only — existing `.text` / `.more` / `.icon` /
+`.proxy` cases keep the `panelControlColor` tint.
+
+### `submodules/TelegramUI/Sources/TelegramRootController.swift` + `submodules/TelegramUI/BUILD` — Vazifalar (Tasks) tab hidden
+
+The Vazifalar (Tasks) tab was removed from the tab bar per owner request (2026-06-04). Same pattern
+as the already-paused AI tab: `import FenixuzTasks`, the `tasksTabController(...)` creation/append in
+`addRootControllers`, the `self.scheduledTasksController` assignment, and the append in
+`updateRootControllers` are all commented out; the `//submodules/Fenixuz/Tasks:FenixuzTasks` dep is
+commented out in `TelegramUI/BUILD`. The `FenixuzTasks` module + SQLite store are kept on disk for a
+future re-enable (uncomment the 4 spots). The `scheduledTasksController` property stays (nil).
+
+### `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` — STT (ovoz→matn) button
+
+Custom Fenixuz speech-to-text round button in the chat input panel (`setupSttButton` /
+`layoutSttButton` / `sttButtonPressed` / `updateSttButtonAppearance`, plus the `sttButton*` fields,
+`FenixuzSpeechToText` import, and a left-inset reservation). Reads `pro_messager` UserDefaults
+`stt_enabled` / `stt_language`.
+
+- **2026-06-04 placement fix:** the button was moved from the RIGHT (it sat at
+  `textInputContainerBackgroundFrame.maxX + 6`, which collided with / overran the send button once the
+  input had text during recording) to the **LEFT, next to the attachment button** — a stable slot that
+  never moves when the input gains text. Mechanism: reserve 46pt via `textFieldInsets.left += 46` when
+  `showSttButton` (sttEnabled && no voice-message recording && no customLeftAction && not extended
+  search); position at `textInputContainerBackgroundFrame.minX - 6 - 40`. The old right-side 46pt
+  reservation and the mic-button push were removed. Default `stt_language` corrected `uz-UZ` → `en-US`
+  (Apple has no Uzbek recogniser; the old default produced silent empty results).
+
+### `submodules/AccountUtils/Sources/AccountUtils.swift` — multi-account limit raised
+
+`maximumNumberOfAccounts` 3 → **20** and `maximumPremiumNumberOfAccounts` 4 → 20 (owner request,
+2026-06-04). Client-side cap only (Telegram's server does not limit how many login sessions one app
+holds, so no Premium is required). The add-account gate reads `maximumNumberOfAccounts`
+(`accountsAndPeers.count + 1 < maximumNumberOfAccounts`). Note: actually keeping ~20 accounts active is
+memory-heavy on iOS (jetsam risk + 24MB NSE limit); the cap itself is harmless.
