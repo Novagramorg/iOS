@@ -7409,15 +7409,13 @@ private final class ChatListLocationContext {
     func updateGhostModeButton() {
         if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_ghost_mode_button") ?? false {
             let isGhostModeActive = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false
-            // Use bundled PDF assets instead of color emoji — emoji font is missing on
-            // some simulators (iOS 26.x) and shows as [?]. Both icons are PDF (vector) so
-            // they render reliably on every iOS version.
-            //   Active   (Ghost ON)  -> "Contact List/MakeInvisibleIcon" (eye-with-slash)
-            //   Inactive (Ghost OFF) -> "Contact List/MakeVisibleIcon"   (open eye)
+            // Ghost mode = read messages without sending read receipts. Custom Fenixuz ghost
+            // glyph (bundled template asset) — the toggle state is shown by tint colour:
+            //   Active   (Ghost ON)  -> accent colour  (theme.list.itemAccentColor)
+            //   Inactive (Ghost OFF) -> normal control grey (panelControlColor)
             let buttonId = isGhostModeActive ? "ghostMode-on" : "ghostMode-off"
-            let iconName = isGhostModeActive ? "Contact List/MakeInvisibleIcon" : "Contact List/MakeVisibleIcon"
             self.ghostModeButton = AnyComponentWithIdentity(id: buttonId, component: AnyComponent(NavigationButtonComponent(
-                content: .icon(imageName: iconName),
+                content: .iconTinted(imageName: "Contact List/FenixGhostIcon", accent: isGhostModeActive),
                 pressed: { [weak self] _ in
                     guard let self, let parentController = self.parentController else { return }
                     let current = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false

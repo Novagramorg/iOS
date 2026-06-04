@@ -28,6 +28,8 @@ public final class NavigationButtonComponent: Component {
         case text(title: String, isBold: Bool)
         case more
         case icon(imageName: String)
+        case systemIcon(name: String)
+        case iconTinted(imageName: String, accent: Bool)
         case proxy(status: ChatTitleProxyStatus)
     }
     
@@ -111,9 +113,11 @@ public final class NavigationButtonComponent: Component {
             
             var textString: NSAttributedString?
             var imageName: String?
+            var systemIconName: String?
+            var iconAccent: Bool = false
             var proxyStatus: ChatTitleProxyStatus?
             var isMore: Bool = false
-            
+
             switch component.content {
             case let .text(title, isBold):
                 textString = NSAttributedString(string: title, font: isBold ? Font.bold(17.0) : Font.medium(17.0), textColor: theme.chat.inputPanel.panelControlColor)
@@ -121,6 +125,11 @@ public final class NavigationButtonComponent: Component {
                 isMore = true
             case let .icon(imageNameValue):
                 imageName = imageNameValue
+            case let .systemIcon(name):
+                systemIconName = name
+            case let .iconTinted(imageNameValue, accent):
+                imageName = imageNameValue
+                iconAccent = accent
             case let .proxy(status):
                 proxyStatus = status
             }
@@ -149,7 +158,7 @@ public final class NavigationButtonComponent: Component {
                 textView.removeFromSuperview()
             }
             
-            if let imageName = imageName {
+            if imageName != nil || systemIconName != nil {
                 let iconView: UIImageView
                 if let current = self.iconView {
                     iconView = current
@@ -159,14 +168,24 @@ public final class NavigationButtonComponent: Component {
                     self.iconView = iconView
                     self.addSubview(iconView)
                 }
-                if self.iconImageName != imageName || themeUpdated {
-                    self.iconImageName = imageName
-                    iconView.image = generateTintedImage(image: UIImage(bundleImageName: imageName), color: theme.chat.inputPanel.panelControlColor)
+                // Accent tint marks an "active" toggle state (e.g. ghost mode ON); otherwise the
+                // normal nav-bar control colour.
+                let iconTintColor = iconAccent ? theme.list.itemAccentColor : theme.chat.inputPanel.panelControlColor
+                // Cache key distinguishes bundle assets / SF Symbols / accent state so we only re-render on change.
+                let cacheKey = (imageName ?? ("sys:" + (systemIconName ?? ""))) + (iconAccent ? ":accent" : "")
+                if self.iconImageName != cacheKey || themeUpdated {
+                    self.iconImageName = cacheKey
+                    if let imageName = imageName {
+                        iconView.image = generateTintedImage(image: UIImage(bundleImageName: imageName), color: iconTintColor)
+                    } else if let systemIconName = systemIconName {
+                        let config = UIImage.SymbolConfiguration(pointSize: 20.0, weight: .medium)
+                        iconView.image = UIImage(systemName: systemIconName, withConfiguration: config)?.withTintColor(iconTintColor, renderingMode: .alwaysOriginal)
+                    }
                 }
-                
+
                 if let iconSize = iconView.image?.size {
                     size.width = 44.0
-                    
+
                     iconView.frame = CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: floor((availableSize.height - iconSize.height) / 2.0)), size: iconSize)
                 }
             } else if let iconView = self.iconView {
