@@ -18,7 +18,8 @@ import TabBarUI
 import WallpaperBackgroundNode
 import ChatPresentationInterfaceState
 import CameraScreen
-import FenixuzTasks
+// Vazifalar (Tasks) tab disabled in UI per owner request — module kept at submodules/Fenixuz/Tasks for future
+// import FenixuzTasks
 // AI tab disabled in UI — module kept at submodules/Fenixuz/AIChatbot for future
 // import FenixuzAIChatbot
 import MediaEditorScreen
@@ -225,8 +226,12 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             controllers.append(callListController)
         }
         
-        let scheduledTasksCtrl = tasksTabController(context: self.context)
-        controllers.append(scheduledTasksCtrl)
+        // Vazifalar (Tasks) tab hidden from UI (owner request). Re-enable by:
+        //   1. uncomment "import FenixuzTasks" above
+        //   2. uncomment the 2 lines below
+        //   3. add "//submodules/Fenixuz/Tasks:FenixuzTasks" back to TelegramUI/BUILD deps
+        // let scheduledTasksCtrl = tasksTabController(context: self.context)
+        // controllers.append(scheduledTasksCtrl)
 
         // AI tab hidden from UI (feature paused). Re-enable by:
         //   1. uncomment "import FenixuzAIChatbot" above
@@ -263,7 +268,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         self.callListController = callListController
         self.chatListController = chatListController
         self.accountSettingsController = accountSettingsController
-        self.scheduledTasksController = scheduledTasksCtrl
+        // Vazifalar (Tasks) tab disabled — self.scheduledTasksController stays nil
         self.rootTabController = tabBarController
         self.pushViewController(tabBarController, animated: false)
     }
@@ -278,10 +283,11 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             controllers.append(self.callListController!)
         }
         
-        if let tasksCtrl = self.scheduledTasksController {
-            controllers.append(tasksCtrl)
-        }
-        
+        // Vazifalar (Tasks) tab disabled — scheduledTasksController stays nil
+        // if let tasksCtrl = self.scheduledTasksController {
+        //     controllers.append(tasksCtrl)
+        // }
+
         if let aiCtrl = self.aiChatbotController {
             controllers.append(aiCtrl)
         }
