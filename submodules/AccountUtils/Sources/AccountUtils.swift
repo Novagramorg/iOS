@@ -4,8 +4,12 @@ import TelegramCore
 import TelegramUIPreferences
 import AccountContext
 
-public let maximumNumberOfAccounts = 3
-public let maximumPremiumNumberOfAccounts = 4
+// Fenixuz: account limit raised 3 -> 20 (owner request). This is a CLIENT-SIDE cap only —
+// Telegram's server does not limit how many independent login sessions one app holds, so no
+// Premium is required. Premium constant kept in sync (it is currently unused in the add-account
+// gate, which reads maximumNumberOfAccounts).
+public let maximumNumberOfAccounts = 20
+public let maximumPremiumNumberOfAccounts = 20
 
 public func activeAccountsAndPeers(context: AccountContext, includePrimary: Bool = false) -> Signal<((AccountContext, EnginePeer)?, [(AccountContext, EnginePeer, Int32)]), NoError> {
     let sharedContext = context.sharedContext
