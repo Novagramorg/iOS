@@ -669,6 +669,15 @@ Custom Fenixuz speech-to-text round button in the chat input panel (`setupSttBut
 
 ### `submodules/AccountUtils/Sources/AccountUtils.swift` — multi-account limit raised
 
+**2026-06-05 fix:** with 3 accounts logged in, "Add Account" showed the upstream "Limit Reached / buy
+Premium" screen — the REAL add-account gate is a hardcoded `maximumAvailableAccounts = 3` (4 premium)
+pattern repeated in THREE files that the original 3→20 raise never touched:
+`PeerInfoScreen/Sources/PeerInfoScreenSettingsActions.swift` (~233, the Settings gate the user hits),
+`SettingsUI/Sources/LogoutOptionsController.swift` (~142) and
+`SettingsUI/Sources/DeleteAccountOptionsController.swift` (~204). All three now read
+`maximumNumberOfAccounts` / `maximumPremiumNumberOfAccounts` (AccountUtils already imported in each).
+Constants raised 20 → **999** (effectively unlimited; safe because the working-set cap keeps ≤3 live).
+
 `maximumNumberOfAccounts` 3 → **20** and `maximumPremiumNumberOfAccounts` 4 → 20 (owner request,
 2026-06-04). Client-side cap only (Telegram's server does not limit how many login sessions one app
 holds, so no Premium is required). The add-account gate reads `maximumNumberOfAccounts`
