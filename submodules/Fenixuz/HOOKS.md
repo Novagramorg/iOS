@@ -674,3 +674,27 @@ Custom Fenixuz speech-to-text round button in the chat input panel (`setupSttBut
 holds, so no Premium is required). The add-account gate reads `maximumNumberOfAccounts`
 (`accountsAndPeers.count + 1 < maximumNumberOfAccounts`). Note: actually keeping ~20 accounts active is
 memory-heavy on iOS (jetsam risk + 24MB NSE limit); the cap itself is harmless.
+
+### `submodules/TelegramUI/Sources/SharedAccountContext.swift` — multi-account scaling (50-100+ accounts)
+
+Audit (2026-06-05) of the multi-account cost found: every logged-in account is turned into a full
+active `AccountContext` simultaneously (`activeAccountsValue!.accounts.append(...)`, ~line 739) with
+**no cap**. Each costs an open SQLite Postbox (page cache, the #1 OOM driver), 2+ OS threads, and
+launch-time `resetStateManagement()` work; all Postbox transactions serialize on a single
+`Postbox.sharedQueue`, so launch/foreground with many accounts storms one thread → UI "freeze". The
+MTProto network is already bounded to primary + task-pending accounts (`SharedWakeupManager`), and push
+works server-side via registered tokens (the NSE opens only the ONE target account's Postbox), so push
+is safe at any account count.
+
+- **Stage 1 (2026-06-05 — memory relief, shipped):** a `didReceiveMemoryWarningNotification` observer
+  (`fenixuzLowMemoryObserver`, registered in `init`, removed in `deinit`) that calls
+  `postbox.clearCaches()` + `account.resetCachedData()` on every NON-primary active account. Reads the
+  account list via the public `activeAccountContexts` signal (`|> take(1)`) to avoid racing the private
+  `activeAccountsValue` mutation queue. Purely additive; uses the same calls already made on
+  primary-switch (line ~777-778), so no behavior change. Reduces jetsam risk in the current all-active
+  world.
+- **Stage 2 (planned — working-set cap = 3):** keep all account RECORDS logged in, but only keep the 3
+  most-recently-used as live `AccountContext`s; suspend the rest (record + notification key retained so
+  NSE push / VoIP calls still work). Requires a lightweight switcher data source (last-known peer +
+  unread cached while live) so suspended accounts still appear in the account list, and a resume path in
+  `switchToAccount`. NOT yet implemented.

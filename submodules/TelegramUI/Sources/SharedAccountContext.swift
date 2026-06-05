@@ -172,6 +172,8 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return self.activeAccountsPromise.get()
     }
     private let managedAccountDisposables = DisposableDict<AccountRecordId>()
+    // Fenixuz: frees non-primary accounts' in-memory caches on memory pressure (multi-account RAM relief).
+    private var fenixuzLowMemoryObserver: NSObjectProtocol?
     private let activeAccountsWithInfoPromise = Promise<(primary: AccountRecordId?, accounts: [AccountWithInfo])>()
     public var activeAccountsWithInfo: Signal<(primary: AccountRecordId?, accounts: [AccountWithInfo]), NoError> {
         return self.activeAccountsWithInfoPromise.get()
@@ -1053,7 +1055,26 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         let _ = managedCleanupAccounts(networkArguments: networkArguments, accountManager: self.accountManager, rootPath: rootPath, auxiliaryMethods: makeTelegramAccountAuxiliaryMethods(uploadInBackground: appDelegate?.uploadInBackround), encryptionParameters: encryptionParameters).start()
         
         self.updateNotificationTokensRegistration()
-        
+
+        // Fenixuz: on memory pressure, drop the in-memory Postbox caches of every NON-primary active
+        // account. With many logged-in accounts this is the cheapest jetsam relief — the primary
+        // (visible) account keeps its caches; idle ones rebuild lazily on demand. Read via the public
+        // signal (not the private activeAccountsValue) to stay off its mutation queue.
+        self.fenixuzLowMemoryObserver = NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else {
+                return
+            }
+            let _ = (self.activeAccountContexts
+            |> take(1)
+            |> deliverOnMainQueue).start(next: { primary, accounts, _ in
+                let primaryId = primary?.account.id
+                for (id, context, _) in accounts where id != primaryId {
+                    context.account.postbox.clearCaches()
+                    context.account.resetCachedData()
+                }
+            })
+        }
+
         if applicationBindings.isMainApp {
             self.widgetDataContext = WidgetDataContext(basePath: self.basePath, inForeground: self.applicationBindings.applicationInForeground, activeAccounts: self.activeAccountContexts
             |> map { _, accounts, _ in
@@ -1095,6 +1116,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     
     deinit {
         assertionFailure("SharedAccountContextImpl is not supposed to be deallocated")
+        if let fenixuzLowMemoryObserver = self.fenixuzLowMemoryObserver {
+            NotificationCenter.default.removeObserver(fenixuzLowMemoryObserver)
+        }
         self.registeredNotificationTokensDisposable.dispose()
         self.presentationDataDisposable.dispose()
         self.automaticMediaDownloadSettingsDisposable.dispose()
