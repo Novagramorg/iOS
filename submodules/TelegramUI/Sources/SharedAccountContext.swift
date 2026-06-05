@@ -174,6 +174,14 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     private let managedAccountDisposables = DisposableDict<AccountRecordId>()
     // Fenixuz: frees non-primary accounts' in-memory caches on memory pressure (multi-account RAM relief).
     private var fenixuzLowMemoryObserver: NSObjectProtocol?
+    // Fenixuz: working-set cap — at most this many accounts are kept LIVE (open Postbox + network +
+    // sync) at once. All other logged-in records stay suspended (still receive push via the NSE) and
+    // are reachable through the Fenixuz "Accounts" screen. The primary is always live; switching to a
+    // suspended account loads it and evicts the least-recently-used one. Lets the app hold 50-100+
+    // logins without the launch/foreground Postbox-queue storm or the open-DB OOM/file-descriptor wall.
+    private let fenixuzMaxLiveAccounts = 3
+    private var fenixuzRecencyOrder: [AccountRecordId] = []
+    private var fenixuzNameCacheDisposable: Disposable?
     private let activeAccountsWithInfoPromise = Promise<(primary: AccountRecordId?, accounts: [AccountWithInfo])>()
     public var activeAccountsWithInfo: Signal<(primary: AccountRecordId?, accounts: [AccountWithInfo]), NoError> {
         return self.activeAccountsWithInfoPromise.get()
@@ -630,10 +638,28 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             return true
         })
         |> deliverOnMainQueue).start(next: { primaryId, records, authRecord in
+            // Fenixuz working-set: keep only the N most-recently-used accounts LIVE. Order = primary
+            // first, then the previous recency order, then the rest by sortIndex. Records outside the
+            // first N are left suspended — accountWithId is NOT called for them, so they open no Postbox,
+            // spawn no threads, and run no sync (they still receive push via the NSE, which reads their
+            // keys from the account record's backupData).
+            var fenixuzOrdered: [AccountRecordId] = []
+            if let primaryId = primaryId, records[primaryId] != nil {
+                fenixuzOrdered.append(primaryId)
+            }
+            for id in self.fenixuzRecencyOrder where records[id] != nil && !fenixuzOrdered.contains(id) {
+                fenixuzOrdered.append(id)
+            }
+            for (id, _) in records.sorted(by: { $0.value.sortIndex < $1.value.sortIndex }) where !fenixuzOrdered.contains(id) {
+                fenixuzOrdered.append(id)
+            }
+            self.fenixuzRecencyOrder = fenixuzOrdered
+            let fenixuzWorkingSet = Set(fenixuzOrdered.prefix(self.fenixuzMaxLiveAccounts))
+
             var addedSignals: [Signal<AddedAccountResult, NoError>] = []
             var addedAuthSignal: Signal<UnauthorizedAccount?, NoError> = .single(nil)
             for (id, attributes) in records {
-                if self.activeAccountsValue?.accounts.firstIndex(where: { $0.0 == id}) == nil {
+                if fenixuzWorkingSet.contains(id), self.activeAccountsValue?.accounts.firstIndex(where: { $0.0 == id}) == nil {
                     addedSignals.append(accountWithId(accountManager: accountManager, networkArguments: networkArguments, id: id, encryptionParameters: encryptionParameters, supplementary: !applicationBindings.isMainApp, isSupportUser: attributes.isSupportUser, rootPath: rootPath, beginWithTestingEnvironment: attributes.isTestingEnvironment, backupData: attributes.backupData, auxiliaryMethods: makeTelegramAccountAuxiliaryMethods(uploadInBackground: appDelegate?.uploadInBackround))
                     |> mapToSignal { result -> Signal<AddedAccountResult, NoError> in
                         switch result {
@@ -754,7 +780,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 }
                 var removedIds: [AccountRecordId] = []
                 for id in self.activeAccountsValue!.accounts.map({ $0.0 }) {
-                    if records[id] == nil {
+                    // Fenixuz: unload accounts whose record is gone OR that fell out of the working-set
+                    // (LRU eviction). The working-set always contains the primary, so it is never evicted.
+                    if records[id] == nil || !fenixuzWorkingSet.contains(id) {
                         removedIds.append(id)
                     }
                 }
@@ -825,6 +853,28 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             }
         })
         
+        if applicationBindings.isMainApp {
+            // Fenixuz: continuously cache each live account's display name keyed by peerId, so the
+            // Fenixuz "Accounts" screen can label suspended accounts (which have no live context).
+            self.fenixuzNameCacheDisposable = (self.activeAccountsWithInfoPromise.get()
+            |> deliverOnMainQueue).start(next: { _, accounts in
+                let defaults = UserDefaults(suiteName: "pro_messager")
+                var cache = (defaults?.dictionary(forKey: "fenixuz_account_names") as? [String: String]) ?? [:]
+                var changed = false
+                for info in accounts {
+                    let key = String(info.peer.id.toInt64())
+                    let name = info.peer.debugDisplayTitle
+                    if cache[key] != name {
+                        cache[key] = name
+                        changed = true
+                    }
+                }
+                if changed {
+                    defaults?.set(cache, forKey: "fenixuz_account_names")
+                }
+            })
+        }
+
         if let mainWindow = mainWindow, applicationBindings.isMainApp {
             let callManager = PresentationCallManagerImpl(accountManager: self.accountManager, getDeviceAccessData: {
                 return (self.currentPresentationData.with { $0 }, { [weak self] c, a in
@@ -1119,6 +1169,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         if let fenixuzLowMemoryObserver = self.fenixuzLowMemoryObserver {
             NotificationCenter.default.removeObserver(fenixuzLowMemoryObserver)
         }
+        self.fenixuzNameCacheDisposable?.dispose()
         self.registeredNotificationTokensDisposable.dispose()
         self.presentationDataDisposable.dispose()
         self.automaticMediaDownloadSettingsDisposable.dispose()

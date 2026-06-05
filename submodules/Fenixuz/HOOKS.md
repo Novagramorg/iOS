@@ -693,8 +693,26 @@ is safe at any account count.
   `activeAccountsValue` mutation queue. Purely additive; uses the same calls already made on
   primary-switch (line ~777-778), so no behavior change. Reduces jetsam risk in the current all-active
   world.
-- **Stage 2 (planned — working-set cap = 3):** keep all account RECORDS logged in, but only keep the 3
-  most-recently-used as live `AccountContext`s; suspend the rest (record + notification key retained so
-  NSE push / VoIP calls still work). Requires a lightweight switcher data source (last-known peer +
-  unread cached while live) so suspended accounts still appear in the account list, and a resume path in
-  `switchToAccount`. NOT yet implemented.
+- **Stage 2 (2026-06-05 — working-set cap = 3, shipped):** all account RECORDS stay logged in, but only
+  the `fenixuzMaxLiveAccounts` (3) most-recently-used are kept as live `AccountContext`s; the rest stay
+  suspended (not loaded → no Postbox/threads/sync). Edits in the `accountManager.accountRecords()`
+  pipeline:
+  - Working-set computed each pass (`fenixuzOrdered`/`fenixuzWorkingSet`): primary first, then prior
+    recency (`fenixuzRecencyOrder`), then the rest by sortIndex; first N = live.
+  - `accountWithId` is gated on `fenixuzWorkingSet.contains(id)` (suspended records never open a Postbox).
+  - The removal loop also unloads loaded accounts that fell out of the working-set (LRU eviction); the
+    primary is always in the working-set so it is never evicted.
+  - Switching to a suspended account (via the Accounts screen → `switchToAccount`) makes it primary →
+    next pipeline pass loads it and evicts the LRU tail (~1-2s cold start).
+  - A name cache (`fenixuzNameCacheDisposable` → UserDefaults `pro_messager` / `fenixuz_account_names`,
+    keyed by `peerId.toInt64()`) records each live account's `debugDisplayTitle` so suspended accounts
+    can be labelled in the Accounts screen.
+  - **Accounts screen** (NOT a Telegram-owned file): `submodules/Fenixuz/ProMessager/Sources/FenixAccountsController.swift`
+    lists every logged-in record (live + suspended) and switches on tap. Reached from Settings →
+    Fenixuz → "Barcha accountlar" (a row added in `FenixSettingsController.swift`, also Fenixuz-owned).
+  - **Known v1 limitations** (push token registration unchanged): suspended accounts keep their existing
+    server-side push registration, so push keeps working in the common case; an APNs token *rotation*
+    while an account is suspended would drop its push until it is next made live. VoIP calls to a
+    suspended account are not presented (no live session). Both are acceptable for the hold-many-accounts
+    use case; revisit by widening `otherAccountUserIds` to all logged-in uids + a PushKit resume path.
+  - Users with ≤3 accounts see IDENTICAL behaviour (no regression) — the cap only engages at 4+.

@@ -14,6 +14,7 @@ import AppBundle
 import FenixuzLocalization
 
 private enum FenixSection: Int32 {
+    case accounts = 5
     case chat = 0
     case interface = 1
     case messaging = 2
@@ -65,7 +66,11 @@ private enum FenixEntry: ItemListNodeEntry {
     case blockForeignUsers(PresentationTheme, String, String, Bool)
     case blockApkFiles(PresentationTheme, String, String, Bool)
     case protectionFooter(PresentationTheme, String)
-    
+
+    // — Accounts (Fenixuz multi-account) —
+    case accountsHeader(String)
+    case accountsManager(PresentationTheme, String)
+
     var section: ItemListSectionId {
         switch self {
         case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .chatFooter:
@@ -78,6 +83,8 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.stt.rawValue
         case .protectionHeader, .blockForeignUsers, .blockApkFiles, .protectionFooter:
             return FenixSection.protection.rawValue
+        case .accountsHeader, .accountsManager:
+            return FenixSection.accounts.rawValue
         }
     }
     
@@ -114,9 +121,12 @@ private enum FenixEntry: ItemListNodeEntry {
         case .blockForeignUsers:         return 41
         case .blockApkFiles:             return 42
         case .protectionFooter:          return 43
+        // Accounts (rendered at the top of the list)
+        case .accountsHeader:            return -2
+        case .accountsManager:           return -1
         }
     }
-    
+
     var sortId: Int {
         return Int(self.stableId)
     }
@@ -179,9 +189,14 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .blockApkFiles(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .protectionFooter(lhsTheme, lhsText):
             if case let .protectionFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
+
+        case let .accountsHeader(lhsText):
+            if case let .accountsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
+        case let .accountsManager(lhsTheme, lhsTitle):
+            if case let .accountsManager(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         }
     }
-    
+
     static func <(lhs: FenixEntry, rhs: FenixEntry) -> Bool {
         return lhs.sortId < rhs.sortId
     }
@@ -189,6 +204,14 @@ private enum FenixEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! FenixSettingsArguments
         switch self {
+        // ─── ACCOUNTLAR ───
+        case let .accountsHeader(text):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+        case let .accountsManager(_, title):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.2.circle.fill", color: .blue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
+                arguments.openAccounts()
+            })
+
         // ─── INTERFEYS ───
         case let .interfaceHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
@@ -432,6 +455,10 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     var entries: [FenixEntry] = []
     let l10n = FenixuzL10n(presentationData.strings)
 
+    // ─── ACCOUNTS (Fenixuz multi-account) ───
+    entries.append(.accountsHeader("ACCOUNTLAR"))
+    entries.append(.accountsManager(presentationData.theme, "Barcha accountlar"))
+
     // ─── INTERFACE ───
     entries.append(.interfaceHeader(l10n.settings_section_interface))
     entries.append(.hideFolders(presentationData.theme, l10n.settings_interface_hideFolders_title, l10n.settings_interface_hideFolders_subtitle, state.hideFolders))
@@ -480,6 +507,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
 }
 
 private final class FenixSettingsArguments {
+    let openAccounts: () -> Void
     let openCalls: () -> Void
     let updateShowDeletedMessages: (Bool) -> Void
     let updateHideFolders: (Bool) -> Void
@@ -498,7 +526,8 @@ private final class FenixSettingsArguments {
     let updateBlockForeignUsers: (Bool) -> Void
     let updateBlockApkFiles: (Bool) -> Void
     
-    init(openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
+        self.openAccounts = openAccounts
         self.openCalls = openCalls
         self.updateShowDeletedMessages = updateShowDeletedMessages
         self.updateHideFolders = updateHideFolders
@@ -529,7 +558,9 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController) -> Void)?
     
-    let arguments = FenixSettingsArguments(openCalls: {
+    let arguments = FenixSettingsArguments(openAccounts: {
+        pushControllerImpl?(fenixAccountsController(context: context))
+    }, openCalls: {
         pushControllerImpl?(CallListController(context: context, mode: .navigation))
     }, updateShowDeletedMessages: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "show_deleted_messages")
