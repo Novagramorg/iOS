@@ -67,6 +67,8 @@ extension PeerInfoScreenNode {
             ))
         case .proMessager:
             push(fenixSettingsController(context: self.context))
+        case .fenixAccounts:
+            push(fenixAccountsController(context: self.context))
         case .stories:
             push(PeerInfoStoryGridScreen(context: self.context, peerId: self.context.account.peerId, scope: .saved))
         case .savedMessages:

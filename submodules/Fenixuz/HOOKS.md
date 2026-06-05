@@ -725,3 +725,12 @@ is safe at any account count.
     suspended account are not presented (no live session). Both are acceptable for the hold-many-accounts
     use case; revisit by widening `otherAccountUserIds` to all logged-in uids + a PushKit resume path.
   - Users with ≤3 accounts see IDENTICAL behaviour (no regression) — the cap only engages at 4+.
+  - **2026-06-05 discoverability hook (3 Telegram-owned files):** the built-in Settings accounts section
+    only lists the live working-set, which confused the owner ("4-account yo'qoldi"). Added a
+    "Barcha accountlar" disclosure row (id 101, icon `PresentationResourcesSettings.devices`) directly
+    in the accounts section ABOVE the Add Account row, navigating to `fenixAccountsController`:
+    `PeerInfoSettingsItems.swift` (~147, the row), `PeerInfoScreen.swift` (`PeerInfoSettingsSection`
+    enum + `case fenixAccounts`, ~165), `PeerInfoScreenSettingsActions.swift` (`case .fenixAccounts:
+    push(fenixAccountsController(...))`, ~70 — file already imports `FenixuzProMessager`; the
+    PeerInfoScreen BUILD already depends on it). Settings stays compact at 100+ logins by design
+    (owner: "Settings UI cho'zilib ketmaydi").

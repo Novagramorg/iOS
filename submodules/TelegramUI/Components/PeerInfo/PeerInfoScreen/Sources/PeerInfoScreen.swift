@@ -163,6 +163,7 @@ enum PeerInfoSettingsSection {
     case devices
     case chatFolders
     case proMessager
+    case fenixAccounts
     case notificationsAndSounds
     case privacyAndSecurity
     case passwordSetup

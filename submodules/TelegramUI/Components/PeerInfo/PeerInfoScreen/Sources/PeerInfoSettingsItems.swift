@@ -144,6 +144,12 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
                 }))
             }
             
+            // Fenixuz: only the live (working-set) accounts are listed above — this row opens the FULL
+            // list (live + suspended), so Settings stays compact even with 100+ logins.
+            items[.accounts]!.append(PeerInfoScreenDisclosureItem(id: 101, text: "Barcha accountlar", icon: PresentationResourcesSettings.devices, action: {
+                interaction.openSettings(.fenixAccounts)
+            }))
+
             items[.accounts]!.append(PeerInfoScreenActionItem(id: 100, text: presentationData.strings.Settings_AddAccount, icon: PresentationResourcesItemList.plusIconImage(presentationData.theme), action: {
                 interaction.openSettings(.addAccount)
             }))
