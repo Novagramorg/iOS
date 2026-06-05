@@ -34,6 +34,7 @@ private enum FenixAccountsSection: Int32 {
 private enum FenixAccountsEntry: ItemListNodeEntry {
     case header(String)
     case account(Int, AccountRow, PresentationTheme)
+    case footer(String)
 
     var section: ItemListSectionId {
         return FenixAccountsSection.accounts.rawValue
@@ -45,6 +46,8 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
             return 0
         case let .account(index, _, _):
             return Int32(1000 + index)
+        case .footer:
+            return 1_000_000
         }
     }
 
@@ -57,6 +60,11 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
             return false
         case let .account(index, row, lhsTheme):
             if case let .account(rhsIndex, rhsRow, rhsTheme) = rhs, index == rhsIndex, row == rhsRow, lhsTheme === rhsTheme {
+                return true
+            }
+            return false
+        case let .footer(text):
+            if case .footer(text) = rhs {
                 return true
             }
             return false
@@ -82,7 +90,7 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
                 label = "Faol"
                 labelStyle = .text
             } else {
-                label = ""
+                label = "uyquda"
                 labelStyle = .text
             }
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.crop.circle.fill", color: row.isPrimary ? .green : .blue), title: row.title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
@@ -90,6 +98,8 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
                     arguments.switchAccount(row.recordId)
                 }
             })
+        case let .footer(text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
 }
@@ -167,6 +177,7 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
         for (index, row) in rows.enumerated() {
             entries.append(.account(index, row, presentationData.theme))
         }
+        entries.append(.footer("Tezkor ishlash uchun bir vaqtda eng so'nggi 3 ta account jonli ushlab turiladi. Qolganlari uyquda bo'ladi — ammo ularga ham bildirishnomalar (push) to'xtovsiz kelaveradi. Istalgan accountga bossangiz, bir lahzada jonlanadi. Shu tarzda 100+ account ham telefonni qotirmaydi."))
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Accountlar"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries.sorted(), style: .blocks)
