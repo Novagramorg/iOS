@@ -655,6 +655,18 @@ Custom Fenixuz speech-to-text round button in the chat input panel (`setupSttBut
   reservation and the mic-button push were removed. Default `stt_language` corrected `uz-UZ` → `en-US`
   (Apple has no Uzbek recogniser; the old default produced silent empty results).
 
+- **2026-06-05 visibility fix:** the button was a plain `HighlightTrackingButton` with a hardcoded
+  faint alpha fill (`black 0.05` light / `white 0.1` dark). The dark fill was nearly invisible on dark
+  wallpapers, so the button appeared to "disappear" while the native voice mic (a `GlassBackgroundView`)
+  stayed visible. Fixed by rebuilding the STT button on the same iOS-26 Liquid-Glass `GlassBackgroundView`
+  the attachment / voice buttons use: a `sttButtonBackground` (GlassBackgroundView) hosting a transparent
+  `sttButton` + a `sttButtonIcon` (`GlassBackgroundView.ContentImageView`), added to
+  `glassBackgroundContainer.contentView` (not `self.view`) so the material samples the wallpaper
+  identically. Idle tint = `currentSttGlassTint()` (`.panel`/`.clear`, matching `defaultGlassTintColor`);
+  recording tint = red custom glass + white icon + pulse. Fields `sttButtonBackgroundView`/
+  `sttButtonIconView` renamed to `sttButtonBackground`/`sttButtonIcon` and retyped; `layoutSttButton`
+  now positions in container-content coordinates (dropped the `containerOffset`/`self.view` conversion).
+
 ### `submodules/AccountUtils/Sources/AccountUtils.swift` — multi-account limit raised
 
 `maximumNumberOfAccounts` 3 → **20** and `maximumPremiumNumberOfAccounts` 4 → 20 (owner request,

@@ -298,8 +298,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     // MARK: - Speech to Text
     private var sttButton: HighlightTrackingButton?
-    private var sttButtonBackgroundView: UIView?
-    private var sttButtonIconView: UIImageView?
+    private var sttButtonBackground: GlassBackgroundView?
+    private var sttButtonIcon: GlassBackgroundView.ContentImageView?
     private var sttManager: SpeechToTextManager?
     private var isSttRecording: Bool = false
     
@@ -5788,91 +5788,107 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         if self.sttButton != nil {
             return
         }
-        
-        let buttonSize = CGSize(width: 40, height: 40)
-        let isDark = self.presentationInterfaceState?.theme.overallDarkAppearance ?? false
-        
-        // Single button with background and icon
+
+        let buttonSize = CGSize(width: 40.0, height: 40.0)
+
+        // Glass blob background — the same GlassBackgroundView the attachment / voice-message
+        // buttons use, so the STT button is equally visible in light and dark mode on any
+        // wallpaper. The old plain alpha fill (white 0.1 in dark) was nearly invisible.
+        let background = GlassBackgroundView(frame: CGRect(origin: .zero, size: buttonSize))
+
         let button = HighlightTrackingButton()
         button.frame = CGRect(origin: .zero, size: buttonSize)
-        button.backgroundColor = isDark
-            ? UIColor.white.withAlphaComponent(0.1)
-            : UIColor.black.withAlphaComponent(0.05)
-        button.layer.cornerRadius = buttonSize.width / 2.0
-        button.clipsToBounds = true
-        button.setImage(self.createSttIcon(isRecording: false), for: .normal)
         button.addTarget(self, action: #selector(self.sttButtonPressed), for: .touchUpInside)
-        
-        button.highligthedChanged = { [weak button] highlighted in
+        background.contentView.addSubview(button)
+
+        let icon = GlassBackgroundView.ContentImageView()
+        icon.isUserInteractionEnabled = false
+        background.contentView.addSubview(icon)
+
+        // Fade the icon on press, like the attachment button (the whole glass blob no longer scales).
+        button.highligthedChanged = { [weak icon] highlighted in
+            guard let icon = icon else { return }
             if highlighted {
-                UIView.animate(withDuration: 0.15) {
-                    button?.transform = CGAffineTransform(scaleX: 0.85, y: 0.85)
-                    button?.alpha = 0.7
-                }
+                icon.layer.removeAnimation(forKey: "opacity")
+                icon.alpha = 0.4
             } else {
-                UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.45, initialSpringVelocity: 0, options: [], animations: {
-                    button?.transform = .identity
-                    button?.alpha = 1.0
-                })
+                icon.alpha = 1.0
+                icon.layer.animateAlpha(from: 0.4, to: 1.0, duration: 0.2)
             }
         }
-        
+
         self.sttButton = button
-        self.sttButtonBackgroundView = button
-        
-        // Add to self.view on top of everything
-        self.view.addSubview(button)
-        self.view.bringSubviewToFront(button)
+        self.sttButtonBackground = background
+        self.sttButtonIcon = icon
+
+        // Live in the same glass container as the attachment button so the material samples the
+        // chat wallpaper identically.
+        self.glassBackgroundContainer.contentView.addSubview(background)
+
+        self.updateSttButtonAppearance(isRecording: self.isSttRecording)
     }
     
     private func removeSttButton() {
         self.sttButton?.removeFromSuperview()
         self.sttButton = nil
-        self.sttButtonBackgroundView?.removeFromSuperview()
-        self.sttButtonBackgroundView = nil
-        self.sttButtonIconView?.removeFromSuperview()
-        self.sttButtonIconView = nil
+        self.sttButtonBackground?.removeFromSuperview()
+        self.sttButtonBackground = nil
+        self.sttButtonIcon?.removeFromSuperview()
+        self.sttButtonIcon = nil
+    }
+
+    private func currentSttGlassTint() -> GlassBackgroundView.TintColor {
+        if let glassType = self.presentationInterfaceState?.preferredGlassType, case .clear = glassType {
+            return .init(kind: .clear)
+        }
+        return .init(kind: .panel)
     }
     
     private func createSttIcon(isRecording: Bool) -> UIImage? {
-        let color: UIColor
-        if isRecording {
-            color = .white
-        } else {
-            color = self.presentationInterfaceState?.theme.chat.inputPanel.panelControlColor ?? UIColor.gray
-        }
-        
         let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
         let symbolName = isRecording ? "waveform" : "waveform.and.mic"
-        
-        if let image = UIImage(systemName: symbolName, withConfiguration: config) {
-            return image.withTintColor(color, renderingMode: .alwaysOriginal)
-        }
-        return nil
+        // Template image so the colour comes from the glass icon's tintColor (and the glass
+        // tint-mask), matching the attachment-button icon.
+        return UIImage(systemName: symbolName, withConfiguration: config)?.withRenderingMode(.alwaysTemplate)
     }
     
     private func updateSttButtonAppearance(isRecording: Bool) {
-        guard let button = self.sttButton else { return }
-        button.setImage(self.createSttIcon(isRecording: isRecording), for: .normal)
-        
+        guard let background = self.sttButtonBackground, let icon = self.sttButtonIcon else { return }
+
+        let buttonSize = CGSize(width: 40.0, height: 40.0)
+        let isDark = self.presentationInterfaceState?.theme.overallDarkAppearance ?? false
+
+        // Icon: recording = white waveform, idle = the same control colour the other input icons use.
+        icon.image = self.createSttIcon(isRecording: isRecording)
+        icon.tintColor = isRecording
+            ? UIColor.white
+            : (self.presentationInterfaceState?.theme.chat.inputPanel.panelControlColor ?? UIColor.gray)
+        if let image = icon.image {
+            icon.frame = CGRect(
+                origin: CGPoint(x: floor((buttonSize.width - image.size.width) * 0.5), y: floor((buttonSize.height - image.size.height) * 0.5)),
+                size: image.size
+            )
+        }
+
+        // Glass tint: idle matches the attachment / voice buttons; recording shows a red glass.
+        let tint: GlassBackgroundView.TintColor = isRecording
+            ? .init(kind: .custom(style: .default, color: UIColor.systemRed))
+            : self.currentSttGlassTint()
+        background.update(size: buttonSize, cornerRadius: buttonSize.height * 0.5, isDark: isDark, tintColor: tint, isInteractive: true, transition: .immediate)
+
         if isRecording {
-            button.backgroundColor = UIColor.systemRed
-            
-            // Pulse animation
-            let pulse = CABasicAnimation(keyPath: "transform.scale")
-            pulse.fromValue = 1.0
-            pulse.toValue = 1.12
-            pulse.duration = 0.6
-            pulse.autoreverses = true
-            pulse.repeatCount = .infinity
-            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            button.layer.add(pulse, forKey: "sttPulse")
+            if background.layer.animation(forKey: "sttPulse") == nil {
+                let pulse = CABasicAnimation(keyPath: "transform.scale")
+                pulse.fromValue = 1.0
+                pulse.toValue = 1.12
+                pulse.duration = 0.6
+                pulse.autoreverses = true
+                pulse.repeatCount = .infinity
+                pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                background.layer.add(pulse, forKey: "sttPulse")
+            }
         } else {
-            let isDark = self.presentationInterfaceState?.theme.overallDarkAppearance ?? false
-            button.backgroundColor = isDark
-                ? UIColor.white.withAlphaComponent(0.1)
-                : UIColor.black.withAlphaComponent(0.05)
-            button.layer.removeAnimation(forKey: "sttPulse")
+            background.layer.removeAnimation(forKey: "sttPulse")
         }
     }
     
@@ -5957,28 +5973,28 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.setupSttButton()
         }
 
-        guard let sttButton = self.sttButton else { return }
+        guard let background = self.sttButtonBackground else { return }
 
-        let buttonSize = CGSize(width: 40, height: 40)
+        let buttonSize = CGSize(width: 40.0, height: 40.0)
 
         // Place the STT button on the LEFT, just before the text field — i.e. right after the
         // attachment button, in the 46pt slot reserved via textFieldInsets.left. The anchor is
         // the text field's LEFT edge, which never moves when the input gains text, so the button
-        // can no longer collide with the send button or run off the right edge.
-        // Coordinates are converted from the glass container to self.view (same as before).
-        let containerOffset = self.glassBackgroundContainer.frame.origin
-        let sttX = textInputContainerBackgroundFrame.minX - 6.0 - buttonSize.width + containerOffset.x
-        let sttY = textInputContainerBackgroundFrame.maxY - buttonSize.height + containerOffset.y
-        sttButton.frame = CGRect(origin: CGPoint(x: sttX, y: sttY), size: buttonSize)
-        self.view.bringSubviewToFront(sttButton)
+        // can no longer collide with the send button or run off the right edge. The glass blob now
+        // lives inside glassBackgroundContainer (next to the attachment button), so coordinates are
+        // the container's content space — same as attachmentButtonFrame, no self.view conversion.
+        let sttX = textInputContainerBackgroundFrame.minX - 6.0 - buttonSize.width
+        let sttY = textInputContainerBackgroundFrame.maxY - buttonSize.height
+        transition.updateFrame(layer: background.layer, frame: CGRect(origin: CGPoint(x: sttX, y: sttY), size: buttonSize))
+        self.glassBackgroundContainer.contentView.bringSubviewToFront(background)
+
+        // Refresh glass tint / icon for the current theme + recording state on every pass.
+        self.updateSttButtonAppearance(isRecording: self.isSttRecording)
 
         // The left slot is stable, so visibility no longer depends on the input text. Keep the
         // button visible while recording so the user can still tap it to stop.
-        if self.isSttRecording {
-            sttButton.alpha = 1.0
-        } else {
-            sttButton.alpha = show ? 1.0 : 0.0
-        }
-        sttButton.isUserInteractionEnabled = show || self.isSttRecording
+        let targetAlpha: CGFloat = (self.isSttRecording || show) ? 1.0 : 0.0
+        transition.updateAlpha(layer: background.layer, alpha: targetAlpha)
+        background.isUserInteractionEnabled = show || self.isSttRecording
     }
 }
