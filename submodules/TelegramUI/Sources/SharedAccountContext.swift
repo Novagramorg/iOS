@@ -179,7 +179,9 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     // are reachable through the Fenixuz "Accounts" screen. The primary is always live; switching to a
     // suspended account loads it and evicts the least-recently-used one. Lets the app hold 50-100+
     // logins without the launch/foreground Postbox-queue storm or the open-DB OOM/file-descriptor wall.
-    private let fenixuzMaxLiveAccounts = 3
+    // 2026-06-05 owner request: cap = 1 — ONLY the selected account is live; every switch is a cold
+    // load (~1-2s), in exchange for absolute-minimum RAM/CPU/network.
+    private let fenixuzMaxLiveAccounts = 1
     private var fenixuzRecencyOrder: [AccountRecordId] = []
     private var fenixuzNameCacheDisposable: Disposable?
     private let activeAccountsWithInfoPromise = Promise<(primary: AccountRecordId?, accounts: [AccountWithInfo])>()

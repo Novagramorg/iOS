@@ -13,6 +13,7 @@ import ItemListPeerItem
 import DeviceAccess
 import TelegramStringFormatting
 import PeerNameColorItem
+import FenixuzLocalization
 
 enum SettingsSection: Int, CaseIterable {
     case edit
@@ -117,7 +118,10 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             }))
         }
         
-        if !settings.accountsAndPeers.isEmpty {
+        // Fenixuz: always show the accounts section — with the working-set cap (1) no other LIVE
+        // account rows may exist, but "Barcha accountlar" and "Add Account" must stay reachable even
+        // when every other account is suspended.
+        do {
             for (peerAccountContext, peer, badgeCount) in settings.accountsAndPeers {
                 let mappedContext = ItemListPeerItem.Context.custom(ItemListPeerItem.Context.Custom(
                     accountPeerId: peerAccountContext.account.peerId,
@@ -146,7 +150,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
             
             // Fenixuz: only the live (working-set) accounts are listed above — this row opens the FULL
             // list (live + suspended), so Settings stays compact even with 100+ logins.
-            items[.accounts]!.append(PeerInfoScreenDisclosureItem(id: 101, text: "Barcha accountlar", icon: PresentationResourcesSettings.devices, action: {
+            items[.accounts]!.append(PeerInfoScreenDisclosureItem(id: 101, text: FenixuzL10n(presentationData.strings).accounts_allAccounts, icon: PresentationResourcesSettings.devices, action: {
                 interaction.openSettings(.fenixAccounts)
             }))
 

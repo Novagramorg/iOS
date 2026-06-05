@@ -456,8 +456,8 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     let l10n = FenixuzL10n(presentationData.strings)
 
     // ─── ACCOUNTS (Fenixuz multi-account) ───
-    entries.append(.accountsHeader("ACCOUNTLAR"))
-    entries.append(.accountsManager(presentationData.theme, "Barcha accountlar"))
+    entries.append(.accountsHeader(l10n.accounts_sectionHeader))
+    entries.append(.accountsManager(presentationData.theme, l10n.accounts_allAccounts))
 
     // ─── INTERFACE ───
     entries.append(.interfaceHeader(l10n.settings_section_interface))

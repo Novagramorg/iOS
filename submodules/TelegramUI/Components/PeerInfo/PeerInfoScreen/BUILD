@@ -97,6 +97,7 @@ swift_library(
         "//submodules/TelegramUI/Components/SendInviteLinkScreen",
         "//submodules/SettingsUI",
         "//submodules/Fenixuz/ProMessager:FenixuzProMessager",
+        "//submodules/Fenixuz/Localization:FenixuzLocalization",
         "//submodules/ShareController",
         "//submodules/TelegramUI/Components/ShareWithPeersScreen",
         "//submodules/StatisticsUI",

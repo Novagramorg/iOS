@@ -526,4 +526,46 @@ public struct FenixuzL10n {
             ru: "Отмена"
         )
     }
+
+    // MARK: - All Accounts (multi-account working-set)
+
+    public var accounts_allAccounts: String {
+        pick(en: "All Accounts", uz: "Barcha accountlar", ru: "Все аккаунты")
+    }
+
+    public var accounts_sectionHeader: String {
+        pick(en: "ACCOUNTS", uz: "ACCOUNTLAR", ru: "АККАУНТЫ")
+    }
+
+    public func accounts_summary(total: Int, active: Int) -> String {
+        pick(
+            en: "TOTAL: \(total) accounts · \(active) active",
+            uz: "JAMI: \(total) ta account · \(active) ta faol",
+            ru: "ВСЕГО: \(total) аккаунтов · \(active) активных"
+        )
+    }
+
+    public var accounts_current: String {
+        pick(en: "Current", uz: "Joriy", ru: "Текущий")
+    }
+
+    public var accounts_active: String {
+        pick(en: "Active", uz: "Faol", ru: "Активный")
+    }
+
+    public var accounts_sleeping: String {
+        pick(en: "sleeping", uz: "uyquda", ru: "спит")
+    }
+
+    public var accounts_accountFallback: String {
+        pick(en: "Account", uz: "Account", ru: "Аккаунт")
+    }
+
+    public var accounts_footer: String {
+        pick(
+            en: "For fast performance, only the selected account stays live. The others sleep — but their notifications keep arriving. Select any account and it wakes up in a few seconds. This way even 100+ accounts won't slow your phone down.",
+            uz: "Tezkor ishlash uchun faqat tanlangan account jonli turadi. Qolganlari uyquda bo'ladi — ammo ularga ham bildirishnomalar to'xtovsiz kelaveradi. Istalgan accountni tanlasangiz, bir necha soniyada jonlanadi. Shu tarzda 100+ account ham telefonni sekinlashtirmaydi.",
+            ru: "Для быстрой работы активен только выбранный аккаунт. Остальные спят — но уведомления для них продолжают приходить. Выберите любой аккаунт — он проснётся за несколько секунд. Так даже 100+ аккаунтов не замедлят телефон."
+        )
+    }
 }

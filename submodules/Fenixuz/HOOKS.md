@@ -734,3 +734,13 @@ is safe at any account count.
     push(fenixAccountsController(...))`, ~70 — file already imports `FenixuzProMessager`; the
     PeerInfoScreen BUILD already depends on it). Settings stays compact at 100+ logins by design
     (owner: "Settings UI cho'zilib ketmaydi").
+  - **2026-06-05 cap 3 → 1 (owner request):** only the SELECTED account is live; every other login is
+    suspended. Every account switch is now a cold load (~1-2s) in exchange for absolute-minimum
+    RAM/CPU/network. Because no other live rows exist, the accounts section in
+    `PeerInfoSettingsItems.swift` was made unconditional (`if !settings.accountsAndPeers.isEmpty` →
+    `do`) so "Barcha accountlar" + "Add Account" stay reachable. Accounts-screen footer text updated.
+  - **2026-06-05 localization:** all multi-account strings moved to `FenixuzL10n` (`accounts_*` keys,
+    en/uz/ru — "All Accounts" / "Barcha accountlar" / "Все аккаунты", summary, Current/Active/sleeping,
+    footer). The Settings row in `PeerInfoSettingsItems.swift` reads
+    `FenixuzL10n(presentationData.strings).accounts_allAccounts` — required `import FenixuzLocalization`
+    + `//submodules/Fenixuz/Localization:FenixuzLocalization` dep in `PeerInfoScreen/BUILD`.

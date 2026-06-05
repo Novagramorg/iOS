@@ -8,6 +8,7 @@ import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
+import FenixuzLocalization
 
 // Fenixuz "Accounts" screen.
 //
@@ -25,6 +26,7 @@ private struct AccountRow: Equatable {
     let title: String
     let isPrimary: Bool
     let isLive: Bool
+    let statusLabel: String
 }
 
 private enum FenixAccountsSection: Int32 {
@@ -81,19 +83,8 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
         case let .header(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .account(_, row, theme):
-            let label: String
-            let labelStyle: ItemListDisclosureLabelStyle
-            if row.isPrimary {
-                label = "Joriy"
-                labelStyle = .badge(theme.list.itemAccentColor)
-            } else if row.isLive {
-                label = "Faol"
-                labelStyle = .text
-            } else {
-                label = "uyquda"
-                labelStyle = .text
-            }
-            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.crop.circle.fill", color: row.isPrimary ? .green : .blue), title: row.title, label: label, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
+            let labelStyle: ItemListDisclosureLabelStyle = row.isPrimary ? .badge(theme.list.itemAccentColor) : .text
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.crop.circle.fill", color: row.isPrimary ? .green : .blue), title: row.title, label: row.statusLabel, labelStyle: labelStyle, sectionId: self.section, style: .blocks, action: {
                 if !row.isPrimary {
                     arguments.switchAccount(row.recordId)
                 }
@@ -154,6 +145,7 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
     )
     |> deliverOnMainQueue
     |> map { presentationData, recordsData, activeInfo -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let l10n = FenixuzL10n(presentationData.strings)
         let names = cachedAccountNames()
         let liveById: [AccountRecordId: AccountWithInfo] = Dictionary(activeInfo.accounts.map { ($0.account.id, $0) }, uniquingKeysWith: { a, _ in a })
 
@@ -166,20 +158,29 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
             } else if let cached = names[String(peerId)], !cached.isEmpty {
                 title = cached
             } else {
-                title = "Account \(peerId)"
+                title = "\(l10n.accounts_accountFallback) \(peerId)"
             }
-            rows.append(AccountRow(recordId: recordId, peerId: peerId, title: title, isPrimary: recordId == recordsData.current, isLive: live != nil))
+            let isPrimary = recordId == recordsData.current
+            let statusLabel: String
+            if isPrimary {
+                statusLabel = l10n.accounts_current
+            } else if live != nil {
+                statusLabel = l10n.accounts_active
+            } else {
+                statusLabel = l10n.accounts_sleeping
+            }
+            rows.append(AccountRow(recordId: recordId, peerId: peerId, title: title, isPrimary: isPrimary, isLive: live != nil, statusLabel: statusLabel))
         }
 
         var entries: [FenixAccountsEntry] = []
         let liveCount = rows.filter({ $0.isLive }).count
-        entries.append(.header("JAMI: \(rows.count) ta account · \(liveCount) ta faol"))
+        entries.append(.header(l10n.accounts_summary(total: rows.count, active: liveCount)))
         for (index, row) in rows.enumerated() {
             entries.append(.account(index, row, presentationData.theme))
         }
-        entries.append(.footer("Tezkor ishlash uchun bir vaqtda eng so'nggi 3 ta account jonli ushlab turiladi. Qolganlari uyquda bo'ladi — ammo ularga ham bildirishnomalar (push) to'xtovsiz kelaveradi. Istalgan accountga bossangiz, bir lahzada jonlanadi. Shu tarzda 100+ account ham telefonni qotirmaydi."))
+        entries.append(.footer(l10n.accounts_footer))
 
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Accountlar"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(l10n.accounts_allAccounts), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries.sorted(), style: .blocks)
         return (controllerState, (listState, arguments))
     }
