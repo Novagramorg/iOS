@@ -50,6 +50,7 @@ swift_library(
         "//submodules/PresentationDataUtils",
         "//submodules/Fenixuz/AppleReview:FenixuzAppleReview",
         "//submodules/Fenixuz/Brand:FenixuzBrand",
+        "//submodules/Fenixuz/Localization:FenixuzLocalization",
     ],
     visibility = [
         "//visibility:public",

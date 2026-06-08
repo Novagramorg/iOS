@@ -763,4 +763,10 @@ public struct FenixuzL10n {
     public var accounts_maxLiveOk: String {
         pick(en: "OK", uz: "OK", ru: "OK")
     }
+
+    // MARK: - QR-code login (phone entry screen)
+
+    public var auth_qrLoginButton: String {
+        pick(en: "Log in by QR code", uz: "QR kod orqali kirish", ru: "Войти по QR-коду")
+    }
 }

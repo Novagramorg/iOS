@@ -15,6 +15,7 @@ import SolidRoundedButtonNode
 import AuthorizationUtils
 import ManagedAnimationNode
 import Markdown
+import FenixuzLocalization
 
 private final class PhoneAndCountryNode: ASDisplayNode {
     let strings: PresentationStrings
@@ -321,6 +322,8 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     private let proceedNode: SolidRoundedButtonNode
     
     private var qrNode: ASImageNode?
+    // Fenixuz: visible "Log in by QR code" text button on the phone-entry screen.
+    private let qrLoginButtonNode: ASButtonNode
     private let exportTokenDisposable = MetaDisposable()
     private let tokenEventsDisposable = MetaDisposable()
     var accountUpdated: ((UnauthorizedAccount) -> Void)?
@@ -429,6 +432,14 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         self.proceedNode.isEnabled = false
         self.proceedNode.accessibilityIdentifier = "Auth.PhoneEntry.ContinueButton"
 
+        // Fenixuz: visible QR-code login button — text-only, styled like Telegram's secondary login links.
+        self.qrLoginButtonNode = ASButtonNode()
+        let qrTitle = FenixuzL10n(strings).auth_qrLoginButton
+        self.qrLoginButtonNode.setTitle(qrTitle, with: Font.regular(17.0), with: theme.list.itemAccentColor, for: .normal)
+        self.qrLoginButtonNode.setTitle(qrTitle, with: Font.regular(17.0), with: theme.list.itemAccentColor.withAlphaComponent(0.6), for: .highlighted)
+        self.qrLoginButtonNode.accessibilityLabel = qrTitle
+        self.qrLoginButtonNode.accessibilityTraits = .button
+
         super.init()
         
         self.setViewBlock({
@@ -446,6 +457,10 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         self.addSubnode(self.proceedNode)
         self.addSubnode(self.animationNode)
         self.addSubnode(self.managedAnimationNode)
+        // Fenixuz: QR login button — only shown when there is an account context (account != nil)
+        // and screen is wide enough (same guard as proceedNode). Hidden on small-layout path.
+        self.addSubnode(self.qrLoginButtonNode)
+        self.qrLoginButtonNode.isHidden = (account == nil)
         self.contactSyncNode.isHidden = true
         
         self.noticeNode.highlightAttributeAction = { attributes in
@@ -490,7 +505,11 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         self.proceedNode.pressed = { [weak self] in
             self?.checkPhone?()
         }
-        
+
+        // Fenixuz: "Log in by QR code" — tap creates qrNode on demand (same as debugQrTap)
+        // and calls refreshQrToken() which exports the login token + renders the QR image.
+        self.qrLoginButtonNode.addTarget(self, action: #selector(self.qrLoginButtonTapped), forControlEvents: .touchUpInside)
+
         self.animationNode.completed = { [weak self] _ in
             self?.animationNode.removeFromSupernode()
             self?.managedAnimationNode.isHidden = false
@@ -634,11 +653,14 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
             self.proceedNode.isHidden = false
             self.animationNode.isHidden = false
             self.animationNode.visibility = true
+            // Fenixuz: QR button visible only on full-size screens and only when account context exists.
+            self.qrLoginButtonNode.isHidden = (self.account == nil)
         } else {
             insets.top = navigationBarHeight
             self.proceedNode.isHidden = true
             self.animationNode.isHidden = true
             self.managedAnimationNode.isHidden = true
+            self.qrLoginButtonNode.isHidden = true
         }
         
         let contactSyncSize = self.contactSyncNode.updateLayout(width: maximumWidth)
@@ -657,9 +679,22 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         }
         
         transition.updateFrame(node: self.proceedNode, frame: buttonFrame)
-        
+
+        // Fenixuz: position the QR login button just above the Continue button, centred.
+        // Height = 44pt (standard tap target). Spacing = 12pt above the Continue button.
+        let qrButtonHeight: CGFloat = 44.0
+        let qrButtonWidth: CGFloat = maximumWidth - inset * 2.0
+        let qrButtonY = buttonFrame.minY - 12.0 - qrButtonHeight
+        let qrButtonFrame = CGRect(
+            x: floorToScreenPixels((layout.size.width - qrButtonWidth) / 2.0),
+            y: qrButtonY,
+            width: qrButtonWidth,
+            height: qrButtonHeight
+        )
+        transition.updateFrame(node: self.qrLoginButtonNode, frame: qrButtonFrame)
+
         self.animationNode.updateLayout(size: animationSize)
-        
+
         let _ = layoutAuthorizationItems(bounds: CGRect(origin: CGPoint(x: 0.0, y: insets.top), size: CGSize(width: layout.size.width, height: layout.size.height - insets.top - insets.bottom - additionalBottomInset)), items: items, transition: transition, failIfDoesNotFit: false)
         
         transition.updateFrame(node: self.managedAnimationNode, frame: self.animationNode.frame)
@@ -706,9 +741,21 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
             qrNode.frame = CGRect(origin: CGPoint(x: 16.0, y: 64.0 + 16.0), size: CGSize(width: 200.0, height: 200.0))
             self.qrNode = qrNode
             self.addSubnode(qrNode)
-            
+
             self.refreshQrToken()
         }
+    }
+
+    // Fenixuz: tap handler for the visible "Log in by QR code" button.
+    // Mirrors debugQrTap but is always reachable by the user (no debug gesture required).
+    @objc private func qrLoginButtonTapped() {
+        if self.qrNode == nil {
+            let qrNode = ASImageNode()
+            qrNode.frame = CGRect(origin: CGPoint(x: 16.0, y: 64.0 + 16.0), size: CGSize(width: 200.0, height: 200.0))
+            self.qrNode = qrNode
+            self.addSubnode(qrNode)
+        }
+        self.refreshQrToken()
     }
     
     private func refreshQrToken() {

@@ -122,6 +122,112 @@ Reason: the three nodes are `private` — only a method inside this class can fl
 
 ---
 
+### `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryControllerNode.swift` — visible QR login button (2026-06-08)
+
+**Top of file — imports block.** Add after `import Markdown`:
+
+```swift
+import FenixuzLocalization
+```
+
+**Inside `AuthorizationSequencePhoneEntryControllerNode` class body** — after `private var qrNode: ASImageNode?`:
+
+```swift
+// Fenixuz: visible "Log in by QR code" text button on the phone-entry screen.
+private let qrLoginButtonNode: ASButtonNode
+```
+
+**Inside `init(...)` — after `proceedNode.accessibilityIdentifier` line** (before `super.init()`):
+
+```swift
+// Fenixuz: visible QR-code login button — text-only, styled like Telegram's secondary login links.
+self.qrLoginButtonNode = ASButtonNode()
+let qrTitle = FenixuzL10n(strings).auth_qrLoginButton
+self.qrLoginButtonNode.setTitle(qrTitle, with: Font.regular(17.0), with: theme.list.itemAccentColor, for: .normal)
+self.qrLoginButtonNode.setTitle(qrTitle, with: Font.regular(17.0), with: theme.list.itemAccentColor.withAlphaComponent(0.6), for: .highlighted)
+self.qrLoginButtonNode.accessibilityLabel = qrTitle
+self.qrLoginButtonNode.accessibilityTraits = .button
+```
+
+**Inside `init(...)` — after `self.contactSyncNode.isHidden = true`** (the addSubnode block):
+
+```swift
+// Fenixuz: QR login button — only shown when there is an account context (account != nil)
+// and screen is wide enough (same guard as proceedNode). Hidden on small-layout path.
+self.addSubnode(self.qrLoginButtonNode)
+self.qrLoginButtonNode.isHidden = (account == nil)
+```
+
+**Inside `init(...)` — after `self.proceedNode.pressed = { ... }` closure:**
+
+```swift
+// Fenixuz: "Log in by QR code" — tap creates qrNode on demand (same as debugQrTap)
+// and calls refreshQrToken() which exports the login token + renders the QR image.
+self.qrLoginButtonNode.addTarget(self, action: #selector(self.qrLoginButtonTapped), forControlEvents: .touchUpInside)
+```
+
+**New method — after `debugQrTap(_:)` (around line 712):**
+
+```swift
+// Fenixuz: tap handler for the visible "Log in by QR code" button.
+// Mirrors debugQrTap but is always reachable by the user (no debug gesture required).
+@objc private func qrLoginButtonTapped() {
+    if self.qrNode == nil {
+        let qrNode = ASImageNode()
+        qrNode.frame = CGRect(origin: CGPoint(x: 16.0, y: 64.0 + 16.0), size: CGSize(width: 200.0, height: 200.0))
+        self.qrNode = qrNode
+        self.addSubnode(qrNode)
+    }
+    self.refreshQrToken()
+}
+```
+
+**Inside `containerLayoutUpdated` — inside the `if layout.size.width > 320.0` branch, after `self.animationNode.visibility = true`:**
+
+```swift
+// Fenixuz: QR button visible only on full-size screens and only when account context exists.
+self.qrLoginButtonNode.isHidden = (self.account == nil)
+```
+
+**Inside `containerLayoutUpdated` — inside the `else` branch (small-layout path), after `self.managedAnimationNode.isHidden = true`:**
+
+```swift
+self.qrLoginButtonNode.isHidden = true
+```
+
+**Inside `containerLayoutUpdated` — immediately after `transition.updateFrame(node: self.proceedNode, frame: buttonFrame)`:**
+
+```swift
+// Fenixuz: position the QR login button just above the Continue button, centred.
+// Height = 44pt (standard tap target). Spacing = 12pt above the Continue button.
+let qrButtonHeight: CGFloat = 44.0
+let qrButtonWidth: CGFloat = maximumWidth - inset * 2.0
+let qrButtonY = buttonFrame.minY - 12.0 - qrButtonHeight
+let qrButtonFrame = CGRect(
+    x: floorToScreenPixels((layout.size.width - qrButtonWidth) / 2.0),
+    y: qrButtonY,
+    width: qrButtonWidth,
+    height: qrButtonHeight
+)
+transition.updateFrame(node: self.qrLoginButtonNode, frame: qrButtonFrame)
+```
+
+Reason: `refreshQrToken()` is `private` — it cannot be called from a Fenixuz module. The entire QR-login session-export machinery (MTProto `auth.exportLoginToken`, `tg://login?token=…` URL, `qrCode(...)` Signal, token-expiry refresh loop, `loginTokenSuccess`/`loginTokenMigrateTo` handling) already exists in this file and works correctly — it was only reachable via a hidden `#if DEBUG && false` gesture on `noticeNode`. This hook surfaces it as a standard visible button with no new logic. The `account == nil` guard mirrors the upstream condition: when `account == nil` (change-number flow), the button stays hidden. Demo flow is completely unaffected — `qrLoginButtonTapped` does not touch `checkPhone`, `prewarmIfDemo`, or any code-entry path.
+
+---
+
+### `submodules/AuthorizationUI/BUILD` — +1 FenixuzLocalization dep (2026-06-08)
+
+Append to `deps = [...]`:
+
+```python
+"//submodules/Fenixuz/Localization:FenixuzLocalization",
+```
+
+Reason: `AuthorizationSequencePhoneEntryControllerNode.swift` now imports `FenixuzLocalization` to read `FenixuzL10n(strings).auth_qrLoginButton` for the visible QR button label (en/uz/ru). Bazel requires all transitive imports to be in `deps`.
+
+---
+
 ### `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryController.swift`
 
 **Top of file — imports block.** Add as the last `import` line:
@@ -574,10 +680,11 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 
 | File | Hook type | Purpose |
 |---|---|---|
-| `AuthorizationUI/BUILD` | +2 lines (deps) | wire FenixuzAppleReview + FenixuzBrand into AuthorizationUI |
+| `AuthorizationUI/BUILD` | +3 lines (deps) | wire FenixuzAppleReview + FenixuzBrand + FenixuzLocalization into AuthorizationUI |
 | `AuthorizationSequenceSplashController.swift` | +1 import, ~5 lines hook | emerald-green brand on Welcome / Start Messaging |
 | `AuthorizationSequenceCodeEntryController.swift` | +1 import, ~9 lines hook | auto-fill SMS code for demo account via xmax.uz |
 | `AuthorizationSequenceCodeEntryControllerNode.swift` | ~10 lines accessor + 3-line guard | private-field access for demo mode + countdown overwrite block |
+| `AuthorizationSequencePhoneEntryControllerNode.swift` | +1 import, +1 property, ~30 lines | visible "Log in by QR code" button surfacing the existing hidden QR flow (2026-06-08) |
 | `AuthorizationSequencePhoneEntryController.swift` | +1 import, +2 prewarm calls (1 line each) | pre-warm SMS forwarder polling on demo phone confirmation (Apple Review timeout fix) |
 | `DeviceAccess/BUILD` | +1 line (dep) | wire FenixuzContactsConsent into DeviceAccess |
 | `DeviceAccess/Sources/DeviceAccess.swift` | +1 import, +3 wrapper lines | server-upload consent dialog before iOS Contacts permission (Apple Review 5.1.2 rejection fix) |
@@ -915,3 +1022,143 @@ deeper for white-background contrast) — and `icon: fenixuzSettingsIcon(systemN
 
 Made `FenixuzIconColor` enum + `fenixuzSettingsIcon(systemName:color:)` `public` so the icon helper can be
 reused from the PeerInfoScreen module, and added a `.gold` case (`0xD4AF37` classic metallic gold).
+
+---
+
+## 📌 Ghost mode ad-reporting suppression (2026-06-08, Task #7)
+
+### `submodules/TelegramCore/Sources/TelegramEngine/Messages/AdMessages.swift`
+
+Three functions call TG servers to report ad views/clicks. All three are guarded with the
+`isFenixuzGhostModeActive` check so no sponsored-message telemetry is sent while Ghost mode is ON.
+
+**1. `AdMessagesHistoryContextImpl.markAsSeen(opaqueId:)` (~line 592)**
+Return type: `Void` (sets a disposable on `maskAsSeenDisposables` and returns). Guard before the signal:
+
+```swift
+// Fenixuz Ghost mode: do NOT report "seen" to TG servers when ghost is active.
+if isFenixuzGhostModeActive { return }
+```
+
+**2. `_internal_markAdAction(account:opaqueId:media:fullscreen:)` (~line 688)**
+Return type: `Void`. Guard at top of function:
+
+```swift
+// Fenixuz Ghost mode: do NOT report ad clicks to TG servers when ghost is active.
+if isFenixuzGhostModeActive { return }
+```
+
+**3. `_internal_markAdAsSeen(account:opaqueId:)` (~line 704)**
+Return type: `Void`. Guard at top of function:
+
+```swift
+// Fenixuz Ghost mode: do NOT report sponsored message views to TG servers when ghost is active.
+if isFenixuzGhostModeActive { return }
+```
+
+`isFenixuzGhostModeActive` is the existing internal global in
+`submodules/TelegramCore/Sources/Fenixuz/FenixuzGhostMode.swift` — same module, no import needed.
+These guards cover both the chat sponsored-message context (`AdMessagesHistoryContextImpl`) AND the
+global-search sponsored-peer context (both eventually call the `_internal_*` free functions).
+
+---
+
+## 📌 Ghost mode nav-button new icons (2026-06-08, Task #13)
+
+### New imagesets in `submodules/TelegramUI/Images.xcassets/Contact List/`
+
+Two new imagesets added with user-supplied vector PDFs:
+
+**`FenixGhostActive.imageset`** — purple filled ghost with dark eyes (multicolor PDF).
+- `Contents.json`: single universal PDF, `preserves-vector-representation: true`, **no** `template-rendering-intent`.
+- Used for Ghost ON state. Rendered with `.alwaysOriginal` so purple + dark eyes are preserved.
+
+**`FenixGhostInactive.imageset`** — thin outline ghost (near-invisible raw; needs tint).
+- `Contents.json`: single universal PDF, `preserves-vector-representation: true`, `template-rendering-intent: template`.
+- Used for Ghost OFF state. Rendered as template tinted `panelControlColor` (grey).
+
+### `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift`
+
+Added new `Content` case:
+
+```swift
+case iconOriginal(imageName: String)
+```
+
+This renders a bundle PDF asset with `.alwaysOriginal` rendering mode, preserving multicolor (no tint).
+Cache key suffix `:original` ensures toggling between `iconOriginal` / `iconTinted` forces a re-render.
+All existing `.text` / `.more` / `.icon` / `.systemIcon` / `.iconTinted` / `.proxy` cases are unchanged.
+
+### `submodules/ChatListUI/Sources/ChatListController.swift` — `updateGhostModeButton()` (~line 7416)
+
+Ghost button content is now state-dependent:
+
+```swift
+let ghostContent: NavigationButtonComponent.Content = isGhostModeActive
+    ? .iconOriginal(imageName: "Contact List/FenixGhostActive")
+    : .iconTinted(imageName: "Contact List/FenixGhostInactive", accent: false)
+```
+
+- ON  → `FenixGhostActive` rendered original (purple filled, multicolor).
+- OFF → `FenixGhostInactive` rendered template tinted `panelControlColor` (grey outline, clearly visible).
+
+---
+
+## 📌 Multi-account notification clear-on-read fix (2026-06-08)
+
+**Bug:** Delivered push notifications were NOT removed when the user opened/read a chat on a non-primary account. They piled up. Root cause: the clear-on-read subscription was wired only to the primary account (`ApplicationContext.swift:777`). With the dynamic multi-account working-set (cap=5), up to 5 accounts can be live simultaneously, each receiving push notifications from its own Telegram server session.
+
+### `submodules/TelegramUI/Sources/SharedNotificationManager.swift`
+
+Two new private properties added inside the class:
+
+```swift
+private var readClearDisposables: [AccountRecordId: Disposable] = [:]
+private var readClearAccountsDisposable: Disposable?
+```
+
+In `init(...)`, after the existing `accountsAndKeysDisposable` block, a new subscription is added that observes the same `accounts: Signal<[(Account, Bool)], NoError>` signal already passed to `SharedNotificationManager`. For each emission:
+
+1. Dispose and remove entries for accounts that left the live set.
+2. For accounts that just entered the live set (no existing entry), subscribe to `account.stateManager.appliedIncomingReadMessages` and call `clearNotificationsManager.append(id)` + `commitNow()` for each emitted `[MessageId]`.
+
+The `deinit` disposes `readClearAccountsDisposable` and all entries in `readClearDisposables`.
+
+`SharedNotificationManager` already holds `clearNotificationsManager` and receives the `accounts` signal — no new dependencies needed. The primary account is in the live set, so it is also handled here.
+
+Reason: `SharedNotificationManager` is the natural home because (a) it already holds `clearNotificationsManager`, (b) it already receives the live-accounts signal, and (c) it is account-manager-scoped (not primary-scoped like `AuthorizedApplicationContext`).
+
+### `submodules/TelegramUI/Sources/ApplicationContext.swift` (line ~777)
+
+The per-primary subscription:
+
+```swift
+self.removeNotificationsDisposable = (context.account.stateManager.appliedIncomingReadMessages
+|> deliverOnMainQueue).start(next: { [weak self] ids in
+    if let strongSelf = self {
+        strongSelf.context.sharedContext.applicationBindings.clearMessageNotifications(ids)
+    }
+})
+```
+
+was replaced with a comment. `SharedNotificationManager` now covers all live accounts including the primary, so this subscription is redundant and would cause double-clearing if kept. `removeNotificationsDisposable` stays declared and nil'd; its `dispose()` call in `deinit` is a safe no-op.
+
+### `submodules/TelegramUI/Sources/AppDelegate.swift` (line ~443, secondary fix)
+
+In the `getNotificationIds` closure inside `ClearNotificationsManager.init(...)`, the `peerId` construction from notification `userInfo` now has a fallback:
+
+```swift
+// Fenixuz: NSE writes the full int64 PeerId as "peerId" in userInfo.
+// Fall back to it if from_id/chat_id/channel_id were absent.
+if peerId == nil {
+    if let peerIdRaw = payload["peerId"] as? String, let peerIdInt = Int64(peerIdRaw) {
+        peerId = PeerId(peerIdInt)
+    } else if let peerIdRaw = payload["peerId"] as? Int64 {
+        peerId = PeerId(peerIdRaw)
+    }
+}
+```
+
+This improves identifier match rate for notifications where the NSE stored a full `PeerId` int64 but the standard `from_id`/`chat_id`/`channel_id` keys were absent (e.g. encrypted payload fallback path).
+
+**Silent-removal check:** The removed primary subscription produced one behavior: clear delivered notifications when the primary account's chats were read. That behavior is fully preserved by `SharedNotificationManager`'s new per-account subscriptions (primary is always in the live set). No previously-working behavior is dropped.
