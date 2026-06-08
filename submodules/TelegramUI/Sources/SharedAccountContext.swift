@@ -856,23 +856,43 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         })
         
         if applicationBindings.isMainApp {
-            // Fenixuz: continuously cache each live account's display name keyed by peerId, so the
-            // Fenixuz "Accounts" screen can label suspended accounts (which have no live context).
+            // Fenixuz: continuously cache each live account's display name + username + phone keyed by
+            // peerId, so the "Accounts" screen can label suspended accounts (which have no live context).
             self.fenixuzNameCacheDisposable = (self.activeAccountsWithInfoPromise.get()
             |> deliverOnMainQueue).start(next: { _, accounts in
                 let defaults = UserDefaults(suiteName: "pro_messager")
-                var cache = (defaults?.dictionary(forKey: "fenixuz_account_names") as? [String: String]) ?? [:]
+                var nameCache = (defaults?.dictionary(forKey: "fenixuz_account_names") as? [String: String]) ?? [:]
+                var usernameCache = (defaults?.dictionary(forKey: "fenixuz_account_usernames") as? [String: String]) ?? [:]
                 var changed = false
                 for info in accounts {
                     let key = String(info.peer.id.toInt64())
                     let name = info.peer.debugDisplayTitle
-                    if cache[key] != name {
-                        cache[key] = name
+                    if nameCache[key] != name {
+                        nameCache[key] = name
+                        changed = true
+                    }
+                    // Cache @username; fall back to phone number string for accounts without a username.
+                    let username: String
+                    switch info.peer {
+                    case let .user(user):
+                        if let uname = user.usernames.first(where: { $0.isActive })?.username ?? user.username {
+                            username = "@\(uname)"
+                        } else if let phone = user.phone, !phone.isEmpty {
+                            username = "+\(phone)"
+                        } else {
+                            username = ""
+                        }
+                    default:
+                        username = ""
+                    }
+                    if usernameCache[key] != username {
+                        usernameCache[key] = username
                         changed = true
                     }
                 }
                 if changed {
-                    defaults?.set(cache, forKey: "fenixuz_account_names")
+                    defaults?.set(nameCache, forKey: "fenixuz_account_names")
+                    defaults?.set(usernameCache, forKey: "fenixuz_account_usernames")
                 }
             })
         }

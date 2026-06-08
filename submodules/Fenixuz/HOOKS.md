@@ -744,3 +744,47 @@ is safe at any account count.
     footer). The Settings row in `PeerInfoSettingsItems.swift` reads
     `FenixuzL10n(presentationData.strings).accounts_allAccounts` — required `import FenixuzLocalization`
     + `//submodules/Fenixuz/Localization:FenixuzLocalization` dep in `PeerInfoScreen/BUILD`.
+  - **2026-06-08 tab-bar long-press switcher fix:** `tabBarItemContextAction` in
+    `PeerInfoScreen.swift` (~line 7128) used to read `other` from `accountsAndPeersValue` — which
+    is sourced from `activeAccountsAndPeers()` → `activeAccountContexts` (live only, cap=1 → empty).
+    Fix: added two new properties `fenixAllAccountsValue` / `fenixAllAccountsDisposable` (set up in
+    the same `isSettings` block around line 6571) that subscribe to `accountManager.accountRecords()`
+    + name cache (`fenixuz_account_names` UserDefaults) so all logged-in records are available.
+    `tabBarItemContextAction` now iterates `fenixAllAccountsValue` for non-current rows and renders
+    them as `ContextMenuActionItem` entries (text + arrow icon). Primary account row kept as
+    `AccountPeerContextItem` (live peer available). This is purely additive — nothing removed.
+    No BUILD change needed (PeerInfoScreen/BUILD already imports Postbox which provides `accountRecords()`).
+  - **2026-06-08 username cache:** `SharedAccountContext.swift` (`fenixuzNameCacheDisposable` block,
+    ~line 858) now also persists `@username` (or `+phone`) per account under
+    `fenixuz_account_usernames` (same UserDefaults suite `pro_messager`). Purely additive —
+    name cache unchanged, new key added in parallel.
+  - **2026-06-08 FenixAccountsController — username + avatar:** `AccountRow` now carries `username`
+    and `livePeer` fields. Live accounts get real avatar via `context + iconPeer` on
+    `ItemListDisclosureItem`; suspended accounts get a colored initials monogram (`UIGraphicsImageRenderer`,
+    no new deps). `additionalDetailLabel` shows `@username` / `+phone` beneath the name.
+    Username sourced from live peer when available, else `fenixuz_account_usernames` cache.
+
+## 📌 Gold "Fenixuz" Settings row (2026-06-08)
+
+Owner request: the **Fenixuz** entry in Settings must be gold ("tilla") so it stands out in the list.
+The row now renders a gold title + a gold **flame** icon (Fenix = phoenix/fire branding) instead of the
+old grey `PresentationResourcesSettings.security` shield.
+
+### `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/ListItems/PeerInfoScreenDisclosureItem.swift` — generic `titleColor`
+
+Added an optional `titleColor: UIColor? = nil` to `PeerInfoScreenDisclosureItem` (property + init param)
+and changed the one line that sets the title colour:
+`let textColorValue = item.titleColor ?? presentationData.theme.list.itemPrimaryTextColor`.
+Generic + additive: every other disclosure row passes `nil` and is unchanged; only the Fenixuz row
+overrides it. No BUILD change.
+
+### `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift` — gold Fenixuz row
+
+`+import FenixuzProMessager` (BUILD already depends on `//submodules/Fenixuz/ProMessager:FenixuzProMessager`).
+The Fenixuz row now passes `titleColor:` a theme-adaptive gold — `0xFFCC33` (dark) / `0xC8951A` (light,
+deeper for white-background contrast) — and `icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold)`.
+
+### `submodules/Fenixuz/ProMessager/Sources/FenixuzSettingsIcons.swift` (Fenixuz-owned)
+
+Made `FenixuzIconColor` enum + `fenixuzSettingsIcon(systemName:color:)` `public` so the icon helper can be
+reused from the PeerInfoScreen module, and added a `.gold` case (`0xD4AF37` classic metallic gold).

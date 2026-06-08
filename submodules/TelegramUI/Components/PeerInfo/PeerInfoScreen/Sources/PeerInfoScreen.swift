@@ -6387,7 +6387,16 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     private let accountsAndPeers = Promise<((AccountContext, EnginePeer)?, [(AccountContext, EnginePeer, Int32)])>()
     private var accountsAndPeersValue: ((AccountContext, EnginePeer)?, [(AccountContext, EnginePeer, Int32)])?
     private var accountsAndPeersDisposable: Disposable?
-    
+
+    // Fenixuz: all logged-in records (live + suspended) for the tab-bar long-press account switcher.
+    // With the working-set cap at 1, activeAccountsAndPeers only returns the current account, so the
+    // switcher would show nothing. This wider signal reads accountRecords() (all logins) and pairs
+    // each suspended account with its cached display name.
+    //
+    // Type: (currentId: AccountRecordId?, records: [(recordId, peerId, displayName, isCurrent)])
+    private var fenixAllAccountsValue: (AccountRecordId?, [(AccountRecordId, Int64, String, Bool)])?
+    private var fenixAllAccountsDisposable: Disposable?
+
     private let activeSessionsContextAndCount = Promise<(ActiveSessionsContext, Int, WebSessionsContext)?>(nil)
 
     private var tabBarItemDisposable: Disposable?
@@ -6558,7 +6567,37 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             |> deliverOnMainQueue).startStrict(next: { [weak self] value in
                 self?.accountsAndPeersValue = value
             })
-            
+
+            // Fenixuz: subscribe to ALL logged-in account records (live + suspended) so the tab-bar
+            // long-press switcher can list every account, not just the live working-set (cap=1).
+            let fenixAllAccounts = context.sharedContext.accountManager.accountRecords()
+            |> map { view -> (AccountRecordId?, [(AccountRecordId, Int64, String, Bool)]) in
+                let names = (UserDefaults(suiteName: "pro_messager")?
+                    .dictionary(forKey: "fenixuz_account_names") as? [String: String]) ?? [:]
+                var result: [(AccountRecordId, Int64, String, Bool)] = []
+                for record in view.records {
+                    var isLoggedOut = false
+                    var peerId: Int64 = 0
+                    var sortIndex: Int32 = 0
+                    for attribute in record.attributes {
+                        if case .loggedOut = attribute { isLoggedOut = true }
+                        else if case let .sortOrder(s) = attribute { sortIndex = s.order }
+                        else if case let .backupData(b) = attribute { peerId = b.data?.peerId ?? 0 }
+                    }
+                    guard !isLoggedOut else { continue }
+                    let _ = sortIndex
+                    let displayName = names[String(peerId)] ?? ""
+                    let isCurrent = record.id == view.currentRecord?.id
+                    result.append((record.id, peerId, displayName, isCurrent))
+                }
+                result.sort(by: { $0.3 && !$1.3 }) // current first
+                return (view.currentRecord?.id, result)
+            }
+            self.fenixAllAccountsDisposable = (fenixAllAccounts
+            |> deliverOnMainQueue).startStrict(next: { [weak self] value in
+                self?.fenixAllAccountsValue = value
+            })
+
             self.tabBarItemContextActionType = .always
             
             let notificationsFromAllAccounts = self.context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.inAppNotificationSettings])
@@ -6829,6 +6868,7 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         self.readyInternalDisposable?.dispose()
         self.presentationDataDisposable?.dispose()
         self.accountsAndPeersDisposable?.dispose()
+        self.fenixAllAccountsDisposable?.dispose()
         self.tabBarItemDisposable?.dispose()
     }
     
@@ -7126,12 +7166,12 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
     }
     
     override public func tabBarItemContextAction(sourceView: ContextExtractedContentContainingView, gesture: ContextGesture) {
-        guard let (maybePrimary, other) = self.accountsAndPeersValue, let primary = maybePrimary else {
+        guard let (maybePrimary, _) = self.accountsAndPeersValue, let primary = maybePrimary else {
             return
         }
-        
+
         let strings = self.presentationData.strings
-        
+
         var items: [ContextMenuItem] = []
         items.append(.action(ContextMenuActionItem(text: strings.Settings_AddAccount, icon: { theme in
             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: theme.contextMenu.primaryColor)
@@ -7142,40 +7182,39 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             strongSelf.controllerNode.openSettings(section: .addAccount)
             f(.dismissWithoutContent)
         })))
-        
-        
-        //let avatarSize = CGSize(width: 28.0, height: 28.0)
-        
+
         items.append(.custom(AccountPeerContextItem(context: self.context, account: self.context.account, peer: primary.1, action: { _, f in
             f(.default)
         }), true))
-        
-        /*items.append(.action(ContextMenuActionItem(text: primary.1.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder), icon: { _ in nil }, iconSource: ContextMenuActionItemIconSource(size: avatarSize, signal: peerAvatarCompleteImage(account: primary.0.account, peer: primary.1, size: avatarSize)), action: { _, f in
-            f(.default)
-        })))*/
-        
-        if !other.isEmpty {
+
+        // Fenixuz: list ALL logged-in accounts (live + suspended) using the wider signal that reads
+        // accountRecords() directly. With the working-set cap at 1, the upstream `other` from
+        // activeAccountsAndPeers is always empty — so we ignore it and use fenixAllAccountsValue.
+        // Suspended accounts have no live Account object, so we render them as text-only action items
+        // (same name shown in FenixAccountsController, sourced from the name cache).
+        let fenixAll = self.fenixAllAccountsValue
+        let nonCurrentRecords = fenixAll?.1.filter { !$0.3 } ?? []
+
+        if !nonCurrentRecords.isEmpty {
             items.append(.separator)
         }
-        
-        for account in other {
-            let id = account.0.account.id
-            items.append(.custom(AccountPeerContextItem(context: self.context, account: account.0.account, peer: account.1, action: { [weak self] _, f in
-                guard let strongSelf = self else {
-                    return
+
+        for record in nonCurrentRecords {
+            let recordId = record.0
+            let displayName = record.2.isEmpty ? "Account" : record.2
+            items.append(.action(ContextMenuActionItem(
+                text: displayName,
+                icon: { theme in
+                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Arrow"), color: theme.contextMenu.primaryColor)
+                },
+                action: { [weak self] _, f in
+                    guard let strongSelf = self else { return }
+                    strongSelf.context.sharedContext.switchToAccount(id: recordId, fromSettingsController: nil, withChatListController: nil)
+                    f(.dismissWithoutContent)
                 }
-                strongSelf.controllerNode.switchToAccount(id: id)
-                f(.dismissWithoutContent)
-            }), true))
-            /*items.append(.action(ContextMenuActionItem(text: account.1.displayTitle(strings: strings, displayOrder: presentationData.nameDisplayOrder), badge: account.2 != 0 ? ContextMenuActionBadge(value: "\(account.2)", color: .accent) : nil, icon: { _ in nil }, iconSource: ContextMenuActionItemIconSource(size: avatarSize, signal: peerAvatarCompleteImage(account: account.0.account, peer: account.1, size: avatarSize)), action: { [weak self] _, f in
-                guard let strongSelf = self else {
-                    return
-                }
-                strongSelf.controllerNode.switchToAccount(id: id)
-                f(.dismissWithoutContent)
-            })))*/
+            )))
         }
-        
+
         let controller = makeContextController(presentationData: self.presentationData, source: .reference(SettingsTabBarContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
         self.context.sharedContext.mainWindow?.presentInGlobalOverlay(controller)
     }

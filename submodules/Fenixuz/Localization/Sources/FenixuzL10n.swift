@@ -568,4 +568,13 @@ public struct FenixuzL10n {
             ru: "Для быстрой работы активен только выбранный аккаунт. Остальные спят — но уведомления для них продолжают приходить. Выберите любой аккаунт — он проснётся за несколько секунд. Так даже 100+ аккаунтов не замедлят телефон."
         )
     }
+
+    // Tab-bar long-press account switcher
+    public var accounts_switchTo: String {
+        pick(en: "Switch account", uz: "Accountni almashtirish", ru: "Сменить аккаунт")
+    }
+
+    public var accounts_tabBarSwitchTitle: String {
+        pick(en: "Switch to…", uz: "O'tish…", ru: "Перейти в…")
+    }
 }
