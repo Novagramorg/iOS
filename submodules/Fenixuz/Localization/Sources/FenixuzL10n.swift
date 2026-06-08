@@ -563,9 +563,9 @@ public struct FenixuzL10n {
 
     public var accounts_footer: String {
         pick(
-            en: "For fast performance, only the selected account stays live. The others sleep — but their notifications keep arriving. Select any account and it wakes up in a few seconds. This way even 100+ accounts won't slow your phone down.",
-            uz: "Tezkor ishlash uchun faqat tanlangan account jonli turadi. Qolganlari uyquda bo'ladi — ammo ularga ham bildirishnomalar to'xtovsiz kelaveradi. Istalgan accountni tanlasangiz, bir necha soniyada jonlanadi. Shu tarzda 100+ account ham telefonni sekinlashtirmaydi.",
-            ru: "Для быстрой работы активен только выбранный аккаунт. Остальные спят — но уведомления для них продолжают приходить. Выберите любой аккаунт — он проснётся за несколько секунд. Так даже 100+ аккаунтов не замедлят телефон."
+            en: "Up to 5 accounts can run live at once. Long-press any account to Activate (keep live) or Put to Sleep. The current account is always live. Sleeping accounts still receive notifications and wake up in 1–2 seconds when selected. This way even 100+ accounts won't slow your phone.",
+            uz: "Bir vaqtda 5 tagacha account jonli ishlashi mumkin. Istalgan accountga uzoq bosib, uni Faollashtiring (jonli saqlanadi) yoki Uyquga qo'ying. Joriy account doim jonli bo'ladi. Uyqudagi accountlar bildirishnoma oladi va tanlaganda 1–2 soniyada jonlanadi. Shu tarzda 100+ account ham telefonni sekinlashtirmaydi.",
+            ru: "До 5 аккаунтов могут работать одновременно. Зажмите любой аккаунт, чтобы Активировать (держать активным) или Усыпить. Текущий аккаунт всегда активен. Спящие аккаунты получают уведомления и просыпаются за 1–2 секунды при выборе. Так даже 100+ аккаунтов не замедлят телефон."
         )
     }
 
@@ -576,5 +576,191 @@ public struct FenixuzL10n {
 
     public var accounts_tabBarSwitchTitle: String {
         pick(en: "Switch to…", uz: "O'tish…", ru: "Перейти в…")
+    }
+
+    // MARK: - Tips / Imkoniyatlar (Feature guide)
+
+    public var tips_screenTitle: String {
+        pick(en: "Features", uz: "Imkoniyatlar", ru: "Возможности")
+    }
+
+    public var tips_closeButton: String {
+        pick(en: "Got it!", uz: "Tushunarli!", ru: "Понятно!")
+    }
+
+    // Ghost mode
+    public var tips_ghost_title: String {
+        pick(en: "Ghost Mode", uz: "Ghost rejimi", ru: "Режим «Призрак»")
+    }
+
+    public var tips_ghost_body: String {
+        pick(
+            en: "Read messages without sending read receipts. Toggle the ghost icon at the top of your chat list — no one will know you were there.",
+            uz: "Xabarlarni o'qildi belgisi yubormasdan o'qing. Chatlar ro'yxati tepasidagi ghost ikonkasini bosing — hech kim bilmaydi.",
+            ru: "Читайте сообщения без отправки уведомлений о прочтении. Нажмите иконку призрака вверху списка чатов — никто не узнает."
+        )
+    }
+
+    // Speech to text
+    public var tips_stt_title: String {
+        pick(en: "Voice → Text (STT)", uz: "Ovoz → Matn (STT)", ru: "Голос → Текст (STT)")
+    }
+
+    public var tips_stt_body: String {
+        pick(
+            en: "Tap the microphone button next to the text field to convert voice to text instantly. Enable it in Fenixuz → Voice → Text settings.",
+            uz: "Matn maydonidagi mikrofon tugmasini bosib, ovozingizni darhol matnga aylantiring. Fenixuz → Ovoz → Matn sozlamalarida yoqing.",
+            ru: "Нажмите кнопку микрофона рядом с полем ввода, чтобы мгновенно преобразовать голос в текст. Включите в настройках Fenixuz → Голос → Текст."
+        )
+    }
+
+    // Multi-account
+    public var tips_multiAccount_title: String {
+        pick(en: "100+ Accounts", uz: "100+ Account", ru: "100+ Аккаунтов")
+    }
+
+    public var tips_multiAccount_body: String {
+        pick(
+            en: "Add as many Telegram accounts as you need. Only the active one runs — the rest sleep but still receive notifications. Switch in 1–2 seconds without slowing your phone.",
+            uz: "Xohlagancha Telegram akkauntlarini qo'shing. Faqat tanlangan akkaunt ishlaydi — qolganlar uyquda, ammo bildirishnomalar kelaveradi. 1–2 soniyada almashing, telefon sekinlashmaydi.",
+            ru: "Добавляйте любое количество аккаунтов Telegram. Активен только выбранный — остальные спят, но уведомления продолжают приходить. Переключение за 1–2 секунды без замедления телефона."
+        )
+    }
+
+    // Edited message history
+    public var tips_editedHistory_title: String {
+        pick(en: "Edited Message History", uz: "Tahrirlangan xabar tarixi", ru: "История правок сообщений")
+    }
+
+    public var tips_editedHistory_body: String {
+        pick(
+            en: "See every previous version of an edited message. Long-press any edited message and choose \"Editing history\" to view all changes.",
+            uz: "Tahrirlangan xabarning barcha oldingi versiyalarini ko'ring. Tahrirlangan xabarga uzoq bosib, \"Tahrir tarixi\"ni tanlang.",
+            ru: "Смотрите все предыдущие версии отредактированных сообщений. Зажмите любое отредактированное сообщение и выберите «История правок»."
+        )
+    }
+
+    // Chat lock
+    public var tips_chatLock_title: String {
+        pick(en: "Chat Lock (PIN)", uz: "Chat qulfi (PIN)", ru: "Блокировка чатов (PIN)")
+    }
+
+    public var tips_chatLock_body: String {
+        pick(
+            en: "Protect individual chats with a PIN code. Only you can open locked chats — even if someone picks up your phone.",
+            uz: "Alohida chatlarni PIN kod bilan himoyalang. Qulflangan chatni faqat siz ochishingiz mumkin.",
+            ru: "Защитите отдельные чаты PIN-кодом. Заблокированный чат откроете только вы — даже если телефон окажется в чужих руках."
+        )
+    }
+
+    // Auto-text
+    public var tips_autoText_title: String {
+        pick(en: "Auto-Text Suffix", uz: "Avto-matn qo'shimchasi", ru: "Авто-постфикс")
+    }
+
+    public var tips_autoText_body: String {
+        pick(
+            en: "Automatically add a custom text at the end of every outgoing message — a signature, hashtag, or anything you like. Configure in Fenixuz → Messages.",
+            uz: "Har bir chiquvchi xabar oxiriga avtomatik matn qo'shing — imzo, hashtag yoki xohlagan narsa. Fenixuz → Xabarlar sozlamalarida o'rnatiladi.",
+            ru: "Автоматически добавляйте произвольный текст в конец каждого исходящего сообщения — подпись, хэштег или что угодно. Настраивается в Fenixuz → Сообщения."
+        )
+    }
+
+    // Translate
+    public var tips_translate_title: String {
+        pick(en: "Instant Translation", uz: "Tezkor tarjima", ru: "Мгновенный перевод")
+    }
+
+    public var tips_translate_body: String {
+        pick(
+            en: "Translate any message with one tap. Long-press a message and choose \"Translate\". Enable the button in Fenixuz → Messages settings.",
+            uz: "Har qanday xabarni bir teginishda tarjima qiling. Xabarga uzoq bosib, \"Tarjima\" ni tanlang. Fenixuz → Xabarlar sozlamalarida yoqiladi.",
+            ru: "Переводите любое сообщение одним нажатием. Зажмите сообщение и выберите «Перевести». Включается в настройках Fenixuz → Сообщения."
+        )
+    }
+
+    // Fenixuz Settings hub
+    public var tips_fenixHub_title: String {
+        pick(en: "Fenixuz Settings Hub", uz: "Fenixuz sozlamalari markazi", ru: "Центр настроек Fenixuz")
+    }
+
+    public var tips_fenixHub_body: String {
+        pick(
+            en: "All Fenixuz features in one place. Open your Telegram Settings and tap the gold \"Fenixuz\" row to access Ghost mode, STT, auto-text, translate, chat lock, and more.",
+            uz: "Barcha Fenixuz imkoniyatlari bir joyda. Telegram Sozlamalariga kirib, oltin rang \"Fenixuz\" qatoriga bosing — Ghost rejimi, STT, avto-matn, tarjima, chat qulfi va boshqalar.",
+            ru: "Все функции Fenixuz в одном месте. Откройте Настройки Telegram и нажмите золотую строку «Fenixuz» — Ghost-режим, STT, авто-текст, перевод, блокировка чатов и многое другое."
+        )
+    }
+
+    // MARK: - Edited message history toggle
+
+    public var settings_chat_editedHistory_title: String {
+        pick(en: "Edited message history", uz: "Tahrirlangan xabar tarixi", ru: "История правок сообщений")
+    }
+
+    public var settings_chat_editedHistory_subtitle: String {
+        pick(
+            en: "Long-press any edited message to view all previous versions",
+            uz: "Tahrirlangan xabarga uzoq bosib barcha oldingi versiyalarni ko'ring",
+            ru: "Зажмите отредактированное сообщение, чтобы увидеть все предыдущие версии"
+        )
+    }
+
+    // MARK: - Camera picker front/back labels
+
+    public var cameraPicker_front: String {
+        pick(en: "Front Camera", uz: "Old kamera", ru: "Передняя камера")
+    }
+
+    public var cameraPicker_back: String {
+        pick(en: "Back Camera", uz: "Orqa kamera", ru: "Задняя камера")
+    }
+
+    // MARK: - Update check alert
+
+    public var update_title: String {
+        pick(en: "Update Available", uz: "Yangilanish mavjud", ru: "Доступно обновление")
+    }
+
+    public func update_message(version: String) -> String {
+        pick(
+            en: "A new version (\(version)) of Fenixuz is available on the App Store.",
+            uz: "Fenixuz'ning yangi versiyasi (\(version)) App Store'da mavjud.",
+            ru: "Новая версия Fenixuz (\(version)) доступна в App Store."
+        )
+    }
+
+    public var update_actionUpdate: String {
+        pick(en: "Update", uz: "Yangilash", ru: "Обновить")
+    }
+
+    public var update_actionLater: String {
+        pick(en: "Later", uz: "Keyinroq", ru: "Позже")
+    }
+
+    // MARK: - Pinned accounts (no-sleep / activate)
+
+    public var accounts_activate: String {
+        pick(en: "Activate (No Sleep)", uz: "Faollashtirish (Uyqusiz)", ru: "Активировать (Без сна)")
+    }
+
+    public var accounts_putToSleep: String {
+        pick(en: "Put to Sleep", uz: "Uyquga qo'yish", ru: "Перевести в сон")
+    }
+
+    public var accounts_maxLiveTitle: String {
+        pick(en: "Maximum Reached", uz: "Chegara yetdi", ru: "Лимит достигнут")
+    }
+
+    public var accounts_maxLiveBody: String {
+        pick(
+            en: "Maximum 5 accounts can run at once — more will heat up and slow your phone. Put one to sleep first.",
+            uz: "Bir vaqtda ko'pi bilan 5 ta account ishlashi mumkin — ko'proq telefon qizib, sekinlashadi. Avval birini uyquga qo'ying.",
+            ru: "Одновременно может работать не более 5 аккаунтов — больше будет греть и замедлять телефон. Сначала усыпите один."
+        )
+    }
+
+    public var accounts_maxLiveOk: String {
+        pick(en: "OK", uz: "OK", ru: "OK")
     }
 }

@@ -763,6 +763,133 @@ is safe at any account count.
     `ItemListDisclosureItem`; suspended accounts get a colored initials monogram (`UIGraphicsImageRenderer`,
     no new deps). `additionalDetailLabel` shows `@username` / `+phone` beneath the name.
     Username sourced from live peer when available, else `fenixuz_account_usernames` cache.
+  - **2026-06-08 — `AccountContext/Sources/AccountContext.swift` protocol extension (upstream):**
+    Added 4 members to `SharedAccountContext` protocol (`fenixuzPinnedAccountsSignal`,
+    `fenixuzLoadPinnedAccounts()`, `fenixuzSavePinnedAccounts(_:)`,
+    `fenixuzTogglePinnedAccount(recordId:primaryRecordId:)`). This lets `FenixAccountsController`
+    (in `FenixuzProMessager`, which cannot import `TelegramUI`) call these methods via the protocol
+    without an `as! SharedAccountContextImpl` cast. Purely additive — no existing protocol members
+    changed; implementations live entirely in `SharedAccountContextImpl`.
+  - **2026-06-08 — user-controlled pinned set (max 5 live):** `fenixuzMaxLiveAccounts` raised 1→5.
+    New `fenixuzPinnedAccountsPromise` (`ValuePromise<Set<Int64>>`) seeded from
+    `fenixuz_active_accounts` (UserDefaults `pro_messager`, array of `Int64` record ids).
+    Public helpers on `SharedAccountContextImpl`: `fenixuzLoadPinnedAccounts()`,
+    `fenixuzSavePinnedAccounts(_:)`, `fenixuzTogglePinnedAccount(recordId:primaryRecordId:)`,
+    `fenixuzPinnedAccountsSignal`. Working-set recomputed on BOTH `accountRecords()` changes AND
+    pin changes via `combineLatest(accountManager.accountRecords(), fenixuzPinnedAccountsPromise.get())`.
+    New working-set rule: `{primary} ∪ {pinned records that exist}`, capped at 5.
+    Non-pinned, non-primary accounts remain suspended. Primary is always live and never evicted.
+    `FenixAccountsController` updated: `isPinned` field in `AccountRow`; state labels use badge
+    colors (accent=Current, green=Active, plain-text=Sleeping); long-press on a non-primary row
+    shows an `ActionSheetController` with "Activate (No Sleep)" or "Put to Sleep"; attempting to
+    activate a 6th live account shows a `UIAlertController` warning and aborts. New L10n keys
+    `accounts_activate`, `accounts_putToSleep`, `accounts_maxLiveTitle`, `accounts_maxLiveBody`,
+    `accounts_maxLiveOk` (en/uz/ru) in `FenixuzL10n.swift`.
+
+## 📌 Edited-history gate + Camera picker localization (2026-06-08)
+
+### `submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift`
+
+**Around line 1184 — the `EditedMessageHistoryAttribute` check.** Wrap with a UserDefaults gate:
+
+```swift
+// Fenixuz: edited history action — only shown when user has enabled it in Settings.
+let editedHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "edited_history_enabled") as? Bool ?? true
+if editedHistoryEnabled, let _ = messages[0].attributes.first(where: { $0 is EditedMessageHistoryAttribute }) {
+    // ... existing action append ...
+}
+```
+
+Reason: `edited_history_enabled` flag (default `true`) is toggled from Fenixuz Settings → Chat section. Gate is a one-liner wrapping the existing condition; default `true` means zero behavior change for existing users. The `UserDefaults` read is the cheapest possible gate — the context-menu build path already runs on the main queue.
+
+---
+
+### `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/BUILD`
+
+Added `"//submodules/Fenixuz/Localization:FenixuzLocalization"` to `deps`.
+
+Reason: `ChatTextInputPanelNode.swift` now imports `FenixuzLocalization` to localize the camera-picker action sheet.
+
+---
+
+### `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift`
+
+**Top of file — imports block.** Add after `import FenixuzSpeechToText`:
+
+```swift
+import FenixuzLocalization
+```
+
+**Inside `presentCameraSelection` closure (around line 925) — replace hardcoded strings.** Was:
+
+```swift
+ActionSheetButtonItem(title: "Oldi Camera", ...)
+ActionSheetButtonItem(title: "Orqa Camera", ...)
+```
+
+Replace with:
+
+```swift
+// Fenixuz: localized camera picker labels (was hardcoded "Oldi Camera"/"Orqa Camera").
+let l10n = FenixuzL10n(presentationInterfaceState.strings)
+ActionSheetButtonItem(title: l10n.cameraPicker_front, ...)
+ActionSheetButtonItem(title: l10n.cameraPicker_back, ...)
+```
+
+`cameraPicker_front` / `cameraPicker_back` strings: en "Front Camera" / "Back Camera", uz "Old kamera" / "Orqa kamera", ru "Передняя камера" / "Задняя камера".
+
+Reason: the original Fenixuz implementation hardcoded Uzbek-only labels visible to all users. `presentationInterfaceState.strings` is already in scope (the surrounding block uses it), so creating `FenixuzL10n` from it costs nothing extra.
+
+---
+
+## 📌 First-launch Tips + App Store update check (2026-06-08)
+
+Two new Fenixuz modules: `FenixuzTips` and `FenixuzUpdateCheck`. Both fire post-login via a single deferred block in `AuthorizedApplicationContext.init`.
+
+### `submodules/TelegramUI/BUILD`
+
+In the `deps = [...]` list, append (alongside the existing Fenixuz deps):
+
+```python
+"//submodules/Fenixuz/Tips:FenixuzTips",
+"//submodules/Fenixuz/UpdateCheck:FenixuzUpdateCheck",
+```
+
+### `submodules/TelegramUI/Sources/ApplicationContext.swift`
+
+**Imports — append after `import BrowserUI`:**
+
+```swift
+import FenixuzTips
+import FenixuzUpdateCheck
+```
+
+**At the very end of `AuthorizedApplicationContext.init(...)` — after the `VoiceChatController` overlay block, before the closing `}`:**
+
+```swift
+// Fenixuz: post-login feature tips + App Store update check.
+// Deferred 1s so the Chats tab finishes its layout before a modal appears
+// (same pattern as the contacts auto-prompt deferral documented in HOOKS.md).
+// Tips take priority on first launch; update check runs on subsequent launches.
+let capturedContext = self.context
+let capturedRootController = self.rootController
+Queue.mainQueue().after(1.0, {
+    let presentationData = capturedContext.sharedContext.currentPresentationData.with { $0 }
+    guard let topVC = capturedRootController.viewControllers.last as? UIViewController else { return }
+    if FenixuzTipsScreen.shouldShowOnFirstLaunch {
+        // First launch: show Tips screen (update check runs next launch).
+        let tipsVC = FenixuzTipsScreen.makeController(presentationData: presentationData)
+        topVC.present(tipsVC, animated: true)
+    } else {
+        // Subsequent launches: non-blocking update check.
+        FenixuzUpdateChecker.checkAndPresentIfNeeded(on: topVC, presentationData: presentationData)
+    }
+})
+```
+
+Reason: the Tips screen must present on the stable Chats window (not racing the auth→tab-bar transition). Both features depend on a live `AccountContext` (theme, language) so they belong here, not in `AppDelegate`. The 1s defer matches the existing contacts-auto-prompt deferral pattern. Tips fires once (guarded by `fenixuz_tips_shown` in `pro_messager` UserDefaults). The update check fires on every subsequent launch but shows at most one alert per session (`sessionAlertShown` static flag in `FenixuzUpdateChecker`).
+
+---
 
 ## 📌 Gold "Fenixuz" Settings row (2026-06-08)
 

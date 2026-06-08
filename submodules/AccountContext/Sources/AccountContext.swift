@@ -1357,6 +1357,12 @@ public protocol SharedAccountContext: AnyObject {
     
     var activeAccountContexts: Signal<(primary: AccountContext?, accounts: [(AccountRecordId, AccountContext, Int32)], currentAuth: UnauthorizedAccount?), NoError> { get }
     var activeAccountsWithInfo: Signal<(primary: AccountRecordId?, accounts: [AccountWithInfo]), NoError> { get }
+
+    // Fenixuz: user-controlled pinned (no-sleep) accounts — up to 5 live simultaneously.
+    var fenixuzPinnedAccountsSignal: Signal<Set<Int64>, NoError> { get }
+    func fenixuzLoadPinnedAccounts() -> Set<Int64>
+    func fenixuzSavePinnedAccounts(_ pinned: Set<Int64>)
+    @discardableResult func fenixuzTogglePinnedAccount(recordId: AccountRecordId, primaryRecordId: AccountRecordId?) -> Bool
         
     var presentGlobalController: (ViewController, Any?) -> Void { get }
     var presentCrossfadeController: () -> Void { get }

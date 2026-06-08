@@ -179,11 +179,58 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     // are reachable through the Fenixuz "Accounts" screen. The primary is always live; switching to a
     // suspended account loads it and evicts the least-recently-used one. Lets the app hold 50-100+
     // logins without the launch/foreground Postbox-queue storm or the open-DB OOM/file-descriptor wall.
-    // 2026-06-05 owner request: cap = 1 — ONLY the selected account is live; every switch is a cold
-    // load (~1-2s), in exchange for absolute-minimum RAM/CPU/network.
-    private let fenixuzMaxLiveAccounts = 1
+    // 2026-06-08 — user-controlled pinned set: up to 5 accounts can be kept live simultaneously.
+    // Primary is always live. The pinned set adds extra "no-sleep" accounts (persisted in UserDefaults
+    // pro_messager / fenixuz_active_accounts as [Int64]). A ValuePromise re-fires the working-set
+    // computation whenever the pinned set changes (no app restart needed).
+    private let fenixuzMaxLiveAccounts = 5
     private var fenixuzRecencyOrder: [AccountRecordId] = []
+    // Pinned account ids — user-controlled, persisted, fires working-set recompute on change.
+    private let fenixuzPinnedAccountsPromise = ValuePromise<Set<Int64>>(Set(), ignoreRepeated: true)
     private var fenixuzNameCacheDisposable: Disposable?
+
+    // MARK: - Fenixuz pinned-accounts helpers (public for FenixAccountsController)
+
+    public func fenixuzLoadPinnedAccounts() -> Set<Int64> {
+        let arr = (UserDefaults(suiteName: "pro_messager")?.array(forKey: "fenixuz_active_accounts") as? [Int64]) ?? []
+        return Set(arr)
+    }
+
+    public func fenixuzSavePinnedAccounts(_ pinned: Set<Int64>) {
+        UserDefaults(suiteName: "pro_messager")?.set(Array(pinned), forKey: "fenixuz_active_accounts")
+        fenixuzPinnedAccountsPromise.set(pinned)
+    }
+
+    /// Toggle a single account's pinned state. Returns true if the account is now pinned.
+    /// Enforces the cap: if adding would exceed (maxLiveAccounts - 1) pinned (primary always takes 1 slot),
+    /// returns false without changing anything — the caller should show the 5-cap warning alert.
+    @discardableResult
+    public func fenixuzTogglePinnedAccount(recordId: AccountRecordId, primaryRecordId: AccountRecordId?) -> Bool {
+        var pinned = fenixuzLoadPinnedAccounts()
+        let id64 = recordId.int64
+        if pinned.contains(id64) {
+            // Unpinning is always allowed.
+            pinned.remove(id64)
+            fenixuzSavePinnedAccounts(pinned)
+            return false
+        } else {
+            // The primary always occupies 1 live slot; we allow (fenixuzMaxLiveAccounts - 1) pinned.
+            // If primary is also in pinned (shouldn't happen), it still counts as the primary slot.
+            let primaryId64 = primaryRecordId?.int64
+            let pinnedExcludingPrimary = pinned.filter { $0 != primaryId64 }
+            if pinnedExcludingPrimary.count >= fenixuzMaxLiveAccounts - 1 {
+                // Cap hit — do not pin, let caller show warning.
+                return false
+            }
+            pinned.insert(id64)
+            fenixuzSavePinnedAccounts(pinned)
+            return true
+        }
+    }
+
+    public var fenixuzPinnedAccountsSignal: Signal<Set<Int64>, NoError> {
+        return fenixuzPinnedAccountsPromise.get()
+    }
     private let activeAccountsWithInfoPromise = Promise<(primary: AccountRecordId?, accounts: [AccountWithInfo])>()
     public var activeAccountsWithInfo: Signal<(primary: AccountRecordId?, accounts: [AccountWithInfo]), NoError> {
         return self.activeAccountsWithInfoPromise.get()
@@ -573,10 +620,14 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         }))
         
         let startTime = CFAbsoluteTimeGetCurrent()
-        
+
+        // Fenixuz: seed the pinned-accounts promise from persisted UserDefaults so the working-set
+        // computation starts with the correct set even before any toggle fires.
+        self.fenixuzPinnedAccountsPromise.set(self.fenixuzLoadPinnedAccounts())
+
         let differenceDisposable = MetaDisposable()
-        let _ = (accountManager.accountRecords()
-        |> map { view -> (AccountRecordId?, [AccountRecordId: AccountAttributes], (AccountRecordId, Bool)?) in
+        let _ = (combineLatest(queue: .mainQueue(), accountManager.accountRecords(), self.fenixuzPinnedAccountsPromise.get())
+        |> map { view, pinnedIds -> (AccountRecordId?, [AccountRecordId: AccountAttributes], (AccountRecordId, Bool)?, Set<Int64>) in
             print("SharedAccountContextImpl: records appeared in \(CFAbsoluteTimeGetCurrent() - startTime)")
             
             var result: [AccountRecordId: AccountAttributes] = [:]
@@ -622,7 +673,7 @@ public final class SharedAccountContextImpl: SharedAccountContext {
                 })
                 return (authAccount.id, isTestingEnvironment)
             })
-            return (view.currentRecord?.id, result, authRecord)
+            return (view.currentRecord?.id, result, authRecord, pinnedIds)
         }
         |> distinctUntilChanged(isEqual: { lhs, rhs in
             if lhs.0 != rhs.0 {
@@ -637,24 +688,33 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             if lhs.2?.1 != rhs.2?.1 {
                 return false
             }
+            if lhs.3 != rhs.3 {
+                return false
+            }
             return true
         })
-        |> deliverOnMainQueue).start(next: { primaryId, records, authRecord in
-            // Fenixuz working-set: keep only the N most-recently-used accounts LIVE. Order = primary
-            // first, then the previous recency order, then the rest by sortIndex. Records outside the
-            // first N are left suspended — accountWithId is NOT called for them, so they open no Postbox,
-            // spawn no threads, and run no sync (they still receive push via the NSE, which reads their
-            // keys from the account record's backupData).
+        |> deliverOnMainQueue).start(next: { primaryId, records, authRecord, pinnedIds in
+            // Fenixuz working-set (v2, 2026-06-08):
+            // working-set = {primary} ∪ {pinned records that still exist}, capped at fenixuzMaxLiveAccounts.
+            // Pinned accounts are user-controlled (persisted in UserDefaults fenixuz_active_accounts).
+            // Primary is ALWAYS live and ALWAYS counts toward the cap (slot 0).
+            // Remaining live slots go to pinned records (by recency), then no other accounts.
+            // Records outside the working-set are left suspended — accountWithId is NOT called for them.
             var fenixuzOrdered: [AccountRecordId] = []
             if let primaryId = primaryId, records[primaryId] != nil {
                 fenixuzOrdered.append(primaryId)
             }
-            for id in self.fenixuzRecencyOrder where records[id] != nil && !fenixuzOrdered.contains(id) {
+            // Add pinned accounts (those that still exist and aren't primary) ordered by recency.
+            let primaryInt64 = primaryId?.int64
+            // First, respect previous recency order for pinned entries.
+            for id in self.fenixuzRecencyOrder where records[id] != nil && !fenixuzOrdered.contains(id) && pinnedIds.contains(id.int64) && id.int64 != primaryInt64 {
                 fenixuzOrdered.append(id)
             }
-            for (id, _) in records.sorted(by: { $0.value.sortIndex < $1.value.sortIndex }) where !fenixuzOrdered.contains(id) {
+            // Then add any pinned records not yet in fenixuzOrdered (new pins, not in recency order yet).
+            for (id, _) in records.sorted(by: { $0.value.sortIndex < $1.value.sortIndex }) where !fenixuzOrdered.contains(id) && pinnedIds.contains(id.int64) && id.int64 != primaryInt64 {
                 fenixuzOrdered.append(id)
             }
+            // Update recency order to include all ordered accounts (for next pass).
             self.fenixuzRecencyOrder = fenixuzOrdered
             let fenixuzWorkingSet = Set(fenixuzOrdered.prefix(self.fenixuzMaxLiveAccounts))
 
