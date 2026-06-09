@@ -35,6 +35,12 @@ The build needs `TELEGRAM_CODESIGNING_GIT_PASSWORD` in the environment. It is se
 - External code is located in `third-party/`
 - No tests are used at the moment
 
+## RichTextEditor editor (`submodules/TelegramUI/Components/RichTextEditor`)
+
+A from-scratch WYSIWYG rich-text editor (UIKit, TextKit 2) developed as a **SwiftPM package** that lives in-tree but is **not yet wired into the app** (nothing in the Bazel build graph depends on it). Build/test/demo it with **SwiftPM, not Bazel**, all from that directory: `swift test` (Core, on macOS), `Scripts/iostest.sh` (UIKit on the iOS simulator), and the `Demo/` xcodegen app. Its own `CLAUDE.md` there is the authority for architecture, status, and workflow.
+
+Bazel targets exist for later consumption — `//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore` and `:RichTextEditorUIKit` — but the module is iOS-17-era, so at the repo's iOS-13 floor they currently `--nobuild`-analyze only; a pending availability-annotation pass is required before they fully compile. **Do not add them to the app's build graph yet.**
+
 ## Embedded watch app (`Telegram/WatchApp`)
 
 A standalone watchOS Telegram client (developed in the separate `~/build/tgwatch` repo) is vendored into this repo at `Telegram/WatchApp/` and can be embedded into the **device** IPA under `Telegram.app/Watch/`. It is built by `xcodebuild` (not Bazel) and codesigned by the Bazel build.

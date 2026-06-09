@@ -1,0 +1,51 @@
+#if canImport(UIKit)
+import XCTest
+import UIKit
+@testable import RichTextEditorUIKit
+import RichTextEditorCore
+
+final class EmojiTableHostingTests: XCTestCase {
+    private func canvasWithTableEmoji() -> DocumentCanvasView {
+        let c = DocumentCanvasView()
+        c.emojiViewProvider = { id, size in
+            let v = UIView(frame: CGRect(origin: .zero, size: size)); v.accessibilityIdentifier = id; return v
+        }
+        // One 1×2 table (row 0 header). Cell (0,0) gets the caret.
+        let cell = { (id: String) in
+            Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "p")))]) }
+        let table = TableBlock(id: BlockID("t1"),
+                               columns: [ColumnSpec(width: 1), ColumnSpec(width: 1)],
+                               rows: [Row(id: BlockID("r1"), cells: [cell("c1"), cell("c2")])])
+        c.setBlocks([.table(table)], width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+        c.layoutIfNeeded()
+        // Place the caret in cell (0,0) and insert an emoji there.
+        if let t = c.boxes.first as? TableBlockBox, let start = t.cellTextStart(row: 0, column: 0) {
+            c.anchor = start; c.head = start
+        }
+        c.insertEmoji(id: "star", altText: nil)
+        c.layoutIfNeeded()
+        return c
+    }
+
+    func test_cellEmoji_isHostedInsideTableContentView() {
+        let c = canvasWithTableEmoji()
+        let view = c.firstHostedEmojiForTesting
+        XCTAssertTrue(view?.superview is TableContentView,
+                      "a cell emoji must be parented in the table's scrolling content view so it rides scroll")
+    }
+
+    func test_cellEmoji_frameIsContentLocal() {
+        let c = canvasWithTableEmoji()
+        guard let t = c.boxes.first as? TableBlockBox, let view = c.firstHostedEmojiForTesting else {
+            return XCTFail("missing table/emoji")
+        }
+        // Content-local x = canvas-space x − table.frame.minX, so it must be SMALLER than table.frame.minX
+        // itself (the cell's left border+padding < the page margin). A raw canvas coordinate would be
+        // table.frame.minX + border + padding, i.e. >= table.frame.minX — this assertion fails for it.
+        XCTAssertLessThan(view.frame.minX, t.frame.minX,
+                          "frame is content-local (canvas rect − table.frame.origin), not canvas-space")
+        XCTAssertFalse(view.frame.isEmpty)
+    }
+}
+#endif
