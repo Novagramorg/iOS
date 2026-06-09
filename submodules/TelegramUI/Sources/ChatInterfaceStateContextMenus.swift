@@ -1181,7 +1181,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
         
-        if let _ = messages[0].attributes.first(where: { $0 is EditedMessageHistoryAttribute }) {
+        // Fenixuz: edited history action — only shown when user has enabled it in Settings.
+        let editedHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "edited_history_enabled") as? Bool ?? true
+        if editedHistoryEnabled, let _ = messages[0].attributes.first(where: { $0 is EditedMessageHistoryAttribute }) {
             actions.append(.action(ContextMenuActionItem(text: "History", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in

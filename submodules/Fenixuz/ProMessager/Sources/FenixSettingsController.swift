@@ -12,6 +12,7 @@ import ItemListUI
 import CallListUI
 import AppBundle
 import FenixuzLocalization
+import FenixuzTips
 
 private enum FenixSection: Int32 {
     case accounts = 5
@@ -38,6 +39,7 @@ private enum FenixEntry: ItemListNodeEntry {
     case showViewFirstMessage(PresentationTheme, String, String, Bool)
     case showGhostMode(PresentationTheme, String, String, Bool)
     case longPressCameraSelection(PresentationTheme, String, String, Bool)
+    case editedHistoryEnabled(PresentationTheme, String, String, Bool)
     case chatFooter(PresentationTheme, String)
     
     // — Interface Section —
@@ -70,10 +72,12 @@ private enum FenixEntry: ItemListNodeEntry {
     // — Accounts (Fenixuz multi-account) —
     case accountsHeader(String)
     case accountsManager(PresentationTheme, String)
+    // — Tips (Imkoniyatlar) —
+    case tipsRow(PresentationTheme, String)
 
     var section: ItemListSectionId {
         switch self {
-        case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .chatFooter:
+        case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .chatFooter:
             return FenixSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .interfaceFooter:
             return FenixSection.interface.rawValue
@@ -83,7 +87,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.stt.rawValue
         case .protectionHeader, .blockForeignUsers, .blockApkFiles, .protectionFooter:
             return FenixSection.protection.rawValue
-        case .accountsHeader, .accountsManager:
+        case .accountsHeader, .accountsManager, .tipsRow:
             return FenixSection.accounts.rawValue
         }
     }
@@ -97,6 +101,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case .showViewFirstMessage:      return 3
         case .showGhostMode:             return 4
         case .longPressCameraSelection:  return 5
+        case .editedHistoryEnabled:      return 7
         case .chatFooter:                return 6
         // Interface
         case .interfaceHeader:           return 10
@@ -124,6 +129,8 @@ private enum FenixEntry: ItemListNodeEntry {
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
         case .accountsManager:           return -1
+        // Tips row — directly above Accounts header
+        case .tipsRow:                   return -3
         }
     }
 
@@ -145,6 +152,8 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .showGhostMode(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .longPressCameraSelection(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .longPressCameraSelection(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .editedHistoryEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .editedHistoryEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .chatFooter(lhsTheme, lhsText):
             if case let .chatFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
             
@@ -194,6 +203,8 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .accountsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .accountsManager(lhsTheme, lhsTitle):
             if case let .accountsManager(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
+        case let .tipsRow(lhsTheme, lhsTitle):
+            if case let .tipsRow(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         }
     }
 
@@ -210,6 +221,10 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .accountsManager(_, title):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.2.circle.fill", color: .blue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openAccounts()
+            })
+        case let .tipsRow(_, title):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "sparkles", color: .gold), title: title, label: "", sectionId: self.section, style: .blocks, action: {
+                arguments.openTips()
             })
 
         // ─── INTERFEYS ───
@@ -253,6 +268,10 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .longPressCameraSelection(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "camera.rotate.fill", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateLongPressCameraSelection(val)
+            })
+        case let .editedHistoryEnabled(_, title, text, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "clock.arrow.circlepath", color: .teal), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateEditedHistoryEnabled(val)
             })
         case let .chatFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -324,6 +343,7 @@ private struct FenixSettingsState: Equatable {
     var showGhostMode: Bool
     var showViewFirstMessage: Bool
     var longPressCameraSelection: Bool
+    var editedHistoryEnabled: Bool
     var showTranslateMessages: Bool
     var textStyle: String
     var autoTextEnabled: Bool
@@ -341,6 +361,7 @@ private struct FenixSettingsState: Equatable {
         self.showGhostMode = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_ghost_mode_button") ?? false
         self.showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
         self.longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? true
+        self.editedHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "edited_history_enabled") as? Bool ?? true
         self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? true
         self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
         self.autoTextEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
@@ -371,6 +392,9 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.longPressCameraSelection != rhs.longPressCameraSelection {
+            return false
+        }
+        if lhs.editedHistoryEnabled != rhs.editedHistoryEnabled {
             return false
         }
         if lhs.showTranslateMessages != rhs.showTranslateMessages {
@@ -455,6 +479,9 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     var entries: [FenixEntry] = []
     let l10n = FenixuzL10n(presentationData.strings)
 
+    // ─── TIPS (Imkoniyatlar / Features) ───
+    entries.append(.tipsRow(presentationData.theme, l10n.tips_screenTitle))
+
     // ─── ACCOUNTS (Fenixuz multi-account) ───
     entries.append(.accountsHeader(l10n.accounts_sectionHeader))
     entries.append(.accountsManager(presentationData.theme, l10n.accounts_allAccounts))
@@ -472,6 +499,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.showViewFirstMessage(presentationData.theme, l10n.settings_chat_firstMessage_title, l10n.settings_chat_firstMessage_subtitle, state.showViewFirstMessage))
     entries.append(.showGhostMode(presentationData.theme, l10n.settings_chat_ghost_title, l10n.settings_chat_ghost_subtitle, state.showGhostMode))
     entries.append(.longPressCameraSelection(presentationData.theme, l10n.settings_chat_camera_title, l10n.settings_chat_camera_subtitle, state.longPressCameraSelection))
+    entries.append(.editedHistoryEnabled(presentationData.theme, l10n.settings_chat_editedHistory_title, l10n.settings_chat_editedHistory_subtitle, state.editedHistoryEnabled))
     entries.append(.chatFooter(presentationData.theme, l10n.settings_chat_footer))
 
     // ─── MESSAGING ───
@@ -508,6 +536,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
 
 private final class FenixSettingsArguments {
     let openAccounts: () -> Void
+    let openTips: () -> Void
     let openCalls: () -> Void
     let updateShowDeletedMessages: (Bool) -> Void
     let updateHideFolders: (Bool) -> Void
@@ -516,6 +545,7 @@ private final class FenixSettingsArguments {
     let updateShowGhostMode: (Bool) -> Void
     let updateShowViewFirstMessage: (Bool) -> Void
     let updateLongPressCameraSelection: (Bool) -> Void
+    let updateEditedHistoryEnabled: (Bool) -> Void
     let updateTranslateMessages: (Bool) -> Void
     let openTranslationSettings: () -> Void
     let openTextStyleSettings: () -> Void
@@ -526,8 +556,9 @@ private final class FenixSettingsArguments {
     let updateBlockForeignUsers: (Bool) -> Void
     let updateBlockApkFiles: (Bool) -> Void
     
-    init(openAccounts: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openTips: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
+        self.openTips = openTips
         self.openCalls = openCalls
         self.updateShowDeletedMessages = updateShowDeletedMessages
         self.updateHideFolders = updateHideFolders
@@ -536,6 +567,7 @@ private final class FenixSettingsArguments {
         self.updateShowGhostMode = updateShowGhostMode
         self.updateShowViewFirstMessage = updateShowViewFirstMessage
         self.updateLongPressCameraSelection = updateLongPressCameraSelection
+        self.updateEditedHistoryEnabled = updateEditedHistoryEnabled
         self.updateTranslateMessages = updateTranslateMessages
         self.openTranslationSettings = openTranslationSettings
         self.openTextStyleSettings = openTextStyleSettings
@@ -560,6 +592,16 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
     
     let arguments = FenixSettingsArguments(openAccounts: {
         pushControllerImpl?(fenixAccountsController(context: context))
+    }, openTips: {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let tipsVC = FenixuzTipsScreen.makeController(presentationData: presentationData)
+        // Present as a UIKit sheet directly — tips screen is a plain UIViewController.
+        // We find the topmost UIViewController via the main window's root.
+        if let rootVC = UIApplication.shared.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+            var top: UIViewController = rootVC
+            while let presented = top.presentedViewController { top = presented }
+            top.present(tipsVC, animated: true)
+        }
     }, openCalls: {
         pushControllerImpl?(CallListController(context: context, mode: .navigation))
     }, updateShowDeletedMessages: { value in
@@ -612,6 +654,13 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         updateState { state in
             var state = state
             state.longPressCameraSelection = value
+            return state
+        }
+    }, updateEditedHistoryEnabled: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "edited_history_enabled")
+        updateState { state in
+            var state = state
+            state.editedHistoryEnabled = value
             return state
         }
     }, updateTranslateMessages: { value in

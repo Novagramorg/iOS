@@ -14,8 +14,10 @@ import DeviceAccess
 import TelegramStringFormatting
 import PeerNameColorItem
 import FenixuzLocalization
+import FenixuzProMessager
 
 enum SettingsSection: Int, CaseIterable {
+    case proMessager
     case edit
     case phone
     case accounts
@@ -23,7 +25,6 @@ enum SettingsSection: Int, CaseIterable {
     case proxy
     case apps
     case shortcuts
-    case proMessager
     case advanced
     case payment
     case extra
@@ -236,8 +237,9 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
         interaction.openSettings(.chatFolders)
     }))
     
-    // Fenixuz Settings Item
-    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Fenixuz", icon: PresentationResourcesSettings.security, action: {
+    // Fenixuz Settings Item — gold title + gold flame icon so the brand row stands out in Settings.
+    let fenixuzGold: UIColor = presentationData.theme.overallDarkAppearance ? UIColor(rgb: 0xFFCC33) : UIColor(rgb: 0xC8951A)
+    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "FenixuzPro", titleColor: fenixuzGold, icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold), action: {
         interaction.openSettings(.proMessager)
     }))
     

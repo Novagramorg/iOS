@@ -61,6 +61,7 @@ import ChatInputContextPanelNode
 import RasterizedCompositionComponent
 import VideoMessageCameraScreen
 import FenixuzSpeechToText
+import FenixuzLocalization
 
 private let counterFont = Font.with(size: 14.0, design: .regular, traits: [.monospacedNumbers])
 
@@ -922,10 +923,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 return
             }
             if let strongSelf = self, isVideo, let interfaceInteraction = strongSelf.interfaceInteraction, let presentationInterfaceState = strongSelf.presentationInterfaceState {
+                // Fenixuz: localized camera picker labels (was hardcoded "Oldi Camera"/"Orqa Camera").
+                let l10n = FenixuzL10n(presentationInterfaceState.strings)
                 let actionSheet = ActionSheetController(theme: ActionSheetControllerTheme(presentationTheme: presentationInterfaceState.theme, fontSize: presentationInterfaceState.fontSize))
                 actionSheet.setItemGroups([
                     ActionSheetItemGroup(items: [
-                        ActionSheetButtonItem(title: "Oldi Camera", color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                        ActionSheetButtonItem(title: l10n.cameraPicker_front, color: .accent, action: { [weak actionSheet, weak strongSelf] in
                             actionSheet?.dismissAnimated()
                             if let interfaceInteraction = strongSelf?.interfaceInteraction {
                                 VideoMessageCameraScreen.pendingCameraPosition = .front
@@ -933,7 +936,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                                 interfaceInteraction.lockMediaRecording()
                             }
                         }),
-                        ActionSheetButtonItem(title: "Orqa Camera", color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                        ActionSheetButtonItem(title: l10n.cameraPicker_back, color: .accent, action: { [weak actionSheet, weak strongSelf] in
                             actionSheet?.dismissAnimated()
                             if let interfaceInteraction = strongSelf?.interfaceInteraction {
                                 VideoMessageCameraScreen.pendingCameraPosition = .back
