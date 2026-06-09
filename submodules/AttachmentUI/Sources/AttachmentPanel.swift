@@ -264,6 +264,10 @@ private final class AttachButtonComponent: CombinedComponent {
             case .quickReply:
                 name = strings.Attachment_Reply
                 imageName = "Chat/Attach Menu/Reply"
+            case .richText:
+                //TODO:localize
+                name = "Text"
+                imageName = "Chat/Attach Menu/Todo"
             }
 
             let tintColor: UIColor
@@ -2193,6 +2197,9 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                 accessibilityTitle = ""
             case .quickReply:
                 accessibilityTitle = self.presentationData.strings.Attachment_Reply
+            case .richText:
+                //TODO:localize
+                accessibilityTitle = "Text"
             }
             buttonView.isAccessibilityElement = true
             buttonView.accessibilityLabel = accessibilityTitle
