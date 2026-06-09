@@ -7190,8 +7190,8 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
         // Fenixuz: list ALL logged-in accounts (live + suspended) using the wider signal that reads
         // accountRecords() directly. With the working-set cap at 1, the upstream `other` from
         // activeAccountsAndPeers is always empty — so we ignore it and use fenixAllAccountsValue.
-        // Suspended accounts have no live Account object, so we render them as text-only action items
-        // (same name shown in FenixAccountsController, sourced from the name cache).
+        // Each non-current account is rendered as FenixAccountSwitchContextItem: initials avatar +
+        // name + @username, mirroring the visual richness of the current-account row above it.
         let fenixAll = self.fenixAllAccountsValue
         let nonCurrentRecords = fenixAll?.1.filter { !$0.3 } ?? []
 
@@ -7199,20 +7199,24 @@ public final class PeerInfoScreenImpl: ViewController, PeerInfoScreen, KeyShortc
             items.append(.separator)
         }
 
+        // Read the username cache once for the whole loop (keyed by String(peerId)).
+        let fenixCachedUsernames = (UserDefaults(suiteName: "pro_messager")?
+            .dictionary(forKey: "fenixuz_account_usernames") as? [String: String]) ?? [:]
+
         for record in nonCurrentRecords {
             let recordId = record.0
+            let peerId = record.1
             let displayName = record.2.isEmpty ? "Account" : record.2
-            items.append(.action(ContextMenuActionItem(
-                text: displayName,
-                icon: { theme in
-                    return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Arrow"), color: theme.contextMenu.primaryColor)
-                },
+            let username = fenixCachedUsernames[String(peerId)] ?? ""
+            items.append(.custom(FenixAccountSwitchContextItem(
+                displayName: displayName,
+                username: username,
                 action: { [weak self] _, f in
                     guard let strongSelf = self else { return }
                     strongSelf.context.sharedContext.switchToAccount(id: recordId, fromSettingsController: nil, withChatListController: nil)
                     f(.dismissWithoutContent)
                 }
-            )))
+            ), false))
         }
 
         let controller = makeContextController(presentationData: self.presentationData, source: .reference(SettingsTabBarContextReferenceContentSource(controller: self, sourceView: sourceView)), items: .single(ContextController.Items(content: .list(items))), recognizer: nil, gesture: gesture)
