@@ -701,8 +701,9 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 | `AuthorizationUI/Sources/AuthorizationSequencePaymentScreen.swift` (line ~29) | -1 import | drop now-unused `import StoreKit` (the only `AppStore*` symbol was `AppStoreTransactionPurpose` which is a TelegramCore type, not StoreKit) |
 | `RMIntro/Sources/platform/ios/RMIntroViewController.m` | ~30 lines (loadGL block + updateLayout branch) | Fenixuz logo visible on Apple-Silicon simulator |
 | `sqlcipher/BUILD` | ~10 lines (header split) | Xcode 26.5 SDK sqlite3ext.h module conflict fix |
+| `ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` | +7 lines in icon-frame branch | clamp oversized PDF artboards (FenixGhostActive 455x491 pt → 25x27 pt); set contentMode = .scaleAspectFit (2026-06-08 size fix) |
 
-**Total Telegram-owned files modified: 20** (6 BUILD + 12 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
+**Total Telegram-owned files modified: 21** (6 BUILD + 13 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
 - `submodules/Fenixuz/AppleReview/` — demo-code fetcher + iOS alert
 - `submodules/Fenixuz/AppStoreIAP/` — Apple 3.1.1 IAP gate (May 2026 rejection fix)
 - `submodules/Fenixuz/Brand/` — central colour palette
@@ -736,6 +737,14 @@ weight .medium) and `iconTinted(imageName: String, accent: Bool)` (bundle asset 
 computes the tint colour and bakes the SF-Symbol / accent state into the icon cache key (so a toggle
 re-renders). Used by the ghost button above. Additive only — existing `.text` / `.more` / `.icon` /
 `.proxy` cases keep the `panelControlColor` tint.
+
+**2026-06-08 icon size clamp:** in the `if var iconSize = iconView.image?.size` branch (icon frame
+computation), added a `maxIconDimension = 28.0 pt` scale-down clamp before setting `iconView.frame`.
+Vector PDF assets (FenixGhostActive / FenixGhostInactive) have large native artboards — without the
+clamp their `image.size` fills most of the screen. Clamp only shrinks oversized images (PNG icons that
+are already ≤28 pt are unaffected). Also sets `iconView.contentMode = .scaleAspectFit` so the PDF
+scales correctly inside the clamped frame. No other icon cases or `.text` / `.more` / `.proxy` branches
+are touched.
 
 ### `submodules/TelegramUI/Sources/TelegramRootController.swift` + `submodules/TelegramUI/BUILD` — Vazifalar (Tasks) tab hidden
 
@@ -1162,3 +1171,91 @@ if peerId == nil {
 This improves identifier match rate for notifications where the NSE stored a full `PeerId` int64 but the standard `from_id`/`chat_id`/`channel_id` keys were absent (e.g. encrypted payload fallback path).
 
 **Silent-removal check:** The removed primary subscription produced one behavior: clear delivered notifications when the primary account's chats were read. That behavior is fully preserved by `SharedNotificationManager`'s new per-account subscriptions (primary is always in the live set). No previously-working behavior is dropped.
+
+---
+
+## 📌 2026-06-09 — multi-account + Ghost session fixes
+
+Four fixes shipped together this day.
+
+### 1. Ghost mode "read on send" — `submodules/TelegramUI/Sources/ChatController.swift`
+
+New Fenixuz file (NOT a hook in a Telegram-owned file): `submodules/TelegramCore/Sources/Fenixuz/FenixuzGhostReadOnSend.swift` —
+`public func fenixuzForceReadHistory(account:peerId:)`. No-op when Ghost is off. When Ghost is on it fires a direct
+`messages.readHistory` / `channels.readHistory` for the peer (bypassing the Ghost suppression in
+`SynchronizePeerReadState.swift`), so replying reveals the read state. Auto-globbed by `TelegramCore/BUILD` (`Sources/**/*.swift`).
+
+Hook in `ChatController.sendMessages(_:media:postpone:commit:)` (~line 8778), inside the `if commit || !isScheduledMessages`
+branch, right after the `enqueueMessages(...)` startStandalone block:
+
+```swift
+if case .peer = self.chatLocation, UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false {
+    let _ = fenixuzForceReadHistory(account: self.context.account, peerId: peerId).startStandalone()
+}
+```
+
+Reason: Ghost suppresses passive read receipts; without this, sending a reply leaves the incoming messages unread on the
+server, so it looks like you answered without reading. `.peer`-only (skip forum threads to avoid over-reading the whole peer).
+
+### 2. Pinned "Active / No Sleep" accounts stay live — `submodules/TelegramUI/Sources/SharedWakeupManager.swift`
+
+Root cause of "pinned account gets no background notification": `updateAccounts()` only granted
+`shouldBeServiceTaskMaster = .always` to the foreground primary; pinned non-primary accounts got `.never`, which closes
+their MTProto connection (`Account.swift:1377-1386` → `network.shouldKeepConnection`). So they never received messages until
+switched to.
+
+New helper before `updateAccounts(...)`:
+
+```swift
+private func fenixuzPinnedIds() -> Set<Int64> {
+    let arr = (UserDefaults(suiteName: "pro_messager")?.array(forKey: "fenixuz_active_accounts") as? [Int64]) ?? []
+    return Set(arr)
+}
+```
+
+At the top of `updateAccounts(...)`: `let fenixuzPinned = self.fenixuzPinnedIds()`. In the active-branch
+`for (account, primary, tasks)` loop the condition changed from `(self.inForeground && primary)` to
+`(self.inForeground && (primary || isPinnedWorkingSet))` where `let isPinnedWorkingSet = fenixuzPinned.contains(account.id.int64)`.
+Suspended (non-working-set) accounts are not in `accountsAndTasks`, so they stay suspended. Key/format matches
+`SharedAccountContextImpl.fenixuzLoadPinnedAccounts()` exactly (`pro_messager` / `fenixuz_active_accounts` as `[Int64]`).
+
+### 3. Tab-bar account switcher rows show avatar + username — `PeerInfoScreen.swift` (updates the 2026-06-08 entry above)
+
+New Fenixuz file (auto-globbed, no BUILD change): `…/PeerInfoScreen/Sources/FenixAccountSwitchContextItem.swift` — a
+`ContextMenuCustomItem` modeled on `AccountPeerContextItem`: left = 30pt colored initials avatar, two lines (name +
+`@username`/`+phone`), tap → `switchToAccount`. In `tabBarItemContextAction`, the non-current `fenixAllAccountsValue` loop now
+appends `.custom(FenixAccountSwitchContextItem(...), false)` instead of a text-only `ContextMenuActionItem` with an arrow icon.
+Username read once from `UserDefaults("pro_messager")["fenixuz_account_usernames"]` keyed by `String(peerId)`.
+
+### 4. QR login overlay (fixes overlap) — `AuthorizationSequencePhoneEntryControllerNode.swift` (updates the 2026-06-08 QR entry above)
+
+`qrLoginButtonTapped` / `debugQrTap` no longer create a 200x200 `qrNode` pinned at top-left (which overlapped the form). Both
+now call a new `showQrOverlay()` that builds a full-bleed `ASDisplayNode` overlay (theme background) over the form, vertically
+centered: title + 240x240 QR `ASImageNode` + instruction text + a `Common_Cancel` button. `dismissQrOverlay()` disposes the token
+loop and restores the form; `applyQrOverlayLayout()` re-centers it in `containerLayoutUpdated`. `refreshQrToken()` is unchanged.
+
+---
+
+## 📌 2026-06-09 (b) — Ghost mode: close remaining seen/presence leaks
+
+Audit of all client→server "seen/read/view/typing" signals found 2 genuine gaps (the other
+candidates — typing, story-read, content-consumed, online presence — were already guarded via the
+INLINE `UserDefaults(suiteName: "pro_messager").bool(forKey: "is_ghost_mode_active")` form at
+`ManagedLocalInputActivities.swift:145`, `ManagedSynchronizeViewStoriesOperations.swift:122`,
+`MarkMessageContentAsConsumedInteractively.swift:7`, `ManagedAccountPresence.swift:46`).
+
+### `submodules/TelegramCore/Sources/State/ManagedSynchronizeMarkAllUnseenPersonalMessagesOperations.swift`
+`synchronizeMarkAllUnseenReactions(...)` (~line 290) — guard at the top, before the peer guards:
+```swift
+if isFenixuzGhostModeActive {
+    return .complete()
+}
+```
+Suppresses the `messages.readReactions` sync (marking "I've seen who reacted to my messages") when Ghost is on. Return type `Signal<Void, NoError>`. (The separate guard at ~143 targets `readMessageContents` inside `oneOperation` — a different function.)
+
+### `submodules/TelegramCore/Sources/State/AccountViewTracker.swift`
+`getMessagesViews` call (~line 723) — increment flag made conditional:
+```swift
+increment: isFenixuzGhostModeActive ? .boolFalse : .boolTrue
+```
+When Ghost is on, channel post view counters are NOT bumped, but the request still runs so the user still SEES view counts (no UI regression). Deliberately NOT a blanket guard.
