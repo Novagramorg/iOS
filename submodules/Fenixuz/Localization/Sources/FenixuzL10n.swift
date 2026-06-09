@@ -769,4 +769,129 @@ public struct FenixuzL10n {
     public var auth_qrLoginButton: String {
         pick(en: "Log in by QR code", uz: "QR kod orqali kirish", ru: "Войти по QR-коду")
     }
+
+    // MARK: - About FenixPro (Settings → FenixPro → About)
+
+    public var about_rowTitle: String {
+        pick(en: "About FenixPro", uz: "FenixPro haqida", ru: "О FenixPro")
+    }
+
+    public var about_screenTitle: String {
+        pick(en: "About FenixPro", uz: "FenixPro haqida", ru: "О FenixPro")
+    }
+
+    public var about_introHeader: String {
+        pick(en: "WHAT IS FENIXPRO", uz: "FENIXPRO NIMA", ru: "ЧТО ТАКОЕ FENIXPRO")
+    }
+
+    public var about_introBody: String {
+        pick(
+            en: "FenixPro is Telegram with a set of extra tools built on top. Everything below is included — no subscription, no paywall. Each feature can be turned on or off in FenixPro settings.",
+            uz: "FenixPro — bu ustiga qo'shimcha vositalar qo'shilgan Telegram. Quyidagilarning barchasi bepul — obuna ham, to'lov ham yo'q. Har bir imkoniyatni FenixPro sozlamalarida yoqish yoki o'chirish mumkin.",
+            ru: "FenixPro — это Telegram с набором дополнительных инструментов. Всё перечисленное ниже бесплатно — без подписки и без платного доступа. Каждую функцию можно включить или выключить в настройках FenixPro."
+        )
+    }
+
+    public var about_featuresHeader: String {
+        pick(en: "FEATURES", uz: "IMKONIYATLAR", ru: "ВОЗМОЖНОСТИ")
+    }
+
+    // Ghost mode
+    public var about_ghost_title: String {
+        pick(en: "Ghost Mode", uz: "Ghost rejimi", ru: "Режим «Призрак»")
+    }
+
+    public var about_ghost_body: String {
+        pick(
+            en: "Read messages, view stories and ads, and stay online without sending a single \"seen\", \"typing\" or \"online\" signal.",
+            uz: "Xabarlarni o'qing, storilar va reklamalarni ko'ring hamda \"ko'rildi\", \"yozyapti\" yoki \"onlayn\" signalini yubormasdan tarmoqda bo'ling.",
+            ru: "Читайте сообщения, смотрите истории и рекламу и оставайтесь онлайн, не отправляя ни одного сигнала «просмотрено», «печатает» или «в сети»."
+        )
+    }
+
+    // Multi-account
+    public var about_multiAccount_title: String {
+        pick(en: "Multi-Account (No Sleep)", uz: "Ko'p account (Uyqusiz)", ru: "Мультиаккаунт (без сна)")
+    }
+
+    public var about_multiAccount_body: String {
+        pick(
+            en: "Keep up to 5 accounts live in the background to receive notifications, while unlimited extra accounts sleep to save battery. Switch in 1–2 seconds.",
+            uz: "Bildirishnomalarni olish uchun 5 tagacha accountni fonda jonli saqlang, qolgan cheksiz accountlar batareyani tejash uchun uyquda turadi. 1–2 soniyada almashing.",
+            ru: "Держите до 5 аккаунтов активными в фоне для получения уведомлений, а неограниченное число остальных спит ради экономии заряда. Переключение за 1–2 секунды."
+        )
+    }
+
+    // QR login
+    public var about_qrLogin_title: String {
+        pick(en: "QR Code Login", uz: "QR kod orqali kirish", ru: "Вход по QR-коду")
+    }
+
+    public var about_qrLogin_body: String {
+        pick(
+            en: "Sign in by scanning a QR code straight from the phone-number screen — no SMS code typing needed.",
+            uz: "Telefon raqami ekranidan to'g'ridan-to'g'ri QR kodni skanerlab kiring — SMS kodni terish shart emas.",
+            ru: "Входите, отсканировав QR-код прямо с экрана ввода номера — без набора кода из SMS."
+        )
+    }
+
+    // Edited message history
+    public var about_editedHistory_title: String {
+        pick(en: "Edited Message History", uz: "Tahrirlangan xabar tarixi", ru: "История правок сообщений")
+    }
+
+    public var about_editedHistory_body: String {
+        pick(
+            en: "See every previous version of an edited message. Long-press an edited message and choose \"Editing history\".",
+            uz: "Tahrirlangan xabarning barcha oldingi versiyalarini ko'ring. Tahrirlangan xabarga uzoq bosib, \"Tahrir tarixi\"ni tanlang.",
+            ru: "Смотрите все предыдущие версии отредактированного сообщения. Зажмите его и выберите «История правок»."
+        )
+    }
+
+    // Speech to text
+    public var about_stt_title: String {
+        pick(en: "Voice → Text", uz: "Ovoz → Matn", ru: "Голос → Текст")
+    }
+
+    public var about_stt_body: String {
+        pick(
+            en: "Convert any voice message to text on your device with the microphone button next to the chat input.",
+            uz: "Chat kirish maydoni yonidagi mikrofon tugmasi bilan har qanday ovozli xabarni qurilmangizda matnga aylantiring.",
+            ru: "Преобразуйте любое голосовое сообщение в текст на устройстве с помощью кнопки микрофона рядом с полем ввода."
+        )
+    }
+
+    // Chat lock
+    public var about_chatLock_title: String {
+        pick(en: "Chat Lock (PIN)", uz: "Chat qulfi (PIN)", ru: "Блокировка чатов (PIN)")
+    }
+
+    public var about_chatLock_body: String {
+        pick(
+            en: "Protect individual chats with a PIN code. Only you can open a locked chat, even if someone else picks up your phone.",
+            uz: "Alohida chatlarni PIN kod bilan himoyalang. Qulflangan chatni faqat siz ochishingiz mumkin, telefon birovning qo'lida bo'lsa ham.",
+            ru: "Защитите отдельные чаты PIN-кодом. Заблокированный чат откроете только вы, даже если телефон окажется у кого-то другого."
+        )
+    }
+
+    // Auto-text & translate
+    public var about_messaging_title: String {
+        pick(en: "Auto-Text & Translation", uz: "Avto-matn va tarjima", ru: "Авто-текст и перевод")
+    }
+
+    public var about_messaging_body: String {
+        pick(
+            en: "Add a custom signature to every outgoing message automatically, and translate any incoming message with one tap.",
+            uz: "Har bir chiquvchi xabar oxiriga avtomatik imzo qo'shing va istalgan kelgan xabarni bir teginishda tarjima qiling.",
+            ru: "Автоматически добавляйте подпись в конец каждого исходящего сообщения и переводите любое входящее сообщение одним нажатием."
+        )
+    }
+
+    public var about_footer: String {
+        pick(
+            en: "FenixPro is built on top of Telegram. All your chats, contacts and data stay in your regular Telegram account.",
+            uz: "FenixPro Telegram asosida qurilgan. Barcha chatlaringiz, kontaktlaringiz va ma'lumotlaringiz oddiy Telegram accountingizda qoladi.",
+            ru: "FenixPro построен на основе Telegram. Все ваши чаты, контакты и данные остаются в вашем обычном аккаунте Telegram."
+        )
+    }
 }

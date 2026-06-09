@@ -74,6 +74,8 @@ private enum FenixEntry: ItemListNodeEntry {
     case accountsManager(PresentationTheme, String)
     // — Tips (Imkoniyatlar) —
     case tipsRow(PresentationTheme, String)
+    // — About FenixPro —
+    case aboutRow(PresentationTheme, String)
 
     var section: ItemListSectionId {
         switch self {
@@ -87,7 +89,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.stt.rawValue
         case .protectionHeader, .blockForeignUsers, .blockApkFiles, .protectionFooter:
             return FenixSection.protection.rawValue
-        case .accountsHeader, .accountsManager, .tipsRow:
+        case .accountsHeader, .accountsManager, .tipsRow, .aboutRow:
             return FenixSection.accounts.rawValue
         }
     }
@@ -131,6 +133,8 @@ private enum FenixEntry: ItemListNodeEntry {
         case .accountsManager:           return -1
         // Tips row — directly above Accounts header
         case .tipsRow:                   return -3
+        // About FenixPro row — at the very top, above Tips
+        case .aboutRow:                  return -4
         }
     }
 
@@ -205,6 +209,8 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .accountsManager(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         case let .tipsRow(lhsTheme, lhsTitle):
             if case let .tipsRow(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
+        case let .aboutRow(lhsTheme, lhsTitle):
+            if case let .aboutRow(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         }
     }
 
@@ -225,6 +231,10 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .tipsRow(_, title):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "sparkles", color: .gold), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openTips()
+            })
+        case let .aboutRow(_, title):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "info.circle.fill", color: .blue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
+                arguments.openAbout()
             })
 
         // ─── INTERFEYS ───
@@ -479,6 +489,9 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     var entries: [FenixEntry] = []
     let l10n = FenixuzL10n(presentationData.strings)
 
+    // ─── ABOUT FENIXPRO ───
+    entries.append(.aboutRow(presentationData.theme, l10n.about_rowTitle))
+
     // ─── TIPS (Imkoniyatlar / Features) ───
     entries.append(.tipsRow(presentationData.theme, l10n.tips_screenTitle))
 
@@ -536,6 +549,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
 
 private final class FenixSettingsArguments {
     let openAccounts: () -> Void
+    let openAbout: () -> Void
     let openTips: () -> Void
     let openCalls: () -> Void
     let updateShowDeletedMessages: (Bool) -> Void
@@ -556,8 +570,9 @@ private final class FenixSettingsArguments {
     let updateBlockForeignUsers: (Bool) -> Void
     let updateBlockApkFiles: (Bool) -> Void
     
-    init(openAccounts: @escaping () -> Void, openTips: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openTips: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
+        self.openAbout = openAbout
         self.openTips = openTips
         self.openCalls = openCalls
         self.updateShowDeletedMessages = updateShowDeletedMessages
@@ -592,6 +607,8 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
     
     let arguments = FenixSettingsArguments(openAccounts: {
         pushControllerImpl?(fenixAccountsController(context: context))
+    }, openAbout: {
+        pushControllerImpl?(fenixAboutController(context: context))
     }, openTips: {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let tipsVC = FenixuzTipsScreen.makeController(presentationData: presentationData)
