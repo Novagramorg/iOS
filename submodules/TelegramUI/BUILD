@@ -56,6 +56,8 @@ swift_library(
         "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
         "//submodules/Fenixuz/ForeignUserBlock:FenixuzForeignUserBlock",
         "//submodules/Fenixuz/EditedHistory:FenixuzEditedHistory",
+        "//submodules/Fenixuz/Tips:FenixuzTips",
+        "//submodules/Fenixuz/UpdateCheck:FenixuzUpdateCheck",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",
