@@ -287,13 +287,16 @@ func managedSynchronizeMarkAllUnseenReactionsOperations(postbox: Postbox, networ
 }
 
 private func synchronizeMarkAllUnseenReactions(transaction: Transaction, postbox: Postbox, network: Network, stateManager: AccountStateManager, peerId: PeerId, operation: SynchronizeMarkAllUnseenReactionsOperation) -> Signal<Void, NoError> {
+    if isFenixuzGhostModeActive {
+        return .complete()
+    }
     guard let peer = transaction.getPeer(peerId) else {
         return .complete()
     }
     guard let inputPeer = apiInputPeer(peer) else {
         return .complete()
     }
-    
+
     var flags: Int32 = 0
     var topMsgId: Int32?
     var savedPeerId: Api.InputPeer?
