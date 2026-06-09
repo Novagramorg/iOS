@@ -1133,14 +1133,30 @@ public final class SharedWakeupManager {
         }*/
     }
     
+    // Fenixuz: read the user-pinned working-set from UserDefaults. Called once per updateAccounts
+    // pass — cheap (no disk I/O, UserDefaults is memory-cached after first access).
+    private func fenixuzPinnedIds() -> Set<Int64> {
+        let arr = (UserDefaults(suiteName: "pro_messager")?.array(forKey: "fenixuz_active_accounts") as? [Int64]) ?? []
+        return Set(arr)
+    }
+
     private func updateAccounts(hasTasks: Bool, endTaskAfterTransactionsComplete: UIBackgroundTaskIdentifier?) {
+        // Fenixuz: accounts in the working-set (pinned "Active / No Sleep") must keep their network
+        // connection alive regardless of which account is currently in the foreground. Read once here
+        // so the Set is shared across the loop below.
+        let fenixuzPinned = self.fenixuzPinnedIds()
+
         if self.inForeground || self.hasActiveAudioSession || self.isInBackgroundExtension || self.backgroundProcessingTaskId != nil || self.backgroundStoryProcessingTaskId != nil || (hasTasks && self.currentExternalCompletion != nil) || self.activeExplicitExtensionTimer != nil || self.silenceAudioRenderer != nil {
             Logger.shared.log("Wakeup", "enableBeginTransactions: true (active)")
-            
+
             for (account, primary, tasks) in self.accountsAndTasks {
                 account.postbox.setCanBeginTransactions(true)
-                
-                if (self.inForeground && primary) || !tasks.isEmpty || (self.activeExplicitExtensionTimer != nil && primary) {
+
+                // Fenixuz: grant .always to any account in the pinned working-set, not just the
+                // foreground primary. This keeps the MTProto connection alive so pinned accounts
+                // receive messages and generate in-app notifications in the background.
+                let isPinnedWorkingSet = fenixuzPinned.contains(account.id.int64)
+                if (self.inForeground && (primary || isPinnedWorkingSet)) || !tasks.isEmpty || (self.activeExplicitExtensionTimer != nil && primary) {
                     account.shouldBeServiceTaskMaster.set(.single(.always))
                 } else {
                     account.shouldBeServiceTaskMaster.set(.single(.never))
