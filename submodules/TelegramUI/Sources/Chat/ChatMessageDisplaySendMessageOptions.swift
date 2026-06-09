@@ -12,6 +12,7 @@ import TopMessageReactions
 import ReactionSelectionNode
 import ChatControllerInteraction
 import ChatSendAudioMessageContextPreview
+import BrowserUI
 
 extension ChatSendMessageEffect {
     convenience init(_ effect: ChatSendMessageActionSheetController.SendParameters.Effect) {
@@ -211,6 +212,14 @@ func chatMessageDisplaySendMessageOptions(selfController: ChatControllerImpl, no
                 }
             }
             
+            var richTextPreview: ChatSendMessageContextScreenRichTextPreview?
+            if case .customChatContents = selfController.presentationInterfaceState.subject {
+            } else if mediaPreview == nil,
+                      let attributedText = textInputView.attributedText,
+                      let attribute = richMarkdownAttributeIfNeeded(context: selfController.context, attributedText: attributedText) {
+                richTextPreview = ChatSendMessageRichTextPreview(context: selfController.context, instantPage: attribute.instantPage)
+            }
+
             let controller = makeChatSendMessageActionSheetController(
                 initialData: initialData,
                 context: selfController.context,
@@ -286,7 +295,8 @@ func chatMessageDisplaySendMessageOptions(selfController: ChatControllerImpl, no
                 },
                 reactionItems: (!textInputView.text.isEmpty || mediaPreview != nil) ? effectItems : nil,
                 availableMessageEffects: availableMessageEffects,
-                isPremium: hasPremium
+                isPremium: hasPremium,
+                richTextPreview: richTextPreview
             )
             selfController.sendMessageActionsController = controller
             if layout.isNonExclusive {

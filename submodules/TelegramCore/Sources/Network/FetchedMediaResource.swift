@@ -240,7 +240,7 @@ private func findMediaResource(media: Media, previousMedia: Media?, resource: Me
 }
 
 public func findMediaResourceById(message: EngineMessage, resourceId: MediaResourceId) -> TelegramMediaResource? {
-    for media in message.media {
+    for media in message.effectiveMedia {
         if let result = findMediaResourceById(media: media, resourceId: resourceId) {
             return result
         }
@@ -899,6 +899,18 @@ func revalidateMediaResourceReference(accountPeerId: PeerId, postbox: Postbox, n
                         for media in message.media {
                             if let updatedResource = findUpdatedMediaResource(media: media, previousMedia: previousMedia, resource: resource) {
                                 return .single(RevalidatedMediaResource(updatedResource: updatedResource, updatedReference: nil))
+                            }
+                        }
+                        // Rich-text messages (`RichTextMessageAttribute`) embed their media in the
+                        // attribute's `InstantPage`, not in `message.media` — search there too so a
+                        // stale instant-page audio/image file reference can revalidate.
+                        for attribute in message.attributes {
+                            if let attribute = attribute as? RichTextMessageAttribute {
+                                for (_, pageMedia) in attribute.instantPage.media {
+                                    if let updatedResource = findUpdatedMediaResource(media: pageMedia, previousMedia: previousMedia, resource: resource) {
+                                        return .single(RevalidatedMediaResource(updatedResource: updatedResource, updatedReference: nil))
+                                    }
+                                }
                             }
                         }
                         return .fail(.generic)

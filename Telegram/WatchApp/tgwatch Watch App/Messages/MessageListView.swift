@@ -11,7 +11,7 @@ struct MessageListView: View {
     @Environment(TDClient.self) private var client
     let row: ChatRow
 
-    @State private var store: ChatHistoryStore?
+    @State private var store: ChatHistoryStore
     @State private var presentedPhoto: PhotoVisual?
     @State private var presentedVideo: VideoVisual?
     @State private var presentedVideoNote: VideoNoteVisual?
@@ -26,6 +26,11 @@ struct MessageListView: View {
     // (unreads present → false, user is parked at the divider, not the bottom).
     @State private var isAtBottom: Bool
     @State private var didApplyInitialScroll: Bool = false
+    // Live scroll-view content height, updated by a dedicated geometry observer
+    // (see `.onScrollGeometryChange(for: CGFloat.self)` below). The initial-
+    // position `.task` polls this to detect when bubbles have finished async-
+    // sizing, rather than guessing a fixed settle delay.
+    @State private var observedContentHeight: CGFloat = 0
     // Pagination triggers fire from `.onScrollVisibilityChange` on the top/bottom rows.
     // On initial layout — especially for all-unread chats where the divider lands at
     // row index 0 — the topmost rows are visible without any user gesture, which would
@@ -40,28 +45,23 @@ struct MessageListView: View {
     // next pagination is allowed.
     @State private var canPaginate: Bool = true
 
-    init(row: ChatRow) {
+    init(row: ChatRow, store: ChatHistoryStore) {
         self.row = row
+        self._store = State(initialValue: store)
         // Opens at tail → starts at bottom. Opens at divider → user is NOT at bottom.
         self._isAtBottom = State(initialValue: row.unreadCount == 0)
     }
 
     var body: some View {
-        Group {
-            if let store {
-                content(store: store)
-            } else {
-                LoadingView(label: "Loading…")
-            }
-        }
+        content(store: store)
         .navigationTitle(row.title)
         .accessibilityIdentifier("messageListView")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 AvatarView(
                     avatar: row.avatar,
-                    onRequestDownload: { fileId in store?.requestFileDownload(fileId: fileId) },
-                    onCancelDownload:  { fileId in store?.cancelFileDownload(fileId: fileId) },
+                    onRequestDownload: { fileId in store.requestFileDownload(fileId: fileId) },
+                    onCancelDownload:  { fileId in store.cancelFileDownload(fileId: fileId) },
                     size: 36
                 )
                 .glassEffect(in: Circle())
@@ -71,72 +71,57 @@ struct MessageListView: View {
             PhotoViewerView(photo: photo)
         }
         .sheet(item: $presentedVideo) { video in
-            if let store {
-                VideoPlayerView(video: video).environment(store)
-            }
+            VideoPlayerView(video: video).environment(store)
         }
         .sheet(item: $presentedVideoNote) { note in
-            if let store {
-                VideoNotePlayerView(note: note).environment(store)
-            }
+            VideoNotePlayerView(note: note).environment(store)
         }
         .sheet(item: $presentedPoll) { target in
-            if let store {
-                PollVoteView(
-                    initialPoll: target.poll,
-                    currentPoll: { store.poll(forMessageId: target.id) },
-                    onVote: { await store.setPollAnswer(messageId: target.id, optionIds: $0) }
-                )
-            }
+            PollVoteView(
+                initialPoll: target.poll,
+                currentPoll: { store.poll(forMessageId: target.id) },
+                onVote: { await store.setPollAnswer(messageId: target.id, optionIds: $0) }
+            )
         }
         .sheet(isPresented: $showAttachment) {
-            if let store {
-                AttachmentSheet(
-                    stickerPickerStore: stickerPickerStore,
-                    onSendSticker: { await store.sendSticker($0) },
-                    onSendVoiceNote: { await store.sendVoiceNote($0) },
-                    onPrepareVoice: {
-                        store.voicePlayback.tearDown()
-                        store.audioPlayback.tearDown()
-                    },
-                    onSendLocation: { latitude, longitude in
-                        await store.sendLocation(latitude: latitude, longitude: longitude)
-                    }
-                )
-                .environment(client)
-            }
+            AttachmentSheet(
+                stickerPickerStore: stickerPickerStore,
+                onSendSticker: { await store.sendSticker($0) },
+                onSendVoiceNote: { await store.sendVoiceNote($0) },
+                onPrepareVoice: {
+                    store.voicePlayback.tearDown()
+                    store.audioPlayback.tearDown()
+                },
+                onSendLocation: { latitude, longitude in
+                    await store.sendLocation(latitude: latitude, longitude: longitude)
+                }
+            )
+            .environment(client)
+            // Inject the picker store at the sheet-content root (above
+            // AttachmentSheet's NavigationStack), mirroring `client`. The
+            // store must live above the stack so pushed destinations —
+            // StickerSetDetailView and its StickerCellViews — inherit it;
+            // injecting only inside StickerPickerView (below the stack)
+            // left pushed set-detail views with no store and trapped on
+            // the `@Environment(StickerPickerStore.self)` lookup.
+            .environment(stickerPickerStore)
         }
         .task {
-            guard store == nil, let loader = client.makeChatHistoryLoader() else { return }
-            let s = ChatHistoryStore(
-                chatId: row.id,
-                chatType: row.chatType,
-                lastReadInboxMessageId: row.lastReadInboxMessageId,
-                lastReadOutboxMessageId: row.lastReadOutboxMessageId,
-                unreadCount: row.unreadCount,
-                lastMessageId: row.lastMessageId,
-                loader: loader,
-                selfUserId: client.me?.id,
-                userNames: client.userNames,
-                draftText: row.draftText,
-                coalesceUpdates: true
-            )
-            self.store = s
-            client.setActiveHistory(s)
-            // Build the picker store HERE (in the chat .task), not lazily in the
-            // attachment-tap closure. Creating an @State and flipping a sheet-present
-            // flag in the same closure races: the .sheet evaluates `if let pickerStore`
-            // against a snapshot where the store is still nil → empty body. Having it
-            // non-nil before the tap (like `store` above) avoids that.
+            client.setActiveHistory(store)
+            // Defer openChat to here (the store was warmed without it). Independent
+            // of warm: if the window is still loading, openChat proceeds anyway.
+            await store.activate()
+            // Build the picker store HERE (not lazily in the attachment-tap closure):
+            // creating an @State and flipping a sheet-present flag in the same closure
+            // races the .sheet's `if let pickerStore` against a nil snapshot.
             if stickerPickerStore == nil, let pl = client.makeStickerPickerLoader() {
                 stickerPickerStore = StickerPickerStore(loader: pl)
             }
-            await s.start()
         }
         .onDisappear {
             let s = self.store
             client.setActiveHistory(nil)
-            Task { await s?.stop() }
+            Task { await s.stop() }
         }
     }
 
@@ -164,9 +149,9 @@ struct MessageListView: View {
             }
             .padding()
         default:
-            // ScrollViewReader is hoisted ABOVE the VStack so the
-            // `.overlay(alignment: .bottomTrailing) { ... }` jump-to-bottom button
-            // can capture `proxy` and call `proxy.scrollTo(...)` after jumpToBottom.
+            // ScrollViewReader wraps the VStack so the initial-position `.task`,
+            // loadOlder scroll-preservation, and tail auto-scroll handlers can capture
+            // `proxy` and call `proxy.scrollTo(...)`.
             ScrollViewReader { proxy in
                 VStack(spacing: 0) {
                     if let err = store.lastSendError {
@@ -245,22 +230,26 @@ struct MessageListView: View {
                                         Task { await store.sendText(snapshot) }
                                     }
                                 )
-                                .id("composeAnchor")
                                 .padding(.top, 8)
                             }
+                            // 19pt bottom content inset so the ReplyBar's "+" and pill sit
+                            // 19pt above the *physical* screen edge when the chat is scrolled
+                            // to the tail. Combined with .ignoresSafeArea(edges: .bottom) on
+                            // the ScrollView below — without that, the system bottom safe-area
+                            // adds extra space and the total inset overshoots. Carried as an
+                            // id'd zero-content spacer (not `.padding(.bottom, 19)` on the
+                            // VStack) so it's part of the scrollable content and
+                            // `proxy.scrollTo("bottomAnchor", .bottom)` reaches the TRUE
+                            // content bottom — anchoring to the ReplyBar instead stops 19pt
+                            // short, landing the chat just above the real tail.
+                            Color.clear
+                                .frame(height: 19)
+                                .id("bottomAnchor")
                         }
                         .padding(.horizontal, 4)
                         .padding(.top, 4)
-                        // 19pt bottom content inset so the ReplyBar's "+" and
-                        // pill sit 19pt above the *physical* screen edge when
-                        // the chat is scrolled to the tail. Combined with
-                        // .ignoresSafeArea(edges: .bottom) on the ScrollView
-                        // below — without that, the system bottom safe-area
-                        // adds extra space and the total inset overshoots.
-                        .padding(.bottom, 19)
                     }
                     .ignoresSafeArea(edges: .bottom)
-                    .defaultScrollAnchor(.bottom)
                     .scrollContentBackground(.hidden)
                     .background {
                         Image("ChatBG")
@@ -270,26 +259,6 @@ struct MessageListView: View {
                             .ignoresSafeArea()
                     }
                     .environment(store)
-                    .task {
-                        // Default branch only appears once `loadState == .loaded`
-                        // (the .loadingFirstPage case above keeps the spinner up).
-                        // .task fires once per view appearance; the guard makes the
-                        // scroll idempotent across re-renders. A short sleep lets
-                        // SwiftUI lay out the freshly-rendered VStack before scrollTo
-                        // resolves the target id — otherwise scrollTo can land before
-                        // the row exists in the rendered tree.
-                        //
-                        // .defaultScrollAnchor(.bottom) on the ScrollView above
-                        // positions the no-divider case at the chat tail BEFORE this
-                        // task fires (so the user never sees the top-flash). We only
-                        // need to override that for the unread-divider case.
-                        guard !didApplyInitialScroll else { return }
-                        didApplyInitialScroll = true
-                        try? await Task.sleep(nanoseconds: 50_000_000)
-                        if let target = store.window.initialScrollTargetId {
-                            proxy.scrollTo(target, anchor: .top)
-                        }
-                    }
                     .onScrollGeometryChange(for: ScrollSnapshot.self) { geometry in
                         ScrollSnapshot(
                             contentOffsetY: geometry.contentOffset.y,
@@ -316,6 +285,71 @@ struct MessageListView: View {
                         // contentSize-stable changes imply user-driven scroll; arm
                         // pagination so it only fires after the user actually moved.
                         userHasScrolled = true
+                    }
+                    // Dedicated content-height tracker for the initial-position
+                    // settle loop. The ScrollSnapshot observer above bails early on
+                    // contentSize changes (to preserve user-driven isAtBottom), so it
+                    // can't be used to watch growth; this one records height on every
+                    // change, including the async bubble-sizing growth we wait out.
+                    .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, newValue in
+                        observedContentHeight = newValue
+                    }
+                    .task {
+                        // Initial positioning. This `default` branch only renders once the
+                        // store is `.loaded` (the `.loadingFirstPage` case keeps the spinner
+                        // up), so `store.rows` is fully populated — true for BOTH the fast
+                        // path (warmed before push) and the slow path (warm finished after
+                        // push, swapping this branch in).
+                        //
+                        // We drive BOTH the unread (→ divider, `.top`) and the read (→ tail,
+                        // `.bottom`) cases imperatively. We do NOT use
+                        // `.defaultScrollAnchor(.bottom)`: on a non-lazy `VStack` it latches
+                        // the bottom offset at the first, too-short layout and reverts to that
+                        // stale offset as content grows — landing ~1 screen above the true
+                        // tail. We use `proxy.scrollTo` rather than `scrollPosition(id:)`
+                        // because the content is a plain (non-lazy) `VStack` —
+                        // `scrollPosition(id:)` only positions reliably inside lazy stacks, and
+                        // switching to `LazyVStack` reintroduces the over-scroll gotcha.
+                        //
+                        // The hard part is TIMING: bubble heights settle a few frames AFTER
+                        // first layout — media (photos, videos, maps, stickers) async-size well
+                        // past any fixed delay. A guessed sleep fires the scroll while
+                        // contentSize is still too short; as bubbles above the anchor then
+                        // grow, `bottomAnchor` is pushed down and we're left parked ~1 screen
+                        // above the tail (the original regression — a fixed 50ms sleep was not
+                        // enough for media-heavy chats). So instead of guessing, re-pin every
+                        // frame until contentSize stops changing (stable for a few consecutive
+                        // frames), capped so a never-settling chat still reveals. The `.overlay`
+                        // cover (gated on `!didApplyInitialScroll`) hides the whole settle so
+                        // there's no visible movement.
+                        guard !didApplyInitialScroll else { return }
+                        let applyInitialPosition: @MainActor () -> Void = {
+                            if let target = store.window.initialScrollTargetId {
+                                proxy.scrollTo(target, anchor: .top)
+                            } else {
+                                proxy.scrollTo("bottomAnchor", anchor: .bottom)
+                            }
+                        }
+                        var lastHeight: CGFloat = -1
+                        var stableFrames = 0
+                        for _ in 0..<90 {                       // ~1.5s cap at one frame each
+                            applyInitialPosition()
+                            try? await Task.sleep(nanoseconds: 16_000_000)
+                            let height = observedContentHeight
+                            if height == lastHeight {
+                                stableFrames += 1
+                                if stableFrames >= 3 { break }  // settled for ~3 frames
+                            } else {
+                                stableFrames = 0
+                                lastHeight = height
+                            }
+                        }
+                        // Final pin once content has settled, plus one runloop pass to catch
+                        // any last residual growth between the final sleep and reveal.
+                        applyInitialPosition()
+                        await Task.yield()
+                        applyInitialPosition()
+                        didApplyInitialScroll = true
                     }
                     .onChange(of: store.rows.first?.id) { oldId, newId in
                         // Scroll preservation across `loadOlder`. When older content is
@@ -345,76 +379,24 @@ struct MessageListView: View {
                               case .bubble(let bubble) = store.rows.last else { return }
                         guard bubble.isOutgoing || isAtBottom else { return }
                         withAnimation(.easeOut(duration: 0.2)) {
-                            if row.canSend {
-                                proxy.scrollTo("composeAnchor", anchor: .bottom)
-                            } else if let lastId = store.rows.last?.id {
-                                proxy.scrollTo(lastId, anchor: .bottom)
-                            }
+                            proxy.scrollTo("bottomAnchor", anchor: .bottom)
                         }
                     }
                 }
-                .overlay(alignment: .bottomTrailing) {
-                    // Hidden when at the bottom; visible when there's something newer
-                    // (unseen incomings OR a non-tail-reaching window).
-                    if !isAtBottom && (store.unseenNewerCount > 0 || !store.window.reachesChatTail) {
-                        Button {
-                            Task {
-                                await store.jumpToBottom()
-                                // jumpToBottom's slow path rebuilds the window in place without
-                                // cycling loadState, so the .onChange(of: loadState) handler doesn't
-                                // re-fire. We scroll directly here, which handles both paths:
-                                //  - Fast path (already at tail): rows unchanged, scroll to current last.
-                                //  - Slow path (window rebuilt): rows.last is the new chat tail after
-                                //    the await returns.
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    if row.canSend {
-                                        proxy.scrollTo("composeAnchor", anchor: .bottom)
-                                    } else if let lastId = store.rows.last?.id {
-                                        proxy.scrollTo(lastId, anchor: .bottom)
-                                    }
-                                }
-                            }
-                        } label: {
-                            JumpButtonGlyph(badgeCount: store.unseenNewerCount)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 6)
-                        .padding(.bottom, 6)
-                        .accessibilityIdentifier("jumpToBottom")
-                    }
+            }
+            // Cover the first-layout→settle window (the `.task` above re-pins to the final
+            // position until contentSize stabilizes) so the user never sees the jump.
+            // Covers BOTH cases: the unread divider (`.top`) and the read tail (`.bottom`)
+            // are both placed imperatively after the content settles, because there is no
+            // `.defaultScrollAnchor(.bottom)` to hold position while bubbles async-grow
+            // (it reverts to a stale first-layout offset — see the `.task` comment).
+            .overlay {
+                if !didApplyInitialScroll {
+                    LoadingView(label: "Loading messages…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.black.ignoresSafeArea())
                 }
             }
         }
     }
 }
-
-/// Visual glyph for the jump-to-bottom button. The real button at the
-/// MessageListView overlay wraps this in a Button, and the #Preview blocks
-/// below render it directly so layout changes are visible in snapshots.
-private struct JumpButtonGlyph: View {
-    let badgeCount: Int
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 28))
-                .foregroundStyle(.white, .blue)
-            if badgeCount > 0 {
-                Text("\(min(badgeCount, 99))")
-                    .font(.system(size: 9, weight: .semibold))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(.red))
-                    .foregroundStyle(.white)
-                    .offset(x: 6, y: -4)
-            }
-        }
-    }
-}
-
-#if DEBUG
-#Preview("Jump no badge") { JumpButtonGlyph(badgeCount: 0).padding() }
-#Preview("Jump badge 1") { JumpButtonGlyph(badgeCount: 1).padding() }
-#Preview("Jump badge 12") { JumpButtonGlyph(badgeCount: 12).padding() }
-#Preview("Jump badge 99+") { JumpButtonGlyph(badgeCount: 250).padding() }
-#endif

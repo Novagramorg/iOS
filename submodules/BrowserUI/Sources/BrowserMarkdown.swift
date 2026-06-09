@@ -3,6 +3,7 @@ import UIKit
 import TelegramCore
 import AccountContext
 import InstantPageUI
+import TextFormat
 
 private let markdownPresentationIntentAttribute = NSAttributedString.Key("NSPresentationIntent")
 private let markdownInlinePresentationIntentAttribute = NSAttributedString.Key("NSInlinePresentationIntent")
@@ -1019,7 +1020,7 @@ public func inputRichTextAttributeFromText(context: AccountContext, text: String
     guard let webpage = markdownWebpage(context: context, file: nil, data: data), case let .Loaded(content) = webpage.content, let instantPage = content.instantPage else {
         return nil
     }
-    return RichTextMessageAttribute(instantPage: instantPage._parse())
+    return RichTextMessageAttribute(instantPage: instantPage._parse(), fullInstantPage: nil)
 }
 
 // MARK: - Markdown classification (entity-expressible vs. rich layout)
@@ -1090,6 +1091,8 @@ private func richTextIsEntityExpressible(_ text: RichText) -> Bool {
         return richTextIsEntityExpressible(inner)
     case .textMentionName(let inner, _):
         return richTextIsEntityExpressible(inner)
+    case .textDate:
+        return false
     }
 }
 
@@ -1137,11 +1140,41 @@ private func instantPageNeedsRichLayout(_ blocks: [InstantPageBlock]) -> Bool {
     return blocks.contains { !blockIsEntityExpressible($0) }
 }
 
+// Rewrites each `ChatTextInputAttributes.customEmoji` run in the attributed
+// input as a `[<alt>](tg://emoji?id=<fileId>)` markdown link, leaving all other
+// text (and its markdown syntax) verbatim. With no custom emoji present this
+// returns `attributedText.string` unchanged, so non-emoji messages are
+// unaffected. The marker is intercepted post-parse in markdownInlineContent.
+private func markdownSourceInjectingCustomEmojiMarkers(_ attributedText: NSAttributedString) -> String {
+    let nsString = attributedText.string as NSString
+    var result = ""
+    attributedText.enumerateAttribute(ChatTextInputAttributes.customEmoji, in: NSRange(location: 0, length: attributedText.length), options: []) { value, range, _ in
+        let substring = nsString.substring(with: range)
+        if let attribute = value as? ChatTextInputTextCustomEmojiAttribute {
+            // The link text must be non-empty: CommonMark drops `[](url)` (no
+            // run carries the link attribute), which would silently lose the
+            // emoji. Fall back to a space, matching the reattach helper.
+            let alt = substring.isEmpty ? " " : substring
+            result += "[\(escapeCustomEmojiMarkdownAlt(alt))](\(customEmojiMarkdownURL(fileId: attribute.fileId)))"
+        } else {
+            result += substring
+        }
+    }
+    return result
+}
+
 // Returns a RichTextMessageAttribute IFF the markdown in `text` produces an
 // InstantPage block with no entity equivalent. Returns nil (-> send via the
 // regular entity path) for plain text, pre-iOS-15, oversize markdown, or
 // markdown that maps cleanly onto entities.
-public func richMarkdownAttributeIfNeeded(context: AccountContext, text: String) -> RichTextMessageAttribute? {
+public func richMarkdownAttributeIfNeeded(context: AccountContext, attributedText: NSAttributedString) -> RichTextMessageAttribute? {
+    // Custom emoji are rewritten to `[<alt>](tg://emoji?id=...)` link markers
+    // before classification + parse; the markers are intercepted back into
+    // .textCustomEmoji in markdownInlineContent. A link is entity-expressible,
+    // so an emoji-only message still classifies as not-rich (and falls through
+    // to the entity path, where its untouched attribute makes a .CustomEmoji
+    // entity) — custom emoji alone never forces a rich message.
+    let text = markdownSourceInjectingCustomEmojiMarkers(attributedText)
     guard markdownMightNeedRichLayout(text) else {
         return nil
     }
@@ -1688,6 +1721,13 @@ private func markdownInlineContent(from attributedString: NSAttributedString, co
             return
         }
 
+        if let linkUrl = markdownLink(attributes: attributes, documentURL: context.documentURL),
+           let fileId = parseCustomEmojiFileId(fromMarkdownURL: linkUrl) {
+            // `text` is the parsed (already-unescaped) link display text = the alt.
+            fragments.append(.richText(.textCustomEmoji(fileId: fileId, alt: text)))
+            return
+        }
+
         let segments = markdownInlineTextSegments(from: text, formulasByPlaceholder: context.formulasByPlaceholder)
         for segment in segments {
             let baseText: RichText
@@ -2115,7 +2155,7 @@ private func markdownDroppingPrefixLength(_ length: Int, from text: RichText) ->
         return dropped == .empty ? .empty : .anchor(text: dropped, name: name)
     case .textCustomEmoji:
         return text
-    case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler:
+    case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
         return text
     }
 }
@@ -2148,7 +2188,7 @@ private func markdownHasDisplayableContent(_ richText: RichText) -> Bool {
         return !latex.isEmpty
     case .textCustomEmoji:
         return true
-    case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler:
+    case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
         return true
     }
 }
@@ -2181,7 +2221,7 @@ private func markdownIsWhitespaceOnly(_ richText: RichText) -> Bool {
         return latex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     case .textCustomEmoji:
         return false
-    case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler:
+    case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textHashtag, .textMention, .textMentionName, .textSpoiler, .textDate:
         return false
     }
 }

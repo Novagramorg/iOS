@@ -8297,6 +8297,7 @@ Sorry for the inconvenience.";
 "Chat.EmptyTopicPlaceholder.Text" = "Send the first message to\nstart this topic.";
 
 "Chat.Message.TopicAuthorBadge" = "Topic Author";
+"Chat.RichText.ShowMore" = "Show more";
 
 "Chat.PanelRestartTopic" = "Restart Topic";
 "Chat.PanelTopicClosedText" = "The topic is closed by admin";
@@ -16342,3 +16343,33 @@ Error: %8$@";
 
 "MediaPicker.SetNewGroupPhoto" = "Set new group photo";
 "MediaPicker.SetNewChannelPhoto" = "Set new channel photo";
+
+"Attachment.Link" = "Link";
+
+"Checkout.PaymentMethod.Proceed" = "Proceed";
+"Checkout.ShippingMethod.Proceed" = "Proceed";
+
+"OpenLinkConfirmation.Title" = "Open link?";
+"OpenLinkConfirmation.Open" = "Open";
+
+"Chat.ContextMenu.OpenInBrowser" = "Open in Browser";
+"Chat.ContextMenu.OpenInApp" = "Open In-App";
+
+"CreatePoll.Link.Description" = "Attach a link to this option.";
+
+"ChatList.ClearSearchHistory.Confirm" = "Clear";
+
+"ChatList.RemoveFolderConfirmationTitle" = "Remove %@?";
+
+"SocksProxySetup.QrCode.TgLink" = "tg:// link";
+"SocksProxySetup.QrCode.TMeLink" = "t.me link";
+
+"WebBrowser.OpenLinksInfo" = "Open links inside Telegram instead of your default browser for more privacy.";
+"WebBrowser.Exceptions.OpenInApp" = "OPEN IN-APP";
+"WebBrowser.Exceptions.DontOpenInApp" = "DON'T OPEN IN-APP";
+"WebBrowser.Exceptions.InAppInfo" = "These sites will still be opened in-app.";
+"WebBrowser.Exceptions.DeleteAll" = "Delete All Exceptions";
+
+"RichTextPreview.Formula" = "[formula]";
+"RichTextPreview.Table" = "[table]";
+"RichTextPreview.Music" = "Music";
