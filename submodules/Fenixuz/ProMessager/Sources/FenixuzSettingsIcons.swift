@@ -4,8 +4,8 @@ import UIKit
 /// Telegram Settings ekranidagi rangli kvadrat ikon ko'rinishida SF Symbol asosida ikon yaratadi.
 /// Apple's iOS Settings va Telegram'ning standart row-icon dizaynini takrorlaydi:
 /// 30×30 dp, 7dp burchak, to'liq rangli fon, oq SF Symbol o'rtada.
-enum FenixuzIconColor {
-    case red, green, blue, lightBlue, teal, orange, purple, pink, gray, violet, yellow
+public enum FenixuzIconColor {
+    case red, green, blue, lightBlue, teal, orange, purple, pink, gray, violet, yellow, gold
 
     var uiColor: UIColor {
         switch self {
@@ -20,11 +20,12 @@ enum FenixuzIconColor {
         case .gray:      return UIColor(red: 0.56, green: 0.56, blue: 0.58, alpha: 1.0)  // 8E8E93
         case .violet:    return UIColor(red: 0.37, green: 0.36, blue: 0.90, alpha: 1.0)  // 5E5CE6
         case .yellow:    return UIColor(red: 1.00, green: 0.80, blue: 0.00, alpha: 1.0)  // FFCC00
+        case .gold:      return UIColor(red: 0.83, green: 0.69, blue: 0.22, alpha: 1.0)  // D4AF37 — tilla
         }
     }
 }
 
-func fenixuzSettingsIcon(systemName: String, color: FenixuzIconColor) -> UIImage? {
+public func fenixuzSettingsIcon(systemName: String, color: FenixuzIconColor) -> UIImage? {
     let size = CGSize(width: 30, height: 30)
     let renderer = UIGraphicsImageRenderer(size: size)
     return renderer.image { ctx in

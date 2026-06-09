@@ -590,6 +590,8 @@ private class AdMessagesHistoryContextImpl {
     }
 
     func markAsSeen(opaqueId: Data) {
+        // Fenixuz Ghost mode: do NOT report "seen" to TG servers when ghost is active.
+        if isFenixuzGhostModeActive { return }
         let signal: Signal<Never, NoError> = self.account.network.request(Api.functions.messages.viewSponsoredMessage(randomId: Buffer(data: opaqueId)))
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)
@@ -686,6 +688,8 @@ public class AdMessagesHistoryContext {
 
 
 func _internal_markAdAction(account: Account, opaqueId: Data, media: Bool, fullscreen: Bool) {
+    // Fenixuz Ghost mode: do NOT report ad clicks to TG servers when ghost is active.
+    if isFenixuzGhostModeActive { return }
     var flags: Int32 = 0
     if media {
         flags |= (1 << 0)
@@ -702,6 +706,8 @@ func _internal_markAdAction(account: Account, opaqueId: Data, media: Bool, fulls
 }
 
 func _internal_markAdAsSeen(account: Account, opaqueId: Data) {
+    // Fenixuz Ghost mode: do NOT report sponsored message views to TG servers when ghost is active.
+    if isFenixuzGhostModeActive { return }
     let signal = account.network.request(Api.functions.messages.viewSponsoredMessage(randomId: Buffer(data: opaqueId)))
     |> `catch` { _ -> Signal<Api.Bool, NoError> in
         return .single(.boolFalse)

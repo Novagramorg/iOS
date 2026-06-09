@@ -7414,8 +7414,13 @@ private final class ChatListLocationContext {
             //   Active   (Ghost ON)  -> accent colour  (theme.list.itemAccentColor)
             //   Inactive (Ghost OFF) -> normal control grey (panelControlColor)
             let buttonId = isGhostModeActive ? "ghostMode-on" : "ghostMode-off"
+            // Ghost ON  → purple filled PDF rendered original (multicolor, no tint).
+            // Ghost OFF → thin outline PDF rendered as template, tinted panelControlColor (grey).
+            let ghostContent: NavigationButtonComponent.Content = isGhostModeActive
+                ? .iconOriginal(imageName: "Contact List/FenixGhostActive")
+                : .iconTinted(imageName: "Contact List/FenixGhostInactive", accent: false)
             self.ghostModeButton = AnyComponentWithIdentity(id: buttonId, component: AnyComponent(NavigationButtonComponent(
-                content: .iconTinted(imageName: "Contact List/FenixGhostIcon", accent: isGhostModeActive),
+                content: ghostContent,
                 pressed: { [weak self] _ in
                     guard let self, let parentController = self.parentController else { return }
                     let current = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false
