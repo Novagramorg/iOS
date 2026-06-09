@@ -19,9 +19,11 @@ swift_library(
         "//submodules/TelegramPresentationData:TelegramPresentationData",
         "//submodules/PresentationDataUtils:PresentationDataUtils",
         "//submodules/ItemListUI:ItemListUI",
+        "//submodules/ContextUI:ContextUI",
         "//submodules/CallListUI:CallListUI",
         "//submodules/AppBundle:AppBundle",
         "//submodules/Fenixuz/Localization:FenixuzLocalization",
+        "//submodules/Fenixuz/Tips:FenixuzTips",
     ],
     visibility = [
         "//visibility:public",

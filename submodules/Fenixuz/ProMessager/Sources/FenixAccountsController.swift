@@ -8,6 +8,7 @@ import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
 import ItemListUI
+import ContextUI
 import FenixuzLocalization
 
 // Fenixuz "Accounts" screen.
@@ -183,12 +184,12 @@ private func avatarColor(for name: String) -> UIColor {
 private final class FenixAccountsArguments {
     let context: AccountContext
     let switchAccount: (AccountRecordId) -> Void
-    let longTapAccount: (AccountRecordId) -> Void
+    let longTapAccount: (AccountRecordId, UIView) -> Void
 
     init(
         context: AccountContext,
         switchAccount: @escaping (AccountRecordId) -> Void,
-        longTapAccount: @escaping (AccountRecordId) -> Void
+        longTapAccount: @escaping (AccountRecordId, UIView) -> Void
     ) {
         self.context = context
         self.switchAccount = switchAccount
@@ -208,7 +209,7 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
     // Shared mutable state: long-press handler needs a synchronous snapshot of rows.
     var currentRows: [AccountRow] = []
     var currentPrimaryRecordId: AccountRecordId?
-    var presentControllerImpl: ((ViewController, Any?) -> Void)?
+    var presentInGlobalOverlayImpl: ((ViewController) -> Void)?
 
     // Max live accounts cap (must match SharedAccountContextImpl.fenixuzMaxLiveAccounts).
     let maxLiveAccounts = 5
@@ -222,50 +223,28 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
                 withChatListController: nil
             )
         },
-        longTapAccount: { recordId in
+        longTapAccount: { recordId, sourceView in
             guard let row = currentRows.first(where: { $0.recordId == recordId }),
                   !row.isPrimary else { return }
 
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let l10n = FenixuzL10n(presentationData.strings)
 
+            // The single relevant action for this row: Put to Sleep (active) or Activate (sleeping).
+            let actionTitle: String
+            let actionIconName: String
             if row.isLive && row.isPinned {
-                // Account is active (pinned) — offer Put to Sleep.
-                let actionSheet = ActionSheetController(presentationData: presentationData)
-                actionSheet.setItemGroups([
-                    ActionSheetItemGroup(items: [
-                        ActionSheetButtonItem(
-                            title: l10n.accounts_putToSleep,
-                            color: .accent,
-                            action: { [weak actionSheet] in
-                                actionSheet?.dismissAnimated()
-                                context.sharedContext.fenixuzTogglePinnedAccount(
-                                    recordId: recordId,
-                                    primaryRecordId: currentPrimaryRecordId
-                                )
-                            }
-                        )
-                    ]),
-                    ActionSheetItemGroup(items: [
-                        ActionSheetButtonItem(
-                            title: l10n.iap_block_cancel,
-                            color: .accent,
-                            font: .bold,
-                            action: { [weak actionSheet] in actionSheet?.dismissAnimated() }
-                        )
-                    ])
-                ])
-                presentControllerImpl?(actionSheet, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                actionTitle = l10n.accounts_putToSleep
+                actionIconName = "Chat/Context Menu/NightMode"
             } else {
-                // Account is sleeping — check cap before offering Activate.
-                // Count live non-primary pinned slots currently in use.
+                // Account is sleeping — enforce the live cap before offering Activate.
                 let primaryId64 = currentPrimaryRecordId?.int64
                 let liveNonPrimaryCount = currentRows.filter {
                     !$0.isPrimary && $0.isLive && $0.isPinned && $0.recordId.int64 != primaryId64
                 }.count
                 // primary occupies slot 0; each pinned non-primary takes one more slot.
                 if liveNonPrimaryCount >= maxLiveAccounts - 1 {
-                    // Cap reached — show warning alert. UIAlertController is fine here.
+                    // Cap reached — this is a genuine warning, so an alert is the right surface.
                     let alert = UIAlertController(
                         title: l10n.accounts_maxLiveTitle,
                         message: l10n.accounts_maxLiveBody,
@@ -283,32 +262,35 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
                     }
                     return
                 }
-                let actionSheet = ActionSheetController(presentationData: presentationData)
-                actionSheet.setItemGroups([
-                    ActionSheetItemGroup(items: [
-                        ActionSheetButtonItem(
-                            title: l10n.accounts_activate,
-                            color: .accent,
-                            action: { [weak actionSheet] in
-                                actionSheet?.dismissAnimated()
-                                context.sharedContext.fenixuzTogglePinnedAccount(
-                                    recordId: recordId,
-                                    primaryRecordId: currentPrimaryRecordId
-                                )
-                            }
-                        )
-                    ]),
-                    ActionSheetItemGroup(items: [
-                        ActionSheetButtonItem(
-                            title: l10n.iap_block_cancel,
-                            color: .accent,
-                            font: .bold,
-                            action: { [weak actionSheet] in actionSheet?.dismissAnimated() }
-                        )
-                    ])
-                ])
-                presentControllerImpl?(actionSheet, ViewControllerPresentationArguments(presentationAnimation: .modalSheet))
+                actionTitle = l10n.accounts_activate
+                actionIconName = "Chat/Context Menu/Check"
             }
+
+            // Native context menu (blurred overlay + actions), anchored to the pressed row —
+            // the same surface used by the Settings tab-bar account switcher.
+            let items: [ContextMenuItem] = [
+                .action(ContextMenuActionItem(
+                    text: actionTitle,
+                    icon: { theme in
+                        generateTintedImage(image: UIImage(bundleImageName: actionIconName), color: theme.contextMenu.primaryColor)
+                    },
+                    action: { _, f in
+                        f(.default)
+                        context.sharedContext.fenixuzTogglePinnedAccount(
+                            recordId: recordId,
+                            primaryRecordId: currentPrimaryRecordId
+                        )
+                    }
+                ))
+            ]
+
+            let contextController = makeContextController(
+                presentationData: presentationData,
+                source: .reference(FenixAccountContextReferenceContentSource(sourceView: sourceView)),
+                items: .single(ContextController.Items(content: .list(items))),
+                gesture: nil
+            )
+            presentInGlobalOverlayImpl?(contextController)
         }
     )
 
@@ -448,27 +430,35 @@ public func fenixAccountsController(context: AccountContext) -> ViewController {
             guard recognizer.state == .began, let controller = controller else { return }
             let location = recognizer.location(in: controller.view)
 
-            // Walk visible item nodes. stableId ≥ 1000 means an account row.
+            // Walk visible item nodes to find the pressed account row (stableId ≥ 1000).
+            var targetRecordId: AccountRecordId?
+            var targetView: UIView?
             controller.forEachItemNode { itemNode in
-                // Convert the tap location to this item node's coordinate system.
                 let nodeFrame = itemNode.view.convert(itemNode.view.bounds, to: controller.view)
-                guard nodeFrame.contains(location),
-                      let idx = itemNode.index else { return }
-                // Items are: [0]=header, [1..N]=accounts, [N+1]=footer
-                // header stableId=0, accounts start at index 1.
+                guard nodeFrame.contains(location), let idx = itemNode.index else { return }
+                // Items are: [0]=header, [1..N]=accounts, [N+1]=footer.
                 let accountListIndex = idx - 1   // 0-based account index
                 if accountListIndex >= 0 && accountListIndex < currentRows.count {
-                    arguments.longTapAccount(currentRows[accountListIndex].recordId)
+                    targetRecordId = currentRows[accountListIndex].recordId
+                    targetView = itemNode.view
                 }
+            }
+            // Clear the highlight the list applied during the press so the row doesn't
+            // stay stuck looking "selected" once the context menu is up.
+            controller.clearItemNodesHighlight(animated: true)
+            if let targetRecordId = targetRecordId, let targetView = targetView {
+                arguments.longTapAccount(targetRecordId, targetView)
             }
         }
         lpgr.minimumPressDuration = 0.45
-        lpgr.cancelsTouchesInView = false
+        // Cancel the touch in the list once we recognize, so the underlying row never
+        // enters / sticks in a highlighted ("selected") state on long-press.
+        lpgr.cancelsTouchesInView = true
         controller.view.addGestureRecognizer(lpgr)
     }
 
-    presentControllerImpl = { [weak controller] c, a in
-        controller?.present(c, in: .window(.root), with: a)
+    presentInGlobalOverlayImpl = { [weak controller] c in
+        controller?.presentInGlobalOverlay(c, with: nil)
     }
 
     return controller
@@ -486,6 +476,19 @@ private final class FenixLongPressGestureRecognizer: UILongPressGestureRecognize
 
     @objc private func handleGesture() {
         handler(self)
+    }
+}
+
+// Anchors the account context menu to the pressed row's view.
+private final class FenixAccountContextReferenceContentSource: ContextReferenceContentSource {
+    private let sourceView: UIView
+
+    init(sourceView: UIView) {
+        self.sourceView = sourceView
+    }
+
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView, contentAreaInScreenSpace: UIScreen.main.bounds)
     }
 }
 
