@@ -8774,7 +8774,14 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         strongSelf.chatDisplayNode.historyNode.scrollToEndOfHistory()
                     }
                 })
-                
+
+                // Fenixuz Ghost mode: replying implies reading. Sending reveals the read state
+                // for this chat (Ghost otherwise suppresses passive read receipts). Simple
+                // 1-1/group chats only — skip forum threads to avoid over-reading the whole peer.
+                if case .peer = self.chatLocation, UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false {
+                    let _ = fenixuzForceReadHistory(account: self.context.account, peerId: peerId).startStandalone()
+                }
+
                 donateSendMessageIntent(account: self.context.account, sharedContext: self.context.sharedContext, intentContext: .chat, peerIds: [peerId])
                 
                 self.updateChatPresentationInterfaceState(interactive: true, { $0.updatedShowCommands(false) })
