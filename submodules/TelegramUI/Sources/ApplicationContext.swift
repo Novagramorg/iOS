@@ -33,6 +33,8 @@ import PhoneNumberFormat
 import AttachmentUI
 import MinimizedContainer
 import BrowserUI
+import FenixuzTips
+import FenixuzUpdateCheck
 
 final class UnauthorizedApplicationContext {
     let sharedContext: SharedAccountContextImpl
@@ -772,12 +774,10 @@ final class AuthorizedApplicationContext {
             }
         })
         
-        self.removeNotificationsDisposable = (context.account.stateManager.appliedIncomingReadMessages
-        |> deliverOnMainQueue).start(next: { [weak self] ids in
-            if let strongSelf = self {
-                strongSelf.context.sharedContext.applicationBindings.clearMessageNotifications(ids)
-            }
-        })
+        // Fenixuz: clear-on-read is now handled in SharedNotificationManager for ALL live accounts.
+        // The per-primary subscription here was replaced so non-primary accounts also clear their
+        // delivered notifications when chats are read (dynamic multi-account, cap=5).
+        // removeNotificationsDisposable kept as nil; dispose in deinit is a safe no-op.
        
         let importableContacts = self.context.sharedContext.contactDataManager?.importable() ?? .single([:])
         let optionalImportableContacts = self.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: PreferencesKeys.contactsSettings))
@@ -830,6 +830,25 @@ final class AuthorizedApplicationContext {
                 self.rootController.presentOverlay(controller: overlayController, inGlobal: true, blockInteraction: false)
             }
         }
+
+        // Fenixuz: post-login feature tips + App Store update check.
+        // Deferred 1s so the Chats tab finishes its layout before a modal appears
+        // (same pattern as the contacts auto-prompt deferral documented in HOOKS.md).
+        // Tips take priority on first launch; update check runs on subsequent launches.
+        let capturedContext = self.context
+        let capturedRootController = self.rootController
+        Queue.mainQueue().after(1.0, {
+            let presentationData = capturedContext.sharedContext.currentPresentationData.with { $0 }
+            guard let topVC = capturedRootController.viewControllers.last else { return }
+            if FenixuzTipsScreen.shouldShowOnFirstLaunch {
+                // First launch: show Tips screen (update check runs next launch).
+                let tipsVC = FenixuzTipsScreen.makeController(presentationData: presentationData)
+                topVC.present(tipsVC, animated: true)
+            } else {
+                // Subsequent launches: non-blocking update check.
+                FenixuzUpdateChecker.checkAndPresentIfNeeded(on: topVC, presentationData: presentationData)
+            }
+        })
     }
     
     deinit {

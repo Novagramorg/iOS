@@ -440,7 +440,16 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                 let fromIdValue = fromId as! NSString
                                 peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
                             }
-                            
+                            // Fenixuz: NSE writes the full int64 PeerId as "peerId" in userInfo.
+                            // Fall back to it if from_id/chat_id/channel_id were absent.
+                            if peerId == nil {
+                                if let peerIdRaw = payload["peerId"] as? String, let peerIdInt = Int64(peerIdRaw) {
+                                    peerId = PeerId(peerIdInt)
+                                } else if let peerIdRaw = payload["peerId"] as? Int64 {
+                                    peerId = PeerId(peerIdRaw)
+                                }
+                            }
+
                             if let msgId = payload["msg_id"] {
                                 let msgIdValue = msgId as! NSString
                                 if let peerId = peerId {

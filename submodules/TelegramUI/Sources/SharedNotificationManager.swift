@@ -43,19 +43,26 @@ public final class SharedNotificationManager {
     private var accountManager: AccountManager<TelegramAccountManagerTypes>?
     private var accountsAndKeys: [(Account, Bool, MasterNotificationKey)]?
     private var accountsAndKeysDisposable: Disposable?
-    
+
+    // Fenixuz: per-account clear-on-read subscriptions.
+    // Each live account subscribes to appliedIncomingReadMessages so delivered
+    // notifications are removed when the user reads any chat — not just the primary.
+    // Key = AccountRecordId, value = disposable for that account's subscription.
+    private var readClearDisposables: [AccountRecordId: Disposable] = [:]
+    private var readClearAccountsDisposable: Disposable?
+
     private var notifications: [NotificationInfo] = []
-    
+
     private var pollStateContexts: [AccountRecordId: PollStateContext] = [:]
-    
+
     init(episodeId: UInt32, application: UIApplication, clearNotificationsManager: ClearNotificationsManager?, inForeground: Signal<Bool, NoError>, accounts: Signal<[(Account, Bool)], NoError>, pollLiveLocationOnce: @escaping (AccountRecordId) -> Void) {
         assert(Queue.mainQueue().isCurrent())
-        
+
         self.episodeId = episodeId
         self.application = application
         self.clearNotificationsManager = clearNotificationsManager
         self.pollLiveLocationOnce = pollLiveLocationOnce
-        
+
         self.inForegroundDisposable = (inForeground
         |> deliverOnMainQueue).startStrict(next: { [weak self] value in
             guard let strongSelf = self else {
@@ -63,7 +70,7 @@ public final class SharedNotificationManager {
             }
             strongSelf.inForeground = value
         })
-        
+
         self.accountsAndKeysDisposable = (accounts
         |> mapToSignal { accounts -> Signal<[(Account, Bool, MasterNotificationKey)], NoError> in
             let signals = accounts.map { account, isCurrent -> Signal<(Account, Bool, MasterNotificationKey), NoError> in
@@ -84,11 +91,55 @@ public final class SharedNotificationManager {
                 strongSelf.process()
             }
         })
+
+        // Fenixuz: subscribe every live account to appliedIncomingReadMessages so
+        // delivered push notifications are cleared when any chat is read on any account.
+        // When accounts change (switch, add, LRU eviction), we dispose old subscriptions
+        // that are no longer needed and add new ones for incoming accounts.
+        self.readClearAccountsDisposable = (accounts
+        |> deliverOnMainQueue).startStrict(next: { [weak self] currentAccounts in
+            guard let strongSelf = self else { return }
+
+            let currentIds = Set(currentAccounts.map { $0.0.id })
+
+            // dispose subscriptions for accounts that left the live set
+            for accountId in Array(strongSelf.readClearDisposables.keys) {
+                if !currentIds.contains(accountId) {
+                    strongSelf.readClearDisposables[accountId]?.dispose()
+                    strongSelf.readClearDisposables.removeValue(forKey: accountId)
+                }
+            }
+
+            // subscribe to accounts that just entered the live set
+            for (account, _) in currentAccounts {
+                let accountId = account.id
+                if strongSelf.readClearDisposables[accountId] != nil {
+                    continue // already subscribed
+                }
+                let disposable = (account.stateManager.appliedIncomingReadMessages
+                |> deliverOnMainQueue).startStrict(next: { [weak self] ids in
+                    guard let strongSelf = self,
+                          let manager = strongSelf.clearNotificationsManager else { return }
+                    for id in ids {
+                        manager.append(id)
+                    }
+                    if !ids.isEmpty {
+                        manager.commitNow()
+                    }
+                })
+                strongSelf.readClearDisposables[accountId] = disposable
+            }
+        })
     }
-    
+
     deinit {
         self.inForegroundDisposable?.dispose()
         self.accountsAndKeysDisposable?.dispose()
+        // Fenixuz: clean up per-account read-clear subscriptions
+        self.readClearAccountsDisposable?.dispose()
+        for (_, disposable) in self.readClearDisposables {
+            disposable.dispose()
+        }
     }
     
     func isPollingState(accountId: AccountRecordId) -> Signal<Bool, NoError> {
