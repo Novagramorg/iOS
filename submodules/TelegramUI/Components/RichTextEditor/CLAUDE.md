@@ -13,15 +13,23 @@ Moved in-tree **2026-06-09** to `submodules/TelegramUI/Components/RichTextEditor
 spec/plan/spike/handoff history and the project's original git log, none of which migrated in-tree.
 Development continues here via **SwiftPM** exactly as before.
 
-**Not yet wired into the app.** Nothing in the Bazel build graph depends on it. Bazel targets
-`//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore` and `:RichTextEditorUIKit`
-exist in `BUILD` for later Telegram consumption, but the code is iOS-17-era, so at the repo's iOS-13
-floor they only `--nobuild`-analyze. **Pending before in-app use:** an `@available(iOS 17, *)`
-annotation pass (today only one `@available(iOS 17.4, *)` exists, on the Translate edit-menu item).
-The package resource (the spoiler particle texture) is **already** wired in *both* build systems
-(SwiftPM `.process("Resources/Media.xcassets")` + a Bazel `apple_resource_bundle`) and accessed via
-`UIImage(named: "TextSpeckle", in: .module, …)` — there is no `#if SWIFT_PACKAGE` shim and none is
-needed. **Do not add the targets to the app's build graph yet.**
+**Now wired into the app.** `ChatTextInputPanelNode` depends on `:RichTextEditorUIKit`, so both Bazel
+targets — `//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore` and
+`:RichTextEditorUIKit` — **fully compile** at the repo's iOS-13 floor as part of the app build (they
+previously only `--nobuild`-analyzed). The **availability pass is done** (2026-06-09): every top-level
+type/extension in the UIKit target is gated `@available(iOS 17.0, *)`; `RichTextEditorCore` is
+pure-Foundation and stays always-available. The two finer annotations are preserved —
+`@available(iOS 17.4, *)` (the Translate edit-menu item) and `@available(iOS 18.0, *)`
+(`UITextInput.isEditable`).
+
+**Spoiler-texture resource access is build-system-split (via `#if SWIFT_PACKAGE`).** `SpoilerDustView`
+resolves the particle texture two ways: under **SwiftPM** it uses `UIImage(named: "TextSpeckle", in:
+.module, …)` (the generated `.module` accessor); under **Bazel** it uses the app's **`AppBundle`** —
+`UIImage(bundleImageName: "Components/TextSpeckle")`, with `//submodules/AppBundle` in the UIKit
+target's Bazel `deps` — because `.module` only exists under SwiftPM (it failed the Bazel compile).
+`import AppBundle` is likewise gated `#if !SWIFT_PACKAGE`. So **both build systems compile**: the
+Bazel/app build *and* the SwiftPM workflow (`swift test`, `Scripts/iostest.sh`, the `Demo/` app). When
+editing this resource path, keep both `#if` branches in sync.
 
 ## Build & test (SwiftPM, not Bazel) — all from this directory
 

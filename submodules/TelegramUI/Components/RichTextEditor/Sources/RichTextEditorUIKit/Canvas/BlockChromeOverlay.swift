@@ -10,6 +10,7 @@ import UIKit
 /// is safe: table structural chrome is only visible during a structural selection, which parks a collapsed
 /// degenerate caret (`caretRect` → `.zero`) and hides the caret view, so the text-caret and structural-chrome
 /// rendering modes are mutually exclusive.
+@available(iOS 17.0, *)
 final class BlockChromeOverlay: UIView {
     weak var canvas: DocumentCanvasView?
 

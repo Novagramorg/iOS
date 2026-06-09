@@ -6,6 +6,7 @@ import RichTextEditorCore
 /// the block's full drawn extent (`box.blockViewFrame`), and it draws the block in local coordinates by
 /// translating the context by `-box.blockViewFrame.origin` and reusing the block's existing canvas-space
 /// `draw`. It NEVER becomes first responder and (Step 1) takes no touches.
+@available(iOS 17.0, *)
 class BlockBackingView: UIView {
     weak var canvas: DocumentCanvasView?
     var box: CanvasBlock?

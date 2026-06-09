@@ -8,6 +8,7 @@ import RichTextEditorCore
 ///
 /// Sizing: `S = (font.ascender + |font.descender|) * scale`, with the box's baseline offset
 /// `y = font.descender`, so the square spans descender→ascender and sits on the baseline like a glyph.
+@available(iOS 17.0, *)
 final class EmojiTextAttachment: NSTextAttachment {
     let ref: EmojiRef
     let scale: CGFloat

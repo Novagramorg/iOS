@@ -6,6 +6,7 @@ import RichTextEditorCore
 /// touches (a collapsed caret = its one paragraph), mutate the box's `style` / `paragraphAttributes`,
 /// and run inside `editing { }` for undo. Top-level only in 5a — paragraph styles inside table cells
 /// (headings in cells aren't meaningful GFM) are out of scope.
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// Assigns a named paragraph style (Title/H1–H3/Body/Quote) to the touched paragraphs and rebuilds
     /// their run layout so the style's font (size/weight) actually applies. Run size/family pins are

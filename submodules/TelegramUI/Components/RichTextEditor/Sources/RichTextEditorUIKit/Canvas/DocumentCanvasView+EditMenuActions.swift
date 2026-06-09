@@ -8,6 +8,7 @@ import Translation
 /// features of UITextView/UITextInteraction/WebKit/PDFKit), so we add them ourselves and present modals
 /// from the owning view controller found via the responder chain. Writing Tools, when the OS surfaces it,
 /// rides in `suggestedActions`.
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// Append our items to the system-suggested actions (which carry Cut/Copy/Paste/Select and, on a
     /// capable device, Writing Tools).

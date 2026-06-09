@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// Next text position to the right: within the current leaf region, or to the next region's
     /// start — except when an image gap sits before that region (then stop at the gap). Handles

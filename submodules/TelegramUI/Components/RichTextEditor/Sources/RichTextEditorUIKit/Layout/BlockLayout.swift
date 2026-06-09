@@ -3,6 +3,7 @@ import UIKit
 
 /// One paragraph block's TextKit 2 layout context (line layout only). All geometry is returned in
 /// the block's own container coordinate space (origin 0,0); the document view offsets it.
+@available(iOS 17.0, *)
 final class BlockLayout {
     let contentStorage: NSTextContentStorage
     let layoutManager: NSTextLayoutManager

@@ -4,9 +4,11 @@ import RichTextEditorCore
 
 /// Identity of one contiguous spoiler run, stable across reconcile passes within a layout (so its pooled
 /// dust view keeps animating). An edit that shifts positions changes the key → the dust restarts (accepted).
+@available(iOS 17.0, *)
 struct SpoilerKey: Hashable { let regionStart: Int; let runIndex: Int }
 
 /// One spoiler run found in the laid-out document (recomputed each `syncSpoilers`).
+@available(iOS 17.0, *)
 struct SpoilerRun {
     let key: SpoilerKey
     let regionStart: Int            // owning region's globalStart (for table-content hosting lookup)
@@ -17,6 +19,7 @@ struct SpoilerRun {
 }
 
 /// A pooled dust view + its unscrolled canvas frame (for culling).
+@available(iOS 17.0, *)
 final class HostedSpoilerDust {
     let view: SpoilerDustView
     var canvasFrame: CGRect
@@ -25,6 +28,7 @@ final class HostedSpoilerDust {
     init(view: SpoilerDustView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
 }
 
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// Recompute spoiler runs, push hidden/revealed into each layout (display-only hide), and reconcile the
     /// dust pool. Selection-driven: a run is revealed iff the selection touches it (collapsed caret inside

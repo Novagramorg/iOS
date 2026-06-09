@@ -3,16 +3,19 @@ import UIKit
 
 /// A minimal pasteboard seam so copy/cut/paste are unit-testable with a fake — the simulator's
 /// UIPasteboard.general can be unauthorized and hang on reads. Production uses UIPasteboard.general.
+@available(iOS 17.0, *)
 protocol TextPasteboard: AnyObject {
     var string: String? { get set }
     var hasStrings: Bool { get }
 }
+@available(iOS 17.0, *)
 extension UIPasteboard: TextPasteboard {}
 
 /// The system edit menu (UIEditMenuInteraction, iOS 16+) + the responder actions that populate it.
 /// Presentation is gesture-driven (see DocumentCanvasView+Interaction); the actions delegate to the
 /// pure helpers in DocumentCanvasView+SelectionActions and the UITextInput witnesses. Select/Select All
 /// here; Copy/Cut/Paste are added in the clipboard task.
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     func installEditMenuInteraction() {
         guard editMenuInteraction == nil else { return }
@@ -124,6 +127,7 @@ extension DocumentCanvasView {
 }
 
 /// Tracks edit-menu visibility so a tap on the caret/selection can toggle it (see handleSingleTap).
+@available(iOS 17.0, *)
 extension DocumentCanvasView: UIEditMenuInteractionDelegate {
     /// Without this, the menu's target rect defaults to a zero-size rect at the source point, so the system
     /// only avoids that single point and overlaps the selection + handles. Returning the content rect makes

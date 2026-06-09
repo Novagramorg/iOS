@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     func installSelectionInteractions() {
         if gestureRecognizers?.isEmpty ?? true {
@@ -204,6 +205,7 @@ extension DocumentCanvasView {
     }
 }
 
+@available(iOS 17.0, *)
 extension DocumentCanvasView: UIGestureRecognizerDelegate {
     override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
         guard g === selectionHandlePan else { return true }   // only gate our handle pan; everything else passes

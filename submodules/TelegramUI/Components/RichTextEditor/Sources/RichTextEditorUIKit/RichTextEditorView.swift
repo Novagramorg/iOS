@@ -4,6 +4,7 @@ import RichTextEditorCore
 
 /// Public façade. Renders all block types (paragraphs, images, tables) in a vertical canvas
 /// with continuous cross-block selection.
+@available(iOS 17.0, *)
 public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     private let scrollView = UIScrollView()
     let canvas = DocumentCanvasView()

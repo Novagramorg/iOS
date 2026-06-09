@@ -4,6 +4,7 @@ import RichTextEditorCore
 
 /// The multi-block document surface. ONE view owns every block and the unified global selection.
 /// (Internal — only `RichTextEditorView` is public; keeps `UITextInput` witnesses internal.)
+@available(iOS 17.0, *)
 final class DocumentCanvasView: UIView {
     let root = BlockStack()
     var boxes: [CanvasBlock] { get { root.boxes } set { root.boxes = newValue } }
@@ -821,6 +822,7 @@ final class DocumentCanvasView: UIView {
 }
 
 /// One pooled emoji: the host view plus its last canvas-space frame (for offscreen culling).
+@available(iOS 17.0, *)
 final class HostedEmoji {
     let view: UIView
     var canvasFrame: CGRect

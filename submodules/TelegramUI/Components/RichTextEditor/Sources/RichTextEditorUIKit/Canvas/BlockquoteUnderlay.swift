@@ -6,6 +6,7 @@ import UIKit
 /// views. A resizable image stretches a tiny bitmap via the layer's `contentsCenter` on the GPU, so a
 /// run-tall frame allocates no large backing store — the size-safe replacement for drawing the fill
 /// into the (document-sized) canvas context.
+@available(iOS 17.0, *)
 final class BlockquoteUnderlay: UIView {
     private var pool: [Int: UIImageView] = [:]   // keyed by run index (stable order along the document)
 

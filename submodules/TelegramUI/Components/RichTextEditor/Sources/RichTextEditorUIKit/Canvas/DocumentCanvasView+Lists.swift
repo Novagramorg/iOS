@@ -2,6 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// Per-block marker strings, computed by Core `ListNumbering` from each box's list membership
     /// (runs are irrelevant to numbering, so we pass lightweight paragraphs). Keyed by `BlockID`.

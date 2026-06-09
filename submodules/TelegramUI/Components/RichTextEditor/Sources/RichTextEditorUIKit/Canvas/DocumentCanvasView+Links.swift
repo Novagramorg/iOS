@@ -9,6 +9,7 @@ import RichTextEditorCore
 /// rather than the toggle engine. A bare collapsed caret (no table selection) is a no-op. The visible
 /// blue styling (no underline) is injected into the live storage here AND emitted by the mapper on
 /// rebuild, and suppressed on read-back — so the model stays link-only (see `AttributedStringMapper`).
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// Runs `mutate` on each (storage, range) `characterFormatTargets()` covers, inside `editing { }`.
     /// No toggle direction — just a per-range mutation. No-op when nothing is targeted.

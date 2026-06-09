@@ -1,6 +1,12 @@
 #if canImport(UIKit)
 import UIKit
 import QuartzCore
+#if !SWIFT_PACKAGE
+import AppBundle
+
+private final class BundleHelper: NSObject {
+}
+#endif
 
 /// The animated "dust" cloud drawn over one hidden spoiler run (the Telegram invisible-ink effect). Ported
 /// from Telegram's `InvisibleInkDustNode`/`InvisibleInkDustView`
@@ -11,9 +17,7 @@ import QuartzCore
 /// `textNode`), so the text-mask half of Telegram's reveal is omitted; the emitter + its mask are kept
 /// faithfully. Non-interactive; the canvas owns hit-test + reveal (`point(inside:)` just reports the run's
 /// rects so a tap "lands" on dust).
-///
-/// PRIVATE API: the twinkle (`valueOverLife` alpha) and the attractor explosion use `CAEmitterBehavior`
-/// (`createEmitterBehavior`), ported from the reference — there is no public equivalent. Isolated here.
+@available(iOS 17.0, *)
 final class SpoilerDustView: UIView {
     /// Hosts the emitter layer; gets the radial reveal mask (mirrors Telegram's `emitterNode`).
     private let emitterContainer = UIView()
@@ -199,7 +203,11 @@ final class SpoilerDustView: UIView {
     /// as a package resource — this is what makes the dust read as fine shimmer rather than coarse blobs. Falls
     /// back to a tiny generated dot only if the bundled asset can't be found.
     private static let speckleImage: UIImage = {
+        #if SWIFT_PACKAGE
         if let asset = UIImage(named: "TextSpeckle", in: .module, with: nil) { return asset }
+        #else
+        if let asset = UIImage(bundleImageName: "Components/TextSpeckle") { return asset }
+        #endif
         let side: CGFloat = 4
         let r = UIGraphicsImageRenderer(size: CGSize(width: side, height: side))
         return r.image { ctx in
@@ -219,11 +227,18 @@ final class SpoilerDustView: UIView {
     var emitterLayerForTesting: CAEmitterLayer { emitterLayer }
     /// The bundled Telegram particle texture, resolved from THIS module's resource bundle (`.module` here
     /// means RichTextEditorUIKit's bundle, not a test bundle). nil ⇒ the resource was dropped/misconfigured.
-    static var bundledSpeckleForTesting: UIImage? { UIImage(named: "TextSpeckle", in: .module, with: nil) }
+    static var bundledSpeckleForTesting: UIImage? {
+        #if SWIFT_PACKAGE
+        return UIImage(named: "TextSpeckle", in: .module, with: nil)
+        #else
+        return UIImage(named: "TextSpeckle", in: Bundle(for: BundleHelper.self), with: nil)
+        #endif
+    }
 }
 
 /// Private `CAEmitterBehavior` bridge (no public API exists for the twinkle / attractor). Ported from the
 /// reference's `LegacyComponents` category.
+@available(iOS 17.0, *)
 extension CAEmitterCell {
     static func createEmitterBehavior(type: String) -> NSObject {
         let selector = ["behaviorWith", "Type:"].joined()
@@ -235,6 +250,7 @@ extension CAEmitterCell {
     }
 }
 
+@available(iOS 17.0, *)
 extension CAEmitterLayer {
     /// Birth rate of the first emitter cell (test seam).
     var birthRateForCellForTesting: Float { (emitterCells?.first?.birthRate) ?? 0 }

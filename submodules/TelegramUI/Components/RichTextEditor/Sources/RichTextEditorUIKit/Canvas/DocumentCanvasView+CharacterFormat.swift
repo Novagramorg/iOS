@@ -7,6 +7,7 @@ import RichTextEditorCore
 /// across cells like selection itself. Attribute-only (no span change), wrapped in `editing { }` so
 /// undo is the existing whole-document `[Block]` snapshot. A collapsed caret is a no-op (collapsed
 /// "typing attributes" are deferred).
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// The (storage, range) pairs a character-format command applies to. When a table row/column is
     /// structurally selected, that's every cell's full text in the row/column (so toolbar formatting

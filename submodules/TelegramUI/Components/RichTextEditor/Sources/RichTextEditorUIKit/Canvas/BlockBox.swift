@@ -5,6 +5,7 @@ import RichTextEditorCore
 /// One paragraph block in the canvas: a TextKit 2 layout plus the structural
 /// fields not stored in the attributed string, its frame in canvas coordinates, and its start in the
 /// document-wide global position space.
+@available(iOS 17.0, *)
 final class BlockBox {
     let id: BlockID
     var style: ParagraphStyleName
@@ -191,6 +192,7 @@ final class BlockBox {
     }
 }
 
+@available(iOS 17.0, *)
 extension BlockBox: CanvasBlock {
     var rendersAsBlockView: Bool { true }
     var nodeStart: Int { get { globalStart } set { globalStart = newValue } }

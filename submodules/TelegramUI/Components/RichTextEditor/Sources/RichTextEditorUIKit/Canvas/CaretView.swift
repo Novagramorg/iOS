@@ -6,6 +6,7 @@ import UIKit
 /// see `installSelectionInteractions`) so that, when the caret sits inside a horizontally-scrollable table
 /// cell, it can be hosted INSIDE the table's scrolling content view and ride the scroll/overscroll bounce —
 /// exactly like the selection fill and handles already do. We own the blink here.
+@available(iOS 17.0, *)
 final class CaretView: UIView {
     private static let blinkKey = "caretBlink"
 

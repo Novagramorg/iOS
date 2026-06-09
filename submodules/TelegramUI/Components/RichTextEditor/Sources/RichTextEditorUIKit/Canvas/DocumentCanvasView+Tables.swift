@@ -7,6 +7,7 @@ import RichTextEditorCore
 /// is the existing whole-document `[Block]` snapshot. The structural commands below no-op when the
 /// caret isn't in a table; `insertTable` is the inverse — it no-ops when the caret IS in a table (or
 /// on an image/gap).
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// The table box containing the caret (`head`), its index in `boxes`, and the caret's (row, col).
     func activeTable() -> (box: TableBlockBox, index: Int, row: Int, col: Int)? {

@@ -48,6 +48,7 @@ swift_library(
     ],
     deps = [
         ":RichTextEditorCore",
+        "//submodules/AppBundle",
     ],
     visibility = [
         "//visibility:public",

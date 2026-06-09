@@ -4,6 +4,7 @@ import RichTextEditorCore
 
 /// A vertical run of `CanvasBlock`s — the shared engine for the document body and for each table
 /// cell. Owns span math (relative to a `baseOffset`) and vertical layout (relative to an origin).
+@available(iOS 17.0, *)
 final class BlockStack {
     var boxes: [CanvasBlock]
     private(set) var baseOffset: Int = 0

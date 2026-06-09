@@ -2,6 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     /// Wraps a mutation: snapshots the document + selection, brackets the input-delegate change,
     /// runs `body`, registers a self-re-registering undo, and refreshes layout/display. This is

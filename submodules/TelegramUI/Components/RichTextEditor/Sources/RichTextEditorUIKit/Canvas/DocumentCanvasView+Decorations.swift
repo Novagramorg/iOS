@@ -2,6 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     struct BlockquoteDecoration { let fill: CGRect; let bar: CGRect }
 
@@ -35,6 +36,7 @@ extension DocumentCanvasView {
     static let blockquoteCornerRadius: CGFloat = 2.5
 }
 
+@available(iOS 17.0, *)
 extension DocumentCanvasView {
     struct PlaceholderDraw { let text: String; let origin: CGPoint; let font: UIFont }
 

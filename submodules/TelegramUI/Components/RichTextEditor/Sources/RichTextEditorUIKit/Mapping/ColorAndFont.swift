@@ -2,12 +2,14 @@
 import UIKit
 import RichTextEditorCore
 
+@available(iOS 17.0, *)
 public extension RGBAColor {
     var uiColor: UIColor {
         UIColor(red: red, green: green, blue: blue, alpha: alpha)
     }
 }
 
+@available(iOS 17.0, *)
 public extension UIColor {
     var rgba: RGBAColor {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
@@ -16,6 +18,7 @@ public extension UIColor {
     }
 }
 
+@available(iOS 17.0, *)
 public enum FontResolver {
     public static func font(family: String?, size: CGFloat, bold: Bool, italic: Bool, serif: Bool = false) -> UIFont {
         var descriptor: UIFontDescriptor

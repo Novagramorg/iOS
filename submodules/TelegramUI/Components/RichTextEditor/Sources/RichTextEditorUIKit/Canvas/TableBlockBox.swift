@@ -5,6 +5,7 @@ import RichTextEditorCore
 /// A table block: a grid of cells, each cell a `BlockStack`. Token size follows the Core model
 /// (table = Σrows + 2; row = Σcells + 2; cell = Σblocks + 2). Cells are laid out row-major; the
 /// canvas treats the whole table as one `CanvasBlock` and recurses via `leafRegions()`.
+@available(iOS 17.0, *)
 final class TableBlockBox: CanvasBlock {
     let id: BlockID
     let columns: [ColumnSpec]

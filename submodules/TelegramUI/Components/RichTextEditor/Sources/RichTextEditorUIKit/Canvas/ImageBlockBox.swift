@@ -4,12 +4,14 @@ import RichTextEditorCore
 
 /// The grey "Add caption" hint shown under an image while its caption is empty. `rect` spans the full
 /// caption content width so a centered paragraph style centers the text horizontally.
+@available(iOS 17.0, *)
 struct CaptionPlaceholder { let text: String; let rect: CGRect; let font: UIFont }
 
 /// An image-with-caption block: a rendered image (resolved from `assetID` via the canvas's image
 /// provider) above an editable caption. Contributes `captionLength + 5` tokens; the caption text
 /// begins at `nodeStart + 2` (after the image atom and the caption paragraph's open token). The
 /// position `nodeStart` (before the atom) is a gap.
+@available(iOS 17.0, *)
 final class ImageBlockBox: CanvasBlock {
     let id: BlockID
     var assetID: String
