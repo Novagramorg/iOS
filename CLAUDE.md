@@ -60,6 +60,20 @@ This matters in two places specifically:
 
 Rare exceptions: top-level view-controller views integrating with the system's first-responder/inset model. If you find yourself wanting `self.frame = …` from inside a child view, refactor so the parent positions it instead.
 
+## ChatHistoryListNode composition
+
+`ChatHistoryListNodeImpl` (`submodules/TelegramUI/Sources/ChatHistoryListNode.swift`) **composes** rather than inherits `ListViewImpl` (`submodules/Display/Source/ListView.swift`): it is an `ASDisplayNode` wrapper holding `private let listView: ListViewImpl` and exposes a deliberately narrowed surface (the `ChatHistoryListNode` protocol in `AccountContext` + curated concrete forwarders) instead of the full `ListView` API. `ListViewImpl` gained a `getCustomItemDeleteAnimationDuration` closure hook so the one former `override` works via composition.
+
+These invariants are **compiler-invisible** — getting them wrong silently breaks the app's primary scroll surface:
+
+- **The π rotation stays on the wrapper** (chat is bottom-up). The wrapper keeps `transform = π` + a `rotated` flag; the child `listView` gets only `rotated = true` (identity transform). So `historyNode.view`/`.layer` remain the rotated surface, and rotation-coupled code — hitTest coordinate conversions, the blur `drawHierarchy` flip, the dust/delete layer, `.layer` animations, and the overscroll-overlay + snapshot-slide reparenting — **stays on `self` (the wrapper)** unchanged.
+- **Only genuine scroll-surface concerns route to the child:** gesture recognizers (selection pan; external taps via `addContentGestureRecognizer`) attach to `self.listView.view` to share the scroll pan's simultaneity environment, and scroller access goes to `self.listView.scroller`.
+- **`let _ = self.view` in `init` is load-bearing.** The old inherited node was view-loaded eagerly (so `self.isNodeLoaded` was always true); `enqueueHistoryViewTransition` gates the history dequeue on it. The wrapper must force-load its view in init or off-screen nodes (created during thread switches) never become ready and `reloadChatLocation`'s completion never fires.
+- **Item nodes are one level deeper.** Any `.supernode` chain / hierarchy-depth assumption passing through the history node gained one level (item → child `listView` → wrapper). E.g. `ChatMessageTransitionNode` converts item rects up `supernode?.supernode?.supernode?.view` (was 2 hops) so the wrapper's rotation is applied as an intermediate transform; a missing hop reflects effect-burst overlays ~180°.
+- Child geometry is driven inside `updateLayout` via `transition.updateFrame(node: self.listView, …)` — the project never relies on ASDisplayNode's automatic `layout()`.
+
+The public surface is being narrowed incrementally (e.g. `scroller` → `bounces`/`contentHeight`; the `trackingOffset`/`beganTrackingAtTopOrigin` pair → `didInteractivelyDragFromTopOrigin`). Prefer intent-named accessors over re-exposing raw `ListView` state.
+
 ## InstantPage V2 & rich-text messages
 
 Typed markdown with structure the regular message-entity set can't represent (headings, lists, tables, formulas, nested blockquotes) is sent as a **rich message** — a `RichTextMessageAttribute` carrying an `InstantPage`, drawn by `ChatMessageRichDataBubbleContentNode` via the **InstantPage V2** renderer (with AI-streaming progressive reveal, inline custom emoji, and entity cases). The detailed architecture and non-obvious invariants — streaming reveal, V2 table/text-box layout, custom-emoji & entity round-trips, task-list checkboxes, nested blockquotes, thinking blocks, the markdown send / edit / copy / paste paths, and surfacing rich-message media through the shared-media/gallery/preview pipelines via `Message.effectiveMedia` — live in [`docs/instantpage-richtext.md`](docs/instantpage-richtext.md).

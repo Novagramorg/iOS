@@ -1123,7 +1123,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     }
     
     func preferredContentSizeForLayout(_ layout: ContainerViewLayout) -> CGSize? {
-        var height = self.historyNode.scroller.contentSize.height
+        var height = self.historyNode.contentHeight
         height += 3.0
         height = min(height, layout.size.height)
         return CGSize(width: layout.size.width, height: height)
@@ -2415,12 +2415,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         let additionalScrollDistance: CGFloat = 0.0
         var scrollToTop = false
-        if dismissedInputByDragging {
-            if !self.historyNode.trackingOffset.isZero {
-                if self.historyNode.beganTrackingAtTopOrigin {
-                    scrollToTop = true
-                }
-            }
+        if dismissedInputByDragging && self.historyNode.didInteractivelyDragFromTopOrigin {
+            scrollToTop = true
         }
         
         var contentBottomInset: CGFloat = inputPanelsHeight + inputPanelsInset
@@ -5399,7 +5395,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             strongSelf.updateIsEmpty(emptyType, wasLoading: wasLoading, animated: animated)
         }
         
-        self.historyNode.view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
+        self.historyNode.addContentGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:))))
         
         self.displayVideoUnmuteTipDisposable?.dispose()
         self.displayVideoUnmuteTipDisposable = (combineLatest(queue: Queue.mainQueue(), ApplicationSpecificNotice.getVolumeButtonToUnmute(accountManager: self.context.sharedContext.accountManager), self.historyNode.hasVisiblePlayableItemNodes, self.historyNode.isInteractivelyScrolling)
