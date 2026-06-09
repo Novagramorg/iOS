@@ -321,7 +321,14 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     private let contactSyncNode: ContactSyncNode
     private let proceedNode: SolidRoundedButtonNode
     
+    // Fenixuz: QR overlay — full-bleed container that covers the form when QR login is active.
+    // qrNode lives inside the overlay so it never draws on top of the phone-entry form.
+    private var qrOverlayNode: ASDisplayNode?
     private var qrNode: ASImageNode?
+    private var qrOverlayTitleNode: ImmediateTextNode?
+    private var qrOverlayInstructionNode: ImmediateTextNode?
+    private var qrOverlayCancelNode: ASButtonNode?
+
     // Fenixuz: visible "Log in by QR code" text button on the phone-entry screen.
     private let qrLoginButtonNode: ASButtonNode
     private let exportTokenDisposable = MetaDisposable()
@@ -530,6 +537,10 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
         #endif
     }
     
+    // Fenixuz: saved layout so showQrOverlay() can apply frames before the next
+    // containerLayoutUpdated call arrives.
+    private var currentLayout: ContainerViewLayout?
+
     private var animationSnapshotView: UIView?
     private var textSnapshotView: UIView?
     private var forcedButtonFrame: CGRect?
@@ -618,6 +629,14 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     }
     
     func containerLayoutUpdated(_ layout: ContainerViewLayout, navigationBarHeight: CGFloat, transition: ContainedViewLayoutTransition) {
+        // Fenixuz: persist layout so showQrOverlay() can lay out immediately on tap.
+        self.currentLayout = layout
+
+        // Fenixuz: keep the QR overlay pinned to the full screen on rotation/resize.
+        if self.qrOverlayNode != nil {
+            self.applyQrOverlayLayout(layout: layout, transition: transition)
+        }
+
         var insets = layout.insets(options: [])
         insets.top = layout.statusBarHeight ?? 20.0
         if let inputHeight = layout.inputHeight, !inputHeight.isZero {
@@ -736,26 +755,175 @@ final class AuthorizationSequencePhoneEntryControllerNode: ASDisplayNode {
     }
     
     @objc private func debugQrTap(_ recognizer: UITapGestureRecognizer) {
-        if self.qrNode == nil {
-            let qrNode = ASImageNode()
-            qrNode.frame = CGRect(origin: CGPoint(x: 16.0, y: 64.0 + 16.0), size: CGSize(width: 200.0, height: 200.0))
-            self.qrNode = qrNode
-            self.addSubnode(qrNode)
-
-            self.refreshQrToken()
-        }
+        // Debug gesture path — now delegates to the same overlay logic.
+        self.showQrOverlay()
     }
 
     // Fenixuz: tap handler for the visible "Log in by QR code" button.
-    // Mirrors debugQrTap but is always reachable by the user (no debug gesture required).
     @objc private func qrLoginButtonTapped() {
-        if self.qrNode == nil {
-            let qrNode = ASImageNode()
-            qrNode.frame = CGRect(origin: CGPoint(x: 16.0, y: 64.0 + 16.0), size: CGSize(width: 200.0, height: 200.0))
-            self.qrNode = qrNode
-            self.addSubnode(qrNode)
+        self.showQrOverlay()
+    }
+
+    // Fenixuz: builds and presents the full-bleed QR overlay so the QR image never
+    // draws on top of the phone-entry form.
+    private func showQrOverlay() {
+        guard self.qrOverlayNode == nil else {
+            // Already visible — just refresh the token.
+            self.refreshQrToken()
+            return
         }
+
+        let l10n = FenixuzL10n(self.strings)
+
+        // Container fills the node's bounds (laid out in containerLayoutUpdated).
+        let overlayNode = ASDisplayNode()
+        overlayNode.backgroundColor = self.theme.list.plainBackgroundColor
+        overlayNode.isUserInteractionEnabled = true
+
+        // Title
+        let titleNode = ImmediateTextNode()
+        titleNode.displaysAsynchronously = false
+        titleNode.maximumNumberOfLines = 1
+        titleNode.attributedText = NSAttributedString(
+            string: l10n.auth_qrLoginButton,
+            font: Font.bold(22.0),
+            textColor: self.theme.list.itemPrimaryTextColor
+        )
+
+        // QR image node — 240×240, centred by containerLayoutUpdated.
+        let qrImageNode = ASImageNode()
+        qrImageNode.displaysAsynchronously = false
+        qrImageNode.displayWithoutProcessing = true
+        qrImageNode.backgroundColor = .white
+        qrImageNode.cornerRadius = 12.0
+        qrImageNode.clipsToBounds = true
+
+        // Instruction
+        let instructionNode = ImmediateTextNode()
+        instructionNode.displaysAsynchronously = false
+        instructionNode.maximumNumberOfLines = 0
+        instructionNode.textAlignment = .center
+        instructionNode.attributedText = NSAttributedString(
+            string: "Open Telegram on another device \u{2192} Settings \u{2192} Devices \u{2192} Link Desktop Device, then scan this code.",
+            font: Font.regular(15.0),
+            textColor: self.theme.list.itemSecondaryTextColor,
+            paragraphAlignment: .center
+        )
+
+        // Cancel button
+        let cancelLabel = self.strings.Common_Cancel
+        let cancelNode = ASButtonNode()
+        cancelNode.setTitle(cancelLabel, with: Font.regular(17.0), with: self.theme.list.itemAccentColor, for: .normal)
+        cancelNode.setTitle(cancelLabel, with: Font.regular(17.0), with: self.theme.list.itemAccentColor.withAlphaComponent(0.6), for: .highlighted)
+        cancelNode.accessibilityLabel = cancelLabel
+        cancelNode.accessibilityTraits = .button
+
+        overlayNode.addSubnode(titleNode)
+        overlayNode.addSubnode(qrImageNode)
+        overlayNode.addSubnode(instructionNode)
+        overlayNode.addSubnode(cancelNode)
+        self.addSubnode(overlayNode)
+
+        self.qrOverlayNode = overlayNode
+        self.qrNode = qrImageNode
+        self.qrOverlayTitleNode = titleNode
+        self.qrOverlayInstructionNode = instructionNode
+        self.qrOverlayCancelNode = cancelNode
+
+        cancelNode.addTarget(self, action: #selector(self.dismissQrOverlay), forControlEvents: .touchUpInside)
+
+        // Trigger layout immediately so the overlay has proper frames before the
+        // first QR image arrives.
+        if let layout = self.currentLayout {
+            self.applyQrOverlayLayout(layout: layout, transition: .immediate)
+        }
+
         self.refreshQrToken()
+    }
+
+    // Fenixuz: removes the QR overlay and cancels all active QR disposables.
+    @objc private func dismissQrOverlay() {
+        self.exportTokenDisposable.set(nil)
+
+        self.qrOverlayNode?.removeFromSupernode()
+        self.qrOverlayNode = nil
+        self.qrNode = nil
+        self.qrOverlayTitleNode = nil
+        self.qrOverlayInstructionNode = nil
+        self.qrOverlayCancelNode = nil
+
+        // Re-arm the token-events listener so a future QR session still works.
+        if let account = self.account {
+            self.tokenEventsDisposable.set((account.updateLoginTokenEvents
+            |> deliverOnMainQueue).startStrict(next: { [weak self] _ in
+                self?.refreshQrToken()
+            }))
+        }
+    }
+
+    // Fenixuz: lays out all children of the QR overlay, centred vertically.
+    // Called from containerLayoutUpdated when the overlay is visible.
+    private func applyQrOverlayLayout(layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
+        guard
+            let overlayNode = self.qrOverlayNode,
+            let titleNode = self.qrOverlayTitleNode,
+            let qrImageNode = self.qrNode,
+            let instructionNode = self.qrOverlayInstructionNode,
+            let cancelNode = self.qrOverlayCancelNode
+        else { return }
+
+        transition.updateFrame(node: overlayNode, frame: CGRect(origin: .zero, size: layout.size))
+
+        let inset: CGFloat = 32.0
+        let qrSize: CGFloat = 240.0
+        let titleToQr: CGFloat = 28.0
+        let qrToInstruction: CGFloat = 20.0
+        let instructionToCancel: CGFloat = 28.0
+        let cancelHeight: CGFloat = 44.0
+
+        let availableWidth = layout.size.width - inset * 2.0
+        let titleSize = titleNode.updateLayout(CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
+        let instructionSize = instructionNode.updateLayout(CGSize(width: min(availableWidth, 320.0), height: .greatestFiniteMagnitude))
+
+        let blockHeight = titleSize.height + titleToQr + qrSize + qrToInstruction + instructionSize.height + instructionToCancel + cancelHeight
+
+        var y = floorToScreenPixels((layout.size.height - blockHeight) / 2.0)
+
+        let titleFrame = CGRect(
+            x: floorToScreenPixels((layout.size.width - titleSize.width) / 2.0),
+            y: y,
+            width: titleSize.width,
+            height: titleSize.height
+        )
+        transition.updateFrame(node: titleNode, frame: titleFrame)
+        y += titleSize.height + titleToQr
+
+        let qrFrame = CGRect(
+            x: floorToScreenPixels((layout.size.width - qrSize) / 2.0),
+            y: y,
+            width: qrSize,
+            height: qrSize
+        )
+        transition.updateFrame(node: qrImageNode, frame: qrFrame)
+        y += qrSize + qrToInstruction
+
+        let instructionFrame = CGRect(
+            x: floorToScreenPixels((layout.size.width - instructionSize.width) / 2.0),
+            y: y,
+            width: instructionSize.width,
+            height: instructionSize.height
+        )
+        transition.updateFrame(node: instructionNode, frame: instructionFrame)
+        y += instructionSize.height + instructionToCancel
+
+        let cancelSize = cancelNode.measure(CGSize(width: availableWidth, height: cancelHeight))
+        let cancelFrame = CGRect(
+            x: floorToScreenPixels((layout.size.width - cancelSize.width) / 2.0),
+            y: y,
+            width: cancelSize.width,
+            height: cancelHeight
+        )
+        transition.updateFrame(node: cancelNode, frame: cancelFrame)
     }
     
     private func refreshQrToken() {
