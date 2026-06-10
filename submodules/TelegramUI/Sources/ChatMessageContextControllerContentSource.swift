@@ -94,7 +94,7 @@ final class ChatMessageContextExtractedContentSource: ContextExtractedContentSou
                     sourceTransitionSurface = chatNode.ensureContextTransitionContainer()
                 }
                 result = ContextControllerTakeViewInfo(containingItem: .node(contentNode), contentAreaInScreenSpace: chatNode.convert(chatNode.frameForVisibleArea(), to: nil), sourceTransitionSurface: sourceTransitionSurface)
-            
+                
                 if self.snapshot, let snapshotView = contentNode.contentNode.view.snapshotContentTree(unhide: false, keepPortals: true, keepTransform: true) {
                     contentNode.view.superview?.addSubview(snapshotView)
                     self.snapshotView = snapshotView

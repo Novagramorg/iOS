@@ -28,6 +28,7 @@ import TranslateUI
 import DebugSettingsUI
 import ChatPresentationInterfaceState
 import Pasteboard
+import BrowserUI
 import SettingsUI
 import TextNodeWithEntities
 import ChatControllerInteraction
@@ -726,7 +727,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     var isGiveawayServiceMessage = false
     var diceEmoji: String?
     if messages.count == 1 {
-        for media in messages[0].media {
+        for media in messages[0].effectiveMedia {
             if let file = media as? TelegramMediaFile {
                 if file.isSticker {
                     loadStickerSaveStatus = file.fileId
@@ -1111,7 +1112,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         if !hasRateTranscription && message.minAutoremoveOrClearTimeout == nil {
-            for media in message.media {
+            for media in message.effectiveMedia {
                 if let file = media as? TelegramMediaFile, let size = file.size, size < 1 * 1024 * 1024, let duration = file.duration, duration < 60, (["audio/mpeg", "audio/mp3", "audio/mpeg3", "audio/ogg"] as [String]).contains(file.mimeType.lowercased()) {
                     let fileName = file.fileName ?? "Tone"
                     
@@ -1166,7 +1167,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         
         if !isPremium && isDownloading {
             var isLargeFile = false
-            for media in message.media {
+            for media in message.effectiveMedia {
                 if let file = media as? TelegramMediaFile {
                     if let size = file.size, size >= 150 * 1024 * 1024 {
                         isLargeFile = true
@@ -1312,9 +1313,16 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         let message = messages[0]
+        var richMessageMarkdown: String?
+        if let richTextAttribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
+            let markdown = markdownStringFromInstantPage(richTextAttribute.instantPage)
+            if !markdown.isEmpty {
+                richMessageMarkdown = markdown
+            }
+        }
         var isExpired = false
         var isImage = false
-        for media in message.media {
+        for media in message.effectiveMedia {
             if let _ = media as? TelegramMediaExpiredContent {
                 isExpired = true
             }
@@ -1324,7 +1332,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         let isCopyProtected = chatPresentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()
-        if !messageText.isEmpty || (resourceAvailable && isImage) || diceEmoji != nil {
+        if !messageText.isEmpty || richMessageMarkdown != nil || (resourceAvailable && isImage) || diceEmoji != nil {
             if !isExpired {
                 if !isPoll {
                     if !isCopyProtected {
@@ -1335,6 +1343,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                                 UIPasteboard.general.string = diceEmoji
                             } else {
                                 let copyTextWithEntities = {
+                                    if let richMessageMarkdown {
+                                        storeMessageTextInPasteboard(richMessageMarkdown, entities: nil)
+                                        Queue.mainQueue().after(0.2, {
+                                            let content: UndoOverlayContent = .copy(text: chatPresentationInterfaceState.strings.Conversation_MessageCopied)
+                                            controllerInteraction.displayUndo(content)
+                                        })
+                                        return
+                                    }
                                     var messageText = message.text
                                     var messageEntities: [MessageTextEntity]?
                                     var restrictedText: String?
@@ -1372,7 +1388,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                                     })
                                 }
                                 if resourceAvailable {
-                                    for media in message.media {
+                                    for media in message.effectiveMedia {
                                         if let image = media as? TelegramMediaImage, let largest = largestImageRepresentation(image.representations) {
                                             let _ = (context.engine.resources.data(resource: EngineMediaResource(largest.resource), incremental: true)
                                             |> take(1)
@@ -1462,7 +1478,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if resourceAvailable, !message.containsSecretMedia && !isCopyProtected {
             var mediaReference: AnyMediaReference?
             var isVideo = false
-            for media in message.media {
+            for media in message.effectiveMedia {
                 if let image = media as? TelegramMediaImage, let _ = largestImageRepresentation(image.representations) {
                     mediaReference = ImageMediaReference.standalone(media: image).abstract
                     break
@@ -1489,7 +1505,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         var downloadableMediaResourceInfos: [String] = []
-        for media in message.media {
+        for media in message.effectiveMedia {
             if let file = media as? TelegramMediaFile {
                 if let info = extractMediaResourceDebugInfo(resource: file.resource) {
                     downloadableMediaResourceInfos.append(info)
@@ -1504,7 +1520,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         
         if !isCopyProtected {
-            for media in message.media {
+            for media in message.effectiveMedia {
                 if let file = media as? TelegramMediaFile {
                     if file.isMusic {
                         actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_SaveToFiles, icon: { theme in

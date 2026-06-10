@@ -1,5 +1,5 @@
 import Foundation
-import TDLibKit
+import TDShim
 
 /// Renders the body text of a message bubble. Mirrors `chatPreview`'s content labels for
 /// non-text content but does not prepend a sender prefix (which is drawn as a separate
@@ -22,6 +22,26 @@ func messageBody(_ content: MessageContent) -> String {
     case .messageContact:        return "Contact"
     case .messagePoll:           return ""
     default:                     return ""
+    }
+}
+
+/// True for message content that has no dedicated bubble rendering and should show the
+/// "Unsupported message" placeholder. Uses positive classification so TDLib's closed
+/// `MessageContent` enum's `default` cleanly captures every unhandled type
+/// (animations/GIFs, games, invoices, calls, dice, stories, gifts, expired media, …).
+///
+/// Service-message content is filtered to `.service` rows upstream (see
+/// `serviceLineText`) and never reaches the bubble path, so it is irrelevant here.
+/// `messageContact` is treated as supported — it keeps its existing "Contact" text
+/// fallback in `messageBody`.
+func isUnsupportedContent(_ content: MessageContent) -> Bool {
+    switch content {
+    case .messageText, .messagePhoto, .messageVideo, .messageVideoNote,
+         .messageVoiceNote, .messageAudio, .messageSticker, .messageDocument,
+         .messageLocation, .messageVenue, .messageContact, .messagePoll:
+        return false
+    default:
+        return true
     }
 }
 

@@ -59,6 +59,7 @@ import Markdown
 import TelegramPermissionsUI
 import Speak
 import TranslateUI
+import TextProcessingScreen
 import UniversalMediaPlayer
 import WallpaperBackgroundNode
 import ChatListUI
@@ -1781,7 +1782,7 @@ extension ChatControllerImpl {
                             
                             let inputText: NSAttributedString
                             if let richTextAttribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
-                                inputText = NSAttributedString(string: markdownStringFromInstantPage(richTextAttribute.instantPage))
+                                inputText = chatInputTextWithReattachedCustomEmoji(markdownStringFromInstantPage(richTextAttribute.instantPage))
                             } else {
                                 inputText = chatInputStateStringWithAppliedEntities(message.text, entities: entities)
                             }
@@ -1841,7 +1842,7 @@ extension ChatControllerImpl {
                 return
             }
             self.updateChatPresentationInterfaceState(transition: transition, interactive: true, { $0.updatedInterfaceState { $0.withoutSelectionState() } })
-        }, deleteSelectedMessages: { [weak self] in
+        }, deleteSelectedMessages: { [weak self] sourceView in
             if let strongSelf = self {
                 if let messageIds = strongSelf.presentationInterfaceState.interfaceState.selectionState?.selectedIds, !messageIds.isEmpty {
                     strongSelf.messageContextDisposable.set((strongSelf.context.sharedContext.chatAvailableMessageActions(engine: strongSelf.context.engine, accountPeerId: strongSelf.context.account.peerId, messageIds: messageIds, keepUpdated: false)
@@ -1855,7 +1856,7 @@ extension ChatControllerImpl {
                                 if actions.options.intersection([.deleteLocally, .deleteGlobally]).isEmpty {
                                     strongSelf.presentClearCacheSuggestion()
                                 } else {
-                                    strongSelf.presentDeleteMessageOptions(messageIds: messageIds, options: actions.options, contextController: nil, completion: { _ in })
+                                    strongSelf.presentDeleteMessageOptions(messageIds: messageIds, options: actions.options, contextController: nil, sourceView: sourceView, completion: { _ in })
                                 }
                             }
                         }
@@ -2214,14 +2215,13 @@ extension ChatControllerImpl {
                 
                 let text = trimChatInputText(convertMarkdownToAttributes(expandedInputStateAttributedString(editMessage.inputState.inputText)))
 
-                let rawEditText = expandedInputStateAttributedString(editMessage.inputState.inputText).string
                 var isSpecialChatContents = false
                 if case .customChatContents = strongSelf.presentationInterfaceState.subject {
                     isSpecialChatContents = true
                 }
                 var richTextAttribute: RichTextMessageAttribute?
                 if !isSpecialChatContents {
-                    richTextAttribute = richMarkdownAttributeIfNeeded(context: strongSelf.context, text: rawEditText)
+                    richTextAttribute = richMarkdownAttributeIfNeeded(context: strongSelf.context, attributedText: expandedInputStateAttributedString(editMessage.inputState.inputText))
                 }
 
                 let entities = generateTextEntities(text.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(text))
@@ -2270,7 +2270,7 @@ extension ChatControllerImpl {
                 
                 if text.length == 0 {
                     if strongSelf.presentationInterfaceState.editMessageState?.mediaReference != nil {
-                    } else if message.media.contains(where: { media in
+                    } else if message.effectiveMedia.contains(where: { media in
                         switch media {
                         case _ as TelegramMediaImage, _ as TelegramMediaFile, _ as TelegramMediaMap:
                             return true
@@ -4670,27 +4670,56 @@ extension ChatControllerImpl {
                 return
             }
             let (_, language) = canTranslateText(context: context, text: text.string, showTranslate: true, ignoredLanguages: nil)
-            
+
             let entities = generateChatInputTextEntities(text)
-            presentTranslateScreen(
-                context: self.context,
-                text: text.string,
-                entities: entities,
-                canCopy: true,
-                fromLanguage: language,
-                replaceText: { text, entities in
-                    replace(chatInputStateStringWithAppliedEntities(text, entities: entities))
-                },
-                pushController: { [weak self] c in
-                    self?.push(c)
-                },
-                presentController: { [weak self] c in
-                    self?.present(c, in: .window(.root))
-                },
-                display: { [weak self] c in
-                    self?.push(c)
+
+            let translationConfiguration = TranslationConfiguration.with(appConfiguration: self.context.currentAppConfiguration.with { $0 })
+            var useSystemTranslation = false
+            switch translationConfiguration.manual {
+            case .system:
+                if #available(iOS 18.0, *) {
+                    useSystemTranslation = true
                 }
-            )
+            default:
+                break
+            }
+
+            if useSystemTranslation {
+                presentTranslateScreen(
+                    context: self.context,
+                    text: text.string,
+                    entities: entities,
+                    canCopy: true,
+                    fromLanguage: language,
+                    replaceText: { text, entities in
+                        replace(chatInputStateStringWithAppliedEntities(text, entities: entities))
+                    },
+                    pushController: { [weak self] c in
+                        self?.push(c)
+                    },
+                    presentController: { [weak self] c in
+                        self?.present(c, in: .window(.root))
+                    },
+                    display: { [weak self] c in
+                        self?.push(c)
+                    }
+                )
+            } else {
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.push(await TextProcessingScreen(
+                        context: self.context,
+                        mode: .translate(fromLanguage: language, applyResult: { text in
+                            replace(chatInputStateStringWithAppliedEntities(text.text, entities: text.entities))
+                        }),
+                        inputText: TextWithEntities(text: text.string, entities: entities),
+                        copyResult: nil,
+                        translateChat: nil
+                    ))
+                }
+            }
         }, sendEmoji: { [weak self] text, attribute, immediately in
             guard let self else {
                 return

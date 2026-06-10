@@ -410,7 +410,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, setupEditMessage: { _, _ in
         }, beginMessageSelection: { _, _ in
         }, cancelMessageSelection: { _ in
-        }, deleteSelectedMessages: {
+        }, deleteSelectedMessages: { _ in
         }, reportSelectedMessages: {
         }, reportMessages: { _, _ in
         }, blockMessageAuthor: { _, _ in
@@ -476,6 +476,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
 
                 var hasOther = false
                 var hasNotOwnMessages = false
+                var hasRichMessages = false
                 for message in messages {
                     if let author = message.effectiveAuthor {
                         if !uniquePeerIds.contains(author.id) {
@@ -502,9 +503,12 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                     if !isDice {
                         hasOther = true
                     }
+                    if message.richText != nil {
+                        hasRichMessages = true
+                    }
                 }
 
-                let canHideNames = hasNotOwnMessages && hasOther
+                let canHideNames = hasNotOwnMessages && hasOther && !hasRichMessages
 
                 let hideNames = forwardOptions.hideNames
                 let hideCaptions = forwardOptions.hideCaptions

@@ -4898,7 +4898,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         mediaReference = mediaReferenceValue
                     } else {
                         if let message = self.historyNode.messageInCurrentHistoryView(editingOriginalMessageId)?._asMessage() {
-                            for media in message.media {
+                            for media in message.effectiveMedia {
                                 if media is TelegramMediaFile || media is TelegramMediaImage {
                                     mediaReference = .message(message: MessageReference(message), media: media)
                                 }
@@ -4911,9 +4911,18 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if case .customChatContents = self.chatPresentationInterfaceState.subject {
                     isSpecialChatContents = true
                 }
-                if !isSpecialChatContents, let attribute = richMarkdownAttributeIfNeeded(context: self.context, text: effectiveInputText.string) {
+                if !"".isEmpty, !isSpecialChatContents, let attribute = richMarkdownAttributeIfNeeded(context: self.context, attributedText: effectiveInputText) {
                     let attributes: [MessageAttribute] = [attribute]
-                    messages.append(.message(text: "", attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+                    var richBubbleUpEmojiOrStickersets: [ItemCollectionId] = []
+                    for (_, packId) in bubbleUpEmojiOrStickersetsById {
+                        if !richBubbleUpEmojiOrStickersets.contains(packId) {
+                            richBubbleUpEmojiOrStickersets.append(packId)
+                        }
+                    }
+                    if richBubbleUpEmojiOrStickersets.count > 1 {
+                        richBubbleUpEmojiOrStickersets.removeAll()
+                    }
+                    messages.append(.message(text: "", attributes: attributes, inlineStickers: inlineStickers, mediaReference: nil, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: richBubbleUpEmojiOrStickersets))
                     mediaReference = nil
                 } else {
                     for text in breakChatInputText(trimChatInputText(inputText)) {

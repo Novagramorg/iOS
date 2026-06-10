@@ -1,5 +1,6 @@
 import Foundation
 import TelegramCore
+import TextFormat
 
 /// Reconstructs a markdown source string from an `InstantPage`.
 ///
@@ -38,7 +39,10 @@ private func markdownString(from block: InstantPageBlock) -> String? {
         return rendered.isEmpty ? nil : escapeLeadingBlockMarker(rendered)
     case let .preformatted(text, language):
         let language = language ?? ""
-        return "```\(language)\n\(markdownInline(from: text))\n```"
+        // Code-fence body is raw text: the fences supply the code formatting, so do NOT run it
+        // through markdownInline (which re-wraps `.fixed` content in backticks and escapes markdown
+        // special chars). Use plainText to emit the literal source.
+        return "```\(language)\n\(text.plainText)\n```"
     case let .blockQuote(blocks, _):
         return markdownBlockQuoteBlocks(blocks)
     case let .pullQuote(text, _):
@@ -76,7 +80,10 @@ private func markdownBlockQuoteBlocks(_ blocks: [InstantPageBlock]) -> String {
             continue
         }
         for line in body.split(separator: "\n", omittingEmptySubsequences: false) {
-            lines.append("> \(String(line))")
+            // Stack nested-quote markers without internal spaces (`>>` not `> >`):
+            // a line already starting with `>` (a nested quote) gets a bare `>`.
+            let text = String(line)
+            lines.append(text.hasPrefix(">") ? ">\(text)" : "> \(text)")
         }
     }
     return lines.joined(separator: "\n")
@@ -119,9 +126,11 @@ private func markdownInline(from richText: RichText) -> String {
         return markdownInline(from: text)
     case let .`subscript`(text):
         return markdownInline(from: text)
+    case let .textCustomEmoji(fileId, alt):
+        return "[\(escapeCustomEmojiMarkdownAlt(alt))](\(customEmojiMarkdownURL(fileId: fileId)))"
     default:
-        // .image, .textCustomEmoji, and the entity cases (.textMention,
-        // .textHashtag, …): fall back to plain text.
+        // .image and the entity cases (.textMention, .textHashtag, …):
+        // fall back to plain text.
         return escapeMarkdown(richText.plainText)
     }
 }
