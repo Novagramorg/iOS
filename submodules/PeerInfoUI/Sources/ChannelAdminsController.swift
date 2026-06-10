@@ -427,19 +427,94 @@ private func channelAdminsControllerEntries(presentationData: PresentationData, 
     }
     
     var entries: [ChannelAdminsEntry] = []
-    if case let .channel(peer) = peer {
+    if case let .community(peer) = peer {
+        if let participants {
+            entries.append(.adminsHeader(presentationData.theme, presentationData.strings.ChannelMembers_ChannelAdminsTitle))
+            
+            if peer.hasPermission(.changeInfo) {
+                entries.append(.addAdmin(presentationData.theme, presentationData.strings.Channel_Management_AddModerator, state.editing))
+            }
+            
+            var combinedParticipants: [RenderedChannelParticipant] = participants
+            var existingParticipantIds = Set<EnginePeer.Id>()
+            for participant in participants {
+                existingParticipantIds.insert(participant.peer.id)
+            }
+            
+            for participant in state.temporaryAdmins {
+                if !existingParticipantIds.contains(participant.peer.id) {
+                    combinedParticipants.append(participant)
+                }
+            }
+            
+            var index: Int32 = 0
+            for participant in combinedParticipants.sorted(by: { lhs, rhs in
+                let lhsInvitedAt: Int32
+                switch lhs.participant {
+                case .creator:
+                    lhsInvitedAt = Int32.min
+                case let .member(_, invitedAt, _, _, _, _):
+                    lhsInvitedAt = invitedAt
+                }
+                let rhsInvitedAt: Int32
+                switch rhs.participant {
+                case .creator:
+                    rhsInvitedAt = Int32.min
+                case let .member(_, invitedAt, _, _, _, _):
+                    rhsInvitedAt = invitedAt
+                }
+                return lhsInvitedAt < rhsInvitedAt
+            }) {
+                if !state.removedPeerIds.contains(participant.peer.id) {
+                    var canEdit = true
+                    var canOpen = true
+                    switch participant.participant {
+                    case .creator:
+                        canEdit = false
+                        canOpen = peer.flags.contains(.isCreator)
+                    case let .member(id, _, adminInfo, _, _, _):
+                        if id == accountPeerId {
+                            canEdit = false
+                        } else if let adminInfo = adminInfo {
+                            if peer.flags.contains(.isCreator) {
+                                canEdit = true
+                                canOpen = true
+                            } else if adminInfo.promotedBy == accountPeerId {
+                                canEdit = true
+                                if let adminRights = peer.adminRights {
+                                    if adminRights.rights.isEmpty {
+                                        canOpen = false
+                                    }
+                                }
+                            } else {
+                                canEdit = false
+                            }
+                        } else {
+                            canEdit = false
+                        }
+                    }
+                    entries.append(.adminPeerItem(presentationData.theme, presentationData.strings, presentationData.dateTimeFormat, presentationData.nameDisplayOrder, false, index, participant, ItemListPeerItemEditing(editable: canEdit, editing: state.editing, revealed: participant.peer.id == state.peerIdWithRevealedOptions), state.removingPeerId != participant.peer.id && existingParticipantIds.contains(participant.peer.id), canOpen))
+                    index += 1
+                }
+            }
+            
+            if peer.hasPermission(.changeInfo) {
+                let info = presentationData.strings.Channel_Management_AddModeratorHelp
+                entries.append(.adminsInfo(presentationData.theme, info))
+            }
+        }
+    } else if case let .channel(peer) = peer {
         var isGroup = false
         if case .group = peer.info {
             isGroup = true
         }
-        //entries.append(.recentActions(presentationData.theme, presentationData.strings.Group_Info_AdminLog))
         
         if isGroup && peer.hasPermission(.deleteAllMessages) && (antiSpamAvailable || antiSpamEnabled) {
             entries.append(.antiSpam(presentationData.theme, presentationData.strings.Group_Management_AntiSpam, antiSpamEnabled))
             entries.append(.antiSpamInfo(presentationData.theme, presentationData.strings.Group_Management_AntiSpamInfo))
         }
         
-        if let participants = participants {
+        if let participants {
             entries.append(.adminsHeader(presentationData.theme, isGroup ? presentationData.strings.ChannelMembers_GroupAdminsTitle : presentationData.strings.ChannelMembers_ChannelAdminsTitle))
             
             if peer.hasPermission(.addAdmins) {
@@ -603,7 +678,12 @@ private func channelAdminsControllerEntries(presentationData: PresentationData, 
     return entries
 }
 
-public func channelAdminsController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, peerId initialPeerId: EnginePeer.Id, loadCompleted: @escaping () -> Void = {}) -> ViewController {
+public func channelAdminsController(
+    context: AccountContext,
+    updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
+    peerId initialPeerId: EnginePeer.Id,
+    loadCompleted: @escaping () -> Void = {}
+) -> ViewController {
     let statePromise = ValuePromise(ChannelAdminsControllerState(), ignoreRepeated: true)
     let stateValue = Atomic(value: ChannelAdminsControllerState())
     let updateState: ((ChannelAdminsControllerState) -> ChannelAdminsControllerState) -> Void = { f in

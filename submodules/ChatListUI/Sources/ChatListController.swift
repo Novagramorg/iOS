@@ -995,6 +995,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                                 } else {
                                     globalValue = globalSettings.groupChats
                                 }
+                            case .community:
+                                globalValue = globalSettings.channels
                             }
                             if globalValue.enabled {
                                 return (false, peerIds)
@@ -1422,6 +1424,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         peer = forumSourcePeer
                     }
                     
+                    if case .community = peer {
+                        self.openCommunityView(communityId: peer.id)
+                        self.chatListDisplayNode.mainContainerNode.currentItemNode.clearHighlightAnimated(true)
+                        return
+                    }
+                    
                     var scrollToEndIfExists = false
                     if let layout = self.validLayout, case .regular = layout.metrics.widthClass {
                         scrollToEndIfExists = true
@@ -1746,6 +1754,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     if let strongSelf = strongSelf {
                         if dismissSearch {
                             strongSelf.deactivateSearch(animated: true)
+                        }
+                        if case .community = peer {
+                            strongSelf.openCommunityView(communityId: peer.id)
+                            strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.clearHighlightAnimated(true)
+                            return
                         }
                         var scrollToEndIfExists = false
                         if let layout = strongSelf.validLayout, case .regular = layout.metrics.widthClass {
@@ -2882,6 +2895,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
         }
         return nil
+    }
+    
+    private func openCommunityView(communityId: EnginePeer.Id) {
+        self.push(self.context.sharedContext.makeCommunityViewScreen(context: self.context, communityId: communityId))
     }
     
     private weak var storyCameraTooltip: TooltipScreen?

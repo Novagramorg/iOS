@@ -206,6 +206,20 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var currentStarRating: TelegramStarRating?
     private var currentPendingStarRating: TelegramStarPendingRating?
     
+    private func hiddenCommunityStatusText(text: String, color: UIColor) -> NSAttributedString {
+        let icon = generateTintedImage(
+            image: generateScaledImage(image: UIImage(bundleImageName: "Chat/Message/Hidden"), size: CGSize(width: 17.0, height: 17.0), opaque: false),
+            color: color
+        )
+        guard let icon else {
+            return NSAttributedString(string: text)
+        }
+        let result = NSMutableAttributedString(string: "#  \(text)")
+        result.addAttribute(.attachment, value: icon, range: NSRange(location: 0, length: 1))
+        result.addAttribute(.baselineOffset, value: 1.0, range: NSRange(location: 0, length: 1))
+        return result
+    }
+
     init(context: AccountContext, controller: PeerInfoScreenImpl, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, isMediaOnly: Bool, isSettings: Bool, isMyProfile: Bool, forumTopicThreadId: Int64?, chatLocation: ChatLocation) {
         self.context = context
         self.controller = controller
@@ -1185,6 +1199,7 @@ final class PeerInfoHeaderNode: ASDisplayNode {
         let smallTitleAttributes: MultiScaleTextState.Attributes
         let titleAttributes: MultiScaleTextState.Attributes
         let subtitleStringText: String
+        var subtitleAttributedText: NSAttributedString?
         let smallSubtitleAttributes: MultiScaleTextState.Attributes
         let subtitleAttributes: MultiScaleTextState.Attributes
         var subtitleIsButton: Bool = false
@@ -1303,6 +1318,9 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 subtitleStringText = statusData.text
                 subtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(17.0), color: subtitleColor)
                 smallSubtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white, shadowColor: titleShadowColor)
+                if statusData.hasHiddenCommunityPrefix {
+                    subtitleAttributedText = self.hiddenCommunityStatusText(text: statusData.text, color: subtitleColor)
+                }
                 
                 usernameString = ("", MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white))
 
@@ -1359,10 +1377,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             TitleNodeStateExpanded: MultiScaleTextState(attributes: smallTitleAttributes, constrainedSize: titleConstrainedSize)
         ], mainState: TitleNodeStateRegular)
         
-        let subtitleNodeLayout = self.subtitleNode.updateLayout(text: subtitleStringText, states: [
+        let subtitleStates: [AnyHashable: MultiScaleTextState] = [
             TitleNodeStateRegular: MultiScaleTextState(attributes: subtitleAttributes, constrainedSize: titleConstrainedSize),
             TitleNodeStateExpanded: MultiScaleTextState(attributes: smallSubtitleAttributes, constrainedSize: titleConstrainedSize)
-        ], mainState: TitleNodeStateRegular)
+        ]
+        let subtitleNodeLayout: [AnyHashable: MultiScaleTextLayout]
+        if let subtitleAttributedText {
+            subtitleNodeLayout = self.subtitleNode.updateLayout(attributedText: subtitleAttributedText, accessibilityText: subtitleStringText, states: subtitleStates, mainState: TitleNodeStateRegular)
+        } else {
+            subtitleNodeLayout = self.subtitleNode.updateLayout(text: subtitleStringText, states: subtitleStates, mainState: TitleNodeStateRegular)
+        }
         self.subtitleNode.accessibilityLabel = subtitleStringText
         
         var subtitleButtonHorizontalOffset: CGFloat = 0.0
@@ -1466,10 +1490,16 @@ final class PeerInfoHeaderNode: ASDisplayNode {
             }
         }
         
-        let panelSubtitleNodeLayout = self.panelSubtitleNode.updateLayout(text: panelSubtitleString?.text ?? subtitleStringText, states: [
+        let panelSubtitleStates: [AnyHashable: MultiScaleTextState] = [
             TitleNodeStateRegular: MultiScaleTextState(attributes: panelSubtitleString?.attributes ?? subtitleAttributes, constrainedSize: titleConstrainedSize),
             TitleNodeStateExpanded: MultiScaleTextState(attributes: panelSubtitleString?.attributes ?? subtitleAttributes, constrainedSize: titleConstrainedSize)
-        ], mainState: TitleNodeStateRegular)
+        ]
+        let panelSubtitleNodeLayout: [AnyHashable: MultiScaleTextLayout]
+        if panelSubtitleString == nil, let subtitleAttributedText {
+            panelSubtitleNodeLayout = self.panelSubtitleNode.updateLayout(attributedText: subtitleAttributedText, accessibilityText: subtitleStringText, states: panelSubtitleStates, mainState: TitleNodeStateRegular)
+        } else {
+            panelSubtitleNodeLayout = self.panelSubtitleNode.updateLayout(text: panelSubtitleString?.text ?? subtitleStringText, states: panelSubtitleStates, mainState: TitleNodeStateRegular)
+        }
         self.panelSubtitleNode.accessibilityLabel = panelSubtitleString?.text ?? subtitleStringText
         
         let usernameNodeLayout = self.usernameNode.updateLayout(text: usernameString.text, states: [

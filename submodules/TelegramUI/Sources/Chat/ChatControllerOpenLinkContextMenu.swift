@@ -17,6 +17,7 @@ import UrlEscaping
 import UrlWhitelist
 import OpenInExternalAppUI
 import SafariServices
+import TelegramPresentationData
 
 private struct ChatLinkOpenMode {
     let shouldOpenInApp: Bool
@@ -26,7 +27,8 @@ private enum ChatLinkReverseOpenTarget {
     case inApp
     case externalBrowser
     
-    var checkboxTitle: String {
+    func title(strings: PresentationStrings) -> String {
+        //TODO:localize
         switch self {
         case .inApp:
             return "Always open this site in-app"
@@ -110,6 +112,7 @@ private func chatLinkContextMenuOpenMode(context: AccountContext, url: String) -
 
 extension ChatControllerImpl {
     private func presentOpenLinkConfirmation(_ url: String, target: ChatLinkReverseOpenTarget) {
+        //TODO:localize
         var exceptionAdded = false
         let disposable = self.context.sharedContext.openUserGeneratedUrl(
             context: self.context,
@@ -187,7 +190,7 @@ extension ChatControllerImpl {
             },
             progress: nil,
             alertDisplayUpdated: nil,
-            concealedAlertOption: OpenUserGeneratedUrlConcealedAlertOption(title: target.checkboxTitle, action: { [weak self] in
+            concealedAlertOption: OpenUserGeneratedUrlConcealedAlertOption(title: target.title(strings: self.presentationData.strings), action: { [weak self] in
                 guard let self else {
                     return
                 }

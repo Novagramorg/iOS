@@ -129,7 +129,7 @@ public enum UpdateChannelAdminRightsError {
 func _internal_fetchChannelParticipant(account: Account, peerId: PeerId, participantId: PeerId) -> Signal<ChannelParticipant?, NoError> {
     return account.postbox.transaction { transaction -> Signal<ChannelParticipant?, NoError> in
         if let peer = transaction.getPeer(peerId), let adminPeer = transaction.getPeer(participantId), let inputPeer = apiInputPeer(adminPeer) {
-            if let channel = peer as? TelegramChannel, let inputChannel = apiInputChannel(channel) {
+            if let inputChannel = apiInputChannel(peer) {
                 return account.network.request(Api.functions.channels.getParticipant(channel: inputChannel, participant: inputPeer))
                 |> map { result -> ChannelParticipant? in
                     switch result {

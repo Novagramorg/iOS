@@ -25,6 +25,7 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     private let forumPeerId: (id: EnginePeer.Id, isMonoforum: Bool)?
     private let selectForumThreads: Bool
     private let suggestedPeers: [EnginePeer]
+    private let excludedPeerIds: Set<EnginePeer.Id>
     
     private let attemptSelection: ((EnginePeer, Int64?, ChatListDisabledPeerReason) -> Void)?
     private let createNewGroup: (() -> Void)?
@@ -66,6 +67,7 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     private let forwardedMessageIds: [EngineMessage.Id]
     private let hasTypeHeaders: Bool
     private let requestPeerType: [ReplyMarkupButtonRequestPeerType]?
+    private let showPeerTypeRequirements: Bool
     let multipleSelectionLimit: Int32?
     private let hasCreation: Bool
     let immediatelySwitchToContacts: Bool
@@ -110,11 +112,13 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
         self.hasTypeHeaders = params.hasTypeHeaders
         self.selectForumThreads = params.selectForumThreads
         self.requestPeerType = params.requestPeerType
+        self.showPeerTypeRequirements = params.showPeerTypeRequirements
         self.hasCreation = params.hasCreation
         self.immediatelySwitchToContacts = params.immediatelySwitchToContacts
         self.immediatelyActivateMultipleSelection = params.immediatelyActivateMultipleSelection
         self.multipleSelectionLimit = params.multipleSelectionLimit
         self.suggestedPeers = params.suggestedPeers
+        self.excludedPeerIds = params.excludedPeerIds
         
         super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: self.presentationData, style: .glass))
         
@@ -264,13 +268,34 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
     override public func loadDisplayNode() {
         self.navigationBar?.secondaryContentHeight = 44.0 + 10.0
         
-        self.displayNode = PeerSelectionControllerNode(context: self.context, controller: self, presentationData: self.presentationData, filter: self.filter, forumPeerId: self.forumPeerId, hasFilters: self.hasFilters, hasChatListSelector: self.hasChatListSelector, hasContactSelector: self.hasContactSelector, hasGlobalSearch: self.hasGlobalSearch, forwardedMessageIds: self.forwardedMessageIds, hasTypeHeaders: self.hasTypeHeaders, requestPeerType: self.requestPeerType, hasCreation: self.hasCreation, createNewGroup: self.createNewGroup, suggestedPeers: self.suggestedPeers, present: { [weak self] c, a in
-            self?.present(c, in: .window(.root), with: a)
-        }, presentInGlobalOverlay: { [weak self] c, a in
-            self?.presentInGlobalOverlay(c, with: a)
-        }, dismiss: { [weak self] in
-            self?.presentingViewController?.dismiss(animated: false, completion: nil)
-        })
+        self.displayNode = PeerSelectionControllerNode(
+            context: self.context,
+            controller: self,
+            presentationData: self.presentationData,
+            filter: self.filter,
+            forumPeerId: self.forumPeerId,
+            hasFilters: self.hasFilters,
+            hasChatListSelector: self.hasChatListSelector,
+            hasContactSelector: self.hasContactSelector,
+            hasGlobalSearch: self.hasGlobalSearch,
+            forwardedMessageIds: self.forwardedMessageIds,
+            hasTypeHeaders: self.hasTypeHeaders,
+            requestPeerType: self.requestPeerType,
+            showPeerTypeRequirements: self.showPeerTypeRequirements,
+            hasCreation: self.hasCreation,
+            createNewGroup: self.createNewGroup,
+            suggestedPeers: self.suggestedPeers,
+            excludedPeerIds: self.excludedPeerIds,
+            present: { [weak self] c, a in
+                self?.present(c, in: .window(.root), with: a)
+            },
+            presentInGlobalOverlay: { [weak self] c, a in
+                self?.presentInGlobalOverlay(c, with: a)
+            },
+            dismiss: { [weak self] in
+                self?.presentingViewController?.dismiss(animated: false, completion: nil)
+            }
+        )
         
         self.peerSelectionNode.navigationBar = self.navigationBar
         
@@ -332,7 +357,8 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
                                 multipleSelection: false,
                                 forwardedMessageIds: [],
                                 hasTypeHeaders: false,
-                                selectForumThreads: false
+                                selectForumThreads: false,
+                                excludedPeerIds: self.excludedPeerIds
                             )
                         )
                         controller.peerSelected = self.peerSelected
@@ -376,7 +402,8 @@ public final class PeerSelectionControllerImpl: ViewController, PeerSelectionCon
                                     multipleSelection: false,
                                     forwardedMessageIds: [],
                                     hasTypeHeaders: false,
-                                    selectForumThreads: false
+                                    selectForumThreads: false,
+                                    excludedPeerIds: strongSelf.excludedPeerIds
                                 )
                             )
                             controller.peerSelected = strongSelf.peerSelected

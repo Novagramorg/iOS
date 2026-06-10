@@ -138,6 +138,7 @@ public enum ChatListItemContent {
     public struct PeerData {
         public var messages: [EngineMessage]
         public var peer: EngineRenderedPeer
+        public var avatarPeer: EngineRenderedPeer?
         public var threadInfo: ThreadInfo?
         public var combinedReadState: EnginePeerReadCounters?
         public var isRemovedFromTotalUnreadCount: Bool
@@ -164,6 +165,7 @@ public enum ChatListItemContent {
         public init(
             messages: [EngineMessage],
             peer: EngineRenderedPeer,
+            avatarPeer: EngineRenderedPeer? = nil,
             threadInfo: ThreadInfo?,
             combinedReadState: EnginePeerReadCounters?,
             isRemovedFromTotalUnreadCount: Bool,
@@ -189,6 +191,7 @@ public enum ChatListItemContent {
         ) {
             self.messages = messages
             self.peer = peer
+            self.avatarPeer = avatarPeer
             self.threadInfo = threadInfo
             self.combinedReadState = combinedReadState
             self.isRemovedFromTotalUnreadCount = isRemovedFromTotalUnreadCount
@@ -1766,6 +1769,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         var displayAsMessage = false
         var enablePreview = true
         var peerIsMonoforum = false
+        var peerIsCommunity = false
         switch item.content {
         case .loading:
             displayAsMessage = true
@@ -1774,6 +1778,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             displayAsMessage = peerData.displayAsMessage
             if displayAsMessage, case let .user(author) = peerData.messages.last?.author {
                 peer = .user(author)
+            } else if let mainPeer = peerData.peer.peer, case .community = mainPeer {
+                peerIsCommunity = true
+                peer = mainPeer
             } else {
                 peer = peerData.peer.chatOrMonoforumMainPeer
                 if case let .channel(channel) = peerData.peer.peer, channel.isMonoForum {
@@ -1895,6 +1902,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         }
         
         if let peer = peer {
+            let avatarPeer: EnginePeer
+            if case let .peer(peerData) = item.content, let avatarMainPeer = peerData.avatarPeer?.chatOrMonoforumMainPeer {
+                avatarPeer = avatarMainPeer
+            } else {
+                avatarPeer = peer
+            }
             var overrideImage: AvatarNodeImageOverride?
             if case let .peer(peerData) = item.content, peerData.customMessageListData != nil {
             } else if peer.id.isReplies {
@@ -1912,6 +1925,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             var isForumAvatar = false
             if peerIsMonoforum {
+                isForumAvatar = true
+            }
+            if peerIsCommunity {
                 isForumAvatar = true
             }
             if case let .channel(channel) = peer, channel.isForumOrMonoForum {
@@ -1944,10 +1960,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 avatarClipStyle = .round
             }
             
-            if peer.smallProfileImage != nil && overrideImage == nil {
-                self.avatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme, peer: peer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter))
+            if avatarPeer.smallProfileImage != nil && overrideImage == nil {
+                self.avatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter))
             } else {
-                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: peer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: 60.0, height: 60.0))
+                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: 60.0, height: 60.0))
             }
             
             if peer.isPremium && peer.id != item.context.account.peerId {

@@ -6,6 +6,7 @@ public enum Api {
     public enum bots {}
     public enum channels {}
     public enum chatlists {}
+    public enum communities {}
     public enum contacts {}
     public enum fragment {}
     public enum help {}
@@ -29,6 +30,7 @@ public enum Api {
         public enum bots {}
         public enum channels {}
         public enum chatlists {}
+        public enum communities {}
         public enum contacts {}
         public enum ephemeral {}
         public enum folders {}
@@ -210,11 +212,14 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1103884886] = { return Api.Chat.parse_chat($0) }
     dict[693512293] = { return Api.Chat.parse_chatEmpty($0) }
     dict[1704108455] = { return Api.Chat.parse_chatForbidden($0) }
+    dict[1154458365] = { return Api.Chat.parse_community($0) }
+    dict[-46343496] = { return Api.Chat.parse_communityForbidden($0) }
     dict[1605510357] = { return Api.ChatAdminRights.parse_chatAdminRights($0) }
     dict[-219353309] = { return Api.ChatAdminWithInvites.parse_chatAdminWithInvites($0) }
     dict[-1626209256] = { return Api.ChatBannedRights.parse_chatBannedRights($0) }
     dict[-1605464774] = { return Api.ChatFull.parse_channelFull($0) }
     dict[640893467] = { return Api.ChatFull.parse_chatFull($0) }
+    dict[-13940614] = { return Api.ChatFull.parse_communityFull($0) }
     dict[1553807106] = { return Api.ChatInvite.parse_chatInvite($0) }
     dict[1516793212] = { return Api.ChatInvite.parse_chatInviteAlready($0) }
     dict[1634294960] = { return Api.ChatInvite.parse_chatInvitePeek($0) }
@@ -233,6 +238,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1008731132] = { return Api.ChatTheme.parse_chatTheme($0) }
     dict[878246344] = { return Api.ChatTheme.parse_chatThemeUniqueGift($0) }
     dict[-1390068360] = { return Api.CodeSettings.parse_codeSettings($0) }
+    dict[1981030077] = { return Api.CommunityPeer.parse_communityPeer($0) }
+    dict[2078997125] = { return Api.CommunityPeerRequest.parse_communityPeerRequest($0) }
     dict[-870702050] = { return Api.Config.parse_config($0) }
     dict[54448129] = { return Api.ConnectedBot.parse_connectedBot($0) }
     dict[429997937] = { return Api.ConnectedBotStarRef.parse_connectedBotStarRef($0) }
@@ -602,6 +609,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[2055212554] = { return Api.Message.parse_messageService($0) }
     dict[-872240531] = { return Api.MessageAction.parse_messageActionBoostApply($0) }
     dict[-988359047] = { return Api.MessageAction.parse_messageActionBotAllowed($0) }
+    dict[1562426088] = { return Api.MessageAction.parse_messageActionChangeCommunity($0) }
     dict[-511160261] = { return Api.MessageAction.parse_messageActionChangeCreator($0) }
     dict[-1781355374] = { return Api.MessageAction.parse_messageActionChannelCreate($0) }
     dict[-365344535] = { return Api.MessageAction.parse_messageActionChannelMigrateFrom($0) }
@@ -1438,6 +1446,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-1816295539] = { return Api.chatlists.ChatlistUpdates.parse_chatlistUpdates($0) }
     dict[283567014] = { return Api.chatlists.ExportedChatlistInvite.parse_exportedChatlistInvite($0) }
     dict[279670215] = { return Api.chatlists.ExportedInvites.parse_exportedInvites($0) }
+    dict[-1921494742] = { return Api.communities.ParticipantJoinedChats.parse_participantJoinedChats($0) }
+    dict[574926765] = { return Api.communities.PeerLinkRequests.parse_peerLinkRequests($0) }
     dict[182326673] = { return Api.contacts.Blocked.parse_blocked($0) }
     dict[-513392236] = { return Api.contacts.Blocked.parse_blockedSlice($0) }
     dict[290452237] = { return Api.contacts.ContactBirthdays.parse_contactBirthdays($0) }
@@ -1865,6 +1875,10 @@ public extension Api {
         case let _1 as Api.ChatTheme:
             _1.serialize(buffer, boxed)
         case let _1 as Api.CodeSettings:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.CommunityPeer:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.CommunityPeerRequest:
             _1.serialize(buffer, boxed)
         case let _1 as Api.Config:
             _1.serialize(buffer, boxed)
@@ -2603,6 +2617,10 @@ public extension Api {
         case let _1 as Api.chatlists.ExportedChatlistInvite:
             _1.serialize(buffer, boxed)
         case let _1 as Api.chatlists.ExportedInvites:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.communities.ParticipantJoinedChats:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.communities.PeerLinkRequests:
             _1.serialize(buffer, boxed)
         case let _1 as Api.contacts.Blocked:
             _1.serialize(buffer, boxed)

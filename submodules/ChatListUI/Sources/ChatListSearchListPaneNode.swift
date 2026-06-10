@@ -1735,7 +1735,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
     
     private var refreshGlobalPostSearchStateDisposable: Disposable?
     
-    init(context: AccountContext, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, interaction: ChatListSearchInteraction, key: ChatListSearchPaneKey, peersFilter: ChatListNodePeersFilter, requestPeerType: [ReplyMarkupButtonRequestPeerType]?, location: ChatListControllerLocation, searchQuery: Signal<String?, NoError>, searchOptions: Signal<ChatListSearchOptions?, NoError>, navigationController: NavigationController?, parentController: ViewController?, globalPeerSearchContext: GlobalPeerSearchContext?) {
+    init(context: AccountContext, animationCache: AnimationCache, animationRenderer: MultiAnimationRenderer, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil, interaction: ChatListSearchInteraction, key: ChatListSearchPaneKey, peersFilter: ChatListNodePeersFilter, requestPeerType: [ReplyMarkupButtonRequestPeerType]?, excludedPeerIds: Set<EnginePeer.Id>, location: ChatListControllerLocation, searchQuery: Signal<String?, NoError>, searchOptions: Signal<ChatListSearchOptions?, NoError>, navigationController: NavigationController?, parentController: ViewController?, globalPeerSearchContext: GlobalPeerSearchContext?) {
         self.context = context
         self.animationCache = animationCache
         self.animationRenderer = animationRenderer
@@ -1757,7 +1757,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
         }
         self.peersFilter = peersFilter
         self.requestPeerType = requestPeerType
-        
+
         let tagMask: EngineMessage.Tags?
         switch key {
         case .chats:
@@ -2915,6 +2915,10 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 let _ = currentRemotePeers.swap((foundRemotePeers.0, foundRemotePeers.1, foundRemotePeers.2))
                 
                 let filteredPeer: (EnginePeer, EnginePeer) -> Bool = { peer, accountPeer in
+                    if excludedPeerIds.contains(peer.id) {
+                        return false
+                    }
+
                     if let requestPeerType {
                         guard !peer.isDeleted && peer.id != context.account.peerId else {
                             return false
@@ -3157,7 +3161,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 if lowercasedQuery.count > 1 {
                     for peer in recentPeers {
                         let renderedPeer = peer
-                        if let peer = peer.peer.chatMainPeer, !existingPeerIds.contains(peer.id) {
+                        if let peer = peer.peer.chatMainPeer, !existingPeerIds.contains(peer.id), filteredPeer(EnginePeer(peer), EnginePeer(accountPeer)) {
                             let peer = EnginePeer(peer)
                             var associatedPeer: EnginePeer?
                             if case let .channel(channel) = peer, channel.isMonoForum {
@@ -3226,7 +3230,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                 index = 0
                 if !adsHidden {
                     for peer in foundRemotePeers.2 {
-                        if !existingPeerIds.contains(peer.peer.id) {
+                        if !existingPeerIds.contains(peer.peer.id), filteredPeer(peer.peer, EnginePeer(accountPeer)) {
                             existingPeerIds.insert(peer.peer.id)
                             entries.append(.adPeer(peer, index, presentationData.theme, presentationData.strings, presentationData.nameSortOrder, presentationData.nameDisplayOrder, globalExpandType, finalQuery))
                             index += 1

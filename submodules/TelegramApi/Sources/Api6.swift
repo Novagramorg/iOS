@@ -1,4 +1,131 @@
 public extension Api {
+    enum DialogFilterSuggested: TypeConstructorDescription {
+        public class Cons_dialogFilterSuggested: TypeConstructorDescription {
+            public var filter: Api.DialogFilter
+            public var description: String
+            public init(filter: Api.DialogFilter, description: String) {
+                self.filter = filter
+                self.description = description
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("dialogFilterSuggested", [("filter", ConstructorParameterDescription(self.filter)), ("description", ConstructorParameterDescription(self.description))])
+            }
+        }
+        case dialogFilterSuggested(Cons_dialogFilterSuggested)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .dialogFilterSuggested(let _data):
+                if boxed {
+                    buffer.appendInt32(2004110666)
+                }
+                _data.filter.serialize(buffer, true)
+                serializeString(_data.description, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .dialogFilterSuggested(let _data):
+                return ("dialogFilterSuggested", [("filter", ConstructorParameterDescription(_data.filter)), ("description", ConstructorParameterDescription(_data.description))])
+            }
+        }
+
+        public static func parse_dialogFilterSuggested(_ reader: BufferReader) -> DialogFilterSuggested? {
+            var _1: Api.DialogFilter?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.DialogFilter
+            }
+            var _2: String?
+            _2 = parseString(reader)
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.DialogFilterSuggested.dialogFilterSuggested(Cons_dialogFilterSuggested(filter: _1!, description: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum DialogPeer: TypeConstructorDescription {
+        public class Cons_dialogPeer: TypeConstructorDescription {
+            public var peer: Api.Peer
+            public init(peer: Api.Peer) {
+                self.peer = peer
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("dialogPeer", [("peer", ConstructorParameterDescription(self.peer))])
+            }
+        }
+        public class Cons_dialogPeerFolder: TypeConstructorDescription {
+            public var folderId: Int32
+            public init(folderId: Int32) {
+                self.folderId = folderId
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("dialogPeerFolder", [("folderId", ConstructorParameterDescription(self.folderId))])
+            }
+        }
+        case dialogPeer(Cons_dialogPeer)
+        case dialogPeerFolder(Cons_dialogPeerFolder)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .dialogPeer(let _data):
+                if boxed {
+                    buffer.appendInt32(-445792507)
+                }
+                _data.peer.serialize(buffer, true)
+                break
+            case .dialogPeerFolder(let _data):
+                if boxed {
+                    buffer.appendInt32(1363483106)
+                }
+                serializeInt32(_data.folderId, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .dialogPeer(let _data):
+                return ("dialogPeer", [("peer", ConstructorParameterDescription(_data.peer))])
+            case .dialogPeerFolder(let _data):
+                return ("dialogPeerFolder", [("folderId", ConstructorParameterDescription(_data.folderId))])
+            }
+        }
+
+        public static func parse_dialogPeer(_ reader: BufferReader) -> DialogPeer? {
+            var _1: Api.Peer?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.Peer
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.DialogPeer.dialogPeer(Cons_dialogPeer(peer: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_dialogPeerFolder(_ reader: BufferReader) -> DialogPeer? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.DialogPeer.dialogPeerFolder(Cons_dialogPeerFolder(folderId: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     enum DisallowedGiftsSettings: TypeConstructorDescription {
         public class Cons_disallowedGiftsSettings: TypeConstructorDescription {
             public var flags: Int32

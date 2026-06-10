@@ -1555,6 +1555,11 @@ public protocol SharedAccountContext: AnyObject {
     func makeGalleryController(context: AccountContext, source: GalleryControllerItemSource, streamSingleVideo: Bool, isPreview: Bool) -> ViewController
     func makeAccountFreezeInfoScreen(context: AccountContext) -> ViewController
     func makeSendInviteLinkScreen(context: AccountContext, subject: SendInviteLinkScreenSubject, peers: [TelegramForbiddenInvitePeer], theme: PresentationTheme?) -> ViewController
+    func makeCommunitiesScreen(context: AccountContext, peerId: EnginePeer.Id?) -> ViewController
+    func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping () -> Void) -> ViewController
+    func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
+    func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
+    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
     func makeCocoonInfoScreen(context: AccountContext) -> ViewController
     func makeLinkEditController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, text: String, link: String?, apply: @escaping (String?, TelegramMediaWebpage?) -> Void) -> ViewController
 

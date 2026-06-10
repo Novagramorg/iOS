@@ -310,6 +310,10 @@ func apiMessagePeerIds(_ message: Api.Message) -> [PeerId] {
                     result.append(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageActionNewCreatorPending.newCreatorId)))
                 case let .messageActionChangeCreator(messageActionChangeCreator):
                     result.append(PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(messageActionChangeCreator.newCreatorId)))
+                case let .messageActionChangeCommunity(messageActionChangeCommunity):
+                    if let communityId = messageActionChangeCommunity.communityId {
+                        result.append(PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(communityId)))
+                    }
             }
         
             return result

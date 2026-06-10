@@ -22,7 +22,7 @@ import PhotoResources
 import ListSectionComponent
 import ListItemSwipeOptionContainer
 
-private let avatarFont = avatarPlaceholderFont(size: 15.0)
+private let avatarFont = avatarPlaceholderFont(size: 17.0)
 private let readIconImage: UIImage? = generateTintedImage(image: UIImage(bundleImageName: "Chat/Message/MenuReadIcon"), color: .white)?.withRenderingMode(.alwaysTemplate)
 private let repostIconImage: UIImage? = generateTintedImage(image: UIImage(bundleImageName: "Stories/HeaderRepost"), color: .white)?.withRenderingMode(.alwaysTemplate)
 private let forwardIconImage: UIImage? = generateTintedImage(image: UIImage(bundleImageName: "Stories/HeaderForward"), color: .white)?.withRenderingMode(.alwaysTemplate)
@@ -913,13 +913,13 @@ public final class PeerListItemComponent: Component {
                 
                 if let peer = component.peer {
                     let clipStyle: AvatarNodeClipStyle
-                    if case let .channel(channel) = peer, channel.isForumOrMonoForum {
+                    if case .community = peer {
+                        clipStyle = .roundedRect
+                    } else if case let .channel(channel) = peer, channel.isForumOrMonoForum {
                         clipStyle = .roundedRect
                     } else {
                         clipStyle = .round
                     }
-                    let _ = clipStyle
-                    let _ = synchronousLoad
                     
                     if peer.smallProfileImage != nil {
                         avatarNode.setPeerV2(
@@ -929,7 +929,7 @@ public final class PeerListItemComponent: Component {
                             authorOfMessage: nil,
                             overrideImage: nil,
                             emptyColor: nil,
-                            clipStyle: .round,
+                            clipStyle: clipStyle,
                             synchronousLoad: synchronousLoad,
                             displayDimensions: CGSize(width: avatarSize, height: avatarSize)
                         )
@@ -1394,7 +1394,7 @@ public final class PeerListItemComponent: Component {
             if themeUpdated {
                 self.separatorLayer.backgroundColor = component.theme.list.itemPlainSeparatorColor.cgColor
             }
-            transition.setFrame(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: leftInset, y: height), size: CGSize(width: availableSize.width - leftInset, height: UIScreenPixel)))
+            transition.setFrame(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: leftInset, y: height), size: CGSize(width: availableSize.width - leftInset - 16.0, height: UIScreenPixel)))
             self.separatorLayer.isHidden = !component.hasNext
             
             let resultBounds = CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: height))

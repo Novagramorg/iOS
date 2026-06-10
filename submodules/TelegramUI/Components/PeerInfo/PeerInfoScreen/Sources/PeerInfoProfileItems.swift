@@ -22,6 +22,7 @@ private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .ment
 
 enum InfoSection: Int, CaseIterable {
     case unofficial
+    case community
     case groupLocation
     case calls
     case personalChannel
@@ -540,6 +541,7 @@ func infoItems(
         let ItemBalance = 9
         let ItemEdit = 10
         let ItemPeerPersonalChannel = 11
+        let ItemCommunity = 12
         
         if let _ = data.threadData {
             let mainUsername: String
@@ -692,6 +694,22 @@ func infoItems(
                     }))
                 }
                 
+                if case .group = channel.info, let linkedCommunityData = data.linkedCommunityData {
+                    items[.community]!.append(PeerInfoScreenCommunityItem(
+                        id: ItemCommunity,
+                        context: context,
+                        community: linkedCommunityData.peer,
+                        chatCount: linkedCommunityData.cachedData?.linkedPeers.count,
+                        action: {
+                            guard let controller = interaction.getController() else {
+                                return
+                            }
+                            let communityController = context.sharedContext.makeCommunityViewScreen(context: context, communityId: linkedCommunityData.peer.id)
+                            controller.push(communityController)
+                        }
+                    ))
+                }
+
                 if case .broadcast = channel.info {
                     var canEditMembers = false
                     if channel.hasPermission(.banMembers) {
@@ -893,6 +911,7 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
         case peerSettings
         case linkedMonoforum
         case peerAdditionalSettings
+        case community
         case peerActions
     }
     
@@ -1337,6 +1356,8 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 let ItemTopics = 117
                 let ItemTopicsText = 118
                 let ItemAppearance = 119
+                let ItemAddToCommunity = 120
+                let ItemAddToCommunityInfo = 121
                 
                 let isCreator = channel.flags.contains(.isCreator)
                 let isPublic = channel.addressName != nil
@@ -1577,6 +1598,14 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                         }))
                     }
                     
+                    if channel.linkedCommunityId == nil {
+                        //TODO:localize
+                        items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Group to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
+                            interaction.editingOpenAddToCommunity()
+                        }))
+                        items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your group part of a community with multiple related chats"))
+                    }
+
                     if isCreator {
                         items[.peerActions]!.append(PeerInfoScreenActionItem(id: ItemDeleteGroup, text: presentationData.strings.Group_DeleteGroup, color: .destructive, icon: nil, alignment: .natural, action: {
                             interaction.openDeletePeer()

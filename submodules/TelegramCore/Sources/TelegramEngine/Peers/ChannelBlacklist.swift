@@ -175,6 +175,10 @@ func _internal_updateDefaultChannelMemberBannedRights(account: Account, peerId: 
                     updatePeersCustom(transaction: transaction, peers: [peer.withUpdatedDefaultBannedRights(rights)], update: { _, updated in
                         return updated
                     })
+                } else if let peer = peer as? TelegramCommunity {
+                    updatePeersCustom(transaction: transaction, peers: [peer.withUpdatedDefaultBannedRights(rights)], update: { _, updated in
+                        return updated
+                    })
                 }
             }
             |> ignoreValues

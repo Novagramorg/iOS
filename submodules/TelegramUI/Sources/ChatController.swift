@@ -3291,7 +3291,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                         }
                                     case .legacyGroup:
                                         peerType = .group
-                                    case .secretChat:
+                                    case .secretChat, .community:
                                         return
                                     }
                                     let peerLocation = MediaResourceUserLocation.peer(peer.id)

@@ -49,6 +49,7 @@ public final class PeerSelectionControllerParams {
     public let updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?
     public let filter: ChatListNodePeersFilter
     public let requestPeerType: [ReplyMarkupButtonRequestPeerType]?
+    public let showPeerTypeRequirements: Bool
     public let forumPeerId: (id: EnginePeer.Id, isMonoforum: Bool)?
     public let hasFilters: Bool
     public let hasChatListSelector: Bool
@@ -67,12 +68,14 @@ public final class PeerSelectionControllerParams {
     public let immediatelySwitchToContacts: Bool
     public let immediatelyActivateMultipleSelection: Bool
     public let suggestedPeers: [EnginePeer]
+    public let excludedPeerIds: Set<EnginePeer.Id>
     
     public init(
         context: AccountContext,
         updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)? = nil,
         filter: ChatListNodePeersFilter = [.onlyWriteable],
         requestPeerType: [ReplyMarkupButtonRequestPeerType]? = nil,
+        showPeerTypeRequirements: Bool = true,
         forumPeerId: (id: EnginePeer.Id, isMonoforum: Bool)? = nil,
         hasFilters: Bool = false,
         hasChatListSelector: Bool = true,
@@ -90,12 +93,14 @@ public final class PeerSelectionControllerParams {
         hasCreation: Bool = false,
         immediatelySwitchToContacts: Bool = false,
         immediatelyActivateMultipleSelection: Bool = false,
-        suggestedPeers: [EnginePeer] = []
+        suggestedPeers: [EnginePeer] = [],
+        excludedPeerIds: Set<EnginePeer.Id> = []
     ) {
         self.context = context
         self.updatedPresentationData = updatedPresentationData
         self.filter = filter
         self.requestPeerType = requestPeerType
+        self.showPeerTypeRequirements = showPeerTypeRequirements
         self.forumPeerId = forumPeerId
         self.hasFilters = hasFilters
         self.hasChatListSelector = hasChatListSelector
@@ -114,6 +119,7 @@ public final class PeerSelectionControllerParams {
         self.immediatelySwitchToContacts = immediatelySwitchToContacts
         self.immediatelyActivateMultipleSelection = immediatelyActivateMultipleSelection
         self.suggestedPeers = suggestedPeers
+        self.excludedPeerIds = excludedPeerIds
     }
 }
 

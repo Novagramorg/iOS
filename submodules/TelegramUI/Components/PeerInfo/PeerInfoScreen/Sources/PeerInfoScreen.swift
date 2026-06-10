@@ -484,6 +484,9 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             editingOpenDiscussionGroupSetup: { [weak self] in
                 self?.editingOpenDiscussionGroupSetup()
             },
+            editingOpenAddToCommunity: { [weak self] in
+                self?.editingOpenAddToCommunity()
+            },
             editingOpenPostSuggestionsSetup: { [weak self] in
                 self?.editingOpenPostSuggestionsSetup()
             },
@@ -4067,6 +4070,13 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.controller?.push(channelDiscussionGroupSetupController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, peerId: peer.id))
     }
     
+    private func editingOpenAddToCommunity() {
+        guard let data = self.data, let peer = data.peer else {
+            return
+        }
+        self.controller?.push(self.context.sharedContext.makeCommunitiesScreen(context: self.context, peerId: peer.id))
+    }
+
     private func editingOpenPostSuggestionsSetup() {
         if #available(iOS 13.0, *) {
             guard let data = self.data, let peer = data.peer else {

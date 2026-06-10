@@ -27,7 +27,7 @@ import GlobalControlPanelsContext
 public enum ChatListNodeMode {
     case chatList(appendContacts: Bool)
     case peers(filter: ChatListNodePeersFilter, isSelecting: Bool, additionalCategories: [ChatListNodeAdditionalCategory], topPeers: [EnginePeer], chatListFilters: [ChatListFilter]?, displayAutoremoveTimeout: Bool, displayPresence: Bool)
-    case peerType(type: [ReplyMarkupButtonRequestPeerType], hasCreate: Bool)
+    case peerType(type: [ReplyMarkupButtonRequestPeerType], hasCreate: Bool, excludedPeerIds: Set<EnginePeer.Id>)
 }
 
 struct ChatListNodeListViewTransition {
@@ -456,6 +456,7 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
                         content: .peer(ChatListItemContent.PeerData(
                             messages: peerEntry.messages,
                             peer: peer,
+                            avatarPeer: peerEntry.avatarPeer,
                             threadInfo: threadInfo,
                             combinedReadState: combinedReadState,
                             isRemovedFromTotalUnreadCount: isRemovedFromTotalUnreadCount,
@@ -817,6 +818,7 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
                             content: .peer(ChatListItemContent.PeerData(
                                 messages: peerEntry.messages,
                                 peer: peer,
+                                avatarPeer: peerEntry.avatarPeer,
                                 threadInfo: threadInfo,
                                 combinedReadState: combinedReadState,
                                 isRemovedFromTotalUnreadCount: isRemovedFromTotalUnreadCount,
@@ -2274,8 +2276,8 @@ public final class ChatListNode: ListViewImpl {
                         
                         isEmpty = false
                         return true
-                    case let .peerType(peerTypes, _):
-                        if let peer = peer.peer, !peer.isDeleted && peer.id != context.account.peerId {
+                    case let .peerType(peerTypes, _, excludedPeerIds):
+                        if let peer = peer.peer, !peer.isDeleted && peer.id != context.account.peerId && !excludedPeerIds.contains(peer.id) {
                             var match = false
                             for peerType in peerTypes {
                                 if match {

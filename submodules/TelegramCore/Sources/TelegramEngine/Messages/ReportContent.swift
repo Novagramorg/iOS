@@ -47,41 +47,12 @@ private let ephemeralReportOptions: [(title: String, value: String)] = [
     ("Other", "other")
 ]
 
-private func ephemeralReportOptionData(_ value: String) -> Data {
-    return value.data(using: .utf8) ?? Data()
-}
-
-private func ephemeralReportReason(option: Data) -> Api.ReportReason? {
-    guard let value = String(data: option, encoding: .utf8) else {
-        return nil
-    }
-
-    switch value {
-    case "spam":
-        return .inputReportReasonSpam
-    case "violence":
-        return .inputReportReasonViolence
-    case "pornography":
-        return .inputReportReasonPornography
-    case "child_abuse":
-        return .inputReportReasonChildAbuse
-    case "illegal_drugs":
-        return .inputReportReasonIllegalDrugs
-    case "personal_details":
-        return .inputReportReasonPersonalDetails
-    case "other":
-        return .inputReportReasonOther
-    default:
-        return nil
-    }
-}
-
 func _internal_reportContent(account: Account, subject: ReportContentSubject, option: Data?, message: String?) -> Signal<ReportContentResult, ReportContentError> {
     return account.postbox.transaction { transaction -> Signal<ReportContentResult, ReportContentError> in
         if case let .messages(messageIds) = subject, !messageIds.isEmpty, messageIds.allSatisfy({ $0.namespace == Namespaces.Message.EphemeralLocal }) {
             guard let option else {
                 return .single(.options(title: "Report", options: ephemeralReportOptions.map { option in
-                    ReportContentResult.Option(text: option.title, option: ephemeralReportOptionData(option.value))
+                    ReportContentResult.Option(text: option.title, option: Data())
                 }))
             }
 
@@ -89,16 +60,12 @@ func _internal_reportContent(account: Account, subject: ReportContentSubject, op
                 return .single(.addComment(optional: false, option: option))
             }
 
-            guard let reason = ephemeralReportReason(option: option) else {
-                return .fail(.generic)
-            }
-
             var requests: [Signal<Api.ReportResult, MTRpcError>] = []
             for messageId in messageIds {
                 guard let peer = transaction.getPeer(messageId.peerId), let inputPeer = apiInputPeer(peer), let _ = transaction.getMessage(messageId)?.attributes.first(where: { $0 is EphemeralMessageAttribute }) as? EphemeralMessageAttribute else {
                     continue
                 }
-                requests.append(account.network.request(Api.functions.ephemeral.reportMessage(peer: inputPeer, id: messageId.id, reason: reason, message: message ?? "")))
+                requests.append(account.network.request(Api.functions.ephemeral.reportMessage(peer: inputPeer, id: messageId.id, option: Buffer(data: option), message: message ?? "")))
             }
 
             if requests.isEmpty {

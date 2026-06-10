@@ -246,6 +246,12 @@ extension Api.Chat {
             case let .channelForbidden(channelForbiddenData):
                 let id = channelForbiddenData.id
                 return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id))
+            case let .community(communityData):
+                let id = communityData.id
+                return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id))
+            case let .communityForbidden(communityForbiddenData):
+                let id = communityForbiddenData.id
+                return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id))
         }
     }
 }

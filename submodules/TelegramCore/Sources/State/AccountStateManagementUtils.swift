@@ -1437,6 +1437,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                         return group.updateDefaultBannedRights(TelegramChatBannedRights(apiBannedRights: defaultBannedRights), version: max(group.version, Int(version)))
                     } else if let channel = peer as? TelegramChannel {//, group.version == version - 1 {
                         return channel.withUpdatedDefaultBannedRights(TelegramChatBannedRights(apiBannedRights: defaultBannedRights))
+                    } else if let community = peer as? TelegramCommunity {
+                        return community.withUpdatedDefaultBannedRights(TelegramChatBannedRights(apiBannedRights: defaultBannedRights))
                     } else {
                         return peer
                     }

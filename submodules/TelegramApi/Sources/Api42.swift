@@ -4542,6 +4542,156 @@ public extension Api.functions.chatlists {
         })
     }
 }
+public extension Api.functions.communities {
+    static func create(flags: Int32, title: String, about: String?, peer: Api.InputPeer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1506256404)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeString(title, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(about!, buffer: buffer, boxed: false)
+        }
+        peer.serialize(buffer, true)
+        return (FunctionDescription(name: "communities.create", parameters: [("flags", ConstructorParameterDescription(flags)), ("title", ConstructorParameterDescription(title)), ("about", ConstructorParameterDescription(about)), ("peer", ConstructorParameterDescription(peer))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+            let reader = BufferReader(buffer)
+            var result: Api.Updates?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Updates
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.communities {
+    static func getJoinedCommunities() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.Chats>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1503401936)
+        return (FunctionDescription(name: "communities.getJoinedCommunities", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.Chats? in
+            let reader = BufferReader(buffer)
+            var result: Api.messages.Chats?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.messages.Chats
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.communities {
+    static func getParticipantJoinedChats(community: Api.InputChannel, participant: Api.InputPeer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.communities.ParticipantJoinedChats>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-125916245)
+        community.serialize(buffer, true)
+        participant.serialize(buffer, true)
+        return (FunctionDescription(name: "communities.getParticipantJoinedChats", parameters: [("community", ConstructorParameterDescription(community)), ("participant", ConstructorParameterDescription(participant))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.communities.ParticipantJoinedChats? in
+            let reader = BufferReader(buffer)
+            var result: Api.communities.ParticipantJoinedChats?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.communities.ParticipantJoinedChats
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.communities {
+    static func getPeerLinkRequests(community: Api.InputChannel, offset: String, limit: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.communities.PeerLinkRequests>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1820904636)
+        community.serialize(buffer, true)
+        serializeString(offset, buffer: buffer, boxed: false)
+        serializeInt32(limit, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "communities.getPeerLinkRequests", parameters: [("community", ConstructorParameterDescription(community)), ("offset", ConstructorParameterDescription(offset)), ("limit", ConstructorParameterDescription(limit))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.communities.PeerLinkRequests? in
+            let reader = BufferReader(buffer)
+            var result: Api.communities.PeerLinkRequests?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.communities.PeerLinkRequests
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.communities {
+    static func toggleAllPeerLinkRequestApproval(flags: Int32, community: Api.InputChannel) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1075585731)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        community.serialize(buffer, true)
+        return (FunctionDescription(name: "communities.toggleAllPeerLinkRequestApproval", parameters: [("flags", ConstructorParameterDescription(flags)), ("community", ConstructorParameterDescription(community))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.communities {
+    static func toggleCommunityCollapsedInDialogs(flags: Int32, community: Api.InputChannel) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-681122838)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        community.serialize(buffer, true)
+        return (FunctionDescription(name: "communities.toggleCommunityCollapsedInDialogs", parameters: [("flags", ConstructorParameterDescription(flags)), ("community", ConstructorParameterDescription(community))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Updates? in
+            let reader = BufferReader(buffer)
+            var result: Api.Updates?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Updates
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.communities {
+    static func toggleParticipantBanned(flags: Int32, community: Api.InputChannel, participant: Api.InputPeer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1721258737)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        community.serialize(buffer, true)
+        participant.serialize(buffer, true)
+        return (FunctionDescription(name: "communities.toggleParticipantBanned", parameters: [("flags", ConstructorParameterDescription(flags)), ("community", ConstructorParameterDescription(community)), ("participant", ConstructorParameterDescription(participant))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.communities {
+    static func togglePeerLink(flags: Int32, community: Api.InputChannel, peer: Api.InputPeer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1936576490)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        community.serialize(buffer, true)
+        peer.serialize(buffer, true)
+        return (FunctionDescription(name: "communities.togglePeerLink", parameters: [("flags", ConstructorParameterDescription(flags)), ("community", ConstructorParameterDescription(community)), ("peer", ConstructorParameterDescription(peer))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.communities {
+    static func togglePeerLinkRequestApproval(flags: Int32, community: Api.InputChannel, peer: Api.InputPeer) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Bool>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1937630808)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        community.serialize(buffer, true)
+        peer.serialize(buffer, true)
+        return (FunctionDescription(name: "communities.togglePeerLinkRequestApproval", parameters: [("flags", ConstructorParameterDescription(flags)), ("community", ConstructorParameterDescription(community)), ("peer", ConstructorParameterDescription(peer))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.Bool? in
+            let reader = BufferReader(buffer)
+            var result: Api.Bool?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.Bool
+            }
+            return result
+        })
+    }
+}
 public extension Api.functions.contacts {
     static func acceptContact(id: Api.InputUser) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.Updates>) {
         let buffer = Buffer()
@@ -5044,14 +5194,14 @@ public extension Api.functions.ephemeral {
     }
 }
 public extension Api.functions.ephemeral {
-    static func reportMessage(peer: Api.InputPeer, id: Int32, reason: Api.ReportReason, message: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.ReportResult>) {
+    static func reportMessage(peer: Api.InputPeer, id: Int32, option: Buffer, message: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.ReportResult>) {
         let buffer = Buffer()
-        buffer.appendInt32(1565499612)
+        buffer.appendInt32(-2029718849)
         peer.serialize(buffer, true)
         serializeInt32(id, buffer: buffer, boxed: false)
-        reason.serialize(buffer, true)
+        serializeBytes(option, buffer: buffer, boxed: false)
         serializeString(message, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "ephemeral.reportMessage", parameters: [("peer", ConstructorParameterDescription(peer)), ("id", ConstructorParameterDescription(id)), ("reason", ConstructorParameterDescription(reason)), ("message", ConstructorParameterDescription(message))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.ReportResult? in
+        return (FunctionDescription(name: "ephemeral.reportMessage", parameters: [("peer", ConstructorParameterDescription(peer)), ("id", ConstructorParameterDescription(id)), ("option", ConstructorParameterDescription(option)), ("message", ConstructorParameterDescription(message))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.ReportResult? in
             let reader = BufferReader(buffer)
             var result: Api.ReportResult?
             if let signature = reader.readInt32() {
@@ -7894,6 +8044,22 @@ public extension Api.functions.messages {
         serializeInt32(minId, buffer: buffer, boxed: false)
         serializeInt64(hash, buffer: buffer, boxed: false)
         return (FunctionDescription(name: "messages.getReplies", parameters: [("peer", ConstructorParameterDescription(peer)), ("msgId", ConstructorParameterDescription(msgId)), ("offsetId", ConstructorParameterDescription(offsetId)), ("offsetDate", ConstructorParameterDescription(offsetDate)), ("addOffset", ConstructorParameterDescription(addOffset)), ("limit", ConstructorParameterDescription(limit)), ("maxId", ConstructorParameterDescription(maxId)), ("minId", ConstructorParameterDescription(minId)), ("hash", ConstructorParameterDescription(hash))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.Messages? in
+            let reader = BufferReader(buffer)
+            var result: Api.messages.Messages?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.messages.Messages
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.messages {
+    static func getRichMessage(peer: Api.InputPeer, id: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.Messages>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1343580623)
+        peer.serialize(buffer, true)
+        serializeInt32(id, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "messages.getRichMessage", parameters: [("peer", ConstructorParameterDescription(peer)), ("id", ConstructorParameterDescription(id))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.Messages? in
             let reader = BufferReader(buffer)
             var result: Api.messages.Messages?
             if let signature = reader.readInt32() {

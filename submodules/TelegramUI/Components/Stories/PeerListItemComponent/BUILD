@@ -16,6 +16,7 @@ swift_library(
         "//submodules/AsyncDisplayKit",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/AccountContext",
+        "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/TelegramCore",
         "//submodules/Postbox",
         "//submodules/Components/MultilineTextComponent",
@@ -36,4 +37,3 @@ swift_library(
         "//visibility:public",
     ],
 )
-

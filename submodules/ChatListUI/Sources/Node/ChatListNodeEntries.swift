@@ -103,6 +103,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
         var draftState: ChatListItemContent.DraftState?
         var mediaDraftContentType: EngineChatList.MediaDraftContentType?
         var peer: EngineRenderedPeer
+        var avatarPeer: EngineRenderedPeer?
         var threadInfo: ChatListItemContent.ThreadInfo?
         var presence: EnginePeer.Presence?
         var hasUnseenMentions: Bool
@@ -132,6 +133,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             draftState: ChatListItemContent.DraftState?,
             mediaDraftContentType: EngineChatList.MediaDraftContentType?,
             peer: EngineRenderedPeer,
+            avatarPeer: EngineRenderedPeer? = nil,
             threadInfo: ChatListItemContent.ThreadInfo?,
             presence: EnginePeer.Presence?,
             hasUnseenMentions: Bool,
@@ -160,6 +162,7 @@ enum ChatListNodeEntry: Comparable, Identifiable {
             self.draftState = draftState
             self.mediaDraftContentType = mediaDraftContentType
             self.peer = peer
+            self.avatarPeer = avatarPeer
             self.threadInfo = threadInfo
             self.presence = presence
             self.hasUnseenMentions = hasUnseenMentions
@@ -244,6 +247,9 @@ enum ChatListNodeEntry: Comparable, Identifiable {
                 return false
             }
             if lhs.peer != rhs.peer {
+                return false
+            }
+            if lhs.avatarPeer != rhs.avatarPeer {
                 return false
             }
             if lhs.threadInfo != rhs.threadInfo {
@@ -588,6 +594,31 @@ private func offsetPinnedIndex(_ index: EngineChatList.Item.Index, offset: UInt1
     }
 }
 
+private func communityMessageAvatarPeer(peer: EngineRenderedPeer, messages: [EngineMessage]) -> EngineRenderedPeer? {
+    guard let mainPeer = peer.peer else {
+        return nil
+    }
+    switch mainPeer {
+    case .community:
+        break
+    default:
+        return nil
+    }
+    guard let message = messages.last else {
+        return nil
+    }
+    guard message.id.peerId != peer.peerId else {
+        return nil
+    }
+    if let sourcePeer = message.enginePeers[message.id.peerId] {
+        return EngineRenderedPeer(peer: sourcePeer)
+    }
+    if let sourcePeer = peer.peers[message.id.peerId] {
+        return EngineRenderedPeer(peer: sourcePeer)
+    }
+    return nil
+}
+
 struct ChatListContactPeer {
     var peer: EnginePeer
     var presence: EnginePeer.Presence
@@ -733,6 +764,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
             draftState: draftState,
             mediaDraftContentType: entry.mediaDraftContentType,
             peer: entry.renderedPeer,
+            avatarPeer: communityMessageAvatarPeer(peer: entry.renderedPeer, messages: updatedMessages),
             threadInfo: threadInfo,
             presence: entry.presence,
             hasUnseenMentions: entry.hasUnseenMentions,
@@ -883,6 +915,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                         draftState: draftState,
                         mediaDraftContentType: item.item.mediaDraftContentType,
                         peer: item.item.renderedPeer,
+                        avatarPeer: communityMessageAvatarPeer(peer: item.item.renderedPeer, messages: item.item.messages),
                         threadInfo: item.item.threadData.flatMap {
                             return ChatListItemContent.ThreadInfo(id: threadId, info: $0.info, isOwnedByMe: $0.isOwnedByMe, isClosed: $0.isClosed, isHidden: $0.isHidden, threadPeer: nil)
                         },
@@ -967,7 +1000,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                     result.append(.TopPeer(index: index, peer: topPeer))
                     index += 1
                 }
-            } else if case let .peerType(types, hasCreate) = mode, !result.isEmpty && hasCreate {
+            } else if case let .peerType(types, hasCreate, _) = mode, !result.isEmpty && hasCreate {
                 for type in types {
                     switch type {
                     case .group:
