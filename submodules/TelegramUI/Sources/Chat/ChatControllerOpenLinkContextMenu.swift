@@ -17,6 +17,7 @@ import UrlEscaping
 import UrlWhitelist
 import OpenInExternalAppUI
 import SafariServices
+import TelegramPresentationData
 
 private struct ChatLinkOpenMode {
     let shouldOpenInApp: Bool
