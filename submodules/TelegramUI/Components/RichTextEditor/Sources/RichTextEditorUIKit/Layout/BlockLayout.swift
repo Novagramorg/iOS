@@ -1,0 +1,190 @@
+#if canImport(UIKit)
+import UIKit
+
+/// One paragraph block's TextKit 2 layout context (line layout only). All geometry is returned in
+/// the block's own container coordinate space (origin 0,0); the document view offsets it.
+@available(iOS 17.0, *)
+final class BlockLayout {
+    let contentStorage: NSTextContentStorage
+    let layoutManager: NSTextLayoutManager
+    let container: NSTextContainer
+
+    /// Bumped on every change that affects what `drawText` produces (storage replacement or a
+    /// display-only rendering attribute). A cheap, collision-free repaint signal — see
+    /// `BlockBox.renderSignature`.
+    private(set) var renderVersion = 0
+
+    /// The text range the inline-prediction ghost foreground was last applied to (nil = none). Tracked so
+    /// `setGhostForeground` removes only ITS OWN range instead of blanket-clearing every `.foregroundColor`
+    /// rendering attribute — which would wipe a coexisting spoiler hide (both use `.foregroundColor`).
+    private var ghostRange: NSTextRange?
+    /// The text ranges currently hidden as spoilers (display-only clear foreground). Tracked so a re-apply
+    /// removes only these before re-adding, never touching the ghost range. The two are disjoint by
+    /// construction (the ghost sits at the caret, which is outside any HIDDEN spoiler — a focused spoiler is
+    /// revealed, not hidden).
+    private var spoilerRanges: [NSTextRange] = []
+    /// The LOCAL ranges last applied by `setSpoilerHidden`, kept ONLY for the no-op equality guard below
+    /// (so a re-apply with identical ranges — the common per-caret-move case — skips the renderVersion bump
+    /// and the paragraph doesn't needlessly repaint). Reset alongside `spoilerRanges` on any storage edit.
+    private var spoilerLocalRanges: [NSRange] = []
+
+    init(attributedString: NSAttributedString, width: CGFloat) {
+        contentStorage = NSTextContentStorage()
+        layoutManager = NSTextLayoutManager()
+        container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layoutManager.textContainer = container
+        contentStorage.addTextLayoutManager(layoutManager)
+        contentStorage.textStorage = NSTextStorage(attributedString: attributedString)
+    }
+
+    var attributedString: NSAttributedString {
+        get { contentStorage.textStorage ?? NSAttributedString() }
+        set {
+            contentStorage.textStorage?.setAttributedString(newValue); renderVersion &+= 1
+            // Reset tracked rendering ranges on a STORAGE-LENGTH change (locations shift, so a stale
+            // NSTextRange could mis-remove). Attribute-only mutations (e.g. applyCharacterToggle's direct
+            // bumpRenderVersion) don't shift offsets, so they intentionally skip this reset.
+            ghostRange = nil; spoilerRanges = []; spoilerLocalRanges = []
+        }
+    }
+
+    /// Bump the render version after mutating `contentStorage.textStorage` directly (i.e. NOT through
+    /// this type's `attributedString`/`replace`). Used by the character-format/link commands so a
+    /// view-backed paragraph repaints when its attributes change. See `BlockBox.renderSignature`.
+    func bumpRenderVersion() { renderVersion &+= 1 }
+
+    var length: Int { contentStorage.textStorage?.length ?? 0 }
+
+    func setWidth(_ width: CGFloat) {
+        container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+    }
+
+    var boundingHeight: CGFloat {
+        var maxY: CGFloat = 0
+        layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
+            maxY = max(maxY, fragment.layoutFragmentFrame.maxY)
+            return true
+        }
+        return maxY
+    }
+
+    /// Y of the first laid-out text line's baseline, relative to the top of the layout (y = 0, i.e. the
+    /// block's `textOrigin.y`). `nil` when there is no laid-out line (empty text — TextKit 2 lays out no
+    /// fragment). Used to align a list marker (drawn outside the text storage) to the paragraph's first
+    /// line, which `lineHeightMultiple` shifts below the natural top.
+    var firstLineBaselineFromTop: CGFloat? {
+        var result: CGFloat?
+        layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
+            guard let line = fragment.textLineFragments.first else { return true }
+            result = fragment.layoutFragmentFrame.minY + line.glyphOrigin.y
+            return false
+        }
+        return result
+    }
+
+    func textRange(_ start: Int, _ end: Int) -> NSTextRange? {
+        let docStart = contentStorage.documentRange.location
+        guard let s = contentStorage.location(docStart, offsetBy: start),
+              let e = contentStorage.location(docStart, offsetBy: end) else { return nil }
+        return NSTextRange(location: s, end: e)
+    }
+
+    func caretRect(atOffset offset: Int) -> CGRect {
+        guard let range = textRange(offset, offset) else { return CGRect(x: 0, y: 0, width: 2, height: 20) }
+        var rect = CGRect(x: 0, y: 0, width: 2, height: 20)
+        layoutManager.enumerateTextSegments(in: range, type: .standard, options: []) { _, frame, _, _ in
+            rect = CGRect(x: frame.minX, y: frame.minY, width: 2, height: max(frame.height, 20))
+            return false
+        }
+        return rect
+    }
+
+    func selectionRects(start: Int, end: Int) -> [CGRect] {
+        guard start < end, let range = textRange(start, end) else { return [] }
+        var rects: [CGRect] = []
+        layoutManager.enumerateTextSegments(in: range, type: .selection, options: []) { _, frame, _, _ in
+            rects.append(frame)
+            return true
+        }
+        return rects
+    }
+
+    func closestOffset(toPoint point: CGPoint) -> Int {
+        // Pick by line first, then by x within that line: a tap in a line's vertical band must map to
+        // that line even if a longer line above has an end-caret that's horizontally nearer (e.g.
+        // tapping the empty space to the right of a short last line). `dy` is the vertical distance to
+        // the caret's line band (0 when the tap is inside it); ties on the same line break on `dx`.
+        var best = 0
+        var bestDy = CGFloat.greatestFiniteMagnitude
+        var bestDx = CGFloat.greatestFiniteMagnitude
+        for offset in 0...length {
+            let caret = caretRect(atOffset: offset)
+            let dy = point.y < caret.minY ? caret.minY - point.y
+                   : point.y > caret.maxY ? point.y - caret.maxY : 0
+            let dx = abs(caret.midX - point.x)
+            if dy < bestDy - 0.5 || (dy <= bestDy + 0.5 && dx < bestDx) {
+                bestDy = dy; bestDx = dx; best = offset
+            }
+        }
+        return best
+    }
+
+    /// Draws the laid-out text fragments into `ctx`, translated to `origin` (canvas coordinates).
+    func drawText(in ctx: CGContext, at origin: CGPoint) {
+        ctx.saveGState()
+        ctx.translateBy(x: origin.x, y: origin.y)
+        layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
+            fragment.draw(at: fragment.layoutFragmentFrame.origin, in: ctx); return true
+        }
+        ctx.restoreGState()
+    }
+
+    func replace(start: Int, end: Int, with string: NSAttributedString) {
+        contentStorage.textStorage?.replaceCharacters(in: NSRange(location: start, length: end - start),
+                                                       with: string)
+        renderVersion &+= 1
+        ghostRange = nil; spoilerRanges = []; spoilerLocalRanges = []
+    }
+
+    /// Sets a DISPLAY-ONLY foreground colour over `[start, end)` via a TextKit 2 rendering attribute (the
+    /// content storage / model is never touched) — used to grey an inline-prediction ghost. Removes only
+    /// the PREVIOUS ghost range (not every `.foregroundColor`) so a coexisting spoiler hide survives. Pass
+    /// `color == nil` to clear the ghost.
+    func setGhostForeground(_ color: UIColor?, start: Int, end: Int) {
+        if let prev = ghostRange { layoutManager.removeRenderingAttribute(.foregroundColor, for: prev) }
+        ghostRange = nil
+        renderVersion &+= 1
+        guard let color, start < end, let range = textRange(start, end) else { return }
+        layoutManager.addRenderingAttribute(.foregroundColor, value: color, for: range)
+        ghostRange = range
+    }
+
+    /// Hides each LOCAL range as a spoiler by painting a DISPLAY-ONLY clear foreground over it (the glyphs
+    /// stop drawing but still occupy layout, so all geometry is unchanged and nothing leaks into the model
+    /// — the `setGhostForeground` precedent). Idempotent: removes the previously-hidden ranges first, so
+    /// passing `[]` reveals everything. Disjoint from the ghost range, so the two never clobber.
+    ///
+    /// Performs a TRUE no-op (does NOT bump `renderVersion`) when the effective ranges are identical to the
+    /// last call — covering both the empty→empty case (non-spoiler regions called each caret move) and the
+    /// stable-hidden case (same hide on successive caret moves). After a storage edit `spoilerLocalRanges`
+    /// is reset, so a re-call with the same logical ranges correctly re-applies the hide.
+    /// Returns `true` iff the hidden set actually changed (so the caller can repaint the owning view — a
+    /// reveal removes the clear foreground, and the paragraph must redraw to show the text again).
+    @discardableResult
+    func setSpoilerHidden(_ ranges: [NSRange]) -> Bool {
+        let effective = ranges.filter { $0.length > 0 }
+        if effective == spoilerLocalRanges { return false }   // no change → do NOT bump renderVersion (repaint gate)
+        for prev in spoilerRanges { layoutManager.removeRenderingAttribute(.foregroundColor, for: prev) }
+        spoilerRanges = []
+        renderVersion &+= 1
+        for r in effective {
+            guard let tr = textRange(r.location, r.location + r.length) else { continue }
+            layoutManager.addRenderingAttribute(.foregroundColor, value: UIColor.clear, for: tr)
+            spoilerRanges.append(tr)
+        }
+        spoilerLocalRanges = effective
+        return true
+    }
+}
+#endif

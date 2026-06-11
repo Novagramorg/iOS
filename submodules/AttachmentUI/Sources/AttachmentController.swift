@@ -34,6 +34,7 @@ public enum AttachmentButtonType: Equatable {
     case emoji
     case audio
     case link
+    case richText
     case standalone
 
     public var key: String {
@@ -64,6 +65,8 @@ public enum AttachmentButtonType: Equatable {
             return "audio"
         case .link:
             return "link"
+        case .richText:
+            return "richText"
         case .standalone:
             return "standalone"
         }
@@ -145,6 +148,12 @@ public enum AttachmentButtonType: Equatable {
             }
         case .link:
             if case .link = rhs {
+                return true
+            } else {
+                return false
+            }
+        case .richText:
+            if case .richText = rhs {
                 return true
             } else {
                 return false
