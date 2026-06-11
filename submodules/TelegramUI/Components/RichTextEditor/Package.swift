@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "RichTextEditor",
-    platforms: [.iOS(.v17), .macOS(.v13)],
+    platforms: [.iOS(.v17), .macOS(.v12)],
     products: [
         .library(name: "RichTextEditorCore", targets: ["RichTextEditorCore"]),
         .library(name: "RichTextEditorUIKit", targets: ["RichTextEditorUIKit"]),
