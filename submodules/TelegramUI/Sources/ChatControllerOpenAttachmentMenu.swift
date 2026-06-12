@@ -35,6 +35,7 @@ import ComposeTodoScreen
 import ComposePollScreen
 import Photos
 import AttachmentFileController
+import RichTextAttachmentScreen
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
@@ -259,6 +260,9 @@ extension ChatControllerImpl {
             var (buttons, allButtons, initialButton) = buttonsAndInitialButton
             if !premiumGiftOptions.isEmpty {
                 buttons.insert(.gift, at: 1)
+            }
+            if strongSelf.context.sharedContext.immediateExperimentalUISettings.debugRichText {
+                buttons.insert(.richText, at: 1)
             }
 
             guard let initialButton = initialButton else {
@@ -830,6 +834,13 @@ extension ChatControllerImpl {
                         completion(controller, controller.mediaPickerContext)
                         strongSelf.controllerNavigationDisposable.set(nil)
                     })
+                    return true
+                case .richText:
+                    if #available(iOS 17.0, *) {
+                        let controller = RichTextAttachmentScreen(context: context)
+                        completion(controller, controller.mediaPickerContext)
+                        strongSelf.controllerNavigationDisposable.set(nil)
+                    }
                     return true
                 default:
                     break
