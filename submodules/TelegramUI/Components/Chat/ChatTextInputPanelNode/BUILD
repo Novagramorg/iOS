@@ -66,6 +66,7 @@ swift_library(
         "//submodules/TelegramUI/Components/RasterizedCompositionComponent",
         "//submodules/TelegramUI/Components/StarsParticleEffect",
         "//submodules/TelegramUI/Components/Calls/VideoChatMicButtonComponent",
+        "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
     ],
     visibility = [
         "//visibility:public",

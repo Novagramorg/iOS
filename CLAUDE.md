@@ -35,6 +35,12 @@ The build needs `TELEGRAM_CODESIGNING_GIT_PASSWORD` in the environment. It is se
 - External code is located in `third-party/`
 - No tests are used at the moment
 
+## RichTextEditor editor (`submodules/TelegramUI/Components/RichTextEditor`)
+
+A from-scratch WYSIWYG rich-text editor (UIKit, TextKit 2) developed as a **SwiftPM package** that lives in-tree and is now **wired into the app** — `ChatTextInputPanelNode` depends on `:RichTextEditorUIKit`, so it builds under Bazel at the repo's iOS-13 floor as part of the app. It was historically developed/tested via **SwiftPM** from that directory (`swift test` for Core on macOS, `Scripts/iostest.sh` for the UIKit suite, the `Demo/` xcodegen app); the UIKit target uses a small `#if SWIFT_PACKAGE` switch for its one bundled resource so it still compiles under both build systems (see below). Its own `CLAUDE.md` there is the authority for architecture, status, and workflow.
+
+Both Bazel targets — `//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore` and `:RichTextEditorUIKit` — now **fully compile** at the repo's iOS-13 floor (the iOS-17 availability pass landed 2026-06-09): every top-level type/extension in the UIKit target is gated `@available(iOS 17.0, *)` (Core is pure-Foundation and stays always-available; finer `17.4`/`18.0` annotations preserved). The spoiler-texture resource is resolved per build system behind `#if SWIFT_PACKAGE`: SwiftPM uses `.module`, Bazel uses the app's `AppBundle` (`UIImage(bundleImageName: "Components/TextSpeckle")`, `//submodules/AppBundle` dep) — so both build systems compile.
+
 ## Embedded watch app (`Telegram/WatchApp`)
 
 A standalone watchOS Telegram client (developed in the separate `~/build/tgwatch` repo) is vendored into this repo at `Telegram/WatchApp/` and can be embedded into the **device** IPA under `Telegram.app/Watch/`. It is built by `xcodebuild` (not Bazel) and codesigned by the Bazel build.
@@ -59,6 +65,20 @@ This matters in two places specifically:
 - **`asyncLayout`-style content nodes.** The measure pass runs off-main and returns a size; the apply step runs on main and the chat layout system positions the node. A child view that writes `self.frame` from `update()` corrupts the size the parent just measured.
 
 Rare exceptions: top-level view-controller views integrating with the system's first-responder/inset model. If you find yourself wanting `self.frame = …` from inside a child view, refactor so the parent positions it instead.
+
+## ChatHistoryListNode composition
+
+`ChatHistoryListNodeImpl` (`submodules/TelegramUI/Sources/ChatHistoryListNode.swift`) **composes** rather than inherits `ListViewImpl` (`submodules/Display/Source/ListView.swift`): it is an `ASDisplayNode` wrapper holding `private let listView: ListViewImpl` and exposes a deliberately narrowed surface (the `ChatHistoryListNode` protocol in `AccountContext` + curated concrete forwarders) instead of the full `ListView` API. `ListViewImpl` gained a `getCustomItemDeleteAnimationDuration` closure hook so the one former `override` works via composition.
+
+These invariants are **compiler-invisible** — getting them wrong silently breaks the app's primary scroll surface:
+
+- **The π rotation stays on the wrapper** (chat is bottom-up). The wrapper keeps `transform = π` + a `rotated` flag; the child `listView` gets only `rotated = true` (identity transform). So `historyNode.view`/`.layer` remain the rotated surface, and rotation-coupled code — hitTest coordinate conversions, the blur `drawHierarchy` flip, the dust/delete layer, `.layer` animations, and the overscroll-overlay + snapshot-slide reparenting — **stays on `self` (the wrapper)** unchanged.
+- **Only genuine scroll-surface concerns route to the child:** gesture recognizers (selection pan; external taps via `addContentGestureRecognizer`) attach to `self.listView.view` to share the scroll pan's simultaneity environment, and scroller access goes to `self.listView.scroller`.
+- **`let _ = self.view` in `init` is load-bearing.** The old inherited node was view-loaded eagerly (so `self.isNodeLoaded` was always true); `enqueueHistoryViewTransition` gates the history dequeue on it. The wrapper must force-load its view in init or off-screen nodes (created during thread switches) never become ready and `reloadChatLocation`'s completion never fires.
+- **Item nodes are one level deeper.** Any `.supernode` chain / hierarchy-depth assumption passing through the history node gained one level (item → child `listView` → wrapper). E.g. `ChatMessageTransitionNode` converts item rects up `supernode?.supernode?.supernode?.view` (was 2 hops) so the wrapper's rotation is applied as an intermediate transform; a missing hop reflects effect-burst overlays ~180°.
+- Child geometry is driven inside `updateLayout` via `transition.updateFrame(node: self.listView, …)` — the project never relies on ASDisplayNode's automatic `layout()`.
+
+The public surface is being narrowed incrementally (e.g. `scroller` → `bounces`/`contentHeight`; the `trackingOffset`/`beganTrackingAtTopOrigin` pair → `didInteractivelyDragFromTopOrigin`). Prefer intent-named accessors over re-exposing raw `ListView` state.
 
 ## InstantPage V2 & rich-text messages
 

@@ -531,6 +531,7 @@ swift_library(
         "//submodules/TelegramUI/Components/RankChatPreviewItem",
         "//submodules/TelegramUI/Components/TextProcessingScreen",
         "//submodules/TelegramUI/Components/CreateBotScreen",
+        "//submodules/TelegramUI/Components/RichTextAttachmentScreen",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

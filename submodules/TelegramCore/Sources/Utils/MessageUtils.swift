@@ -522,6 +522,14 @@ public extension Message {
         }
         return nil
     }
+    var isEphemeral: Bool {
+        for attribute in self.attributes {
+            if attribute is EphemeralMessageAttribute || attribute is EphemeralOutgoingMessageAttribute {
+                return true
+            }
+        }
+        return false
+    }
 }
 
 public extension Message {
