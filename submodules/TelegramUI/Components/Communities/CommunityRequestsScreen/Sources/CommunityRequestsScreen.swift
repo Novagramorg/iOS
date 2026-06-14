@@ -31,10 +31,12 @@ private final class CommunityRequestsScreenComponent: Component {
 
     let context: AccountContext
     let communityId: EnginePeer.Id
+    let requestsContext: CommunityPeerLinkRequestsContext
 
-    init(context: AccountContext, communityId: EnginePeer.Id) {
+    init(context: AccountContext, communityId: EnginePeer.Id, requestsContext: CommunityPeerLinkRequestsContext) {
         self.context = context
         self.communityId = communityId
+        self.requestsContext = requestsContext
     }
 
     static func ==(lhs: CommunityRequestsScreenComponent, rhs: CommunityRequestsScreenComponent) -> Bool {
@@ -42,6 +44,9 @@ private final class CommunityRequestsScreenComponent: Component {
             return false
         }
         if lhs.communityId != rhs.communityId {
+            return false
+        }
+        if lhs.requestsContext !== rhs.requestsContext {
             return false
         }
         return true
@@ -72,8 +77,6 @@ private final class CommunityRequestsScreenComponent: Component {
         private var requests: [CommunityPeerRequest]?
         private var peers: [EnginePeer.Id: EnginePeer] = [:]
         private var cachedPeerData: [EnginePeer.Id: EngineCachedPeerData] = [:]
-        private var inFlightPeerActions: [EnginePeer.Id: Bool] = [:]
-        private var bulkAction: Bool?
         private var cachedChevronImage: (UIImage, PresentationTheme)?
 
         private var communityDisposable: Disposable?
@@ -81,8 +84,6 @@ private final class CommunityRequestsScreenComponent: Component {
         private var cachedDataDisposable: Disposable?
         private var cachedDataPeerIds = Set<EnginePeer.Id>()
         private var requestedCachedPeerIds = Set<EnginePeer.Id>()
-        private var bulkActionDisposable = MetaDisposable()
-        private var actionDisposables: [EnginePeer.Id: Disposable] = [:]
 
         override init(frame: CGRect) {
             self.scrollView = ScrollView()
@@ -113,10 +114,6 @@ private final class CommunityRequestsScreenComponent: Component {
             self.communityDisposable?.dispose()
             self.loadDisposable?.dispose()
             self.cachedDataDisposable?.dispose()
-            self.bulkActionDisposable.dispose()
-            for (_, disposable) in self.actionDisposables {
-                disposable.dispose()
-            }
         }
 
         func scrollToTop() {
@@ -126,6 +123,9 @@ private final class CommunityRequestsScreenComponent: Component {
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             if !self.ignoreScrolling {
                 self.updateScrolling(transition: .immediate)
+            }
+            if scrollView.contentOffset.y + scrollView.bounds.height > scrollView.contentSize.height - 200.0 {
+                self.component?.requestsContext.loadMore(limit: 100)
             }
         }
 
@@ -209,19 +209,17 @@ private final class CommunityRequestsScreenComponent: Component {
             if self.loadDisposable != nil {
                 return
             }
-            self.loadDisposable = (component.context.engine.peers.communityPeerLinkRequests(
-                communityId: component.communityId,
-                offset: nil,
-                limit: 100
-            )
+            self.loadDisposable = (component.requestsContext.state
             |> deliverOnMainQueue).startStrict(next: { [weak self] result in
                 guard let self else {
                     return
                 }
-                self.requests = result.requests
+                self.requests = result.hasLoadedOnce ? result.requests : nil
                 self.peers = result.peers
+                self.ensureCachedData(component: component)
                 self.state?.updated(transition: .spring(duration: 0.35))
             })
+            component.requestsContext.loadMore(limit: 100)
         }
 
         private func ensureCachedData(component: CommunityRequestsScreenComponent) {
@@ -276,20 +274,6 @@ private final class CommunityRequestsScreenComponent: Component {
             })
         }
 
-        private func presentError() {
-            guard let component = self.component, let environment = self.environment else {
-                return
-            }
-            environment.controller()?.present(AlertScreen(
-                context: component.context,
-                title: nil,
-                text: "Something went wrong.",
-                actions: [
-                    AlertScreen.Action(title: environment.strings.Common_OK, type: .default)
-                ]
-            ), in: .window(.root))
-        }
-
         private func alertText(_ text: String, boldText: String, presentationData: PresentationData) -> NSAttributedString {
             let result = NSMutableAttributedString(string: text, font: Font.regular(13.0), textColor: presentationData.theme.actionSheet.primaryTextColor)
             if let range = text.range(of: boldText) {
@@ -317,9 +301,6 @@ private final class CommunityRequestsScreenComponent: Component {
 
         private func presentBulkConfirmation(approve: Bool, count: Int) {
             guard let component = self.component, let environment = self.environment else {
-                return
-            }
-            if self.bulkAction != nil {
                 return
             }
 
@@ -368,72 +349,14 @@ private final class CommunityRequestsScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
-            if self.bulkAction != nil {
-                return
-            }
-
-            self.bulkAction = approve
-            self.state?.updated(transition: .immediate)
-
-            self.bulkActionDisposable.set((component.context.engine.peers.toggleAllCommunityPeerLinkRequestApproval(
-                communityId: component.communityId,
-                approve: approve
-            )
-            |> deliverOnMainQueue).startStrict(error: { [weak self] _ in
-                guard let self else {
-                    return
-                }
-                self.bulkAction = nil
-                self.state?.updated(transition: .spring(duration: 0.35))
-                self.presentError()
-            }, completed: { [weak self] in
-                guard let self, let component = self.component else {
-                    return
-                }
-                self.bulkAction = nil
-                self.requests = []
-                self.inFlightPeerActions.removeAll()
-                component.context.account.viewTracker.forceUpdateCachedPeerData(peerId: component.communityId)
-                self.state?.updated(transition: .spring(duration: 0.35))
-            }))
+            component.requestsContext.updateAll(action: approve ? .approve : .deny)
         }
 
         private func setRequestApproval(request: CommunityPeerRequest, approve: Bool) {
             guard let component = self.component else {
                 return
             }
-            if self.inFlightPeerActions[request.peerId] != nil || self.bulkAction != nil {
-                return
-            }
-            self.inFlightPeerActions[request.peerId] = approve
-            self.state?.updated(transition: .immediate)
-
-            self.actionDisposables[request.peerId]?.dispose()
-            self.actionDisposables[request.peerId] = (component.context.engine.peers.toggleCommunityPeerLinkRequestApproval(
-                communityId: component.communityId,
-                peerId: request.peerId,
-                approve: approve
-            )
-            |> deliverOnMainQueue).startStrict(error: { [weak self] _ in
-                guard let self else {
-                    return
-                }
-                self.inFlightPeerActions.removeValue(forKey: request.peerId)
-                self.actionDisposables[request.peerId]?.dispose()
-                self.actionDisposables.removeValue(forKey: request.peerId)
-                self.state?.updated(transition: .spring(duration: 0.35))
-                self.presentError()
-            }, completed: { [weak self] in
-                guard let self, let component = self.component else {
-                    return
-                }
-                self.inFlightPeerActions.removeValue(forKey: request.peerId)
-                self.actionDisposables[request.peerId]?.dispose()
-                self.actionDisposables.removeValue(forKey: request.peerId)
-                self.requests = self.requests?.filter { $0.peerId != request.peerId }
-                component.context.account.viewTracker.forceUpdateCachedPeerData(peerId: component.communityId)
-                self.state?.updated(transition: .spring(duration: 0.35))
-            })
+            component.requestsContext.update(request, action: approve ? .approve : .deny)
         }
 
         private func openPeer(_ peer: EnginePeer) {
@@ -473,9 +396,6 @@ private final class CommunityRequestsScreenComponent: Component {
         }
 
         private func requestItem(component: CommunityRequestsScreenComponent, row: CommunityRequestRow, hasNext: Bool, theme: PresentationTheme, presentationData: PresentationData) -> AnyComponentWithIdentity<Empty> {
-            let inFlightAction = self.inFlightPeerActions[row.request.peerId]
-            let isEnabled = inFlightAction == nil && self.bulkAction == nil
-
             return AnyComponentWithIdentity(id: row.request.peerId, component: AnyComponent(CommunityRequestItemComponent(
                 context: component.context,
                 theme: theme,
@@ -485,9 +405,9 @@ private final class CommunityRequestsScreenComponent: Component {
                 memberCount: row.memberCount,
                 isPrivate: row.isPrivate,
                 isVisible: row.isVisible,
-                isEnabled: isEnabled,
-                declineDisplaysProgress: inFlightAction == false,
-                addDisplaysProgress: inFlightAction == true,
+                isEnabled: true,
+                declineDisplaysProgress: false,
+                addDisplaysProgress: false,
                 hasNext: hasNext,
                 open: { [weak self] _ in
                     self?.openRequest(row: row)
@@ -739,8 +659,8 @@ private final class CommunityRequestsScreenComponent: Component {
                                 badgeForeground: theme.list.blocksBackgroundColor
                             ))
                         ),
-                        isEnabled: self.bulkAction == nil,
-                        displaysProgress: self.bulkAction == false,
+                        isEnabled: true,
+                        displaysProgress: false,
                         action: { [weak self] in
                             self?.presentBulkConfirmation(approve: false, count: rows.count)
                         }
@@ -768,8 +688,8 @@ private final class CommunityRequestsScreenComponent: Component {
                                 badgeForeground: theme.list.itemCheckColors.fillColor
                             ))
                         ),
-                        isEnabled: self.bulkAction == nil,
-                        displaysProgress: self.bulkAction == true,
+                        isEnabled: true,
+                        displaysProgress: false,
                         action: { [weak self] in
                             self?.presentBulkConfirmation(approve: true, count: rows.count)
                         }
@@ -846,10 +766,11 @@ private final class CommunityRequestsScreenComponent: Component {
 }
 
 public final class CommunityRequestsScreen: ViewControllerComponentContainer {
-    public init(context: AccountContext, communityId: EnginePeer.Id) {
+    public init(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext? = nil) {
+        let requestsContext = existingContext ?? context.engine.peers.communityPeerLinkRequestsContext(communityId: communityId, initialLimit: 100)
         super.init(
             context: context,
-            component: CommunityRequestsScreenComponent(context: context, communityId: communityId),
+            component: CommunityRequestsScreenComponent(context: context, communityId: communityId, requestsContext: requestsContext),
             navigationBarAppearance: .default,
             theme: .default,
             updatedPresentationData: nil

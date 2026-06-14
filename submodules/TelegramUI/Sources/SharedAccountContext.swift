@@ -4329,7 +4329,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
 
     public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
-        return CommunityRequestsScreen(context: context, communityId: communityId)
+        return self.makeCommunityRequestsScreen(context: context, communityId: communityId, existingContext: nil)
+    }
+
+    public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController {
+        return CommunityRequestsScreen(context: context, communityId: communityId, existingContext: existingContext)
     }
 
     public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {

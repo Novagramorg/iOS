@@ -27,6 +27,7 @@ public enum TelegramCommunityPermission {
     case changeInfo
     case banUsers
     case manageLinkedPeers
+    case addAdmins
 }
 
 public final class TelegramCommunity: Peer, Equatable {
@@ -234,6 +235,11 @@ public final class TelegramCommunity: Peer, Equatable {
                 return false
             }
             return true
+        case .addAdmins:
+            if let adminRights = self.adminRights {
+                return adminRights.rights.contains(.canAddAdmins)
+            }
+            return false
         }
     }
 }

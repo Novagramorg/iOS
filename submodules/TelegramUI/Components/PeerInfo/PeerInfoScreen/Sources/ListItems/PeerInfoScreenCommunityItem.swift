@@ -6,6 +6,7 @@ import AccountContext
 import TelegramCore
 import TelegramPresentationData
 import AvatarNode
+import AppBundle
 
 final class PeerInfoScreenCommunityItem: PeerInfoScreenItem {
     let id: AnyHashable
@@ -30,6 +31,7 @@ final class PeerInfoScreenCommunityItem: PeerInfoScreenItem {
 private final class PeerInfoScreenCommunityItemNode: PeerInfoScreenItemNode {
     private let selectionNode: PeerInfoScreenSelectableBackgroundNode
     private let maskNode: ASImageNode
+    private let avatarShadowNode: ASImageNode
     private let avatarNode: AvatarNode
     private let titleNode: ImmediateTextNode
     private let subtitleNode: ImmediateTextNode
@@ -47,6 +49,10 @@ private final class PeerInfoScreenCommunityItemNode: PeerInfoScreenItemNode {
 
         self.maskNode = ASImageNode()
         self.maskNode.isUserInteractionEnabled = false
+
+        self.avatarShadowNode = ASImageNode()
+        self.avatarShadowNode.displaysAsynchronously = false
+        self.avatarShadowNode.displayWithoutProcessing = true
 
         self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 18.0))
 
@@ -80,6 +86,7 @@ private final class PeerInfoScreenCommunityItemNode: PeerInfoScreenItemNode {
         self.addSubnode(self.bottomSeparatorNode)
         self.addSubnode(self.selectionNode)
         self.addSubnode(self.maskNode)
+        self.addSubnode(self.avatarShadowNode)
         self.addSubnode(self.avatarNode)
         self.addSubnode(self.titleNode)
         self.addSubnode(self.subtitleNode)
@@ -134,6 +141,16 @@ private final class PeerInfoScreenCommunityItemNode: PeerInfoScreenItemNode {
             origin: CGPoint(x: sideInset, y: floorToScreenPixels((height - avatarSize) / 2.0)),
             size: CGSize(width: avatarSize, height: avatarSize)
         )
+        if let shadowImage = UIImage(bundleImageName: "Components/CommunityShadow") {
+            self.avatarShadowNode.isHidden = false
+            self.avatarShadowNode.image = generateTintedImage(image: shadowImage, color: presentationData.theme.list.itemSecondaryTextColor)
+
+            let aspectRatio = shadowImage.size.width / shadowImage.size.height
+            let shadowSize = CGSize(width: floor(avatarSize * aspectRatio * 0.98), height: avatarSize)
+            transition.updateFrame(node: self.avatarShadowNode, frame: shadowSize.centered(around: avatarFrame.center).offsetBy(dx: -5.0 + UIScreenPixel, dy: 0.0))
+        } else {
+            self.avatarShadowNode.isHidden = true
+        }
         transition.updateFrame(node: self.avatarNode, frame: avatarFrame)
 
         let textHeight: CGFloat

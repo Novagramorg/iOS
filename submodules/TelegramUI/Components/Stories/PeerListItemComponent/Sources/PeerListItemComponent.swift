@@ -58,6 +58,7 @@ public final class PeerListItemComponent: Component {
     public enum Style {
         case generic
         case compact
+        case list
     }
     
     public enum SelectionState: Equatable {
@@ -678,6 +679,8 @@ public final class PeerListItemComponent: Component {
             self.component = component
             self.state = state
             
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            
             self.containerButton.alpha = component.isEnabled ? 1.0 : 0.3
             self.containerButton.isEnabled = component.action != nil
             
@@ -686,8 +689,7 @@ public final class PeerListItemComponent: Component {
             let labelData: (String, Subtitle.Color)
             if let presence = component.presence {
                 let timestamp = CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970
-                let dateTimeFormat = component.context.sharedContext.currentPresentationData.with { $0 }.dateTimeFormat
-                let labelDataValue = stringAndActivityForUserPresence(strings: component.strings, dateTimeFormat: dateTimeFormat, presence: presence, relativeTo: Int32(timestamp))
+                let labelDataValue = stringAndActivityForUserPresence(strings: component.strings, dateTimeFormat: presentationData.dateTimeFormat, presence: presence, relativeTo: Int32(timestamp))
                 labelData = (labelDataValue.0, labelDataValue.1 ? .accent : .neutral)
             } else if let subtitle = component.subtitle {
                 labelData = (subtitle.text, subtitle.color)
@@ -709,7 +711,7 @@ public final class PeerListItemComponent: Component {
             let verticalInset: CGFloat = component.insets?.top ?? 1.0
             
             var leftInset: CGFloat = 53.0 + component.sideInset
-            if case .generic = component.style {
+            if [.generic, .list].contains(component.style) {
                 leftInset += 9.0
             }
             var rightInset: CGFloat = contextInset * 2.0 + 8.0 + component.sideInset
@@ -719,7 +721,7 @@ public final class PeerListItemComponent: Component {
             if component.story != nil {
                 rightInset += 40.0
             }
-            
+                        
             var subtitleComponentSize: CGSize?
             if let subtitleComponent = component.subtitleComponent {
                 let subtitleView: ComponentView<Empty>
@@ -762,6 +764,10 @@ public final class PeerListItemComponent: Component {
                 } else {
                     height = 40.0 + verticalInset * 2.0
                 }
+            case .list:
+                titleFont = Font.semibold(floor(presentationData.listsFontSize.itemListBaseFontSize * 16.0 / 17.0))
+                subtitleFont = Font.regular(14.0)
+                height = 48.0 + verticalInset * 2.0
             }
 
             if let rightAccessoryComponentView = self.rightAccessoryComponentView, component.rightAccessoryComponent?.id != previousComponent?.rightAccessoryComponent?.id {
@@ -1165,7 +1171,7 @@ public final class PeerListItemComponent: Component {
                 
                 let labelFrame: CGRect
                 switch component.style {
-                case .generic:
+                case .generic, .list:
                     labelFrame = CGRect(origin: CGPoint(x: titleFrame.minX + iconLabelOffset, y: titleFrame.maxY + titleSpacing), size: labelSize)
                 case .compact:
                     labelFrame = CGRect(origin: CGPoint(x: titleFrame.maxX + 4.0, y: floor((height - verticalInset * 2.0 - centralContentHeight) / 2.0)), size: labelSize)

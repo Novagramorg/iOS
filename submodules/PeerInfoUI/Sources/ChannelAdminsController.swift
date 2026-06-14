@@ -38,6 +38,17 @@ private final class ChannelAdminsControllerArguments {
     }
 }
 
+private func updateCachedCommunityAdminsCount(context: AccountContext, peerId: EnginePeer.Id, delta: Int32) {
+    let _ = context.account.postbox.transaction { transaction -> Void in
+        transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, cachedData -> EngineCachedPeerData? in
+            guard let cachedData = cachedData as? CachedCommunityData, let adminsCount = cachedData.adminsCount else {
+                return cachedData
+            }
+            return cachedData.withUpdatedAdminsCount(max(0, adminsCount + delta))
+        })
+    }.startStandalone()
+}
+
 private enum ChannelAdminsSection: Int32 {
     case administration
     case admins
@@ -429,9 +440,10 @@ private func channelAdminsControllerEntries(presentationData: PresentationData, 
     var entries: [ChannelAdminsEntry] = []
     if case let .community(peer) = peer {
         if let participants {
-            entries.append(.adminsHeader(presentationData.theme, presentationData.strings.ChannelMembers_ChannelAdminsTitle))
+            //TODO:localize
+            entries.append(.adminsHeader(presentationData.theme, "COMMUNITY ADMINS"))
             
-            if peer.hasPermission(.changeInfo) {
+            if peer.hasPermission(.addAdmins) {
                 entries.append(.addAdmin(presentationData.theme, presentationData.strings.Channel_Management_AddModerator, state.editing))
             }
             
@@ -471,7 +483,7 @@ private func channelAdminsControllerEntries(presentationData: PresentationData, 
                     switch participant.participant {
                     case .creator:
                         canEdit = false
-                        canOpen = peer.flags.contains(.isCreator)
+                        canOpen = false
                     case let .member(id, _, adminInfo, _, _, _):
                         if id == accountPeerId {
                             canEdit = false
@@ -493,13 +505,14 @@ private func channelAdminsControllerEntries(presentationData: PresentationData, 
                             canEdit = false
                         }
                     }
-                    entries.append(.adminPeerItem(presentationData.theme, presentationData.strings, presentationData.dateTimeFormat, presentationData.nameDisplayOrder, false, index, participant, ItemListPeerItemEditing(editable: canEdit, editing: state.editing, revealed: participant.peer.id == state.peerIdWithRevealedOptions), state.removingPeerId != participant.peer.id && existingParticipantIds.contains(participant.peer.id), canOpen))
+                    entries.append(.adminPeerItem(presentationData.theme, presentationData.strings, presentationData.dateTimeFormat, presentationData.nameDisplayOrder, false, index, participant, ItemListPeerItemEditing(editable: canEdit, editing: state.editing, revealed: participant.peer.id == state.peerIdWithRevealedOptions), state.removingPeerId != participant.peer.id, canOpen))
                     index += 1
                 }
             }
             
-            if peer.hasPermission(.changeInfo) {
-                let info = presentationData.strings.Channel_Management_AddModeratorHelp
+            if peer.hasPermission(.addAdmins) {
+                //TODO:localize
+                let info = "You can add admins to help you manage your community."
                 entries.append(.adminsInfo(presentationData.theme, info))
             }
         }
@@ -839,6 +852,13 @@ public func channelAdminsController(
             } else {
                 removeAdminDisposable.set((context.peerChannelMemberCategoriesContextsManager.updateMemberAdminRights(engine: context.engine, peerId: peerId, memberId: adminId, adminRights: nil, rank: nil)
                 |> deliverOnMainQueue).start(completed: {
+                    let _ = (peerView.get()
+                    |> take(1)
+                    |> deliverOnMainQueue).start(next: { peerView in
+                        if case .community = peerView.peer {
+                            updateCachedCommunityAdminsCount(context: context, peerId: peerId, delta: -1)
+                        }
+                    })
                     updateState {
                         return $0.withUpdatedRemovingPeerId(nil)
                     }
@@ -853,6 +873,59 @@ public func channelAdminsController(
             |> take(1)
             |> deliverOnMainQueue).start(next: { peerView in
                 updateState { current in
+                    if case .community = peerView.peer {
+                        //TODO:localize
+                        let title = "Add Admin"
+                        let controller = context.sharedContext.makePeerSelectionController(PeerSelectionControllerParams(
+                            context: context,
+                            updatedPresentationData: updatedPresentationData,
+                            filter: [.onlyPrivateChats, .excludeBots, .excludeSavedMessages, .excludeRecent, .doNotSearchMessages],
+                            hasChatListSelector: false,
+                            hasContactSelector: true,
+                            hasGlobalSearch: false,
+                            title: title,
+                            immediatelySwitchToContacts: true,
+                            excludedPeerIds: [context.account.peerId]
+                        ))
+                        controller.peerSelected = { [weak controller] peer, _ in
+                            controller?.dismiss()
+
+                            if peer.id == context.account.peerId {
+                                return
+                            }
+
+                            pushControllerImpl?(channelAdminController(context: context, updatedPresentationData: updatedPresentationData, peerId: peerId, adminId: peer.id, initialParticipant: nil, updated: { adminRights in
+                                guard let adminRights else {
+                                    return
+                                }
+
+                                let participant = RenderedChannelParticipant(
+                                    participant: .member(
+                                        id: peer.id,
+                                        invitedAt: Int32(Date().timeIntervalSince1970),
+                                        adminInfo: ChannelParticipantAdminInfo(
+                                            rights: adminRights,
+                                            promotedBy: context.account.peerId,
+                                            canBeEditedByAccountPeer: true
+                                        ),
+                                        banInfo: nil,
+                                        rank: nil,
+                                        subscriptionUntilDate: nil
+                                    ),
+                                    peer: peer
+                                )
+                                updateState { state in
+                                    var temporaryAdmins = state.temporaryAdmins.filter { $0.peer.id != peer.id }
+                                    temporaryAdmins.append(participant)
+                                    return state.withUpdatedTemporaryAdmins(temporaryAdmins)
+                                }
+                            }, upgradedToSupergroup: upgradedToSupergroup, transferedOwnership: transferedOwnership))
+                        }
+                        pushControllerImpl?(controller)
+
+                        return current
+                    }
+
                     var dismissController: (() -> Void)?
                     let controller = ChannelMembersSearchControllerImpl(params: ChannelMembersSearchControllerParams(context: context, peerId: peerId, mode: .promote, filters: [], openPeer: { peer, participant in
                         dismissController?()
@@ -1086,8 +1159,17 @@ public func channelAdminsController(
         let previous = previousPeers
         previousPeers = admins
         
+        let isCommunity: Bool
+        if case .community = view.peer {
+            isCommunity = true
+        } else {
+            isCommunity = false
+        }
+
         var isGroup = true
-        if case let .channel(peer) = view.peer, case .broadcast = peer.info {
+        if isCommunity {
+            isGroup = false
+        } else if case let .channel(peer) = view.peer, case .broadcast = peer.info {
             isGroup = false
         } else if case .legacyGroup = view.peer {
             isGroup = true
@@ -1119,7 +1201,15 @@ public func channelAdminsController(
             emptyStateItem = ItemListLoadingIndicatorEmptyStateItem(theme: presentationData.theme)
         }
         
-        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(isGroup ? presentationData.strings.ChatAdmins_Title : presentationData.strings.Channel_Management_Title), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, secondaryRightNavigationButton: secondaryRightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
+        let title: String
+        if isCommunity {
+            //TODO:localize
+            title = "Admins"
+        } else {
+            title = isGroup ? presentationData.strings.ChatAdmins_Title : presentationData.strings.Channel_Management_Title
+        }
+
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(title), leftNavigationButton: nil, rightNavigationButton: rightNavigationButton, secondaryRightNavigationButton: secondaryRightNavigationButton, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back), animateChanges: true)
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: channelAdminsControllerEntries(presentationData: presentationData, accountPeerId: context.account.peerId, peer: view.peer, state: state, participants: admins, antiSpamAvailable: antiSpamAvailable, antiSpamEnabled: antiSpamEnabled, signMessagesEnabled: signMessagesEnabled, showAuthorProfilesEnabled: showAuthorProfilesEnabled), style: .blocks, emptyStateItem: emptyStateItem, searchItem: searchItem, animateChanges: previous != nil && admins != nil && previous!.count >= admins!.count)
         
         return (controllerState, (listState, arguments))

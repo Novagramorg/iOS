@@ -21,9 +21,11 @@ import ListSectionComponent
 import ListItemComponentAdaptor
 import PeerListItemComponent
 import AlertComponent
+import AlertUI
 import SearchBarNode
 import ChatListUI
 import ItemListUI
+import CommunityAdminApprovalScreen
 import CommunityPrivateChatScreen
 
 private struct CommunityChatPreviewData: Equatable {
@@ -240,25 +242,47 @@ private func communityCachedMemberCounts(_ data: [EnginePeer.Id: CachedPeerData]
     return result
 }
 
+private func communityChatListContextActionsEqual(_ lhs: ChatListItem.EnabledContextActions?, _ rhs: ChatListItem.EnabledContextActions?) -> Bool {
+    switch (lhs, rhs) {
+    case (nil, nil):
+        return true
+    case (.auto?, .auto?):
+        return true
+    case let (.custom(lhsActions)?, .custom(rhsActions)?):
+        return lhsActions.rawValue == rhsActions.rawValue
+    default:
+        return false
+    }
+}
+
 private final class CommunityChatListItemGenerator: ListItemComponentAdaptor.ItemGenerator {
     let context: AccountContext
     let presentationData: ChatListPresentationData
     let peer: EnginePeer
     let preview: CommunityChatPreviewData
     let interaction: ChatListNodeInteraction
+    let enabledContextActions: ChatListItem.EnabledContextActions?
+    let hasActiveRevealControls: Bool
+    let hasNext: Bool
     
     init(
         context: AccountContext,
         presentationData: ChatListPresentationData,
         peer: EnginePeer,
         preview: CommunityChatPreviewData,
-        interaction: ChatListNodeInteraction
+        interaction: ChatListNodeInteraction,
+        enabledContextActions: ChatListItem.EnabledContextActions?,
+        hasActiveRevealControls: Bool,
+        hasNext: Bool
     ) {
         self.context = context
         self.presentationData = presentationData
         self.peer = peer
         self.preview = preview
         self.interaction = interaction
+        self.enabledContextActions = enabledContextActions
+        self.hasActiveRevealControls = hasActiveRevealControls
+        self.hasNext = hasNext
     }
     
     static func ==(lhs: CommunityChatListItemGenerator, rhs: CommunityChatListItemGenerator) -> Bool {
@@ -269,6 +293,15 @@ private final class CommunityChatListItemGenerator: ListItemComponentAdaptor.Ite
             return false
         }
         if lhs.preview != rhs.preview {
+            return false
+        }
+        if !communityChatListContextActionsEqual(lhs.enabledContextActions, rhs.enabledContextActions) {
+            return false
+        }
+        if lhs.hasActiveRevealControls != rhs.hasActiveRevealControls {
+            return false
+        }
+        if lhs.hasNext != rhs.hasNext {
             return false
         }
         if lhs.presentationData.theme !== rhs.presentationData.theme {
@@ -338,12 +371,14 @@ private final class CommunityChatListItemGenerator: ListItemComponentAdaptor.Ite
                 tags: []
             )),
             editing: false,
-            hasActiveRevealControls: false,
+            hasActiveRevealControls: self.hasActiveRevealControls,
             selected: false,
             header: nil,
-            enabledContextActions: nil,
+            enabledContextActions: self.enabledContextActions,
             hiddenOffset: false,
-            interaction: self.interaction
+            interaction: self.interaction,
+            useCommunityViewLayout: true,
+            communityViewHasNext: self.hasNext
         )
     }
 }
@@ -610,6 +645,7 @@ private final class CommunityViewContentComponent: Component {
     let dismiss: () -> Void
     let openEdit: () -> Void
     let activateSearch: () -> Void
+    let removePeer: (EnginePeer.Id) -> Void
     let searchQueryUpdated: (String) -> Void
     let cancelSearch: () -> Void
     
@@ -635,6 +671,7 @@ private final class CommunityViewContentComponent: Component {
         dismiss: @escaping () -> Void,
         openEdit: @escaping () -> Void,
         activateSearch: @escaping () -> Void,
+        removePeer: @escaping (EnginePeer.Id) -> Void,
         searchQueryUpdated: @escaping (String) -> Void,
         cancelSearch: @escaping () -> Void
     ) {
@@ -659,6 +696,7 @@ private final class CommunityViewContentComponent: Component {
         self.dismiss = dismiss
         self.openEdit = openEdit
         self.activateSearch = activateSearch
+        self.removePeer = removePeer
         self.searchQueryUpdated = searchQueryUpdated
         self.cancelSearch = cancelSearch
     }
@@ -722,6 +760,7 @@ private final class CommunityViewContentComponent: Component {
         private weak var state: EmptyComponentState?
         private var environment: EnvironmentType?
         private var interaction: ChatListNodeInteraction?
+        private var revealedPeerId: EnginePeer.Id?
         private let pendingRequestsIcon = renderSettingsIcon(name: "Item List/Icons/Requests", backgroundColors: [UIColor(rgb: 0x0079ff)])
         
         override init(frame: CGRect) {
@@ -742,7 +781,9 @@ private final class CommunityViewContentComponent: Component {
                 animationCache: component.context.animationCache,
                 animationRenderer: component.context.animationRenderer,
                 activateSearch: {},
-                peerSelected: { _, _, _, _, _ in },
+                peerSelected: { [weak self] peer, _, _, _, _ in
+                    self?.component?.openPeer(peer)
+                },
                 disabledPeerSelected: { _, _, _ in },
                 togglePeerSelected: { _, _ in },
                 togglePeersSelection: { _, _ in },
@@ -750,11 +791,39 @@ private final class CommunityViewContentComponent: Component {
                 messageSelected: { _, _, _, _ in },
                 groupSelected: { _ in },
                 addContact: { _ in },
-                setPeerIdWithRevealedOptions: { _, _ in },
+                setPeerIdWithRevealedOptions: { [weak self] peerId, fromPeerId in
+                    guard let self else {
+                        return
+                    }
+                    if (peerId == nil && fromPeerId == self.revealedPeerId) || (peerId != nil && fromPeerId == nil) || (peerId == nil && fromPeerId == nil) {
+                        self.revealedPeerId = peerId
+                        self.state?.updated(transition: .immediate)
+                    }
+                },
                 setItemPinned: { _, _ in },
                 setPeerMuted: { _, _ in },
                 setPeerThreadMuted: { _, _, _ in },
-                deletePeer: { _, _ in },
+                deletePeer: { [weak self] peerId, _ in
+                    guard let self, let component = self.component, let environment = self.environment, let controller = environment.controller() else {
+                        return
+                    }
+                    let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                    //TODO:localize
+                    let title = "Remove chat from community?"
+                    //TODO:localize
+                    let text = "This chat will be removed from the community."
+                    controller.present(textAlertController(
+                        context: component.context,
+                        title: title,
+                        text: text,
+                        actions: [
+                            TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
+                            TextAlertAction(type: .destructiveAction, title: presentationData.strings.Common_Delete, action: {
+                                component.removePeer(peerId)
+                            })
+                        ]
+                    ), in: .window(.root))
+                },
                 deletePeerThread: { _, _ in },
                 setPeerThreadStopped: { _, _, _ in },
                 setPeerThreadPinned: { _, _, _ in },
@@ -862,23 +931,6 @@ private final class CommunityViewContentComponent: Component {
             }
         }
 
-        private func isPrivate(_ peer: EnginePeer) -> Bool {
-            if let addressName = peer.addressName, !addressName.isEmpty {
-                return false
-            }
-            if peer.usernames.contains(where: { $0.flags.contains(.isActive) && !$0.username.isEmpty }) {
-                return false
-            }
-            return true
-        }
-
-        private func pendingRequestsTotalCount(component: CommunityViewContentComponent) -> Int32 {
-            if let pendingRequests = component.pendingRequests {
-                return pendingRequests.totalCount
-            }
-            return component.cachedData?.pendingRequests ?? 0
-        }
-
         private func pendingRequestRows(component: CommunityViewContentComponent) -> [CommunityViewRequestRow] {
             guard let pendingRequests = component.pendingRequests else {
                 return []
@@ -886,12 +938,16 @@ private final class CommunityViewContentComponent: Component {
             var result: [CommunityViewRequestRow] = []
             for request in pendingRequests.requests {
                 if let peer = pendingRequests.peers[request.peerId] {
+                    var isPrivate = true
+                    if let addressName = peer.addressName, !addressName.isEmpty {
+                        isPrivate = false
+                    }
                     result.append(CommunityViewRequestRow(
                         request: request,
                         peer: peer,
                         requestedBy: pendingRequests.peers[request.requestedBy],
                         memberCount: self.memberCount(peerId: request.peerId, cachedPeerData: component.pendingRequestCachedPeerData),
-                        isPrivate: self.isPrivate(peer),
+                        isPrivate: isPrivate,
                         isVisible: request.isVisible
                     ))
                 }
@@ -961,9 +1017,10 @@ private final class CommunityViewContentComponent: Component {
                 disableAnimations: true
             )
             let interaction = self.makeInteraction(component: component)
+            let canManageLinkedPeers = component.community?.hasPermission(.manageLinkedPeers) == true
             
-            for (index, row) in rows.enumerated() {
-                let hasNext = index != rows.count - 1
+            for index in rows.indices {
+                let row = rows[index]
                 switch section {
                 case .joined, .visible:
                     let preview = component.previews[row.peer.id] ?? CommunityChatPreviewData(messages: [], readCounters: EnginePeerReadCounters())
@@ -973,7 +1030,10 @@ private final class CommunityViewContentComponent: Component {
                             presentationData: chatListPresentationData,
                             peer: row.peer,
                             preview: preview,
-                            interaction: interaction
+                            interaction: interaction,
+                            enabledContextActions: canManageLinkedPeers ? .custom([.delete]) : nil,
+                            hasActiveRevealControls: self.revealedPeerId == row.peer.id,
+                            hasNext: index != rows.count - 1
                         ),
                         params: ListViewItemLayoutParams(
                             width: availableWidth,
@@ -983,8 +1043,12 @@ private final class CommunityViewContentComponent: Component {
                             isStandalone: true
                         ),
                         action: { [weak self] in
-                            self?.component?.openPeer(row.peer)
-                        }
+                            guard let self, self.revealedPeerId == nil else {
+                                return
+                            }
+                            self.component?.openPeer(row.peer)
+                        },
+                        actionMode: .gesture
                     ))))
                 case .requestable:
                     let subtitle = self.memberCountString(component: component, peerId: row.peer.id).flatMap {
@@ -994,7 +1058,7 @@ private final class CommunityViewContentComponent: Component {
                         context: component.context,
                         theme: theme,
                         strings: presentationData.strings,
-                        style: .generic,
+                        style: .list,
                         sideInset: 0.0,
                         title: row.peer.compactDisplayTitle,
                         peer: row.peer,
@@ -1004,7 +1068,7 @@ private final class CommunityViewContentComponent: Component {
                         rightAccessory: .disclosure,
                         selectionState: .none,
                         isEnabled: true,
-                        hasNext: hasNext,
+                        hasNext: false,
                         extractedTheme: PeerListItemComponent.ExtractedTheme(
                             inset: 2.0,
                             background: theme.list.itemBlocksBackgroundColor
@@ -1045,7 +1109,12 @@ private final class CommunityViewContentComponent: Component {
             availableWidth: CGFloat,
             transition: ComponentTransition
         ) -> CGSize? {
-            let totalCount = self.pendingRequestsTotalCount(component: component)
+            let totalCount: Int32
+            if let pendingRequests = component.pendingRequests {
+                totalCount = pendingRequests.totalCount
+            } else {
+                totalCount = component.cachedData?.pendingRequests ?? 0
+            }
             guard totalCount > 0 else {
                 return nil
             }
@@ -1459,14 +1528,14 @@ private final class CommunityViewScreenComponent: Component {
         private var cachedPeerData: [EnginePeer.Id: CachedPeerData] = [:]
         private var previews: [EnginePeer.Id: CommunityChatPreviewData] = [:]
         private var pendingRequests: CommunityPeerLinkRequests?
+        private var pendingRequestsContext: CommunityPeerLinkRequestsContext?
         private var pendingRequestCachedPeerData: [EnginePeer.Id: CachedPeerData] = [:]
-        private var pendingRequestInFlightPeerId: EnginePeer.Id?
-        private var pendingRequestInFlightApprove: Bool?
         private var joinedPeerIds = Set<EnginePeer.Id>()
         
         private var isSearchActive = false
         private var searchQuery = ""
         private var isAddActionInProgress = false
+        private var removingPeerId: EnginePeer.Id?
         private var didRequestInitialData = false
         private var didRequestJoinedChats = false
         
@@ -1476,9 +1545,9 @@ private final class CommunityViewScreenComponent: Component {
         private let previewsDisposable = MetaDisposable()
         private let joinedChatsDisposable = MetaDisposable()
         private let actionDisposable = MetaDisposable()
+        private let removePeerDisposable = MetaDisposable()
         private let pendingRequestsDisposable = MetaDisposable()
         private let pendingRequestCachedDataDisposable = MetaDisposable()
-        private let pendingRequestActionDisposable = MetaDisposable()
         private var currentLinkedPeerIds: [EnginePeer.Id] = []
         private var currentPendingRequestsCount: Int32?
         private var currentPendingRequestCachedPeerIds: [EnginePeer.Id] = []
@@ -1491,9 +1560,9 @@ private final class CommunityViewScreenComponent: Component {
             self.previewsDisposable.dispose()
             self.joinedChatsDisposable.dispose()
             self.actionDisposable.dispose()
+            self.removePeerDisposable.dispose()
             self.pendingRequestsDisposable.dispose()
             self.pendingRequestCachedDataDisposable.dispose()
-            self.pendingRequestActionDisposable.dispose()
         }
         
         private var isAdmin: Bool {
@@ -1626,9 +1695,8 @@ private final class CommunityViewScreenComponent: Component {
                 if self.currentPendingRequestsCount != 0 || self.pendingRequests != nil || !self.pendingRequestCachedPeerData.isEmpty {
                     self.currentPendingRequestsCount = 0
                     self.pendingRequests = nil
+                    self.pendingRequestsContext = nil
                     self.pendingRequestCachedPeerData = [:]
-                    self.pendingRequestInFlightPeerId = nil
-                    self.pendingRequestInFlightApprove = nil
                     self.currentPendingRequestCachedPeerIds = []
                     self.pendingRequestsDisposable.set(nil)
                     self.pendingRequestCachedDataDisposable.set(nil)
@@ -1637,21 +1705,34 @@ private final class CommunityViewScreenComponent: Component {
                 return
             }
 
-            if !force && self.currentPendingRequestsCount == pendingCount && self.pendingRequests != nil {
+            if !force && self.pendingRequestsContext != nil {
+                self.currentPendingRequestsCount = pendingCount
                 return
             }
             self.currentPendingRequestsCount = pendingCount
 
-            self.pendingRequestsDisposable.set((component.context.engine.peers.communityPeerLinkRequests(
-                communityId: component.communityId,
-                offset: nil,
-                limit: 2
-            )
+            let requestsContext: CommunityPeerLinkRequestsContext
+            if let current = self.pendingRequestsContext {
+                requestsContext = current
+                if force {
+                    requestsContext.reload(limit: 2)
+                }
+            } else {
+                requestsContext = component.context.engine.peers.communityPeerLinkRequestsContext(communityId: component.communityId, initialLimit: 2)
+                self.pendingRequestsContext = requestsContext
+            }
+
+            self.pendingRequestsDisposable.set((requestsContext.state
             |> deliverOnMainQueue).startStrict(next: { [weak self] result in
                 guard let self else {
                     return
                 }
-                self.pendingRequests = result
+                self.pendingRequests = CommunityPeerLinkRequests(
+                    totalCount: result.count,
+                    requests: result.requests,
+                    nextOffset: nil,
+                    peers: result.peers
+                )
                 self.updatePendingRequestCachedData(component: component)
                 self.state?.updated(transition: .spring(duration: 0.35))
             }))
@@ -1734,7 +1815,7 @@ private final class CommunityViewScreenComponent: Component {
             guard let component = self.component, let environment = self.environment else {
                 return
             }
-            let controller = component.context.sharedContext.makeCommunityRequestsScreen(context: component.context, communityId: component.communityId)
+            let controller = component.context.sharedContext.makeCommunityRequestsScreen(context: component.context, communityId: component.communityId, existingContext: self.pendingRequestsContext)
             controller.navigationPresentation = .modal
             environment.controller()?.push(controller)
         }
@@ -1752,50 +1833,57 @@ private final class CommunityViewScreenComponent: Component {
             ))
         }
 
-        private func setPendingRequestApproval(request: CommunityPeerRequest, approve: Bool) {
-            guard let component = self.component else {
+        private func removePeer(_ peerId: EnginePeer.Id) {
+            guard let component = self.component, self.isAdmin, self.removingPeerId == nil else {
                 return
             }
-            if self.pendingRequestInFlightPeerId != nil {
-                return
-            }
-
-            self.pendingRequestInFlightPeerId = request.peerId
-            self.pendingRequestInFlightApprove = approve
+            self.removingPeerId = peerId
             self.state?.updated(transition: .immediate)
 
-            self.pendingRequestActionDisposable.set((component.context.engine.peers.toggleCommunityPeerLinkRequestApproval(
+            self.removePeerDisposable.set((component.context.engine.peers.toggleCommunityPeerLink(
                 communityId: component.communityId,
-                peerId: request.peerId,
-                approve: approve
+                peerId: peerId,
+                action: .unlink
             )
             |> deliverOnMainQueue).startStrict(error: { [weak self] _ in
                 guard let self else {
                     return
                 }
-                self.pendingRequestInFlightPeerId = nil
-                self.pendingRequestInFlightApprove = nil
+                self.removingPeerId = nil
                 self.state?.updated(transition: .spring(duration: 0.35))
                 self.presentError()
             }, completed: { [weak self] in
                 guard let self, let component = self.component else {
                     return
                 }
-                self.pendingRequestInFlightPeerId = nil
-                self.pendingRequestInFlightApprove = nil
-                if let pendingRequests = self.pendingRequests {
-                    self.pendingRequests = CommunityPeerLinkRequests(
-                        totalCount: max(0, pendingRequests.totalCount - 1),
-                        requests: pendingRequests.requests.filter { $0.peerId != request.peerId },
-                        nextOffset: pendingRequests.nextOffset,
-                        peers: pendingRequests.peers
-                    )
-                    self.updatePendingRequestCachedData(component: component)
+                self.removingPeerId = nil
+                if let cachedData = self.cachedData {
+                    self.cachedData = cachedData.withUpdatedLinkedPeers(cachedData.linkedPeers.filter { $0.peerId != peerId })
                 }
-                component.context.account.viewTracker.forceUpdateCachedPeerData(peerId: component.communityId)
-                self.updatePendingRequestsSignal(component: component, force: true)
+                self.peers.removeValue(forKey: peerId)
+                self.cachedPeerData.removeValue(forKey: peerId)
+                self.previews.removeValue(forKey: peerId)
+                self.joinedPeerIds.remove(peerId)
+                self.currentLinkedPeerIds.removeAll(where: { $0 == peerId })
+
+                let _ = component.context.account.postbox.transaction { transaction -> Void in
+                    transaction.updatePeerCachedData(peerIds: Set([component.communityId]), update: { _, current in
+                        guard let current = current as? CachedCommunityData else {
+                            return current
+                        }
+                        return current.withUpdatedLinkedPeers(current.linkedPeers.filter { $0.peerId != peerId })
+                    })
+                }.startStandalone()
+
                 self.state?.updated(transition: .spring(duration: 0.35))
             }))
+        }
+
+        private func setPendingRequestApproval(request: CommunityPeerRequest, approve: Bool) {
+            guard let pendingRequestsContext = self.pendingRequestsContext else {
+                return
+            }
+            pendingRequestsContext.update(request, action: approve ? .approve : .deny)
         }
 
         private func toggleCollapsed(_ collapsed: Bool) {
@@ -1888,8 +1976,8 @@ private final class CommunityViewScreenComponent: Component {
                         previews: self.previews,
                         pendingRequests: self.pendingRequests,
                         pendingRequestCachedPeerData: self.pendingRequestCachedPeerData,
-                        pendingRequestInFlightPeerId: self.pendingRequestInFlightPeerId,
-                        pendingRequestInFlightApprove: self.pendingRequestInFlightApprove,
+                        pendingRequestInFlightPeerId: nil,
+                        pendingRequestInFlightApprove: nil,
                         joinedPeerIds: self.joinedPeerIds,
                         isSearchActive: self.isSearchActive,
                         searchQuery: self.searchQuery,
@@ -1915,8 +2003,16 @@ private final class CommunityViewScreenComponent: Component {
                             guard let self else {
                                 return
                             }
-                            self.isSearchActive = true
-                            self.state?.updated(transition: .spring(duration: 0.35))
+                            guard let community = self.community, let controller = self.environment?.controller else {
+                                return
+                            }
+                            controller()?.present(CommunityAdminApprovalScreen(
+                                context: component.context,
+                                community: EnginePeer(community)
+                            ), in: .window(.root))
+                        },
+                        removePeer: { [weak self] peerId in
+                            self?.removePeer(peerId)
                         },
                         searchQueryUpdated: { [weak self] value in
                             guard let self else {

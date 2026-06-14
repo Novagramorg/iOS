@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/AccountContext",
+        "//submodules/AlertUI",
         "//submodules/AsyncDisplayKit",
         "//submodules/ChatListUI",
         "//submodules/ComponentFlow",
@@ -29,6 +30,7 @@ swift_library(
         "//submodules/PresentationDataUtils",
         "//submodules/TelegramUI/Components/AlertComponent",
         "//submodules/TelegramUI/Components/ButtonComponent",
+        "//submodules/TelegramUI/Components/Communities/CommunityAdminApprovalScreen",
         "//submodules/TelegramUI/Components/Communities/CommunityPrivateChatScreen",
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",
         "//submodules/TelegramUI/Components/GlassControls",
