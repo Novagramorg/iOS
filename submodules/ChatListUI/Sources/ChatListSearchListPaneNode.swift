@@ -1138,7 +1138,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                                     filterTitle = presentationData.strings.ChatList_Search_Messages_Channels
                                 case .groups:
                                     filterTitle = presentationData.strings.ChatList_Search_Messages_GroupChats
-                                case .privateChats:
+                                case .privateChats, .bots:
                                     filterTitle = presentationData.strings.ChatList_Search_Messages_PrivateChats
                                 case .globalPosts:
                                     filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
@@ -1231,7 +1231,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                     filterTitle = presentationData.strings.ChatList_Search_Messages_Channels
                 case .groups:
                     filterTitle = presentationData.strings.ChatList_Search_Messages_GroupChats
-                case .privateChats:
+                case .privateChats, .bots:
                     filterTitle = presentationData.strings.ChatList_Search_Messages_PrivateChats
                 case .globalPosts:
                     filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
@@ -1257,7 +1257,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                     filterTitle = presentationData.strings.ChatList_Search_Messages_Channels
                 case .groups:
                     filterTitle = presentationData.strings.ChatList_Search_Messages_GroupChats
-                case .privateChats:
+                case .privateChats, .bots:
                     filterTitle = presentationData.strings.ChatList_Search_Messages_PrivateChats
                 case .globalPosts:
                     filterTitle = presentationData.strings.ChatList_HeaderPublicPosts
@@ -1495,7 +1495,7 @@ private struct DownloadItem: Equatable {
 
 private func filteredPeerSearchQueryResults(value: ([FoundPeer], [FoundPeer]), scope: TelegramSearchPeersScope) -> ([FoundPeer], [FoundPeer]) {
     switch scope {
-    case .everywhere, .privateChats, .groups, .globalPosts:
+    case .everywhere, .privateChats, .bots, .groups, .globalPosts:
         return value
     case .channels:
         return (
@@ -1520,9 +1520,11 @@ private func filteredPeerSearchQueryResults(value: ([FoundPeer], [FoundPeer]), s
 final class GlobalPeerSearchContext {
     private struct SearchKey: Hashable {
         var query: String
+        var scope: TelegramSearchPeersScope?
         
-        init(query: String) {
+        init(query: String, scope: TelegramSearchPeersScope?) {
             self.query = query
+            self.scope = scope
         }
     }
     
@@ -1548,7 +1550,14 @@ final class GlobalPeerSearchContext {
         }
         
         func searchRemotePeers(engine: TelegramEngine, query: String, scope: TelegramSearchPeersScope, onNext: @escaping (([FoundPeer], [FoundPeer])) -> Void) -> Disposable {
-            let searchKey = SearchKey(query: query)
+            var keyScope: TelegramSearchPeersScope?
+            switch scope {
+            case .channels, .bots:
+                keyScope = scope
+            default:
+                break
+            }
+            let searchKey = SearchKey(query: query, scope: keyScope)
             let queryContext: QueryContext
             if let current = self.queryContexts[searchKey] {
                 queryContext = current
@@ -1561,7 +1570,7 @@ final class GlobalPeerSearchContext {
                 self.queryContexts[searchKey] = queryContext
                 queryContext.disposable.set((engine.contacts.searchRemotePeers(
                     query: query,
-                    scope: .everywhere
+                    scope: scope
                 )
                 |> delay(0.4, queue: Queue.mainQueue())
                 |> deliverOn(self.queue)).start(next: { [weak queryContext] value in

@@ -7620,11 +7620,14 @@ Sorry for the inconvenience.";
 "Group.Setup.ApproveNewMembersInfo" = "Turn this on if you want users to be able to send messages only after they are approved by an admin.";
 "Group.Setup.ApproveNewMembersManagedBy" = "Managed by %@";
 "Group.Setup.ApproveNewMembersApplyToExistingInviteLinksTitle" = "Apply to existing invite links?";
-"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksText" = "Also %@ **%@** for **%@ existing invite links** in this %@?";
-"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksEnable" = "enable";
-"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksDisable" = "disable";
-"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksPeerGroup" = "group";
-"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksPeerChannel" = "channel";
+
+"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksText.Links_1" = "%@ existing invite link";
+"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksText.Links_any" = "%@ existing invite links";
+"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksText.EnableGroup" = "Also enable **Approve New Members** for **%@** in this group?";
+"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksText.DisableGroup" = "Also disable **Approve New Members** for **%@** in this group?";
+"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksText.EnableChannel" = "Also enable **Approve New Subscribers** for **%@** in this group?";
+"Group.Setup.ApproveNewMembersApplyToExistingInviteLinksText.DisableChannel" = "Also disable **Approve New Subscribers** for **%@** in this group?";
+
 "Channel.Setup.ApproveNewSubscribers" = "Approve New Subscribers";
 "Channel.Setup.ApproveNewSubscribersInfo" = "Turn this on if you want users to be able to join only after they are approved by an admin.";
 
@@ -16373,3 +16376,8 @@ Error: %8$@";
 "RichTextPreview.Formula" = "[formula]";
 "RichTextPreview.Table" = "[table]";
 "RichTextPreview.Music" = "Music";
+
+"WebBrowser.Exception.OpenInApp" = "Always open this site in-app";
+"WebBrowser.Exception.OpenInBrowser" = "Always open this site in browser";
+"WebBrowser.ExceptionAdded.Title" = "Exception Added";
+"WebBrowser.ExceptionAdded.Text" = "This site will always open in-app.";
