@@ -81,7 +81,7 @@ public func giftSaleAlertController(
     case .stars:
         priceString = strings.Gift_Buy_Confirm_Text_Stars(Int32(clamping: resellAmount.amount.value))
     case .ton:
-        priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) TON**"
+        priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) GRAM**"
     }
     
     let text = strings.Gift_Sell_Confirm_Text(giftTitle, priceString).string

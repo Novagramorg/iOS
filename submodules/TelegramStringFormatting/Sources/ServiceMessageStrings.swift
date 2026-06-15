@@ -1332,7 +1332,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                 case .stars:
                                     starsString = strings.Notification_StarsGiftOffer_Accepted_Stars(Int32(clamping: resaleStars.amount.value))
                                 case .ton:
-                                    starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
+                                    starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                                 }
                                 let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
                                 var peerName = ""
@@ -1365,7 +1365,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                     case .stars:
                                         starsString = strings.Notification_StarsGift_Bought_Stars(Int32(clamping: resaleStars.amount.value))
                                     case .ton:
-                                        starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
+                                        starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                                     }
                                     if message.id.peerId == accountPeerId {
                                         attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_BoughtForYouself(starsString)._tuple, body: bodyAttributes, argumentAttributes: [0: boldAttributes])
@@ -1408,7 +1408,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                     case .stars:
                                         starsString = strings.Notification_StarsGift_Bought_Stars(Int32(clamping: resaleStars.amount.value))
                                     case .ton:
-                                        starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
+                                        starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                                     }
                                     let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
                                     attributes[1] = boldAttributes
@@ -1703,7 +1703,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     case .stars:
                         priceString = strings.Notification_StarsGiftOffer_OfferYou_Stars(Int32(clamping: amount.amount.value))
                     case .ton:
-                        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
+                        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                     }
                     
                     attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGiftOffer_OfferYou(peerName, priceString, giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
@@ -1713,7 +1713,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                     case .stars:
                         priceString = strings.Notification_StarsGiftOffer_Offer_Stars(Int32(clamping: amount.amount.value))
                     case .ton:
-                        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
+                        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                     }
                     
                     attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGiftOffer_Offer(peerName, priceString, giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
@@ -1736,7 +1736,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         case .stars:
                             priceString = strings.Notification_StarsGiftOffer_ExpiredYou_Stars(Int32(clamping: amount.amount.value))
                         case .ton:
-                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
+                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                         }
                         
                         var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
@@ -1749,7 +1749,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         case .stars:
                             priceString = strings.Notification_StarsGiftOffer_Expired_Stars(Int32(clamping: amount.amount.value))
                         case .ton:
-                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
+                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                         }
                         
                         let timeString = ""
@@ -1770,7 +1770,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                         case .stars:
                             priceString = strings.Notification_StarsGiftOffer_Rejected_Stars(Int32(clamping: amount.amount.value))
                         case .ton:
-                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " TON"
+                            priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                         }
                         
                         var attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: peerIds)
