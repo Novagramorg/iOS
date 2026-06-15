@@ -1301,7 +1301,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
             case let .starGiftUnique(gift, isUpgrade, _, _, _, _, _, isPrepaidUpgrade, peerId, senderId, _, resaleStars, _, _, _, assigned, fromOffer, _, isCrafted):
                 if case let .unique(gift) = gift {
                     if !forAdditionalServiceMessage && !"".isEmpty {
-                        attributedString = NSAttributedString(string: "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))", font: titleFont, textColor: primaryTextColor)
+                        attributedString = NSAttributedString(string: "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: dateTimeFormat))", font: titleFont, textColor: primaryTextColor)
                     } else if let messagePeer = message.peers[message.id.peerId] {
                         var peerName = EnginePeer(messagePeer).compactDisplayTitle
                         var peerIds: [(Int, EnginePeer.Id?)] = [(0, messagePeer.id)]
@@ -1334,7 +1334,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                 case .ton:
                                     starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                                 }
-                                let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
+                                let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: dateTimeFormat))"
                                 var peerName = ""
                                 if let name = message.peers[message.id.peerId].flatMap(EnginePeer.init)?.compactDisplayTitle {
                                     peerName = name
@@ -1354,7 +1354,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                 }
                             } else if message.id.peerId == accountPeerId && assigned {
                                 let attributes: [Int: MarkdownAttributeSet] = [0: boldAttributes]
-                                let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
+                                let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: dateTimeFormat))"
                                 attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Assigned(giftTitle)._tuple, body: bodyAttributes, argumentAttributes: attributes)
                             } else if message.id.peerId.isTelegramNotifications && senderId == nil {
                                 attributedString = NSAttributedString(string: strings.Notification_StarsGift_SentSomeone, font: titleFont, textColor: primaryTextColor)
@@ -1410,7 +1410,7 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                                     case .ton:
                                         starsString = formatTonAmountText(resaleStars.amount.value, dateTimeFormat: dateTimeFormat) + " GRAM"
                                     }
-                                    let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, dateTimeFormat.groupingSeparator))"
+                                    let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: dateTimeFormat))"
                                     attributes[1] = boldAttributes
                                     attributes[2] = boldAttributes
                                     attributedString = addAttributesToStringWithRanges(strings.Notification_StarsGift_Bought(peerName, giftTitle, starsString)._tuple, body: bodyAttributes, argumentAttributes: attributes)

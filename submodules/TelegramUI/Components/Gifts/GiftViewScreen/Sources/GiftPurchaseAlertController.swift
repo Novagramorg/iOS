@@ -106,7 +106,7 @@ public func giftPurchaseAlertController(
             )
         ))
                 
-        let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, presentationData.dateTimeFormat.groupingSeparator))"
+        let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: presentationData.dateTimeFormat))"
         var priceString = ""
         switch currency {
         case .stars:
