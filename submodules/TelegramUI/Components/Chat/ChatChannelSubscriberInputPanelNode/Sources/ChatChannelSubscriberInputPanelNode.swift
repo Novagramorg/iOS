@@ -233,7 +233,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
                     didJoin = true
                 case let .webView(webView):
                     if let controller = strongSelf.interfaceInteraction?.getNavigationController()?.viewControllers.last as? ViewController {
-                        context.sharedContext.openJoinChatWebView(context: context, parentController: controller, updatedPresentationData: nil, webView: webView)
+                        context.sharedContext.openJoinChatWebView(context: context, parentController: controller, updatedPresentationData: nil, webView: webView, chatTitle: EnginePeer(peer).compactDisplayTitle)
                     }
                 }
             }, error: { [weak self] error in

@@ -75,13 +75,13 @@ public func giftSaleAlertController(
         )
     ))
     
-    let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, presentationData.dateTimeFormat.groupingSeparator))"
+    let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: presentationData.dateTimeFormat))"
     var priceString = ""
     switch resellAmount.currency {
     case .stars:
         priceString = strings.Gift_Buy_Confirm_Text_Stars(Int32(clamping: resellAmount.amount.value))
     case .ton:
-        priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) TON**"
+        priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) GRAM**"
     }
     
     let text = strings.Gift_Sell_Confirm_Text(giftTitle, priceString).string

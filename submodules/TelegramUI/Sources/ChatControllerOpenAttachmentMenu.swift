@@ -284,7 +284,7 @@ extension ChatControllerImpl {
                     } else {
                         let _ = (context.engine.messages.getAttachMenuBot(botId: botId)
                         |> deliverOnMainQueue).startStandalone(next: { bot in
-                            let controller = webAppTermsAlertController(context: context, updatedPresentationData: strongSelf.updatedPresentationData, bot: bot, completion: { allowWrite in
+                            let controller = webAppTermsAlertController(context: context, updatedPresentationData: strongSelf.updatedPresentationData, completion: { allowWrite in
                                 let _ = (context.engine.messages.addBotToAttachMenu(botId: botId, allowWrite: allowWrite)
                                 |> deliverOnMainQueue).startStandalone(error: { _ in
 
@@ -792,7 +792,7 @@ extension ChatControllerImpl {
                         strongSelf.controllerNavigationDisposable.set(nil)
 
                         if bot.flags.contains(.notActivated) {
-                            let alertController = webAppTermsAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, bot: bot, completion: { [weak self] allowWrite in
+                            let alertController = webAppTermsAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, completion: { [weak self] allowWrite in
                                 guard let self else {
                                     return
                                 }
