@@ -4857,24 +4857,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                 }
                 
-                var isSpecialChatContents = false
-                if case .customChatContents = self.chatPresentationInterfaceState.subject {
-                    isSpecialChatContents = true
-                }
-                if !"".isEmpty, !isSpecialChatContents, let attribute = richMarkdownAttributeIfNeeded(context: self.context, attributedText: effectiveInputText) {
-                    let attributes: [MessageAttribute] = [attribute]
-                    var richBubbleUpEmojiOrStickersets: [ItemCollectionId] = []
-                    for (_, packId) in bubbleUpEmojiOrStickersetsById {
-                        if !richBubbleUpEmojiOrStickersets.contains(packId) {
-                            richBubbleUpEmojiOrStickersets.append(packId)
-                        }
-                    }
-                    if richBubbleUpEmojiOrStickersets.count > 1 {
-                        richBubbleUpEmojiOrStickersets.removeAll()
-                    }
-                    messages.append(.message(text: "", attributes: attributes, inlineStickers: inlineStickers, mediaReference: nil, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: richBubbleUpEmojiOrStickersets))
-                    mediaReference = nil
-                } else {
+                do {
                     for text in breakChatInputText(trimChatInputText(inputText)) {
                         if text.length != 0 {
                             var attributes: [MessageAttribute] = []

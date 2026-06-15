@@ -2215,14 +2215,7 @@ extension ChatControllerImpl {
                 
                 let text = trimChatInputText(convertMarkdownToAttributes(expandedInputStateAttributedString(editMessage.inputState.inputText)))
 
-                var isSpecialChatContents = false
-                if case .customChatContents = strongSelf.presentationInterfaceState.subject {
-                    isSpecialChatContents = true
-                }
-                var richTextAttribute: RichTextMessageAttribute?
-                if !isSpecialChatContents {
-                    richTextAttribute = richMarkdownAttributeIfNeeded(context: strongSelf.context, attributedText: expandedInputStateAttributedString(editMessage.inputState.inputText))
-                }
+                let richTextAttribute: RichTextMessageAttribute? = nil
 
                 let entities = generateTextEntities(text.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(text))
                 var entitiesAttribute: TextEntitiesMessageAttribute?

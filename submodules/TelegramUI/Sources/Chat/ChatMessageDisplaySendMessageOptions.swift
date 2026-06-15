@@ -212,13 +212,7 @@ func chatMessageDisplaySendMessageOptions(selfController: ChatControllerImpl, no
                 }
             }
             
-            var richTextPreview: ChatSendMessageContextScreenRichTextPreview?
-            if case .customChatContents = selfController.presentationInterfaceState.subject {
-            } else if mediaPreview == nil,
-                      let attributedText = textInputView.attributedText,
-                      let attribute = richMarkdownAttributeIfNeeded(context: selfController.context, attributedText: attributedText) {
-                richTextPreview = ChatSendMessageRichTextPreview(context: selfController.context, instantPage: attribute.instantPage)
-            }
+            let richTextPreview: ChatSendMessageContextScreenRichTextPreview? = nil
 
             let controller = makeChatSendMessageActionSheetController(
                 initialData: initialData,
