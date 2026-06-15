@@ -200,7 +200,13 @@ private func allOpenInOptions(context: AccountContext, item: OpenInItem) -> [Ope
             }))
 
             options.append(OpenInOption(identifier: "vivaldi", application: .other(title: "Vivaldi", identifier: 1633234600, scheme: "vivaldi", store: "us"), action: {
-                return .openUrl(url: "vivaldi://\(url)")
+                if let url = URL(string: url), var components = URLComponents(url: url, resolvingAgainstBaseURL: true) {
+                    components.scheme = "vivaldi"
+                    if let url = components.string {
+                        return .openUrl(url: url)
+                    }
+                }
+                return .none
             }))
         case let .location(location, directions):
             let lat = location.latitude

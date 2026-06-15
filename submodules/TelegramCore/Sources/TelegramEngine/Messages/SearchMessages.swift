@@ -515,7 +515,7 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                         flags |= (1 << 1)
                     case .groups:
                         flags |= (1 << 2)
-                    case .privateChats:
+                    case .privateChats, .bots:
                         flags |= (1 << 3)
                     case .globalPosts:
                         break
