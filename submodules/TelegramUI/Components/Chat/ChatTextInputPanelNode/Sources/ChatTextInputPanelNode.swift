@@ -5902,6 +5902,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     @objc private func sttButtonPressed() {
+        // Fenixuz: selection haptic on STT record start/stop toggle.
+        let sttHaptic = UISelectionFeedbackGenerator()
+        sttHaptic.selectionChanged()
         if self.isSttRecording {
             self.stopSttRecording()
             return
@@ -5909,6 +5912,21 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if self.sttManager == nil {
             self.sttManager = SpeechToTextManager()
+        }
+        // Fenixuz #25: translate the finished transcription before it lands in the input field.
+        // Inline TelegramCore translate (importing FenixuzProMessager here would create a module cycle).
+        // The on/off flag + target language are read inside SpeechToTextManager from "pro_messager".
+        self.sttManager?.translateHandler = { [weak self] text, lang, completion in
+            guard let self, let context = self.context else {
+                completion(text)
+                return
+            }
+            let _ = (context.engine.messages.translate(text: text, toLang: lang)
+            |> deliverOnMainQueue).startStandalone(next: { result in
+                completion(result?.0 ?? text)
+            }, error: { _ in
+                completion(text)
+            })
         }
         
         // Default to a supported language (matches Settings + manager defaults). Apple has no

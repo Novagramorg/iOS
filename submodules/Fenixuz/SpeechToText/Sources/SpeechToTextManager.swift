@@ -11,11 +11,18 @@ public final class SpeechToTextManager {
     private let audioEngine = AVAudioEngine()
     private var audioSessionDisposable: Any?
     private var isStopping = false
-    
+
     public var onTextUpdate: ((String) -> Void)?
     public var onStop: (() -> Void)?
     public var onError: ((String) -> Void)?
-    
+
+    /// Optional handler injected by the caller to translate final transcriptions.
+    /// Signature: (rawText, targetLangCode, completion(translatedText)) -> Void
+    /// When nil, the raw transcription is emitted unchanged.
+    /// On any failure the handler must call completion with the original rawText so the
+    /// user never receives an empty insert.
+    public var translateHandler: ((String, String, @escaping (String) -> Void) -> Void)?
+
     public var isRecording: Bool {
         return audioEngine.isRunning
     }
@@ -41,7 +48,7 @@ public final class SpeechToTextManager {
         // surfaces a clear message so the user knows to pick a supported language.
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId))
     }
-    
+
     public func toggleRecording() {
         if audioEngine.isRunning {
             stopRecording()
@@ -49,15 +56,15 @@ public final class SpeechToTextManager {
             startRecording()
         }
     }
-    
+
     private func startRecording() {
         isStopping = false
-        
+
         if recognitionTask != nil {
             recognitionTask?.cancel()
             recognitionTask = nil
         }
-        
+
         SFSpeechRecognizer.requestAuthorization { authStatus in
             DispatchQueue.main.async {
                 switch authStatus {
@@ -78,7 +85,7 @@ public final class SpeechToTextManager {
             }
         }
     }
-    
+
     private func startRecordingEngine() {
         guard let speechRecognizer = self.speechRecognizer else {
             // Apple has no speech recogniser for this language at all (e.g. Uzbek).
@@ -92,40 +99,40 @@ public final class SpeechToTextManager {
             self.onStop?()
             return
         }
-        
+
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        
+
         guard let recognitionRequest = recognitionRequest else {
             self.onError?("Ovozni aniqlash so'rovini yaratib bo'lmadi.")
             self.onStop?()
             return
         }
-        
+
         recognitionRequest.shouldReportPartialResults = true
-        
+
         if #available(iOS 13, *) {
             recognitionRequest.requiresOnDeviceRecognition = false
         }
-        
+
         let setupAndStartEngine = { [weak self] in
             guard let self = self else { return }
-            
+
             let inputNode = self.audioEngine.inputNode
             let recordingFormat = inputNode.outputFormat(forBus: 0)
-            
+
             guard recordingFormat.sampleRate > 0 && recordingFormat.channelCount > 0 else {
                 self.onError?("Audio format noto'g'ri: sampleRate=\(recordingFormat.sampleRate), channels=\(recordingFormat.channelCount)")
                 self.onStop?()
                 return
             }
-            
+
             inputNode.removeTap(onBus: 0)
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { (buffer, _) in
                 self.recognitionRequest?.append(buffer)
             }
-            
+
             self.audioEngine.prepare()
-            
+
             do {
                 try self.audioEngine.start()
             } catch {
@@ -133,22 +140,26 @@ public final class SpeechToTextManager {
                 self.onStop?()
                 return
             }
-            
+
             self.recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest, resultHandler: { [weak self] (result, error) in
                 guard let self = self else { return }
-                
+
                 if self.isStopping {
                     return
                 }
-                
+
                 if let result = result {
-                    self.onTextUpdate?(result.bestTranscription.formattedString)
-                    
+                    let transcribed = result.bestTranscription.formattedString
+
                     if result.isFinal {
-                        self.cleanupRecording()
+                        // Final result: optionally translate before emitting, then clean up.
+                        self.emitFinalText(transcribed)
+                    } else {
+                        // Partial result: emit raw text immediately for live preview.
+                        self.onTextUpdate?(transcribed)
                     }
                 }
-                
+
                 if let error = error {
                     let nsError = error as NSError
                     // Ignore errors caused by intentional stop/cancel or unavailable service
@@ -165,7 +176,7 @@ public final class SpeechToTextManager {
                 }
             })
         }
-        
+
         if let sharedManagedAudioSession = sharedManagedAudioSession {
             let disposable = sharedManagedAudioSession.push(
                 audioSessionType: .record(speaker: false, video: false, withOthers: false),
@@ -190,10 +201,10 @@ public final class SpeechToTextManager {
             setupAndStartEngine()
         }
     }
-    
+
     public func stopRecording() {
         isStopping = true
-        
+
         if audioEngine.isRunning {
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -202,23 +213,49 @@ public final class SpeechToTextManager {
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest = nil
-        
+
         if let disposable = self.audioSessionDisposable as? SwiftSignalKit.Disposable {
             disposable.dispose()
             self.audioSessionDisposable = nil
         }
-        
+
         let audioSession = AVAudioSession.sharedInstance()
         try? audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try? audioSession.setActive(true)
-        
+
         onStop?()
     }
-    
+
+    /// Reads the voice-translate flag and target lang from UserDefaults (same suite as the rest
+    /// of the module), then either translates via the injected handler or emits raw text.
+    /// Always calls cleanupRecording() once the text has been emitted.
+    private func emitFinalText(_ rawText: String) {
+        let ud = UserDefaults(suiteName: "pro_messager")
+        let voiceTranslateOn = ud?.bool(forKey: "voice_translate_enabled") ?? false
+
+        guard voiceTranslateOn, let handler = translateHandler, !rawText.isEmpty else {
+            // Feature is off, no handler wired, or nothing was transcribed — emit as-is.
+            onTextUpdate?(rawText)
+            cleanupRecording()
+            return
+        }
+
+        // Resolve target language: saved auto_translate_lang > "en"
+        let savedLang = ud?.string(forKey: "auto_translate_lang") ?? ""
+        let targetLang = savedLang.isEmpty ? "en" : savedLang
+
+        handler(rawText, targetLang) { [weak self] translatedText in
+            guard let self = self else { return }
+            // handler guarantees a non-empty string on failure (falls back to rawText)
+            self.onTextUpdate?(translatedText)
+            self.cleanupRecording()
+        }
+    }
+
     /// Internal cleanup without triggering onStop (used when recognition ends naturally)
     private func cleanupRecording() {
         isStopping = true
-        
+
         if audioEngine.isRunning {
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -226,24 +263,24 @@ public final class SpeechToTextManager {
         recognitionRequest?.endAudio()
         recognitionTask = nil
         recognitionRequest = nil
-        
+
         if let disposable = self.audioSessionDisposable as? SwiftSignalKit.Disposable {
             disposable.dispose()
             self.audioSessionDisposable = nil
         }
-        
+
         let audioSession = AVAudioSession.sharedInstance()
         try? audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
         try? audioSession.setActive(true)
-        
+
         onStop?()
     }
-    
+
     public static var currentLanguageName: String {
         let locale = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "en-US"
         return SpeechToTextManager.languageName(for: locale)
     }
-    
+
     public static func languageName(for localeId: String) -> String {
         for lang in supportedLanguages {
             if lang.id == localeId {
@@ -252,7 +289,7 @@ public final class SpeechToTextManager {
         }
         return localeId
     }
-    
+
     public static let supportedLanguages: [(id: String, name: String)] = [
         ("en-US", "🇬🇧 English"),
         ("ru-RU", "🇷🇺 Русский"),
@@ -291,6 +328,6 @@ public final class SpeechToTextManager {
         ("fr-CA", "🇨🇦 Français (CA)"),
         ("es-MX", "🇲🇽 Español (MX)"),
         ("zh-TW", "🇹🇼 中文 (繁體)"),
-        ("pt-PT", "🇵🇹 Português (PT)"),
+        ("pt-PT", "🇵🇹 Português (PT)")
     ]
 }

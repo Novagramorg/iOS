@@ -22,8 +22,9 @@ swift_library(
         "//submodules/ContextUI:ContextUI",
         "//submodules/CallListUI:CallListUI",
         "//submodules/AppBundle:AppBundle",
+        "//submodules/ComponentFlow",
         "//submodules/Fenixuz/Localization:FenixuzLocalization",
-        "//submodules/Fenixuz/Tips:FenixuzTips",
+        "//submodules/Fenixuz/Brand:FenixuzBrand",
     ],
     visibility = [
         "//visibility:public",

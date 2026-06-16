@@ -220,7 +220,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
         contactsController.switchToChatsController = {  [weak self] in
             self?.openChatsController(activateSearch: false)
         }
-        // Contacts Tab removed here
+        controllers.append(contactsController) // Fenixuz: Contacts tab re-enabled 2026-06-16 (init/startup path)
         
         if showCallsTab {
             controllers.append(callListController)
@@ -278,7 +278,7 @@ public final class TelegramRootController: NavigationController, TelegramRootCon
             return
         }
         var controllers: [ViewController] = []
-        // controllers.append(self.contactsController!)
+        controllers.append(self.contactsController!) // Fenixuz: Contacts tab re-enabled 2026-06-16 (was hidden for Apple 5.1.2 review; consent hook covers it)
         if showCallsTab {
             controllers.append(self.callListController!)
         }

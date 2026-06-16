@@ -7174,6 +7174,9 @@ private final class ChatListLocationContext {
                                 return
                             }
                             
+                            // Fenixuz: light haptic on story camera button tap.
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
                             if let componentView = parentController.chatListHeaderView(), let storyPeerListView = componentView.storyPeerListView(), storyPeerListView.isLiveStreaming {
                                 parentController.displayContinueLiveStream()
                             } else {

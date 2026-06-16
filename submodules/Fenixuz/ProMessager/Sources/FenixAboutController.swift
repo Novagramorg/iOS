@@ -12,14 +12,18 @@ import FenixuzLocalization
 // Fenixuz "About FenixPro" screen.
 //
 // A read-only overview of what FenixPro is and which extra tools it adds on top of Telegram.
-// Pushed from the FenixPro settings screen ("About FenixPro" row). Distinct from the Tips /
-// "Imkoniyatlar" modal sheet (a how-to-use guide): this page describes the product itself.
+// Pushed from the FenixPro settings screen ("About FenixPro" row).
 //
-// Each feature gets its own section: an icon + title row (no chevron, not tappable) plus a
-// section-footer paragraph with a short, honest description. Section footers wrap naturally,
-// so the longer descriptions never truncate. Only features that are actually user-visible in
-// this fork are listed (Ghost, multi-account, QR login, edited history, STT, chat lock,
-// auto-text/translate). Hidden modules (AI chatbot, Tasks tab) are intentionally omitted.
+// Layout:
+//   • Intro section  — header + one-paragraph product description
+//   • Feature rows   — icon + title (no chevron) + footer body paragraph, one section each
+//   • How-to section — the feature tips list (was separate "Features" screen before merge),
+//                      icon + title (no chevron) + footer how-to paragraph, one section each
+//   • Closing footer — attribution paragraph
+//
+// Each feature/tip occupies its own section so the footer paragraph wraps cleanly.
+
+// MARK: - Shared row model
 
 private struct AboutFeature {
     let symbol: String
@@ -27,6 +31,8 @@ private struct AboutFeature {
     let title: String
     let body: String
 }
+
+// MARK: - Feature rows (what FenixPro is)
 
 private func aboutFeatures(l10n: FenixuzL10n) -> [AboutFeature] {
     return [
@@ -43,51 +49,124 @@ private func aboutFeatures(l10n: FenixuzL10n) -> [AboutFeature] {
         AboutFeature(symbol: "lock.fill", color: .green,
                      title: l10n.about_chatLock_title, body: l10n.about_chatLock_body),
         AboutFeature(symbol: "text.append", color: .orange,
-                     title: l10n.about_messaging_title, body: l10n.about_messaging_body),
+                     title: l10n.about_messaging_title, body: l10n.about_messaging_body)
     ]
 }
 
-private enum FenixAboutSection: Int32 {
-    case intro
-    // Each feature occupies its own section so the footer paragraph wraps cleanly.
-    // Feature sections start at rawValue 1 (intro = 0); the closing footer sits last.
-    case featureBase = 1
+// MARK: - Tips rows (how to use each feature — was the separate "Features" screen)
+
+private func aboutTips(l10n: FenixuzL10n, langCode: String) -> [AboutFeature] {
+    // Reuse AboutFeature as the row model — same icon/title/body shape.
+    // "character.bubble.fill" is iOS 13+ safe; "translate" symbol is iOS 14+ only.
+    //
+    // Folder-unlock entries use inline strings (no FenixuzL10n key needed — these
+    // describe just-shipped behavior and are self-contained).
+    // "folder.fill" and "tag.fill" are both iOS 13+ available.
+    let unlimitedFoldersTitle: String
+    let unlimitedFoldersBody: String
+    let folderTagsTitle: String
+    let folderTagsBody: String
+    switch langCode {
+    case "uz":
+        unlimitedFoldersTitle = "Cheksiz jildlar"
+        unlimitedFoldersBody  = "Premium cheklovisiz jild yarating."
+        folderTagsTitle       = "Jild teglari"
+        folderTagsBody        = "Har bir chatda jild teg nomini ko'rsatish — Premium shart emas."
+    case "ru":
+        unlimitedFoldersTitle = "Безлимитные папки"
+        unlimitedFoldersBody  = "Создавайте папки без ограничения Premium."
+        folderTagsTitle       = "Теги папок"
+        folderTagsBody        = "Показывать теги папок на чатах — без Premium."
+    default:
+        unlimitedFoldersTitle = "Unlimited Folders"
+        unlimitedFoldersBody  = "Create folders without the Premium limit."
+        folderTagsTitle       = "Folder Tags"
+        folderTagsBody        = "Show folder name tags on each chat — no Premium needed."
+    }
+
+    return [
+        AboutFeature(symbol: "eye.slash.fill", color: .gray,
+                     title: l10n.tips_ghost_title, body: l10n.tips_ghost_body),
+        AboutFeature(symbol: "mic.fill", color: .red,
+                     title: l10n.tips_stt_title, body: l10n.tips_stt_body),
+        AboutFeature(symbol: "person.2.fill", color: .blue,
+                     title: l10n.tips_multiAccount_title, body: l10n.tips_multiAccount_body),
+        AboutFeature(symbol: "clock.arrow.circlepath", color: .teal,
+                     title: l10n.tips_editedHistory_title, body: l10n.tips_editedHistory_body),
+        AboutFeature(symbol: "lock.fill", color: .green,
+                     title: l10n.tips_chatLock_title, body: l10n.tips_chatLock_body),
+        AboutFeature(symbol: "text.append", color: .orange,
+                     title: l10n.tips_autoText_title, body: l10n.tips_autoText_body),
+        AboutFeature(symbol: "character.bubble.fill", color: .pink,
+                     title: l10n.tips_translate_title, body: l10n.tips_translate_body),
+        AboutFeature(symbol: "flame.fill", color: .gold,
+                     title: l10n.tips_fenixHub_title, body: l10n.tips_fenixHub_body),
+        // Folder unlock features — shipped with the Premium folder-limit bypass.
+        AboutFeature(symbol: "folder.fill", color: .blue,
+                     title: unlimitedFoldersTitle, body: unlimitedFoldersBody),
+        AboutFeature(symbol: "tag.fill", color: .teal,
+                     title: folderTagsTitle, body: folderTagsBody)
+    ]
 }
+
+// MARK: - Section ID layout
+//
+// Stable section IDs ensure the list renders in the correct visual order.
+// Ranges are non-overlapping; each feature/tip occupies its own section so
+// the footer paragraph wraps cleanly under its row.
+//
+//   0          → intro
+//   1 …  99    → feature sections (max 99 features)
+//   500        → tips header (its own section, distinct from feature sections)
+//   501 … 599  → tip sections  (max 99 tips)
+//   100000     → closing footer
 
 private enum FenixAboutEntry: ItemListNodeEntry {
     case introHeader(String)
     case introBody(String)
+    // "what FenixPro is" rows — index 0…N
     case featureRow(Int, AboutFeature, PresentationTheme)
     case featureBody(Int, String)
+    // "how to use" section (merged from the old Features/Tips screen)
+    case tipsHeader(String)
+    case tipRow(Int, AboutFeature, PresentationTheme)
+    case tipBody(Int, String)
+    // Closing attribution
     case footer(String)
 
     var section: ItemListSectionId {
         switch self {
         case .introHeader, .introBody:
-            return FenixAboutSection.intro.rawValue
-        case let .featureRow(index, _, _):
-            return ItemListSectionId(FenixAboutSection.featureBase.rawValue + Int32(index))
-        case let .featureBody(index, _):
-            return ItemListSectionId(FenixAboutSection.featureBase.rawValue + Int32(index))
+            return 0
+        case let .featureRow(index, _, _), let .featureBody(index, _):
+            // Feature sections: 1 … 99
+            return ItemListSectionId(1 + Int32(index))
+        case .tipsHeader:
+            return 500
+        case let .tipRow(index, _, _), let .tipBody(index, _):
+            // Tip sections: 501 … 599
+            return ItemListSectionId(501 + Int32(index))
         case .footer:
-            // A high, stable section id keeps the closing footer below every feature section.
             return 100000
         }
     }
 
     var stableId: Int32 {
         switch self {
-        case .introHeader:
-            return 0
-        case .introBody:
-            return 1
+        case .introHeader:    return 0
+        case .introBody:      return 1
         case let .featureRow(index, _, _):
-            // Two entries per feature: row then body. Reserve a 2-wide slot per index.
+            // 2 entries per feature: row then body. Slots 100, 102, 104 …
             return Int32(100 + index * 2)
         case let .featureBody(index, _):
             return Int32(100 + index * 2 + 1)
-        case .footer:
-            return 1_000_000
+        case .tipsHeader:     return 500
+        case let .tipRow(index, _, _):
+            // 2 entries per tip. Slots 600, 602, 604 …
+            return Int32(600 + index * 2)
+        case let .tipBody(index, _):
+            return Int32(600 + index * 2 + 1)
+        case .footer:         return 1_000_000
         }
     }
 
@@ -108,7 +187,23 @@ private enum FenixAboutEntry: ItemListNodeEntry {
                lhsTheme === rhsTheme { return true }
             return false
         case let .featureBody(index, text):
-            if case let .featureBody(rhsIndex, rhsText) = rhs, index == rhsIndex, text == rhsText { return true }
+            if case let .featureBody(rhsIndex, rhsText) = rhs,
+               index == rhsIndex, text == rhsText { return true }
+            return false
+        case let .tipsHeader(text):
+            if case .tipsHeader(text) = rhs { return true }
+            return false
+        case let .tipRow(index, tip, lhsTheme):
+            if case let .tipRow(rhsIndex, rhsTip, rhsTheme) = rhs,
+               index == rhsIndex,
+               tip.title == rhsTip.title,
+               tip.body == rhsTip.body,
+               tip.symbol == rhsTip.symbol,
+               lhsTheme === rhsTheme { return true }
+            return false
+        case let .tipBody(index, text):
+            if case let .tipBody(rhsIndex, rhsText) = rhs,
+               index == rhsIndex, text == rhsText { return true }
             return false
         case let .footer(text):
             if case .footer(text) = rhs { return true }
@@ -135,7 +230,7 @@ private enum FenixAboutEntry: ItemListNodeEntry {
                 sectionId: self.section
             )
         case let .featureRow(_, feature, _):
-            // Icon + title, no chevron and no action — this is a description, not a link.
+            // Icon + title, no chevron and no action — this is a description row.
             return ItemListDisclosureItem(
                 presentationData: presentationData,
                 icon: fenixuzSettingsIcon(systemName: feature.symbol, color: feature.color),
@@ -147,6 +242,30 @@ private enum FenixAboutEntry: ItemListNodeEntry {
                 action: nil
             )
         case let .featureBody(_, text):
+            return ItemListTextItem(
+                presentationData: presentationData,
+                text: .plain(text),
+                sectionId: self.section
+            )
+        case let .tipsHeader(text):
+            return ItemListSectionHeaderItem(
+                presentationData: presentationData,
+                text: text,
+                sectionId: self.section
+            )
+        case let .tipRow(_, tip, _):
+            // Same presentation as featureRow — icon + title, no action.
+            return ItemListDisclosureItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: tip.symbol, color: tip.color),
+                title: tip.title,
+                label: "",
+                sectionId: self.section,
+                style: .blocks,
+                disclosureStyle: .none,
+                action: nil
+            )
+        case let .tipBody(_, text):
             return ItemListTextItem(
                 presentationData: presentationData,
                 text: .plain(text),
@@ -164,16 +283,27 @@ private enum FenixAboutEntry: ItemListNodeEntry {
 
 private func fenixAboutEntries(presentationData: PresentationData) -> [FenixAboutEntry] {
     let l10n = FenixuzL10n(presentationData.strings)
+    let langCode = presentationData.strings.primaryComponent.languageCode
     var entries: [FenixAboutEntry] = []
 
+    // Intro
     entries.append(.introHeader(l10n.about_introHeader))
     entries.append(.introBody(l10n.about_introBody))
 
+    // "What FenixPro is" feature rows
     for (index, feature) in aboutFeatures(l10n: l10n).enumerated() {
         entries.append(.featureRow(index, feature, presentationData.theme))
         entries.append(.featureBody(index, feature.body))
     }
 
+    // "How to use" tips section — content from the old Features/Tips screen
+    entries.append(.tipsHeader(l10n.about_featuresHeader))
+    for (index, tip) in aboutTips(l10n: l10n, langCode: langCode).enumerated() {
+        entries.append(.tipRow(index, tip, presentationData.theme))
+        entries.append(.tipBody(index, tip.body))
+    }
+
+    // Closing attribution
     entries.append(.footer(l10n.about_footer))
 
     return entries.sorted()

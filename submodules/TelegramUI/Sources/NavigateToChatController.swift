@@ -35,7 +35,7 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
         if ChatPincodeManager.shared.isLocked(targetPeerId) && !isBypassed {
             let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
             let pincodeVC = ChatPincodeViewController(
-                mode: .verify(onVerify: { code in
+                mode: .verify(passwordType: ChatPincodeManager.shared.getMetadata(for: targetPeerId).passwordType, biometricEnabled: ChatPincodeManager.shared.getMetadata(for: targetPeerId).biometricEnabled, onVerify: { code in
                     ChatPincodeManager.shared.verify(code, for: targetPeerId)
                 }, onSuccess: {
                     // Set bypass BEFORE re-calling so the next invocation skips the gate

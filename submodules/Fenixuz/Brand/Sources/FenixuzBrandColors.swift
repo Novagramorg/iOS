@@ -37,10 +37,20 @@ public enum FenixuzBrandColors {
     public static let destructiveDark = UIColor(rgb: 0xB91C1C)
 
     // MARK: - Semantic aliases (use these in UI code; values may evolve)
-    public static var primary:      UIColor { brand600 }   // CTA buttons
+    public static var primary: UIColor { brand600 }   // CTA buttons
     public static var primaryLight: UIColor { brand500 }   // hover / pressed
-    public static var primaryDeep:  UIColor { brand700 }
+    public static var primaryDeep: UIColor { brand700 }
     public static var primaryAccent: UIColor { brand500 }  // text accent
+
+    // MARK: - White / light-theme accent (Feature #23)
+    //
+    // Used when the user turns on "Brand accent in light theme" in Fenix Settings.
+    // We re-use brand500 (emerald #10B981) as the accent — same hue family as the
+    // login screen so the brand stays coherent across dark & light modes.
+    // Light-theme specific tones for tinting tappable elements and highlights.
+    public static let lightThemeAccent: UIColor = brand500   // #10B981 — primary tint
+    public static let lightThemeAccentLight: UIColor = brand100   // #D1FAE5 — selection bg, badge fill
+    public static let lightThemeAccentDeep: UIColor = brand600   // #059669 — pressed / active state
 }
 
 // MARK: - UIColor convenience
@@ -48,9 +58,9 @@ public enum FenixuzBrandColors {
 extension UIColor {
     fileprivate convenience init(rgb: UInt32) {
         self.init(
-            red:   CGFloat((rgb >> 16) & 0xFF) / 255.0,
+            red: CGFloat((rgb >> 16) & 0xFF) / 255.0,
             green: CGFloat((rgb >>  8) & 0xFF) / 255.0,
-            blue:  CGFloat( rgb        & 0xFF) / 255.0,
+            blue: CGFloat( rgb        & 0xFF) / 255.0,
             alpha: 1.0
         )
     }

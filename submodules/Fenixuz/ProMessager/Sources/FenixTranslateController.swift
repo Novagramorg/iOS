@@ -15,6 +15,85 @@ private let kSuiteName    = "pro_messager"
 private let kEnabled      = "auto_translate_enabled"
 private let kLang         = "auto_translate_lang"
 private let kDownloaded   = "auto_translate_downloaded"
+private let kVoiceTranslateEnabled = "voice_translate_enabled"
+
+// MARK: - Voice-to-text translation utility
+
+/// Translates `text` into `targetLang` (ISO 639-1 code, e.g. "en", "ru", "uz") using the
+/// Telegram MTProto translation engine.  On any failure the `completion` is called with the
+/// original `text` so the caller never receives an empty string.
+///
+/// - Parameters:
+///   - text:       The transcribed voice text to translate.
+///   - targetLang: ISO 639-1 target language code.  Reads `auto_translate_lang` from
+///                 UserDefaults as a fallback; falls back further to "en".
+///   - context:    The active Telegram AccountContext (provides the network).
+///   - completion: Called on the main thread with the translated text (or `text` on failure).
+public func fenixTranslateVoiceText(
+    _ text: String,
+    to targetLang: String,
+    context: AccountContext,
+    completion: @escaping (String) -> Void
+) {
+    guard !text.isEmpty else {
+        completion(text)
+        return
+    }
+
+    // Resolve the actual target language: caller > UserDefaults > "en"
+    let resolvedLang: String = {
+        if !targetLang.isEmpty { return targetLang }
+        let saved = UserDefaults(suiteName: kSuiteName)?.string(forKey: kLang) ?? ""
+        return saved.isEmpty ? "en" : saved
+    }()
+
+    let signal: Signal<(String, [MessageTextEntity])?, TranslationError> =
+        context.engine.messages.translate(text: text, toLang: resolvedLang)
+
+    // Keep a strong reference while the signal is alive
+    var disposable: Disposable?
+    disposable = signal.start(
+        next: { result in
+            DispatchQueue.main.async {
+                if let translated = result?.0, !translated.isEmpty {
+                    completion(translated)
+                } else {
+                    // Translation returned nothing — fall back to raw transcription
+                    completion(text)
+                }
+                disposable?.dispose()
+                disposable = nil
+            }
+        },
+        error: { _ in
+            // Any network / server error — fall back to raw transcription
+            DispatchQueue.main.async {
+                completion(text)
+                disposable?.dispose()
+                disposable = nil
+            }
+        },
+        completed: {}
+    )
+}
+
+/// Returns the currently saved voice-translate-enabled flag.
+public var fenixVoiceTranslateEnabled: Bool {
+    return UserDefaults(suiteName: kSuiteName)?.bool(forKey: kVoiceTranslateEnabled) ?? false
+}
+
+/// Returns the currently saved voice-translate target language (ISO 639-1).
+/// Falls back to the auto-translate language, then "en".
+public var fenixVoiceTranslateTargetLang: String {
+    let ud = UserDefaults(suiteName: kSuiteName)
+    let lang = ud?.string(forKey: kLang) ?? ""
+    return lang.isEmpty ? "en" : lang
+}
+
+/// Persists the voice-translate-enabled flag.
+public func fenixSetVoiceTranslateEnabled(_ enabled: Bool) {
+    UserDefaults(suiteName: kSuiteName)?.set(enabled, forKey: kVoiceTranslateEnabled)
+}
 
 // MARK: - Section
 
@@ -49,7 +128,7 @@ private enum AutoTranslateEntry: ItemListNodeEntry {
         }
     }
 
-    static func ==(lhs: AutoTranslateEntry, rhs: AutoTranslateEntry) -> Bool {
+    static func == (lhs: AutoTranslateEntry, rhs: AutoTranslateEntry) -> Bool {
         switch (lhs, rhs) {
         case let (.infoText(lt, la), .infoText(rt, ra)):
             return lt === rt && la == ra
@@ -64,7 +143,7 @@ private enum AutoTranslateEntry: ItemListNodeEntry {
         }
     }
 
-    static func <(lhs: AutoTranslateEntry, rhs: AutoTranslateEntry) -> Bool {
+    static func < (lhs: AutoTranslateEntry, rhs: AutoTranslateEntry) -> Bool {
         return lhs.stableId < rhs.stableId
     }
 
@@ -154,7 +233,7 @@ private func autoTranslateEntries(presentationData: PresentationData, state: Aut
         ("Yapon tili", "ja"),
         ("Koreys tili", "ko")
     ]
-    
+
     for (index, lang) in languages.enumerated() {
         let isSelected = state.lang == lang.1
         let isDownloaded = state.downloadedLanguages.contains(lang.1)
@@ -219,4 +298,3 @@ public func fenixTranslateAutoController(context: AccountContext, onEnabledSelec
 
     return ItemListController(context: context, state: signal)
 }
-

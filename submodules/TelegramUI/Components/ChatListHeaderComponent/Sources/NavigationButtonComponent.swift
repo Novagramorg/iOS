@@ -101,6 +101,14 @@ public final class NavigationButtonComponent: Component {
         }
         
         @objc private func pressed() {
+            // Fenixuz: light haptic for Fenixuz-added icon button types (iconOriginal, iconTinted, systemIcon).
+            switch self.component?.content {
+            case .iconOriginal, .iconTinted, .systemIcon:
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+            default:
+                break
+            }
             self.component?.pressed(self)
         }
         

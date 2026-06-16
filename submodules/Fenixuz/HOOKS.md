@@ -1298,3 +1298,134 @@ Suppresses the `messages.readReactions` sync (marking "I've seen who reacted to 
 increment: isFenixuzGhostModeActive ? .boolFalse : .boolTrue
 ```
 When Ghost is on, channel post view counters are NOT bumped, but the request still runs so the user still SEES view counts (no UI regression). Deliberately NOT a blanket guard.
+
+---
+
+## 📌 2026-06-16 — quick-wins batch (haptic, voice-translate, chat-lock biometric)
+
+### `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` — menu haptic (#42)
+
+**Inside `pressed()` (~line 103):** a `switch self.component?.content` guard fires a `UIImpactFeedbackGenerator(style: .light)` only for the three Fenixuz-added content types — `.iconOriginal`, `.iconTinted`, and `.systemIcon`. The upstream cases `.icon`, `.text`, `.more`, and `.proxy` deliberately fall through with no haptic so existing upstream button UX is unchanged.
+
+```swift
+@objc private func pressed() {
+    // Fenixuz: light haptic for Fenixuz-added icon button types (iconOriginal, iconTinted, systemIcon).
+    switch self.component?.content {
+    case .iconOriginal, .iconTinted, .systemIcon:
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+    default:
+        break
+    }
+    self.component?.pressed(self)
+}
+```
+
+Reason: upstream `.pressed()` had no haptic. Fenixuz ghost-mode, STT, and header buttons use the three new content types; the haptic covers all of them in one place without touching the upstream `.icon`/`.text`/`.more`/`.proxy` code paths (those belong to upstream UX — changing them would affect chat navigation buttons, compose button, proxy button, etc.).
+
+---
+
+### `submodules/ChatListUI/Sources/ChatListController.swift` — story-camera button haptic (#42)
+
+**Inside the story-camera `NavigationButtonComponent` pressed closure (~line 7177):**
+
+```swift
+// Fenixuz: light haptic on story camera button tap.
+let generator = UIImpactFeedbackGenerator(style: .light)
+generator.impactOccurred()
+```
+
+Inserted immediately before the existing `parentController.displayContinueLiveStream()` / `openStoryCamera(fromList:)` branch.
+
+Reason: the story-camera button uses `.icon(imageName:)` content type — the upstream case that `NavigationButtonComponent.pressed()` intentionally does NOT add haptic to. The story-camera is a Fenixuz UX surface (custom placement, custom icon `"Chat List/AddStoryIcon"`) and should have haptic feedback; adding it here in the action closure is the only path that works without touching the upstream `.icon` render path.
+
+---
+
+### `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` — STT haptic + voice→translate (#42, #25)
+
+**`sttButtonPressed()` (~line 5904) — two Fenixuz additions:**
+
+**1. Haptic (#42):**
+
+```swift
+// Fenixuz: selection haptic on STT record start/stop toggle.
+let sttHaptic = UISelectionFeedbackGenerator()
+sttHaptic.selectionChanged()
+```
+
+Fires at the very start of `sttButtonPressed()` before the early-return for the `isSttRecording` case, so both start and stop get feedback.
+
+**2. Voice→translate (#25):**
+
+```swift
+// Fenixuz #25: translate the finished transcription before it lands in the input field.
+// Inline TelegramCore translate (importing FenixuzProMessager here would create a module cycle).
+// The on/off flag + target language are read inside SpeechToTextManager from "pro_messager".
+self.sttManager?.translateHandler = { [weak self] text, lang, completion in
+    guard let self, let context = self.context else {
+        completion(text)
+        return
+    }
+    let _ = (context.engine.messages.translate(text: text, toLang: lang)
+    |> deliverOnMainQueue).startStandalone(next: { result in
+        completion(result?.0 ?? text)
+    }, error: { _ in
+        completion(text)
+    })
+}
+```
+
+Set immediately after `self.sttManager` is created/reused. The translate-on/off flag and target language are read inside `SpeechToTextManager` from the `pro_messager` UserDefaults suite — not here. If translation is disabled or the engine call fails, `completion(text)` passes through the raw transcription unchanged. The `translateHandler` is an inline closure rather than a separate module import because importing `FenixuzProMessager` from `ChatTextInputPanelNode` (which is a dependency of `TelegramUI`, which is a dependency of `FenixuzProMessager`) would create a circular module dependency.
+
+---
+
+### `submodules/ChatListUI/Sources/ChatContextMenus.swift` — chat-lock context menu with passwordType (#46)
+
+**Around lines 494–513 — the `.remove` and `.set` callers in the per-chat pincode context-menu action:**
+
+`.remove` caller (~line 494): `ChatPincodeViewController(mode: .remove(passwordType: ChatPincodeManager.shared.getMetadata(for: peerId).passwordType, onVerify: ..., onSuccess: ...))` — passes `passwordType:` read from `getMetadata(for:)` so the verify screen shows dots (PIN) or a text field (alphanumeric) matching whatever the user set up.
+
+`.set` caller (~line 505): `ChatPincodeViewController(mode: .set(onSuccess: { code, passwordType, biometricEnabled in ChatPincodeManager.shared.setPincode(code, for: peerId, type: passwordType, biometricEnabled: biometricEnabled) }))` — the `onSuccess` closure now carries `(code, passwordType, biometricEnabled)` and forwards all three to `ChatPincodeManager.setPincode(_:for:type:biometricEnabled:)`.
+
+Reason: `ChatPincodeMode.remove` and `.set` gained `passwordType:` and `biometricEnabled:` parameters when `FenixuzChatLock` was updated to support both PIN and alphanumeric passwords. These call sites in the upstream-owned `ChatContextMenus.swift` must match the new API signatures or the project will not build. `getMetadata(for:)` is a new public method on `ChatPincodeManager.shared` that returns a `ChatLockMetadata` struct carrying both `passwordType` and `biometricEnabled`.
+
+---
+
+### `submodules/TelegramUI/Sources/NavigateToChatController.swift` — chat-lock verify gate with passwordType + biometricEnabled (#46)
+
+**`navigateToChatControllerImpl(_:)` (~line 38):** the `.verify` caller now passes both `passwordType:` and `biometricEnabled:` sourced from `ChatPincodeManager.shared.getMetadata(for: targetPeerId)`:
+
+```swift
+let pincodeVC = ChatPincodeViewController(
+    mode: .verify(
+        passwordType: ChatPincodeManager.shared.getMetadata(for: targetPeerId).passwordType,
+        biometricEnabled: ChatPincodeManager.shared.getMetadata(for: targetPeerId).biometricEnabled,
+        onVerify: { code in
+            ChatPincodeManager.shared.verify(code, for: targetPeerId)
+        },
+        onSuccess: { ... }
+    ),
+    presentationData: presentationData
+)
+```
+
+Reason: same API change as above — `ChatPincodeMode.verify` now requires `passwordType:` and `biometricEnabled:`. This is the gate that intercepts every chat navigation and shows the lock screen before opening the chat; it must pass the correct credential type so the lock screen renders dots (PIN) or a text field, and the correct biometric flag so Face ID / Touch ID is attempted on appear.
+
+
+---
+
+## 📌 2026-06-16 (c) — folder unlock + chat-lock menu localization
+
+### `submodules/TelegramCore/Sources/State/UserLimitsConfiguration.swift` (~line 163)
+`self.maxFoldersCount = max(1000, getValue("dialog_filters_limit", ...))` — lifts the CLIENT-side folder-count gate so the Premium "Limit Reached" upsell never triggers. NOTE: the Telegram **server** still enforces its own cap on `messages.updateDialogFilter`, so true count is server-bounded.
+
+### `submodules/ChatListUI/Sources/ChatListFilterPresetListController.swift` (~line 282)
+`var effectiveDisplayTags: Bool? = displayTags` (was gated by `if isPremium`) — unlocks the "Show Folder Tags" toggle for everyone. Tag rendering is fully client-side.
+
+### `submodules/ChatListUI/Sources/ChatContextMenus.swift` (~line 484)
+`pincodeTitle` now uses `FenixuzChatLockStrings.menuRemove / .menuSet` (localized en/uz/ru) instead of the hardcoded Uzbek `"🔒 Pincode qo'yish"`.
+
+### `submodules/TelegramUI/Sources/TelegramRootController.swift` (~line 281) — 2026-06-16
+Contacts tab re-enabled (`controllers.append(self.contactsController!)` uncommented). Was hidden during the Apple 5.1.2 contacts-privacy review; the `DeviceAccess.authorizeAccess(.contacts)` consent hook (see contacts-consent section above) now gates all contacts access, so the Find-Friends tab presents the consent alert before reading contacts.
+
+NOTE: there are TWO tab-build paths — the init (~line 223, startup) and `updateRootControllers` (~line 281, calls-tab toggle). BOTH now append `contactsController` so the Contacts tab shows at launch and survives a calls-tab refresh.

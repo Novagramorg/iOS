@@ -160,7 +160,7 @@ extension UserLimitsConfiguration {
         self.maxPublicLinksCount = getValue("channels_public_limit", orElse: defaultValue.maxPublicLinksCount)
         self.maxSavedGifCount = getValue("saved_gifs_limit", orElse: defaultValue.maxSavedGifCount)
         self.maxFavedStickerCount = getValue("stickers_faved_limit", orElse: defaultValue.maxFavedStickerCount)
-        self.maxFoldersCount = getValue("dialog_filters_limit", orElse: defaultValue.maxFoldersCount)
+        self.maxFoldersCount = max(1000, getValue("dialog_filters_limit", orElse: defaultValue.maxFoldersCount)) // Fenixuz: lift client folder-count gate (server still caps)
         self.maxFolderChatsCount = getValue("dialog_filters_chats_limit", orElse: defaultValue.maxFolderChatsCount)
         self.maxCaptionLength = getValue("caption_length_limit", orElse: defaultValue.maxCaptionLength)
         self.maxUploadFileParts = getValue("upload_max_fileparts", orElse: defaultValue.maxUploadFileParts)

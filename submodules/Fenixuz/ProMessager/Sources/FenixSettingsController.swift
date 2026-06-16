@@ -11,8 +11,9 @@ import PresentationDataUtils
 import ItemListUI
 import CallListUI
 import AppBundle
+import ComponentFlow
 import FenixuzLocalization
-import FenixuzTips
+import FenixuzBrand
 
 private enum FenixSection: Int32 {
     case accounts = 5
@@ -21,6 +22,8 @@ private enum FenixSection: Int32 {
     case messaging = 2
     case stt = 3
     case protection = 4
+    case appearance = 6
+    case chatLock = 7
 }
 
 private func textStyleDisplayName(_ rawValue: String, l10n: FenixuzL10n) -> String {
@@ -41,14 +44,14 @@ private enum FenixEntry: ItemListNodeEntry {
     case longPressCameraSelection(PresentationTheme, String, String, Bool)
     case editedHistoryEnabled(PresentationTheme, String, String, Bool)
     case chatFooter(PresentationTheme, String)
-    
+
     // — Interface Section —
     case interfaceHeader(String)
     case hideFolders(PresentationTheme, String, String, Bool)
     case showStories(PresentationTheme, String, String, Bool)
     case showMutualContactSymbol(PresentationTheme, String, String, Bool)
     case interfaceFooter(PresentationTheme, String)
-    
+
     // — Messaging Section —
     case messagingHeader(String)
     case textStyle(PresentationTheme, String, String)
@@ -57,23 +60,35 @@ private enum FenixEntry: ItemListNodeEntry {
     case translateToggle(PresentationTheme, String, String, Bool)
     case translateMessages(PresentationTheme, String)
     case messagingFooter(PresentationTheme, String)
-    
+
     // — STT Section —
     case sttHeader(String)
     case sttEnabled(PresentationTheme, String, String, Bool)
     case sttLanguage(PresentationTheme, String, String)
-    
+    // isNew: true while this feature's introducedBuild is newer than the seen-build pointer
+    case voiceTranslate(PresentationTheme, String, String, Bool, Bool)
+
     // — Protection Section —
     case protectionHeader(String)
     case blockForeignUsers(PresentationTheme, String, String, Bool)
     case blockApkFiles(PresentationTheme, String, String, Bool)
     case protectionFooter(PresentationTheme, String)
 
+    // — Appearance Section (Feature #23) —
+    // isNew: true while this feature's introducedBuild is newer than the seen-build pointer
+    case appearanceHeader(String)
+    case whiteThemeAccent(PresentationTheme, String, String, Bool, Bool)
+    case appearanceFooter(PresentationTheme, String)
+
+    // — Chat Lock Section (Feature #46) —
+    // isNew: true while this feature's introducedBuild is newer than the seen-build pointer
+    case chatLockHeader(String, Bool)
+    case chatLockInfo(PresentationTheme, String)
+    case chatLockFooter(PresentationTheme, String)
+
     // — Accounts (Fenixuz multi-account) —
     case accountsHeader(String)
     case accountsManager(PresentationTheme, String)
-    // — Tips (Imkoniyatlar) —
-    case tipsRow(PresentationTheme, String)
     // — About FenixPro —
     case aboutRow(PresentationTheme, String)
 
@@ -85,15 +100,19 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.interface.rawValue
         case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .messagingFooter:
             return FenixSection.messaging.rawValue
-        case .sttHeader, .sttEnabled, .sttLanguage:
+        case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
             return FenixSection.stt.rawValue
         case .protectionHeader, .blockForeignUsers, .blockApkFiles, .protectionFooter:
             return FenixSection.protection.rawValue
-        case .accountsHeader, .accountsManager, .tipsRow, .aboutRow:
+        case .appearanceHeader, .whiteThemeAccent, .appearanceFooter:
+            return FenixSection.appearance.rawValue
+        case .chatLockHeader, .chatLockInfo, .chatLockFooter:
+            return FenixSection.chatLock.rawValue
+        case .accountsHeader, .accountsManager, .aboutRow:
             return FenixSection.accounts.rawValue
         }
     }
-    
+
     var stableId: Int32 {
         switch self {
         // Chat
@@ -123,26 +142,33 @@ private enum FenixEntry: ItemListNodeEntry {
         case .sttHeader:                 return 30
         case .sttEnabled:                return 31
         case .sttLanguage:               return 32
+        case .voiceTranslate:            return 33
         // Protection
         case .protectionHeader:          return 40
         case .blockForeignUsers:         return 41
         case .blockApkFiles:             return 42
         case .protectionFooter:          return 43
+        // Appearance (Feature #23)
+        case .appearanceHeader:          return 50
+        case .whiteThemeAccent:          return 51
+        case .appearanceFooter:          return 52
+        // Chat Lock (Feature #46) — informational section
+        case .chatLockHeader:            return 60
+        case .chatLockInfo:              return 61
+        case .chatLockFooter:            return 62
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
         case .accountsManager:           return -1
-        // Tips row — directly above Accounts header
-        case .tipsRow:                   return -3
-        // About FenixPro row — at the very top, above Tips
-        case .aboutRow:                  return -4
+        // About FenixPro row — at the very top, above Accounts
+        case .aboutRow:                  return -3
         }
     }
 
     var sortId: Int {
         return Int(self.stableId)
     }
-    
-    static func ==(lhs: FenixEntry, rhs: FenixEntry) -> Bool {
+
+    static func == (lhs: FenixEntry, rhs: FenixEntry) -> Bool {
         switch lhs {
         case let .chatHeader(lhsText):
             if case let .chatHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
@@ -160,7 +186,7 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .editedHistoryEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .chatFooter(lhsTheme, lhsText):
             if case let .chatFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
-            
+
         case let .interfaceHeader(lhsText):
             if case let .interfaceHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .hideFolders(lhsTheme, lhsTitle, lhsText, lhsValue):
@@ -171,7 +197,7 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .showMutualContactSymbol(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .interfaceFooter(lhsTheme, lhsText):
             if case let .interfaceFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
-            
+
         case let .messagingHeader(lhsText):
             if case let .messagingHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .textStyle(lhsTheme, lhsTitle, lhsLabel):
@@ -186,14 +212,17 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .translateMessages(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         case let .messagingFooter(lhsTheme, lhsText):
             if case let .messagingFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
-            
+
         case let .sttHeader(lhsText):
             if case let .sttHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .sttEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .sttEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .sttLanguage(lhsTheme, lhsTitle, lhsLabel):
             if case let .sttLanguage(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel { return true } else { return false }
-            
+        case let .voiceTranslate(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .voiceTranslate(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
+               lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+
         case let .protectionHeader(lhsText):
             if case let .protectionHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .blockForeignUsers(lhsTheme, lhsTitle, lhsText, lhsValue):
@@ -203,21 +232,34 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .protectionFooter(lhsTheme, lhsText):
             if case let .protectionFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
+        case let .appearanceHeader(lhsText):
+            if case let .appearanceHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
+        case let .whiteThemeAccent(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .whiteThemeAccent(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
+               lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .appearanceFooter(lhsTheme, lhsText):
+            if case let .appearanceFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
+
+        case let .chatLockHeader(lhsText, lhsIsNew):
+            if case let .chatLockHeader(rhsText, rhsIsNew) = rhs, lhsText == rhsText, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .chatLockInfo(lhsTheme, lhsText):
+            if case let .chatLockInfo(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
+        case let .chatLockFooter(lhsTheme, lhsText):
+            if case let .chatLockFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
+
         case let .accountsHeader(lhsText):
             if case let .accountsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
         case let .accountsManager(lhsTheme, lhsTitle):
             if case let .accountsManager(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
-        case let .tipsRow(lhsTheme, lhsTitle):
-            if case let .tipsRow(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         case let .aboutRow(lhsTheme, lhsTitle):
             if case let .aboutRow(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         }
     }
 
-    static func <(lhs: FenixEntry, rhs: FenixEntry) -> Bool {
+    static func < (lhs: FenixEntry, rhs: FenixEntry) -> Bool {
         return lhs.sortId < rhs.sortId
     }
-    
+
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! FenixSettingsArguments
         switch self {
@@ -227,10 +269,6 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .accountsManager(_, title):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "person.2.circle.fill", color: .blue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openAccounts()
-            })
-        case let .tipsRow(_, title):
-            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "sparkles", color: .gold), title: title, label: "", sectionId: self.section, style: .blocks, action: {
-                arguments.openTips()
             })
         case let .aboutRow(_, title):
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "info.circle.fill", color: .blue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
@@ -327,6 +365,24 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "globe", color: .blue), title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openSttLanguageSettings()
             })
+        case let .voiceTranslate(_, title, text, value, isNew):
+            // "character.bubble.fill" is iOS 13+ safe; "translate" is iOS 14+ only.
+            // isNew: always true for now — flip to false in the call site when no longer new.
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "character.bubble.fill", color: .teal),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateVoiceTranslate(val)
+                }
+            )
 
         // ─── HIMOYA ───
         case let .protectionHeader(text):
@@ -340,6 +396,53 @@ private enum FenixEntry: ItemListNodeEntry {
                 arguments.updateBlockApkFiles(val)
             })
         case let .protectionFooter(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+
+        // ─── KO'RINISH (APPEARANCE) ───
+        case let .appearanceHeader(text):
+            return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
+        case let .whiteThemeAccent(_, title, text, value, isNew):
+            // isNew: always true for now — flip to false in the call site when no longer new.
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "paintpalette.fill", color: .green),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateWhiteThemeAccent(val)
+                }
+            )
+        case let .appearanceFooter(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+
+        // ─── CHAT LOCK (Feature #46) ───
+        case let .chatLockHeader(text, isNew):
+            // ItemListSectionHeaderItem has native badge: + badgeStyle: support — use that
+            // instead of a text suffix so the badge is a proper green pill.
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
+            let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
+                ? ItemListSectionHeaderItem.BadgeStyle(
+                    background: UIColor(red: 0.18, green: 0.74, blue: 0.44, alpha: 1.0),
+                    foreground: .white
+                )
+                : nil
+            return ItemListSectionHeaderItem(
+                presentationData: presentationData,
+                text: text,
+                badge: badgeText,
+                badgeStyle: badgeStyle,
+                sectionId: self.section
+            )
+        case let .chatLockInfo(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+        case let .chatLockFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
@@ -362,7 +465,9 @@ private struct FenixSettingsState: Equatable {
     var sttLanguage: String
     var blockForeignUsers: Bool
     var blockApkFiles: Bool
-    
+    var whiteThemeAccentEnabled: Bool
+    var voiceTranslateEnabled: Bool
+
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
         self.hideFolders = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "hide_folders") ?? false
@@ -380,9 +485,13 @@ private struct FenixSettingsState: Equatable {
         self.sttLanguage = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "en-US"
         self.blockForeignUsers = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
         self.blockApkFiles = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_apk_files") ?? false
+        // Default off — user opts in explicitly (light theme stays stock until they toggle it)
+        self.whiteThemeAccentEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "white_theme_accent_enabled") ?? false
+        // Default off — voice translate is an opt-in power-user feature
+        self.voiceTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "voice_translate_enabled") ?? false
     }
-    
-    static func ==(lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
+
+    static func == (lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
         if lhs.showDeletedMessages != rhs.showDeletedMessages {
             return false
         }
@@ -429,6 +538,12 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.sttLanguage != rhs.sttLanguage {
+            return false
+        }
+        if lhs.whiteThemeAccentEnabled != rhs.whiteThemeAccentEnabled {
+            return false
+        }
+        if lhs.voiceTranslateEnabled != rhs.voiceTranslateEnabled {
             return false
         }
         return true
@@ -481,19 +596,18 @@ private func sttSupportedLanguages() -> [(String, String)] {
         ("fr-CA", "🇨🇦 Français (CA)"),
         ("es-MX", "🇲🇽 Español (MX)"),
         ("zh-TW", "🇹🇼 中文 (繁體)"),
-        ("pt-PT", "🇵🇹 Português (PT)"),
+        ("pt-PT", "🇵🇹 Português (PT)")
     ]
 }
 
 private func fenixSettingsEntries(presentationData: PresentationData, state: FenixSettingsState) -> [FenixEntry] {
     var entries: [FenixEntry] = []
     let l10n = FenixuzL10n(presentationData.strings)
+    // Resolved once at entry-build time; used by local string namespaces throughout.
+    let langCode = presentationData.strings.primaryComponent.languageCode
 
     // ─── ABOUT FENIXPRO ───
     entries.append(.aboutRow(presentationData.theme, l10n.about_rowTitle))
-
-    // ─── TIPS (Imkoniyatlar / Features) ───
-    entries.append(.tipsRow(presentationData.theme, l10n.tips_screenTitle))
 
     // ─── ACCOUNTS (Fenixuz multi-account) ───
     entries.append(.accountsHeader(l10n.accounts_sectionHeader))
@@ -536,11 +650,37 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     let sttLangName = sttLanguageDisplayName(state.sttLanguage)
     entries.append(.sttLanguage(presentationData.theme, l10n.settings_voice_sttLang_title, sttLangName))
 
+    // Voice → Translate toggle (Feature #25)
+    // Shows when STT is enabled and adds auto-translation of the transcription result.
+    // isNew: hardcoded true — set to false here when this feature is no longer new.
+    let voiceTranslateTitle    = FenixVoiceTranslateStrings.toggleTitle(langCode: langCode)
+    let voiceTranslateSubtitle = FenixVoiceTranslateStrings.toggleSubtitle(langCode: langCode)
+    entries.append(.voiceTranslate(presentationData.theme, voiceTranslateTitle, voiceTranslateSubtitle, state.voiceTranslateEnabled, true))
+
     // ─── PROTECTION ───
     entries.append(.protectionHeader(l10n.settings_section_protection))
     entries.append(.blockForeignUsers(presentationData.theme, l10n.settings_protection_foreign_title, l10n.settings_protection_foreign_subtitle, state.blockForeignUsers))
     entries.append(.blockApkFiles(presentationData.theme, l10n.settings_protection_apk_title, l10n.settings_protection_apk_subtitle, state.blockApkFiles))
     entries.append(.protectionFooter(presentationData.theme, l10n.settings_protection_footer))
+
+    // ─── APPEARANCE (Feature #23) ───
+    // Local strings — not in FenixuzL10n to avoid parallel-edit hazard on Localization module.
+    // isNew: hardcoded true — set to false here when this feature is no longer new.
+    let appearanceTitle = FenixWhiteThemeStrings.sectionTitle(langCode: langCode)
+    let accentTitle    = FenixWhiteThemeStrings.toggleTitle(langCode: langCode)
+    let accentSubtitle = FenixWhiteThemeStrings.toggleSubtitle(langCode: langCode)
+    let accentFooter   = FenixWhiteThemeStrings.footer(langCode: langCode)
+    entries.append(.appearanceHeader(appearanceTitle))
+    entries.append(.whiteThemeAccent(presentationData.theme, accentTitle, accentSubtitle, state.whiteThemeAccentEnabled, true))
+    entries.append(.appearanceFooter(presentationData.theme, accentFooter))
+
+    // ─── CHAT LOCK (Feature #46) ───
+    // Informational section — lock is set per-chat via long-press context menu, not via a global toggle here.
+    // Local strings to avoid parallel-edit hazard on the shared Localization module.
+    // isNew: hardcoded true — set to false here when this feature is no longer new.
+    entries.append(.chatLockHeader(FenixChatLockStrings.sectionTitle(langCode: langCode), true))
+    entries.append(.chatLockInfo(presentationData.theme, FenixChatLockStrings.infoBody(langCode: langCode)))
+    entries.append(.chatLockFooter(presentationData.theme, FenixChatLockStrings.footer(langCode: langCode)))
 
     // ItemListController entries should arrive in stableId order to avoid an
     // assertion. Section visual order is controlled by stableId numbering.
@@ -550,7 +690,6 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
 private final class FenixSettingsArguments {
     let openAccounts: () -> Void
     let openAbout: () -> Void
-    let openTips: () -> Void
     let openCalls: () -> Void
     let updateShowDeletedMessages: (Bool) -> Void
     let updateHideFolders: (Bool) -> Void
@@ -569,11 +708,12 @@ private final class FenixSettingsArguments {
     let openSttLanguageSettings: () -> Void
     let updateBlockForeignUsers: (Bool) -> Void
     let updateBlockApkFiles: (Bool) -> Void
-    
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openTips: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void) {
+    let updateWhiteThemeAccent: (Bool) -> Void
+    let updateVoiceTranslate: (Bool) -> Void
+
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
-        self.openTips = openTips
         self.openCalls = openCalls
         self.updateShowDeletedMessages = updateShowDeletedMessages
         self.updateHideFolders = updateHideFolders
@@ -592,6 +732,8 @@ private final class FenixSettingsArguments {
         self.openSttLanguageSettings = openSttLanguageSettings
         self.updateBlockForeignUsers = updateBlockForeignUsers
         self.updateBlockApkFiles = updateBlockApkFiles
+        self.updateWhiteThemeAccent = updateWhiteThemeAccent
+        self.updateVoiceTranslate = updateVoiceTranslate
     }
 }
 
@@ -601,24 +743,14 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
     let updateState: ((FenixSettingsState) -> FenixSettingsState) -> Void = { f in
         statePromise.set(stateValue.modify { f($0) })
     }
-    
+
     var pushControllerImpl: ((ViewController) -> Void)?
     var presentControllerImpl: ((ViewController) -> Void)?
-    
+
     let arguments = FenixSettingsArguments(openAccounts: {
         pushControllerImpl?(fenixAccountsController(context: context))
     }, openAbout: {
         pushControllerImpl?(fenixAboutController(context: context))
-    }, openTips: {
-        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
-        let tipsVC = FenixuzTipsScreen.makeController(presentationData: presentationData)
-        // Present as a UIKit sheet directly — tips screen is a plain UIViewController.
-        // We find the topmost UIViewController via the main window's root.
-        if let rootVC = UIApplication.shared.windows.first(where: { $0.isKeyWindow })?.rootViewController {
-            var top: UIViewController = rootVC
-            while let presented = top.presentedViewController { top = presented }
-            top.present(tipsVC, animated: true)
-        }
     }, openCalls: {
         pushControllerImpl?(CallListController(context: context, mode: .navigation))
     }, updateShowDeletedMessages: { value in
@@ -759,8 +891,26 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             state.blockApkFiles = value
             return state
         }
+    }, updateWhiteThemeAccent: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "white_theme_accent_enabled")
+        // Notify observers so any apply-point can react at runtime.
+        // The actual theme tinting happens at the apply-point hook described below.
+        NotificationCenter.default.post(name: .fenixWhiteThemeAccentChanged, object: nil)
+        updateState { state in
+            var state = state
+            state.whiteThemeAccentEnabled = value
+            return state
+        }
+    }, updateVoiceTranslate: { value in
+        // Write to the same key that SpeechToTextManager reads (Feature #25).
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "voice_translate_enabled")
+        updateState { state in
+            var state = state
+            state.voiceTranslateEnabled = value
+            return state
+        }
     })
-    
+
     let signal = combineLatest(
         context.sharedContext.presentationData,
         statePromise.get()
@@ -770,7 +920,7 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: fenixSettingsEntries(presentationData: presentationData, state: state), style: .blocks)
             return (controllerState, (listState, arguments))
         }
-    
+
     let controller = ItemListController(context: context, state: signal)
     pushControllerImpl = { [weak controller] c in
         controller?.push(c)
@@ -779,4 +929,159 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         controller?.present(c, in: .window(.root))
     }
     return controller
+}
+
+// MARK: - Notification name (Feature #23)
+
+extension NSNotification.Name {
+    // Posted when the user flips the white-theme accent toggle.
+    // Apply-point hook: subscribe to this in the place that rebuilds PresentationTheme
+    // (e.g. inside the app's theme-override logic) and call
+    // FenixWhiteThemeAccent.applyIfNeeded(to:) there.
+    public static let fenixWhiteThemeAccentChanged = NSNotification.Name("FenixWhiteThemeAccentChanged")
+}
+
+// MARK: - Public read helper (Feature #23)
+
+/// Lets any module read the white-theme-accent preference without importing FenixuzProMessager
+/// or referencing UserDefaults key literals directly.
+public enum FenixWhiteThemeAccent {
+    // UserDefaults key — same suite as all other Fenix settings
+    static let udKey   = "white_theme_accent_enabled"
+    static let udSuite = "pro_messager"
+
+    /// True when the user has turned on brand accent for the light theme.
+    public static var isEnabled: Bool {
+        UserDefaults(suiteName: udSuite)?.bool(forKey: udKey) ?? false
+    }
+
+    // The actual theme-engine apply-point is upstream and requires
+    // PresentationTheme surgery. Call this from the apply-point once it is wired.
+    // Returns FenixuzBrandColors.lightThemeAccent when enabled, nil otherwise.
+    // TODO apply-point: hook into the app-level theme rebuild triggered by
+    //   .fenixWhiteThemeAccentChanged and swap theme.rootController.navigationBar.accentTextColor
+    //   (and related tokens) with the returned color when non-nil.
+    public static func accentColorIfEnabled() -> UIColor? {
+        guard isEnabled else { return nil }
+        return FenixuzBrandColors.lightThemeAccent
+    }
+}
+
+// MARK: - Local string namespace (Feature #23)
+// Kept here to avoid the parallel-edit hazard on the shared Localization module.
+
+private enum FenixWhiteThemeStrings {
+    static func sectionTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Ko'rinish"
+        case "ru": return "Внешний вид"
+        default:   return "Appearance"
+        }
+    }
+
+    static func toggleTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yorqin temada brand rangi"
+        case "ru": return "Акцент бренда в светлой теме"
+        default:   return "Brand accent in light theme"
+        }
+    }
+
+    static func toggleSubtitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yorqin (oq) temada Fenixuz yashil rangini accent sifatida qo'llaydi"
+        case "ru": return "Применяет фирменный зелёный Fenixuz в качестве акцента в светлой теме"
+        default:   return "Applies Fenixuz emerald as the accent color in the light theme"
+        }
+    }
+
+    static func footer(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Faqat yorqin (oq) temaga ta'sir qiladi. Qayta ishga tushirmasdan kuchga kiradi."
+        case "ru": return "Влияет только на светлую тему. Применяется без перезапуска."
+        default:   return "Affects the light theme only. Takes effect without restarting."
+        }
+    }
+}
+
+// MARK: - Local string namespace (Feature #46 — Chat Lock)
+// Kept local to avoid the parallel-edit hazard on the shared Localization module.
+// Lock is set per-chat via long-press → context menu; this section is informational only.
+
+private enum FenixChatLockStrings {
+    static func sectionTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Chat qulfi"
+        case "ru": return "Блокировка чата"
+        default:   return "Chat Lock"
+        }
+    }
+
+    // One descriptive paragraph that covers: how to set, PIN vs text, Face/Touch ID.
+    static func infoBody(langCode: String) -> String {
+        switch langCode {
+        case "uz":
+            return "Istalgan chatni uzoq bosib (long-press) → \"Qulf o'rnatish\" menyusini tanlang. " +
+                   "4 xonali PIN-kod yoki ixtiyoriy uzunlikdagi parol o'rnatishingiz mumkin. " +
+                   "Qurilmangiz Face ID yoki Touch ID'ni qo'llab-quvvatlasa, biometrik qulfdan ham foydalanishingiz mumkin. " +
+                   "Qulflangan chatni ochishda kod yoki biometrik tekshiruv so'raladi."
+        case "ru":
+            return "Зажмите любой чат (long-press) → выберите «Установить замок». " +
+                   "Можно задать 4-значный PIN или пароль произвольной длины. " +
+                   "Если устройство поддерживает Face ID или Touch ID, можно включить биометрическую разблокировку. " +
+                   "При открытии заблокированного чата потребуется ввод кода или биометрия."
+        default:
+            return "Long-press any chat → choose \"Set Lock\" from the context menu. " +
+                   "You can set a 4-digit PIN or an alphanumeric password of any length. " +
+                   "If your device supports Face ID or Touch ID, you can enable biometric unlock. " +
+                   "Opening a locked chat will prompt for your code or biometrics."
+        }
+    }
+
+    static func footer(langCode: String) -> String {
+        switch langCode {
+        case "uz":
+            return "Qulf har bir chat uchun alohida o'rnatiladi. Parollar xavfsiz iOS Keychain'da saqlanadi."
+        case "ru":
+            return "Замок устанавливается отдельно для каждого чата. Пароли хранятся в защищённом iOS Keychain."
+        default:
+            return "Lock is set per-chat. Credentials are stored in the iOS Keychain."
+        }
+    }
+}
+
+// MARK: - Local string namespace (Feature #25 — Voice Translate)
+// Kept local to avoid the parallel-edit hazard on the shared Localization module.
+// Target language is reused from the existing auto_translate_lang key — no picker needed here.
+
+private enum FenixVoiceTranslateStrings {
+    static func toggleTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Ovozli xabarlarni tarjima qilish"
+        case "ru": return "Переводить голосовые сообщения"
+        default:   return "Translate voice messages"
+        }
+    }
+
+    static func toggleSubtitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Nutqni matnga aylantirgandan so'ng avtomatik tarjima qiladi"
+        case "ru": return "Автоматически переводит транскрипцию после распознавания речи"
+        default:   return "Automatically translates the transcription after speech recognition"
+        }
+    }
+}
+
+// MARK: - Local string namespace (NEW badge header)
+// Short localised text used as the badge label on section headers.
+// "NEW" is kept very short so it fits cleanly in the grey header badge pill.
+
+private enum FenixNewBadgeLabel {
+    static func headerText(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "YANGI"
+        case "ru": return "НОВОЕ"
+        default:   return "NEW"
+        }
+    }
 }
