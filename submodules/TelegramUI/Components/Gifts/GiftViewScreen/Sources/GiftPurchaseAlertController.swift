@@ -106,7 +106,7 @@ public func giftPurchaseAlertController(
             )
         ))
                 
-        let giftTitle = "\(gift.title) #\(presentationStringsFormattedNumber(gift.number, presentationData.dateTimeFormat.groupingSeparator))"
+        let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: presentationData.dateTimeFormat))"
         var priceString = ""
         switch currency {
         case .stars:
@@ -115,7 +115,7 @@ public func giftPurchaseAlertController(
             }
         case .ton:
             if let resellAmount = gift.resellAmounts?.first(where: { $0.currency == .ton }) {
-                priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) TON**"
+                priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) GRAM**"
             }
         }
     

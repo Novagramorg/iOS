@@ -1342,7 +1342,7 @@ func openResolvedUrlImpl(
                     |> deliverOnMainQueue).start(next: { bot in
                         let choose = filterChooseTypes(choose, peerTypes: bot.peerTypes)
                         
-                        let controller = webAppTermsAlertController(context: context, updatedPresentationData: updatedPresentationData, bot: bot, completion: { allowWrite in
+                        let controller = webAppTermsAlertController(context: context, updatedPresentationData: updatedPresentationData, completion: { allowWrite in
                             let _ = (context.engine.messages.addBotToAttachMenu(botId: peerId, allowWrite: allowWrite)
                             |> deliverOnMainQueue).start(error: { _ in
                                 presentError(presentationData.strings.WebApp_AddToAttachmentUnavailableError)

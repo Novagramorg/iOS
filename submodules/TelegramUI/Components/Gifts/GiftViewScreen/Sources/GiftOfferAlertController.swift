@@ -38,7 +38,7 @@ public func giftOfferAlertController(
     case .stars:
         priceString = strings.Chat_GiftPurchaseOffer_AcceptConfirmation_Text_Stars(Int32(clamping: amount.amount.value))
     case .ton:
-        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: presentationData.dateTimeFormat) + " TON"
+        priceString = formatTonAmountText(amount.amount.value, dateTimeFormat: presentationData.dateTimeFormat) + " GRAM"
     }
     
     let resaleConfiguration = StarsSubscriptionConfiguration.with(appConfiguration: context.currentAppConfiguration.with { $0 })
@@ -49,7 +49,7 @@ public func giftOfferAlertController(
         finalPriceString = strings.Chat_GiftPurchaseOffer_AcceptConfirmation_Text_Stars(starsValue)
     case .ton:
         let tonValue = Int64(Float(amount.amount.value) * Float(resaleConfiguration.starGiftCommissionTonPermille) / 1000.0)
-        finalPriceString = formatTonAmountText(tonValue, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: 3) + " TON"
+        finalPriceString = formatTonAmountText(tonValue, dateTimeFormat: presentationData.dateTimeFormat, maxDecimalPositions: 3) + " GRAM"
     }
     
     let giftTitle = "\(gift.title) #\(formatCollectibleNumber(gift.number, dateTimeFormat: presentationData.dateTimeFormat))"

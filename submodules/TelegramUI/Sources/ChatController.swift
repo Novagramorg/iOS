@@ -5254,7 +5254,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     case .joined:
                         self.present(UndoOverlayController(presentationData: presentationData, content: .succeed(text: presentationData.strings.Chat_SimilarChannels_JoinedChannel(peer.compactDisplayTitle).string, timeout: nil, customUndoText: nil), elevatedLayout: false, position: .top, animateInAsReplacement: false, action: { _ in return false }), in: .current)
                     case let .webView(webView):
-                        self.context.sharedContext.openJoinChatWebView(context: self.context, parentController: self, updatedPresentationData: self.updatedPresentationData, webView: webView)
+                        self.context.sharedContext.openJoinChatWebView(context: self.context, parentController: self, updatedPresentationData: self.updatedPresentationData, webView: webView, chatTitle: peer.compactDisplayTitle)
                     }
                 }, error: { [weak self] error in
                     guard let self else {
@@ -7788,7 +7788,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                                             strongSelf.dismiss()
                                         }
                                     case let .webView(webView):
-                                        strongSelf.context.sharedContext.openJoinChatWebView(context: strongSelf.context, parentController: strongSelf, updatedPresentationData: strongSelf.updatedPresentationData, webView: webView)
+                                        strongSelf.context.sharedContext.openJoinChatWebView(context: strongSelf.context, parentController: strongSelf, updatedPresentationData: strongSelf.updatedPresentationData, webView: webView, chatTitle: EnginePeer(peer).compactDisplayTitle)
                                     }
                                 }, error: { _ in
                                     guard let strongSelf = self else {
