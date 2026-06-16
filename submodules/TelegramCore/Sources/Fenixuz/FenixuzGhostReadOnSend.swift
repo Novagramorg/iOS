@@ -20,12 +20,14 @@ public func fenixuzForceReadHistory(account: Account, peerId: PeerId) -> Signal<
         guard let peer = transaction.getPeer(peerId) else {
             return nil
         }
-        guard let topIndex = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud) else {
+        // LOCAL read — clear the unread badge. Use the top CLOUD index (incoming messages live in
+        // the Cloud namespace). The namespace-agnostic top would return the just-sent PENDING
+        // message (Local namespace) and mark the wrong read state, leaving Cloud incoming unread.
+        guard let topCloudIndex = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud) else {
             return nil
         }
-        // Keep the local read state in sync too (idempotent if already locally read).
-        let _ = transaction.applyInteractiveReadMaxIndex(topIndex)
-        return (peer, topIndex.id.id)
+        _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: topCloudIndex)
+        return (peer, topCloudIndex.id.id)
     }
     |> mapToSignal { peerAndMaxId -> Signal<Never, NoError> in
         guard let (peer, maxId) = peerAndMaxId else {

@@ -15,23 +15,18 @@ ok()   { echo -e "${GREEN}✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
 err()  { echo -e "${RED}✗ $1${NC}"; exit 1; }
 
-# ─── Auto-kill stale build processes ─────────────────────────────────────────
-# Har safar ./run.sh ishga tushganda avval eski bazel/build process'larni
-# o'chiramiz. Aks holda "Another command (pid=X) is running" deb to'xtab qoladi.
-# DIQQAT: o'zimizning run.sh process'ini kill qilmaylik.
-#
-# Pattern'lar:
-#   bazel-8.4.2  — bazel client binary (build chaqiruvchi)
-#   bazel(Telegram-iOS) — bazel JAVA server (long-lived, lock ushlab turadi)
-#   A-server.jar — server jar (yana bir nom)
-#   wrapped_clang / swift-frontend — actively running compile workers
-for pat in 'bazel-8.4.2' 'bazel(Telegram-iOS)' 'A-server.jar' 'wrapped_clang' 'swift-frontend'; do
-    pkill -9 -f "$pat" 2>/dev/null || true
-done
-# Bazel server lock fayllari stale qolmasin (server o'lganidan keyin)
-rm -f "$HOME/telegram-bazel-cache/bazel-user-root"/*/server/lock 2>/dev/null || true
-rm -f "$HOME/telegram-bazel-cache/bazel-user-root"/*/command.port 2>/dev/null || true
-sleep 1
+# ─── Bazel server'ni ISSIQ saqlash (eng katta tezlik yutug'i) ────────────────
+# Eski kod har run'da `pkill -9` bilan Bazel server'ni o'ldirardi. Server 1000+
+# target'ning analysis grafini xotirada ushlab turadi — uni tirik qoldirsak,
+# bir qatorlik o'zgarishdan keyingi rebuild MINUTLAB sovuq re-analysis o'rniga
+# SONIYALARDA tugaydi (va `.bazelrc` dagi persistent Swift worker'lar ham
+# saqlanadi). Bazel 8 parallel/stale buyruqlarni o'zi xavfsiz boshqaradi.
+# Shuning uchun faqat ALLAQACHON o'lgan server (crash / OOM / reboot) qoldirgan
+# stale lock fayllarini tozalaymiz — sog'lom server'ga tegmaymiz.
+if ! pgrep -f 'A-server.jar' >/dev/null 2>&1; then
+    rm -f "$HOME/telegram-bazel-cache/bazel-user-root"/*/server/lock 2>/dev/null || true
+    rm -f "$HOME/telegram-bazel-cache/bazel-user-root"/*/command.port 2>/dev/null || true
+fi
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
 show_help() {
@@ -100,14 +95,20 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ─── Disk tekshiruvi (5GB dan kam bo'lsa cache tozalaydi) ─────────────────────
+# ─── Disk guard — build cache'ni FAQAT haqiqatan kam bo'lsa tozalaydi ────────
+# Bu `cas/` (Bazel disk_cache content store) ni o'chiradi — ya'ni har bir
+# cache'langan action QAYTA ishga tushadi. Shu sabab juda KAM (favqulodda) bo'lishi
+# kerak. Eski threshold 50GB edi: disk to'laga yaqin bo'lganda deyarli HAR run'da
+# ishga tushib, har build'ni sekin "noldan" build'ga aylantirardi. 8GB ga
+# tushirdik — bu real favqulodda klapan, har-build cache wipe emas.
+# Disk'ni arzon yo'l bilan bo'shating (qarang: pastdagi DISK eslatma).
 AVAIL_GB=$(df -g . | awk 'NR==2 {print $4}')
-if [ "$AVAIL_GB" -lt 50 ] 2>/dev/null; then
-    warn "Disk da faqat ${AVAIL_GB}GB bo'sh joy qoldi! Cache tozalanmoqda..."
+if [ "${AVAIL_GB:-999}" -lt 8 ] 2>/dev/null; then
+    warn "Disk juda kam (${AVAIL_GB}GB) — build cache (cas) favqulodda tozalanmoqda..."
     rm -rf "$HOME/telegram-bazel-cache/cas" 2>/dev/null
     rm -rf /private/tmp/telegram-sim-app 2>/dev/null
     rm -rf /private/tmp/telegram-device-app 2>/dev/null
-    ok "Cache tozalandi. $(df -h . | awk 'NR==2 {print $4}') bo'sh joy mavjud"
+    ok "Tozalandi. $(df -h . | awk 'NR==2 {print $4}') bo'sh joy mavjud"
 fi
 
 CACHE_DIR="$HOME/telegram-bazel-cache"

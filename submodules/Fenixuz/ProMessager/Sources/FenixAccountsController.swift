@@ -104,7 +104,11 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
             }
 
             let subtitle = row.username.isEmpty ? nil : row.username
-            let icon: UIImage? = row.livePeer == nil ? fenixInitialsAvatar(name: row.title) : nil
+            // Live rows render the real avatar via iconPeer. Suspended rows have no live peer, so use
+            // the photo cached to disk while the account was live; fall back to a colored initials circle.
+            let icon: UIImage? = row.livePeer == nil
+                ? (fenixCachedAccountAvatar(peerId: row.peerId) ?? fenixInitialsAvatar(name: row.title))
+                : nil
 
             return ItemListDisclosureItem(
                 presentationData: presentationData,
@@ -131,6 +135,29 @@ private enum FenixAccountsEntry: ItemListNodeEntry {
                 sectionId: self.section
             )
         }
+    }
+}
+
+// Loads the account's real avatar that SharedAccountContext mirrored to disk while the account was
+// live (path formula duplicated from fenixAccountAvatarCachePath — same process, same Caches dir).
+// Returns nil when nothing is cached yet so the caller falls back to the initials circle below.
+private func fenixCachedAccountAvatar(peerId: Int64) -> UIImage? {
+    guard peerId != 0,
+          let caches = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first else {
+        return nil
+    }
+    let path = caches + "/fenixuz-account-avatars/\(peerId).png"
+    guard FileManager.default.fileExists(atPath: path),
+          let raw = UIImage(contentsOfFile: path) else {
+        return nil
+    }
+    // ItemListDisclosureItem sizes the icon node to the image's natural point size
+    // (see iconNode.frame = ... size: icon.size). The cached PNG is 120px @ scale 1.0,
+    // so it must be redrawn into the same 40pt box fenixInitialsAvatar uses — otherwise
+    // the avatar renders giant. Screen-scale render keeps it crisp; round alpha is preserved.
+    let target = CGSize(width: 40.0, height: 40.0)
+    return UIGraphicsImageRenderer(size: target).image { _ in
+        raw.draw(in: CGRect(origin: .zero, size: target))
     }
 }
 

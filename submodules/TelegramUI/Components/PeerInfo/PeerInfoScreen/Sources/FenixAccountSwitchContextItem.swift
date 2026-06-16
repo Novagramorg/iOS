@@ -16,15 +16,18 @@ import ContextUI
 // MARK: - Public item type
 
 final class FenixAccountSwitchContextItem: ContextMenuCustomItem {
+    let peerId: Int64      // used to load the account's real avatar cached on disk while it was live
     let displayName: String
     let username: String   // "@handle", "+phone", or "" — cached from fenixuz_account_usernames
     let action: (ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void) -> Void
 
     init(
+        peerId: Int64,
         displayName: String,
         username: String,
         action: @escaping (ContextControllerProtocol, @escaping (ContextMenuActionResult) -> Void) -> Void
     ) {
+        self.peerId = peerId
         self.displayName = displayName
         self.username = username
         self.action = action
@@ -77,7 +80,11 @@ private final class FenixAccountSwitchContextItemNode: ASDisplayNode, ContextMen
         self.avatarNode.isLayerBacked = true
         self.avatarNode.displayWithoutProcessing = true
         self.avatarNode.displaysAsynchronously = false
-        self.avatarNode.image = fenixContextInitialsAvatar(name: item.displayName, size: CGSize(width: 30, height: 30))
+        self.avatarNode.contentMode = .scaleAspectFill
+        // Prefer the account's real photo (cached to disk while the account was live); fall back to a
+        // colored initials circle when no photo is cached yet (or the account has no avatar set).
+        self.avatarNode.image = fenixContextCachedAccountAvatar(peerId: item.peerId)
+            ?? fenixContextInitialsAvatar(name: item.displayName, size: CGSize(width: 30, height: 30))
 
         let nameFont = Font.semibold(presentationData.listsFontSize.baseDisplaySize * 15.0 / 17.0)
         self.nameNode = ImmediateTextNode()
@@ -229,6 +236,21 @@ private final class FenixAccountSwitchContextItemNode: ASDisplayNode, ContextMen
 // Kept private so they don't pollute the module namespace. The originals in
 // FenixAccountsController are also private — copy is intentional (different size,
 // different font) and avoids creating a shared Fenixuz utility module for two callers.
+
+// Loads the account's real avatar that SharedAccountContext mirrored to disk while the account was
+// live. Path formula is duplicated from fenixAccountAvatarCachePath (different module, same process,
+// same Caches directory). Returns nil when nothing is cached yet so callers fall back to initials.
+private func fenixContextCachedAccountAvatar(peerId: Int64) -> UIImage? {
+    guard peerId != 0,
+          let caches = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first else {
+        return nil
+    }
+    let path = caches + "/fenixuz-account-avatars/\(peerId).png"
+    guard FileManager.default.fileExists(atPath: path) else {
+        return nil
+    }
+    return UIImage(contentsOfFile: path)
+}
 
 private func fenixContextInitialsAvatar(name: String, size: CGSize) -> UIImage? {
     let initials = fenixContextAvatarInitials(from: name)

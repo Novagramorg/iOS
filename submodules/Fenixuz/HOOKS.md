@@ -879,6 +879,23 @@ is safe at any account count.
     `ItemListDisclosureItem`; suspended accounts get a colored initials monogram (`UIGraphicsImageRenderer`,
     no new deps). `additionalDetailLabel` shows `@username` / `+phone` beneath the name.
     Username sourced from live peer when available, else `fenixuz_account_usernames` cache.
+  - **2026-06-11 real avatar for suspended accounts (disk cache):** suspended accounts had no live
+    peer, so both switchers (tab-bar long-press menu + `FenixAccountsController`) drew only a colored
+    initials circle, never the account's real photo. Fix mirrors each live account's rendered avatar
+    to disk keyed by peerId, then loads it for suspended rows.
+    - **Write:** `SharedAccountContext.swift` — added `import AvatarNode` (already a BUILD dep),
+      a `fenixuzAvatarDiskCache` property, and a `FenixAccountAvatarDiskCache.update(accounts:)` call
+      inside the existing `fenixuzNameCacheDisposable` handler (made `[weak self]`). The manager calls
+      `peerAvatarCompleteImage(account:peer:size:round:)` (120×120 round) and writes a PNG to
+      `Caches/fenixuz-account-avatars/<peerId>.png`, re-rendering only when the avatar's
+      `resource.id.stringRepresentation` changes (tracked in UserDefaults `fenixuz_account_avatar_versions`);
+      clears the file when an account has no photo. Module-level helper `fenixAccountAvatarCachePath(peerId:)`.
+    - **Read:** `FenixAccountSwitchContextItem.swift` gained a `peerId` init param and prefers
+      `fenixContextCachedAccountAvatar(peerId:)` over the initials image. `PeerInfoScreen.swift`
+      `tabBarItemContextAction` passes `peerId: peerId`. `FenixAccountsController.swift` suspended rows
+      prefer `fenixCachedAccountAvatar(peerId:)` before `fenixInitialsAvatar`. Path formula duplicated
+      (different modules, same main-app Caches dir) — consistent with the existing initials-helper duplication.
+      No BUILD changes (read sites need only Foundation/UIKit). Purely additive; initials remain the fallback.
   - **2026-06-08 — `AccountContext/Sources/AccountContext.swift` protocol extension (upstream):**
     Added 4 members to `SharedAccountContext` protocol (`fenixuzPinnedAccountsSignal`,
     `fenixuzLoadPinnedAccounts()`, `fenixuzSavePinnedAccounts(_:)`,
@@ -1178,24 +1195,46 @@ This improves identifier match rate for notifications where the NSE stored a ful
 
 Four fixes shipped together this day.
 
-### 1. Ghost mode "read on send" — `submodules/TelegramUI/Sources/ChatController.swift`
+### 1. Ghost mode "read on send" — `submodules/TelegramCore/Sources/PendingMessages/EnqueueMessage.swift`
 
 New Fenixuz file (NOT a hook in a Telegram-owned file): `submodules/TelegramCore/Sources/Fenixuz/FenixuzGhostReadOnSend.swift` —
-`public func fenixuzForceReadHistory(account:peerId:)`. No-op when Ghost is off. When Ghost is on it fires a direct
-`messages.readHistory` / `channels.readHistory` for the peer (bypassing the Ghost suppression in
-`SynchronizePeerReadState.swift`), so replying reveals the read state. Auto-globbed by `TelegramCore/BUILD` (`Sources/**/*.swift`).
+`public func fenixuzForceReadHistory(account:peerId:)`. No-op when Ghost is off. When Ghost is on it does the canonical
+local read (`_internal_applyMaxReadIndexInteractively`) AND fires a direct `messages.readHistory` / `channels.readHistory`
+for the peer (bypassing the Ghost suppression in `SynchronizePeerReadState.swift`), so replying reveals the read state.
+Auto-globbed by `TelegramCore/BUILD` (`Sources/**/*.swift`).
 
-Hook in `ChatController.sendMessages(_:media:postpone:commit:)` (~line 8778), inside the `if commit || !isScheduledMessages`
-branch, right after the `enqueueMessages(...)` startStandalone block:
+**2026-06-11 — hook MOVED to the core enqueue funnel.** The original hook lived in
+`ChatController.sendMessages(...)` (TelegramUI). It did not reliably fire for the actual text-send path (the badge
+stayed unread after replying in Ghost). The fix moves it to the single function every send path funnels through:
+`public func enqueueMessages(account:peerId:messages:)` in `EnqueueMessage.swift`:
 
 ```swift
-if case .peer = self.chatLocation, UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false {
-    let _ = fenixuzForceReadHistory(account: self.context.account, peerId: peerId).startStandalone()
+return account.postbox.transaction { transaction -> [MessageId?] in
+    let result = enqueueMessages(transaction: transaction, account: account, peerId: peerId, messages: messages)
+    // Ghost: sending implies reading — clear the local unread badge inside the send transaction.
+    // MUST use namespace: .Cloud — the namespace-agnostic top returns the just-enqueued PENDING
+    // (Local-namespace) message and marks the WRONG read state, leaving Cloud incoming unread.
+    if isFenixuzGhostModeActive, let topIndex = transaction.getTopPeerMessageIndex(peerId: peerId, namespace: Namespaces.Message.Cloud) {
+        _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: topIndex)
+    }
+    return result
+}
+|> afterCompleted {
+    // Push the read receipt to the server so the other side sees "read".
+    if isFenixuzGhostModeActive { let _ = fenixuzForceReadHistory(account: account, peerId: peerId).startStandalone() }
 }
 ```
 
-Reason: Ghost suppresses passive read receipts; without this, sending a reply leaves the incoming messages unread on the
-server, so it looks like you answered without reading. `.peer`-only (skip forum threads to avoid over-reading the whole peer).
+**Two root causes (both fixed, verified on simulator — unread count 1→0):**
+1. **Hook placement:** the old `ChatController.sendMessages` hook never fired for text replies — text sends route through
+   `ChatControllerLoadDisplayNode.swift:981` (`chatDisplayNode.sendMessages` closure) → `enqueueMessages(account:…)`,
+   NOT `controller.sendMessages`. Core-level placement in `enqueueMessages` is UI-path-independent.
+2. **Namespace:** `getTopPeerMessageIndex(peerId:)` (no namespace) returns the just-enqueued pending message in
+   `Namespaces.Message.Local`; applying the read there does not clear the Cloud incoming unread. Must pass `.Cloud`.
+
+Reason: Ghost suppresses passive read receipts; without this, sending a reply leaves the incoming messages unread (local
+badge + server). The old `ChatController` hook was removed (a 3-line pointer comment is left at the former site).
+`fenixuzForceReadHistory` also uses `.Cloud` for both the local read and the server `maxId`.
 
 ### 2. Pinned "Active / No Sleep" accounts stay live — `submodules/TelegramUI/Sources/SharedWakeupManager.swift`
 
