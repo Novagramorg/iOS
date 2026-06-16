@@ -9,6 +9,7 @@ extension DocumentCanvasView {
     /// the single entry point for every editing operation (typing, structural, list).
     func editing(_ body: () -> Void) {
         finalizeMarkedText()   // commit a composition (own undo step) / dismiss a prediction before this edit
+        dismissEditMenuForSelectionOrTextChange()   // the text is about to change → close any open menu (native UITextView)
         let before = currentBlocks()
         let beforeAnchor = anchor, beforeHead = head
         textInputDelegate?.textWillChange(self)
@@ -16,7 +17,7 @@ extension DocumentCanvasView {
         textInputDelegate?.textDidChange(self)
         registerUndo(snapshot: before, anchor: beforeAnchor, head: beforeHead)
         recomputeDocumentHasSpoilers()   // an edit (toggleSpoiler/delete/paste/insert/structural) may add or remove the last spoiler — refresh the syncSpoilers gate before refreshSelectionUI runs it
-        invalidateIntrinsicContentSize(); setNeedsLayout(); setNeedsDisplay(); refreshSelectionUI()
+        notifyContentSizeChanged(); setNeedsDisplay(); refreshSelectionUI()
         onSelectionChange?()   // an edit moves the caret too — ask the host to scroll it into view (like the arrow-key setter)
     }
 
@@ -35,7 +36,7 @@ extension DocumentCanvasView {
             target.head = min(head, target.documentSize)
             target.textInputDelegate?.textDidChange(target)
             target.registerUndo(snapshot: redo, anchor: redoAnchor, head: redoHead)
-            target.invalidateIntrinsicContentSize(); target.setNeedsLayout()
+            target.notifyContentSizeChanged()
             target.setNeedsDisplay(); target.refreshSelectionUI()
         }
     }
@@ -66,33 +67,48 @@ extension DocumentCanvasView {
             return
         }
 
-        // Cross-block. Paragraph↔paragraph: the existing split/merge (keeps 2b behavior).
-        if let sB = start.box as? BlockBox, let eB = end.box as? BlockBox {
-            let headPart = sB.currentParagraph().split(at: start.local, newID: BlockID.generate()).0
-            let tailPart = eB.currentParagraph().split(at: end.local, newID: BlockID.generate()).1
-            var headRuns = headPart.runs
+        // Cross-block. A media (image/video) endpoint is REMOVED only when the selection covers its
+        // whole node (the leading gap + the entire caption); a selection that ends/starts PARTWAY through
+        // a caption keeps the image, truncated (the Phase 2c partial behavior — see the truncate branch).
+        // Select-All over a document whose first/last block is an image fully covers that image, so it is
+        // dropped here exactly as a covered MIDDLE image already is.
+        func mediaFullyCovered(_ box: CanvasBlock) -> Bool {
+            box is MediaBlockBox && lo <= box.nodeStart && hi >= box.textStart + box.textLength
+        }
+        let keepStartMedia = (start.box is MediaBlockBox) && !mediaFullyCovered(start.box)
+        let keepEndMedia = (end.box is MediaBlockBox) && !mediaFullyCovered(end.box)
+
+        // Merge path: each endpoint is a paragraph OR a fully-covered media (which contributes nothing
+        // and is dropped). The surviving paragraph is startPrefix + text + endSuffix; replaceSubrange over
+        // [start.index ... end.index] drops every box between the endpoints — including a fully-covered
+        // endpoint image. (Paragraph↔paragraph is the original 2b split/merge, unchanged.)
+        if !keepStartMedia && !keepEndMedia {
+            let headPart = (start.box as? BlockBox)?.currentParagraph().split(at: start.local, newID: BlockID.generate()).0
+            let tailPart = (end.box as? BlockBox)?.currentParagraph().split(at: end.local, newID: BlockID.generate()).1
+            var headRuns = headPart?.runs ?? []
             if !text.isEmpty {
-                let ca = mapper.characterAttributes(from: typingAttributesAtGlobal(start.box.textStart + start.local))
+                let ca = mapper.characterAttributes(from: typingAttributesAtGlobal(start.box.textStart + start.local), style: (start.box as? BlockBox)?.style ?? .body)
                 headRuns.append(TextRun(text: text, attributes: ca))
             }
-            var merged = headPart
+            // Base paragraph carries the start paragraph's identity/style when present (preserving the
+            // upper block's style across the merge), else the end paragraph's, else a fresh body paragraph
+            // (both endpoints were fully-covered media — e.g. Select-All over [image, image]).
+            var merged = headPart ?? tailPart ?? ParagraphBlock(id: BlockID.generate(), runs: [])
             merged.runs = headRuns
-            merged = merged.merging(tailPart)
+            if let tailPart { merged = merged.merging(tailPart) }
             let mergedBox = BlockBox(paragraph: merged, mapper: mapper, width: effectiveWidth)
             var newBoxes = stack.boxes
             newBoxes.replaceSubrange(start.index...end.index, with: [mergedBox])
             stack.boxes = newBoxes
             recomputeSpans()
-            let caret = mergedBox.textStart + headPart.utf16Count + (text as NSString).length
+            let caret = mergedBox.textStart + (headPart?.utf16Count ?? 0) + (text as NSString).length
             anchor = caret; head = caret
             return
         }
-        // An image is at an endpoint. v1 bound (Phase 2c spec): TRUNCATE each endpoint's text region
-        // (start keeps [0, start.local) + inserted text; end keeps [end.local, …)) and drop ONLY the
-        // strictly-covered middle boxes. Do NOT merge across the block-type boundary and do NOT remove
-        // the endpoint boxes — a selection ending inside an image caption keeps that image with its
-        // surviving caption suffix. (Removing end.box here would lose that kept suffix.) A selection
-        // that fully covers an image makes it a middle box, which IS dropped below.
+        // A media endpoint is only PARTIALLY covered (selection starts/ends partway through its caption):
+        // TRUNCATE each endpoint's text region (start keeps [0, start.local) + inserted text; end keeps
+        // [end.local, …)) and drop ONLY the strictly-covered middle boxes. Do NOT remove the endpoint
+        // boxes — a selection ending inside an image caption keeps that image with its surviving suffix.
         start.box.textLayout.replace(start: start.local, end: start.box.textLength,
                                      with: NSAttributedString(string: text,
                                          attributes: typingAttributesAtGlobal(start.box.textStart + start.local)))
@@ -118,6 +134,18 @@ extension DocumentCanvasView {
         let caret = index > 0 ? boxes[index - 1].textStart + boxes[index - 1].textLength
                               : (boxes.first?.textStart ?? 0)
         anchor = caret; head = caret
+    }
+
+    /// Removes the block at `index` (an empty paragraph just before `media`), parking the caret at
+    /// `media`'s leading gap — which shifts up into the removed block's place. Used by backspace at a
+    /// media block's gap when the previous paragraph is empty. Caller wraps this in `editing { … }`.
+    func deleteBlock(at index: Int, parkingCaretAtGapOf media: CanvasBlock) {
+        guard boxes.indices.contains(index) else { return }
+        var newBoxes = boxes
+        newBoxes.remove(at: index)
+        boxes = newBoxes
+        recomputeSpans()
+        anchor = media.nodeStart; head = media.nodeStart   // media moved up; its gap is its (recomputed) nodeStart
     }
 
     /// Resolves a global position to its owning `BlockStack` — a cell stack when inside a table,
@@ -234,40 +262,40 @@ extension DocumentCanvasView {
         anchor = caret; head = caret
     }
 
-    /// Inserts an image block (with an empty caption) at the caret, splitting the caret's paragraph
-    /// if mid-text. The caller has already registered the image with the canvas's `imageProvider`
-    /// under `assetID`. Caret lands in the new image's caption.
-    func insertImage(_ image: UIImage, naturalSize: CGSize, assetID: String) {
+    /// Inserts a media block (`kind`, with an empty caption) at the caret, splitting the caret's paragraph
+    /// if mid-text. The host resolves `mediaID` to a view via the canvas's `mediaViewProvider` (each
+    /// occurrence gets its own view, keyed by the new block's `BlockID`). Caret lands in the new caption.
+    func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind) {
         guard !boxes.isEmpty else { return }
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             guard let pos = resolveBox(at: head) else { return }
-            let imageBlock = ImageBlock(id: BlockID.generate(), assetID: assetID,
+            let mediaBlock = MediaBlock(id: BlockID.generate(), mediaID: mediaID, kind: kind,
                                         naturalSize: Size2D(width: Double(naturalSize.width),
                                                             height: Double(naturalSize.height)))
-            let imageBox = ImageBlockBox(image: imageBlock, mapper: mapper, width: effectiveWidth)
+            let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth)
             var newBoxes = boxes
             if let p = pos.box as? BlockBox, pos.local > 0, pos.local < p.textLength {
-                // split the paragraph and insert the image between the halves
+                // split the paragraph and insert the media between the halves
                 let (upper, lower) = p.currentParagraph().split(at: pos.local, newID: BlockID.generate())
                 let upperBox = BlockBox(paragraph: upper, mapper: mapper, width: effectiveWidth)
                 let lowerBox = BlockBox(paragraph: lower, mapper: mapper, width: effectiveWidth)
-                let replacement: [any CanvasBlock] = [upperBox, imageBox, lowerBox]
+                let replacement: [any CanvasBlock] = [upperBox, mediaBox, lowerBox]
                 newBoxes.replaceSubrange(pos.index...pos.index, with: replacement)
             } else if pos.local == 0 {
-                newBoxes.insert(imageBox, at: pos.index)        // before the caret's block
+                newBoxes.insert(mediaBox, at: pos.index)        // before the caret's block
             } else {
-                newBoxes.insert(imageBox, at: pos.index + 1)    // after the caret's block
+                newBoxes.insert(mediaBox, at: pos.index + 1)    // after the caret's block
             }
             boxes = newBoxes
             recomputeSpans()
-            anchor = imageBox.textStart; head = imageBox.textStart
+            anchor = mediaBox.textStart; head = mediaBox.textStart
         }
     }
 
     /// Inserts a new body paragraph immediately before the (top-level) image box at `index`, containing
     /// `text` (empty for a bare newline). Caret lands at the end of the inserted text in the new
-    /// paragraph. Mirrors `insertImage`'s block-insert. Caller wraps this in `editing { … }`.
+    /// paragraph. Mirrors `insertMedia`'s block-insert. Caller wraps this in `editing { … }`.
     func insertParagraphBeforeImage(at index: Int, text: String) {
         guard boxes.indices.contains(index) else { return }
         let runs = text.isEmpty ? [] : [TextRun(text: text)]
@@ -279,6 +307,40 @@ extension DocumentCanvasView {
         recomputeSpans()
         let caret = newBox.textStart + (text as NSString).length
         anchor = caret; head = caret
+    }
+
+    /// Inserts an empty body paragraph at `insertIndex` (shifting later boxes down), placing the caret in
+    /// it. The escape hatch for a quote (tap below it / Shift+Return) — there is otherwise no way to start
+    /// a normal paragraph adjacent to a quote at the document's edge. Undoable.
+    func insertEmptyBodyParagraph(at insertIndex: Int) {
+        guard insertIndex >= 0, insertIndex <= boxes.count else { return }
+        editing {
+            let newBox = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                  mapper: mapper, width: effectiveWidth)
+            var newBoxes = boxes
+            newBoxes.insert(newBox, at: insertIndex)
+            boxes = newBoxes
+            recomputeSpans()
+            anchor = newBox.textStart; head = newBox.textStart
+        }
+    }
+
+    /// True when the caret at `local` sits on the FIRST visual (wrapped) line of `box` — i.e. its caret
+    /// shares the y of offset 0. Drives Shift+Return's exit direction out of a quote.
+    func caretIsOnFirstLine(of box: BlockBox, atLocal local: Int) -> Bool {
+        let firstY = box.textLayout.caretRect(atOffset: 0).minY
+        return abs(box.textLayout.caretRect(atOffset: local).minY - firstY) < 1
+    }
+
+    /// Shift+Return EXITS a quote with a new empty body paragraph (caret there): ABOVE the quote when the
+    /// caret is on its first visual line, else BELOW it. Outside a quote it falls back to a normal
+    /// paragraph break (like Return). Undoable.
+    func performShiftReturn() {
+        guard selFrom == selTo, let pos = resolveBox(at: head), let p = pos.box as? BlockBox, p.style == .quote else {
+            insertParagraphBreak()
+            return
+        }
+        insertEmptyBodyParagraph(at: caretIsOnFirstLine(of: p, atLocal: pos.local) ? pos.index : pos.index + 1)
     }
 
     /// In-place text replace within the leaf region's layout (used for typing inside cells, and as
@@ -343,13 +405,6 @@ extension DocumentCanvasView {
             for r in box.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return true }
         }
         return false
-    }
-
-    func placeGapCursorBeforeFirstImage() {
-        guard let img = boxes.first(where: { $0 is ImageBlockBox }) else { return }
-        becomeFirstResponder()
-        anchor = img.nodeStart; head = img.nodeStart
-        setNeedsDisplay(); refreshSelectionUI()
     }
 }
 #endif

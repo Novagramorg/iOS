@@ -11,9 +11,8 @@ extension DocumentCanvasView {
     /// Assigns a named paragraph style (Title/H1–H3/Body/Quote) to the touched paragraphs and rebuilds
     /// their run layout so the style's font (size/weight) actually applies. Run size/family pins are
     /// cleared so the style decides them; user bold/italic/strike/code and links are preserved.
-    /// Known limitation: a heading injects bold that round-trips into the model, so down-converting a
-    /// heading to body can leave residual bold (cosmetic; revisited when the markdown layer separates
-    /// style fonts from char emphasis).
+    /// Title/headings are regular-weight by default (StyleSheet.font no longer forces bold), so bold is a
+    /// pure user toggle that round-trips uniformly — a heading→body down-convert carries no residual bold.
     func setParagraphStyle(_ name: ParagraphStyleName) {
         guard !boxes.isEmpty else { return }
         editing {

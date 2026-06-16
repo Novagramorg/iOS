@@ -3,14 +3,12 @@ import XCTest
 
 final class ResolveTests: XCTestCase {
     // Reuse the Task-11 fixture map:
-    // 0 <p> 1 O 2 n 3 e 4 </p> 5 <imgBlock> 6 <imgAtom> 7 <capP> 8 H 9 i 10 </capP> 11 </imgBlock> 12
+    // 0 <p> 1 O 2 n 3 e 4 </p> 5 <mediaBlock> 6 <mediaAtom> 7 <capP> 8 H 9 i 10 </capP> 11 </mediaBlock> 12
     private func tree() -> DocNode {
         DocumentTree.build(from: Document(
-            metadata: .init(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                            modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [
                 .paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "One")])),
-                .image(ImageBlock(id: BlockID("i1"), assetID: "a",
+                .media(MediaBlock(id: BlockID("i1"), mediaID: "a",
                                   naturalSize: Size2D(width: 1, height: 1),
                                   caption: [TextRun(text: "Hi")])),
             ]))
@@ -30,7 +28,7 @@ final class ResolveTests: XCTestCase {
         if case .doc = r.parent {} else { XCTFail("parent should be doc") }
     }
 
-    func test_resolve_insideCaptionText_isDepth2UnderImageBlock() {
+    func test_resolve_insideCaptionText_isDepth2UnderMediaBlock() {
         let r = PositionResolver.resolve(9, in: tree())   // inside caption text (after 'H')
         XCTAssertEqual(r.depth, 2)
         if case .paragraph(let id, _) = r.parent { XCTAssertEqual(id, BlockID("i1")) }
@@ -53,8 +51,8 @@ final class ResolveTests: XCTestCase {
         let r = PositionResolver.resolve(5, in: tree())  // boundary between paragraph and image
         if case .paragraph(let id, _) = r.nodeBefore { XCTAssertEqual(id, BlockID("p1")) }
         else { XCTFail("nodeBefore should be paragraph p1") }
-        if case .imageBlock(let id, _) = r.nodeAfter { XCTAssertEqual(id, BlockID("i1")) }
-        else { XCTFail("nodeAfter should be the image block i1") }
+        if case .mediaBlock(let id, _) = r.nodeAfter { XCTAssertEqual(id, BlockID("i1")) }
+        else { XCTFail("nodeAfter should be the media block i1") }
     }
 
     func test_resolve_nodeBeforeAfterAreNilInsideText() {

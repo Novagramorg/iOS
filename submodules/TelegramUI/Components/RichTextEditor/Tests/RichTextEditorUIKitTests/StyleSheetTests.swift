@@ -26,22 +26,38 @@ final class StyleSheetTests: XCTestCase {
         XCTAssertGreaterThan(h1.pointSize, body.pointSize)
     }
 
-    func test_title_isSerif_body_isSans() {
+    func test_caption_is15ptSans_andBodyIsSans() {
         let sheet = StyleSheet.default
-        let titleName = sheet.font(for: .title, attributes: .plain).fontName
-        let bodyFamily = sheet.font(for: .body, attributes: .plain).familyName
-        XCTAssertTrue(titleName.contains("NewYork"), "title should use the system serif; got \(titleName)")
-        XCTAssertEqual(bodyFamily, UIFont.systemFont(ofSize: 17).familyName)   // body stays sans
+        let caption = sheet.font(for: .caption, attributes: .plain)
+        XCTAssertEqual(caption.pointSize, 15, accuracy: 0.5)
+        XCTAssertEqual(caption.familyName, UIFont.systemFont(ofSize: 15).familyName, "captions are sans")
+        XCTAssertEqual(sheet.font(for: .body, attributes: .plain).familyName,
+                       UIFont.systemFont(ofSize: 17).familyName, "body is sans")
     }
 
-    func test_heading_isSerif_andStillBold() {
+    func test_heading_isSerif_andNotBoldByDefault() {
         let f = StyleSheet.default.font(for: .heading1, attributes: .plain)
-        XCTAssertTrue(f.fontName.contains("NewYork"))
-        XCTAssertTrue(f.fontDescriptor.symbolicTraits.contains(.traitBold))
+        XCTAssertTrue(f.fontName.contains("NewYork"), "headings stay serif")
+        XCTAssertFalse(f.fontDescriptor.symbolicTraits.contains(.traitBold),
+                       "headings are regular weight by default — bold is user emphasis only")
+    }
+
+    func test_heading_userBoldStillApplies() {
+        var bold = CharacterAttributes(); bold.bold = true
+        let f = StyleSheet.default.font(for: .heading1, attributes: bold)
+        XCTAssertTrue(f.fontDescriptor.symbolicTraits.contains(.traitBold),
+                      "a user can still bold a heading explicitly")
     }
 
     func test_body_is17pt() {
         XCTAssertEqual(StyleSheet.default.font(for: .body, attributes: .plain).pointSize, 17, accuracy: 0.5)
+    }
+
+    func test_headingSizes_matchTypeScale() {
+        let sheet = StyleSheet.default
+        XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 24, accuracy: 0.5)
+        XCTAssertEqual(sheet.font(for: .heading2, attributes: .plain).pointSize, 21, accuracy: 0.5)
+        XCTAssertEqual(sheet.font(for: .heading3, attributes: .plain).pointSize, 19, accuracy: 0.5)
     }
 
     func test_perStyleSpacing_applied() {
@@ -50,8 +66,6 @@ final class StyleSheetTests: XCTestCase {
         XCTAssertGreaterThan(body.lineHeightMultiple, 1.0)                 // body gets a line-height bump
         let h1 = sheet.paragraphStyle(for: .heading1, attributes: .default) as! NSParagraphStyle
         XCTAssertGreaterThan(h1.paragraphSpacingBefore, 0)                 // headings get space before
-        let title = sheet.paragraphStyle(for: .title, attributes: .default) as! NSParagraphStyle
-        XCTAssertGreaterThan(title.lineHeightMultiple, 1.0)
     }
 }
 #endif

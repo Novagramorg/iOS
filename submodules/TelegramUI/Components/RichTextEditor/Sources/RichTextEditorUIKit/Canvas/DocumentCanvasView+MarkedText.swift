@@ -75,7 +75,7 @@ extension DocumentCanvasView {
         anchor = selStart; head = clampGlobal(selStart + selectedRange.length)
         textInputDelegate?.selectionDidChange(self)
 
-        invalidateIntrinsicContentSize(); setNeedsLayout(); setNeedsDisplay(); refreshSelectionUI()
+        notifyContentSizeChanged(); setNeedsDisplay(); refreshSelectionUI()
         onSelectionChange?()   // a growing composition advances the caret — scroll it into view (CJK/IME typing)
     }
 
@@ -149,7 +149,7 @@ extension DocumentCanvasView {
         ghostStyledLayout = nil
         guard let m = markedRange, markedTextIsPrediction,
               let (region, _) = leafRegion(containingGlobal: m.from) else { return }
-        region.layout.setGhostForeground(.placeholderText,
+        region.layout.setGhostForeground(self.mapper.theme.placeholder,
                                          start: m.from - region.globalStart,
                                          end: m.to - region.globalStart)
         ghostStyledLayout = region.layout

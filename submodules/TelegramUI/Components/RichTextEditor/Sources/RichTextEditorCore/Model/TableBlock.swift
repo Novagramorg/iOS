@@ -22,7 +22,7 @@ public struct ColumnSpec: Codable, Equatable {
     }
 }
 
-/// A table cell. In v1 cells contain paragraph and image blocks (no nested tables).
+/// A table cell. In v1 cells contain paragraph and media blocks (no nested tables).
 public struct Cell: Codable, Equatable {
     public var id: BlockID
     public var blocks: [Block]

@@ -2215,15 +2215,6 @@ extension ChatControllerImpl {
                 
                 let text = trimChatInputText(convertMarkdownToAttributes(expandedInputStateAttributedString(editMessage.inputState.inputText)))
 
-                var isSpecialChatContents = false
-                if case .customChatContents = strongSelf.presentationInterfaceState.subject {
-                    isSpecialChatContents = true
-                }
-                var richTextAttribute: RichTextMessageAttribute?
-                if !isSpecialChatContents {
-                    richTextAttribute = richMarkdownAttributeIfNeeded(context: strongSelf.context, attributedText: expandedInputStateAttributedString(editMessage.inputState.inputText))
-                }
-
                 let entities = generateTextEntities(text.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(text))
                 var entitiesAttribute: TextEntitiesMessageAttribute?
                 if !entities.isEmpty {
@@ -2307,12 +2298,7 @@ extension ChatControllerImpl {
                             let currentWebpagePreviewAttribute = currentMessage.webpagePreviewAttribute ?? WebpagePreviewMessageAttribute(leadingPreview: false, forceLargeMedia: nil, isManuallyAdded: true, isSafe: false)
                             let currentRichText = currentMessage.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute
 
-                            if let richTextAttribute = richTextAttribute {
-                                // Rich edit: empty text, no entities, carry the rich attribute.
-                                if currentRichText != richTextAttribute || !currentMessage.text.isEmpty || updatingMedia {
-                                    strongSelf.context.account.pendingUpdateMessageManager.add(messageId: editMessage.messageId, text: "", media: media, entities: nil, richText: richTextAttribute, inlineStickers: inlineStickers, webpagePreviewAttribute: webpagePreviewAttribute, invertMediaAttribute: invertedMediaAttribute, disableUrlPreview: disableUrlPreview)
-                                }
-                            } else {
+                            do {
                                 if currentMessage.text != text.string || currentEntities != entities || currentRichText != nil || updatingMedia || webpagePreviewAttribute != currentWebpagePreviewAttribute || disableUrlPreview {
                                     strongSelf.context.account.pendingUpdateMessageManager.add(messageId: editMessage.messageId, text: text.string, media: media, entities: entitiesAttribute, richText: nil, inlineStickers: inlineStickers, webpagePreviewAttribute: webpagePreviewAttribute, invertMediaAttribute: invertedMediaAttribute, disableUrlPreview: disableUrlPreview)
                                 }
@@ -4685,6 +4671,11 @@ extension ChatControllerImpl {
                 return
             }
             self.chatDisplayNode.openAICompose()
+        }, openExpandedInput: { [weak self] in
+            guard let self else {
+                return
+            }
+            self.chatDisplayNode.openExpandedInput()
         }, openSetPeerAvatar: { [weak self] in
             guard let self, let peer = self.presentationInterfaceState.renderedPeer?.peer else {
                 return

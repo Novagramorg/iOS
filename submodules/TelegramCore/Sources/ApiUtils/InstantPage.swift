@@ -336,6 +336,10 @@ extension InstantPageBlock {
     }
     
     func apiInputBlock() -> Api.PageBlock? {
+        return self.apiInputBlock(mediaIdRemap: [:])
+    }
+
+    func apiInputBlock(mediaIdRemap: [MediaId: Int64]) -> Api.PageBlock? {
         switch self {
         case .unsupported, .title, .subtitle, .kicker, .header, .subheader, .cover, .channelBanner, .authorDate, .relatedArticles, .webEmbed, .postEmbed, .thinking:
             return nil
@@ -381,7 +385,7 @@ extension InstantPageBlock {
             if blocks.count == 1, case let .paragraph(text) = blocks[0] {
                 return .pageBlockBlockquote(Api.PageBlock.Cons_pageBlockBlockquote(text: text.apiRichText(), caption: caption.apiRichText()))
             }
-            return .pageBlockBlockquoteBlocks(Api.PageBlock.Cons_pageBlockBlockquoteBlocks(blocks: blocks.compactMap { $0.apiInputBlock() }, caption: caption.apiRichText()))
+            return .pageBlockBlockquoteBlocks(Api.PageBlock.Cons_pageBlockBlockquoteBlocks(blocks: blocks.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, caption: caption.apiRichText()))
         case let .pullQuote(text, caption):
             return .pageBlockPullquote(Api.PageBlock.Cons_pageBlockPullquote(text: text.apiRichText(), caption: caption.apiRichText()))
         case let .image(id, caption, url, webpageId):
@@ -389,7 +393,8 @@ extension InstantPageBlock {
             if url != nil && webpageId != nil {
                 flags |= 1 << 0
             }
-            return .pageBlockPhoto(Api.PageBlock.Cons_pageBlockPhoto(flags: flags, photoId: id.id, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText())), url: url, webpageId: webpageId?.id))
+            let photoId = mediaIdRemap[id] ?? id.id
+            return .pageBlockPhoto(Api.PageBlock.Cons_pageBlockPhoto(flags: flags, photoId: photoId, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText())), url: url, webpageId: webpageId?.id))
         case let .video(id, caption, autoplay, loop):
             var flags: Int32 = 0
             if autoplay {
@@ -398,13 +403,15 @@ extension InstantPageBlock {
             if loop {
                 flags |= 1 << 1
             }
-            return .pageBlockVideo(Api.PageBlock.Cons_pageBlockVideo(flags: flags, videoId: id.id, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
+            let videoId = mediaIdRemap[id] ?? id.id
+            return .pageBlockVideo(Api.PageBlock.Cons_pageBlockVideo(flags: flags, videoId: videoId, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
         case let .audio(id, caption):
-            return .pageBlockAudio(Api.PageBlock.Cons_pageBlockAudio(audioId: id.id, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
+            let audioId = mediaIdRemap[id] ?? id.id
+            return .pageBlockAudio(Api.PageBlock.Cons_pageBlockAudio(audioId: audioId, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
         case let .collage(items, caption):
-            return .pageBlockCollage(Api.PageBlock.Cons_pageBlockCollage(items: items.compactMap { $0.apiInputBlock() }, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
+            return .pageBlockCollage(Api.PageBlock.Cons_pageBlockCollage(items: items.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
         case let .slideshow(items, caption):
-            return .pageBlockSlideshow(Api.PageBlock.Cons_pageBlockSlideshow(items: items.compactMap { $0.apiInputBlock() }, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
+            return .pageBlockSlideshow(Api.PageBlock.Cons_pageBlockSlideshow(items: items.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
         case let .table(title, rows, bordered, striped):
             var flags: Int32 = 0
             if bordered {
@@ -419,7 +426,7 @@ extension InstantPageBlock {
             if expanded {
                 flags |= (1 << 0)
             }
-            return .pageBlockDetails(Api.PageBlock.Cons_pageBlockDetails(flags: flags, blocks: blocks.compactMap { $0.apiInputBlock() }, title: title.apiRichText()))
+            return .pageBlockDetails(Api.PageBlock.Cons_pageBlockDetails(flags: flags, blocks: blocks.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, title: title.apiRichText()))
         case let .map(latitude, longitude, zoom, dimensions, caption):
             return .inputPageBlockMap(Api.PageBlock.Cons_inputPageBlockMap(geo: .inputGeoPoint(Api.InputGeoPoint.Cons_inputGeoPoint(flags: 0, lat: latitude, long: longitude, accuracyRadius: nil)), zoom: zoom, w: dimensions.width, h: dimensions.height, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
         }

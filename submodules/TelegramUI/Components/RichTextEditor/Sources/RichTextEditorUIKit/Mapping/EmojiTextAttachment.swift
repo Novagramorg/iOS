@@ -8,10 +8,15 @@ import RichTextEditorCore
 ///
 /// Sizing: `S = (font.ascender + |font.descender|) * scale`, with the box's baseline offset
 /// `y = font.descender`, so the square spans descender→ascender and sits on the baseline like a glyph.
+///
+/// `renderBoost` enlarges only the VISIBLE host view (see `BlockLayout.attachmentBox`) by that many points,
+/// centered on the glyph box — it does NOT touch `attachmentBounds`, so the line height stays put and the
+/// extra size bleeds into the line's leading. Used to render body emoji a touch larger than their glyph box.
 @available(iOS 17.0, *)
 final class EmojiTextAttachment: NSTextAttachment {
     let ref: EmojiRef
     let scale: CGFloat
+    let renderBoost: CGFloat
 
     /// A 1×1 clear image ensures TextKit 2 calls `attachmentBounds(for:location:…)` and reserves layout
     /// space (an image-less attachment can be laid out as zero-width). It's identical for every emoji and
@@ -19,9 +24,10 @@ final class EmojiTextAttachment: NSTextAttachment {
     private static let spacerImage: UIImage =
         UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
 
-    init(ref: EmojiRef, scale: CGFloat) {
+    init(ref: EmojiRef, scale: CGFloat, renderBoost: CGFloat = 0) {
         self.ref = ref
         self.scale = scale
+        self.renderBoost = renderBoost
         super.init(data: nil, ofType: nil)
         self.image = Self.spacerImage
     }

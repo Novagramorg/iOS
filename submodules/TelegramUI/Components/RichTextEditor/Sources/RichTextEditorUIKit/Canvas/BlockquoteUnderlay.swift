@@ -30,6 +30,14 @@ final class BlockquoteUnderlay: UIView {
         for iv in pool.values where !iv.isHidden { iv.image = image }
     }
 
+    /// The bar + fill color. Defaults to `.systemBlue` (prior behavior); set from the editor theme's accent.
+    var accentColor: UIColor = .systemBlue {
+        didSet {
+            cachedImage = nil
+            rebuildFillForAppearanceChange()
+        }
+    }
+
     /// The cached resizable fill+bar image, rebuilt on a trait change (light/dark, tint).
     private var cachedImage: UIImage?
     private var cachedTraits: UITraitCollection?
@@ -45,9 +53,9 @@ final class BlockquoteUnderlay: UIView {
             let ctx = c.cgContext
             let rect = CGRect(origin: .zero, size: size)
             let path = UIBezierPath(roundedRect: rect, cornerRadius: radius)
-            UIColor.systemBlue.withAlphaComponent(0.10).setFill(); path.fill()
+            accentColor.withAlphaComponent(0.10).setFill(); path.fill()
             ctx.saveGState(); path.addClip()
-            UIColor.systemBlue.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: bar, height: size.height))
+            accentColor.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: bar, height: size.height))
             ctx.restoreGState()
         }.resizableImage(withCapInsets: UIEdgeInsets(top: cap, left: cap, bottom: cap, right: cap),
                          resizingMode: .stretch)

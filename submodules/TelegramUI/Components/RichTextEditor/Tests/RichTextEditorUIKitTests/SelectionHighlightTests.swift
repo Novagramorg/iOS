@@ -16,6 +16,68 @@ final class SelectionHighlightTests: XCTestCase {
         return c
     }
 
+    func test_selectionHighlight_fullyCoveredLine_fillsToContainerTrailingEdge() {
+        let v = canvas([
+            .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Hello")])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "World")])),
+        ])
+        let a = v.boxes[0], b = v.boxes[1]
+        let aRegion = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("a")) }!
+        let edge = aRegion.canvasOrigin.x + aRegion.layout.container.size.width
+        // Select all of "Hello" and continue into "World" — A's line is covered in full + continues.
+        let fill = v.selectionHighlightRects(globalFrom: a.textStart, globalTo: b.textStart + 2)
+        let aFill = fill.first { abs($0.minY - aRegion.canvasOrigin.y) < 6 }!
+        XCTAssertEqual(aFill.maxX, edge, accuracy: 1.0, "A's fully-covered line fills to the container trailing edge")
+        // Precondition: the glyph-hugging rect stops well short of the edge (so the fill is a real change).
+        let hug = v.selectionRects(globalFrom: a.textStart, globalTo: b.textStart + 2)
+            .first { abs($0.minY - aRegion.canvasOrigin.y) < 6 }!
+        XCTAssertLessThan(hug.maxX, edge - 10, "the glyph rect hugs the text, well short of the edge")
+    }
+
+    func test_selectionHighlight_emptyLineSpanned_getsFullWidthRect() {
+        let v = canvas([
+            .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Hi")])),
+            .paragraph(ParagraphBlock(id: BlockID("e"), runs: [])),          // empty line
+            .paragraph(ParagraphBlock(id: BlockID("c"), runs: [TextRun(text: "Bye")])),
+        ])
+        let a = v.boxes[0], c = v.boxes[2]
+        let eRegion = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("e")) }!
+        let fill = v.selectionHighlightRects(globalFrom: a.textStart, globalTo: c.textStart + 2)
+        let eFill = fill.first { abs($0.minY - eRegion.canvasOrigin.y) < 6 }
+        XCTAssertNotNil(eFill, "the spanned empty line gets a highlight rect")
+        XCTAssertEqual(eFill!.width, eRegion.layout.container.size.width, accuracy: 1.0, "empty line fills the full width")
+        XCTAssertGreaterThan(eFill!.height, 1, "and has a real line height")
+    }
+
+    func test_selectionHighlight_quoteFirstLine_coveredInFull_startsAtFarLeft() {
+        let v = canvas([
+            .paragraph(ParagraphBlock(id: BlockID("q"), style: .quote, runs: [TextRun(text: "Quote")])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "After")])),
+        ])
+        let q = v.boxes[0], b = v.boxes[1]
+        let qRegion = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("q")) }!
+        // Precondition: the quote text is indented (firstLineHeadIndent), so the glyph rect starts past the far left.
+        let hug = v.selectionRects(globalFrom: q.textStart, globalTo: b.textStart + 2)
+            .first { abs($0.minY - qRegion.canvasOrigin.y) < 6 }!
+        XCTAssertGreaterThan(hug.minX, qRegion.canvasOrigin.x + 4, "quote text is indented from the far left")
+        // The fully-covered first line of the quote starts at the FAR LEFT (the container origin), like its
+        // continuation lines — not the indented first glyph.
+        let fill = v.selectionHighlightRects(globalFrom: q.textStart, globalTo: b.textStart + 2)
+            .first { abs($0.minY - qRegion.canvasOrigin.y) < 6 }!
+        XCTAssertEqual(fill.minX, qRegion.canvasOrigin.x, accuracy: 1.0,
+                       "the quote's fully-covered first line starts at the far left")
+    }
+
+    func test_selectionHighlight_midLineSelection_stillHugsGlyphs() {
+        let v = canvas([.paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Hello world")]))])
+        let a = v.boxes[0]
+        let from = a.textStart, to = a.textStart + 5                       // "Hello" only — no continuation
+        let fill = v.selectionHighlightRects(globalFrom: from, globalTo: to)
+        let hug = v.selectionRects(globalFrom: from, globalTo: to)
+        XCTAssertEqual(fill.count, hug.count)
+        XCTAssertEqual(fill.first!.maxX, hug.first!.maxX, accuracy: 0.5, "a mid-line selection is not filled to the edge")
+    }
+
     func test_selectionHighlightOverlay_isAboveEmojiOverlay() {
         let c = canvas([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "ab")]))])
         let subs = c.subviews
@@ -60,6 +122,7 @@ final class SelectionHighlightTests: XCTestCase {
                 let v = UIView(frame: CGRect(origin: .zero, size: size)); v.backgroundColor = .black; return v }
             c.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "ab")]))], width: 320)
             c.frame = CGRect(x: 0, y: 0, width: 320, height: 200); c.layoutIfNeeded()
+            c.simulateParentLayout()   // parent re-lays-out on the emoji insert's content-size notification, so the emoji view is placed
             c.anchor = c.boxes[0].textStart + 1; c.head = c.anchor
             c.insertEmoji(id: "x", altText: nil)
             c.layoutIfNeeded()

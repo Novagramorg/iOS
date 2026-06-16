@@ -178,7 +178,7 @@ final class MarkedTextTests: XCTestCase {
     func test_setMarkedText_inImageCaption_fallsBackToPlainInsert_noStrandedComposition() {
         let v = DocumentCanvasView()
         v.setBlocks([
-            .image(ImageBlock(id: BlockID("img"), assetID: "a", naturalSize: Size2D(width: 100, height: 80),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "a", naturalSize: Size2D(width: 100, height: 80),
                               caption: [TextRun(text: "Cap")])),
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Body")])),
         ], width: 300)

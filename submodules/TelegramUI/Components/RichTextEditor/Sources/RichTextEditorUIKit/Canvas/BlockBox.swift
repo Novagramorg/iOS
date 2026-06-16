@@ -2,6 +2,31 @@
 import UIKit
 import RichTextEditorCore
 
+/// The placeholder strings drawn in empty paragraphs. Configurable so a host can localize them or suppress
+/// them entirely (a chat composer draws its own placeholder, so it sets all to ""). An empty string means
+/// "no placeholder" for that case. Defaults preserve the editor's built-in English hints.
+@available(iOS 17.0, *)
+public struct RichTextEditorPlaceholders: Equatable {
+    /// Shown on the document's last empty body paragraph.
+    public var body: String
+    /// Shown on an empty top-level list item ("return ends the list").
+    public var listEnd: String
+    /// Shown on an empty nested list item ("return outdents").
+    public var listOutdent: String
+
+    public init(body: String, listEnd: String, listOutdent: String) {
+        self.body = body
+        self.listEnd = listEnd
+        self.listOutdent = listOutdent
+    }
+
+    public static let `default` = RichTextEditorPlaceholders(
+        body: "Type something…",
+        listEnd: "Press return to end the list",
+        listOutdent: "Press return to outdent"
+    )
+}
+
 /// One paragraph block in the canvas: a TextKit 2 layout plus the structural
 /// fields not stored in the attributed string, its frame in canvas coordinates, and its start in the
 /// document-wide global position space.
@@ -37,6 +62,15 @@ final class BlockBox {
     /// Gates placeholder drawing so empty TABLE-CELL paragraphs draw no placeholder (parity with today,
     /// where placeholders are a top-level-only concern). Default false.
     var isTopLevelBlock = false
+
+    /// True only for the LAST top-level block in the document (set by the canvas during layout). Gates the
+    /// body "Type something…" placeholder so it shows only on the document's last line, not on every empty
+    /// body paragraph. Default false.
+    var isLastBlock = false
+
+    /// The placeholder strings to draw in this box when empty. Stamped by the canvas during layout
+    /// (`stampListMarkers`) from its configurable `placeholders`. Default = the editor's built-in hints.
+    var placeholders: RichTextEditorPlaceholders = .default
 
     /// A plain body paragraph (not a list item) — the spacing between two of these is tightened.
     var isBodyParagraph: Bool { style == .body && listMembership == nil }
@@ -124,13 +158,14 @@ final class BlockBox {
 
     /// Placeholder text for THIS empty paragraph, or nil. A list item's hint reflects what Return does.
     var placeholderText: String? {
+        // An empty configured string means "no placeholder" for that case (→ nil, so nothing is drawn).
+        func nonEmpty(_ s: String) -> String? { s.isEmpty ? nil : s }
         if let list = listMembership {
-            return list.level > 0 ? "Press return to outdent" : "Press return to end the list"
+            return nonEmpty(list.level > 0 ? placeholders.listOutdent : placeholders.listEnd)
         }
         switch style {
-        case .title: return "Title"
-        case .body:  return "Type something…"
-        default:     return nil
+        case .body: return isLastBlock ? nonEmpty(placeholders.body) : nil   // only on the document's last line
+        default:    return nil
         }
     }
 
@@ -188,7 +223,7 @@ final class BlockBox {
 
     func currentParagraph() -> ParagraphBlock {
         ParagraphBlock(id: id, style: style, paragraph: paragraphAttributes, list: listMembership,
-                       runs: mapper.runs(from: layout.attributedString))
+                       runs: mapper.runs(from: layout.attributedString, style: style))
     }
 }
 
@@ -217,7 +252,7 @@ extension BlockBox: CanvasBlock {
         }
         if let pd = placeholderDraw() {
             NSAttributedString(string: pd.text,
-                attributes: [.font: pd.font, .foregroundColor: UIColor.placeholderText]).draw(at: pd.origin)
+                attributes: [.font: pd.font, .foregroundColor: mapper.theme.placeholder]).draw(at: pd.origin)
         }
     }
 }

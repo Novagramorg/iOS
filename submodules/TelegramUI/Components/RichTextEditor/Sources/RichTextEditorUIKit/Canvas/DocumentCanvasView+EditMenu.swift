@@ -39,7 +39,7 @@ extension DocumentCanvasView {
                 .reduce(CGRect.null) { $0.union($1) }
             if !union.isNull { return union }   // fall through to the caret if the range produced no rects
         }
-        if let img = imageBox(atGap: head) { return img.imageRect() }
+        if let img = mediaBox(atGap: head) { return img.mediaRect() }
         return caretRect(for: DocumentTextPosition(head))
     }
 
@@ -70,7 +70,25 @@ extension DocumentCanvasView {
         interaction.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: sourcePoint))
     }
 
-    func dismissEditMenu() { editMenuInteraction?.dismissMenu() }
+    func dismissEditMenu() {
+        dismissEditMenuCountForTesting += 1
+        editMenuInteraction?.dismissMenu()
+    }
+
+    /// Native UITextView dismisses the edit menu the moment the text or the caret/selection changes.
+    /// Called from the selection setters, the `selectedTextRange` setter, and the `editing { }` wrapper.
+    ///
+    /// The dismiss is UNCONDITIONAL — deliberately NOT gated on `editMenuVisible`. A presented
+    /// `UIEditMenuInteraction` does not self-dismiss on a selection change (it just repositions via
+    /// `targetRectFor`), so we must call `dismissMenu()`; and the system flips `editMenuVisible` to false
+    /// on a touch-down BEFORE the gesture's setter runs, so gating on it would skip the dismiss exactly
+    /// when the user moves the cursor. `dismissMenu()` on a non-presented interaction is a harmless no-op.
+    /// The present-after-change gesture flows (Select / Select All / double-tap / handle-drag `.ended` /
+    /// long-press `.ended`) are unaffected because they change the selection via `applySelection` (NOT a
+    /// dismiss point) and call `presentEditMenu()` AFTER any setter.
+    func dismissEditMenuForSelectionOrTextChange() {
+        dismissEditMenu()
+    }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         switch action {

@@ -59,7 +59,7 @@ extension DocumentCanvasView {
     func handleTap(at point: CGPoint, time now: TimeInterval) {
         // An image atom has no word/paragraph to escalate to — route EVERY tap on an image to the
         // single-tap (two-step select/menu) handler, bypassing multi-tap escalation.
-        if let img = imageBox(atGap: closestGlobalPosition(to: point)), img.imageRect().contains(point) {
+        if let img = mediaBox(atGap: closestGlobalPosition(to: point)), img.mediaRect().contains(point) {
             lastTapTime = now; lastTapLocation = point; tapCount = 1
             performSingleTap(at: point)
             return
@@ -104,6 +104,12 @@ extension DocumentCanvasView {
     func performSingleTap(at point: CGPoint) {
         let wasMenuVisible = editMenuVisible               // capture before the system auto-dismisses on touch-down
         ensureFirstResponder()
+        // A tap BELOW the document's last block, when that block is a quote, starts a new body paragraph
+        // after it — the only way to escape a trailing quote (nothing exists below it to tap into).
+        if let last = boxes.last as? BlockBox, last.style == .quote, point.y > last.frame.maxY {
+            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing quote
+            return
+        }
         if let hit = tableHandle(at: point), let action = tableHandleTap(at: point) {
             switch action {
             case .select(let kind):                        // 1st tap → select the row/column (no menu yet)
@@ -127,7 +133,7 @@ extension DocumentCanvasView {
         // Tap on an image body (resolves to its gap AND the point is inside the image) → atom-select /
         // menu. MUST precede the clear below (else a 2nd tap on a selected image would clear it before
         // its menu could open).
-        if let img = imageBox(atGap: p), img.imageRect().contains(point) {
+        if let img = mediaBox(atGap: p), img.mediaRect().contains(point) {
             handleImageTap(img, wasMenuVisible: wasMenuVisible)
             return
         }

@@ -44,7 +44,7 @@ extension DocumentCanvasView: UITextInput {
         if storage.length == 0 {
             // An empty image caption is render-only centered (not in the model), so the next typed
             // character must carry that centered paragraph style explicitly or it would land left-aligned.
-            if let img = boxes.compactMap({ $0 as? ImageBlockBox }).first(where: { region.ref == .caption($0.id) }) {
+            if let img = boxes.compactMap({ $0 as? MediaBlockBox }).first(where: { region.ref == .caption($0.id) }) {
                 return img.captionTypingAttributes()
             }
             // Recover the owning paragraph (if any) so an empty styled/listed paragraph keeps its
@@ -74,6 +74,7 @@ extension DocumentCanvasView: UITextInput {
         set {
             finalizeMarkedText()     // a deliberate selection move commits a composition / dismisses a prediction
             clearStructuralSelections()
+            dismissEditMenuForSelectionOrTextChange()   // system-driven move (keyboard cursor-drag / autocorrect) closes the menu too
             let r = newValue as? DocumentTextRange
             anchor = clamp(r?.from.offset ?? 0); head = clamp(r?.to.offset ?? 0)
             setNeedsDisplay(); refreshSelectionUI()
@@ -172,8 +173,8 @@ extension DocumentCanvasView: UITextInput {
         // leading edge; `updateCaretView` renders the app's own caret there (and this geometry also feeds the
         // loupe / hit-test / edit menu). (This returned .zero before, which is why draw(_:) used to hand-draw
         // a custom GapCursor bar.)
-        if let img = imageBox(atGap: pos) {
-            let rr = img.imageRect()
+        if let img = mediaBox(atGap: pos) {
+            let rr = img.mediaRect()
             return CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height)
         }
         return .zero
@@ -215,7 +216,7 @@ extension DocumentCanvasView: UIKeyInput {
             applyReplace(globalFrom: m.from, globalTo: m.to, text: text)   // in place; caret → end
             textInputDelegate?.textDidChange(self)
             commitMarkedText()
-            invalidateIntrinsicContentSize(); setNeedsLayout(); setNeedsDisplay(); refreshSelectionUI()
+            notifyContentSizeChanged(); setNeedsDisplay(); refreshSelectionUI()
             onSelectionChange?()   // committing a composition moves the caret — scroll it into view too
             return
         }
@@ -223,7 +224,7 @@ extension DocumentCanvasView: UIKeyInput {
         // Caret on an image's gap cursor → open a new body paragraph immediately before the image
         // (Enter inserts an empty one), rather than letting the text fall into the caption. Symmetric
         // to deleteBackward's gap branch below.
-        if selFrom == selTo, let img = imageBox(atGap: head), let i = boxIndex(of: img) {
+        if selFrom == selTo, let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
             editing { insertParagraphBeforeImage(at: i, text: text == "\n" ? "" : text) }
             return
         }
@@ -271,19 +272,42 @@ extension DocumentCanvasView: UIKeyInput {
             }
             return
         }
-        // Gap before an image → delete that image (also the path for a tap-selected image atom, whose
-        // hidden caret is parked at the gap). Clear the now-stale image selection after.
-        if let img = imageBox(atGap: head), let i = boxIndex(of: img) {
-            editing { deleteImageBox(at: i) }
-            clearImageSelection()
+        // Caret at a media block's leading gap.
+        if let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
+            if imageSelection != nil {
+                // A tap-SELECTED media atom → delete the whole block (explicit selection delete).
+                editing { deleteImageBox(at: i) }
+                clearImageSelection()
+            } else if i > 0, let prev = boxes[i - 1] as? BlockBox {
+                // A plain caret at the gap must NOT delete the media. Act on the previous paragraph: a
+                // non-empty one → move the caret to its end (no delete); an empty one → delete it (the
+                // caret stays at the media's gap).
+                if prev.textLength == 0 {
+                    editing { deleteBlock(at: i - 1, parkingCaretAtGapOf: img) }
+                } else {
+                    setCaret(global: prev.textStart + prev.textLength)
+                }
+            } else {
+                // Media is the document's first block, or the previous block isn't a paragraph (another
+                // media / a table): move to the previous caret slot without deleting (no-op at doc start).
+                let prev = prevTextPosition(before: head)
+                if prev != head { setCaret(global: prev) }
+            }
             return
         }
         guard let pos = resolveBox(at: head) else { return }
-        if pos.box is ImageBlockBox, pos.local == 0 {        // caption start → delete the image
+        if let p = pos.box as? BlockBox, p.style == .quote, p.textLength == 0 {
+            // Backspace in an EMPTY quote un-quotes it (→ body paragraph). Otherwise an empty quote —
+            // especially the document's FIRST block, which matches no merge branch below — can't be
+            // removed at all. Mirrors empty-list-item Return (DocumentCanvasView+Editing.insertParagraphBreak).
+            editing { p.style = .body; restyle(p); recomputeSpans() }
+            return
+        }
+        if pos.box is MediaBlockBox, pos.local == 0 {        // caption start → delete the image
             editing { deleteImageBox(at: pos.index) }
         } else if pos.local > 0 {
             editing { applyReplace(globalFrom: head - 1, globalTo: head, text: "") }
-        } else if pos.index > 0, boxes[pos.index - 1] is ImageBlockBox {
+        } else if pos.index > 0, boxes[pos.index - 1] is MediaBlockBox {
             editing { deleteImageBox(at: pos.index - 1) }     // start of a block after an image
         } else if pos.index > 0, boxes[pos.index - 1] is TableBlockBox {
             // Start of a block after a table → move WITHOUT deleting into the table's last cell (no merge

@@ -1307,7 +1307,7 @@ private final class TextProcessingSheetComponent: Component {
                     hasEntityKeyboard: false,
                     gesture: nil,
                     sourceSendButton: sourceSendButton,
-                    textInputView: UITextView(),
+                    textInputSource: nil,
                     emojiViewProvider: nil,
                     completion: { [weak self] in
                         guard let self else {

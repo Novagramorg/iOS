@@ -7,17 +7,18 @@ import RichTextEditorCore
 @available(iOS 17.0, *)
 struct CaptionPlaceholder { let text: String; let rect: CGRect; let font: UIFont }
 
-/// An image-with-caption block: a rendered image (resolved from `assetID` via the canvas's image
-/// provider) above an editable caption. Contributes `captionLength + 5` tokens; the caption text
-/// begins at `nodeStart + 2` (after the image atom and the caption paragraph's open token). The
-/// position `nodeStart` (before the atom) is a gap.
+/// A media-with-caption block: a host-supplied media view (resolved from `mediaID` via the canvas's
+/// `mediaViewProvider`, positioned at `mediaRect()`) above an editable caption. Contributes
+/// `captionLength + 5` tokens; the caption text begins at `nodeStart + 2` (after the media atom and the
+/// caption paragraph's open token). The position `nodeStart` (before the atom) is a gap.
 @available(iOS 17.0, *)
-final class ImageBlockBox: CanvasBlock {
+final class MediaBlockBox: CanvasBlock {
     let id: BlockID
-    var assetID: String
+    var mediaID: String
+    var kind: MediaKind
     var naturalSize: Size2D
     var displayWidth: Double?
-    var alignment: ImageAlignment
+    var alignment: MediaAlignment
     let caption: BlockLayout
     let mapper: AttributedStringMapper
 
@@ -26,7 +27,7 @@ final class ImageBlockBox: CanvasBlock {
     let verticalInset: CGFloat = 8
     let captionGap: CGFloat = 4
     /// The most-recently-set layout width (from `setWidth` or `init`). Used by `height`,
-    /// `imageAreaHeight`, and `imageRect` so they are correct before `frame` is assigned by
+    /// `imageAreaHeight`, and `mediaRect` so they are correct before `frame` is assigned by
     /// `layoutSubviews`.
     private(set) var layoutWidth: CGFloat
 
@@ -41,18 +42,19 @@ final class ImageBlockBox: CanvasBlock {
     /// margins (the inverse of the inset top-level frame). The image draws edge-to-edge over this.
     private var canvasWidth: CGFloat { layoutWidth + CanvasMetrics.pageMargin * 2 }
 
-    init(image block: ImageBlock, mapper: AttributedStringMapper, width: CGFloat) {
+    init(media block: MediaBlock, mapper: AttributedStringMapper, width: CGFloat) {
         id = block.id
-        assetID = block.assetID
+        mediaID = block.mediaID
+        kind = block.kind
         naturalSize = block.naturalSize
         displayWidth = block.displayWidth
         alignment = block.alignment
         self.mapper = mapper
         layoutWidth = max(width, 1)
-        // The caption's paragraph id matches the image block's id — it only keys the paragraph style
+        // The caption's paragraph id matches the media block's id — it only keys the paragraph style
         // here; `currentBlock()` extracts the caption runs, not this temporary paragraph's id.
-        let captionPara = ParagraphBlock(id: block.id, style: .body,
-                                         paragraph: ImageBlockBox.captionParagraph,
+        let captionPara = ParagraphBlock(id: block.id, style: .caption,
+                                         paragraph: MediaBlockBox.captionParagraph,
                                          runs: block.caption)
         caption = BlockLayout(attributedString: mapper.attributedString(for: captionPara),
                               width: max(width, 1))
@@ -60,7 +62,9 @@ final class ImageBlockBox: CanvasBlock {
 
     // CanvasBlock — text region is the caption.
     var rendersAsBlockView: Bool { true }
-    var blockViewFrame: CGRect { frame.union(imageRect()) }   // a full-bleed image draws past its inset frame
+    // The medium is now an overlay view (not drawn into the backing store), so the backing view only needs
+    // to cover the caption (its own inset frame). The full-bleed medium is hosted in the canvas mediaOverlay.
+    var blockViewFrame: CGRect { frame }
     var textLayout: BlockLayout { caption }
     var textLength: Int { caption.length }
     var nodeSize: Int { caption.length + 5 }
@@ -90,8 +94,8 @@ final class ImageBlockBox: CanvasBlock {
     /// otherwise collapse. Mirrors `BlockBox.emptyLineHeight`. Keeps the "Add caption" line always visible.
     private var captionEmptyLineHeight: CGFloat {
         guard caption.length == 0 else { return 0 }
-        let font = mapper.styleSheet.font(for: .body, attributes: .plain)
-        let ps = mapper.styleSheet.paragraphStyle(for: .body, attributes: ImageBlockBox.captionParagraph, list: nil)
+        let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
+        let ps = mapper.styleSheet.paragraphStyle(for: .caption, attributes: MediaBlockBox.captionParagraph, list: nil)
         let mult = ps.lineHeightMultiple > 0 ? ps.lineHeightMultiple : 1
         return font.lineHeight * mult
     }
@@ -99,8 +103,8 @@ final class ImageBlockBox: CanvasBlock {
     /// Width of the "Add caption" placeholder in the caption (body) font — used to align the empty-caption
     /// caret to the START (left edge) of the centered placeholder rather than the line's center.
     private var captionPlaceholderTextWidth: CGFloat {
-        let font = mapper.styleSheet.font(for: .body, attributes: .plain)
-        return (ImageBlockBox.captionPlaceholderText as NSString).size(withAttributes: [.font: font]).width
+        let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
+        return (MediaBlockBox.captionPlaceholderText as NSString).size(withAttributes: [.font: font]).width
     }
 
     var height: CGFloat {
@@ -114,7 +118,7 @@ final class ImageBlockBox: CanvasBlock {
     }
 
     // NOTE: assumes a top-level image (bleeds past the page margin to the canvas edge). No command inserts an image into a table cell today; if that becomes possible, a nested image must skip the bleed.
-    func imageRect() -> CGRect {
+    func mediaRect() -> CGRect {
         let avail = max(canvasWidth, 1)
         let size = imageDisplaySize(maxWidth: avail)
         let bleedX = frame.minX - CanvasMetrics.pageMargin
@@ -134,8 +138,8 @@ final class ImageBlockBox: CanvasBlock {
     }
 
     func currentBlock() -> Block {
-        .image(ImageBlock(id: id, assetID: assetID, naturalSize: naturalSize, displayWidth: displayWidth,
-                          alignment: alignment, caption: mapper.runs(from: caption.attributedString)))
+        .media(MediaBlock(id: id, mediaID: mediaID, kind: kind, naturalSize: naturalSize, displayWidth: displayWidth,
+                          alignment: alignment, caption: mapper.runs(from: caption.attributedString, style: .caption)))
     }
 
     func leafRegions() -> [LeafTextRegion] {
@@ -156,9 +160,9 @@ final class ImageBlockBox: CanvasBlock {
     /// the model), so an empty caption carries no run to inherit it from — without this, the first typed
     /// character would be left-aligned. Mirrors the empty-paragraph path in `typingAttributeDict`.
     func captionTypingAttributes() -> [NSAttributedString.Key: Any] {
-        var attrs = mapper.attributes(for: CharacterAttributes(), style: .body)
-        attrs[.paragraphStyle] = mapper.styleSheet.paragraphStyle(for: .body,
-                                                                  attributes: ImageBlockBox.captionParagraph, list: nil)
+        var attrs = mapper.attributes(for: CharacterAttributes(), style: .caption)
+        attrs[.paragraphStyle] = mapper.styleSheet.paragraphStyle(for: .caption,
+                                                                  attributes: MediaBlockBox.captionParagraph, list: nil)
         return attrs
     }
 
@@ -168,24 +172,24 @@ final class ImageBlockBox: CanvasBlock {
     /// the same render layer. Mirrors the paragraph placeholder's color/font.
     func captionPlaceholder() -> CaptionPlaceholder? {
         guard caption.length == 0 else { return nil }
-        let font = mapper.styleSheet.font(for: .body, attributes: .plain)
+        let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
         let rect = CGRect(x: textOrigin.x, y: textOrigin.y, width: layoutWidth, height: captionEmptyLineHeight)
-        return CaptionPlaceholder(text: ImageBlockBox.captionPlaceholderText, rect: rect, font: font)
+        return CaptionPlaceholder(text: MediaBlockBox.captionPlaceholderText, rect: rect, font: font)
     }
 
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {
-        let rect = imageRect()
-        if let image = imageProvider(assetID) { image.draw(in: rect) }
-        else { UIColor.secondarySystemFill.setFill(); ctx.fill(rect) }
+        // The medium itself is now a host-supplied overlay view (positioned at `mediaRect()` by the canvas
+        // media reconciler), so the backing store draws only the caption (+ its placeholder). `imageProvider`
+        // is retained as the shared `CanvasBlock.draw` parameter but is unused here.
         caption.drawText(in: ctx, at: textOrigin)
         if let ph = captionPlaceholder() {
             // Use the caption's OWN paragraph style (centered + body line-height metrics) so the
             // placeholder is metrically identical to real caption text — same centering AND same baseline,
             // so nothing shifts vertically the instant the user types.
-            let ps = mapper.styleSheet.paragraphStyle(for: .body, attributes: ImageBlockBox.captionParagraph, list: nil)
+            let ps = mapper.styleSheet.paragraphStyle(for: .caption, attributes: MediaBlockBox.captionParagraph, list: nil)
             NSAttributedString(string: ph.text, attributes: [
                 .font: ph.font,
-                .foregroundColor: UIColor.placeholderText,
+                .foregroundColor: mapper.theme.placeholder,
                 .paragraphStyle: ps,
             ]).draw(in: ph.rect)
         }

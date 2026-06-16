@@ -2,7 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
-/// A block rendered by `DocumentCanvasView`. Conformers: `BlockBox` (paragraph), `ImageBlockBox`
+/// A block rendered by `DocumentCanvasView`. Conformers: `BlockBox` (paragraph), `MediaBlockBox`
 /// (image + caption), and `TableBlockBox` (a grid of cells). The canvas treats every block uniformly:
 /// span math via `nodeStart`/`nodeSize`, and selection/caret/text/draw via `leafRegions()` (each
 /// block's editable text regions, recursing into table cells) + `draw(in:imageProvider:)`. The
@@ -12,7 +12,7 @@ protocol CanvasBlock: AnyObject {
     var id: BlockID { get }
     /// When true, the canvas renders this block via a persistent, non-focusable `BlockBackingView`
     /// subview (pooled by `BlockID`) instead of drawing it into the shared canvas `CGContext`.
-    /// Default false (see the extension below). Will be overridden to true by `ImageBlockBox` (Task 3) and `TableBlockBox` (Task 6).
+    /// Default false (see the extension below). Will be overridden to true by `MediaBlockBox` (Task 3) and `TableBlockBox` (Task 6).
     var rendersAsBlockView: Bool { get }
     /// The canvas-coordinate rect this block's `BlockBackingView` occupies. Defaults to `frame`; a block
     /// that draws PAST its layout frame (a full-bleed image; a table whose grid border extends a few px

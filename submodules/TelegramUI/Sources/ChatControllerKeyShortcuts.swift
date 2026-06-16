@@ -17,6 +17,9 @@ extension ChatControllerImpl {
         if !isTopmostChatController(self) {
             return []
         }
+        if self.attachmentController != nil {
+            return []
+        }
         
         let strings = self.presentationData.strings
         

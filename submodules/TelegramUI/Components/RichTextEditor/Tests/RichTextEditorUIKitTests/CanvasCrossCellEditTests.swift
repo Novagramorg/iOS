@@ -121,9 +121,7 @@ final class CanvasCrossCellEditTests: XCTestCase {
         let cellB = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("bp")) }!
         v.anchor = cellA.globalStart + 2; v.head = cellB.globalStart + 2
         v.deleteBackward()
-        let doc = Document(metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                                      modifiedAt: Date(timeIntervalSince1970: 0)),
-                           blocks: v.currentBlocks())
+        let doc = Document(blocks: v.currentBlocks())
         XCTAssertEqual(v.documentSizeValue, DocumentTree.documentSize(doc))
     }
 
@@ -151,7 +149,7 @@ final class CanvasCrossCellEditTests: XCTestCase {
         let v = DocumentCanvasView()
         let imgCell = Cell(id: BlockID("c"), blocks: [
             .paragraph(ParagraphBlock(id: BlockID("cp"), runs: [TextRun(text: "Cap")])),
-            .image(ImageBlock(id: BlockID("ci"), assetID: "x", naturalSize: Size2D(width: 10, height: 10))),
+            .media(MediaBlock(id: BlockID("ci"), mediaID: "x", naturalSize: Size2D(width: 10, height: 10))),
         ])
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("top"), runs: [TextRun(text: "Top")])),
@@ -166,7 +164,7 @@ final class CanvasCrossCellEditTests: XCTestCase {
         v.deleteBackward()
         guard case .table(let model) = v.currentBlocks().first(where: { if case .table = $0 { return true } else { return false } })!
         else { return XCTFail() }
-        let cellCKeepsImage = model.rows[0].cells[0].blocks.contains { if case .image = $0 { return true } else { return false } }
+        let cellCKeepsImage = model.rows[0].cells[0].blocks.contains { if case .media = $0 { return true } else { return false } }
         XCTAssertTrue(cellCKeepsImage, "an image in a covered cell is preserved (only its caption text clears)")
     }
 
@@ -249,9 +247,7 @@ final class CanvasCrossCellEditTests: XCTestCase {
         XCTAssertEqual(cellInfo(v, 1, 1)?.firstText, "lta")   // end suffix kept
         XCTAssertEqual(cellInfo(v, 0, 1)?.firstText, "")      // middle cleared
         XCTAssertEqual(cellInfo(v, 1, 0)?.firstText, "")      // middle cleared
-        let doc = Document(metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                                      modifiedAt: Date(timeIntervalSince1970: 0)),
-                           blocks: v.currentBlocks())
+        let doc = Document(blocks: v.currentBlocks())
         XCTAssertEqual(v.documentSizeValue, DocumentTree.documentSize(doc))
     }
 

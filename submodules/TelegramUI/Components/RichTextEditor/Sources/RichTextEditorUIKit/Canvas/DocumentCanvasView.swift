@@ -8,7 +8,7 @@ import RichTextEditorCore
 final class DocumentCanvasView: UIView {
     let root = BlockStack()
     var boxes: [CanvasBlock] { get { root.boxes } set { root.boxes = newValue } }
-    let mapper: AttributedStringMapper
+    var mapper: AttributedStringMapper
     var imageProvider: (String) -> UIImage? = { _ in nil }
     /// Returns a FRESH, non-interactive view for an emoji `id` sized to the requested square, or nil.
     /// The canvas owns/positions/removes it; a host with only a CALayer wraps it in a plain UIView.
@@ -23,6 +23,17 @@ final class DocumentCanvasView: UIView {
     let emojiOverlay = UIView()
     /// Hide an emoji view when its canvas frame is more than this far outside the visible viewport.
     var emojiCullMargin: CGFloat = 50
+    /// Returns a FRESH media view for a `mediaID` sized to the medium's natural size, or nil. The canvas
+    /// owns/positions/resizes/removes it. Mirrors `emojiViewProvider` but for block-level media.
+    var mediaViewProvider: (_ mediaID: String, _ naturalSize: CGSize) -> RichTextMediaItemView? = { _, _ in nil }
+    /// Hosted media views, keyed by the OWNING block's `BlockID` (the occurrence) so edits/undo reuse —
+    /// not recreate — them, and two blocks sharing one `mediaID` get two independent views.
+    var mediaItemViews: [BlockID: HostedMediaItem] = [:]
+    /// Non-interactive container for media views (canvas coords). Kept below the chrome overlay; above
+    /// block backing views so a full-bleed medium overlays its block.
+    let mediaOverlay = UIView()
+    /// Hide a media view when its canvas frame is more than this far outside the visible viewport.
+    var mediaCullMargin: CGFloat = 50
     /// Pooled dust views, keyed by spoiler-run identity so a hidden run keeps its animating emitter across
     /// reconcile passes. Mutated by the reconciler in `DocumentCanvasView+Spoilers.swift`.
     var spoilerDustViews: [SpoilerKey: HostedSpoilerDust] = [:]
@@ -75,10 +86,10 @@ final class DocumentCanvasView: UIView {
     private weak var lastCaretContainer: UIView?
     private var lastCaretFrame: CGRect = .null
 
-    /// Called whenever the canvas invalidates its intrinsic content size (its height may have changed
-    /// after an edit/undo). The host (`RichTextEditorView`) sizes the canvas frame-based, not via Auto
-    /// Layout, so `invalidateIntrinsicContentSize()` alone does NOT re-flow the host — without this hook
-    /// a height change is only reflected on the next host layout pass (e.g. a rotation).
+    /// Fired by `notifyContentSizeChanged()` whenever the content height may have changed (after an
+    /// edit/undo/IME/document-swap). The host (`RichTextEditorView`) sizes the canvas frame-based, not via
+    /// Auto Layout, so the canvas does NOT lay itself out — it notifies through this hook and the parent
+    /// drives layout explicitly (`performLayout` → `layoutContent`).
     var onContentSizeChange: (() -> Void)?
     /// Fired whenever the caret moves to a spot the host may need to reveal: the OS moving the selection
     /// through the `selectedTextRange` setter (hardware arrow navigation), and every editing operation
@@ -86,6 +97,40 @@ final class DocumentCanvasView: UIView {
     /// marked-text branch). The host uses it to scroll the caret into view, since these can land the caret
     /// off-screen (arrowing up out of a tall image; typing the line below the keyboard).
     var onSelectionChange: (() -> Void)?
+    /// Fired once when the canvas actually GAINS first-responder status (not on a repeat
+    /// `becomeFirstResponder()` while already focused — the tap handlers call it unconditionally). The
+    /// host surfaces this as `RichTextEditorView.onBecameFirstResponder`.
+    var onBecameFirstResponder: (() -> Void)?
+    /// Fired once when the canvas actually RESIGNS first-responder status. Surfaced as
+    /// `RichTextEditorView.onResignedFirstResponder`.
+    var onResignedFirstResponder: (() -> Void)?
+
+    /// Interior content margins — interactable padding around the document, ADDED to the built-in
+    /// `pageMargin`. Unlike the host's scroll insets (covered by chrome/keyboard, content scrolls under),
+    /// these are PART of the content: the text lays out inset by them (so it wraps narrower and is offset
+    /// from the canvas edges), the content height grows by top+bottom, and the margin area still hit-tests
+    /// to the nearest text position. Applied by `RichTextEditorView.update(size:insets:contentMargins:)`
+    /// (a layout-affecting input, passed every update); default `.zero`. A plain stored value: the `update`
+    /// that sets it re-runs `performLayout`, which lays the canvas out EXPLICITLY (`layoutContent()`), so the
+    /// setter neither schedules layout itself nor fires `onContentSizeChange`/`onChange`.
+    var contentMargins: UIEdgeInsets = .zero
+
+    /// The built-in horizontal page margin applied to paragraph/table text (in addition to `contentMargins`).
+    /// Defaults to the document metric (`CanvasMetrics.pageMargin`, 16pt); a compact host (e.g. the chat
+    /// composer) can set it to 0 so the host controls all horizontal insets via the frame + `contentMargins`.
+    /// Image bleed (`MediaBlockBox`) keeps the static document metric.
+    var pageMargin: CGFloat = CanvasMetrics.pageMargin
+
+    /// The base inter-block vertical inset for the document root (each side). Defaults to the document
+    /// metric (`BlockBox.defaultVerticalInset`, 8pt); a compact host (the chat composer) sets it to 0 so a
+    /// single paragraph hugs its text height instead of carrying the inter-paragraph gap. Applied to the
+    /// root stack in `layoutContent`; nested (table-cell) stacks keep the document default.
+    var blockVerticalInset: CGFloat = BlockBox.defaultVerticalInset
+
+    /// Placeholder strings drawn in empty paragraphs. Stamped onto each top-level box during layout.
+    /// Defaults to the editor's built-in hints; a compact host (chat composer) sets them to "" to suppress
+    /// the editor's placeholder (it draws its own). Applied on the next layout pass.
+    var placeholders: RichTextEditorPlaceholders = .default
 
     // Selection as global UTF-16 positions; `anchor` fixed, `head` moving.
     var anchor = 0
@@ -123,6 +168,9 @@ final class DocumentCanvasView: UIView {
     /// Whether the edit menu is currently presented (tracked via UIEditMenuInteractionDelegate), so a tap
     /// on the caret/selection can TOGGLE the menu instead of re-presenting it (the close-then-reopen flicker).
     var editMenuVisible = false
+    /// Test observability: counts `dismissEditMenu()` calls (a presented `UIEditMenuInteraction` can't be
+    /// driven in a unit test, so the auto-dismiss-on-change behavior is asserted via this counter).
+    var dismissEditMenuCountForTesting = 0
     /// Reference-time of the last edit-menu dismissal. The system auto-dismisses the menu on a tap-down,
     /// BEFORE our single-tap handler runs (on tap-up), so `editMenuVisible` is already false by then; this
     /// lets the handler tell "this tap just dismissed the menu" from "no menu was up".
@@ -182,6 +230,9 @@ final class DocumentCanvasView: UIView {
         emojiOverlay.isUserInteractionEnabled = false
         emojiOverlay.backgroundColor = .clear
         addSubview(emojiOverlay)
+        mediaOverlay.isUserInteractionEnabled = false
+        mediaOverlay.backgroundColor = .clear
+        addSubview(mediaOverlay)   // above block backing views, below the selection wash / chrome
         spoilerOverlay.isUserInteractionEnabled = false
         spoilerOverlay.backgroundColor = .clear
         addSubview(spoilerOverlay)   // above emoji, below the selection wash
@@ -196,27 +247,50 @@ final class DocumentCanvasView: UIView {
 
     override var canBecomeFirstResponder: Bool { true }
 
+    /// When non-nil, replaces the system keyboard while the canvas stays first responder (a consumer
+    /// sets e.g. an `EmptyInputView` to hide the keyboard while showing a separate emoji panel, so the
+    /// caret keeps rendering). `nil` ⇒ system keyboard.
+    var customInputView: UIView?
+    override var inputView: UIView? { return self.customInputView }
+
     @discardableResult
     override func becomeFirstResponder() -> Bool {
+        let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let became = super.becomeFirstResponder()
         if became { updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
+        if became && !wasFirstResponder { onBecameFirstResponder?() }   // only the real not-focused→focused transition
         return became
     }
 
     @discardableResult
     override func resignFirstResponder() -> Bool {
         finalizeMarkedText()
+        let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let resigned = super.resignFirstResponder()
         if resigned { updateCaretView(); updateSelectionHandleViews() }   // hide caret + handles (no longer FR)
+        if resigned && wasFirstResponder { onResignedFirstResponder?() } // only the real focused→not-focused transition
         return resigned
     }
 
     override var keyCommands: [UIKeyCommand]? {
         [UIKeyCommand(input: "\t", modifierFlags: [], action: #selector(handleTabKey)),
-         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey))]
+         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey)),
+         UIKeyCommand(input: "\r", modifierFlags: .shift, action: #selector(handleShiftReturn))]
     }
     @objc private func handleTabKey() { moveToCell(forward: true) }
     @objc private func handleShiftTabKey() { moveToCell(forward: false) }
+    @objc private func handleShiftReturn() { performShiftReturn() }
+
+    /// Applies a theme: updates the mapper (text/link colors used on the next reload) and pushes the accent
+    /// color to the persistent caret/selection/blockquote views. The caller reloads content afterward so the
+    /// boxes rebuild with the themed mapper.
+    func applyTheme(_ theme: RichTextEditorTheme) {
+        self.mapper.theme = theme
+        self.caretView.accentColor = theme.accent
+        self.startHandleView.accentColor = theme.accent
+        self.endHandleView.accentColor = theme.accent
+        self.blockquoteUnderlay.accentColor = theme.accent
+    }
 
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose
     /// cells the canvas reaches via `leafRegions()`.
@@ -233,14 +307,14 @@ final class DocumentCanvasView: UIView {
         boxes = blocks.compactMap { block -> CanvasBlock? in
             switch block {
             case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: width)
-            case .image(let img): return ImageBlockBox(image: img, mapper: mapper, width: width)
+            case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width)
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
             }
         }
         recomputeSpans()
         recomputeDocumentHasSpoilers()   // a fresh document may load spoilers, or none (gates syncSpoilers)
         anchor = min(anchor, documentSize); head = min(head, documentSize)
-        invalidateIntrinsicContentSize(); setNeedsLayout(); setNeedsDisplay()
+        notifyContentSizeChanged(); setNeedsDisplay()
     }
 
     /// A full-document replacement that NOTIFIES the input system (so the keyboard's shadow document
@@ -368,7 +442,7 @@ final class DocumentCanvasView: UIView {
         syncBlockquoteUnderlay()
         // A freshly re-realized table has a brand-new (empty) content view; re-host emoji so its cell
         // emoji migrate back into it. Otherwise the cheap hide/show cull suffices (frames unchanged).
-        if realizedFreshTable { syncEmojiViews() } else { cullEmojiViews() }
+        if realizedFreshTable { syncEmojiViews(); syncMediaItemViews() } else { cullEmojiViews(); cullMediaItemViews() }
         refreshSelectionUI()
         scrollCaretIntoViewIfNeeded()
     }
@@ -381,6 +455,13 @@ final class DocumentCanvasView: UIView {
     /// Binds (or re-binds) a realized view to its box: frame, table H-scroll sync, and the repaint gate.
     /// `fresh` = the view was just created/recycled (its bitmap is stale ⇒ force a repaint).
     private func bindRealizedView(_ view: BlockBackingView, to box: CanvasBlock, fresh: Bool) {
+        // A structural edit (split/merge) keeps a surviving block's BlockID but swaps its BlockBox for a
+        // brand-new instance whose fresh BlockLayout resets `renderVersion` to 0. `renderSignature` encodes
+        // that per-instance counter, so it is MEANINGLESS to compare across a box-instance replacement —
+        // a same-height/same-style upper half can collide with the old signature and wrongly skip the
+        // repaint, leaving the pre-split full-text bitmap. Detect the instance swap and force a repaint;
+        // the signature gate below still covers the common same-instance cases (scroll, typing in place).
+        let boxInstanceChanged = view.box !== box
         view.box = box
         view.frame = box.blockViewFrame                                  // image: full drawn extent; table: visible window
         if let t = box as? TableBlockBox, let tv = view as? TableBackingView, !fresh {
@@ -389,7 +470,7 @@ final class DocumentCanvasView: UIView {
         view.setNeedsLayout()
         if let p = box as? BlockBox {
             let sig = p.renderSignature
-            if fresh || view.lastRenderedSignature != sig {              // recycled OR content changed
+            if fresh || boxInstanceChanged || view.lastRenderedSignature != sig {   // recycled OR rebound OR content changed
                 view.lastRenderedSignature = sig
                 view.setNeedsDisplay()
             }
@@ -453,20 +534,38 @@ final class DocumentCanvasView: UIView {
     /// Public-within-module accessor for the façade.
     var documentSizeValue: Int { documentSize }
 
-    /// Re-flows boxes to a new width if it changed (called from the façade's layout).
+    /// The left/right padding from the canvas edge to the text: the built-in `pageMargin` plus the
+    /// configurable `contentMargins` on that side. The text content width is the canvas width minus both.
+    var contentLeftPad: CGFloat { self.pageMargin + contentMargins.left }
+    var contentRightPad: CGFloat { self.pageMargin + contentMargins.right }
+    func contentWidth(forWidth width: CGFloat) -> CGFloat { max(width - contentLeftPad - contentRightPad, 1) }
+
+    /// Re-flows boxes to a new width if it changed, so the caller can read an accurate
+    /// `intrinsicContentSize` BEFORE it sizes the canvas frame. Called from the façade's `performLayout`,
+    /// which lays the canvas out explicitly (`layoutContent()`) right after — so this does not schedule
+    /// layout itself.
     func setParagraphsWidthIfNeeded(_ width: CGFloat) {
-        let content = max(width - CanvasMetrics.pageMargin * 2, 1)
+        let content = contentWidth(forWidth: width)
         guard let first = boxes.first, abs(first.frame.width - content) > 0.5 || first.frame.width == 0 else { return }
         for box in boxes { box.setWidth(content) }
         recomputeSpans()
-        setNeedsLayout()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        layoutContent()
+    }
+
+    /// Lays out the document content + overlays against `bounds`. The parent
+    /// (`RichTextEditorView.performLayout`) calls this DIRECTLY so layout never depends on the UIKit
+    /// `needsLayout` flag — the editor's convention is that the parent drives layout explicitly and a view
+    /// never `setNeedsLayout()`s itself; it only notifies the parent (`onContentSizeChange`). Also invoked
+    /// by `layoutSubviews` for any UIKit-driven pass. Idempotent.
+    func layoutContent() {
         if bounds.width > 0 { lastLayoutWidth = bounds.width }
-        _ = root.layout(origin: CGPoint(x: CanvasMetrics.pageMargin, y: 0),
-                        width: max(bounds.width - CanvasMetrics.pageMargin * 2, 1))
+        root.verticalInsetBase = self.blockVerticalInset
+        _ = root.layout(origin: CGPoint(x: contentLeftPad, y: contentMargins.top),
+                        width: contentWidth(forWidth: bounds.width))
         for case let t as TableBlockBox in boxes { t.recompute() }   // cell frames depend on the table frame
         stampListMarkers()
         syncBlockViews()
@@ -475,6 +574,8 @@ final class DocumentCanvasView: UIView {
         syncBlockquoteUnderlay()
         emojiOverlay.frame = bounds
         syncEmojiViews()
+        mediaOverlay.frame = bounds
+        syncMediaItemViews()
         spoilerOverlay.frame = bounds
         syncSpoilers()
         selectionHighlight.frame = bounds
@@ -492,15 +593,15 @@ final class DocumentCanvasView: UIView {
     }
 
     override var intrinsicContentSize: CGSize {
-        CGSize(width: UIView.noIntrinsicMetric, height: boxes.reduce(0) { $0 + $1.height })
+        CGSize(width: UIView.noIntrinsicMetric,
+               height: contentMargins.top + boxes.reduce(0) { $0 + $1.height } + contentMargins.bottom)
     }
 
-    /// The canvas is frame-managed by its host, so this is a no-op for layout on its own; forward the
-    /// signal to the host (`onContentSizeChange`) so it re-flows the canvas frame + scroll content size.
-    override func invalidateIntrinsicContentSize() {
-        super.invalidateIntrinsicContentSize()
-        onContentSizeChange?()
-    }
+    /// Notifies the host that the content height may have changed (e.g. after an edit), so it re-runs
+    /// layout. The editor convention: a view never `setNeedsLayout()`s itself for a content change — it
+    /// notifies its parent, which drives layout explicitly. `intrinsicContentSize` is a pure computed
+    /// property, so there is nothing to invalidate; this only fires the callback.
+    func notifyContentSizeChanged() { onContentSizeChange?() }
 
     /// Selection/caret changes call `setNeedsDisplay()` without a layout pass; propagate the repaint to
     /// the selection overlays and the chrome overlay — and to TABLE views only (their cell wash is
@@ -524,16 +625,16 @@ final class DocumentCanvasView: UIView {
     /// the text and the emoji subviews. Table-cell regions are excluded (their highlight rides each table's
     /// own content-view overlay so it tracks horizontal overscroll).
     func drawNonTableSelectionHighlight(in ctx: CGContext) {
-        UIColor.tintColor.withAlphaComponent(0.30).setFill()
+        self.mapper.theme.accent.withAlphaComponent(0.30).setFill()
         if selFrom != selTo {
-            for r in selectionRects(globalFrom: selFrom, globalTo: selTo,
-                                    regionFilter: { !self.isRegionInTable($0) }) {
+            for r in selectionHighlightRects(globalFrom: selFrom, globalTo: selTo,
+                                             regionFilter: { !self.isRegionInTable($0) }) {
                 ctx.fill(r)
             }
         }
         // Image-atom wash for a selected (range-covered or tap-selected) image — moved here from the
         // image's BlockBackingView so it sits above any caption emoji and reads consistently.
-        for case let img as ImageBlockBox in boxes {
+        for case let img as MediaBlockBox in boxes {
             if let rect = imageSelectionTintRect(for: img) { ctx.fill(rect) }
         }
     }
@@ -565,6 +666,36 @@ final class DocumentCanvasView: UIView {
         return rects
     }
 
+    /// Selection rects for DRAWING the highlight wash, styled like UITextView (distinct from the
+    /// glyph-hugging `selectionRects`): a line covered in full fills to the text container's trailing edge,
+    /// and an empty line spanned by the selection gets a full-width rect. Used only by the highlight draw
+    /// path — the OS witness / edit-menu / spoiler / marked-text geometry keep the glyph-hugging rects.
+    func selectionHighlightRects(globalFrom: Int, globalTo: Int,
+                                 regionFilter: (LeafTextRegion) -> Bool = { _ in true }) -> [CGRect] {
+        var rects: [CGRect] = []
+        for r in allLeafRegions() where regionFilter(r) {
+            let regionEnd = r.globalStart + r.length
+            let offX = tableContentOffsetX(forGlobal: r.globalStart)
+            let lo = max(globalFrom, r.globalStart), hi = min(globalTo, regionEnd)
+            if lo < hi {
+                // The selection continuing past this region's last character means its trailing newline (the
+                // next block) is selected → the final covered line fills to the edge, like UITextView.
+                let continuesPast = globalTo > regionEnd
+                for seg in r.layout.selectionFillRects(start: lo - r.globalStart, end: hi - r.globalStart,
+                                                       fillTrailingLine: continuesPast) {
+                    rects.append(seg.offsetBy(dx: r.canvasOrigin.x - offX, dy: r.canvasOrigin.y))
+                }
+            } else if r.length == 0, globalFrom <= r.globalStart, r.globalStart < globalTo {
+                // An empty line spanned by the selection → a full-width highlight (the empty paragraph has no
+                // glyphs, so `selectionFillRects` yields nothing; synthesize the line-height-tall full row).
+                let h = r.emptyLineHeight > 0 ? r.emptyLineHeight : r.layout.caretRect(atOffset: 0).height
+                rects.append(CGRect(x: r.canvasOrigin.x - offX, y: r.canvasOrigin.y,
+                                    width: r.layout.container.size.width, height: h))
+            }
+        }
+        return rects
+    }
+
     /// Maps a point in canvas coordinates to the closest global text position.
     func closestGlobalPosition(to point: CGPoint) -> Int { root.closestPosition(toCanvasPoint: point) }
 
@@ -578,14 +709,14 @@ final class DocumentCanvasView: UIView {
     /// unscrolled-canvas rect into a VISIBLE canvas rect.
     func tableContentOffsetX(forGlobal pos: Int) -> CGFloat { tableBox(containingGlobal: pos)?.contentOffsetX ?? 0 }
 
-    /// True if `pos` is the gap before an image atom (an image box's `nodeStart`).
+    /// True if `pos` is the gap before a media atom (a media box's `nodeStart`).
     func isGapPosition(_ pos: Int) -> Bool {
-        boxes.contains { $0 is ImageBlockBox && $0.nodeStart == pos }
+        boxes.contains { $0 is MediaBlockBox && $0.nodeStart == pos }
     }
 
-    /// The image box whose gap-before-atom is at `pos`, if any.
-    func imageBox(atGap pos: Int) -> ImageBlockBox? {
-        boxes.first { ($0 as? ImageBlockBox)?.nodeStart == pos } as? ImageBlockBox
+    /// The media box whose gap-before-atom is at `pos`, if any.
+    func mediaBox(atGap pos: Int) -> MediaBlockBox? {
+        boxes.first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
     }
 
     /// If the caret (`head`) is inside a horizontally-scrollable table, scroll its cell into view.
@@ -651,6 +782,7 @@ final class DocumentCanvasView: UIView {
         }
         target = clampGlobal(target)
         clearStructuralSelections()
+        dismissEditMenuForSelectionOrTextChange()   // the caret moved → close any open menu (native UITextView)
         textInputDelegate?.selectionWillChange(self)
         anchor = target; head = target
         textInputDelegate?.selectionDidChange(self)
@@ -664,6 +796,7 @@ final class DocumentCanvasView: UIView {
     func setSelectionHead(global pos: Int, scrollIntoView: Bool = true) {
         finalizeMarkedText()
         clearStructuralSelections()
+        dismissEditMenuForSelectionOrTextChange()
         textInputDelegate?.selectionWillChange(self)
         head = pos
         textInputDelegate?.selectionDidChange(self)
@@ -675,6 +808,7 @@ final class DocumentCanvasView: UIView {
     func setSelectionAnchor(global pos: Int) {
         finalizeMarkedText()
         clearStructuralSelections()
+        dismissEditMenuForSelectionOrTextChange()
         textInputDelegate?.selectionWillChange(self)
         anchor = pos
         textInputDelegate?.selectionDidChange(self)
@@ -764,9 +898,9 @@ final class DocumentCanvasView: UIView {
                 .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
                           dy: region.region.canvasOrigin.y))
             hostCaretOnCanvas(at: frame)
-        } else if let img = imageBox(atGap: head) {
+        } else if let img = mediaBox(atGap: head) {
             // An image gap: a vertical bar at the image's leading edge (full height).
-            let rr = img.imageRect()
+            let rr = img.mediaRect()
             frame = CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height)
             hostCaretOnCanvas(at: frame)
         } else {
@@ -827,5 +961,13 @@ final class HostedEmoji {
     let view: UIView
     var canvasFrame: CGRect
     init(view: UIView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
+}
+
+/// One pooled media view: the host view plus its last canvas-space frame (for offscreen culling).
+@available(iOS 17.0, *)
+final class HostedMediaItem {
+    let view: RichTextMediaItemView
+    var canvasFrame: CGRect
+    init(view: RichTextMediaItemView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
 }
 #endif

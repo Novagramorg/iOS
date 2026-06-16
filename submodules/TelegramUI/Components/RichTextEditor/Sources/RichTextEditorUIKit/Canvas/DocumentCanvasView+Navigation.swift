@@ -15,7 +15,7 @@ extension DocumentCanvasView {
             let gap = nextStart - 2
             return isGapPosition(gap) ? gap : nextStart
         }
-        if let img = imageBox(atGap: pos) { return img.textStart }   // on a gap → into the caption
+        if let img = mediaBox(atGap: pos) { return img.textStart }   // on a gap → into the caption
         return min(pos + 1, documentSize)
     }
 
@@ -30,7 +30,7 @@ extension DocumentCanvasView {
             if i > 0 { return regions[i - 1].globalStart + regions[i - 1].length }
             return pos
         }
-        if let img = imageBox(atGap: pos) {   // on a gap → previous block's text end, or doc start
+        if let img = mediaBox(atGap: pos) {   // on a gap → previous block's text end, or doc start
             if let idx = boxIndex(of: img), idx > 0 { return boxes[idx - 1].textStart + boxes[idx - 1].textLength }
             return 0
         }
@@ -62,7 +62,7 @@ extension DocumentCanvasView {
         // Candidate renderable slots: each leaf region's start and end, plus each image gap.
         var candidates: [Int] = []
         for r in allLeafRegions() { candidates.append(r.globalStart); candidates.append(r.globalStart + r.length) }
-        for box in boxes where box is ImageBlockBox { candidates.append(box.nodeStart) }
+        for box in boxes where box is MediaBlockBox { candidates.append(box.nodeStart) }
         guard !candidates.isEmpty else { return p }
         let atOrAfter = candidates.filter { $0 >= p }.min()
         let atOrBefore = candidates.filter { $0 <= p }.max()
@@ -76,7 +76,7 @@ extension DocumentCanvasView {
         guard let idx = boxIndex(of: table), idx + 1 < boxes.count else { return nil }
         let next = boxes[idx + 1]
         if let t = next as? TableBlockBox { return t.cellTextStart(row: 0, column: 0) }
-        if next is ImageBlockBox { return next.nodeStart }
+        if next is MediaBlockBox { return next.nodeStart }
         return next.textStart
     }
 
@@ -95,7 +95,7 @@ extension DocumentCanvasView {
             let col = min(max(preferColumn, 0), max(t.columnCount - 1, 0))
             return t.cellTextStart(row: t.rowCount - 1, column: col) ?? box.textStart + box.textLength
         }
-        if box is ImageBlockBox { return box.nodeStart }
+        if box is MediaBlockBox { return box.nodeStart }
         return box.textStart + box.textLength
     }
 
@@ -106,16 +106,16 @@ extension DocumentCanvasView {
         // the caption start. A geometric probe here is unsafe — the point just above/below the image can
         // land in a non-renderable inter-block slot, which `closestGlobalPosition` may resolve to a
         // structural position, hiding the caret (the reported "Up hides the caret" bug).
-        if let img = imageBox(atGap: pos), let idx = boxIndex(of: img) {
+        if let img = mediaBox(atGap: pos), let idx = boxIndex(of: img) {
             if down { return nextTextPosition(after: pos) }   // → caption start
             guard idx > 0 else { return pos }                 // leading image → nothing above to move to
             let above = boxes[idx - 1]
             // Into a table above, land under WHERE THE GAP CARET IS DRAWN: `caretRect` draws the gap bar at
-            // `imageRect().minX` (the image's leading edge), so map that same x (folding in any horizontal
+            // `mediaRect().minX` (the image's leading edge), so map that same x (folding in any horizontal
             // scroll) → a column. For a full-bleed image the leading edge is the page's left, i.e. column 0;
             // an aligned/narrow image follows the caret. Pure arithmetic over cached widths — no layout/async
             // dependency (does not reintroduce the determinism issue the scroll fix solved).
-            let col = (above as? TableBlockBox).map { $0.columnIndex(atX: img.imageRect().minX + $0.contentOffsetX) } ?? 0
+            let col = (above as? TableBlockBox).map { $0.columnIndex(atX: img.mediaRect().minX + $0.contentOffsetX) } ?? 0
             return entryPositionBottom(of: above, preferColumn: col)   // table → LAST row @col; image → gap; paragraph → end
         }
         guard let (region, local) = leafRegion(containingGlobal: pos) else { return pos }

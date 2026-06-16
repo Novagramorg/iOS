@@ -22,11 +22,11 @@ public struct StyleSheet {
 
     private func baseSize(_ style: ParagraphStyleName) -> CGFloat {
         switch style {
-        case .title: return 28
         case .heading1: return 24
-        case .heading2: return 20
-        case .heading3: return 18
+        case .heading2: return 21
+        case .heading3: return 19
         case .body, .quote: return 17
+        case .caption: return 15
         }
     }
 
@@ -34,21 +34,23 @@ public struct StyleSheet {
     private struct StyleMetrics { var spacingBefore: CGFloat; var spacingAfter: CGFloat; var lineHeightMultiple: CGFloat }
     private func metrics(for style: ParagraphStyleName) -> StyleMetrics {
         switch style {
-        case .title:    return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.05)
         case .heading1: return StyleMetrics(spacingBefore: 18, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading2: return StyleMetrics(spacingBefore: 16, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading3: return StyleMetrics(spacingBefore: 14, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .body:     return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
+        case .caption:  return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
         case .quote:    return StyleMetrics(spacingBefore: 8,  spacingAfter: 8, lineHeightMultiple: 1.10)
         }
     }
 
     public func font(for style: ParagraphStyleName, attributes: CharacterAttributes) -> UIFont {
         let size = attributes.fontSize.map { CGFloat($0) } ?? baseSize(style)
-        let bold = attributes.bold || style == .title || style == .heading1
-            || style == .heading2 || style == .heading3
+        // Headings are NOT bold by default — they read as regular-weight serif at a larger size.
+        // Bold is purely user emphasis (`CharacterAttributes.bold`), so it stays an independent toggle
+        // that round-trips uniformly in every style (no style-injected weight to leak into the model).
+        let bold = attributes.bold
         let italic = attributes.italic   // quote is upright; its bar/fill is a drawn canvas decoration (see DocumentCanvasView+Decorations)
-        let serif = style == .title || style == .heading1 || style == .heading2 || style == .heading3
+        let serif = style == .heading1 || style == .heading2 || style == .heading3
         return FontResolver.font(family: attributes.fontFamily, size: size, bold: bold, italic: italic, serif: serif)
     }
 

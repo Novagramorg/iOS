@@ -74,10 +74,15 @@ final class SelectionHandleView: UIView {
                       width: 2 * r, height: caret.height + 2 * r)
     }
 
+    /// The handle fill color. Defaults to `.tintColor` (prior behavior); set from the editor theme's accent.
+    var accentColor: UIColor = .tintColor {
+        didSet { setNeedsDisplay() }
+    }
+
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         let r = Self.knobRadius, sw = Self.stemWidth
-        UIColor.tintColor.setFill()
+        accentColor.setFill()
         // Stem: the caret-height portion of the bounds (the remaining 2r is the knob's room).
         ctx.fill(CGRect(x: bounds.midX - sw / 2, y: isStart ? 2 * r : 0, width: sw, height: bounds.height - 2 * r))
         // Knob: a filled circle at the top (START) or bottom (END).

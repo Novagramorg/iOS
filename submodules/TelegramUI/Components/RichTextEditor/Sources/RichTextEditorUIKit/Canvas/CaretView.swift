@@ -14,10 +14,15 @@ final class CaretView: UIView {
     /// idempotency of `DocumentCanvasView.updateCaretView` — a no-op update must not restart the blink.
     private(set) var blinkResetCount = 0
 
+    /// The caret fill color. Defaults to `.tintColor` (prior behavior); set from the editor theme's accent.
+    var accentColor: UIColor = .tintColor {
+        didSet { backgroundColor = accentColor }
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = false
-        backgroundColor = .tintColor
+        backgroundColor = accentColor
         layer.cornerRadius = 1
         isHidden = true
     }
@@ -25,7 +30,7 @@ final class CaretView: UIView {
 
     override func tintColorDidChange() {
         super.tintColorDidChange()
-        backgroundColor = .tintColor
+        backgroundColor = accentColor
     }
 
     /// Adds the repeating opacity blink (1 → 0, autoreversing) if it isn't already running. Solid at first.

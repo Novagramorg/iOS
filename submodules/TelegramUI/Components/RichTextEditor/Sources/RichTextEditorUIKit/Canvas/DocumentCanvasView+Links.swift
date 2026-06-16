@@ -30,7 +30,7 @@ extension DocumentCanvasView {
     func setLink(_ url: String) {
         applyCharacterAttribute { storage, range in
             storage.addAttribute(.link, value: url, range: range)
-            storage.addAttribute(.foregroundColor, value: UIColor.link, range: range)
+            storage.addAttribute(.foregroundColor, value: self.mapper.theme.accent, range: range)
             // No underline: reference design shows links as blue text only.
         }
     }
@@ -42,9 +42,15 @@ extension DocumentCanvasView {
             storage.removeAttribute(.link, range: range)
             // Defensive: storage written before 6a may carry a link underline; clear it.
             storage.removeAttribute(.underlineStyle, range: range)
-            // Match the mapper's default for unlinked runs (it writes (ca.foreground ?? .black)); don't
-            // removeAttribute(.foregroundColor) — that would leave live storage colorless until the next rebuild.
-            storage.addAttribute(.foregroundColor, value: UIColor.black, range: range)
+            // Restore the mapper's default unlinked-run foreground so the text renders like any other run
+            // (the mapper writes ca.foreground ?? primaryText, or secondaryText for .caption). We don't
+            // removeAttribute(.foregroundColor) — that would leave live storage colorless (black) until the
+            // next rebuild. KNOWN LIMITATION: this writes primaryText regardless of style, so removing a link
+            // inside a .caption run under a theme where primaryText != secondaryText leaves an explicit
+            // foreground that the read-back strip (which compares captions against secondaryText) won't clear,
+            // lightly polluting the model for that run. Latent until a host sets such a theme; revisit with the
+            // host-wiring work.
+            storage.addAttribute(.foregroundColor, value: self.mapper.theme.primaryText, range: range)
         }
     }
 

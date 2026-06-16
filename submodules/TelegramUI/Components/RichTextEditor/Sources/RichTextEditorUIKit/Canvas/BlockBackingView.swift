@@ -15,6 +15,15 @@ class BlockBackingView: UIView {
     /// canvas skip repainting an unchanged paragraph view. nil = never rendered (forces the first paint).
     var lastRenderedSignature: Int?
 
+    /// Test-only: counts repaint requests so a test can assert a reused view was actually asked to
+    /// repaint after a structural edit (the split/merge stale-bitmap regression — a reused view keeps
+    /// its old layer bitmap unless `setNeedsDisplay` is called). Passive; no production behavior change.
+    var setNeedsDisplayCountForTesting = 0
+    override func setNeedsDisplay() {
+        setNeedsDisplayCountForTesting += 1
+        super.setNeedsDisplay()
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
@@ -46,7 +55,7 @@ class BlockBackingView: UIView {
     func drawBlockSelection(in ctx: CGContext, box: CanvasBlock, from: Int, to: Int) {
         guard from != to else { return }
         let lo = min(from, to), hi = max(from, to)
-        UIColor.tintColor.withAlphaComponent(0.30).setFill()
+        (canvas?.mapper.theme.accent ?? .tintColor).withAlphaComponent(0.30).setFill()
         for region in box.leafRegions() {
             let a = max(lo, region.globalStart), b = min(hi, region.globalStart + region.length)
             guard a < b else { continue }

@@ -62,6 +62,39 @@ final class BlockViewTests: XCTestCase {
                           "setting a link changes the render signature (so a view-backed paragraph repaints)")
     }
 
+    func test_splitParagraph_repaintsTheReusedUpperView() {
+        // Splitting a paragraph (Return mid-text) replaces the surviving UPPER block's BlockBox with a
+        // brand-new instance (fresh BlockLayout, renderVersion == 0) that keeps the original BlockID — so
+        // the canvas REUSES the same BlockBackingView for it. The lower half gets a fresh BlockID + fresh
+        // view (always repaints). The upper view's repaint is gated by `renderSignature`, which encodes the
+        // per-instance `renderVersion` (a counter that resets to 0 for every new box). When the split keeps
+        // the upper block's HEIGHT and style unchanged and the prior render was at renderVersion 0, the new
+        // box's signature COLLIDES with the old one and the gate wrongly skips setNeedsDisplay — leaving the
+        // stale full-text bitmap. Height stays unchanged when the split paragraph already has a following
+        // sibling (its bottom inset is already the shrunk inter-paragraph value, before and after), so split
+        // the MIDDLE of three body paragraphs.
+        let v = DocumentCanvasView()
+        v.setParagraphs([
+            ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "First")]),
+            ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "HelloWorld")]),
+            ParagraphBlock(id: BlockID("c"), runs: [TextRun(text: "Third")]),
+        ], width: 300)
+        v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
+        v.simulateParentLayout()
+        let upperView = v.blockViews[BlockID("b")]!
+        let heightBefore = v.boxes[1].frame.height
+        let before = upperView.setNeedsDisplayCountForTesting
+        v.setCaret(global: v.boxes[1].textStart + 5)          // caret between "Hello" and "World"
+        v.insertText("\n")                                     // routes to insertParagraphBreak (split)
+        v.layoutIfNeeded()
+        XCTAssertTrue(v.blockViews[BlockID("b")] === upperView, "upper half keeps BlockID 'b' ⇒ same view reused")
+        XCTAssertEqual((v.boxes[1] as! BlockBox).textLength, 5, "upper box now holds the truncated 'Hello'")
+        XCTAssertEqual(v.boxes[1].frame.height, heightBefore, accuracy: 0.01,
+                       "precondition: the split keeps the upper block's height unchanged (so the signature collides — the bug path)")
+        XCTAssertGreaterThan(upperView.setNeedsDisplayCountForTesting, before,
+                             "the reused upper view must be repainted after the split (else it shows stale full text)")
+    }
+
     func test_selectionRects_regionFilter_excludesFilteredRegions() {
         let v = paragraphCanvas()
         let all = v.selectionRects(globalFrom: 0, globalTo: v.documentSizeValue)
@@ -76,11 +109,12 @@ final class BlockViewTests: XCTestCase {
             UIColor.systemBlue.setFill(); c.fill(CGRect(x: 0, y: 0, width: 100, height: 60)) } }
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Above")])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 100, height: 60),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 100, height: 60),
                               caption: [TextRun(text: "Cap")])),
             .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Below")])),
         ], width: 300)
         v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
+        v.simulateParentLayout()
         return v
     }
 
@@ -102,7 +136,7 @@ final class BlockViewTests: XCTestCase {
     func test_imageCaption_caretAndSelectionGeometryUnchanged() {
         let v = imageCanvas()
         let cap = v.allLeafRegions().first { $0.ref == .caption(BlockID("img")) }!
-        let imgBox = v.boxes[1] as! ImageBlockBox
+        let imgBox = v.boxes[1] as! MediaBlockBox
         let stripLeft = cap.canvasOrigin.x
         let stripRight = cap.canvasOrigin.x + imgBox.layoutWidth
         // Caption is CENTERED. The caret at the START of "Cap" is indented from the left edge, and the caret
@@ -140,18 +174,34 @@ final class BlockViewTests: XCTestCase {
         XCTAssertNotNil(image.cgImage)
     }
 
-    func test_fullBleedImageView_frameCoversTheBleed() {
+    /// A minimal hosted media view (the medium is now a host-supplied overlay view, not a CPU-drawn bitmap).
+    private final class StubMediaView: UIView, RichTextMediaItemView {
+        func update(size: CGSize) {}
+    }
+
+    func test_fullBleedMediaView_coversTheBleed() {
+        // The medium is now a host-supplied overlay view positioned at `mediaRect()` (not drawn into the
+        // block's backing store), so the bleed is covered by THAT view, not the block backing view. The
+        // block backing view is now caption-only (blockViewFrame == frame).
         let v = imageCanvas()
-        let imgBox = v.boxes[1] as! ImageBlockBox
-        let r = imgBox.imageRect()
+        v.mediaViewProvider = { _, _ in StubMediaView() }
+        v.setNeedsLayout(); v.layoutIfNeeded()
+        let imgBox = v.boxes[1] as! MediaBlockBox
+        let r = imgBox.mediaRect()
         XCTAssertLessThan(r.minX, imgBox.frame.minX, "a top-level image bleeds left past its inset content frame")
         XCTAssertGreaterThan(r.maxX, imgBox.frame.maxX, "...and right past it")
-        // The block view's FRAME must cover the bleed: a UIView's own draw is confined to its bounds-sized
-        // backing store, so a frame == the inset layout-frame would silently clip the bleed (clipsToBounds
-        // does NOT affect own-draw). This is the regression the earlier clipsToBounds=false "fix" missed.
-        let view = v.blockViews[BlockID("img")]!
-        XCTAssertLessThanOrEqual(view.frame.minX, r.minX + 0.01, "view frame covers the left bleed")
-        XCTAssertGreaterThanOrEqual(view.frame.maxX, r.maxX - 0.01, "view frame covers the right bleed")
+        // The block backing view is now the inset frame only (the medium overlays it separately).
+        // UIKit pixel-rounds view frames, so compare at 0.01pt.
+        let blockView = v.blockViews[BlockID("img")]!
+        XCTAssertEqual(blockView.frame.minX, imgBox.frame.minX, accuracy: 0.01, "block backing view is caption-only (no longer covers the bleed)")
+        XCTAssertEqual(blockView.frame.minY, imgBox.frame.minY, accuracy: 0.01)
+        XCTAssertEqual(blockView.frame.width, imgBox.frame.width, accuracy: 0.01)
+        XCTAssertEqual(blockView.frame.height, imgBox.frame.height, accuracy: 0.01)
+        // The hosted media view is positioned at mediaRect() and so covers the full bleed.
+        let media = v.hostedMediaViewForTesting(BlockID("img"))
+        XCTAssertNotNil(media, "a registered provider realizes a hosted media view")
+        XCTAssertEqual(media!.frame.minX, r.minX, accuracy: 0.01, "media view covers the left bleed")
+        XCTAssertEqual(media!.frame.maxX, r.maxX, accuracy: 0.01, "media view covers the right bleed")
     }
 
     func test_blockView_isReusedAcrossEditAndUndo() {

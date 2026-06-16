@@ -40,12 +40,6 @@ final class TableBlockBox: CanvasBlock {
     /// (Step 2). Tunable via the demo screenshot. Columns still scale-to-fit while every column stays at or
     /// above this; once one would drop below it, the table keeps its natural width and scrolls.
     static let minColumnWidth: CGFloat = 100
-    static let gridColor = UIColor { tc in
-        tc.userInterfaceStyle == .dark ? UIColor(white: 0.27, alpha: 1) : UIColor(white: 0.88, alpha: 1)  // ≈#E0E0E0 light
-    }
-    /// Header-row (row 0) background tint: gray at 0.1 alpha.
-    static let headerRowBackground = UIColor(white: 0.5, alpha: 0.1)
-
     init(table: TableBlock, mapper: AttributedStringMapper, width: CGFloat) {
         id = table.id
         columns = table.columns
@@ -61,7 +55,7 @@ final class TableBlockBox: CanvasBlock {
                 BlockStack(boxes: c.blocks.compactMap { block in
                     switch block {
                     case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: 100)
-                    case .image(let img): return ImageBlockBox(image: img, mapper: mapper, width: 100)
+                    case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: 100)
                     case .table: return nil   // no nested tables in v1
                     }
                 })
@@ -333,7 +327,7 @@ final class TableBlockBox: CanvasBlock {
         // Header-row tint, clipped to the rounded border so the top corners round with the table.
         if let headerRect = headerRowBackgroundRect() {
             ctx.saveGState(); outer.addClip()
-            TableBlockBox.headerRowBackground.setFill(); ctx.fill(headerRect)
+            mapper.theme.tableHeaderBackground.setFill(); ctx.fill(headerRect)
             ctx.restoreGState()
         }
         var y = frame.minY + TableBlockBox.border
@@ -352,7 +346,7 @@ final class TableBlockBox: CanvasBlock {
             y += rowHeights[r] + TableBlockBox.border
         }
         // grid lines (interior dividers + outer border), using cached geometry
-        TableBlockBox.gridColor.setStroke()
+        mapper.theme.tableBorder.setStroke()
         ctx.setLineWidth(TableBlockBox.border)
         if columnWidths.count > 1 {
             var cx = frame.minX + TableBlockBox.border

@@ -10,17 +10,64 @@ final class MapperTests: XCTestCase {
     func test_characterAttributes_roundTripThroughDict() {
         // No link here: a link deliberately suppresses foreground/underline on read-back (covered by
         // AttributedStringMapperLinkTests), so those fields are exercised here on an unlinked run.
+        // Use a NON-default foreground (red) so it round-trips as explicit — an explicit color equal to the
+        // theme's default would be stripped to nil (that behavior is covered by its own test below).
         let ca = CharacterAttributes(bold: true, italic: true, underline: true, strikethrough: true,
-                                     fontSize: 18, foreground: .black,
+                                     fontSize: 18, foreground: RGBAColor(red: 1, green: 0, blue: 0),
                                      highlight: RGBAColor(red: 1, green: 1, blue: 0),
                                      baselineOffset: 4)
         let dict = mapper.attributes(for: ca, style: .body)
         let back = mapper.characterAttributes(from: dict)
         XCTAssertTrue(back.bold); XCTAssertTrue(back.italic)
         XCTAssertTrue(back.underline); XCTAssertTrue(back.strikethrough)
-        XCTAssertNotNil(back.foreground)
+        XCTAssertEqual(back.foreground, RGBAColor(red: 1, green: 0, blue: 0))
         XCTAssertEqual(back.baselineOffset ?? 0, 4, accuracy: 0.01)
         XCTAssertNotNil(back.highlight)
+    }
+
+    func test_uncoloredRun_staysNilThroughRoundTrip() {
+        // A run with no explicit color renders in the theme default but must read back as nil (unset),
+        // so re-theming recolors it and serialization stays clean.
+        let dict = mapper.attributes(for: CharacterAttributes(), style: .body)
+        XCTAssertEqual(dict[.foregroundColor] as? UIColor, RichTextEditorTheme.default.primaryText,
+                       "un-colored body text renders in the primary text color")
+        let back = mapper.characterAttributes(from: dict, style: .body)
+        XCTAssertNil(back.foreground, "the injected default must be stripped back to nil")
+    }
+
+    func test_explicitColorEqualToDefault_isStripped() {
+        // An explicit foreground that happens to equal the theme default is indistinguishable from the
+        // injected default and is stripped to nil (visually identical, and re-themable). Documented behavior.
+        let ca = CharacterAttributes(foreground: RichTextEditorTheme.default.primaryText.rgba)
+        let dict = mapper.attributes(for: ca, style: .body)
+        let back = mapper.characterAttributes(from: dict, style: .body)
+        XCTAssertNil(back.foreground)
+    }
+
+    func test_captionUsesSecondaryDefault_andStripsIt() {
+        let theme = RichTextEditorTheme(primaryText: .red, secondaryText: .blue, placeholder: .placeholderText,
+                                        accent: .green, tableBorder: .gray, tableHeaderBackground: .gray)
+        let m = AttributedStringMapper(theme: theme)
+        // Caption renders in secondary; body renders in primary.
+        XCTAssertEqual(m.attributes(for: CharacterAttributes(), style: .caption)[.foregroundColor] as? UIColor, UIColor.blue)
+        XCTAssertEqual(m.attributes(for: CharacterAttributes(), style: .body)[.foregroundColor] as? UIColor, UIColor.red)
+        // The caption default is stripped only when read back WITH the caption style.
+        let captionDict = m.attributes(for: CharacterAttributes(), style: .caption)
+        XCTAssertNil(m.characterAttributes(from: captionDict, style: .caption).foreground)
+        // Reading the caption dict back with the WRONG style (body) must NOT strip the secondary color —
+        // guards against a caller forgetting to pass .caption (e.g. MediaBlockBox captions).
+        XCTAssertNotNil(m.characterAttributes(from: captionDict, style: .body).foreground,
+                        "caption secondary must not be stripped when read back as body style")
+    }
+
+    func test_linkUsesAccentColor() {
+        let theme = RichTextEditorTheme(primaryText: .black, secondaryText: .black, placeholder: .placeholderText,
+                                        accent: .green, tableBorder: .gray, tableHeaderBackground: .gray)
+        let m = AttributedStringMapper(theme: theme)
+        let dict = m.attributes(for: CharacterAttributes(link: "https://example.com"), style: .body)
+        XCTAssertEqual(dict[.foregroundColor] as? UIColor, UIColor.green)
+        // Link foreground is render-only and never captured into the model.
+        XCTAssertNil(m.characterAttributes(from: dict, style: .body).foreground)
     }
 
     func test_paragraphBlock_roundTripsRuns() {

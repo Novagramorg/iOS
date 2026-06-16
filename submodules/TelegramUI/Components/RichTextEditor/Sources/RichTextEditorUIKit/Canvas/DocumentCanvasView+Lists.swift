@@ -17,14 +17,18 @@ extension DocumentCanvasView {
     struct ListMarkerDraw { let label: String; let origin: CGPoint; let font: UIFont; let id: BlockID }
 
     /// Stamps each top-level list box with its Core-computed marker label and flags each as
-    /// `isTopLevelBlock` (the top-level placeholder gate). Called during layout so a box can draw its
-    /// own marker. Table-cell boxes are intentionally NOT stamped (parity: markers in cells aren't
-    /// drawn today, and cell paragraphs draw no placeholder).
+    /// `isTopLevelBlock` (the top-level placeholder gate) and `isLastBlock` (the last-line gate for the
+    /// body placeholder). Called during layout so a box can draw its own marker. Table-cell boxes are
+    /// intentionally NOT stamped (parity: markers in cells aren't drawn today, and cell paragraphs draw
+    /// no placeholder).
     func stampListMarkers() {
         let labels = listMarkerLabels()
+        let last = boxes.last
         for case let p as BlockBox in boxes {
             p.isTopLevelBlock = true
+            p.isLastBlock = (p === last)
             p.resolvedListMarker = labels[p.id]
+            p.placeholders = self.placeholders
         }
     }
 

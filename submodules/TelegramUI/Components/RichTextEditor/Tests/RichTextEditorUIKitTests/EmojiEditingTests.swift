@@ -64,11 +64,11 @@ final class EmojiEditingTests: XCTestCase {
         let c = DocumentCanvasView()
         c.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "ab")])),
-            .image(ImageBlock(id: BlockID("i1"), assetID: "a", naturalSize: Size2D(width: 10, height: 10))),
+            .media(MediaBlock(id: BlockID("i1"), mediaID: "a", naturalSize: Size2D(width: 10, height: 10))),
         ], width: 320)
         c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         c.layoutIfNeeded()
-        guard let gap = c.boxes.first(where: { $0 is ImageBlockBox })?.nodeStart else { return XCTFail("no image") }
+        guard let gap = c.boxes.first(where: { $0 is MediaBlockBox })?.nodeStart else { return XCTFail("no image") }
         c.anchor = gap; c.head = gap   // the image gap (region-less but renderable)
         let before = c.currentBlocks().count
         c.insertEmoji(id: "star", altText: nil)
