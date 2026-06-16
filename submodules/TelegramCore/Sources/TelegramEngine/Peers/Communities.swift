@@ -384,11 +384,45 @@ func _internal_toggleCommunityParticipantBanned(account: Account, communityId: P
     |> switchToLatest
 }
 
+private func applyCommunityCollapsedInDialogs(transaction: Transaction, communityId: PeerId, collapsed: Bool) {
+    if var community = transaction.getPeer(communityId) as? TelegramCommunity {
+        community = community.withUpdatedCollapsedInDialogs(collapsed)
+        transaction.updatePeersInternal([community]) { _, peer in
+            return peer
+        }
+        updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: nil)
+    }
+    if let cachedData = transaction.getPeerCachedData(peerId: communityId) as? CachedCommunityData {
+        var linkedPeerIds = Set<PeerId>()
+        for linkedPeer in cachedData.linkedPeers {
+            if linkedPeer.peerId != communityId {
+                linkedPeerIds.insert(linkedPeer.peerId)
+            }
+        }
+        for peerId in linkedPeerIds {
+            if collapsed {
+                transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
+            } else if shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: peerId) {
+                transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
+            } else if let peer = transaction.getPeer(peerId) {
+                transaction.updatePeerChatListInclusion(peerId, inclusion: .ifHasMessagesOrOneOf(
+                    groupId: .root,
+                    pinningIndex: transaction.getPeerChatListIndex(peerId)?.1.pinningIndex,
+                    minTimestamp: minTimestampForPeerInclusion(peer)
+                ))
+            }
+        }
+    }
+}
+
 func _internal_toggleCommunityCollapsedInDialogs(account: Account, communityId: PeerId, collapsed: Bool) -> Signal<Never, CommunityCollapsedInDialogsError> {
     return account.postbox.transaction { transaction -> Signal<Never, CommunityCollapsedInDialogsError> in
         guard let inputCommunity = communityInputChannel(transaction: transaction, communityId: communityId) else {
             return .fail(.generic)
         }
+
+        let previousCollapsed = (transaction.getPeer(communityId) as? TelegramCommunity)?.collapsedInDialogs ?? false
+        applyCommunityCollapsedInDialogs(transaction: transaction, communityId: communityId, collapsed: collapsed)
 
         let flags: Int32 = collapsed ? (1 << 0) : 0
         return account.network.request(Api.functions.communities.toggleCommunityCollapsedInDialogs(flags: flags, community: inputCommunity))
@@ -398,37 +432,19 @@ func _internal_toggleCommunityCollapsedInDialogs(account: Account, communityId: 
         |> mapToSignal { updates -> Signal<Never, CommunityCollapsedInDialogsError> in
             account.stateManager.addUpdates(updates)
             return account.postbox.transaction { transaction -> Void in
-                if var community = transaction.getPeer(communityId) as? TelegramCommunity {
-                    community = community.withUpdatedCollapsedInDialogs(collapsed)
-                    transaction.updatePeersInternal([community]) { _, peer in
-                        return peer
-                    }
-                    updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: nil)
-                }
-                if let cachedData = transaction.getPeerCachedData(peerId: communityId) as? CachedCommunityData {
-                    var linkedPeerIds = Set<PeerId>()
-                    for linkedPeer in cachedData.linkedPeers {
-                        if linkedPeer.peerId != communityId {
-                            linkedPeerIds.insert(linkedPeer.peerId)
-                        }
-                    }
-                    for peerId in linkedPeerIds {
-                        if collapsed {
-                            transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
-                        } else if shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: peerId) {
-                            transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
-                        } else if let peer = transaction.getPeer(peerId) {
-                            transaction.updatePeerChatListInclusion(peerId, inclusion: .ifHasMessagesOrOneOf(
-                                groupId: .root,
-                                pinningIndex: transaction.getPeerChatListIndex(peerId)?.1.pinningIndex,
-                                minTimestamp: minTimestampForPeerInclusion(peer)
-                            ))
-                        }
-                    }
-                }
+                applyCommunityCollapsedInDialogs(transaction: transaction, communityId: communityId, collapsed: collapsed)
             }
             |> castError(CommunityCollapsedInDialogsError.self)
             |> ignoreValues
+        }
+        |> `catch` { error -> Signal<Never, CommunityCollapsedInDialogsError> in
+            return account.postbox.transaction { transaction -> Void in
+                applyCommunityCollapsedInDialogs(transaction: transaction, communityId: communityId, collapsed: previousCollapsed)
+            }
+            |> castError(CommunityCollapsedInDialogsError.self)
+            |> mapToSignal { _ -> Signal<Never, CommunityCollapsedInDialogsError> in
+                return .fail(error)
+            }
         }
     }
     |> castError(CommunityCollapsedInDialogsError.self)

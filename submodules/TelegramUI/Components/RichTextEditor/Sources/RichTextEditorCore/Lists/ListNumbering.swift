@@ -30,6 +30,10 @@ public enum ListNumbering {
                 counters[level] += 1
                 resetDeeper(than: level)
                 result[block.id] = orderedLabel(value: counters[level], level: level)
+            case .checklist:
+                resetDeeper(than: level)
+                counters[level] = 0        // checkboxes don't count
+                result[block.id] = (list.checked == true) ? "☑" : "☐"
             }
         }
         return result
