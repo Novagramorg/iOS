@@ -60,6 +60,73 @@ final class EmojiEditingTests: XCTestCase {
         XCTAssertNil(firstEmojiRun(c))
     }
 
+    // MARK: - Backspace deletes a whole grapheme cluster (standard Unicode emoji)
+
+    /// The text of the first paragraph block.
+    private func firstParagraphText(_ c: DocumentCanvasView) -> String? {
+        c.currentBlocks().compactMap { b -> ParagraphBlock? in
+            if case let .paragraph(p) = b { return p }; return nil
+        }.first?.text
+    }
+
+    private func caretToEnd(_ c: DocumentCanvasView) {
+        let end = c.boxes[0].textStart + c.boxes[0].textLength
+        c.anchor = end; c.head = end
+    }
+
+    func test_deleteBackward_removesWholeSurrogatePairEmoji() {
+        let c = makeCanvas(text: "a\u{1F600}")   // "a😀" — 😀 is 2 UTF-16 units
+        caretToEnd(c)
+        c.deleteBackward()
+        XCTAssertEqual(firstParagraphText(c), "a", "the whole emoji is removed, not one surrogate half")
+    }
+
+    func test_deleteBackward_removesWholeZWJSequence() {
+        let c = makeCanvas(text: "a\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}")  // "a👨‍👩‍👧‍👦"
+        caretToEnd(c)
+        c.deleteBackward()
+        XCTAssertEqual(firstParagraphText(c), "a", "the whole ZWJ family emoji is removed as one unit")
+    }
+
+    func test_deleteBackward_removesWholeSkinToneEmoji() {
+        let c = makeCanvas(text: "a\u{1F44D}\u{1F3FD}")   // "a👍🏽" — thumbs-up + skin-tone modifier
+        caretToEnd(c)
+        c.deleteBackward()
+        XCTAssertEqual(firstParagraphText(c), "a", "the base emoji and its skin-tone modifier are removed together")
+    }
+
+    func test_deleteBackward_removesWholeFlagEmoji() {
+        let c = makeCanvas(text: "a\u{1F1FA}\u{1F1F8}")   // "a🇺🇸" — regional indicator pair
+        caretToEnd(c)
+        c.deleteBackward()
+        XCTAssertEqual(firstParagraphText(c), "a", "a regional-indicator flag is removed as one unit")
+    }
+
+    func test_deleteBackward_partialGraphemeSelection_removesWholeEmoji() {
+        // The OS can request a backspace as a RANGE delete covering only one half of a surrogate pair
+        // (observed: selFrom/selTo split the emoji). Deleting it verbatim leaves a stray code unit.
+        let c = makeCanvas(text: "a\u{1F600}")   // "a😀" — a(0..1), 😀(1..3)
+        let base = c.boxes[0].textStart
+        c.anchor = base + 2; c.head = base + 3   // selection of ONLY the low surrogate half
+        c.deleteBackward()
+        XCTAssertEqual(firstParagraphText(c), "a", "a partial-grapheme selection delete removes the whole emoji, not half")
+    }
+
+    func test_insertText_overPartialGraphemeSelection_replacesWholeEmoji() {
+        let c = makeCanvas(text: "a\u{1F600}b")   // "a😀b"
+        let base = c.boxes[0].textStart
+        c.anchor = base + 2; c.head = base + 3    // partial emoji
+        c.insertText("X")
+        XCTAssertEqual(firstParagraphText(c), "aXb", "typing over a partial-grapheme selection replaces the whole emoji")
+    }
+
+    func test_deleteBackward_plainASCII_removesOneChar() {
+        let c = makeCanvas(text: "abc")
+        caretToEnd(c)
+        c.deleteBackward()
+        XCTAssertEqual(firstParagraphText(c), "ab", "a plain character still deletes one at a time")
+    }
+
     func test_insertEmoji_atImageGap_isNoOp() {
         let c = DocumentCanvasView()
         c.setBlocks([

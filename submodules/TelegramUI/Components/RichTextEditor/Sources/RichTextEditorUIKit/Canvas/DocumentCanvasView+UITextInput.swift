@@ -249,6 +249,41 @@ extension DocumentCanvasView: UIKeyInput {
         editing { applyReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
     }
 
+    /// The number of UTF-16 units the composed character sequence (grapheme cluster) immediately
+    /// before the caret at global position `head` occupies. Backspace deletes this many units so a
+    /// multi-unit emoji — a surrogate-pair scalar, a ZWJ sequence, a skin-tone / flag / variation-
+    /// selector combo — is removed as ONE unit instead of one code unit (which would orphan the rest
+    /// and render "part" of the emoji). Within a leaf region the global axis is 1:1 with UTF-16, and a
+    /// grapheme never spans regions, so `head - n` stays in the same region. Returns 1 when the region
+    /// can't be resolved (the safe single-unit fallback); a custom-emoji `U+FFFC` and any plain BMP
+    /// character are single-unit clusters, so this is a no-op for them. Caller guarantees `local > 0`.
+    func graphemeClusterLengthBeforeCaret(global head: Int) -> Int {
+        guard let (region, local) = leafRegion(containingGlobal: head), local > 0 else { return 1 }
+        let s = region.layout.attributedString.string as NSString
+        guard local <= s.length else { return 1 }
+        let r = s.rangeOfComposedCharacterSequence(at: local - 1)
+        return max(1, local - r.location)
+    }
+
+    /// Expands a global range so neither endpoint sits INSIDE a composed character sequence: `from` snaps
+    /// DOWN to its cluster start, `to` snaps UP to its cluster end. The OS can request a delete/replace of a
+    /// PARTIAL grapheme — notably a backspace arriving as a 1-UTF-16-unit range covering only one half of a
+    /// surrogate-pair emoji (`selFrom≠selTo`) — and deleting it verbatim leaves a stray code unit (a
+    /// "service character"). A grapheme never spans leaf regions, so each endpoint is snapped within its own
+    /// region; a range already on boundaries (the common case) is returned unchanged.
+    func rangeExpandedToGraphemeBoundaries(globalFrom: Int, globalTo: Int) -> (from: Int, to: Int) {
+        func snap(_ g: Int, up: Bool) -> Int {
+            guard let (region, local) = leafRegion(containingGlobal: g), local > 0 else { return g }
+            let s = region.layout.attributedString.string as NSString
+            guard local < s.length else { return g }
+            let r = s.rangeOfComposedCharacterSequence(at: local)
+            guard r.location != local else { return g }   // already on a cluster boundary
+            return region.globalStart + (up ? r.location + r.length : r.location)
+        }
+        let lo = min(globalFrom, globalTo), hi = max(globalFrom, globalTo)
+        return (snap(lo, up: false), snap(hi, up: true))
+    }
+
     func deleteBackward() {
         if markedRange != nil { commitMarkedText() }   // delete acts on committed text, not the composition
         guard !boxes.isEmpty else { return }
@@ -259,7 +294,8 @@ extension DocumentCanvasView: UIKeyInput {
         if isInsideTable(head) {
             guard let active = activeStack(at: head) else { return }
             if active.local > 0 {
-                editing { applyLeafReplace(globalFrom: head - 1, globalTo: head, text: "") }
+                let n = graphemeClusterLengthBeforeCaret(global: head)
+                editing { applyLeafReplace(globalFrom: head - n, globalTo: head, text: "") }
             } else if active.index > 0 {
                 editing { mergeParagraphs(in: active.stack, upperIndex: active.index - 1) }
             } else {
@@ -306,7 +342,8 @@ extension DocumentCanvasView: UIKeyInput {
         if pos.box is MediaBlockBox, pos.local == 0 {        // caption start → delete the image
             editing { deleteImageBox(at: pos.index) }
         } else if pos.local > 0 {
-            editing { applyReplace(globalFrom: head - 1, globalTo: head, text: "") }
+            let n = graphemeClusterLengthBeforeCaret(global: head)
+            editing { applyReplace(globalFrom: head - n, globalTo: head, text: "") }
         } else if pos.index > 0, boxes[pos.index - 1] is MediaBlockBox {
             editing { deleteImageBox(at: pos.index - 1) }     // start of a block after an image
         } else if pos.index > 0, boxes[pos.index - 1] is TableBlockBox {

@@ -17,6 +17,15 @@ public extension RichTextEditorView {
     /// Commit any pending marked/predictive text before send. The range return value is not needed by the host.
     func finalizeComposerMarkedText() { _ = self.canvas.finalizeMarkedText() }
 
+    /// The selection in the chat composer's flat UTF-16 coordinate space (the document's paragraphs joined
+    /// by "\n", matching `ComposerDocumentBridge`). The host reads it to track the caret and writes it to
+    /// move the caret after a programmatic insert/replace; without a real mapping the host is selection-blind
+    /// (the caret never advances and a surrogate-pair emoji is split on edit, leaving a stray code unit).
+    var composerSelectedRange: NSRange {
+        get { self.canvas.composerSelectedRange }
+        set { self.canvas.composerSelectedRange = newValue }
+    }
+
     /// Reload the editing surface's input views (after changing `customInputView`).
     func reloadComposerInputViews() { self.canvas.reloadInputViews() }
 

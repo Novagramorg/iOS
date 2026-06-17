@@ -259,11 +259,17 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var inputContentOffset: CGPoint { self.editorView.composerContentOffset }
     public func setInputScrollIndicatorInsets(_ insets: UIEdgeInsets) { self.editorView.setComposerScrollIndicatorInsets(insets) }
 
-    // MARK: Stubs — Phase 2+ (selection geometry, spoilers, typing attrs, language, theme fidelity)
+    /// The caret/selection in the composer's flat UTF-16 coordinate space (paragraphs joined by "\n",
+    /// matching `ComposerDocumentBridge`). The panel reads this to know where to insert/replace and writes
+    /// it to move the caret after an edit, so it MUST reflect the editor's real selection — a stub (e.g.
+    /// always end-of-text + no-op setter) makes the panel selection-blind: the caret never advances after a
+    /// programmatic insert and a surrogate-pair emoji gets split on edit, leaving a stray "service character".
     public var selectedRange: NSRange {
-        get { NSRange(location: (self.text as NSString).length, length: 0) }
-        set { }
+        get { self.editorView.composerSelectedRange }
+        set { self.editorView.composerSelectedRange = newValue }
     }
+
+    // MARK: Stubs — Phase 2+ (selection geometry, spoilers, typing attrs, language, theme fidelity)
     public var selectionRect: CGRect { .zero }
     public func firstSelectionRect(forCharacterRange characterRange: NSRange) -> CGRect? { nil }
     public func currentCaretRect() -> CGRect? { nil }

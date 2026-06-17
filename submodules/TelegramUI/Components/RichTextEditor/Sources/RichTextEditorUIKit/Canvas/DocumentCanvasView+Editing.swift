@@ -12,8 +12,15 @@ extension DocumentCanvasView {
         dismissEditMenuForSelectionOrTextChange()   // the text is about to change → close any open menu (native UITextView)
         let before = currentBlocks()
         let beforeAnchor = anchor, beforeHead = head
+        // Every edit also moves the caret, so bracket the SELECTION change too — not just the text change.
+        // Without this the OS keeps a stale `selectedTextRange` after a programmatic edit (custom emoji
+        // keyboard insert / delete), so the caret appears not to advance and the next insert lands at the
+        // wrong spot (leaving a stray U+FFFC "service character"). Mirrors `reload`. System-driven keystrokes
+        // already let UIKit own the selection; the extra notification there is harmless (matches UITextView).
         textInputDelegate?.textWillChange(self)
+        textInputDelegate?.selectionWillChange(self)
         body()
+        textInputDelegate?.selectionDidChange(self)
         textInputDelegate?.textDidChange(self)
         registerUndo(snapshot: before, anchor: beforeAnchor, head: beforeHead)
         recomputeDocumentHasSpoilers()   // an edit (toggleSpoiler/delete/paste/insert/structural) may add or remove the last spoiler — refresh the syncSpoilers gate before refreshSelectionUI runs it
@@ -31,9 +38,11 @@ extension DocumentCanvasView {
             let redo = target.currentBlocks()
             let redoAnchor = target.anchor, redoHead = target.head
             target.textInputDelegate?.textWillChange(target)
+            target.textInputDelegate?.selectionWillChange(target)   // undo moves the caret too — keep the OS in sync (see editing)
             target.setBlocks(blocks, width: target.effectiveWidth)
             target.anchor = min(anchor, target.documentSize)
             target.head = min(head, target.documentSize)
+            target.textInputDelegate?.selectionDidChange(target)
             target.textInputDelegate?.textDidChange(target)
             target.registerUndo(snapshot: redo, anchor: redoAnchor, head: redoHead)
             target.notifyContentSizeChanged()
@@ -188,6 +197,9 @@ extension DocumentCanvasView {
     /// insert-image's pre-clear) MUST route through here so none drives a cross-stack range into
     /// `applyReplace`'s same-stack guard (which would silently no-op). Caller wraps in `editing { … }`.
     func applySelectionReplace(globalFrom: Int, globalTo: Int, text: String) {
+        // Never delete/replace a PARTIAL grapheme (e.g. one half of a surrogate-pair emoji, which the OS can
+        // request on backspace as a 1-unit range) — expand to whole clusters so no stray code unit is left.
+        let (globalFrom, globalTo) = rangeExpandedToGraphemeBoundaries(globalFrom: globalFrom, globalTo: globalTo)
         if selectionEndpointsEditableTopLevel(globalFrom, globalTo) || bothInSameCellStack(globalFrom, globalTo) {
             applyReplace(globalFrom: globalFrom, globalTo: globalTo, text: text)
         } else {

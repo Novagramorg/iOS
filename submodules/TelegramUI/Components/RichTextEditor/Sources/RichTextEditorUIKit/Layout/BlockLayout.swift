@@ -183,10 +183,17 @@ final class BlockLayout: BlockLayoutEngine {
         // that line even if a longer line above has an end-caret that's horizontally nearer (e.g.
         // tapping the empty space to the right of a short last line). `dy` is the vertical distance to
         // the caret's line band (0 when the tap is inside it); ties on the same line break on `dx`.
+        let ns = attributedString.string as NSString
         var best = 0
         var bestDy = CGFloat.greatestFiniteMagnitude
         var bestDx = CGFloat.greatestFiniteMagnitude
         for offset in 0...length {
+            // Skip offsets INSIDE a composed character sequence (a surrogate-pair / ZWJ / variation-selector
+            // emoji is ONE caret stop). A mid-cluster caret would let a later insert/delete split the cluster,
+            // leaving a stray code unit (the "service character"). Endpoints (0, length) are always stops.
+            if offset > 0, offset < length, ns.rangeOfComposedCharacterSequence(at: offset).location != offset {
+                continue
+            }
             let caret = caretRect(atOffset: offset)
             let dy = point.y < caret.minY ? caret.minY - point.y
                    : point.y > caret.maxY ? point.y - caret.maxY : 0

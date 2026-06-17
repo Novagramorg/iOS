@@ -154,6 +154,17 @@ The façade is now driven by its host rather than self-laying-out:
 - `deleteTable()` — removes the caret's table (one undo step; caret lands on the successor block, or a fresh
   empty paragraph if it was the only block). No-op when not in a table. (Caret-based; a structural-selection
   delete is deferred.)
+- `composerSelectedRange: NSRange { get set }` — the selection in the **chat composer's flat UTF-16
+  coordinate space** (the document's top-level paragraphs joined by `"\n"`, exactly the
+  `ComposerDocumentBridge` flattening; non-paragraph blocks contribute nothing). Maps that flat offset
+  to/from the editor's global selection axis (which carries non-renderable structural slots between blocks),
+  collapsing each paragraph break to one `"\n"` so a multi-UTF-16-unit emoji + the separators line up 1:1
+  with what `ChatTextInputPanelNode` inserts. **This is load-bearing for the chat composer:**
+  `RichTextEditorChatInputNode.selectedRange` forwards to it, and the panel drives ALL insert/replace/caret
+  moves off `selectedRange`. While it was a stub (getter = end-of-text, setter = no-op) the panel was
+  selection-blind — the caret never advanced after a programmatic insert and a surrogate-pair emoji was split
+  on a delete/insert cycle, leaving a stray code unit (a "service character"). The setter brackets
+  `selectionWillChange/DidChange` (programmatic move). Implemented in `DocumentCanvasView+ComposerSelection`.
 
 **Host edit-menu hook (added 2026-06-17, `RichTextEditorView` + `DocumentCanvasView+EditMenuActions`).**
 `contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?` lets a host **transform**
@@ -346,7 +357,11 @@ UIKit files.
   on a non-renderable structural slot.
 - **Any pure `anchor`/`head` change must bracket `inputDelegate.selectionWillChange/DidChange`** — else the
   OS keeps a stale `selectedTextRange` and the next hardware arrow navigates from the wrong spot.
-  (memory: `selection-changes-need-inputdelegate-bracket`)
+  (memory: `selection-changes-need-inputdelegate-bracket`) **This includes EDITS**, not just pure selection
+  moves: `editing { }` and the undo closure bracket BOTH `text*` and `selection*` (like `reload`), because
+  every edit also moves the caret. Omitting the selection bracket is invisible under system-keyboard typing
+  (UIKit owns the selection there) but breaks **programmatic** inserts — e.g. the custom emoji keyboard:
+  the caret appeared not to advance and a re-insert dropped a stray bare `U+FFFC` "service character".
 - **Any caret-moving op must fire `onSelectionChange`** so the host can scroll-follow the caret (the
   façade's `scrollCaretIntoView`). Over-firing is safe — it early-returns when already visible and scrolls
   **non-animated** (an animated scroll races the OS arrow dispatch → nondeterministic geometry).
@@ -363,6 +378,26 @@ UIKit files.
   1 UTF-16 position, so `DocumentTree`/`PositionResolver`/the editing engine/tokenizer are untouched.
   Host-provided `UIView`s are pooled by `instanceID`, hosted in the canvas overlay (body/caption) or the
   table's content view (cells, ride H-scroll), and culled.
+- **Caret placement snaps to composed-character boundaries — never mid-emoji.** `closestOffset(toPoint:)`
+  (both `BlockLayout` and `BlockLayoutTK1`) skips offsets INSIDE a composed character sequence (surrogate
+  pair / ZWJ / variation-selector emoji), so a tap can only land on a grapheme boundary. Without this a tap
+  near an emoji places the caret mid-cluster, and the next insert/delete (incl. via the chat composer's
+  `selectedRange`) splits the cluster → a stray code unit (the "service character"). Pairs with the
+  grapheme-aware `deleteBackward` below — both keep the editor surrogate-safe.
+- **Range delete/replace expands to whole grapheme clusters.** `applySelectionReplace` (THE chokepoint for
+  every selection-replacing edit — delete, type-over, paste, `replace(_:withText:)`) runs
+  `rangeExpandedToGraphemeBoundaries` first, so a range covering only PART of a composed sequence is widened
+  to the whole cluster. This is load-bearing for the **chat composer**: the OS delivers backspace there as a
+  RANGE delete (`selFrom≠selTo`) that can cover just one half of a surrogate-pair emoji — deleting it verbatim
+  left a lone surrogate (rendered `U+FFFD`), the composer "service character". The collapsed-caret
+  `deleteBackward` grapheme snap did NOT cover this path; the expansion does.
+- **Backspace deletes a whole grapheme cluster, not one UTF-16 unit.** `deleteBackward`'s in-place delete
+  (both the top-level and in-cell branches) removes `graphemeClusterLengthBeforeCaret(global:)` units, not a
+  hardcoded 1 — so a *standard* Unicode emoji typed from the system keyboard (surrogate-pair scalar, ZWJ
+  sequence, skin-tone / flag / variation-selector combo, all multi-UTF-16-unit) is removed as one unit
+  instead of leaving an orphaned half. Computed via `rangeOfComposedCharacterSequence` on the leaf region's
+  own string (the global axis is 1:1 with UTF-16 inside a region; a grapheme never spans regions). A
+  custom-emoji `U+FFFC` and any plain BMP char are single-unit clusters, so it's a no-op for them.
 - **Gesture arbitration is gate-only.** Handle/knob pan vs scroll pan is resolved *only* via
   `gestureRecognizerShouldBegin` — never `require(toFail:)` or forced simultaneous recognition. The
   single-tap recognizer fires immediately with manual multi-tap escalation in `handleTap` (no
