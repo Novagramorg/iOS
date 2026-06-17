@@ -1522,3 +1522,7 @@ Anchor (noyob Python): `let replyMessageSubject = strongSelf.presentationInterfa
 Logika: `auto_sticker_enabled` true + `messages` bo'sh emas + `messages[0]` `.message` case + `auto_sticker_data` base64 decode + `PostboxDecoder.decodeRootObject() as? TelegramMediaFile` → `FileMediaReference.standalone(media:).abstract` → yangi `EnqueueMessage.message(text:"", ...)` `messages` array oxiriga qo'shiladi.
 
 Anchor (noyob Python): `                    self.sendMessages(messages, silentPosting, scheduleTime, repeatPeriod, messages.count > 1, postpone)\n                }`.
+
+
+### `submodules/ItemListUI/Sources/Items/ItemListSwitchItem.swift` — titleBadge y-position fix — 2026-06-17
+Native `titleBadgeComponent` (NEW badge) y-position used `(contentSize.height - badge)/2` — the full row center. On rows WITH a subtitle the badge dropped onto the subtitle text and covered words ("auto-downl[NEW]all networks"). Changed to `titleNode.frame.minY + (titleNode.height - badge)/2` so the badge aligns to the title line regardless of subtitle. Title-only rows (ChannelStatsController) unaffected — math identical. Python.

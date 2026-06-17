@@ -601,7 +601,9 @@ public class ItemListSwitchItemNode: ListViewItemNode, ItemListItemNode {
                                 titleBadgeTransition = .immediate
                                 strongSelf.view.addSubview(view)
                             }
-                            titleBadgeTransition.updateFrame(view: view, frame: CGRect(origin: CGPoint(x: strongSelf.titleNode.frame.maxX + 7.0, y: floor((contentSize.height - badgeSize.height) / 2.0)), size: badgeSize))
+                            // FENIX-HOOK: badge'ni title qatori markaziga tekislash (eski formula butun row markazini olardi — subtitle bor bo'lsa badge subtitle ustiga tushib qolardi)
+                            // FENIX-HOOK: badge'ni local titleFrame'ga tekislash (titleNode.frame transition.updatePosition tufayli noto'g'ri minY beradi; titleFrame aniq title pozitsiyasi)
+                            titleBadgeTransition.updateFrame(view: view, frame: CGRect(origin: CGPoint(x: titleFrame.maxX + 7.0, y: titleFrame.minY + floor((titleFrame.height - badgeSize.height) / 2.0)), size: badgeSize))
                         }
                     } else if let componentView = strongSelf.titleBadgeComponentView {
                         strongSelf.titleBadgeComponentView = nil
