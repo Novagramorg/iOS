@@ -2297,6 +2297,26 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             guard let strongSelf = self else {
                 return false
             }
+            // FENIX-HOOK #38 — sticker confirm (covers every send branch; runs before branching)
+            if (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false), !(UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_sticker_bypass") ?? false) {
+                let fenixSTitle: String; let fenixSText: String; let fenixSSend: String; let fenixSCancel: String
+                switch strongSelf.presentationData.strings.primaryComponent.languageCode {
+                case "uz": fenixSTitle = "Yuborishni tasdiqlang"; fenixSText = "Stikerni yubormoqchimisiz?"; fenixSSend = "Yuborish"; fenixSCancel = "Bekor qilish"
+                case "ru": fenixSTitle = "Подтвердите отправку"; fenixSText = "Отправить стикер?"; fenixSSend = "Отправить"; fenixSCancel = "Отмена"
+                default: fenixSTitle = "Confirm sending"; fenixSText = "Send this sticker?"; fenixSSend = "Send"; fenixSCancel = "Cancel"
+                }
+                strongSelf.present(textAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, title: fenixSTitle, text: fenixSText, actions: [
+                    TextAlertAction(type: .defaultAction, title: fenixSSend, action: { [weak strongSelf] in
+                        guard let strongSelf else { return }
+                        UserDefaults(suiteName: "pro_messager")?.set(true, forKey: "fenix_sticker_bypass")
+                        let _ = strongSelf.controllerInteraction?.sendSticker(fileReference, silentPosting, schedule, query, clearInput, sourceView, sourceRect, sourceLayer, bubbleUpEmojiOrStickersets)
+                        UserDefaults(suiteName: "pro_messager")?.set(false, forKey: "fenix_sticker_bypass")
+                    }),
+                    TextAlertAction(type: .genericAction, title: fenixSCancel, action: {})
+                ]), in: .window(.root))
+                return false
+            }
+            // END FENIX-HOOK #38
 
             if let _ = strongSelf.presentationInterfaceState.slowmodeState, strongSelf.presentationInterfaceState.subject != .scheduledMessages {
                 if let sourceView, let sourceRect {
@@ -2411,50 +2431,8 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     }, shouldAnimateMessageTransition ? correlationId : nil)
 
                     addToTransitionNodeIfNeeded()
-                    // FENIX-HOOK #38 — stikerni yuborishdan oldin tasdiq dialogi
-                    let fenixSendConfirm38 = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false
-                    let fenixLang38 = strongSelf.presentationData.strings.primaryComponent.languageCode
-                    if fenixSendConfirm38 {
-                        let fenixTransformed38 = strongSelf.transformEnqueueMessages(messages, silentPosting: silentPosting, postpone: postpone)
-                        let fenixDialogTitle38: String
-                        let fenixDialogText38: String
-                        let fenixSendLabel38: String
-                        let fenixCancelLabel38: String
-                        switch fenixLang38 {
-                        case "uz":
-                            fenixDialogTitle38 = "Yuborishni tasdiqlang"
-                            fenixDialogText38  = "Stikerni yubormoqchimisiz?"
-                            fenixSendLabel38   = "Yuborish"
-                            fenixCancelLabel38 = "Bekor qilish"
-                        case "ru":
-                            fenixDialogTitle38 = "Подтвердите отправку"
-                            fenixDialogText38  = "Отправить стикер?"
-                            fenixSendLabel38   = "Отправить"
-                            fenixCancelLabel38 = "Отмена"
-                        default:
-                            fenixDialogTitle38 = "Confirm sending"
-                            fenixDialogText38  = "Send this sticker?"
-                            fenixSendLabel38   = "Send"
-                            fenixCancelLabel38 = "Cancel"
-                        }
-                        let fenixAlert38 = textAlertController(
-                            context: strongSelf.context,
-                            updatedPresentationData: strongSelf.updatedPresentationData,
-                            title: fenixDialogTitle38,
-                            text: fenixDialogText38,
-                            actions: [
-                                TextAlertAction(type: .defaultAction, title: fenixSendLabel38, action: {
-                                    strongSelf.sendMessages(fenixTransformed38)
-                                }),
-                                TextAlertAction(type: .genericAction, title: fenixCancelLabel38, action: {})
-                            ]
-                        )
-                        strongSelf.present(fenixAlert38, in: .window(.root))
-                    } else {
-                        let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: silentPosting, postpone: postpone)
-                        strongSelf.sendMessages(transformedMessages)
-                    }
-                    // END FENIX-HOOK #38
+                    let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: silentPosting, postpone: postpone)
+                    strongSelf.sendMessages(transformedMessages)
                 } else if schedule {
                     strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
                         if let strongSelf = self {

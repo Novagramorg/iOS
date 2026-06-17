@@ -1428,6 +1428,12 @@ Reason: same API change as above — `ChatPincodeMode.verify` now requires `pass
 ### `submodules/ChatListUI/Sources/ChatContextMenus.swift` — Copy Chat ID (#24) — 2026-06-17
 After the chat-lock Pincode block (~line 514), a "Copy Chat ID" context-menu action was added (guarded by `if !isSavedMessages`). It copies `peerId.toInt64()` to `UIPasteboard.general.string` and shows an `UndoOverlayController(.copy(text:))` confirmation. Titles are inline en/uz/ru (no Localization-module dependency). No toggle — the action is always present. Applied via Python (not Edit) to keep the upstream diff minimal.
 
+### `submodules/ChatListUI/Sources/ChatContextMenus.swift` — Secret read localization — 2026-06-17
+Secret-read context-menu item (~line 470) had a hardcoded Uzbek title; localized to inline en/uz/ru via languageCode. Behavior unchanged (isSecretRead: true). Python.
+
+### `submodules/TelegramUI/Sources/ChatController.swift` — Sticker send-confirm all-branches fix (#38) — 2026-06-17
+The #38 sticker confirm initially sat only in the silentPosting branch (so normal sends bypassed it). Moved to the top of the sendSticker callback to cover every branch; a fenix_sticker_bypass UserDefaults flag re-sends after the user confirms. Python.
+
 ### `submodules/TelegramUI/Sources/TelegramRootController.swift` (~line 281) — 2026-06-16
 Contacts tab re-enabled (`controllers.append(self.contactsController!)` uncommented). Was hidden during the Apple 5.1.2 contacts-privacy review; the `DeviceAccess.authorizeAccess(.contacts)` consent hook (see contacts-consent section above) now gates all contacts access, so the Find-Friends tab presents the consent alert before reading contacts.
 

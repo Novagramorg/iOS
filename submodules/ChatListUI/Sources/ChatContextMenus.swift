@@ -468,7 +468,13 @@ func chatContextMenuItems(context: AccountContext, peerId: PeerId, promoInfo: Ch
                                 
                                 // MARK: - Maxfiy ko'rish
                                 if !isSavedMessages {
-                                    items.append(.action(ContextMenuActionItem(text: "Maxfiy ko'rish", icon: { theme in
+                                    let secretReadTitle: String
+                                    switch presentationData.strings.primaryComponent.languageCode {
+                                    case "uz": secretReadTitle = "Maxfiy ko'rish"
+                                    case "ru": secretReadTitle = "Секретный просмотр"
+                                    default:   secretReadTitle = "Secret read"
+                                    }
+                                    items.append(.action(ContextMenuActionItem(text: secretReadTitle, icon: { theme in
                                         generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsUnread"), color: theme.contextMenu.primaryColor)
                                     }, action: { _, f in
                                         f(.default)
