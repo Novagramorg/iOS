@@ -64,6 +64,8 @@ private enum FenixEntry: ItemListNodeEntry {
     case sendTranslateConfirm(PresentationTheme, String, String, Bool, Bool)
     // Feature #30: Sticker auto-add after text message
     case autoStickerEnabled(PresentationTheme, String, String, Bool)
+    // Feature #34: Heart effect auto-attach to sent messages
+    case heartEffectEnabled(PresentationTheme, String, String, Bool)
     case messagingFooter(PresentationTheme, String)
 
     // — STT Section —
@@ -106,7 +108,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .interfaceFooter:
             return FenixSection.interface.rawValue
-        case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .autoStickerEnabled, .messagingFooter:
+        case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .autoStickerEnabled, .heartEffectEnabled, .messagingFooter:
             return FenixSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
             return FenixSection.stt.rawValue
@@ -147,6 +149,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case .translateMessages:         return 25
         case .sendTranslateConfirm:      return 27
         case .autoStickerEnabled:        return 28
+        case .heartEffectEnabled:        return 29
         case .messagingFooter:           return 26
         // STT
         case .sttHeader:                 return 30
@@ -227,6 +230,8 @@ private enum FenixEntry: ItemListNodeEntry {
                lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .autoStickerEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .autoStickerEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .heartEffectEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .heartEffectEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .messagingFooter(lhsTheme, lhsText):
             if case let .messagingFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -394,6 +399,11 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "face.smiling.inverse", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateAutoStickerEnabled(val)
             })
+        case let .heartEffectEnabled(_, title, text, value):
+            // Feature #34: Heart effect — auto-attaches the ❤️ message effect to sent text messages
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "heart.fill", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateHeartEffectEnabled(val)
+            })
         case let .messagingFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -540,6 +550,8 @@ private struct FenixSettingsState: Equatable {
     var sendConfirmEnabled: Bool
     // Feature #30: Sticker auto-add — after each text message, append last saved sticker
     var autoStickerEnabled: Bool
+    // Feature #34: Heart effect — auto-attach ❤️ message effect to sent messages
+    var heartEffectEnabled: Bool
 
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -570,6 +582,8 @@ private struct FenixSettingsState: Equatable {
         self.sendConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false
         // Default off — user opts in (Feature #30)
         self.autoStickerEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_sticker_enabled") ?? false
+        // Default off — user opts in (Feature #34)
+        self.heartEffectEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "heart_effect_enabled") ?? false
     }
 
     static func == (lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
@@ -637,6 +651,9 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.autoStickerEnabled != rhs.autoStickerEnabled {
+            return false
+        }
+        if lhs.heartEffectEnabled != rhs.heartEffectEnabled {
             return false
         }
         return true
@@ -744,6 +761,9 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     // Feature #30: Sticker auto-add toggle
     entries.append(.autoStickerEnabled(presentationData.theme, FenixAutoStickerStrings.toggleTitle(langCode: langCode), FenixAutoStickerStrings.toggleSubtitle(langCode: langCode), state.autoStickerEnabled))
 
+    // Feature #34: Heart effect toggle
+    entries.append(.heartEffectEnabled(presentationData.theme, FenixHeartEffectStrings.toggleTitle(langCode: langCode), FenixHeartEffectStrings.toggleSubtitle(langCode: langCode), state.heartEffectEnabled))
+
     entries.append(.messagingFooter(presentationData.theme, l10n.settings_messaging_footer))
 
     // ─── VOICE → TEXT ───
@@ -820,8 +840,9 @@ private final class FenixSettingsArguments {
     let updateSendTranslateConfirm: (Bool) -> Void
     let updateSendConfirmEnabled: (Bool) -> Void
     let updateAutoStickerEnabled: (Bool) -> Void
+    let updateHeartEffectEnabled: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openCalls = openCalls
@@ -848,6 +869,7 @@ private final class FenixSettingsArguments {
         self.updateSendTranslateConfirm = updateSendTranslateConfirm
         self.updateSendConfirmEnabled = updateSendConfirmEnabled
         self.updateAutoStickerEnabled = updateAutoStickerEnabled
+        self.updateHeartEffectEnabled = updateHeartEffectEnabled
     }
 }
 
@@ -1064,6 +1086,17 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         updateState { state in
             var state = state
             state.autoStickerEnabled = value
+            return state
+        }
+    }, updateHeartEffectEnabled: { value in
+        // Feature #34: Heart effect toggle — on enable, resolve & cache the ❤️ effect id for the send path
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "heart_effect_enabled")
+        if value {
+            FenixHeartEffect.resolveAndCache(context: context)
+        }
+        updateState { state in
+            var state = state
+            state.heartEffectEnabled = value
             return state
         }
     })
@@ -1373,5 +1406,56 @@ private enum FenixAutoStickerStrings {
         case "ru": return "После каждого текстового сообщения добавляет последний отправленный стикер"
         default:   return "Appends the last sent sticker after each text message"
         }
+    }
+}
+
+// MARK: - Local string namespace (Feature #34 — Heart effect)
+
+private enum FenixHeartEffectStrings {
+    static func toggleTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yurakcha effekti"
+        case "ru": return "Эффект сердечка"
+        default:   return "Heart effect"
+        }
+    }
+
+    static func toggleSubtitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yuborilgan xabarlarga ❤️ animatsion effektini avtomatik qo'shadi"
+        case "ru": return "Автоматически добавляет анимированный эффект ❤️ к отправленным сообщениям"
+        default:   return "Automatically adds the ❤️ animated effect to sent messages"
+        }
+    }
+}
+
+// MARK: - Feature #34: Heart effect resolver
+// Resolves the server-assigned ❤️ message-effect id (free / non-premium reaction effect)
+// and caches it to UserDefaults so the send path can attach it synchronously.
+// availableMessageEffects() is a one-shot cached read, so we retry a few times in case
+// the local cache isn't warm yet.
+private enum FenixHeartEffect {
+    private static var disposable: Disposable?
+
+    static func resolveAndCache(context: AccountContext) {
+        attempt(context: context, remaining: 4)
+    }
+
+    private static func attempt(context: AccountContext, remaining: Int) {
+        disposable?.dispose()
+        disposable = (context.engine.stickers.availableMessageEffects()
+        |> deliverOnMainQueue).start(next: { effects in
+            if let effects = effects, !effects.messageEffects.isEmpty {
+                let heart = effects.messageEffects.first(where: { $0.emoticon.hasPrefix("❤") && !$0.isPremium })
+                    ?? effects.messageEffects.first(where: { $0.emoticon.hasPrefix("❤") })
+                if let heart = heart {
+                    UserDefaults(suiteName: "pro_messager")?.set(Int(heart.id), forKey: "fenix_heart_effect_id")
+                }
+            } else if remaining > 0 {
+                Queue.mainQueue().after(1.5, {
+                    attempt(context: context, remaining: remaining - 1)
+                })
+            }
+        })
     }
 }

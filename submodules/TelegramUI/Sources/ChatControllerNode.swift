@@ -5044,6 +5044,25 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     return attributes
                 }
             }
+
+            // FENIX-HOOK #34 — heart effect auto-attach START
+            // When the heart toggle is on and the user did NOT explicitly pick an effect,
+            // attach the cached ❤️ message-effect id to the outgoing text message.
+            if !messages.isEmpty, messageEffect == nil, case .message = messages[0],
+               self.chatLocation.peerId?.namespace == Namespaces.Peer.CloudUser,
+               (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "heart_effect_enabled") ?? false) {
+                let fenixHeartId = UserDefaults(suiteName: "pro_messager")?.integer(forKey: "fenix_heart_effect_id") ?? 0
+                if fenixHeartId != 0 {
+                    messages[0] = messages[0].withUpdatedAttributes { attributes in
+                        var attributes = attributes
+                        if attributes.first(where: { $0 is EffectMessageAttribute }) == nil {
+                            attributes.append(EffectMessageAttribute(id: Int64(fenixHeartId)))
+                        }
+                        return attributes
+                    }
+                }
+            }
+            // FENIX-HOOK #34 — heart effect auto-attach END
             
             if !messages.isEmpty || postEmptyMessages || self.chatPresentationInterfaceState.interfaceState.forwardMessageIds != nil {
                 if let forwardMessageIds = self.chatPresentationInterfaceState.interfaceState.forwardMessageIds {

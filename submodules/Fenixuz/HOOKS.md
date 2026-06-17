@@ -1526,3 +1526,20 @@ Anchor (noyob Python): `                    self.sendMessages(messages, silentPo
 
 ### `submodules/ItemListUI/Sources/Items/ItemListSwitchItem.swift` — titleBadge y-position fix — 2026-06-17
 Native `titleBadgeComponent` (NEW badge) y-position used `(contentSize.height - badge)/2` — the full row center. On rows WITH a subtitle the badge dropped onto the subtitle text and covered words ("auto-downl[NEW]all networks"). Changed to `titleNode.frame.minY + (titleNode.height - badge)/2` so the badge aligns to the title line regardless of subtitle. Title-only rows (ChannelStatsController) unaffected — math identical. Python.
+
+
+## 📌 2026-06-17 — Feature #34: Heart Effect (auto-attach ❤️ message effect)
+
+Sozlama: `pro_messager` UserDefaults `heart_effect_enabled` (default `false`). Toggle `FenixSettingsController.swift` — Messaging seksiyasida (stableId = 29), `FenixHeartEffectStrings` private namespace.
+
+Resolver: `FenixHeartEffect` (xuddi shu fayl oxirida). Toggle ON bo'lganda `context.engine.stickers.availableMessageEffects()` dan `emoticon` `❤` bilan boshlanadigan NON-premium effektni topib, uning `id` sini `fenix_heart_effect_id` (Int) key'iga cache qiladi. `availableMessageEffects()` bir martalik cache read bo'lgani uchun sovuq cache holatida 4 marta (1.5s oraliq) retry qiladi.
+
+No-Backend: heart effekt reaction-asosli (`isPremium == false`) — barcha userlar yubora oladi, Telegram serveri qabul qiladi. Premium emoji'dan farqli (theatre EMAS).
+
+### `submodules/TelegramUI/Sources/ChatControllerNode.swift` (~qator 5047) — Python bilan qo'llandi, 2026-06-17
+
+`sendCurrentMessage` ichida, tanlangan effekt bloki (`if !messages.isEmpty, let messageEffect { ... }`) dan KEYIN `// FENIX-HOOK #34` bloki qo'shildi.
+
+Logika: `heart_effect_enabled` true + foydalanuvchi effekt tanlamagan (`messageEffect == nil`) + `messages[0]` `.message` case + **private chat** (`chatLocation.peerId.namespace == CloudUser` — guruh/kanal/secret chatga BIRIKTIRMAYDI, native effekt private-only) + `fenix_heart_effect_id != 0` → `messages[0]` ga `EffectMessageAttribute(id:)` qo'shiladi (faqat allaqachon effekt yo'q bo'lsa). Foydalanuvchi qo'lda tanlagan effektni bekor qilmaydi, forward-only sendga tegmaydi.
+
+Anchor (noyob Python): `attributes.append(EffectMessageAttribute(id: messageEffect.id))`.
