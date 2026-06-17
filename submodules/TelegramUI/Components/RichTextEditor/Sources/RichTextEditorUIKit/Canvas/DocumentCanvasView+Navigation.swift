@@ -9,7 +9,14 @@ extension DocumentCanvasView {
     func nextTextPosition(after pos: Int) -> Int {
         let regions = allLeafRegions()
         if let i = regions.firstIndex(where: { pos >= $0.globalStart && pos <= $0.globalStart + $0.length }) {
-            if pos < regions[i].globalStart + regions[i].length { return pos + 1 }
+            if pos < regions[i].globalStart + regions[i].length {
+                // Step a whole grapheme, not one UTF-16 unit — else an arrow lands mid-surrogate inside an
+                // emoji (no visible move) and crossing it takes two presses.
+                let local = pos - regions[i].globalStart
+                let s = regions[i].layout.attributedString.string as NSString
+                let r = s.rangeOfComposedCharacterSequence(at: local)
+                return regions[i].globalStart + (r.location + r.length)
+            }
             guard i + 1 < regions.count else { return pos }
             let nextStart = regions[i + 1].globalStart
             let gap = nextStart - 2
@@ -24,7 +31,13 @@ extension DocumentCanvasView {
     func prevTextPosition(before pos: Int) -> Int {
         let regions = allLeafRegions()
         if let i = regions.firstIndex(where: { pos >= $0.globalStart && pos <= $0.globalStart + $0.length }) {
-            if pos > regions[i].globalStart { return pos - 1 }
+            if pos > regions[i].globalStart {
+                // Step a whole grapheme, not one UTF-16 unit (see nextTextPosition).
+                let local = pos - regions[i].globalStart
+                let s = regions[i].layout.attributedString.string as NSString
+                let r = s.rangeOfComposedCharacterSequence(at: local - 1)
+                return regions[i].globalStart + r.location
+            }
             let gap = regions[i].globalStart - 2
             if isGapPosition(gap) { return gap }
             if i > 0 { return regions[i - 1].globalStart + regions[i - 1].length }

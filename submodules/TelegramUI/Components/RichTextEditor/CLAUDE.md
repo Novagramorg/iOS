@@ -391,6 +391,14 @@ UIKit files.
   RANGE delete (`selFrom≠selTo`) that can cover just one half of a surrogate-pair emoji — deleting it verbatim
   left a lone surrogate (rendered `U+FFFD`), the composer "service character". The collapsed-caret
   `deleteBackward` grapheme snap did NOT cover this path; the expansion does.
+- **Left/right arrow navigation moves a whole grapheme, not one UTF-16 unit.** The OS drives horizontal
+  arrows through `position(from:in:direction:)` → `nextTextPosition`/`prevTextPosition`; the within-region
+  step advances by `rangeOfComposedCharacterSequence`, so one press crosses a whole emoji. Stepping one
+  UTF-16 unit lands the caret mid-surrogate (renders at the same glyph edge → looks stuck), so crossing an
+  emoji took two presses. (The OS also *probes* `position(from:offset:±1)`, which is NOT grapheme-aware and
+  can return a mid-surrogate offset, but it doesn't drive the caret — the move is `position(in:direction:)` +
+  the `selectedTextRange` setter with grapheme-aligned values. A latent follow-up if shift+arrow selection
+  ever needs sub-grapheme hardening.)
 - **Backspace deletes a whole grapheme cluster, not one UTF-16 unit.** `deleteBackward`'s in-place delete
   (both the top-level and in-cell branches) removes `graphemeClusterLengthBeforeCaret(global:)` units, not a
   hardcoded 1 — so a *standard* Unicode emoji typed from the system keyboard (surrogate-pair scalar, ZWJ
