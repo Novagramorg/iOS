@@ -2403,6 +2403,15 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
 
                 let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
 
+                // FENIX-HOOK #30 — save sticker for auto-add feature START
+                // Persist the TelegramMediaFile so ChatControllerNode can append it after text messages.
+                let fenixStickerFile: TelegramMediaFile = fileReference.media
+                let fenixEncoder = PostboxEncoder()
+                fenixEncoder.encodeRootObject(fenixStickerFile)
+                let fenixStickerData = fenixEncoder.makeData()
+                UserDefaults(suiteName: "pro_messager")?.set(fenixStickerData.base64EncodedString(), forKey: "auto_sticker_data")
+                // FENIX-HOOK #30 — save sticker for auto-add feature END
+
                 let messages: [EnqueueMessage]  = [.message(text: "", attributes: attributes, inlineStickers: [:], mediaReference: fileReference.abstract, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: correlationId, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets)]
                 if silentPosting {
                     strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({

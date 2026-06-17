@@ -1498,3 +1498,27 @@ Anchor (noyob Python): `addToTransitionNodeIfNeeded()\n                    let t
 Logika: `send_confirm_enabled` true bo'lsa, `f(.dismissWithoutContent)` avval chaqiriladi (context menu yopiladi), keyin `textAlertController(context:title:text:actions:)` dialog. "Yuborish" → `controllerInteraction?.sendGift(message.id.peerId)`. "Bekor qilish" → bo'sh. Present: `controllerInteraction?.presentController(fenixAlert38, nil)`.
 
 Anchor (noyob Python): `            }, action: { _, f in\n                let _ = controllerInteraction.sendGift(message.id.peerId)\n                f(.dismissWithoutContent)\n            })))`.
+
+## 📌 2026-06-17 — Feature #30: Sticker Auto-Add (after text message)
+
+Sozlama: `pro_messager` UserDefaults `auto_sticker_enabled` (default `false`). Toggle `FenixSettingsController.swift` — Messaging seksiyasida (stableId = 28), `FenixAutoStickerStrings` private namespace. Disable qilinganda `auto_sticker_data` key ham o'chiriladi.
+
+Saqlash: sticker yuborilganda `PostboxEncoder.encodeRootObject(TelegramMediaFile)` → `makeData()` → `base64EncodedString()` → `auto_sticker_data` key'iga yoziladi.
+
+Yuborish: `sendCurrentMessage` ichida `sendMessages(...)` chaqirilishidan OLDIN `PostboxDecoder(buffer: MemoryBuffer(data:)).decodeRootObject() as? TelegramMediaFile` bilan decode → `FileMediaReference.standalone(media:).abstract` → `EnqueueMessage.message(text:"", ...)` qo'shiladi. Faqat `.message` shaped birinchi elementli array'larda ishlaydi (forward-only holat bilan aralashmaydi).
+
+### `submodules/TelegramUI/Sources/ChatController.swift` — Python bilan qo'llandi, 2026-06-17
+
+`sendSticker:` callback ichida, `let replyMessageSubject = ...` va `let messages: [EnqueueMessage] = [...]` orasiga `// FENIX-HOOK #30` bloki qo'shildi (~qator 2404–2413).
+
+Logika: `fileReference.media` (non-optional `TelegramMediaFile`) → `PostboxEncoder.encodeRootObject` → `makeData().base64EncodedString()` → `UserDefaults(suiteName:"pro_messager").set(..., forKey:"auto_sticker_data")`.
+
+Anchor (noyob Python): `let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject\n\n                let messages: [EnqueueMessage]  = [.message(text: "",`.
+
+### `submodules/TelegramUI/Sources/ChatControllerNode.swift` — Python bilan qo'llandi, 2026-06-17
+
+`doSend` closure ichida, `self.sendMessages(messages, ...)` chaqirilishidan OLDIN `// FENIX-HOOK #30` bloki qo'shildi (~qator 5123–5152).
+
+Logika: `auto_sticker_enabled` true + `messages` bo'sh emas + `messages[0]` `.message` case + `auto_sticker_data` base64 decode + `PostboxDecoder.decodeRootObject() as? TelegramMediaFile` → `FileMediaReference.standalone(media:).abstract` → yangi `EnqueueMessage.message(text:"", ...)` `messages` array oxiriga qo'shiladi.
+
+Anchor (noyob Python): `                    self.sendMessages(messages, silentPosting, scheduleTime, repeatPeriod, messages.count > 1, postpone)\n                }`.

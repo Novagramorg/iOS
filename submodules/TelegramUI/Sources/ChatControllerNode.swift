@@ -5120,6 +5120,34 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }, usedCorrelationId)
                     completion()
                     
+                    // FENIX-HOOK #30 — auto sticker send START
+                    // After all text messages are enqueued, append the saved sticker if feature is on.
+                    // Only fires when there is at least one .message in the outgoing array (text send),
+                    // not for forward-only sends. Checked via first-element shape.
+                    let fenixAutoStickerOn = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_sticker_enabled") ?? false
+                    if fenixAutoStickerOn,
+                       !messages.isEmpty,
+                       case .message = messages[0],
+                       let fenixStickerB64 = UserDefaults(suiteName: "pro_messager")?.string(forKey: "auto_sticker_data"),
+                       let fenixStickerRaw = Data(base64Encoded: fenixStickerB64),
+                       let fenixStickerFile = PostboxDecoder(buffer: MemoryBuffer(data: fenixStickerRaw)).decodeRootObject() as? TelegramMediaFile {
+                        let fenixStickerRef = FileMediaReference.standalone(media: fenixStickerFile).abstract
+                        let fenixStickerMsg = EnqueueMessage.message(
+                            text: "",
+                            attributes: [],
+                            inlineStickers: [:],
+                            mediaReference: fenixStickerRef,
+                            threadId: self.chatLocation.threadId,
+                            replyToMessageId: nil,
+                            replyToStoryId: nil,
+                            localGroupingKey: nil,
+                            correlationId: nil,
+                            bubbleUpEmojiOrStickersets: []
+                        )
+                        messages.append(fenixStickerMsg)
+                    }
+                    // FENIX-HOOK #30 — auto sticker send END
+
                     self.sendMessages(messages, silentPosting, scheduleTime, repeatPeriod, messages.count > 1, postpone)
                 }
                 

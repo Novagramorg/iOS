@@ -62,6 +62,8 @@ private enum FenixEntry: ItemListNodeEntry {
     case translateMessages(PresentationTheme, String)
     // isNew: true — Feature #37 Send-Translate 2-tap confirm
     case sendTranslateConfirm(PresentationTheme, String, String, Bool, Bool)
+    // Feature #30: Sticker auto-add after text message
+    case autoStickerEnabled(PresentationTheme, String, String, Bool)
     case messagingFooter(PresentationTheme, String)
 
     // — STT Section —
@@ -104,7 +106,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .interfaceFooter:
             return FenixSection.interface.rawValue
-        case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .messagingFooter:
+        case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .autoStickerEnabled, .messagingFooter:
             return FenixSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
             return FenixSection.stt.rawValue
@@ -144,6 +146,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case .translateToggle:           return 24
         case .translateMessages:         return 25
         case .sendTranslateConfirm:      return 27
+        case .autoStickerEnabled:        return 28
         case .messagingFooter:           return 26
         // STT
         case .sttHeader:                 return 30
@@ -222,6 +225,8 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .sendTranslateConfirm(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
             if case let .sendTranslateConfirm(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
                lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .autoStickerEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .autoStickerEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .messagingFooter(lhsTheme, lhsText):
             if case let .messagingFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -384,6 +389,11 @@ private enum FenixEntry: ItemListNodeEntry {
                     arguments.updateSendTranslateConfirm(val)
                 }
             )
+        case let .autoStickerEnabled(_, title, text, value):
+            // Feature #30: Sticker auto-add — sends the last saved sticker after each text message
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "face.smiling.inverse", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateAutoStickerEnabled(val)
+            })
         case let .messagingFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -528,6 +538,8 @@ private struct FenixSettingsState: Equatable {
     var translateConfirmEnabled: Bool
     // Feature #38: yuborishdan oldin umumiy tasdiq so'rovi (ovoz, stiker, sovg'a)
     var sendConfirmEnabled: Bool
+    // Feature #30: Sticker auto-add — after each text message, append last saved sticker
+    var autoStickerEnabled: Bool
 
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -556,6 +568,8 @@ private struct FenixSettingsState: Equatable {
         self.translateConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "translate_confirm_enabled") ?? false
         // Default off — user opts in (Feature #38)
         self.sendConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false
+        // Default off — user opts in (Feature #30)
+        self.autoStickerEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_sticker_enabled") ?? false
     }
 
     static func == (lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
@@ -620,6 +634,9 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.sendConfirmEnabled != rhs.sendConfirmEnabled {
+            return false
+        }
+        if lhs.autoStickerEnabled != rhs.autoStickerEnabled {
             return false
         }
         return true
@@ -724,6 +741,9 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     let sendConfirmSubtitle = FenixSendTranslateStrings.toggleSubtitle(langCode: langCode)
     entries.append(.sendTranslateConfirm(presentationData.theme, sendConfirmTitle, sendConfirmSubtitle, state.translateConfirmEnabled, true))
 
+    // Feature #30: Sticker auto-add toggle
+    entries.append(.autoStickerEnabled(presentationData.theme, FenixAutoStickerStrings.toggleTitle(langCode: langCode), FenixAutoStickerStrings.toggleSubtitle(langCode: langCode), state.autoStickerEnabled))
+
     entries.append(.messagingFooter(presentationData.theme, l10n.settings_messaging_footer))
 
     // ─── VOICE → TEXT ───
@@ -799,8 +819,9 @@ private final class FenixSettingsArguments {
     let updateAutoDownloadDisabled: (Bool) -> Void
     let updateSendTranslateConfirm: (Bool) -> Void
     let updateSendConfirmEnabled: (Bool) -> Void
+    let updateAutoStickerEnabled: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openCalls = openCalls
@@ -826,6 +847,7 @@ private final class FenixSettingsArguments {
         self.updateAutoDownloadDisabled = updateAutoDownloadDisabled
         self.updateSendTranslateConfirm = updateSendTranslateConfirm
         self.updateSendConfirmEnabled = updateSendConfirmEnabled
+        self.updateAutoStickerEnabled = updateAutoStickerEnabled
     }
 }
 
@@ -1030,6 +1052,18 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         updateState { state in
             var state = state
             state.sendConfirmEnabled = value
+            return state
+        }
+    }, updateAutoStickerEnabled: { value in
+        // Feature #30: Sticker auto-add toggle
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "auto_sticker_enabled")
+        if !value {
+            // When disabled, clear saved sticker data to avoid stale state
+            UserDefaults(suiteName: "pro_messager")?.removeObject(forKey: "auto_sticker_data")
+        }
+        updateState { state in
+            var state = state
+            state.autoStickerEnabled = value
             return state
         }
     })
@@ -1317,6 +1351,27 @@ public enum FenixSendConfirmStrings {
         case "uz": return "Bekor qilish"
         case "ru": return "Отмена"
         default:   return "Cancel"
+        }
+    }
+}
+
+// MARK: - Local string namespace (Feature #30 — Auto Sticker)
+// Kept local to avoid parallel-edit hazard on the shared Localization module.
+
+private enum FenixAutoStickerStrings {
+    static func toggleTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Avtomatik sticker"
+        case "ru": return "Авто-стикер"
+        default:   return "Auto sticker"
+        }
+    }
+
+    static func toggleSubtitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Har matnli xabardan keyin oxirgi yuborilgan stickerni qo'shadi"
+        case "ru": return "После каждого текстового сообщения добавляет последний отправленный стикер"
+        default:   return "Appends the last sent sticker after each text message"
         }
     }
 }
