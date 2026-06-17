@@ -29,6 +29,13 @@ public struct ChatRichTextThemeColors {
     }
 }
 
+/// Format commands routable from the new editor backend's context menu. `Link` is intentionally absent —
+/// it is handled host-side via `openLinkEditing` (it needs a URL-entry UI). `code`/`date` have no native
+/// editor representation yet and are no-ops on the new backend.
+public enum ChatRichTextFormatAction {
+    case bold, italic, monospace, strikethrough, underline, spoiler, quote, code, date
+}
+
 /// Protocol seam for the chat composer's text editor. Implemented today by
 /// `ChatRichTextInputNodeImpl` (which composes the existing `ChatInputTextNode`);
 /// intended to be implemented directly by the TextKit-2 RichTextEditor later.
@@ -231,6 +238,27 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// Commit any pending marked/autocorrect text (called before send). For the UITextView
     /// backend this applies keyboard autocorrection; another backend finalizes marked text.
     func applyAutocorrection()
+
+    /// Whether this backend uses the native TextKit-2 `Document` engine (the new editor). The legacy
+    /// `UITextView` backend returns `false`. Used by the host (e.g. `openLinkEditing`) to route through the
+    /// native format API instead of the legacy `ChatTextInputState`.
+    var usesNativeRichTextEngine: Bool { get }
+
+    /// Transform of the editor backend's default edit-menu elements (e.g. swap in the chat "Format" submenu),
+    /// forwarded to the editor's menu. No-op on the legacy backend (it uses the `chatInputTextNodeMenu` delegate).
+    var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])? { get set }
+
+    /// Apply a format command through the backend's native engine. No-op on the legacy backend.
+    func performFormatAction(_ action: ChatRichTextFormatAction)
+
+    /// The link URL the current selection carries (for prefilling a link editor), or nil.
+    func currentRichTextLinkURL() -> String?
+
+    /// The plain text of the current selection (for a link editor's prompt label).
+    func selectedRichText() -> String
+
+    /// Apply (or, for empty/nil, remove) a link over the current selection via the native engine.
+    func applyRichTextLink(_ url: String?)
 }
 
 /// Creates the default composition-based rich text input node.
@@ -649,4 +677,14 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
     func applyAutocorrection() {
         Keyboard.applyAutocorrection(textView: self.textInputNodeImpl.textView)
     }
+
+    var usesNativeRichTextEngine: Bool { return false }
+
+    // The legacy backend builds its menu via ChatTextInputPanelNode.chatInputTextNodeMenu; this hook is unused.
+    var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?
+
+    func performFormatAction(_ action: ChatRichTextFormatAction) {}
+    func currentRichTextLinkURL() -> String? { return nil }
+    func selectedRichText() -> String { return "" }
+    func applyRichTextLink(_ url: String?) {}
 }

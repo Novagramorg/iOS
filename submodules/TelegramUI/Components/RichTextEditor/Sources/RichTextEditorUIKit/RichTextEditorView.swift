@@ -41,6 +41,16 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// react by dismissing a panel / chrome.
     public var onResignedFirstResponder: (() -> Void)?
 
+    /// Transform the editor's default edit-menu elements into the final set. `defaultElements` is the system
+    /// suggested actions (Cut/Copy/Paste/Select + Writing Tools) followed by the editor's own custom items
+    /// (the built-in "Format" submenu + Look Up / Translate / Share). Return the elements to present.
+    /// Consulted ONLY for a non-collapsed selection, ONLY on iOS 16+ (`UIEditMenuInteraction`); on iOS 13–15
+    /// the editor's built-in items are shown unchanged. nil ⇒ default menu.
+    public var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])? {
+        get { canvas.hostContextMenuItemsProvider }
+        set { canvas.hostContextMenuItemsProvider = newValue }
+    }
+
     /// A read-only snapshot of the editor at the current selection — drives a host toolbar's per-action
     /// availability + selected state. Pure: never mutates or fires `onChange`.
     public struct EditorState: Equatable {
@@ -158,6 +168,8 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         get { scrollView.contentOffset }
         set { scrollView.contentOffset = newValue }
     }
+    /// Test accessor: the underlying canvas (to set up selection in unit tests).
+    var canvasForTesting: DocumentCanvasView { canvas }
 
     public func toggleBold() { canvas.toggleBold() }
     public func toggleItalic() { canvas.toggleItalic() }
@@ -193,6 +205,13 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func removeLink() { canvas.removeLink() }
     /// The link the entire selection carries (for prefilling a link editor), or nil.
     public func currentLink() -> String? { canvas.currentLink() }
+
+    /// The plain text of the current selection (empty string when the selection is collapsed). Used by a
+    /// host link editor to label the prompt and decide add-vs-edit.
+    public func selectedText() -> String {
+        guard let range = canvas.selectedTextRange else { return "" }
+        return canvas.text(in: range) ?? ""
+    }
 
     /// Increases the list nesting level of the touched list items (no-op on non-list paragraphs).
     public func indent() { canvas.indent() }

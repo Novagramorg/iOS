@@ -3775,6 +3775,20 @@ extension ChatControllerImpl {
             |> deliverOnMainQueue).startStandalone()
         }, openLinkEditing: { [weak self] in
             if let strongSelf = self {
+                // New rich-text editor backend: the editor owns the document, so read/apply the link through its
+                // native API rather than the legacy ChatTextInputState. The same chatTextLinkEditController UI is reused.
+                if let richNode = strongSelf.chatDisplayNode.textInputPanelNode?.richTextInputNode, richNode.usesNativeRichTextEngine {
+                    let selectedText = richNode.selectedRichText()
+                    let existingLink = richNode.currentRichTextLinkURL()
+                    let controller = chatTextLinkEditController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, text: strongSelf.presentationData.strings.TextFormat_AddLinkText(selectedText).string, link: existingLink, apply: { [weak richNode] link, _ in
+                        guard let richNode else { return }
+                        if let link {
+                            richNode.applyRichTextLink(link.isEmpty ? nil : link)
+                        }
+                    })
+                    strongSelf.present(controller, in: .window(.root))
+                    return
+                }
                 var selectionRange: Range<Int>?
                 var text: NSAttributedString?
                 var inputMode: ChatInputMode?

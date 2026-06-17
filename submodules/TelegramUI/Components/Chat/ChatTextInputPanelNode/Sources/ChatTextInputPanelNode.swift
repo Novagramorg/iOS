@@ -1069,6 +1069,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         richTextInputNode.inputTypingAttributes = [NSAttributedString.Key.font: Font.regular(max(minInputFontSize, baseFontSize)), NSAttributedString.Key.foregroundColor: textColor, NSAttributedString.Key.paragraphStyle: paragraphStyle]
         richTextInputNode.inputClipsToBounds = false
         richTextInputNode.inputDelegate = self
+        if #available(iOS 16.0, *) {
+            richTextInputNode.contextMenuItemsProvider = { [weak self] defaultElements in
+                return self?.buildRichTextContextMenuElements(defaultElements: defaultElements) ?? defaultElements
+            }
+        }
         richTextInputNode.inputHitTestSlop = UIEdgeInsets(top: -5.0, left: -5.0, bottom: -5.0, right: -5.0)
         richTextInputNode.keyboardAppearance = keyboardAppearance
         richTextInputNode.inputTintColor = tintColor
@@ -5091,7 +5096,74 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         return UIMenu(children: actions)
     }
-    
+
+    /// Transforms the editor's default edit-menu elements for the NEW (native) rich-text editor backend.
+    /// Drops the editor's built-in "Format" submenu and inserts the composer's richer one (same strings +
+    /// secret-chat gating as `chatInputTextNodeMenu`), routing each action to the editor's native engine via
+    /// `performFormatAction`; `Link` reuses the host link UI via `openLinkEditing`. Look Up / Translate /
+    /// Share (in `defaultElements`) are preserved. The editor calls this (through `contextMenuItemsProvider`)
+    /// only for a non-collapsed selection, so no selection check is needed here.
+    @available(iOS 16.0, *)
+    private func buildRichTextContextMenuElements(defaultElements: [UIMenuElement]) -> [UIMenuElement] {
+        guard let richTextInputNode = self.richTextInputNode else {
+            return defaultElements
+        }
+
+        var hasSpoilers = true
+        if self.presentationInterfaceState?.chatLocation.peerId?.namespace == Namespaces.Peer.SecretChat {
+            hasSpoilers = false
+        }
+
+        var children: [UIAction] = []
+        if hasSpoilers {
+            children.append(UIAction(title: self.strings?.TextFormat_Quote ?? "Quote", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.quote)
+            })
+            children.append(UIAction(title: self.strings?.TextFormat_Spoiler ?? "Spoiler", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.spoiler)
+            })
+        }
+        children.append(contentsOf: [
+            UIAction(title: self.strings?.TextFormat_Bold ?? "Bold", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.bold)
+            },
+            UIAction(title: self.strings?.TextFormat_Italic ?? "Italic", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.italic)
+            },
+            UIAction(title: self.strings?.TextFormat_Monospace ?? "Monospace", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.monospace)
+            },
+            UIAction(title: self.strings?.TextFormat_Link ?? "Link", image: nil) { [weak self] _ in
+                self?.interfaceInteraction?.openLinkEditing()
+            }
+        ])
+        if hasSpoilers {
+            children.append(UIAction(title: self.strings?.TextFormat_Date ?? "Date", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.date)
+            })
+        }
+        children.append(contentsOf: [
+            UIAction(title: self.strings?.TextFormat_Strikethrough ?? "Strikethrough", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.strikethrough)
+            },
+            UIAction(title: self.strings?.TextFormat_Underline ?? "Underline", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.underline)
+            }
+        ])
+        children.append(UIAction(title: self.strings?.TextFormat_Code ?? "Code", image: nil) { [weak richTextInputNode] _ in
+            richTextInputNode?.performFormatAction(.code)
+        })
+
+        let formatMenu = UIMenu(title: self.strings?.TextFormat_Format ?? "Format", image: nil, children: children)
+
+        // Drop the editor's built-in "Format" submenu (identified by its "Format" title), then
+        // splice in the composer's after the system Cut/Copy/Paste actions.
+        var elements = defaultElements.filter { ($0 as? UIMenu)?.title != "Format" }
+        let insertIndex = min(1, elements.count)
+        elements.insert(formatMenu, at: insertIndex)
+        return elements
+    }
+
     @available(iOS 16.0, *)
     public func editableTextNodeMenu(_ editableTextNode: ASEditableTextNode, forTextRange textRange: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu {
         return chatInputTextNodeMenu(forTextRange: textRange, suggestedActions: suggestedActions)

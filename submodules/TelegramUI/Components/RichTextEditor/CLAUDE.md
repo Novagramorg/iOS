@@ -155,8 +155,34 @@ The façade is now driven by its host rather than self-laying-out:
   empty paragraph if it was the only block). No-op when not in a table. (Caret-based; a structural-selection
   delete is deferred.)
 
+**Host edit-menu hook (added 2026-06-17, `RichTextEditorView` + `DocumentCanvasView+EditMenuActions`).**
+`contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?` lets a host **transform**
+the iOS-16 edit menu. The editor calls it from `editMenuInteraction(_:menuFor:suggestedActions:)` with
+`defaultElements` = the system suggested actions (Cut/Copy/Paste/Select + Writing Tools) **followed by the
+editor's own custom items** (the built-in "Format" submenu + Look Up / Translate / Share); the host returns the
+final children. Consulted **only for a non-collapsed selection** (matches `customEditMenuElements()`' own gating)
+and **only on iOS 16+** — on iOS 13–15 (`UIMenuController`) host items are NOT injected (a `UIMenuItem` needs an
+Obj-C `#selector` and can't carry a closure; `UIAction` hides its handler, so the closure-based host items can't
+be bridged). `nil` ⇒ the editor's default menu, unchanged. The chat composer (`ChatTextInputPanelNode`) uses it
+to drop the editor's 3-item built-in Format submenu and splice in its richer 10-item one (Bold/Italic/Monospace/
+Link/Strikethrough/Underline/Quote/Spoiler/Date/Code, secret-chat gated), routing each to the editor's native
+engine (`toggleBold()` etc.; Quote → `setParagraphStyle(.quote)`; Date/Code are deferred no-ops); Link reuses the
+host link UI (a branched `openLinkEditing` in `ChatControllerLoadDisplayNode`, using `currentLink()` /
+`selectedText()` / `setLink`/`removeLink`). `selectedText() -> String` is the selected substring (for that link
+editor). Spec/plan for this work were intentionally not retained in-tree.
+
+**Load-bearing invariant — the iOS-16 edit menu needs `Display.Window1.hitTest` to forward to it.**
+`UIEditMenuInteraction` hosts its menu in a top-level `_UIEditMenuContainerView` subview of the app window.
+Telegram's `Window1.hitTest` (`submodules/Display/Source/WindowContent.swift`) only forwards touches to window
+subviews whose class matches an allow-list; it was extended (2026-06-17) to match `"EditMenu"` (alongside the
+pre-iOS-16 `"UITransitionView"` / `"ContextMenuContainerView"`). **Without that match, taps on the menu fall
+through to the content below and every item is inert** — the symptom that surfaced first here because this is a
+custom `UITextInput` presenting `UIEditMenuInteraction` directly. Any editor change that relies on the system
+edit menu being interactive in the Telegram app depends on this allow-list entry.
+
 **Deferred:** pending caret formatting (inline toggles at a *collapsed* caret are currently inert — they show
-the inherited state but don't affect the next typed char); table structural selection.
+the inherited state but don't affect the next typed char); table structural selection; code-block paragraph
+style + timestamp-entity model (the composer's Code/Date menu items are no-ops until these land).
 
 The host action bar (12 icon actions + ContextUI context menus) lives in the separate `RichTextAttachmentScreen`
 module, not this package. Full session handoff: `~/Documents/RichTextEditor/docs/superpowers/handoffs/2026-06-12-richtext-session-handoff.md`.

@@ -193,6 +193,43 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     @discardableResult public func makeInputFirstResponder() -> Bool { self.editorView.becomeFirstResponder() }
     @discardableResult public func resignInputFirstResponder() -> Bool { self.editorView.resignEditorFirstResponder() }
     public func applyAutocorrection() { self.editorView.finalizeComposerMarkedText() }
+
+    // MARK: Context menu + native format routing
+    public var usesNativeRichTextEngine: Bool { true }
+
+    public var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])? {
+        get { self.editorView.contextMenuItemsProvider }
+        set { self.editorView.contextMenuItemsProvider = newValue }
+    }
+
+    public func performFormatAction(_ action: ChatRichTextFormatAction) {
+        switch action {
+        case .bold: self.editorView.toggleBold()
+        case .italic: self.editorView.toggleItalic()
+        case .strikethrough: self.editorView.toggleStrikethrough()
+        case .underline: self.editorView.toggleUnderline()
+        case .monospace: self.editorView.toggleInlineCode()
+        case .spoiler: self.editorView.toggleSpoiler()
+        case .quote: self.editorView.setParagraphStyle(.quote)
+        case .code:
+            // TODO: no code-block paragraph style in the editor yet (deferred editor work). No-op for now.
+            break
+        case .date:
+            // TODO: no timestamp-entity model in the editor (deferred). No-op for now.
+            break
+        }
+    }
+
+    public func currentRichTextLinkURL() -> String? { self.editorView.currentLink() }
+    public func selectedRichText() -> String { self.editorView.selectedText() }
+    public func applyRichTextLink(_ url: String?) {
+        if let url, !url.isEmpty {
+            self.editorView.setLink(url)
+        } else {
+            self.editorView.removeLink()
+        }
+    }
+
     public var keyboardInputView: UIView? {
         get { self.editorView.customInputView }
         set { self.editorView.customInputView = newValue }

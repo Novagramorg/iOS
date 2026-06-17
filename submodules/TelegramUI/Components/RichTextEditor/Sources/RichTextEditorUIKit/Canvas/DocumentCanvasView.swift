@@ -173,6 +173,10 @@ final class DocumentCanvasView: UIView {
         get { editMenuInteractionStorage as? UIEditMenuInteraction }
         set { editMenuInteractionStorage = newValue }
     }
+    /// Host-provided transform of the edit-menu elements. Consulted by the iOS-16 `menuFor:` delegate only,
+    /// and only for a non-collapsed selection. nil ⇒ the editor's default menu. (iOS 13–15 keeps its built-in
+    /// items — see DocumentCanvasView+EditMenu; UIMenuItem cannot carry a closure.)
+    var hostContextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?
     /// Whether the edit menu is currently presented (tracked via UIEditMenuInteractionDelegate), so a tap
     /// on the caret/selection can TOGGLE the menu instead of re-presenting it (the close-then-reopen flicker).
     var editMenuVisible = false
