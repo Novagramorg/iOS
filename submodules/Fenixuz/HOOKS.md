@@ -1434,6 +1434,12 @@ Secret-read context-menu item (~line 470) had a hardcoded Uzbek title; localized
 ### `submodules/TelegramUI/Sources/ChatController.swift` — Sticker send-confirm all-branches fix (#38) — 2026-06-17
 The #38 sticker confirm initially sat only in the silentPosting branch (so normal sends bypassed it). Moved to the top of the sendSticker callback to cover every branch; a fenix_sticker_bypass UserDefaults flag re-sends after the user confirms. Python.
 
+### `submodules/TelegramUI/Sources/Chat/ChatControllerMediaRecording.swift` — Voice send confirm (#38) — 2026-06-17
+Voice confirm was first mis-placed at micButton.stopRecording (ChatTextInputPanelNode) — but stopMediaRecording() auto-sends, so the dialog came too late. Reverted that hook, and placed the confirm at the top of sendMediaRecording() (the actual voice send entry; auto-send routes here too) with a fenix_voice_bypass flag that re-sends after confirm. Python.
+
+### `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` — Camera picker keyboard fix (#29) — 2026-06-17
+The front/back camera-selection ActionSheet presented in .window(.root) sat below the keyboard window (invisible when keyboard open). Added view.window?.endEditing(true) before present so the keyboard dismisses first. Python.
+
 ### `submodules/TelegramUI/Sources/TelegramRootController.swift` (~line 281) — 2026-06-16
 Contacts tab re-enabled (`controllers.append(self.contactsController!)` uncommented). Was hidden during the Apple 5.1.2 contacts-privacy review; the `DeviceAccess.authorizeAccess(.contacts)` consent hook (see contacts-consent section above) now gates all contacts access, so the Find-Friends tab presents the consent alert before reading contacts.
 

@@ -692,6 +692,25 @@ extension ChatControllerImpl {
         messageEffect: ChatSendMessageEffect? = nil,
         postpone: Bool = false
     ) {
+        // FENIX-HOOK #38 — ovozli xabarni yuborishdan oldin tasdiq (voice ACTUAL send entry; sticker kabi bypass-flag bilan)
+        if (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false), !(UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_voice_bypass") ?? false) {
+            let fenixVTitle: String; let fenixVText: String; let fenixVSend: String; let fenixVCancel: String
+            switch self.presentationInterfaceState.strings.primaryComponent.languageCode {
+            case "uz": fenixVTitle = "Yuborishni tasdiqlang"; fenixVText = "Ovozli xabarni yubormoqchimisiz?"; fenixVSend = "Yuborish"; fenixVCancel = "Bekor qilish"
+            case "ru": fenixVTitle = "Подтвердите отправку"; fenixVText = "Отправить голосовое сообщение?"; fenixVSend = "Отправить"; fenixVCancel = "Отмена"
+            default: fenixVTitle = "Confirm sending"; fenixVText = "Send this voice message?"; fenixVSend = "Send"; fenixVCancel = "Cancel"
+            }
+            self.present(textAlertController(context: self.context, updatedPresentationData: self.updatedPresentationData, title: fenixVTitle, text: fenixVText, actions: [
+                TextAlertAction(type: .defaultAction, title: fenixVSend, action: { [weak self] in
+                    guard let self else { return }
+                    UserDefaults(suiteName: "pro_messager")?.set(true, forKey: "fenix_voice_bypass")
+                    self.sendMediaRecording(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, viewOnce: viewOnce, messageEffect: messageEffect, postpone: postpone)
+                    UserDefaults(suiteName: "pro_messager")?.set(false, forKey: "fenix_voice_bypass")
+                }),
+                TextAlertAction(type: .genericAction, title: fenixVCancel, action: {})
+            ]), in: .window(.root))
+            return
+        }
         self.chatDisplayNode.updateRecordedMediaDeleted(false)
         
         guard let recordedMediaPreview = self.presentationInterfaceState.interfaceState.mediaDraftState else {
