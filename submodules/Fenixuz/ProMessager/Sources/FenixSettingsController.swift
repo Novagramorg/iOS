@@ -8,6 +8,7 @@ import TelegramCore
 import AccountContext
 import TelegramPresentationData
 import PresentationDataUtils
+import TelegramUIPreferences
 import ItemListUI
 import CallListUI
 import AppBundle
@@ -72,6 +73,7 @@ private enum FenixEntry: ItemListNodeEntry {
     case protectionHeader(String)
     case blockForeignUsers(PresentationTheme, String, String, Bool)
     case blockApkFiles(PresentationTheme, String, String, Bool)
+    case autoDownloadDisabled(PresentationTheme, String, String, Bool, Bool)
     case protectionFooter(PresentationTheme, String)
 
     // — Appearance Section (Feature #23) —
@@ -102,7 +104,7 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
             return FenixSection.stt.rawValue
-        case .protectionHeader, .blockForeignUsers, .blockApkFiles, .protectionFooter:
+        case .protectionHeader, .blockForeignUsers, .blockApkFiles, .autoDownloadDisabled, .protectionFooter:
             return FenixSection.protection.rawValue
         case .appearanceHeader, .whiteThemeAccent, .appearanceFooter:
             return FenixSection.appearance.rawValue
@@ -147,7 +149,8 @@ private enum FenixEntry: ItemListNodeEntry {
         case .protectionHeader:          return 40
         case .blockForeignUsers:         return 41
         case .blockApkFiles:             return 42
-        case .protectionFooter:          return 43
+        case .autoDownloadDisabled:      return 43
+        case .protectionFooter:          return 44
         // Appearance (Feature #23)
         case .appearanceHeader:          return 50
         case .whiteThemeAccent:          return 51
@@ -229,6 +232,8 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .blockForeignUsers(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .blockApkFiles(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .blockApkFiles(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .autoDownloadDisabled(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .autoDownloadDisabled(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .protectionFooter(lhsTheme, lhsText):
             if case let .protectionFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -395,6 +400,12 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "doc.fill.badge.ellipsis", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateBlockApkFiles(val)
             })
+        case let .autoDownloadDisabled(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrow.down.circle.fill", color: .orange), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateAutoDownloadDisabled(val)
+            })
         case let .protectionFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -467,6 +478,7 @@ private struct FenixSettingsState: Equatable {
     var blockApkFiles: Bool
     var whiteThemeAccentEnabled: Bool
     var voiceTranslateEnabled: Bool
+    var autoDownloadDisabled: Bool
 
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -489,6 +501,8 @@ private struct FenixSettingsState: Equatable {
         self.whiteThemeAccentEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "white_theme_accent_enabled") ?? false
         // Default off — voice translate is an opt-in power-user feature
         self.voiceTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "voice_translate_enabled") ?? false
+        // Default off — when on, all media auto-download is turned off
+        self.autoDownloadDisabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_download_disabled") ?? false
     }
 
     static func == (lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
@@ -544,6 +558,9 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.voiceTranslateEnabled != rhs.voiceTranslateEnabled {
+            return false
+        }
+        if lhs.autoDownloadDisabled != rhs.autoDownloadDisabled {
             return false
         }
         return true
@@ -661,6 +678,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.protectionHeader(l10n.settings_section_protection))
     entries.append(.blockForeignUsers(presentationData.theme, l10n.settings_protection_foreign_title, l10n.settings_protection_foreign_subtitle, state.blockForeignUsers))
     entries.append(.blockApkFiles(presentationData.theme, l10n.settings_protection_apk_title, l10n.settings_protection_apk_subtitle, state.blockApkFiles))
+    entries.append(.autoDownloadDisabled(presentationData.theme, FenixAutoDownloadStrings.title(langCode: langCode), FenixAutoDownloadStrings.subtitle(langCode: langCode), state.autoDownloadDisabled, true))
     entries.append(.protectionFooter(presentationData.theme, l10n.settings_protection_footer))
 
     // ─── APPEARANCE (Feature #23) ───
@@ -710,8 +728,9 @@ private final class FenixSettingsArguments {
     let updateBlockApkFiles: (Bool) -> Void
     let updateWhiteThemeAccent: (Bool) -> Void
     let updateVoiceTranslate: (Bool) -> Void
+    let updateAutoDownloadDisabled: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openCalls = openCalls
@@ -734,6 +753,7 @@ private final class FenixSettingsArguments {
         self.updateBlockApkFiles = updateBlockApkFiles
         self.updateWhiteThemeAccent = updateWhiteThemeAccent
         self.updateVoiceTranslate = updateVoiceTranslate
+        self.updateAutoDownloadDisabled = updateAutoDownloadDisabled
     }
 }
 
@@ -893,8 +913,9 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         }
     }, updateWhiteThemeAccent: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "white_theme_accent_enabled")
-        // Notify observers so any apply-point can react at runtime.
-        // The actual theme tinting happens at the apply-point hook described below.
+        // Apply (or revert) the brand emerald accent on the light builtin themes.
+        // The theme engine rebuilds presentationData app-wide — no restart needed.
+        FenixWhiteThemeAccent.applyToLightThemes(accountManager: context.sharedContext.accountManager, enabled: value)
         NotificationCenter.default.post(name: .fenixWhiteThemeAccentChanged, object: nil)
         updateState { state in
             var state = state
@@ -907,6 +928,20 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         updateState { state in
             var state = state
             state.voiceTranslateEnabled = value
+            return state
+        }
+    }, updateAutoDownloadDisabled: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "auto_download_disabled")
+        // When the switch is on, disable auto-download on every network; off restores it.
+        let _ = updateMediaDownloadSettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
+            var updated = current
+            updated.cellular.enabled = !value
+            updated.wifi.enabled = !value
+            return updated
+        }).start()
+        updateState { state in
+            var state = state
+            state.autoDownloadDisabled = value
             return state
         }
     })
@@ -950,25 +985,62 @@ public enum FenixWhiteThemeAccent {
     static let udKey   = "white_theme_accent_enabled"
     static let udSuite = "pro_messager"
 
+    // Both light builtin themes get the accent: .dayClassic and .day.
+    // For builtin themes PresentationThemeReference.index == the raw value (0 and 2).
+    private static let lightThemeIndices: [Int64] = [
+        PresentationThemeReference.builtin(.dayClassic).index,
+        PresentationThemeReference.builtin(.day).index
+    ]
+
     /// True when the user has turned on brand accent for the light theme.
     public static var isEnabled: Bool {
         UserDefaults(suiteName: udSuite)?.bool(forKey: udKey) ?? false
     }
 
-    // The actual theme-engine apply-point is upstream and requires
-    // PresentationTheme surgery. Call this from the apply-point once it is wired.
-    // Returns FenixuzBrandColors.lightThemeAccent when enabled, nil otherwise.
-    // TODO apply-point: hook into the app-level theme rebuild triggered by
-    //   .fenixWhiteThemeAccentChanged and swap theme.rootController.navigationBar.accentTextColor
-    //   (and related tokens) with the returned color when non-nil.
+    /// Returns FenixuzBrandColors.lightThemeAccent when enabled, nil otherwise.
     public static func accentColorIfEnabled() -> UIColor? {
         guard isEnabled else { return nil }
         return FenixuzBrandColors.lightThemeAccent
+    }
+
+    /// Writes (enabled) or reverts (disabled) the brand emerald accent on both light builtin themes.
+    /// Disabling clears only the accent we set — a user-chosen accent is left untouched.
+    /// Updating the shared theme settings makes the engine rebuild presentationData app-wide.
+    public static func applyToLightThemes(accountManager: AccountManager<TelegramAccountManagerTypes>, enabled: Bool) {
+        let emerald = FenixuzBrandColors.lightThemeAccentValue
+        _ = updatePresentationThemeSettingsInteractively(accountManager: accountManager, { current in
+            var accentColors = current.themeSpecificAccentColors
+            for index in lightThemeIndices {
+                if enabled {
+                    accentColors[index] = PresentationThemeAccentColor(index: -1, baseColor: .custom, accentColor: emerald)
+                } else if accentColors[index]?.accentColor == emerald {
+                    accentColors[index] = nil
+                }
+            }
+            return current.withUpdatedThemeSpecificAccentColors(accentColors)
+        }).start()
     }
 }
 
 // MARK: - Local string namespace (Feature #23)
 // Kept here to avoid the parallel-edit hazard on the shared Localization module.
+
+private enum FenixAutoDownloadStrings {
+    static func title(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Avto-yuklashni o'chirish"
+        case "ru": return "Отключить автозагрузку"
+        default:   return "Disable auto-download"
+        }
+    }
+    static func subtitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Barcha media uchun avtomatik yuklab olishni o'chiradi (mobil va Wi-Fi)"
+        case "ru": return "Отключает автозагрузку всех медиа (моб. сеть и Wi-Fi)"
+        default:   return "Turns off media auto-download on all networks"
+        }
+    }
+}
 
 private enum FenixWhiteThemeStrings {
     static func sectionTitle(langCode: String) -> String {

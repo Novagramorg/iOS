@@ -512,6 +512,26 @@ func chatContextMenuItems(context: AccountContext, peerId: PeerId, promoInfo: Ch
                                         }
                                     })))
                                 }
+
+                                // MARK: - Copy Chat ID (Feature #24)
+                                if !isSavedMessages {
+                                    let cidLang = presentationData.strings.primaryComponent.languageCode
+                                    let cidTitle: String
+                                    let cidCopied: String
+                                    switch cidLang {
+                                    case "uz": cidTitle = "Chat ID'ni nusxalash"; cidCopied = "Chat ID nusxalandi"
+                                    case "ru": cidTitle = "Скопировать Chat ID"; cidCopied = "Chat ID скопирован"
+                                    default: cidTitle = "Copy Chat ID"; cidCopied = "Chat ID copied"
+                                    }
+                                    items.append(.action(ContextMenuActionItem(text: cidTitle, icon: { theme in
+                                        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor)
+                                    }, action: { _, f in
+                                        f(.default)
+                                        UIPasteboard.general.string = "\(peerId.toInt64())"
+                                        let pd = context.sharedContext.currentPresentationData.with { $0 }
+                                        chatListController?.present(UndoOverlayController(presentationData: pd, content: .copy(text: cidCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+                                    })))
+                                }
                             }
                         } else {
                             if case .search = source {

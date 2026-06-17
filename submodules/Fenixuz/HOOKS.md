@@ -1425,6 +1425,9 @@ Reason: same API change as above — `ChatPincodeMode.verify` now requires `pass
 ### `submodules/ChatListUI/Sources/ChatContextMenus.swift` (~line 484)
 `pincodeTitle` now uses `FenixuzChatLockStrings.menuRemove / .menuSet` (localized en/uz/ru) instead of the hardcoded Uzbek `"🔒 Pincode qo'yish"`.
 
+### `submodules/ChatListUI/Sources/ChatContextMenus.swift` — Copy Chat ID (#24) — 2026-06-17
+After the chat-lock Pincode block (~line 514), a "Copy Chat ID" context-menu action was added (guarded by `if !isSavedMessages`). It copies `peerId.toInt64()` to `UIPasteboard.general.string` and shows an `UndoOverlayController(.copy(text:))` confirmation. Titles are inline en/uz/ru (no Localization-module dependency). No toggle — the action is always present. Applied via Python (not Edit) to keep the upstream diff minimal.
+
 ### `submodules/TelegramUI/Sources/TelegramRootController.swift` (~line 281) — 2026-06-16
 Contacts tab re-enabled (`controllers.append(self.contactsController!)` uncommented). Was hidden during the Apple 5.1.2 contacts-privacy review; the `DeviceAccess.authorizeAccess(.contacts)` consent hook (see contacts-consent section above) now gates all contacts access, so the Find-Friends tab presents the consent alert before reading contacts.
 

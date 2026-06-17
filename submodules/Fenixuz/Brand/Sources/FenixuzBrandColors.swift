@@ -49,6 +49,9 @@ public enum FenixuzBrandColors {
     // login screen so the brand stays coherent across dark & light modes.
     // Light-theme specific tones for tinting tappable elements and highlights.
     public static let lightThemeAccent: UIColor = brand500   // #10B981 — primary tint
+    // Raw RGB of lightThemeAccent (== brand500). The theme engine's
+    // PresentationThemeAccentColor.accentColor wants a UInt32, not a UIColor.
+    public static let lightThemeAccentValue: UInt32 = 0x10B981
     public static let lightThemeAccentLight: UIColor = brand100   // #D1FAE5 — selection bg, badge fill
     public static let lightThemeAccentDeep: UIColor = brand600   // #059669 — pressed / active state
 }
