@@ -1431,4 +1431,58 @@ After the chat-lock Pincode block (~line 514), a "Copy Chat ID" context-menu act
 ### `submodules/TelegramUI/Sources/TelegramRootController.swift` (~line 281) — 2026-06-16
 Contacts tab re-enabled (`controllers.append(self.contactsController!)` uncommented). Was hidden during the Apple 5.1.2 contacts-privacy review; the `DeviceAccess.authorizeAccess(.contacts)` consent hook (see contacts-consent section above) now gates all contacts access, so the Find-Friends tab presents the consent alert before reading contacts.
 
+---
+
+## 📌 2026-06-17 — Feature #37: Send-Translate 2-tap confirm
+
+### `submodules/TelegramUI/Sources/ChatControllerNode.swift` (~line 4690) — Python bilan qo'llandi
+
+`sendCurrentMessage(...)` ichida, mavjud `// PRO MESSAGER: Automatic Translation` (#31) anchor'dan OLDIN yangi `// FENIX-HOOK #37` bloki qo'shildi (qatorlar 4690–4756).
+
+Maqsad: foydalanuvchi `translate_confirm_enabled` sozlamasini yoqsa, yuborishdan oldin tasdiq dialogi chiqadi. Mavjud `#31` avtomatik tarjimadan farqi — bu so'raydi, avtomatik qilmaydi.
+
+Shart: `overrideText == nil && confirmEnabled && !proTranslateLang.isEmpty && currentInputText.length > 0 && !hasTranslateAttr`
+
+Agar shart bajarilsa:
+1. Input maydon tozalanadi (mavjud `#31` pattern bilan bir xil)
+2. `textAlertController(context:title:text:actions:)` bilan alert ko'rsatiladi, `controller.present(..., in: .window(.root))` bilan present qilinadi
+3. "Translate & Send" → `engine.messages.translate` → muvaffaqiyatda `pro_translated` attr bilan `sendCurrentMessage(overrideText:)`, xatoda fallback original + attr
+4. "Send Original" → original matn + `pro_translated` attr bilan `sendCurrentMessage(overrideText:)` (qayta confirm oldini oladi)
+5. `return` — `#31` hook ishlamaydi (confirm allaqachon hal qildi)
+
+Anchor (noyob): `            // PRO MESSAGER: Automatic Translation\n`
+Tasdiqlash: `python3 -c "content=open('...ChatControllerNode.swift').read(); assert content.count('// PRO MESSAGER: Automatic Translation') == 1"`
+
 NOTE: there are TWO tab-build paths — the init (~line 223, startup) and `updateRootControllers` (~line 281, calls-tab toggle). BOTH now append `contactsController` so the Contacts tab shows at launch and survives a calls-tab refresh.
+
+---
+
+## 📌 2026-06-17 — Feature #38: Send-Confirm Dialog (voice, sticker, gift)
+
+Sozlama: `pro_messager` UserDefaults `send_confirm_enabled` (default `false`). Toggle `FenixSettingsController.swift` — Protection seksiyasida (stableId = 45), `FenixSendConfirmStrings` namespace (public). Har 3 hook inline langCode switch ishlatadi (FenixuzProMessager import → module cycle xavfi bor edi).
+
+### `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` — Python bilan qo'llandi, 2026-06-17
+
+`mediaActionButtons.micButton.stopRecording` callback'iga `// FENIX-HOOK #38` bloki qo'shildi (~qator 905–950).
+
+Logika: `send_confirm_enabled` true bo'lsa, `interfaceInteraction.stopMediaRecording()` + `tooltipController?.dismiss()` chaqirilgandan SO'NG `UIAlertController` (`.alert` style) ko'rsatiladi (textAlertController shu modulda mavjud emas — PresentationDataUtils dep yo'q). "Yuborish" → `sendRecordedMedia(false, false)`. "Bekor qilish" → `deleteRecordedMedia()`. False holda — asl xatti-harakat (to'g'ridan-to'g'ri send).
+
+Present: `UIApplication.shared.windows.first?.rootViewController` orqali top presented VC.
+
+Anchor (noyob Python): START=`self.mediaActionButtons.micButton.stopRecording = { [weak self] in\n`, END=`        self.mediaActionButtons.micButton.updateLocked = { [weak self] _ in`.
+
+### `submodules/TelegramUI/Sources/ChatController.swift` — Python bilan qo'llandi, 2026-06-17
+
+`sendSticker:` callback ichida, `addToTransitionNodeIfNeeded()` dan keyin `// FENIX-HOOK #38` bloki qo'shildi (~qator 2414–2457).
+
+Logika: `send_confirm_enabled` true bo'lsa, `transformEnqueueMessages` avval bajariladi va `textAlertController(context:updatedPresentationData:title:text:actions:)` bilan dialog ko'rsatiladi. "Yuborish" → `sendMessages(fenixTransformed)`. "Bekor qilish" → bo'sh. Present: `strongSelf.present(... in: .window(.root))`.
+
+Anchor (noyob Python): `addToTransitionNodeIfNeeded()\n                    let transformedMessages = strongSelf.transformEnqueueMessages(messages, silentPosting: silentPosting, postpone: postpone)\n                    strongSelf.sendMessages(transformedMessages)\n                } else if schedule {`.
+
+### `submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` — Python bilan qo'llandi, 2026-06-17
+
+`sendGift` context menu action ichiga `// FENIX-HOOK #38` bloki qo'shildi (~qator 1162–1204).
+
+Logika: `send_confirm_enabled` true bo'lsa, `f(.dismissWithoutContent)` avval chaqiriladi (context menu yopiladi), keyin `textAlertController(context:title:text:actions:)` dialog. "Yuborish" → `controllerInteraction?.sendGift(message.id.peerId)`. "Bekor qilish" → bo'sh. Present: `controllerInteraction?.presentController(fenixAlert38, nil)`.
+
+Anchor (noyob Python): `            }, action: { _, f in\n                let _ = controllerInteraction.sendGift(message.id.peerId)\n                f(.dismissWithoutContent)\n            })))`.

@@ -902,9 +902,40 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         self.mediaActionButtons.micButton.stopRecording = { [weak self] in
             if let strongSelf = self, let interfaceInteraction = strongSelf.interfaceInteraction {
+                // FENIX-HOOK #38 — ovozli xabarni yuborishdan oldin tasdiq dialogi (native ActionSheet)
+                let fenixSendConfirm = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false
+                guard fenixSendConfirm, let fenixState = strongSelf.presentationInterfaceState else {
+                    interfaceInteraction.stopMediaRecording()
+                    strongSelf.tooltipController?.dismiss()
+                    return
+                }
+                let fenixSendLabel: String
+                switch fenixState.strings.primaryComponent.languageCode {
+                case "uz": fenixSendLabel = "Ovozli xabarni yuborish"
+                case "ru": fenixSendLabel = "Отправить голосовое"
+                default:   fenixSendLabel = "Send voice message"
+                }
                 interfaceInteraction.stopMediaRecording()
-                
                 strongSelf.tooltipController?.dismiss()
+                let fenixActionSheet = ActionSheetController(theme: ActionSheetControllerTheme(presentationTheme: fenixState.theme, fontSize: fenixState.fontSize))
+                fenixActionSheet.setItemGroups([
+                    ActionSheetItemGroup(items: [
+                        ActionSheetButtonItem(title: fenixSendLabel, color: .accent, action: { [weak fenixActionSheet, weak strongSelf] in
+                            fenixActionSheet?.dismissAnimated()
+                            strongSelf?.interfaceInteraction?.sendRecordedMedia(false, false)
+                        })
+                    ]),
+                    ActionSheetItemGroup(items: [
+                        ActionSheetButtonItem(title: fenixState.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak fenixActionSheet, weak strongSelf] in
+                            fenixActionSheet?.dismissAnimated()
+                            strongSelf?.interfaceInteraction?.deleteRecordedMedia()
+                        })
+                    ])
+                ])
+                if let controller = interfaceInteraction.chatController() {
+                    controller.present(fenixActionSheet, in: .window(.root))
+                }
+                // END FENIX-HOOK #38
             }
         }
         self.mediaActionButtons.micButton.updateLocked = { [weak self] _ in

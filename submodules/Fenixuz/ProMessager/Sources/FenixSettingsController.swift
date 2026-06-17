@@ -60,6 +60,8 @@ private enum FenixEntry: ItemListNodeEntry {
     case autoTranslate(PresentationTheme, String, String)
     case translateToggle(PresentationTheme, String, String, Bool)
     case translateMessages(PresentationTheme, String)
+    // isNew: true — Feature #37 Send-Translate 2-tap confirm
+    case sendTranslateConfirm(PresentationTheme, String, String, Bool, Bool)
     case messagingFooter(PresentationTheme, String)
 
     // — STT Section —
@@ -74,6 +76,8 @@ private enum FenixEntry: ItemListNodeEntry {
     case blockForeignUsers(PresentationTheme, String, String, Bool)
     case blockApkFiles(PresentationTheme, String, String, Bool)
     case autoDownloadDisabled(PresentationTheme, String, String, Bool, Bool)
+    // Feature #38: yuborishdan oldin tasdiq so'rovi (ovoz, stiker, sovg'a)
+    case sendConfirmEnabled(PresentationTheme, String, String, Bool, Bool)
     case protectionFooter(PresentationTheme, String)
 
     // — Appearance Section (Feature #23) —
@@ -100,11 +104,11 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .interfaceFooter:
             return FenixSection.interface.rawValue
-        case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .messagingFooter:
+        case .messagingHeader, .textStyle, .autoText, .autoTranslate, .translateToggle, .translateMessages, .sendTranslateConfirm, .messagingFooter:
             return FenixSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
             return FenixSection.stt.rawValue
-        case .protectionHeader, .blockForeignUsers, .blockApkFiles, .autoDownloadDisabled, .protectionFooter:
+        case .protectionHeader, .blockForeignUsers, .blockApkFiles, .autoDownloadDisabled, .sendConfirmEnabled, .protectionFooter:
             return FenixSection.protection.rawValue
         case .appearanceHeader, .whiteThemeAccent, .appearanceFooter:
             return FenixSection.appearance.rawValue
@@ -139,6 +143,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case .autoTranslate:             return 23
         case .translateToggle:           return 24
         case .translateMessages:         return 25
+        case .sendTranslateConfirm:      return 27
         case .messagingFooter:           return 26
         // STT
         case .sttHeader:                 return 30
@@ -150,6 +155,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case .blockForeignUsers:         return 41
         case .blockApkFiles:             return 42
         case .autoDownloadDisabled:      return 43
+        case .sendConfirmEnabled:        return 45
         case .protectionFooter:          return 44
         // Appearance (Feature #23)
         case .appearanceHeader:          return 50
@@ -213,6 +219,9 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .translateToggle(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .translateMessages(lhsTheme, lhsTitle):
             if case let .translateMessages(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
+        case let .sendTranslateConfirm(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .sendTranslateConfirm(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
+               lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .messagingFooter(lhsTheme, lhsText):
             if case let .messagingFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -234,6 +243,8 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .blockApkFiles(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .autoDownloadDisabled(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
             if case let .autoDownloadDisabled(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .sendConfirmEnabled(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .sendConfirmEnabled(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .protectionFooter(lhsTheme, lhsText):
             if case let .protectionFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -356,6 +367,23 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "character.book.closed.fill", color: .lightBlue), title: title, label: "", sectionId: self.section, style: .blocks, action: {
                 arguments.openTranslationSettings()
             })
+        case let .sendTranslateConfirm(_, title, text, value, isNew):
+            // Feature #37: 2-tap send confirm toggle (isNew badge)
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "questionmark.bubble.fill", color: .orange),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateSendTranslateConfirm(val)
+                }
+            )
         case let .messagingFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -406,6 +434,23 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrow.down.circle.fill", color: .orange), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateAutoDownloadDisabled(val)
             })
+        case let .sendConfirmEnabled(_, title, text, value, isNew):
+            // Feature #38: yuborishdan oldin tasdiq so'rovi (ovoz, stiker, sovg'a)
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "hand.raised.fill", color: .purple),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateSendConfirmEnabled(val)
+                }
+            )
         case let .protectionFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
 
@@ -479,6 +524,10 @@ private struct FenixSettingsState: Equatable {
     var whiteThemeAccentEnabled: Bool
     var voiceTranslateEnabled: Bool
     var autoDownloadDisabled: Bool
+    // Feature #37: yuborishdan oldin tarjima tasdiq so'rovi
+    var translateConfirmEnabled: Bool
+    // Feature #38: yuborishdan oldin umumiy tasdiq so'rovi (ovoz, stiker, sovg'a)
+    var sendConfirmEnabled: Bool
 
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -503,6 +552,10 @@ private struct FenixSettingsState: Equatable {
         self.voiceTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "voice_translate_enabled") ?? false
         // Default off — when on, all media auto-download is turned off
         self.autoDownloadDisabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_download_disabled") ?? false
+        // Default off — user opts in (Feature #37)
+        self.translateConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "translate_confirm_enabled") ?? false
+        // Default off — user opts in (Feature #38)
+        self.sendConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false
     }
 
     static func == (lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
@@ -561,6 +614,12 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.autoDownloadDisabled != rhs.autoDownloadDisabled {
+            return false
+        }
+        if lhs.translateConfirmEnabled != rhs.translateConfirmEnabled {
+            return false
+        }
+        if lhs.sendConfirmEnabled != rhs.sendConfirmEnabled {
             return false
         }
         return true
@@ -658,6 +717,13 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
 
     entries.append(.translateToggle(presentationData.theme, l10n.settings_messaging_translateToggle_title, l10n.settings_messaging_translateToggle_subtitle, state.showTranslateMessages))
     entries.append(.translateMessages(presentationData.theme, l10n.settings_messaging_translateLanguage_title))
+
+    // Feature #37: Send-Translate 2-tap confirm toggle
+    // isNew: true — set to false here when this feature is no longer new
+    let sendConfirmTitle    = FenixSendTranslateStrings.toggleTitle(langCode: langCode)
+    let sendConfirmSubtitle = FenixSendTranslateStrings.toggleSubtitle(langCode: langCode)
+    entries.append(.sendTranslateConfirm(presentationData.theme, sendConfirmTitle, sendConfirmSubtitle, state.translateConfirmEnabled, true))
+
     entries.append(.messagingFooter(presentationData.theme, l10n.settings_messaging_footer))
 
     // ─── VOICE → TEXT ───
@@ -679,6 +745,8 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.blockForeignUsers(presentationData.theme, l10n.settings_protection_foreign_title, l10n.settings_protection_foreign_subtitle, state.blockForeignUsers))
     entries.append(.blockApkFiles(presentationData.theme, l10n.settings_protection_apk_title, l10n.settings_protection_apk_subtitle, state.blockApkFiles))
     entries.append(.autoDownloadDisabled(presentationData.theme, FenixAutoDownloadStrings.title(langCode: langCode), FenixAutoDownloadStrings.subtitle(langCode: langCode), state.autoDownloadDisabled, true))
+    // Feature #38: yuborishdan oldin tasdiq so'rovi toggle
+    entries.append(.sendConfirmEnabled(presentationData.theme, FenixSendConfirmStrings.toggleTitle(langCode: langCode), FenixSendConfirmStrings.toggleSubtitle(langCode: langCode), state.sendConfirmEnabled, true))
     entries.append(.protectionFooter(presentationData.theme, l10n.settings_protection_footer))
 
     // ─── APPEARANCE (Feature #23) ───
@@ -729,8 +797,10 @@ private final class FenixSettingsArguments {
     let updateWhiteThemeAccent: (Bool) -> Void
     let updateVoiceTranslate: (Bool) -> Void
     let updateAutoDownloadDisabled: (Bool) -> Void
+    let updateSendTranslateConfirm: (Bool) -> Void
+    let updateSendConfirmEnabled: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openCalls = openCalls
@@ -754,6 +824,8 @@ private final class FenixSettingsArguments {
         self.updateWhiteThemeAccent = updateWhiteThemeAccent
         self.updateVoiceTranslate = updateVoiceTranslate
         self.updateAutoDownloadDisabled = updateAutoDownloadDisabled
+        self.updateSendTranslateConfirm = updateSendTranslateConfirm
+        self.updateSendConfirmEnabled = updateSendConfirmEnabled
     }
 }
 
@@ -933,7 +1005,7 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
     }, updateAutoDownloadDisabled: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "auto_download_disabled")
         // When the switch is on, disable auto-download on every network; off restores it.
-        let _ = updateMediaDownloadSettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
+        _ = updateMediaDownloadSettingsInteractively(accountManager: context.sharedContext.accountManager, { current in
             var updated = current
             updated.cellular.enabled = !value
             updated.wifi.enabled = !value
@@ -942,6 +1014,22 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         updateState { state in
             var state = state
             state.autoDownloadDisabled = value
+            return state
+        }
+    }, updateSendTranslateConfirm: { value in
+        // Feature #37: yuborishdan oldin tarjima tasdiq so'rovi
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "translate_confirm_enabled")
+        updateState { state in
+            var state = state
+            state.translateConfirmEnabled = value
+            return state
+        }
+    }, updateSendConfirmEnabled: { value in
+        // Feature #38: yuborishdan oldin umumiy tasdiq so'rovi (ovoz, stiker, sovg'a)
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "send_confirm_enabled")
+        updateState { state in
+            var state = state
+            state.sendConfirmEnabled = value
             return state
         }
     })
@@ -1154,6 +1242,81 @@ private enum FenixNewBadgeLabel {
         case "uz": return "YANGI"
         case "ru": return "НОВОЕ"
         default:   return "NEW"
+        }
+    }
+}
+
+// MARK: - Local string namespace (Feature #37 — Send-Translate Confirm)
+// Kept local to avoid the parallel-edit hazard on the shared Localization module.
+// The toggle sits in the Messaging section and controls translate_confirm_enabled key.
+
+private enum FenixSendTranslateStrings {
+    static func toggleTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yuborishda tarjima so'rovi"
+        case "ru": return "Запрос перевода при отправке"
+        default:   return "Ask to translate on send"
+        }
+    }
+
+    static func toggleSubtitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Send tugmasida tarjima qilib yuborish yoki originalni yuborish so'rovi chiqadi"
+        case "ru": return "При отправке появится диалог: перевести или отправить оригинал"
+        default:   return "Before sending, a dialog asks to translate or send the original"
+        }
+    }
+}
+
+// MARK: - Local string namespace (Feature #38 — Send Confirm Dialog)
+// Ovoz xabari, stiker yoki sovg'a yuborishdan oldin tasdiq so'rovi.
+
+public enum FenixSendConfirmStrings {
+    public static func toggleTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yuborishdan oldin so'rash"
+        case "ru": return "Спрашивать перед отправкой"
+        default:   return "Ask before sending"
+        }
+    }
+
+    public static func toggleSubtitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Ovozli xabar, stiker yoki sovg'a yuborishdan oldin tasdiq so'raladi"
+        case "ru": return "Перед отправкой голосового, стикера или подарка появится подтверждение"
+        default:   return "Confirms before sending a voice message, sticker, or gift"
+        }
+    }
+
+    public static func dialogTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yuborishni tasdiqlang"
+        case "ru": return "Подтвердите отправку"
+        default:   return "Confirm sending"
+        }
+    }
+
+    public static func dialogText(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Xabarni yuborishni xohlaysizmi?"
+        case "ru": return "Вы хотите отправить это сообщение?"
+        default:   return "Do you want to send this message?"
+        }
+    }
+
+    public static func sendAction(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yuborish"
+        case "ru": return "Отправить"
+        default:   return "Send"
+        }
+    }
+
+    public static func cancelAction(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Bekor qilish"
+        case "ru": return "Отмена"
+        default:   return "Cancel"
         }
     }
 }

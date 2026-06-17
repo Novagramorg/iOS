@@ -4687,13 +4687,81 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.composeInputState.inputText)
             }
             
-            // PRO MESSAGER: Automatic Translation
+            // PRO MESSAGER: shared translate settings (used by #37 confirm and #31 auto-translate below)
             let proAutoTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_translate_enabled") ?? false
             let proTranslateLang = UserDefaults(suiteName: "pro_messager")?.string(forKey: "auto_translate_lang") ?? ""
             let currentInputText = effectiveInputText
-            
             let hasTranslateAttr = currentInputText.length > 0 && currentInputText.attribute(NSAttributedString.Key("pro_translated"), at: 0, effectiveRange: nil) != nil
-            
+
+            // FENIX-HOOK #37: Send-Translate 2-tap confirm
+            // Feature: agar translate_confirm_enabled yoqilgan bo'lsa, yuborishdan oldin tasdiq so'raydi.
+            // Mavjud #31 auto-translate hook'dan OLDIN tekshiriladi — agar confirm yo'q bo'lsa, #31 ishlaydi.
+            let proTranslateConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "translate_confirm_enabled") ?? false
+            if overrideText == nil && proTranslateConfirmEnabled && !proTranslateLang.isEmpty && currentInputText.length > 0 && !hasTranslateAttr {
+                if let controller = self.controller {
+                    let langCode = self.chatPresentationInterfaceState.strings.primaryComponent.languageCode
+                    let alertTitle: String
+                    let translateAction: String
+                    let sendOriginalAction: String
+                    switch langCode {
+                    case "uz":
+                        alertTitle = "Xabarni tarjima qilib yuborasizmi?"
+                        translateAction = "Tarjima qilib yuborish"
+                        sendOriginalAction = "Original yuborish"
+                    case "ru":
+                        alertTitle = "Отправить сообщение с переводом?"
+                        translateAction = "Перевести и отправить"
+                        sendOriginalAction = "Отправить оригинал"
+                    default:
+                        alertTitle = "Send with translation?"
+                        translateAction = "Translate & Send"
+                        sendOriginalAction = "Send Original"
+                    }
+                    // Input maydonini tozalab, foydalanuvchi UI ni ko'rmaydi (original text saqlangan)
+                    if let textInputPanelNode = self.textInputPanelNode {
+                        textInputPanelNode.updateInputTextState(ChatTextInputState(inputText: NSAttributedString()))
+                    }
+                    controller.present(textAlertController(context: self.context, title: nil, text: alertTitle, actions: [
+                        TextAlertAction(type: .genericAction, title: sendOriginalAction, action: { [weak self] in
+                            guard let self else { return }
+                            // Original matnni pro_translated attr bilan yuborish (qayta confirm oldini oladi)
+                            let fallbackAttrString = NSMutableAttributedString(attributedString: currentInputText)
+                            fallbackAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: fallbackAttrString.length))
+                            self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
+                        }),
+                        TextAlertAction(type: .defaultAction, title: translateAction, action: { [weak self] in
+                            guard let self else { return }
+                            let engine = self.context.engine
+                            let _ = (engine.messages.translate(text: currentInputText.string, toLang: proTranslateLang, entities: [])
+                            |> deliverOnMainQueue).start(next: { [weak self] translatedStr in
+                                guard let self else { return }
+                                if let translatedStr = translatedStr, !translatedStr.0.isEmpty {
+                                    let translatedAttrString = NSMutableAttributedString(string: translatedStr.0)
+                                    if currentInputText.length > 0 {
+                                        let attrs = currentInputText.attributes(at: currentInputText.length - 1, effectiveRange: nil)
+                                        translatedAttrString.addAttributes(attrs, range: NSRange(location: 0, length: translatedAttrString.length))
+                                    }
+                                    translatedAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: translatedAttrString.length))
+                                    self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: translatedAttrString, completion: completion)
+                                } else {
+                                    let fallbackAttrString = NSMutableAttributedString(attributedString: currentInputText)
+                                    fallbackAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: fallbackAttrString.length))
+                                    self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
+                                }
+                            }, error: { [weak self] _ in
+                                guard let self else { return }
+                                let fallbackAttrString = NSMutableAttributedString(attributedString: currentInputText)
+                                fallbackAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: fallbackAttrString.length))
+                                self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
+                            })
+                        }),
+                    ]), in: .window(.root))
+                }
+                return
+            }
+            // END FENIX-HOOK #37
+
+            // PRO MESSAGER: Automatic Translation (settings declared above, shared with #37)
             if overrideText == nil && proAutoTranslateEnabled && !proTranslateLang.isEmpty && currentInputText.length > 0 && !hasTranslateAttr {
                 if let textInputPanelNode = self.textInputPanelNode {
                     textInputPanelNode.updateInputTextState(ChatTextInputState(inputText: NSAttributedString()))

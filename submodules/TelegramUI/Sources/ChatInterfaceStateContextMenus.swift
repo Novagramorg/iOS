@@ -1159,8 +1159,43 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             actions.append(.action(ContextMenuActionItem(text: sendGiftTitle, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Gift"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
-                let _ = controllerInteraction.sendGift(message.id.peerId)
+                // FENIX-HOOK #38 — sovg'a yuborishdan oldin tasdiq dialogi
+                let fenixSendConfirm38 = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false
+                guard fenixSendConfirm38 else {
+                    let _ = controllerInteraction.sendGift(message.id.peerId)
+                    f(.dismissWithoutContent)
+                    return
+                }
                 f(.dismissWithoutContent)
+                let fenixTitle38: String
+                let fenixText38: String
+                let fenixSend38: String
+                let fenixCancel38: String
+                switch chatPresentationInterfaceState.strings.primaryComponent.languageCode {
+                case "uz":
+                    fenixTitle38 = "Yuborishni tasdiqlang"
+                    fenixText38 = "Sovg'a yubormoqchimisiz?"
+                    fenixSend38 = "Yuborish"
+                    fenixCancel38 = "Bekor qilish"
+                case "ru":
+                    fenixTitle38 = "Подтвердите отправку"
+                    fenixText38 = "Отправить подарок?"
+                    fenixSend38 = "Отправить"
+                    fenixCancel38 = "Отмена"
+                default:
+                    fenixTitle38 = "Confirm sending"
+                    fenixText38 = "Send this gift?"
+                    fenixSend38 = "Send"
+                    fenixCancel38 = "Cancel"
+                }
+                let fenixAlert38 = textAlertController(context: context, title: fenixTitle38, text: fenixText38, actions: [
+                    TextAlertAction(type: .defaultAction, title: fenixSend38, action: {
+                        let _ = controllerInteraction.sendGift(message.id.peerId)
+                    }),
+                    TextAlertAction(type: .genericAction, title: fenixCancel38, action: {})
+                ])
+                controllerInteraction.presentController(fenixAlert38, nil)
+                // END FENIX-HOOK #38
             })))
         }
         
