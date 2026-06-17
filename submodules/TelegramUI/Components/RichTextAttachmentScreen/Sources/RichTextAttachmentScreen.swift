@@ -16,7 +16,6 @@ import ContextUI
 import Postbox
 import TelegramCore
 
-@available(iOS 17.0, *)
 public class RichTextAttachmentScreen: ViewControllerComponentContainer, AttachmentContainable {
     public enum RichTextAttachment {
         case image(ImageMediaReference)
@@ -81,7 +80,6 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     }
 }
 
-@available(iOS 17.0, *)
 final class RichTextAttachmentScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
@@ -622,7 +620,7 @@ final class RichTextAttachmentScreenComponent: Component {
     }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 private final class RichTextActionContextReferenceSource: ContextReferenceContentSource {
     private let sourceView: UIView
     init(sourceView: UIView) { self.sourceView = sourceView }

@@ -2,7 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension NSAttributedString.Key {
     /// Marks a run as inline code (GFM `code`). At render time the mapper swaps in a monospaced font
     /// + subtle background; on read-back it round-trips to `CharacterAttributes.inlineCode` (and
@@ -16,7 +16,7 @@ extension NSAttributedString.Key {
 }
 
 /// Converts between the Core model and `NSAttributedString` for one paragraph block.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 public struct AttributedStringMapper {
     public let styleSheet: StyleSheet
     /// Square-side multiplier for inline emoji (× the font's ascender+|descender|). Baked into each

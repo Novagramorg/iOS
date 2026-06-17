@@ -5,7 +5,7 @@ import RichTextEditorCore
 /// A table block: a grid of cells, each cell a `BlockStack`. Token size follows the Core model
 /// (table = Σrows + 2; row = Σcells + 2; cell = Σblocks + 2). Cells are laid out row-major; the
 /// canvas treats the whole table as one `CanvasBlock` and recurses via `leafRegions()`.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class TableBlockBox: CanvasBlock {
     let id: BlockID
     let columns: [ColumnSpec]
@@ -399,8 +399,8 @@ final class TableBlockBox: CanvasBlock {
     // caret resting on a table boundary is snapped into a cell first (see `caretSnappedIntoCell`) — but
     // keeping this per-instance contains any future accidental write to one table rather than leaking
     // it into a process-wide shared layout.
-    private let emptyLayout = BlockLayout(attributedString: NSAttributedString(string: ""), width: 1)
-    var textLayout: BlockLayout { emptyLayout }
+    private let emptyLayout = makeBlockLayout(attributedString: NSAttributedString(string: ""), width: 1)
+    var textLayout: BlockLayoutEngine { emptyLayout }
     var textStart: Int { nodeStart }
     var textLength: Int { 0 }
     var textRef: TextNodeRef { .paragraph(id) }

@@ -4,6 +4,7 @@ import UIKit
 @testable import RichTextEditorUIKit
 import RichTextEditorCore
 
+@available(iOS 16.0, *)
 final class EmojiMapperTests: XCTestCase {
     private let mapper = AttributedStringMapper()
 
@@ -140,7 +141,8 @@ final class EmojiMapperTests: XCTestCase {
     }
 }
 
-/// A minimal NSTextLocation for exercising attachmentBounds in a unit test.
+/// A minimal NSTextLocation for exercising attachmentBounds in a unit test. (NSTextLocation is iOS 15+.)
+@available(iOS 15.0, *)
 private final class DummyLocation: NSObject, NSTextLocation {
     func compare(_ location: NSTextLocation) -> ComparisonResult { .orderedSame }
 }

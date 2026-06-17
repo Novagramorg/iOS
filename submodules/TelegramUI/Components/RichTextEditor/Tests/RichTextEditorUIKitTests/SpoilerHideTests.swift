@@ -4,6 +4,7 @@ import UIKit
 @testable import RichTextEditorUIKit
 import RichTextEditorCore
 
+@available(iOS 16.0, *)
 final class SpoilerHideTests: XCTestCase {
     private func layout(_ s: String) -> BlockLayout {
         let block = ParagraphBlock(id: BlockID("p1"), style: .body, runs: [TextRun(text: s)])

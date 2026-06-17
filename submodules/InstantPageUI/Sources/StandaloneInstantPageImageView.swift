@@ -10,7 +10,7 @@ import TelegramUIPreferences
 /// (module-internal) `InstantPageImageNode`. Built for the rich-text composer, which needs to show a
 /// freshly-picked `EngineMedia` outside any web page. The caller sizes it (frame / `update(size:)`);
 /// the underlying node self-lays-out from its frame (see `InstantPageImageNode.layout()`).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 public final class StandaloneInstantPageImageView: UIView {
     private let node: InstantPageImageNode
 

@@ -4,7 +4,7 @@ import UIKit
 /// Host-settable colors for the editor. Set via `RichTextEditorView.theme`; applied at render time only and
 /// never written into the `Document` model. `default` reproduces the editor's prior hardcoded colors, so the
 /// look is unchanged until a host assigns a theme.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 public struct RichTextEditorTheme {
     /// Default foreground for runs without an explicit color (and for list markers' conceptual text color).
     public var primaryText: UIColor

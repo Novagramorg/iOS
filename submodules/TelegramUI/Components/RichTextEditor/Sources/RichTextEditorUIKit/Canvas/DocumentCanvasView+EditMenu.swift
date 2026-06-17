@@ -3,49 +3,37 @@ import UIKit
 
 /// A minimal pasteboard seam so copy/cut/paste are unit-testable with a fake — the simulator's
 /// UIPasteboard.general can be unauthorized and hang on reads. Production uses UIPasteboard.general.
-@available(iOS 17.0, *)
 protocol TextPasteboard: AnyObject {
     var string: String? { get set }
     var hasStrings: Bool { get }
 }
-@available(iOS 17.0, *)
 extension UIPasteboard: TextPasteboard {}
 
-/// The system edit menu (UIEditMenuInteraction, iOS 16+) + the responder actions that populate it.
-/// Presentation is gesture-driven (see DocumentCanvasView+Interaction); the actions delegate to the
-/// pure helpers in DocumentCanvasView+SelectionActions and the UITextInput witnesses. Select/Select All
-/// here; Copy/Cut/Paste are added in the clipboard task.
-@available(iOS 17.0, *)
+/// The system edit menu + the responder actions that populate it. On iOS 16+ the menu is presented via
+/// `UIEditMenuInteraction` (install + delegate live in the gated extension below); on iOS 13–15 it falls
+/// back to the deprecated `UIMenuController`. The responder actions (Select/Copy/Cut/Paste + the custom
+/// Bold/Italic/Underline/Look Up/Share) are SHARED — only the presentation differs. Presentation is
+/// gesture-driven (see DocumentCanvasView+Interaction).
 extension DocumentCanvasView {
-    func installEditMenuInteraction() {
-        guard editMenuInteraction == nil else { return }
-        let interaction = UIEditMenuInteraction(delegate: self)
-        addInteraction(interaction)
-        editMenuInteraction = interaction
-    }
-
     /// How far the edit-menu target rect grows above/below a text selection so the menu clears the round
-    /// selection-handle knobs (the OS draws them a few points beyond the first/last line; UIEditMenuInteraction
-    /// reserves no space for them on its own — we must include them in the target rect). Tuned visually.
+    /// selection-handle knobs (the OS draws them a few points beyond the first/last line). Tuned visually.
     static let selectionHandleAllowance: CGFloat = 12
 
     /// The content the edit menu must not obscure, in canvas coordinates: a structurally-selected table
     /// row/column, else the selection union, else the image atom at a gap caret, else the collapsed caret.
-    /// Pure function of the current selection — `targetRectFor` is re-invoked on every layout change.
     func editMenuContentRect() -> CGRect {
         if let outline = tableSelectionOutlineRect() { return outline }
         if selFrom != selTo {
             let union = selectionRects(globalFrom: selFrom, globalTo: selTo)
                 .reduce(CGRect.null) { $0.union($1) }
-            if !union.isNull { return union }   // fall through to the caret if the range produced no rects
+            if !union.isNull { return union }
         }
         if let img = mediaBox(atGap: head) { return img.mediaRect() }
         return caretRect(for: DocumentTextPosition(head))
     }
 
-    /// The rect `UIEditMenuInteraction` lays the menu out AROUND (the `targetRectFor` value). It is the
-    /// content rect grown to clear the drag handles for a non-collapsed TEXT selection; a caret, image, or
-    /// structural table outline has no text handles, so it is returned unpadded.
+    /// The rect the menu lays out AROUND — the content rect grown to clear the drag handles for a
+    /// non-collapsed TEXT selection; a caret/image/structural-table pick has no text handles, so unpadded.
     func editMenuTargetRect() -> CGRect {
         let content = editMenuContentRect()
         if selFrom != selTo, tableSelection == nil {
@@ -54,38 +42,47 @@ extension DocumentCanvasView {
         return content
     }
 
-    /// Present the system menu, anchored at the top-center of the content rect (a meaningful point inside
-    /// the selection so hit-testing resolves to this responder). The menu lays itself out AROUND the
-    /// `targetRectFor` rect (see the delegate below), so it no longer covers the word or its handles.
+    /// Present the system menu, anchored at the top-center of the content rect. iOS 16+ uses
+    /// `UIEditMenuInteraction` (it lays out around `targetRectFor`); below 16, `UIMenuController`.
     func presentEditMenu() {
-        guard let interaction = editMenuInteraction, isFirstResponder else { return }
+        guard isFirstResponder else { return }
         let rect = editMenuContentRect()
-        let cfg = UIEditMenuConfiguration(identifier: nil, sourcePoint: CGPoint(x: rect.midX, y: rect.minY))
-        interaction.presentEditMenu(with: cfg)
+        if #available(iOS 16.0, *) {
+            guard let interaction = editMenuInteraction else { return }
+            let cfg = UIEditMenuConfiguration(identifier: nil, sourcePoint: CGPoint(x: rect.midX, y: rect.minY))
+            interaction.presentEditMenu(with: cfg)
+        } else {
+            presentLegacyEditMenu(targetRect: editMenuTargetRect())
+        }
     }
 
     /// Present the edit menu anchored at an explicit point (used for the table handle menu).
     func presentEditMenu(sourcePoint: CGPoint) {
-        guard let interaction = editMenuInteraction, isFirstResponder else { return }
-        interaction.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: sourcePoint))
+        guard isFirstResponder else { return }
+        if #available(iOS 16.0, *) {
+            guard let interaction = editMenuInteraction else { return }
+            interaction.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: sourcePoint))
+        } else {
+            presentLegacyEditMenu(targetRect: CGRect(origin: sourcePoint, size: .zero))
+        }
     }
 
     func dismissEditMenu() {
         dismissEditMenuCountForTesting += 1
-        editMenuInteraction?.dismissMenu()
+        if #available(iOS 16.0, *) {
+            editMenuInteraction?.dismissMenu()
+        } else {
+            UIMenuController.shared.hideMenu()
+            editMenuVisible = false
+        }
     }
 
     /// Native UITextView dismisses the edit menu the moment the text or the caret/selection changes.
     /// Called from the selection setters, the `selectedTextRange` setter, and the `editing { }` wrapper.
-    ///
-    /// The dismiss is UNCONDITIONAL — deliberately NOT gated on `editMenuVisible`. A presented
-    /// `UIEditMenuInteraction` does not self-dismiss on a selection change (it just repositions via
-    /// `targetRectFor`), so we must call `dismissMenu()`; and the system flips `editMenuVisible` to false
-    /// on a touch-down BEFORE the gesture's setter runs, so gating on it would skip the dismiss exactly
-    /// when the user moves the cursor. `dismissMenu()` on a non-presented interaction is a harmless no-op.
-    /// The present-after-change gesture flows (Select / Select All / double-tap / handle-drag `.ended` /
-    /// long-press `.ended`) are unaffected because they change the selection via `applySelection` (NOT a
-    /// dismiss point) and call `presentEditMenu()` AFTER any setter.
+    /// UNCONDITIONAL (not gated on `editMenuVisible`) — see the long note that previously lived here:
+    /// a presented menu does not self-dismiss on a selection change, and the system clears `editMenuVisible`
+    /// on touch-down before the gesture's setter runs. `dismissMenu()`/`hideMenu()` is a no-op when nothing
+    /// is presented.
     func dismissEditMenuForSelectionOrTextChange() {
         dismissEditMenu()
     }
@@ -95,10 +92,7 @@ extension DocumentCanvasView {
         case #selector(select(_:)):
             return hasText && selFrom == selTo && leafRegion(containingGlobal: head) != nil
         case #selector(selectAll(_:)):
-            // "Everything already selected" is measured against the RENDERABLE bounds (what
-            // `selectAllText` lands on), not the raw 0/documentSize: a document ending in a
-            // structural block (e.g. a table) has `endOfDocument < documentSize`, so comparing
-            // against documentSize would wrongly keep Select All enabled after a select-all.
+            // Measured against RENDERABLE bounds (what `selectAllText` lands on), not raw 0/documentSize.
             let begin = (beginningOfDocument as? DocumentTextPosition)?.offset ?? 0
             let end = (endOfDocument as? DocumentTextPosition)?.offset ?? documentSize
             return hasText && !(selFrom <= begin && selTo >= end)
@@ -106,6 +100,10 @@ extension DocumentCanvasView {
             return selFrom < selTo
         case #selector(paste(_:)):
             return pasteboard.hasStrings
+        case #selector(legacyBold), #selector(legacyItalic), #selector(legacyUnderline),
+             #selector(legacyLookUp), #selector(legacyShare):
+            // The custom items of the UIMenuController (iOS 13–15) fallback — a non-collapsed selection only.
+            return selFrom < selTo
         default:
             return super.canPerformAction(action, withSender: sender)
         }
@@ -135,21 +133,59 @@ extension DocumentCanvasView {
     @objc override func paste(_ sender: Any?) {
         guard let raw = pasteboard.string, let range = selectedTextRange else { return }
         // Multi-line paragraph-splitting paste is Phase 5d; flatten newlines so applyReplace's
-        // no-newline precondition holds.
-        // Normalize CRLF first so \r\n doesn't flatten to a double space; multi-line paragraph-splitting
-        // paste is Phase 5d, so newlines collapse to a single space.
+        // no-newline precondition holds. Normalize CRLF first so \r\n doesn't flatten to a double space.
         let flattened = raw.replacingOccurrences(of: "\r\n", with: "\n")
             .components(separatedBy: .newlines).joined(separator: " ")
         replace(range, withText: flattened)
     }
+
+    // MARK: - Legacy UIMenuController fallback (iOS 13–15)
+
+    /// Presents the deprecated `UIMenuController`. Standard Cut/Copy/Paste/Select/Select All surface
+    /// automatically from `canPerformAction`; the custom items (Format toggles + Look Up + Share) are added
+    /// as flat `UIMenuItem`s (UIMenuController has no submenus, so the iOS-16+ "Format" submenu is flattened).
+    /// `Translate` is iOS 17.4+, so it never appears on this path. Reuses the shared responder actions.
+    private func presentLegacyEditMenu(targetRect: CGRect) {
+        let mc = UIMenuController.shared
+        mc.menuItems = legacyCustomMenuItems()
+        mc.showMenu(from: self, rect: targetRect)
+        editMenuVisible = true
+    }
+
+    private func legacyCustomMenuItems() -> [UIMenuItem] {
+        guard selFrom < selTo else { return [] }
+        return [
+            UIMenuItem(title: "Bold", action: #selector(legacyBold)),
+            UIMenuItem(title: "Italic", action: #selector(legacyItalic)),
+            UIMenuItem(title: "Underline", action: #selector(legacyUnderline)),
+            UIMenuItem(title: "Look Up", action: #selector(legacyLookUp)),
+            UIMenuItem(title: "Share", action: #selector(legacyShare)),
+        ]
+    }
+
+    @objc private func legacyBold() { toggleBold() }
+    @objc private func legacyItalic() { toggleItalic() }
+    @objc private func legacyUnderline() { toggleUnderline() }
+    @objc private func legacyLookUp() { presentLookUp() }
+    @objc private func legacyShare() { presentShare() }
 }
 
-/// Tracks edit-menu visibility so a tap on the caret/selection can toggle it (see handleSingleTap).
-@available(iOS 17.0, *)
+/// iOS 16+ system edit menu: the `UIEditMenuInteraction` install + its delegate. Below 16 this whole
+/// extension is absent and `presentEditMenu`/`dismissEditMenu` use `UIMenuController` instead.
+@available(iOS 16.0, *)
+extension DocumentCanvasView {
+    func installEditMenuInteraction() {
+        guard editMenuInteraction == nil else { return }
+        let interaction = UIEditMenuInteraction(delegate: self)
+        addInteraction(interaction)
+        editMenuInteraction = interaction
+    }
+}
+
+@available(iOS 16.0, *)
 extension DocumentCanvasView: UIEditMenuInteractionDelegate {
-    /// Without this, the menu's target rect defaults to a zero-size rect at the source point, so the system
-    /// only avoids that single point and overlaps the selection + handles. Returning the content rect makes
-    /// the menu present AROUND it. Recomputed each call (the system re-invokes this on layout changes).
+    /// Returning the content rect makes the menu present AROUND it (the default zero-size rect would let it
+    /// overlap the selection + handles). Recomputed each call (the system re-invokes on layout changes).
     func editMenuInteraction(_ interaction: UIEditMenuInteraction,
                              targetRectFor configuration: UIEditMenuConfiguration) -> CGRect {
         editMenuTargetRect()

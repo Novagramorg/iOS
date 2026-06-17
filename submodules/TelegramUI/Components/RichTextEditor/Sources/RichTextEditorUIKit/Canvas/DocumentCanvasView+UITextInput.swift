@@ -2,7 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView: UITextInput {
     private func clamp(_ n: Int) -> Int { clampGlobal(n) }
 
@@ -204,7 +204,7 @@ extension DocumentCanvasView: UITextInput {
     }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView: UIKeyInput {
     var hasText: Bool { documentSize > 0 }
 

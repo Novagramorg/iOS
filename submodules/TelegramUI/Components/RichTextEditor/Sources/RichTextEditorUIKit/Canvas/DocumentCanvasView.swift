@@ -4,7 +4,7 @@ import RichTextEditorCore
 
 /// The multi-block document surface. ONE view owns every block and the unified global selection.
 /// (Internal — only `RichTextEditorView` is public; keeps `UITextInput` witnesses internal.)
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class DocumentCanvasView: UIView {
     let root = BlockStack()
     var boxes: [CanvasBlock] { get { root.boxes } set { root.boxes = newValue } }
@@ -164,7 +164,15 @@ final class DocumentCanvasView: UIView {
     // Created lazily in the `tokenizer` getter (Task 5) — declaring it with `= ...textInput: self`
     // here would require the UITextInput conformance to type-check before it exists.
     var inputTokenizer: UITextInputTokenizer?
-    var editMenuInteraction: UIEditMenuInteraction?
+    /// iOS 16+ system edit-menu interaction. Untyped storage because a stored property can't be
+    /// `@available`-gated narrower than its (now iOS-13) enclosing type, while `UIEditMenuInteraction` is
+    /// iOS 16+; below 16 the canvas falls back to `UIMenuController` (see DocumentCanvasView+EditMenu).
+    private var editMenuInteractionStorage: AnyObject?
+    @available(iOS 16.0, *)
+    var editMenuInteraction: UIEditMenuInteraction? {
+        get { editMenuInteractionStorage as? UIEditMenuInteraction }
+        set { editMenuInteractionStorage = newValue }
+    }
     /// Whether the edit menu is currently presented (tracked via UIEditMenuInteractionDelegate), so a tap
     /// on the caret/selection can TOGGLE the menu instead of re-presenting it (the close-then-reopen flicker).
     var editMenuVisible = false
@@ -183,8 +191,15 @@ final class DocumentCanvasView: UIView {
     var lastTapLocation: CGPoint = .zero
     var tapCount = 0
     /// Active magnifier loupe during a long-press caret drag (iOS 17+). Begun on `.began`, moved on
-    /// `.changed`, invalidated + niled on `.ended`/`.cancelled`/`.failed`.
-    var loupeSession: UITextLoupeSession?
+    /// `.changed`, invalidated + niled on `.ended`/`.cancelled`/`.failed`. The storage is untyped because a
+    /// stored property can't be `@available`-gated narrower than its enclosing (iOS-16) type, while
+    /// `UITextLoupeSession` is iOS 17+; the typed accessor below is the gated view onto it.
+    private var loupeSessionStorage: AnyObject?
+    @available(iOS 17.0, *)
+    var loupeSession: UITextLoupeSession? {
+        get { loupeSessionStorage as? UITextLoupeSession }
+        set { loupeSessionStorage = newValue }
+    }
     var draggingEndpoint: SelectionEndpoint?
     var draggingTableKnob: TableRangeEnd?
     var selectionHandlePan: UIPanGestureRecognizer?
@@ -211,7 +226,7 @@ final class DocumentCanvasView: UIView {
     var markedTextIsPrediction = false
     /// The layout currently carrying the grey prediction-ghost rendering colour (display-only), so it
     /// can be cleared when the prediction moves or ends. Weak: the layout is owned by its box.
-    weak var ghostStyledLayout: BlockLayout?
+    weak var ghostStyledLayout: BlockLayoutEngine?
     /// Document + selection snapshot captured at composition START, registered as ONE undo at commit
     /// (so undo removes the whole composed word, not each keystroke).
     var compositionUndoSnapshot: [Block]?
@@ -690,7 +705,7 @@ final class DocumentCanvasView: UIView {
                 // glyphs, so `selectionFillRects` yields nothing; synthesize the line-height-tall full row).
                 let h = r.emptyLineHeight > 0 ? r.emptyLineHeight : r.layout.caretRect(atOffset: 0).height
                 rects.append(CGRect(x: r.canvasOrigin.x - offX, y: r.canvasOrigin.y,
-                                    width: r.layout.container.size.width, height: h))
+                                    width: r.layout.containerWidth, height: h))
             }
         }
         return rects
@@ -956,7 +971,7 @@ final class DocumentCanvasView: UIView {
 }
 
 /// One pooled emoji: the host view plus its last canvas-space frame (for offscreen culling).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class HostedEmoji {
     let view: UIView
     var canvasFrame: CGRect
@@ -964,7 +979,7 @@ final class HostedEmoji {
 }
 
 /// One pooled media view: the host view plus its last canvas-space frame (for offscreen culling).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class HostedMediaItem {
     let view: RichTextMediaItemView
     var canvasFrame: CGRect

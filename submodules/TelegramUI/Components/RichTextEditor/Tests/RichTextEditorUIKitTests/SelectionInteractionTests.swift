@@ -65,8 +65,10 @@ final class SelectionInteractionTests: XCTestCase {
         // chrome (`_UITextSelectionLollipopView`/highlight/cursor) that custom no-draw replacement views no
         // longer suppress — the default lollipops leak at the container origin (handle knobs at ~CGPoint.zero).
         let v = canvasWithInteraction()
-        XCTAssertFalse(v.interactions.contains { $0 is UITextSelectionDisplayInteraction },
-                       "no UITextSelectionDisplayInteraction (its default handle chrome would leak at the origin)")
+        if #available(iOS 17.0, *) {   // the type itself is iOS 17+ (it's what we assert we DON'T install)
+            XCTAssertFalse(v.interactions.contains { $0 is UITextSelectionDisplayInteraction },
+                           "no UITextSelectionDisplayInteraction (its default handle chrome would leak at the origin)")
+        }
     }
 
     func test_appDrawsItsOwnHandles_forARangedSelection() {

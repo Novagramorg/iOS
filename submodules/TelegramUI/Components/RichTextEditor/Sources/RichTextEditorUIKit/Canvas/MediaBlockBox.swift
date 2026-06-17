@@ -4,14 +4,14 @@ import RichTextEditorCore
 
 /// The grey "Add caption" hint shown under an image while its caption is empty. `rect` spans the full
 /// caption content width so a centered paragraph style centers the text horizontally.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 struct CaptionPlaceholder { let text: String; let rect: CGRect; let font: UIFont }
 
 /// A media-with-caption block: a host-supplied media view (resolved from `mediaID` via the canvas's
 /// `mediaViewProvider`, positioned at `mediaRect()`) above an editable caption. Contributes
 /// `captionLength + 5` tokens; the caption text begins at `nodeStart + 2` (after the media atom and the
 /// caption paragraph's open token). The position `nodeStart` (before the atom) is a gap.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class MediaBlockBox: CanvasBlock {
     let id: BlockID
     var mediaID: String
@@ -19,7 +19,7 @@ final class MediaBlockBox: CanvasBlock {
     var naturalSize: Size2D
     var displayWidth: Double?
     var alignment: MediaAlignment
-    let caption: BlockLayout
+    let caption: BlockLayoutEngine
     let mapper: AttributedStringMapper
 
     var frame: CGRect = .zero
@@ -56,8 +56,8 @@ final class MediaBlockBox: CanvasBlock {
         let captionPara = ParagraphBlock(id: block.id, style: .caption,
                                          paragraph: MediaBlockBox.captionParagraph,
                                          runs: block.caption)
-        caption = BlockLayout(attributedString: mapper.attributedString(for: captionPara),
-                              width: max(width, 1))
+        caption = makeBlockLayout(attributedString: mapper.attributedString(for: captionPara),
+                                  width: max(width, 1))
     }
 
     // CanvasBlock — text region is the caption.
@@ -65,7 +65,7 @@ final class MediaBlockBox: CanvasBlock {
     // The medium is now an overlay view (not drawn into the backing store), so the backing view only needs
     // to cover the caption (its own inset frame). The full-bleed medium is hosted in the canvas mediaOverlay.
     var blockViewFrame: CGRect { frame }
-    var textLayout: BlockLayout { caption }
+    var textLayout: BlockLayoutEngine { caption }
     var textLength: Int { caption.length }
     var nodeSize: Int { caption.length + 5 }
     var textStart: Int { nodeStart + 2 }

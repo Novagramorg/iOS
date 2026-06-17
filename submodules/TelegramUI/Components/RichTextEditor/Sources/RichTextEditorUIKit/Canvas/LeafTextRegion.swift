@@ -6,9 +6,9 @@ import RichTextEditorCore
 /// are absolute positions in the document; `canvasOrigin` is where `layout` offset 0 draws in
 /// canvas coordinates. (A paragraph yields one; an image yields its caption; a table flat-maps
 /// over its cells' stacks.)
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 struct LeafTextRegion {
-    let layout: BlockLayout
+    let layout: BlockLayoutEngine
     let globalStart: Int
     let length: Int
     let ref: TextNodeRef

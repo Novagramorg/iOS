@@ -1,6 +1,7 @@
 # RichTextEditor — project guide
 
-A from-scratch **WYSIWYG rich-text editor for iOS** (UIKit, TextKit 2, iOS 17+) with images
+A from-scratch **WYSIWYG rich-text editor for iOS** (UIKit; TextKit 2 on iOS 16+, TextKit 1 on iOS 13–15;
+floor **iOS 13**) with images
 (captions), lists, tables, links, inline custom emoji, and Telegram-style spoilers. The **defining
 requirement** is **continuous selection across the whole document, including partial selection
 *through* table cells** — which (per verified spike research) is only achievable with a **custom
@@ -15,12 +16,26 @@ Development continues here via **SwiftPM** exactly as before.
 
 **Now wired into the app.** `ChatTextInputPanelNode` depends on `:RichTextEditorUIKit`, so both Bazel
 targets — `//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore` and
-`:RichTextEditorUIKit` — **fully compile** at the repo's iOS-13 floor as part of the app build (they
-previously only `--nobuild`-analyzed). The **availability pass is done** (2026-06-09): every top-level
-type/extension in the UIKit target is gated `@available(iOS 17.0, *)`; `RichTextEditorCore` is
-pure-Foundation and stays always-available. The two finer annotations are preserved —
-`@available(iOS 17.4, *)` (the Translate edit-menu item) and `@available(iOS 18.0, *)`
-(`UITextInput.isEditable`).
+`:RichTextEditorUIKit` — **fully compile and run down to iOS 13** as part of the app build.
+
+**Dual layout-engine back-port (2026-06-17).** TextKit was quarantined behind a one-method-per-call seam,
+`protocol BlockLayoutEngine` (`Layout/BlockLayoutEngine.swift`), so the layout engine is swappable:
+`BlockLayout` (TextKit 2, `@available(iOS 16.0, *)`) on iOS 16+, and **`BlockLayoutTK1`** (TextKit 1, iOS 7+,
+ungated) on iOS 13–15. `makeBlockLayout(...)` picks TK2 on iOS 16+ / TK1 below; the runtime debug toggle
+`BlockLayoutBackend.forceTextKit1` (DEBUG default `true`) forces TK1 on any OS for testing the back-port. The
+system edit menu likewise falls back from `UIEditMenuInteraction` (iOS 16+) to **`UIMenuController`** (iOS
+13–15) — see `DocumentCanvasView+EditMenu` (shared responder actions; custom items become flat `UIMenuItem`s).
+
+So **the UIKit target is gated `@available(iOS 13.0, *)`** (`RichTextEditorCore` is pure-Foundation,
+always-available), with only genuine higher-OS APIs kept at their real floor: the TK2 `BlockLayout` type + the
+4 `UIEditMenuInteraction` touch-points at **iOS 16**; the magnifier loupe (`UITextLoupeSession`) +
+`inlinePredictionType` at **iOS 17**; Translate at **17.4**; `isEditable` at **18**. **TK1 trade-offs on iOS
+13–15** (deliberate): no spoiler text-hiding (UIKit `NSLayoutManager` has no rendering/temporary-attribute
+analog), no loupe, no inline predictions — everything else (editing, tables, lists, links, emoji, selection,
+IME, edit menu) works. Full SwiftPM suite is green on both engines (TK1 via the DEBUG `forceTextKit1`). The
+app-side consumers (`RichTextEditorChatInputNode`, `RichTextAttachmentScreen` + its helpers,
+`StandaloneInstantPageImageView`) are also lowered to iOS 13; the editor still only appears behind the
+`debugRichText` ("Debug Text") experimental flag.
 
 **Spoiler-texture resource access is build-system-split (via `#if SWIFT_PACKAGE`).** `SpoilerDustView`
 resolves the particle texture two ways: under **SwiftPM** it uses `UIImage(named: "TextSpeckle", in:

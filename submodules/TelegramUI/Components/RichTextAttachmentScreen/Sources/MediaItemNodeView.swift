@@ -7,7 +7,7 @@ import RichTextEditorUIKit
 
 /// Adapts InstantPageUI's `StandaloneInstantPageImageView` (renders stills AND video) to the editor's
 /// `RichTextMediaItemView` seam. The editor owns/positions/sizes it.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class MediaItemNodeView: UIView, RichTextMediaItemView {
     private let mediaView: StandaloneInstantPageImageView
 

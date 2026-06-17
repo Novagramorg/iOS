@@ -2,7 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// The top-level paragraph box containing the caret (`head`), or nil when the caret is inside a table
     /// cell (there the containing top-level box is a `TableBlockBox`, not a `BlockBox`).

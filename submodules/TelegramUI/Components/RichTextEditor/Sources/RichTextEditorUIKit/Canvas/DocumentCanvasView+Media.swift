@@ -2,7 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// Reconciles pooled host media views against the laid-out document: reuse by owning `BlockID`,
     /// create via the provider for new blocks, size+position each at its media rect, tear down removed

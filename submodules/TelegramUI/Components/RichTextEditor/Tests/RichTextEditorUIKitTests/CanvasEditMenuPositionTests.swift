@@ -8,6 +8,7 @@ import RichTextEditorCore
 /// `editMenuInteraction(_:targetRectFor:)`. Without that hook the target rect defaults to a zero-size
 /// rect at the source point, so the menu covers the selected word and the selection handles. These
 /// tests pin `editMenuTargetRect()` — the pure geometry the delegate returns — for each present case.
+@available(iOS 16.0, *)
 final class CanvasEditMenuPositionTests: XCTestCase {
     private func paragraphCanvas() -> DocumentCanvasView {
         let v = DocumentCanvasView()

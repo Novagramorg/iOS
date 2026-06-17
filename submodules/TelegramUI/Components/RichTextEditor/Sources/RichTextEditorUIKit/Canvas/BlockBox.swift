@@ -5,7 +5,7 @@ import RichTextEditorCore
 /// The placeholder strings drawn in empty paragraphs. Configurable so a host can localize them or suppress
 /// them entirely (a chat composer draws its own placeholder, so it sets all to ""). An empty string means
 /// "no placeholder" for that case. Defaults preserve the editor's built-in English hints.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 public struct RichTextEditorPlaceholders: Equatable {
     /// Shown on the document's last empty body paragraph.
     public var body: String
@@ -30,13 +30,13 @@ public struct RichTextEditorPlaceholders: Equatable {
 /// One paragraph block in the canvas: a TextKit 2 layout plus the structural
 /// fields not stored in the attributed string, its frame in canvas coordinates, and its start in the
 /// document-wide global position space.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class BlockBox {
     let id: BlockID
     var style: ParagraphStyleName
     var listMembership: ListMembership?
     var paragraphAttributes: ParagraphAttributes
-    let layout: BlockLayout
+    let layout: BlockLayoutEngine
     let mapper: AttributedStringMapper
 
     var frame: CGRect = .zero
@@ -98,8 +98,8 @@ final class BlockBox {
         listMembership = paragraph.list
         paragraphAttributes = paragraph.paragraph
         self.mapper = mapper
-        layout = BlockLayout(attributedString: mapper.attributedString(for: paragraph),
-                             width: max(width, 1))
+        layout = makeBlockLayout(attributedString: mapper.attributedString(for: paragraph),
+                                 width: max(width, 1))
     }
 
     var length: Int { layout.length }
@@ -227,12 +227,12 @@ final class BlockBox {
     }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension BlockBox: CanvasBlock {
     var rendersAsBlockView: Bool { true }
     var nodeStart: Int { get { globalStart } set { globalStart = newValue } }
     var nodeSize: Int { length + 2 }
-    var textLayout: BlockLayout { layout }
+    var textLayout: BlockLayoutEngine { layout }
     var textStart: Int { globalStart }
     var textLength: Int { length }
     func currentBlock() -> Block { .paragraph(currentParagraph()) }

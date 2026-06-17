@@ -7,7 +7,7 @@ import RichTextEditorCore
 /// span math via `nodeStart`/`nodeSize`, and selection/caret/text/draw via `leafRegions()` (each
 /// block's editable text regions, recursing into table cells) + `draw(in:imageProvider:)`. The
 /// single-text-region members are a convenience for leaf blocks; a table supplies degenerate values.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 protocol CanvasBlock: AnyObject {
     var id: BlockID { get }
     /// When true, the canvas renders this block via a persistent, non-focusable `BlockBackingView`
@@ -26,7 +26,7 @@ protocol CanvasBlock: AnyObject {
     /// Assigned by `recomputeSpans`.
     var nodeStart: Int { get set }
     /// The block's single editable text region.
-    var textLayout: BlockLayout { get }
+    var textLayout: BlockLayoutEngine { get }
     /// Global position where the editable text begins (`== nodeStart` for a paragraph; `nodeStart + 2` for an image).
     var textStart: Int { get }
     /// UTF-16 length of the editable text (`== textLayout.length`).
@@ -50,7 +50,7 @@ protocol CanvasBlock: AnyObject {
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?)
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension CanvasBlock {
     var rendersAsBlockView: Bool { false }
     var blockViewFrame: CGRect { frame }

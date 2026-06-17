@@ -837,52 +837,50 @@ extension ChatControllerImpl {
                     })
                     return true
                 case .richText:
-                    if #available(iOS 17.0, *) {
-                        let controller = RichTextAttachmentScreen(
-                            context: context,
-                            sendMessage: { [weak self] document, media in
+                    let controller = RichTextAttachmentScreen(
+                        context: context,
+                        sendMessage: { [weak self] document, media in
+                            guard let strongSelf = self else {
+                                return
+                            }
+                            let text: String
+                            let attributes: [EngineMessage.Attribute]
+                            switch composeRichMessage(from: document, media: media) {
+                            case let .rich(instantPage):
+                                text = ""
+                                attributes = [RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil)]
+                            case let .plain(plainText, entities):
+                                text = plainText
+                                attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
+                            case .empty:
+                                return
+                            }
+                            let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
+                            let message: EnqueueMessage = .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
+                            strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
                                 guard let strongSelf = self else {
                                     return
                                 }
-                                let text: String
-                                let attributes: [EngineMessage.Attribute]
-                                switch composeRichMessage(from: document, media: media) {
-                                case let .rich(instantPage):
-                                    text = ""
-                                    attributes = [RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil)]
-                                case let .plain(plainText, entities):
-                                    text = plainText
-                                    attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
-                                case .empty:
-                                    return
-                                }
-                                let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
-                                let message: EnqueueMessage = .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])
-                                strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in
-                                    guard let strongSelf = self else {
-                                        return
+                                strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
+                                    if let strongSelf = self {
+                                        strongSelf.chatDisplayNode.collapseInput()
+                                        strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
+                                        })
                                     }
-                                    strongSelf.chatDisplayNode.setupSendActionOnViewUpdate({
-                                        if let strongSelf = self {
-                                            strongSelf.chatDisplayNode.collapseInput()
-                                            strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: false, {
-                                                $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil) }
-                                            })
-                                        }
-                                    }, nil)
-                                    strongSelf.sendMessages([message], postpone: postpone)
-                                })
-                            },
-                            presentAttachmentMenu: { [weak self] completion in
-                                guard let self else {
-                                    return
-                                }
-                                self.presentRichTextAttachmentMenu(completion: completion)
+                                }, nil)
+                                strongSelf.sendMessages([message], postpone: postpone)
+                            })
+                        },
+                        presentAttachmentMenu: { [weak self] completion in
+                            guard let self else {
+                                return
                             }
-                        )
-                        completion(controller, controller.mediaPickerContext)
-                        strongSelf.controllerNavigationDisposable.set(nil)
-                    }
+                            self.presentRichTextAttachmentMenu(completion: completion)
+                        }
+                    )
+                    completion(controller, controller.mediaPickerContext)
+                    strongSelf.controllerNavigationDisposable.set(nil)
                     return true
                 default:
                     break
@@ -925,7 +923,7 @@ extension ChatControllerImpl {
         })
     }
     
-    @available(iOS 17.0, *)
+    @available(iOS 13.0, *)
     func presentRichTextAttachmentMenu(completion: @escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) {
         presentPollAttachmentScreen(context: self.context, updatedPresentationData: self.updatedPresentationData, subject: .richText, availableButtons: [
             .gallery,

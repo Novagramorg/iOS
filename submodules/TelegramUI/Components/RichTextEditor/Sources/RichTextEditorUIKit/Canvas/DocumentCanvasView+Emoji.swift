@@ -2,7 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// Inserts an inline emoji (one `U+FFFC` carrying an `EmojiRef`) at the caret, in whatever leaf
     /// region (body paragraph / image caption / table cell) owns it. Clears any selection first. The
@@ -48,7 +48,7 @@ extension DocumentCanvasView {
     }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// One emoji occurrence found in the laid-out text.
     private struct EmojiOccurrence { let ref: EmojiRef; let canvasRect: CGRect; let regionStart: Int }

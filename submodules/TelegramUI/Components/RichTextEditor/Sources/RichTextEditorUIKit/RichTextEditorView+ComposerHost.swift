@@ -4,7 +4,7 @@ import UIKit
 /// Small public forwarders used by the chat-composer host (`RichTextEditorChatInputNode`). The editing
 /// surface (`canvas`) and `scrollView` are module-internal, so a consumer in another module reaches these
 /// behaviors only through `RichTextEditorView`. No new editor logic lives here.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 public extension RichTextEditorView {
     /// Whether the editing surface (the canvas, the actual first responder) currently has focus.
     /// `UIView.isFirstResponder` would report the wrapper, not the canvas.

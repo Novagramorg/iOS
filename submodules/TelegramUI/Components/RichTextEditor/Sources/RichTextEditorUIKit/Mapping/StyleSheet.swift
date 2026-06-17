@@ -4,7 +4,7 @@ import RichTextEditorCore
 
 /// Resolves a paragraph style name to concrete fonts/paragraph layout (UIKit-only, hence here
 /// rather than in Core).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 public struct StyleSheet {
     public init() {}
     public static let `default` = StyleSheet()

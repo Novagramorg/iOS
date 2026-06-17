@@ -6,7 +6,7 @@ import RichTextEditorCore
 /// the block's full drawn extent (`box.blockViewFrame`), and it draws the block in local coordinates by
 /// translating the context by `-box.blockViewFrame.origin` and reusing the block's existing canvas-space
 /// `draw`. It NEVER becomes first responder and (Step 1) takes no touches.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 class BlockBackingView: UIView {
     weak var canvas: DocumentCanvasView?
     var box: CanvasBlock?
@@ -55,7 +55,7 @@ class BlockBackingView: UIView {
     func drawBlockSelection(in ctx: CGContext, box: CanvasBlock, from: Int, to: Int) {
         guard from != to else { return }
         let lo = min(from, to), hi = max(from, to)
-        (canvas?.mapper.theme.accent ?? .tintColor).withAlphaComponent(0.30).setFill()
+        (canvas?.mapper.theme.accent ?? .systemBlue).withAlphaComponent(0.30).setFill()   // .tintColor is iOS 15+
         for region in box.leafRegions() {
             let a = max(lo, region.globalStart), b = min(hi, region.globalStart + region.length)
             guard a < b else { continue }

@@ -14,6 +14,7 @@ import RichTextEditorCore
 /// when the user moves the cursor. `dismissMenu()` on a non-presented interaction is a harmless no-op.
 /// Observed via `dismissEditMenuCountForTesting` — a presented `UIEditMenuInteraction` can't be driven
 /// in a unit test, so we assert on the dismiss call, not on the visibility flag.
+@available(iOS 16.0, *)
 final class EditMenuAutoDismissTests: XCTestCase {
     private func canvas() -> DocumentCanvasView {
         let v = DocumentCanvasView()

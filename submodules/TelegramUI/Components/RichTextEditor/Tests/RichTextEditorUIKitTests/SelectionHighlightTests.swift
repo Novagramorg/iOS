@@ -23,7 +23,7 @@ final class SelectionHighlightTests: XCTestCase {
         ])
         let a = v.boxes[0], b = v.boxes[1]
         let aRegion = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("a")) }!
-        let edge = aRegion.canvasOrigin.x + aRegion.layout.container.size.width
+        let edge = aRegion.canvasOrigin.x + aRegion.layout.containerWidth
         // Select all of "Hello" and continue into "World" — A's line is covered in full + continues.
         let fill = v.selectionHighlightRects(globalFrom: a.textStart, globalTo: b.textStart + 2)
         let aFill = fill.first { abs($0.minY - aRegion.canvasOrigin.y) < 6 }!
@@ -45,7 +45,7 @@ final class SelectionHighlightTests: XCTestCase {
         let fill = v.selectionHighlightRects(globalFrom: a.textStart, globalTo: c.textStart + 2)
         let eFill = fill.first { abs($0.minY - eRegion.canvasOrigin.y) < 6 }
         XCTAssertNotNil(eFill, "the spanned empty line gets a highlight rect")
-        XCTAssertEqual(eFill!.width, eRegion.layout.container.size.width, accuracy: 1.0, "empty line fills the full width")
+        XCTAssertEqual(eFill!.width, eRegion.layout.containerWidth, accuracy: 1.0, "empty line fills the full width")
         XCTAssertGreaterThan(eFill!.height, 1, "and has a real line height")
     }
 

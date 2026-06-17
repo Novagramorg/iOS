@@ -7,24 +7,24 @@ import RichTextEditorCore
 /// across cells like selection itself. Attribute-only (no span change), wrapped in `editing { }` so
 /// undo is the existing whole-document `[Block]` snapshot. A collapsed caret is a no-op (collapsed
 /// "typing attributes" are deferred).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// The (storage, range) pairs a character-format command applies to. When a table row/column is
     /// structurally selected, that's every cell's full text in the row/column (so toolbar formatting
     /// works on the whole row/column). Otherwise it's the text selection's intersection with each leaf
     /// region — body paragraphs, captions, and table cells alike. Empty when nothing applies (e.g. a
     /// bare collapsed caret).
-    func characterFormatTargets() -> [(storage: NSTextStorage, range: NSRange, layout: BlockLayout)] {
+    func characterFormatTargets() -> [(storage: NSTextStorage, range: NSRange, layout: BlockLayoutEngine)] {
         if let regions = tableStructuralSelectionRegions() {
             return regions.compactMap { r in
-                guard r.length > 0, let storage = r.layout.contentStorage.textStorage else { return nil }
+                guard r.length > 0, let storage = r.layout.backingStorage else { return nil }
                 return (storage, NSRange(location: 0, length: r.length), r.layout)
             }
         }
         guard selFrom < selTo else { return [] }
         return allLeafRegions().compactMap { r in
             let a = max(selFrom, r.globalStart), b = min(selTo, r.globalStart + r.length)
-            guard a < b, let storage = r.layout.contentStorage.textStorage else { return nil }
+            guard a < b, let storage = r.layout.backingStorage else { return nil }
             return (storage, NSRange(location: a - r.globalStart, length: b - a), r.layout)
         }
     }

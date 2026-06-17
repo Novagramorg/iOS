@@ -11,7 +11,7 @@ import ChatInputTextNode
 /// behind the `debugRichText` flag (see `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
 /// display, layout, and editing; selection geometry, spoiler reveal, typing attributes, and the full
 /// delegate suite are safe stubs (Phase 2+).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInputNode {
     private let editorView = RichTextEditorView()
     private let baseFontSize: CGFloat = 17.0

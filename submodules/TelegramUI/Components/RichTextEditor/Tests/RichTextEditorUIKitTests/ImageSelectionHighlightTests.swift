@@ -4,6 +4,7 @@ import UIKit
 @testable import RichTextEditorUIKit
 import RichTextEditorCore
 
+@available(iOS 16.0, *)
 final class ImageSelectionHighlightTests: XCTestCase {
     /// ["Above", image(caption "Caption"), "Below"] at 300pt, with a teal stand-in image provider.
     func canvas() -> DocumentCanvasView {

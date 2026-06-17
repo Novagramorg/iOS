@@ -2,7 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// True when `img` should render its selection tint — either it is the tap-selected atom, or a
     /// non-collapsed text selection spans across its atom (a range flowing over it). A collapsed gap

@@ -3,11 +3,15 @@ import UIKit
 
 /// One paragraph block's TextKit 2 layout context (line layout only). All geometry is returned in
 /// the block's own container coordinate space (origin 0,0); the document view offsets it.
-@available(iOS 17.0, *)
-final class BlockLayout {
+@available(iOS 16.0, *)
+final class BlockLayout: BlockLayoutEngine {
     let contentStorage: NSTextContentStorage
     let layoutManager: NSTextLayoutManager
     let container: NSTextContainer
+
+    /// `BlockLayoutEngine` accessors abstracting the TextKit 2 internals the editor used to reach directly.
+    var backingStorage: NSTextStorage? { contentStorage.textStorage }
+    var containerWidth: CGFloat { container.size.width }
 
     /// Bumped on every change that affects what `drawText` produces (storage replacement or a
     /// display-only rendering attribute). A cheap, collision-free repaint signal — see

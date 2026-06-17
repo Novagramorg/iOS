@@ -1039,7 +1039,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private func loadTextInputNode() {
         let richTextInputNode: ChatRichTextInputNode
-        if #available(iOS 17.0, *), self.context?.sharedContext.immediateExperimentalUISettings.debugRichText == true {
+        if self.context?.sharedContext.immediateExperimentalUISettings.debugRichText == true {
             richTextInputNode = RichTextEditorChatInputNode()
         } else {
             richTextInputNode = makeChatRichTextInputNode()

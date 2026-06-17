@@ -7,7 +7,7 @@ import RichTextEditorCore
 /// `ListMembership.level` on every list box the selection touches, restyle, recompute. Works on a
 /// collapsed caret (it's a paragraph-level command). Outdent clamps at level 0 (it does NOT drop the
 /// list — that's the list toggle's job); indent clamps at `maxListLevel`.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     private var maxListLevel: Int { 8 }
 
