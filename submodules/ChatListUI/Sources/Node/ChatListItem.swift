@@ -603,6 +603,10 @@ public class ChatListItem: ListViewItem {
             break
         case let .peer(peerData):
             if let message = peerData.messages.last, let peer = peerData.peer.peer {
+                if case .community = peer {
+                    self.interaction.peerSelected(peer, nil, nil, peerData.promoInfo, false)
+                    return
+                }
                 let communitySelectedPeer = communitySourcePeer(peerData: peerData, message: message)
                 let selectedPeer = communitySelectedPeer ?? peer
                 var threadId: Int64?
@@ -674,6 +678,7 @@ private let hideIcon = ItemListRevealOptionIcon.animation(animation: "anim_hide"
 private let unhideIcon = ItemListRevealOptionIcon.animation(animation: "anim_hide", scale: 1.0, offset: -15.0, replaceColors: [0xbdbdc2], flip: true)
 private let startIcon = ItemListRevealOptionIcon.animation(animation: "anim_play", scale: 1.0, offset: 0.0, replaceColors: [0xbdbdc2], flip: false)
 private let closeIcon = ItemListRevealOptionIcon.animation(animation: "anim_pause", scale: 1.0, offset: 0.0, replaceColors: [0xbdbdc2], flip: false)
+private let ungroupCommunityIcon = ItemListRevealOptionIcon.animation(animation: "anim_ungroupcom", scale: 0.5, offset: -4.0, replaceColors: nil, flip: false)
 
 private enum RevealOptionKey: Int32 {
     case pin
@@ -1827,6 +1832,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         var enablePreview = true
         var peerIsMonoforum = false
         var peerIsCommunity = false
+        var peerLinkedCommunityId: EnginePeer.Id?
         switch item.content {
         case .loading:
             displayAsMessage = true
@@ -1842,6 +1848,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 peer = peerData.peer.chatOrMonoforumMainPeer
                 if case let .channel(channel) = peerData.peer.peer, channel.isMonoForum {
                     peerIsMonoforum = true
+                }
+                if case let .channel(channel) = peerData.peer.peer {
+                    peerLinkedCommunityId = channel.linkedCommunityId
                 }
             }
             if peerData.peer.peerId.namespace == Namespaces.Peer.SecretChat {
@@ -1871,7 +1880,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             lineWidth: 2.33,
             inactiveLineWidth: 1.33
         ), transition: .immediate)
-        self.avatarNode.isUserInteractionEnabled = storyState != nil || peerIsCommunity
+        self.avatarNode.isUserInteractionEnabled = (storyState != nil && !peerIsCommunity) || peerLinkedCommunityId != nil
         
         if let stats = storyState?.stats, stats.hasLiveItems {
             if self.avatarLiveBadge == nil {
@@ -2297,6 +2306,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             var autoremoveTimeout: Int32?
             var itemTags: [ChatListItemContent.Tag] = []
             var isCommunityAvatar = false
+            var displayCommunityAvatarBadge = false
             
             var groupHiddenByDefault = false
             
@@ -2323,6 +2333,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     let peerValue = peerData.peer
                     if case .community = peerValue.peer {
                         isCommunityAvatar = true
+                    }
+                    if case let .channel(channel) = peerValue.peer, channel.linkedCommunityId != nil {
+                        displayCommunityAvatarBadge = true
                     }
                     let threadInfoValue = peerData.threadInfo
                     let combinedReadStateValue = peerData.combinedReadState
@@ -3899,7 +3912,14 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                     peerRevealOptions = []
                                 }
                             } else if promoInfo == nil {
-                                peerRevealOptions = revealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isPinned: isPinned, isMuted: !isAccountPeer ? isMuted : nil, location: item.chatListLocation, peerId: renderedPeer.peerId, accountPeerId: item.context.account.peerId, canDelete: true, isEditing: item.editing, filterData: item.filterData)
+                                if case let .peer(peerData) = item.content, case .community = peerData.peer.peer {
+                                    //TODO:localize
+                                    peerRevealOptions = [
+                                        ItemListRevealOption(key: RevealOptionKey.ungroup.rawValue, title: "Ungroup", icon: ungroupCommunityIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor)
+                                    ]
+                                } else {
+                                    peerRevealOptions = revealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isPinned: isPinned, isMuted: !isAccountPeer ? isMuted : nil, location: item.chatListLocation, peerId: renderedPeer.peerId, accountPeerId: item.context.account.peerId, canDelete: true, isEditing: item.editing, filterData: item.filterData)
+                                }
                                 if case let .chat(itemPeer) = contentPeer {
                                     peerLeftRevealOptions = leftRevealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isUnread: unreadCount.unread, isEditing: item.editing, isPinned: isPinned, isSavedMessages: itemPeer.peerId == item.context.account.peerId, location: item.chatListLocation, peer: itemPeer.peers[itemPeer.peerId]!, filterData: item.filterData)
                                 } else {
@@ -4140,7 +4160,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         strongSelf.communityAvatarShadowNode.isHidden = true
                     }
 
-                    if useChatListLayout && isCommunityAvatar && avatarContentImageSpec == nil {
+                    if useChatListLayout && displayCommunityAvatarBadge && avatarContentImageSpec == nil && !item.useCommunityViewLayout {
                         let communityAvatarBadgeBackgroundView: GlassBackgroundView
                         let communityAvatarBadgeIconView: GlassBackgroundView.ContentImageView
                         if let currentBackgroundView = strongSelf.communityAvatarBadgeBackgroundView, let currentIconView = strongSelf.communityAvatarBadgeIconView {
@@ -4165,7 +4185,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         let scaledAvatarSize = CGSize(width: avatarFrame.width * avatarScale, height: avatarFrame.height * avatarScale)
                         let scaledAvatarCenter = CGPoint(x: avatarFrame.width * 0.5 + avatarScaleOffset, y: avatarFrame.height * 0.5)
                         let scaledAvatarFrame = CGRect(origin: CGPoint(x: scaledAvatarCenter.x - scaledAvatarSize.width * 0.5, y: scaledAvatarCenter.y - scaledAvatarSize.height * 0.5), size: scaledAvatarSize)
-                        let badgeFrame = CGRect(origin: CGPoint(x: scaledAvatarFrame.maxX - badgeSize.width + 3.0, y: scaledAvatarFrame.maxY - badgeSize.height + 3.0), size: badgeSize)
+                        let badgeFrame = CGRect(origin: CGPoint(x: scaledAvatarFrame.maxX - badgeSize.width + 1.0, y: scaledAvatarFrame.maxY - badgeSize.height + 1.0), size: badgeSize)
 
                         communityAvatarBadgeBackgroundView.isHidden = false
                         communityAvatarBadgeBackgroundView.update(size: badgeSize, cornerRadius: badgeSize.height * 0.5, isDark: item.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: ComponentTransition(transition))
@@ -5305,7 +5325,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         if case let .peer(peerData) = item.content, peerData.customMessageListData != nil {
                             backgroundColor = .clear
                         } else {
-                            backgroundColor = theme.itemBackgroundColor
+                            backgroundColor = .clear
+                            //backgroundColor = theme.itemBackgroundColor
                         }
                         highlightedBackgroundColor = theme.itemHighlightedBackgroundColor
                     }
@@ -5561,6 +5582,10 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     }
                 }
                 item.interaction.deletePeer(index.messageIndex.id.peerId, joined)
+            case RevealOptionKey.ungroup.rawValue:
+                if case let .peer(peerData) = item.content, case .community = peerData.peer.peer {
+                    item.interaction.ungroupCommunity(peerData.peer.peerId)
+                }
             case RevealOptionKey.archive.rawValue:
                 item.interaction.updatePeerGrouping(index.messageIndex.id.peerId, true)
                 close = false
@@ -5721,8 +5746,12 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         
         if let _ = item.interaction.inlineNavigationLocation {
         } else {
-            var shouldHitTestAvatar = self.avatarNode.storyStats != nil
+            var isCommunity = false
             if case let .peer(peerData) = item.content, case .community = peerData.peer.peer {
+                isCommunity = true
+            }
+            var shouldHitTestAvatar = !isCommunity && self.avatarNode.storyStats != nil
+            if case let .peer(peerData) = item.content, case let .channel(channel) = peerData.peer.peer, channel.linkedCommunityId != nil {
                 shouldHitTestAvatar = true
             }
             if shouldHitTestAvatar {
@@ -5744,8 +5773,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             case .loading:
                 break
             case let .peer(peerData):
-                if let peer = peerData.peer.peer, case .community = peer {
-                    item.interaction.peerSelected(peer, nil, nil, peerData.promoInfo, false)
+                if let peer = peerData.peer.peer, case let .channel(channel) = peer, let linkedCommunityId = channel.linkedCommunityId {
+                    item.interaction.openCommunity(linkedCommunityId)
                 } else {
                     item.interaction.openStories(.peer(peerData.peer.peerId), self)
                 }

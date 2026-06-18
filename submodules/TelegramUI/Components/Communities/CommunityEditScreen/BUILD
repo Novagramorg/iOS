@@ -11,11 +11,14 @@ swift_library(
     ],
     deps = [
         "//submodules/AccountContext",
+        "//submodules/AvatarNode",
         "//submodules/ComponentFlow",
         "//submodules/Components/MultilineTextComponent",
         "//submodules/Components/ViewControllerComponent",
         "//submodules/Display",
+        "//submodules/MapResourceToAvatarSizes",
         "//submodules/PeerInfoUI",
+        "//submodules/RadialStatusNode",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
         "//submodules/TelegramPresentationData",
@@ -23,6 +26,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ListActionItemComponent",
         "//submodules/TelegramUI/Components/ListSectionComponent",
         "//submodules/TelegramUI/Components/ListTextFieldItemComponent",
+        "//submodules/TelegramUI/Components/PlainButtonComponent",
         "//submodules/ItemListUI",
     ],
     visibility = [

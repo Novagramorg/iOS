@@ -2084,6 +2084,9 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                         self.titleView.subtitle = presentationData.strings.MediaPicker_SetNewGroupPhoto
                     case .channel:
                         self.titleView.subtitle = presentationData.strings.MediaPicker_SetNewChannelPhoto
+                    case .community:
+                        //TODO:localize
+                        self.titleView.subtitle = "Set new community photo"
                     }
                     self.titleView.isEnabled = true
                 case .story:

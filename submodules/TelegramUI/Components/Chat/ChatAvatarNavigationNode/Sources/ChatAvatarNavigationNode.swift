@@ -17,6 +17,7 @@ import EmojiStatusComponent
 import AvatarVideoNode
 import AvatarStoryIndicatorComponent
 import ComponentDisplayAdapters
+import GlassBackgroundComponent
 
 private let normalFont = avatarPlaceholderFont(size: 16.0)
 private let smallFont = avatarPlaceholderFont(size: 12.0)
@@ -33,6 +34,8 @@ public final class ChatAvatarNavigationNode: ASDisplayNode {
     
     public var statusView: ComponentView<Empty>
     private var starView: StarView?
+    private var communityAvatarBadgeBackgroundView: GlassBackgroundView?
+    private var communityAvatarBadgeIconView: GlassBackgroundView.ContentImageView?
     
     private var cachedDataDisposable = MetaDisposable()
     private var hierarchyTrackingLayer: HierarchyTrackingLayer?
@@ -110,6 +113,7 @@ public final class ChatAvatarNavigationNode: ASDisplayNode {
         }
         
         self.avatarNode.isHidden = true
+        self.communityAvatarBadgeBackgroundView?.isHidden = true
     }
     
     public func setPeer(
@@ -134,6 +138,42 @@ public final class ChatAvatarNavigationNode: ASDisplayNode {
         self.avatarNode.isHidden = false
         self.avatarNode.setPeer(context: context, theme: theme, peer: peer, authorOfMessage: authorOfMessage, overrideImage: overrideImage, emptyColor: emptyColor, clipStyle: clipStyle, synchronousLoad: synchronousLoad, displayDimensions: displayDimensions, storeUnrounded: storeUnrounded)
         
+        if let peer, case let .channel(channel) = peer, channel.linkedCommunityId != nil, !"".isEmpty {
+            let communityAvatarBadgeBackgroundView: GlassBackgroundView
+            let communityAvatarBadgeIconView: GlassBackgroundView.ContentImageView
+            if let currentBackgroundView = self.communityAvatarBadgeBackgroundView, let currentIconView = self.communityAvatarBadgeIconView {
+                communityAvatarBadgeBackgroundView = currentBackgroundView
+                communityAvatarBadgeIconView = currentIconView
+            } else {
+                communityAvatarBadgeBackgroundView = GlassBackgroundView()
+                communityAvatarBadgeBackgroundView.isUserInteractionEnabled = false
+                communityAvatarBadgeBackgroundView.isHidden = true
+
+                communityAvatarBadgeIconView = GlassBackgroundView.ContentImageView()
+                communityAvatarBadgeIconView.isUserInteractionEnabled = false
+
+                communityAvatarBadgeBackgroundView.contentView.addSubview(communityAvatarBadgeIconView)
+                self.containerNode.view.addSubview(communityAvatarBadgeBackgroundView)
+
+                self.communityAvatarBadgeBackgroundView = communityAvatarBadgeBackgroundView
+                self.communityAvatarBadgeIconView = communityAvatarBadgeIconView
+            }
+
+            let badgeSize = CGSize(width: 20.0, height: 20.0)
+            let badgeFrame = CGRect(origin: CGPoint(x: self.avatarNode.frame.maxX - badgeSize.width + 1.0, y: self.avatarNode.frame.maxY - badgeSize.height + 1.0), size: badgeSize)
+            communityAvatarBadgeBackgroundView.isHidden = false
+            communityAvatarBadgeBackgroundView.update(size: badgeSize, cornerRadius: badgeSize.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .clear), transition: .immediate)
+            communityAvatarBadgeBackgroundView.frame = badgeFrame
+
+            if let arrowImage = UIImage(bundleImageName: "Media Editor/DownArrow") {
+                communityAvatarBadgeIconView.image = arrowImage
+                communityAvatarBadgeIconView.tintColor = theme.rootController.navigationBar.primaryTextColor
+                communityAvatarBadgeIconView.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((badgeSize.width - arrowImage.size.width) * 0.5), y: floorToScreenPixels((badgeSize.height - arrowImage.size.height) * 0.5)), size: arrowImage.size)
+            }
+        } else {
+            self.communityAvatarBadgeBackgroundView?.isHidden = true
+        }
+
         if let peer, peer.isSubscription {
             let starView: StarView
             if let current = self.starView {
@@ -151,6 +191,9 @@ public final class ChatAvatarNavigationNode: ASDisplayNode {
         } else if let starView = self.starView {
             self.starView = nil
             starView.removeFromSuperview()
+        }
+        if let communityAvatarBadgeBackgroundView = self.communityAvatarBadgeBackgroundView, !communityAvatarBadgeBackgroundView.isHidden {
+            self.containerNode.view.bringSubviewToFront(communityAvatarBadgeBackgroundView)
         }
         
         if let peer = peer, peer.isPremium {

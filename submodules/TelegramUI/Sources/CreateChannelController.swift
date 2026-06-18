@@ -545,7 +545,7 @@ public func createChannelController(context: AccountContext, mode: CreateChannel
             
             let editorController = MediaEditorScreenImpl(
                 context: context,
-                mode: .avatarEditor,
+                mode: .avatarEditor(clipStyle: .round),
                 subject: subject,
                 transitionIn: fromCamera ? .camera : transitionView.flatMap({ .gallery(
                     MediaEditorScreenImpl.TransitionIn.GalleryTransitionIn(

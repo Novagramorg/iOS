@@ -345,7 +345,7 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                                     let request: Signal<Api.Updates, MTRpcError>
                                     if let peer = peer as? TelegramGroup {
                                         request = network.request(Api.functions.messages.editChatPhoto(chatId: peer.id.id._internalGetInt64Value(), photo: .inputChatUploadedPhoto(.init(flags: flags, file: file, video: videoFile, videoStartTs: videoStartTimestamp, videoEmojiMarkup: videoEmojiMarkup))))
-                                    } else if let peer = peer as? TelegramChannel, let inputChannel = apiInputChannel(peer) {
+                                    } else if let inputChannel = apiInputChannel(peer) {
                                         request = network.request(Api.functions.channels.editPhoto(channel: inputChannel, photo: .inputChatUploadedPhoto(.init(flags: flags, file: file, video: videoFile, videoStartTs: videoStartTimestamp, videoEmojiMarkup: videoEmojiMarkup))))
                                     } else {
                                         assertionFailure()
@@ -537,7 +537,7 @@ func _internal_updatePeerPhotoInternal(postbox: Postbox, network: Network, state
                 let request: Signal<Api.Updates, MTRpcError>
                 if let peer = peer as? TelegramGroup {
                     request = network.request(Api.functions.messages.editChatPhoto(chatId: peer.id.id._internalGetInt64Value(), photo: .inputChatPhotoEmpty))
-                } else if let peer = peer as? TelegramChannel, let inputChannel = apiInputChannel(peer) {
+                } else if let inputChannel = apiInputChannel(peer) {
                     request = network.request(Api.functions.channels.editPhoto(channel: inputChannel, photo: .inputChatPhotoEmpty))
                 } else {
                     assertionFailure()

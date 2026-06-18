@@ -1061,7 +1061,7 @@ public final class PeerListItemComponent: Component {
             let centralContentHeight: CGFloat
             if let subtitleComponentSize {
                 centralContentHeight = titleSize.height + subtitleComponentSize.height + titleSpacing
-            } else if labelSize.height > 0.0, case .generic = component.style {
+            } else if labelSize.height > 0.0, [.generic, .list].contains(component.style) {
                 centralContentHeight = titleSize.height + labelSize.height + titleSpacing
             } else {
                 centralContentHeight = titleSize.height

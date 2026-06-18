@@ -31,11 +31,11 @@ import CommunityPrivateChatScreen
 private struct CommunityChatPreviewData: Equatable {
     var messages: [EngineMessage]
     var readCounters: EnginePeerReadCounters
-    
+
     var timestamp: Int32 {
         return self.messages.first?.timestamp ?? 0
     }
-    
+
     var searchText: String {
         return self.messages.map(\.text).joined(separator: " ")
     }
@@ -179,7 +179,7 @@ private func communityChatPreviewSignal(context: AccountContext, peerId: EngineP
     var ignoredNamespaces = Set<Int32>()
     ignoredNamespaces = ignoredNamespaces.union(Namespaces.Message.allNonRegular)
     ignoredNamespaces = ignoredNamespaces.union(Namespaces.Message.allEphemeral)
-    
+
     return combineLatest(
         context.account.postbox.aroundMessageHistoryViewForLocation(
             .peer(peerId: peerId, threadId: nil),
@@ -208,7 +208,7 @@ private func communityChatPreviewSignal(context: AccountContext, peerId: EngineP
             }
         }
         messages = messages.reversed()
-        
+
         return (peerId, CommunityChatPreviewData(messages: messages, readCounters: readCounters))
     }
 }
@@ -217,7 +217,7 @@ private func communityChatPreviewsSignal(context: AccountContext, peerIds: [Engi
     if peerIds.isEmpty {
         return .single([:])
     }
-    
+
     return combineLatest(peerIds.map { peerId in
         return communityChatPreviewSignal(context: context, peerId: peerId)
     })
@@ -264,7 +264,7 @@ private final class CommunityChatListItemGenerator: ListItemComponentAdaptor.Ite
     let enabledContextActions: ChatListItem.EnabledContextActions?
     let hasActiveRevealControls: Bool
     let hasNext: Bool
-    
+
     init(
         context: AccountContext,
         presentationData: ChatListPresentationData,
@@ -284,7 +284,7 @@ private final class CommunityChatListItemGenerator: ListItemComponentAdaptor.Ite
         self.hasActiveRevealControls = hasActiveRevealControls
         self.hasNext = hasNext
     }
-    
+
     static func ==(lhs: CommunityChatListItemGenerator, rhs: CommunityChatListItemGenerator) -> Bool {
         if lhs.context !== rhs.context {
             return false
@@ -327,7 +327,7 @@ private final class CommunityChatListItemGenerator: ListItemComponentAdaptor.Ite
         }
         return true
     }
-    
+
     func item() -> ListViewItem {
         let messageIndex: EngineMessage.Index
         if let message = self.preview.messages.first {
@@ -338,7 +338,7 @@ private final class CommunityChatListItemGenerator: ListItemComponentAdaptor.Ite
                 timestamp: 0
             )
         }
-        
+
         return ChatListItem(
             presentationData: self.presentationData,
             context: self.context,
@@ -378,7 +378,7 @@ private final class CommunityChatListItemGenerator: ListItemComponentAdaptor.Ite
             hiddenOffset: false,
             interaction: self.interaction,
             useCommunityViewLayout: true,
-            communityViewHasNext: self.hasNext
+            communityViewHasNext: false
         )
     }
 }
@@ -389,7 +389,7 @@ private final class CommunitySearchBarComponent: Component {
     let query: String
     let queryUpdated: (String) -> Void
     let cancel: () -> Void
-    
+
     init(
         theme: PresentationTheme,
         strings: PresentationStrings,
@@ -403,7 +403,7 @@ private final class CommunitySearchBarComponent: Component {
         self.queryUpdated = queryUpdated
         self.cancel = cancel
     }
-    
+
     static func ==(lhs: CommunitySearchBarComponent, rhs: CommunitySearchBarComponent) -> Bool {
         if lhs.theme !== rhs.theme {
             return false
@@ -416,29 +416,29 @@ private final class CommunitySearchBarComponent: Component {
         }
         return true
     }
-    
+
     final class View: UIView {
         private var searchBarNode: SearchBarNode?
         private var didActivate = false
         private var component: CommunitySearchBarComponent?
-        
+
         deinit {
             self.searchBarNode?.removeFromSupernode()
         }
-        
+
         override func didMoveToSuperview() {
             super.didMoveToSuperview()
-            
+
             if self.superview == nil {
                 self.didActivate = false
             }
         }
-        
+
         func update(component: CommunitySearchBarComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             let themeUpdated = self.component?.theme !== component.theme
             let stringsUpdated = self.component?.strings !== component.strings
             self.component = component
-            
+
             let searchBarNode: SearchBarNode
             if let current = self.searchBarNode {
                 searchBarNode = current
@@ -465,7 +465,7 @@ private final class CommunitySearchBarComponent: Component {
                 self.searchBarNode = searchBarNode
                 self.addSubview(searchBarNode.view)
             }
-            
+
             if themeUpdated || stringsUpdated {
                 let searchBarTheme = SearchBarNodeTheme(theme: component.theme, hasSeparator: false)
                 searchBarNode.updateThemeAndStrings(
@@ -479,11 +479,11 @@ private final class CommunitySearchBarComponent: Component {
                     textColor: searchBarTheme.placeholder
                 )
             }
-            
+
             if searchBarNode.text != component.query {
                 searchBarNode.text = component.query
             }
-            
+
             let size = CGSize(width: availableSize.width, height: 54.0)
             searchBarNode.updateLayout(
                 boundingSize: size,
@@ -492,22 +492,22 @@ private final class CommunitySearchBarComponent: Component {
                 transition: transition.containedViewLayoutTransition
             )
             transition.setFrame(view: searchBarNode.view, frame: CGRect(origin: .zero, size: size))
-            
+
             if !self.didActivate {
                 self.didActivate = true
                 Queue.mainQueue().after(0.05) { [weak searchBarNode] in
                     searchBarNode?.activate()
                 }
             }
-            
+
             return size
         }
     }
-    
+
     func makeView() -> View {
         return View(frame: CGRect())
     }
-    
+
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
     }
@@ -521,7 +521,7 @@ private final class CommunityViewBottomButtonComponent: Component {
     let isEnabled: Bool
     let displaysProgress: Bool
     let action: () -> Void
-    
+
     init(
         theme: PresentationTheme,
         title: String,
@@ -539,7 +539,7 @@ private final class CommunityViewBottomButtonComponent: Component {
         self.displaysProgress = displaysProgress
         self.action = action
     }
-    
+
     static func ==(lhs: CommunityViewBottomButtonComponent, rhs: CommunityViewBottomButtonComponent) -> Bool {
         if lhs.theme !== rhs.theme {
             return false
@@ -561,10 +561,10 @@ private final class CommunityViewBottomButtonComponent: Component {
         }
         return true
     }
-    
+
     final class View: UIView {
         private let button = ComponentView<Empty>()
-        
+
         func update(component: CommunityViewBottomButtonComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
             var buttonItems: [AnyComponentWithIdentity<Empty>] = []
             if let iconName = component.iconName {
@@ -578,7 +578,7 @@ private final class CommunityViewBottomButtonComponent: Component {
                 font: Font.semibold(17.0),
                 color: component.theme.list.itemCheckColors.foregroundColor
             ))))
-            
+
             let buttonSize = self.button.update(
                 transition: .immediate,
                 component: AnyComponent(ButtonComponent(
@@ -597,7 +597,7 @@ private final class CommunityViewBottomButtonComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: availableSize.width, height: 52.0)
             )
-            
+
             if let buttonView = self.button.view {
                 if buttonView.superview == nil {
                     self.addSubview(buttonView)
@@ -607,15 +607,15 @@ private final class CommunityViewBottomButtonComponent: Component {
                     size: CGSize(width: availableSize.width, height: buttonSize.height)
                 ))
             }
-            
+
             return CGSize(width: availableSize.width, height: buttonSize.height)
         }
     }
-    
+
     func makeView() -> View {
         return View(frame: CGRect())
     }
-    
+
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, transition: transition)
     }
@@ -623,9 +623,11 @@ private final class CommunityViewBottomButtonComponent: Component {
 
 private final class CommunityViewContentComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
-    
+
     let context: AccountContext
     let communityId: EnginePeer.Id
+    let style: CommunityViewScreenStyle
+    let presentation: CommunityViewScreenPresentation
     let community: TelegramCommunity?
     let cachedData: CachedCommunityData?
     let peers: [EnginePeer.Id: EnginePeer]
@@ -648,10 +650,12 @@ private final class CommunityViewContentComponent: Component {
     let removePeer: (EnginePeer.Id) -> Void
     let searchQueryUpdated: (String) -> Void
     let cancelSearch: () -> Void
-    
+
     init(
         context: AccountContext,
         communityId: EnginePeer.Id,
+        style: CommunityViewScreenStyle,
+        presentation: CommunityViewScreenPresentation,
         community: TelegramCommunity?,
         cachedData: CachedCommunityData?,
         peers: [EnginePeer.Id: EnginePeer],
@@ -677,6 +681,8 @@ private final class CommunityViewContentComponent: Component {
     ) {
         self.context = context
         self.communityId = communityId
+        self.style = style
+        self.presentation = presentation
         self.community = community
         self.cachedData = cachedData
         self.peers = peers
@@ -700,12 +706,18 @@ private final class CommunityViewContentComponent: Component {
         self.searchQueryUpdated = searchQueryUpdated
         self.cancelSearch = cancelSearch
     }
-    
+
     static func ==(lhs: CommunityViewContentComponent, rhs: CommunityViewContentComponent) -> Bool {
         if lhs.context !== rhs.context {
             return false
         }
         if lhs.communityId != rhs.communityId {
+            return false
+        }
+        if lhs.style != rhs.style {
+            return false
+        }
+        if lhs.presentation != rhs.presentation {
             return false
         }
         if lhs.community != rhs.community {
@@ -746,7 +758,7 @@ private final class CommunityViewContentComponent: Component {
         }
         return true
     }
-        
+
     final class View: UIView {
         private let headerControls = ComponentView<Empty>()
         private let headerTitle = ComponentView<Empty>()
@@ -755,27 +767,27 @@ private final class CommunityViewContentComponent: Component {
         private let collapseFooter = ComponentView<Empty>()
         private let pendingRequestsSection = ComponentView<Empty>()
         private var sectionViews: [CommunityViewSection: ComponentView<Empty>] = [:]
-        
+
         private var component: CommunityViewContentComponent?
         private weak var state: EmptyComponentState?
         private var environment: EnvironmentType?
         private var interaction: ChatListNodeInteraction?
         private var revealedPeerId: EnginePeer.Id?
         private let pendingRequestsIcon = renderSettingsIcon(name: "Item List/Icons/Requests", backgroundColors: [UIColor(rgb: 0x0079ff)])
-        
+
         override init(frame: CGRect) {
             super.init(frame: frame)
         }
-        
+
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
-                
+
         private func makeInteraction(component: CommunityViewContentComponent) -> ChatListNodeInteraction {
             if let current = self.interaction {
                 return current
             }
-            
+
             let interaction = ChatListNodeInteraction(
                 context: component.context,
                 animationCache: component.context.animationCache,
@@ -861,12 +873,12 @@ private final class CommunityViewContentComponent: Component {
             self.interaction = interaction
             return interaction
         }
-        
+
         private func rows(component: CommunityViewContentComponent, section: CommunityViewSection) -> [CommunityViewRow] {
             guard let cachedData = component.cachedData else {
                 return []
             }
-            
+
             var result: [CommunityViewRow] = []
             for linkedPeer in cachedData.linkedPeers {
                 guard let peer = component.peers[linkedPeer.peerId] else {
@@ -891,7 +903,7 @@ private final class CommunityViewContentComponent: Component {
                     }
                 }
             }
-            
+
             let query = component.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if !query.isEmpty {
                 result = result.filter { row in
@@ -904,16 +916,18 @@ private final class CommunityViewContentComponent: Component {
                     return false
                 }
             }
-            
+
             return result
         }
-        
+
         private func memberCountString(component: CommunityViewContentComponent, peerId: EnginePeer.Id) -> String? {
             guard let count = communityCachedMemberCounts(component.cachedPeerData)[peerId] else {
                 return nil
             }
-            if count > 0 {
+            if count > 1 {
                 return "\(count) members"
+            } else if count == 1 {
+                return "\(count) member"
             }
             return nil
         }
@@ -977,7 +991,7 @@ private final class CommunityViewContentComponent: Component {
             )
             environment.controller()?.present(controller, in: .window(.root))
         }
-        
+
         private func sectionTitle(_ section: CommunityViewSection) -> String {
             switch section {
             case .joined:
@@ -988,7 +1002,7 @@ private final class CommunityViewContentComponent: Component {
                 return "CHATS YOU CAN REQUEST TO JOIN"
             }
         }
-        
+
         private func updateSection(
             component: CommunityViewContentComponent,
             section: CommunityViewSection,
@@ -996,6 +1010,7 @@ private final class CommunityViewContentComponent: Component {
             theme: PresentationTheme,
             presentationData: PresentationData,
             availableWidth: CGFloat,
+            sectionStyle: ListSectionComponent.Style,
             transition: ComponentTransition
         ) -> CGSize {
             let sectionView: ComponentView<Empty>
@@ -1005,7 +1020,7 @@ private final class CommunityViewContentComponent: Component {
                 sectionView = ComponentView<Empty>()
                 self.sectionViews[section] = sectionView
             }
-            
+
             var items: [AnyComponentWithIdentity<Empty>] = []
             let chatListPresentationData = ChatListPresentationData(
                 theme: theme,
@@ -1018,7 +1033,7 @@ private final class CommunityViewContentComponent: Component {
             )
             let interaction = self.makeInteraction(component: component)
             let canManageLinkedPeers = component.community?.hasPermission(.manageLinkedPeers) == true
-            
+
             for index in rows.indices {
                 let row = rows[index]
                 switch section {
@@ -1071,7 +1086,7 @@ private final class CommunityViewContentComponent: Component {
                         hasNext: false,
                         extractedTheme: PeerListItemComponent.ExtractedTheme(
                             inset: 2.0,
-                            background: theme.list.itemBlocksBackgroundColor
+                            background: component.style == .plain ? theme.chatList.itemBackgroundColor : theme.list.itemBlocksBackgroundColor
                         ),
                         insets: UIEdgeInsets(top: 2.0, left: 0.0, bottom: 2.0, right: 0.0),
                         action: { peer, _, _ in
@@ -1080,12 +1095,12 @@ private final class CommunityViewContentComponent: Component {
                     ))))
                 }
             }
-            
+
             return sectionView.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
-                    style: .glass,
+                    style: sectionStyle,
                     header: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: self.sectionTitle(section),
@@ -1107,6 +1122,8 @@ private final class CommunityViewContentComponent: Component {
             theme: PresentationTheme,
             presentationData: PresentationData,
             availableWidth: CGFloat,
+            sectionStyle: ListSectionComponent.Style,
+            actionItemStyle: ListActionItemComponent.Style,
             transition: ComponentTransition
         ) -> CGSize? {
             let totalCount: Int32
@@ -1152,7 +1169,7 @@ private final class CommunityViewContentComponent: Component {
             } else {
                 items.append(AnyComponentWithIdentity(id: "pendingRequests", component: AnyComponent(ListActionItemComponent(
                     theme: theme,
-                    style: .glass,
+                    style: actionItemStyle,
                     title: AnyComponent(MultilineTextComponent(
                         text: .plain(NSAttributedString(
                             string: "Pending Requests",
@@ -1198,7 +1215,7 @@ private final class CommunityViewContentComponent: Component {
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
                     theme: theme,
-                    style: .glass,
+                    style: sectionStyle,
                     header: header,
                     footer: nil,
                     items: items
@@ -1207,26 +1224,40 @@ private final class CommunityViewContentComponent: Component {
                 containerSize: CGSize(width: availableWidth, height: 10000.0)
             )
         }
-        
+
         func update(component: CommunityViewContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
             let environment = environment[EnvironmentType.self].value
             self.environment = environment
-            
+
             var transition = transition
             if "".isEmpty {
                 transition = .immediate
             }
-            
-            let theme = environment.theme.withModalBlocksBackground()
+
+            let theme: PresentationTheme
+            let sectionStyle: ListSectionComponent.Style
+            let actionItemStyle: ListActionItemComponent.Style
+            let sideInset: CGFloat
+            switch component.style {
+            case .grouped:
+                theme = environment.theme.withModalBlocksBackground()
+                sectionStyle = .glass
+                actionItemStyle = .glass
+                sideInset = 16.0 + max(environment.safeInsets.left, environment.safeInsets.right)
+            case .plain:
+                theme = environment.theme
+                sectionStyle = .legacy
+                actionItemStyle = .legacy
+                sideInset = max(environment.safeInsets.left, environment.safeInsets.right)
+            }
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-            let sideInset: CGFloat = 16.0 + max(environment.safeInsets.left, environment.safeInsets.right)
-            let sectionSpacing: CGFloat = 28.0
+            let sectionSpacing: CGFloat = component.style == .grouped ? 28.0 : 12.0
             let contentWidth = availableSize.width - sideInset * 2.0
-            
+
             self.backgroundColor = .clear
-            
+
             let isAdmin = component.community?.hasPermission(.manageLinkedPeers) == true
             var rightItems: [GlassControlGroupComponent.Item] = []
             if isAdmin {
@@ -1238,15 +1269,20 @@ private final class CommunityViewContentComponent: Component {
                     }
                 ))
             }
-            rightItems.append(GlassControlGroupComponent.Item(
-                id: AnyHashable("search"),
-                content: .icon("Navigation/Search"),
-                action: {
-                    component.activateSearch()
-                }
-            ))
-            
+            if component.style == .grouped {
+                rightItems.append(GlassControlGroupComponent.Item(
+                    id: AnyHashable("search"),
+                    content: .icon("Navigation/Search"),
+                    action: {
+                        component.activateSearch()
+                    }
+                ))
+            }
+
             var contentHeight: CGFloat = 16.0
+            if component.presentation == .fullScreen {
+                contentHeight += max(environment.safeInsets.top, environment.statusBarHeight)
+            }
             let headerControlsY = contentHeight
             let headerControlsSize = self.headerControls.update(
                 transition: transition,
@@ -1255,8 +1291,8 @@ private final class CommunityViewContentComponent: Component {
                     leftItem: GlassControlPanelComponent.Item(
                         items: [
                             GlassControlGroupComponent.Item(
-                                id: AnyHashable("close"),
-                                content: .icon("Navigation/Close"),
+                                id: AnyHashable(component.presentation == .sheet ? "close" : "back"),
+                                content: .icon(component.presentation == .sheet ? "Navigation/Close" : "Navigation/Back"),
                                 action: {
                                     component.dismiss()
                                 }
@@ -1273,18 +1309,18 @@ private final class CommunityViewContentComponent: Component {
                     isDark: theme.overallDarkAppearance
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 44.0)
+                containerSize: CGSize(width: availableSize.width - 16.0 * 2.0, height: 44.0)
             )
             if let headerControlsView = self.headerControls.view {
                 if headerControlsView.superview == nil {
                     self.addSubview(headerControlsView)
                 }
                 transition.setFrame(view: headerControlsView, frame: CGRect(
-                    origin: CGPoint(x: sideInset, y: headerControlsY),
+                    origin: CGPoint(x: 16.0, y: headerControlsY),
                     size: headerControlsSize
                 ))
             }
-                        
+
             if component.isSearchActive {
                 let searchLeftInset: CGFloat = sideInset + 56.0
                 let searchWidth = max(1.0, availableSize.width - searchLeftInset - sideInset)
@@ -1356,76 +1392,83 @@ private final class CommunityViewContentComponent: Component {
                 }
             }
             contentHeight += 44.0 + 36.0
-            
-            let collapseSectionSize = self.collapseSection.update(
-                transition: transition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: theme,
-                    style: .glass,
-                    header: nil,
-                    footer: nil,
-                    items: [
-                        AnyComponentWithIdentity(id: "collapse", component: AnyComponent(ListActionItemComponent(
-                            theme: theme,
-                            style: .glass,
-                            title: AnyComponent(MultilineTextComponent(
-                                text: .plain(NSAttributedString(
-                                    string: "Show as One Chat",
-                                    font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
-                                    textColor: theme.list.itemPrimaryTextColor
-                                )),
-                                maximumNumberOfLines: 1
-                            )),
-                            accessory: .toggle(ListActionItemComponent.Toggle(
-                                style: .regular,
-                                isOn: component.community?.collapsedInDialogs == true,
-                                isInteractive: true,
-                                isEnabled: true,
-                                action: { [weak self] value in
-                                    self?.component?.toggleCollapsed(value)
-                                }
-                            )),
-                            action: nil
-                        )))
-                    ]
-                )),
-                environment: {},
-                containerSize: CGSize(width: contentWidth, height: 10000.0)
-            )
-            if let collapseSectionView = self.collapseSection.view {
-                if collapseSectionView.superview == nil {
-                    self.addSubview(collapseSectionView)
-                }
-                transition.setFrame(view: collapseSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: collapseSectionSize))
-            }
-            contentHeight += collapseSectionSize.height + 10.0
-            
-            let footerSize = self.collapseFooter.update(
-                transition: transition,
-                component: AnyComponent(MultilineTextComponent(
-                    text: .plain(NSAttributedString(
-                        string: "Group all community chats into one item in the chat list.",
-                        font: Font.regular(13.0),
-                        textColor: theme.list.freeTextColor
-                    )),
-                    maximumNumberOfLines: 0
-                )),
-                environment: {},
-                containerSize: CGSize(width: contentWidth - 32.0, height: 10000.0)
-            )
-            if let footerView = self.collapseFooter.view {
-                if footerView.superview == nil {
-                    self.addSubview(footerView)
-                }
-                transition.setFrame(view: footerView, frame: CGRect(origin: CGPoint(x: sideInset + 16.0, y: contentHeight), size: footerSize))
-            }
-            contentHeight += footerSize.height + sectionSpacing
 
-            if isAdmin, let pendingRequestsSectionSize = self.updatePendingRequestsSection(
+            if component.style == .grouped {
+                let collapseSectionSize = self.collapseSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: theme,
+                        style: sectionStyle,
+                        header: nil,
+                        footer: nil,
+                        items: [
+                            AnyComponentWithIdentity(id: "collapse", component: AnyComponent(ListActionItemComponent(
+                                theme: theme,
+                                style: actionItemStyle,
+                                title: AnyComponent(MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        string: "Show as One Chat",
+                                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                                        textColor: theme.list.itemPrimaryTextColor
+                                    )),
+                                    maximumNumberOfLines: 1
+                                )),
+                                accessory: .toggle(ListActionItemComponent.Toggle(
+                                    style: .regular,
+                                    isOn: component.community?.collapsedInDialogs == true,
+                                    isInteractive: true,
+                                    isEnabled: true,
+                                    action: { [weak self] value in
+                                        self?.component?.toggleCollapsed(value)
+                                    }
+                                )),
+                                action: nil
+                            )))
+                        ]
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: contentWidth, height: 10000.0)
+                )
+                if let collapseSectionView = self.collapseSection.view {
+                    if collapseSectionView.superview == nil {
+                        self.addSubview(collapseSectionView)
+                    }
+                    transition.setFrame(view: collapseSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: collapseSectionSize))
+                }
+                contentHeight += collapseSectionSize.height + 10.0
+
+                let footerSize = self.collapseFooter.update(
+                    transition: transition,
+                    component: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: "Group all community chats into one item in the chat list.",
+                            font: Font.regular(13.0),
+                            textColor: theme.list.freeTextColor
+                        )),
+                        maximumNumberOfLines: 0
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: contentWidth - 32.0, height: 10000.0)
+                )
+                if let footerView = self.collapseFooter.view {
+                    if footerView.superview == nil {
+                        self.addSubview(footerView)
+                    }
+                    transition.setFrame(view: footerView, frame: CGRect(origin: CGPoint(x: sideInset + 16.0, y: contentHeight), size: footerSize))
+                }
+                contentHeight += footerSize.height + sectionSpacing
+            } else {
+                self.collapseSection.view?.removeFromSuperview()
+                self.collapseFooter.view?.removeFromSuperview()
+            }
+
+            if component.style == .grouped, isAdmin, let pendingRequestsSectionSize = self.updatePendingRequestsSection(
                 component: component,
                 theme: theme,
                 presentationData: presentationData,
                 availableWidth: contentWidth,
+                sectionStyle: sectionStyle,
+                actionItemStyle: actionItemStyle,
                 transition: transition
             ) {
                 if let pendingRequestsSectionView = self.pendingRequestsSection.view {
@@ -1445,7 +1488,7 @@ private final class CommunityViewContentComponent: Component {
                 })
             }
 
-            
+
             let sections: [CommunityViewSection] = [.joined, .visible, .requestable]
             for section in sections {
                 let rows = self.rows(component: component, section: section)
@@ -1457,7 +1500,7 @@ private final class CommunityViewContentComponent: Component {
                     }
                     continue
                 }
-                
+
                 let size = self.updateSection(
                     component: component,
                     section: section,
@@ -1465,6 +1508,7 @@ private final class CommunityViewContentComponent: Component {
                     theme: theme,
                     presentationData: presentationData,
                     availableWidth: contentWidth,
+                    sectionStyle: sectionStyle,
                     transition: transition
                 )
                 if let sectionView = self.sectionViews[section]?.view {
@@ -1475,18 +1519,18 @@ private final class CommunityViewContentComponent: Component {
                 }
                 contentHeight += size.height + sectionSpacing
             }
-            
+
             contentHeight += 16.0
             contentHeight += 60.0
-            
+
             return CGSize(width: availableSize.width, height: contentHeight)
         }
     }
-    
+
     func makeView() -> View {
         return View(frame: CGRect())
     }
-    
+
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
@@ -1494,15 +1538,19 @@ private final class CommunityViewContentComponent: Component {
 
 private final class CommunityViewScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
-    
+
     let context: AccountContext
     let communityId: EnginePeer.Id
-    
-    init(context: AccountContext, communityId: EnginePeer.Id) {
+    let style: CommunityViewScreenStyle
+    let presentation: CommunityViewScreenPresentation
+
+    init(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) {
         self.context = context
         self.communityId = communityId
+        self.style = style
+        self.presentation = presentation
     }
-    
+
     static func ==(lhs: CommunityViewScreenComponent, rhs: CommunityViewScreenComponent) -> Bool {
         if lhs.context !== rhs.context {
             return false
@@ -1510,18 +1558,27 @@ private final class CommunityViewScreenComponent: Component {
         if lhs.communityId != rhs.communityId {
             return false
         }
+        if lhs.style != rhs.style {
+            return false
+        }
+        if lhs.presentation != rhs.presentation {
+            return false
+        }
         return true
     }
-    
+
     final class View: UIView {
         private let sheet = ComponentView<(EnvironmentType, ResizableSheetComponentEnvironment)>()
         private let sheetExternalState = ResizableSheetComponent<EnvironmentType>.ExternalState()
         private let animateOut = ActionSlot<Action<()>>()
-        
+        private let scrollView = UIScrollView()
+        private let fullscreenContent = ComponentView<EnvironmentType>()
+        private let fullscreenBottomItem = ComponentView<Empty>()
+
         private var component: CommunityViewScreenComponent?
         private weak var state: EmptyComponentState?
         private var environment: EnvironmentType?
-        
+
         private var community: TelegramCommunity?
         private var cachedData: CachedCommunityData?
         private var peers: [EnginePeer.Id: EnginePeer] = [:]
@@ -1531,14 +1588,14 @@ private final class CommunityViewScreenComponent: Component {
         private var pendingRequestsContext: CommunityPeerLinkRequestsContext?
         private var pendingRequestCachedPeerData: [EnginePeer.Id: CachedPeerData] = [:]
         private var joinedPeerIds = Set<EnginePeer.Id>()
-        
+
         private var isSearchActive = false
         private var searchQuery = ""
         private var isAddActionInProgress = false
         private var removingPeerId: EnginePeer.Id?
         private var didRequestInitialData = false
         private var didRequestJoinedChats = false
-        
+
         private var dataDisposable: Disposable?
         private let linkedPeersDisposable = MetaDisposable()
         private let linkedPeerDataDisposable = MetaDisposable()
@@ -1552,7 +1609,23 @@ private final class CommunityViewScreenComponent: Component {
         private var currentPendingRequestsCount: Int32?
         private var currentPendingRequestCachedPeerIds: [EnginePeer.Id] = []
         private var requestedPendingRequestCachedPeerIds = Set<EnginePeer.Id>()
-        
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+
+            self.scrollView.showsVerticalScrollIndicator = true
+            self.scrollView.showsHorizontalScrollIndicator = false
+            self.scrollView.scrollsToTop = true
+            self.scrollView.delaysContentTouches = false
+            self.scrollView.canCancelContentTouches = true
+            self.scrollView.contentInsetAdjustmentBehavior = .never
+            self.scrollView.alwaysBounceVertical = true
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
         deinit {
             self.dataDisposable?.dispose()
             self.linkedPeersDisposable.dispose()
@@ -1564,11 +1637,11 @@ private final class CommunityViewScreenComponent: Component {
             self.pendingRequestsDisposable.dispose()
             self.pendingRequestCachedDataDisposable.dispose()
         }
-        
+
         private var isAdmin: Bool {
             return self.community?.hasPermission(.manageLinkedPeers) == true
         }
-        
+
         private func presentError() {
             guard let component = self.component, let environment = self.environment else {
                 return
@@ -1582,13 +1655,13 @@ private final class CommunityViewScreenComponent: Component {
                 ]
             ), in: .window(.root))
         }
-        
+
         private func updateLinkedPeerSignals(component: CommunityViewScreenComponent, ids: [EnginePeer.Id]) {
             if self.currentLinkedPeerIds == ids {
                 return
             }
             self.currentLinkedPeerIds = ids
-            
+
             if ids.isEmpty {
                 self.peers = [:]
                 self.cachedPeerData = [:]
@@ -1599,7 +1672,7 @@ private final class CommunityViewScreenComponent: Component {
                 self.state?.updated(transition: .immediate)
                 return
             }
-            
+
             self.linkedPeersDisposable.set((component.context.engine.data.subscribe(
                 EngineDataMap(ids.map(TelegramEngine.EngineData.Item.Peer.Peer.init(id:)))
             )
@@ -1616,7 +1689,7 @@ private final class CommunityViewScreenComponent: Component {
                 self.peers = peers
                 self.state?.updated(transition: .spring(duration: 0.35))
             }))
-            
+
             self.linkedPeerDataDisposable.set((component.context.engine.data.subscribe(
                 EngineDataMap(ids.map(TelegramEngine.EngineData.Item.Peer.CachedData.init(id:)))
             )
@@ -1633,7 +1706,7 @@ private final class CommunityViewScreenComponent: Component {
                 self.cachedPeerData = cachedPeerData
                 self.state?.updated(transition: .spring(duration: 0.35))
             }))
-            
+
             self.previewsDisposable.set((communityChatPreviewsSignal(context: component.context, peerIds: ids)
             |> deliverOnMainQueue).startStrict(next: { [weak self] previews in
                 guard let self else {
@@ -1791,6 +1864,14 @@ private final class CommunityViewScreenComponent: Component {
 
         private func dismiss(animated: Bool) {
             guard let controller = self.environment?.controller else {
+                return
+            }
+            if self.component?.presentation == .fullScreen {
+                if let navigationController = controller()?.navigationController as? NavigationController {
+                    let _ = navigationController.popViewController(animated: animated)
+                } else {
+                    controller()?.dismiss(completion: nil)
+                }
                 return
             }
             if animated {
@@ -1953,173 +2034,267 @@ private final class CommunityViewScreenComponent: Component {
             environment.controller()?.push(selectionController)
         }
 
+        private func makeContentComponent(component: CommunityViewScreenComponent) -> CommunityViewContentComponent {
+            return CommunityViewContentComponent(
+                context: component.context,
+                communityId: component.communityId,
+                style: component.style,
+                presentation: component.presentation,
+                community: self.community,
+                cachedData: self.cachedData,
+                peers: self.peers,
+                cachedPeerData: self.cachedPeerData,
+                previews: self.previews,
+                pendingRequests: self.pendingRequests,
+                pendingRequestCachedPeerData: self.pendingRequestCachedPeerData,
+                pendingRequestInFlightPeerId: nil,
+                pendingRequestInFlightApprove: nil,
+                joinedPeerIds: self.joinedPeerIds,
+                isSearchActive: self.isSearchActive,
+                searchQuery: self.searchQuery,
+                toggleCollapsed: { [weak self] value in
+                    self?.toggleCollapsed(value)
+                },
+                setRequestApproval: { [weak self] request, approve in
+                    self?.setPendingRequestApproval(request: request, approve: approve)
+                },
+                openPeer: { [weak self] peer in
+                    self?.openPeer(peer)
+                },
+                openPendingRequests: { [weak self] in
+                    self?.openPendingRequests()
+                },
+                dismiss: { [weak self] in
+                    self?.dismiss(animated: true)
+                },
+                openEdit: { [weak self] in
+                    self?.openEdit()
+                },
+                activateSearch: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    guard let community = self.community, let controller = self.environment?.controller else {
+                        return
+                    }
+                    controller()?.present(CommunityAdminApprovalScreen(
+                        context: component.context,
+                        community: EnginePeer(community)
+                    ), in: .window(.root))
+                },
+                removePeer: { [weak self] peerId in
+                    self?.removePeer(peerId)
+                },
+                searchQueryUpdated: { [weak self] value in
+                    guard let self else {
+                        return
+                    }
+                    self.searchQuery = value
+                    self.state?.updated(transition: .immediate)
+                },
+                cancelSearch: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.isSearchActive = false
+                    self.searchQuery = ""
+                    self.state?.updated(transition: .spring(duration: 0.35))
+                }
+            )
+        }
+
+        private func makeBottomButtonComponent(theme: PresentationTheme, safeInsets: UIEdgeInsets) -> CommunityViewBottomButtonComponent {
+            return CommunityViewBottomButtonComponent(
+                theme: theme,
+                title: self.isAdmin ? "Add a Chat to Community" : "OK",
+                iconName: self.isAdmin ? "Item List/Icons/Add" : nil,
+                safeInsets: safeInsets,
+                isEnabled: !self.isAddActionInProgress,
+                displaysProgress: self.isAddActionInProgress,
+                action: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    if self.isAdmin {
+                        self.openAddChat()
+                    } else {
+                        self.dismiss(animated: true)
+                    }
+                }
+            )
+        }
+
         func update(component: CommunityViewScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             self.component = component
             self.state = state
             let environment = environment[EnvironmentType.self].value
             self.environment = environment
-            
+
             self.ensureDataSignal(component: component)
-            
-            let theme = environment.theme.withModalBlocksBackground()
-            
-            let sheetSize = self.sheet.update(
-                transition: transition,
-                component: AnyComponent(ResizableSheetComponent<EnvironmentType>(
-                    content: AnyComponent<EnvironmentType>(CommunityViewContentComponent(
-                        context: component.context,
-                        communityId: component.communityId,
-                        community: self.community,
-                        cachedData: self.cachedData,
-                        peers: self.peers,
-                        cachedPeerData: self.cachedPeerData,
-                        previews: self.previews,
-                        pendingRequests: self.pendingRequests,
-                        pendingRequestCachedPeerData: self.pendingRequestCachedPeerData,
-                        pendingRequestInFlightPeerId: nil,
-                        pendingRequestInFlightApprove: nil,
-                        joinedPeerIds: self.joinedPeerIds,
-                        isSearchActive: self.isSearchActive,
-                        searchQuery: self.searchQuery,
-                        toggleCollapsed: { [weak self] value in
-                            self?.toggleCollapsed(value)
-                        },
-                        setRequestApproval: { [weak self] request, approve in
-                            self?.setPendingRequestApproval(request: request, approve: approve)
-                        },
-                        openPeer: { [weak self] peer in
-                            self?.openPeer(peer)
-                        },
-                        openPendingRequests: { [weak self] in
-                            self?.openPendingRequests()
-                        },
-                        dismiss: { [weak self] in
-                            self?.dismiss(animated: true)
-                        },
-                        openEdit: { [weak self] in
-                            self?.openEdit()
-                        },
-                        activateSearch: { [weak self] in
-                            guard let self else {
-                                return
-                            }
-                            guard let community = self.community, let controller = self.environment?.controller else {
-                                return
-                            }
-                            controller()?.present(CommunityAdminApprovalScreen(
-                                context: component.context,
-                                community: EnginePeer(community)
-                            ), in: .window(.root))
-                        },
-                        removePeer: { [weak self] peerId in
-                            self?.removePeer(peerId)
-                        },
-                        searchQueryUpdated: { [weak self] value in
-                            guard let self else {
-                                return
-                            }
-                            self.searchQuery = value
-                            self.state?.updated(transition: .immediate)
-                        },
-                        cancelSearch: { [weak self] in
-                            guard let self else {
-                                return
-                            }
-                            self.isSearchActive = false
-                            self.searchQuery = ""
-                            self.state?.updated(transition: .spring(duration: 0.35))
-                        }
+
+            switch component.presentation {
+            case .sheet:
+                self.scrollView.removeFromSuperview()
+                self.fullscreenContent.view?.removeFromSuperview()
+                self.fullscreenBottomItem.view?.removeFromSuperview()
+
+                let theme = environment.theme.withModalBlocksBackground()
+                let sheetSize = self.sheet.update(
+                    transition: transition,
+                    component: AnyComponent(ResizableSheetComponent<EnvironmentType>(
+                        content: AnyComponent<EnvironmentType>(self.makeContentComponent(component: component)),
+                        hasTopEdgeEffect: false,
+                        bottomItem: AnyComponent(self.makeBottomButtonComponent(theme: theme, safeInsets: environment.safeInsets)),
+                        backgroundColor: .color(theme.list.modalBlocksBackgroundColor),
+                        defaultHeight: self.isAdmin ? 620.0 : 700.0,
+                        externalState: self.sheetExternalState,
+                        animateOut: self.animateOut
                     )),
-                    hasTopEdgeEffect: false,
-                    bottomItem: AnyComponent(CommunityViewBottomButtonComponent(
-                        theme: theme,
-                        title: self.isAdmin ? "Add a Chat to Community" : "OK",
-                        iconName: self.isAdmin ? "Item List/Icons/Add" : nil,
-                        safeInsets: environment.safeInsets,
-                        isEnabled: !self.isAddActionInProgress,
-                        displaysProgress: self.isAddActionInProgress,
-                        action: { [weak self] in
-                            guard let self else {
-                                return
+                    environment: {
+                        environment
+                        ResizableSheetComponentEnvironment(
+                            theme: theme,
+                            statusBarHeight: environment.statusBarHeight,
+                            safeInsets: environment.safeInsets,
+                            inputHeight: 0.0,
+                            metrics: environment.metrics,
+                            deviceMetrics: environment.deviceMetrics,
+                            isDisplaying: environment.isVisible,
+                            isCentered: environment.metrics.widthClass == .regular,
+                            screenSize: availableSize,
+                            regularMetricsSize: CGSize(width: 430.0, height: 900.0),
+                            dismiss: { [weak self] animated in
+                                self?.dismiss(animated: animated)
                             }
-                            if self.isAdmin {
-                                self.openAddChat()
-                            } else {
-                                self.dismiss(animated: true)
-                            }
-                        }
-                    )),
-                    backgroundColor: .color(theme.list.modalBlocksBackgroundColor),
-                    defaultHeight: self.isAdmin ? 620.0 : 700.0,
-                    externalState: self.sheetExternalState,
-                    animateOut: self.animateOut
-                )),
-                environment: {
-                    environment
-                    ResizableSheetComponentEnvironment(
-                        theme: theme,
-                        statusBarHeight: environment.statusBarHeight,
-                        safeInsets: environment.safeInsets,
-                        inputHeight: 0.0,
-                        metrics: environment.metrics,
-                        deviceMetrics: environment.deviceMetrics,
-                        isDisplaying: environment.isVisible,
-                        isCentered: environment.metrics.widthClass == .regular,
-                        screenSize: availableSize,
-                        regularMetricsSize: CGSize(width: 430.0, height: 900.0),
-                        dismiss: { [weak self] animated in
-                            self?.dismiss(animated: animated)
-                        }
-                    )
-                },
-                containerSize: availableSize
-            )
-            if let sheetView = self.sheet.view {
-                if sheetView.superview == nil {
-                    self.addSubview(sheetView)
+                        )
+                    },
+                    containerSize: availableSize
+                )
+                if let sheetView = self.sheet.view {
+                    if sheetView.superview == nil {
+                        self.addSubview(sheetView)
+                    }
+                    transition.setFrame(view: sheetView, frame: CGRect(origin: .zero, size: sheetSize))
                 }
-                transition.setFrame(view: sheetView, frame: CGRect(origin: .zero, size: sheetSize))
+            case .fullScreen:
+                self.sheet.view?.removeFromSuperview()
+
+                let theme = environment.theme
+                self.backgroundColor = theme.chatList.backgroundColor
+
+                let buttonInsets = ContainerViewLayout.concentricInsets(bottomInset: environment.safeInsets.bottom, innerDiameter: 52.0, sideInset: 30.0)
+                let bottomPanelHeight = 52.0 + buttonInsets.bottom
+                let bottomPanelWidth = max(1.0, availableSize.width - environment.safeInsets.left * 2.0 - buttonInsets.left - buttonInsets.right)
+                let bottomSize = self.fullscreenBottomItem.update(
+                    transition: transition,
+                    component: AnyComponent(self.makeBottomButtonComponent(theme: theme, safeInsets: UIEdgeInsets())),
+                    environment: {},
+                    containerSize: CGSize(width: bottomPanelWidth, height: 52.0)
+                )
+                let bottomFrame = CGRect(
+                    origin: CGPoint(
+                        x: environment.safeInsets.left + buttonInsets.left,
+                        y: availableSize.height - bottomPanelHeight
+                    ),
+                    size: bottomSize
+                )
+                if let bottomView = self.fullscreenBottomItem.view {
+                    if bottomView.superview == nil {
+                        self.addSubview(bottomView)
+                    }
+                    transition.setFrame(view: bottomView, frame: bottomFrame)
+                }
+
+                if self.scrollView.superview == nil {
+                    if let bottomView = self.fullscreenBottomItem.view {
+                        self.insertSubview(self.scrollView, belowSubview: bottomView)
+                    } else {
+                        self.addSubview(self.scrollView)
+                    }
+                }
+                transition.setFrame(view: self.scrollView, frame: CGRect(origin: .zero, size: availableSize))
+
+                let contentSize = self.fullscreenContent.update(
+                    transition: transition,
+                    component: AnyComponent(self.makeContentComponent(component: component)),
+                    environment: {
+                        environment
+                    },
+                    containerSize: CGSize(width: availableSize.width, height: 10000.0)
+                )
+                if let contentView = self.fullscreenContent.view {
+                    if contentView.superview == nil {
+                        self.scrollView.addSubview(contentView)
+                    }
+                    transition.setFrame(view: contentView, frame: CGRect(origin: .zero, size: contentSize))
+                }
+
+                let scrollInsets = UIEdgeInsets(top: 0.0, left: 0.0, bottom: availableSize.height - bottomFrame.minY + 8.0, right: 0.0)
+                if self.scrollView.verticalScrollIndicatorInsets != scrollInsets {
+                    self.scrollView.verticalScrollIndicatorInsets = scrollInsets
+                }
+                let scrollContentSize = CGSize(width: availableSize.width, height: contentSize.height)
+                if self.scrollView.contentSize != scrollContentSize {
+                    self.scrollView.contentSize = scrollContentSize
+                }
             }
-            
+
             return availableSize
         }
     }
-    
+
     func makeView() -> View {
         return View(frame: CGRect())
     }
-    
+
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
 
 public final class CommunityViewScreen: ViewControllerComponentContainer {
-    public init(context: AccountContext, communityId: EnginePeer.Id) {
+    public convenience init(context: AccountContext, communityId: EnginePeer.Id) {
+        self.init(context: context, communityId: communityId, style: .grouped, presentation: .sheet)
+    }
+
+    public init(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) {
         super.init(
             context: context,
-            component: CommunityViewScreenComponent(context: context, communityId: communityId),
+            component: CommunityViewScreenComponent(context: context, communityId: communityId, style: style, presentation: presentation),
             navigationBarAppearance: .none,
             theme: .default,
             updatedPresentationData: nil
         )
-        
-        self.statusBar.statusBarStyle = .Ignore
-        self.navigationPresentation = .flatModal
-        self.blocksBackgroundWhenInOverlay = true
+
+        switch presentation {
+        case .sheet:
+            self.statusBar.statusBarStyle = .Ignore
+            self.navigationPresentation = .flatModal
+            self.blocksBackgroundWhenInOverlay = true
+        case .fullScreen:
+            self.statusBar.statusBarStyle = .Ignore
+            self.navigationPresentation = .default
+            self.blocksBackgroundWhenInOverlay = false
+        }
     }
-    
+
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
-        self.view.disablesInteractiveModalDismiss = true
+
+        if self.navigationPresentation == .flatModal {
+            self.view.disablesInteractiveModalDismiss = true
+        }
     }
 
     public func dismissAnimated() {
+        guard self.navigationPresentation == .flatModal else {
+            self.dismiss(completion: nil)
+            return
+        }
         if let view = self.node.hostView.findTaggedView(tag: ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View.Tag()) as? ResizableSheetComponent<ViewControllerComponentContainer.Environment>.View {
             view.dismissAnimated()
         }
