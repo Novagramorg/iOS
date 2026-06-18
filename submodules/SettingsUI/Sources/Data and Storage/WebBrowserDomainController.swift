@@ -39,7 +39,7 @@ public func webBrowserDomainController(
     content.append(AnyComponentWithIdentity(
         id: "text",
         component: AnyComponent(
-            AlertTextComponent(content: .plain(external ? strings.WebBrowser_Exceptions_Create_ExternalText : strings.WebBrowser_Exceptions_Create_Text))
+            AlertTextComponent(content: .plain(!external ? strings.WebBrowser_Exceptions_Create_ExternalText : strings.WebBrowser_Exceptions_Create_Text))
         )
     ))
         
