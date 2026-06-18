@@ -1281,14 +1281,27 @@ public enum ChatHistoryNodeHistoryState: Equatable {
     case loaded(isEmpty: Bool, hasReachedLimits: Bool)
 }
 
-public protocol ChatHistoryListNode: ListView {
+public protocol ChatHistoryListNode: ASDisplayNode {
     var historyState: ValuePromise<ChatHistoryNodeHistoryState> { get }
-    
+
     func scrollToEndOfHistory()
     func updateLayout(transition: ContainedViewLayoutTransition, updateSizeAndInsets: ListViewUpdateSizeAndInsets)
     func messageInCurrentHistoryView(_ id: EngineMessage.Id) -> EngineMessage?
-    
+
     var contentPositionChanged: (ListViewVisibleContentOffset) -> Void { get set }
+
+    // Curated ListView surface reached via the ChatHistoryListNode protocol type
+    // (PeerInfoListPaneNode + ChatLoadingNode). Everything else moves to concrete-only forwarders.
+    var bounces: Bool { get set }
+    var scrollEnabled: Bool { get set }
+    var preloadPages: Bool { get set }
+    var defaultToSynchronousTransactionWhileScrolling: Bool { get set }
+    var insets: UIEdgeInsets { get }
+    func visibleContentOffset() -> ListViewVisibleContentOffset
+    func transferVelocity(_ velocity: CGFloat)
+    func forEachItemNode(_ f: (ASDisplayNode) -> Void)
+    func forEachVisibleItemNode(_ f: (ASDisplayNode) -> Void)
+    func forEachItemHeaderNode(_ f: (ListViewItemHeaderNode) -> Void)
 }
 
 public extension ChatFolderTitle {

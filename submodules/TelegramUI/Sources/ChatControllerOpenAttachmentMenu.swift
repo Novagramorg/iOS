@@ -35,6 +35,7 @@ import ComposeTodoScreen
 import ComposePollScreen
 import Photos
 import AttachmentFileController
+import RichTextAttachmentScreen
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
@@ -260,6 +261,9 @@ extension ChatControllerImpl {
             if !premiumGiftOptions.isEmpty {
                 buttons.insert(.gift, at: 1)
             }
+            if strongSelf.context.sharedContext.immediateExperimentalUISettings.debugRichText {
+                buttons.insert(.richText, at: 1)
+            }
 
             guard let initialButton = initialButton else {
                 if case let .bot(botId, botPayload, botJustInstalled) = subject {
@@ -284,7 +288,7 @@ extension ChatControllerImpl {
                     } else {
                         let _ = (context.engine.messages.getAttachMenuBot(botId: botId)
                         |> deliverOnMainQueue).startStandalone(next: { bot in
-                            let controller = webAppTermsAlertController(context: context, updatedPresentationData: strongSelf.updatedPresentationData, bot: bot, completion: { allowWrite in
+                            let controller = webAppTermsAlertController(context: context, updatedPresentationData: strongSelf.updatedPresentationData, completion: { allowWrite in
                                 let _ = (context.engine.messages.addBotToAttachMenu(botId: botId, allowWrite: allowWrite)
                                 |> deliverOnMainQueue).startStandalone(error: { _ in
 
@@ -792,7 +796,7 @@ extension ChatControllerImpl {
                         strongSelf.controllerNavigationDisposable.set(nil)
 
                         if bot.flags.contains(.notActivated) {
-                            let alertController = webAppTermsAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, bot: bot, completion: { [weak self] allowWrite in
+                            let alertController = webAppTermsAlertController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, completion: { [weak self] allowWrite in
                                 guard let self else {
                                     return
                                 }
@@ -830,6 +834,13 @@ extension ChatControllerImpl {
                         completion(controller, controller.mediaPickerContext)
                         strongSelf.controllerNavigationDisposable.set(nil)
                     })
+                    return true
+                case .richText:
+                    if #available(iOS 17.0, *) {
+                        let controller = RichTextAttachmentScreen(context: context)
+                        completion(controller, controller.mediaPickerContext)
+                        strongSelf.controllerNavigationDisposable.set(nil)
+                    }
                     return true
                 default:
                     break
