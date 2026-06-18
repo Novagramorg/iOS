@@ -16383,3 +16383,21 @@ Error: %8$@";
 "WebBrowser.ExceptionAdded.Text" = "This site will always open in-app.";
 
 "WebApp.GuardDisclaimerText" = "**%1$@** uses **%2$@** to welcome new members. You must agree to the Terms of Use of mini apps to continue.";
+
+"Currency.Grams_1" = "%@ Gram";
+"Currency.Grams_any" = "%@ Grams";
+
+"Gift.Buy.Confirm.BuyForGrams_1" = "Buy for %@ Gram";
+"Gift.Buy.Confirm.BuyForGrams_any" = "Buy for %@ Grams";
+
+"Gift.Sell.Confirm.ListForGrams_1" = "List for %@ Gram";
+"Gift.Sell.Confirm.ListForGrams_any" = "List for %@ Grams";
+
+"Chat.PrivateMessageSentTimestamp.Date" = "sent %@";
+"Chat.PrivateMessageSentTimestamp.TodayAt" = "sent today at %@";
+"Chat.PrivateMessageSentTimestamp.YesterdayAt" = "sent yesterday at %@";
+
+"Message.EditFullDateFormat" = "edited on %1$@, %2$@";
+"Message.EditTodayFullDateFormat" = "edited at %1$@";
+
+"WebBrowser.Exceptions.Create.ExternalText" = "Enter a domain that you don't want to be opened in the external browser.";
