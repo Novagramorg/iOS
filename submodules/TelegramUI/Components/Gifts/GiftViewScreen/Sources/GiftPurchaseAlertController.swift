@@ -115,7 +115,7 @@ public func giftPurchaseAlertController(
             }
         case .ton:
             if let resellAmount = gift.resellAmounts?.first(where: { $0.currency == .ton }) {
-                priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) GRAM**"
+                priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat, formatString: presentationData.strings.Currency_Grams))**"
             }
         }
     
@@ -240,7 +240,7 @@ public func giftPurchaseAlertController(
             }
         case .ton:
             if let resellAmount = gift.resellAmounts?.first(where: { $0.currency == .ton }) {
-                buyString = strings.Gift_Buy_Confirm_BuyForTon(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)).string
+                buyString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat, formatString: strings.Gift_Buy_Confirm_BuyForGrams)
             }
         }
         actions.append(.init(id: "buy", title: buyString, type: .default, action: {
