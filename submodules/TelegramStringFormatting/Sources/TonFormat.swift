@@ -48,7 +48,7 @@ public func formatTonAmountText(_ value: Int64, dateTimeFormat: PresentationDate
             return amountString
         }
         let pluralizationValue: Int32 = (value == 1_000_000_000 || value == -1_000_000_000) ? 1 : 100
-        return formatString(pluralizationValue).replacingOccurrences(of: "%@", with: amountString)
+        return formatString(pluralizationValue).replacingOccurrences(of: "\(pluralizationValue)", with: amountString)
     }
 
     var balanceText = "\(abs(value))"
