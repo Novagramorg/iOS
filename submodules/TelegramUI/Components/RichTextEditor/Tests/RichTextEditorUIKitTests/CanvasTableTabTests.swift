@@ -77,11 +77,11 @@ final class CanvasTableTabTests: XCTestCase {
         v.setBlocks([
             .table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 140), ColumnSpec(width: 140)],
                 rows: [Row(id: BlockID("r0"), cells: [cell("a", "Alpha"), cell("b", "Beta")])])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50))),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50))),
         ], width: 340)
         v.frame = CGRect(x: 0, y: 0, width: 340, height: 500); v.layoutIfNeeded()
         let cellB = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("bp")) }!
-        let imageBox = v.boxes.first { $0 is ImageBlockBox }!
+        let imageBox = v.boxes.first { $0 is MediaBlockBox }!
         v.anchor = cellB.globalStart + 1; v.head = v.anchor
         v.moveToCell(forward: true)
         XCTAssertEqual(v.head, imageBox.nodeStart, "Tab exits to the gap before the image after the table")

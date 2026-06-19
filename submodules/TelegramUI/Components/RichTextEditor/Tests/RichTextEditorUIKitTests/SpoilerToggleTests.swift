@@ -61,9 +61,7 @@ final class SpoilerToggleTests: XCTestCase {
     func test_facade_toggleSpoiler_reflectsInDocument() {
         let e = RichTextEditorView()
         e.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
-        e.document = Document(metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                                         modifiedAt: Date(timeIntervalSince1970: 0)),
-                              blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
+        e.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
         e.layoutIfNeeded()
         e.selectAll(); e.toggleSpoiler()
         let allSpoiler = e.document.blocks.contains { b in

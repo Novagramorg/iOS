@@ -48,15 +48,14 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
                 ]),
             ])
         editor.document = Document(
-            metadata: DocumentMetadata(title: "Into the Dark", createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [
-                .paragraph(ParagraphBlock(id: BlockID("title"), style: .title, runs: [TextRun(text: "Into the Dark")])),
+                .paragraph(ParagraphBlock(id: BlockID("title"), style: .heading1, runs: [TextRun(text: "Into the Dark")])),
                 .paragraph(ParagraphBlock(id: BlockID("intro"), runs: [
                     TextRun(text: "Black holes "), emojiRun("spinner", "intro-spin"),
                     TextRun(text: " are the strangest objects we know "), emojiRun("star", "intro-star"),
                     TextRun(text: ". Places where gravity pulls so hard that not even light escapes."),
                 ])),
+                .media(MediaBlock(id: BlockID("media0"), mediaID: "demo-1", kind: .image, naturalSize: Size2D(width: 1280, height: 720))),
                 .paragraph(ParagraphBlock(id: BlockID("spoilerDemo"), runs: [
                     TextRun(text: "Tap to reveal: "),
                     TextRun(text: "this is a hidden spoiler", attributes: CharacterAttributes(spoiler: true)),
@@ -72,6 +71,8 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
                 .table(wideTable),
                 .paragraph(ParagraphBlock(id: BlockID("end"), runs: [TextRun(text: "")])),
             ])
+
+        editor.registerMediaViewProvider { mediaID, _ in DemoMediaItemView(mediaID: mediaID) }
 
         editor.registerEmojiViewProvider { id, size in
             switch id {
@@ -181,7 +182,7 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
     }
 
     private func styleMenu() -> UIMenu {
-        let names: [(String, ParagraphStyleName)] = [("Title", .title), ("Heading 1", .heading1),
+        let names: [(String, ParagraphStyleName)] = [("Heading 1", .heading1),
             ("Heading 2", .heading2), ("Heading 3", .heading3), ("Body", .body), ("Quote", .quote)]
         return UIMenu(title: "Style", children: names.map { n in
             UIAction(title: n.0) { [weak self] _ in self?.editor.setParagraphStyle(n.1) }
@@ -239,9 +240,11 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
         guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else { return }
         provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
             guard let image = object as? UIImage else { return }
+            let naturalSize = image.size
             DispatchQueue.main.async {
                 self?.editor.becomeFirstResponder()
-                self?.editor.insertImage(image, naturalSize: image.size)
+                let mediaID = "picked-\(UUID().uuidString)"
+                self?.editor.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: .image)
             }
         }
     }

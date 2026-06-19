@@ -101,10 +101,6 @@ final class ScrollCaretOnEditTests: XCTestCase {
 
     // MARK: Façade-level: typing actually scrolls an off-screen caret back into view.
 
-    private func meta() -> DocumentMetadata {
-        DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0), modifiedAt: Date(timeIntervalSince1970: 0))
-    }
-
     func test_typing_scrollsOffScreenCaretBackIntoView() {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 200))   // short viewport
         window.makeKeyAndVisible()
@@ -115,7 +111,7 @@ final class ScrollCaretOnEditTests: XCTestCase {
         let blocks = (0..<40).map {
             Block.paragraph(ParagraphBlock(id: BlockID("p\($0)"), runs: [TextRun(text: "Line \($0)")]))
         }
-        editor.document = Document(metadata: meta(), blocks: blocks)
+        editor.document = Document(blocks: blocks)
         editor.layoutIfNeeded()
         XCTAssertTrue(editor.becomeFirstResponder())
 

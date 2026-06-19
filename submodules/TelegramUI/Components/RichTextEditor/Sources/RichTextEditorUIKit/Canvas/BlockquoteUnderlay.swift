@@ -6,7 +6,7 @@ import UIKit
 /// views. A resizable image stretches a tiny bitmap via the layer's `contentsCenter` on the GPU, so a
 /// run-tall frame allocates no large backing store — the size-safe replacement for drawing the fill
 /// into the (document-sized) canvas context.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class BlockquoteUnderlay: UIView {
     private var pool: [Int: UIImageView] = [:]   // keyed by run index (stable order along the document)
 
@@ -15,11 +15,25 @@ final class BlockquoteUnderlay: UIView {
         isUserInteractionEnabled = false
         backgroundColor = .clear
         isOpaque = false
-        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: BlockquoteUnderlay, _: UITraitCollection) in
-            view.rebuildFillForAppearanceChange()
+        // `registerForTraitChanges` is iOS 17+; on iOS 16 the `traitCollectionDidChange` override below
+        // provides the same light↔dark rebuild.
+        if #available(iOS 17.0, *) {
+            registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: BlockquoteUnderlay, _: UITraitCollection) in
+                view.rebuildFillForAppearanceChange()
+            }
         }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
+
+    // iOS-16 fallback for the iOS-17 `registerForTraitChanges` registered in init. (Deprecated on iOS 17+,
+    // where the registration handles appearance changes; the guard avoids a redundant rebuild there.)
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard #unavailable(iOS 17.0) else { return }
+        if traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle {
+            rebuildFillForAppearanceChange()
+        }
+    }
 
     /// A system appearance switch (light↔dark) only fires trait callbacks, not `layoutSubviews`, so the
     /// cached (appearance-baked) fill image would otherwise go stale until the next relayout. Rebuild it
@@ -28,6 +42,14 @@ final class BlockquoteUnderlay: UIView {
         cachedImage = nil
         let image = fillImage()
         for iv in pool.values where !iv.isHidden { iv.image = image }
+    }
+
+    /// The bar + fill color. Defaults to `.systemBlue` (prior behavior); set from the editor theme's accent.
+    var accentColor: UIColor = .systemBlue {
+        didSet {
+            cachedImage = nil
+            rebuildFillForAppearanceChange()
+        }
     }
 
     /// The cached resizable fill+bar image, rebuilt on a trait change (light/dark, tint).
@@ -45,9 +67,9 @@ final class BlockquoteUnderlay: UIView {
             let ctx = c.cgContext
             let rect = CGRect(origin: .zero, size: size)
             let path = UIBezierPath(roundedRect: rect, cornerRadius: radius)
-            UIColor.systemBlue.withAlphaComponent(0.10).setFill(); path.fill()
+            accentColor.withAlphaComponent(0.10).setFill(); path.fill()
             ctx.saveGState(); path.addClip()
-            UIColor.systemBlue.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: bar, height: size.height))
+            accentColor.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: bar, height: size.height))
             ctx.restoreGState()
         }.resizableImage(withCapInsets: UIEdgeInsets(top: cap, left: cap, bottom: cap, right: cap),
                          resizingMode: .stretch)

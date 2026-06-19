@@ -50,14 +50,38 @@ final class CanvasDecorationsTests: XCTestCase {
         XCTAssertEqual(v.blockquoteDecorations().count, 2)                     // two distinct quotes → two backgrounds
     }
 
-    func test_placeholders_titleAndBody_whenEmpty() {
+    func test_typeSomethingPlaceholder_onlyOnLastBlock() {
+        // Two empty body paragraphs: the "Type something…" placeholder shows ONLY on the last block.
         let v = canvas([
-            .paragraph(ParagraphBlock(id: BlockID("t"), style: .title, runs: [])),
+            .paragraph(ParagraphBlock(id: BlockID("a"), style: .body, runs: [])),
             .paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: [])),
         ])
         let draws = v.placeholderDraws()
-        XCTAssertEqual(draws.map(\.text), ["Title", "Type something…"])
-        XCTAssertTrue(draws[0].font.fontName.contains("NewYork"))     // title placeholder in serif
+        XCTAssertEqual(draws.map(\.text), ["Type something…"], "only one placeholder — on the last block")
+        // It belongs to the LAST box (box "b"), not the first.
+        let lastBox = v.boxes[1]
+        XCTAssertEqual(draws.first?.origin.y ?? -1, lastBox.textOrigin.y, accuracy: 8.0,
+                       "the placeholder sits on the last block, not the first")
+    }
+
+    func test_typeSomethingPlaceholder_notShown_whenEmptyBodyIsNotLast() {
+        // An empty body paragraph that is NOT the last block shows no placeholder.
+        let v = canvas([
+            .paragraph(ParagraphBlock(id: BlockID("a"), style: .body, runs: [])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), style: .heading1, runs: [TextRun(text: "Hi")])),
+        ])
+        XCTAssertTrue(v.placeholderDraws().isEmpty,
+                      "a non-last empty body shows no placeholder; the last block has content")
+    }
+
+    func test_placeholder_onlyBodyAmongStyles_whenEmpty() {
+        let v = canvas([
+            .paragraph(ParagraphBlock(id: BlockID("h"), style: .heading1, runs: [])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: [])),
+        ])
+        let draws = v.placeholderDraws()
+        XCTAssertEqual(draws.map(\.text), ["Type something…"],
+                       "only an empty body paragraph shows a placeholder; headings don't")
     }
 
     func test_placeholder_baselineMatchesRealFirstLineBaseline() {
@@ -127,13 +151,13 @@ final class CanvasDecorationsTests: XCTestCase {
 
     func test_placeholder_isDrawnByBox_onlyForTopLevelEmptyParagraph() {
         let v = DocumentCanvasView()
-        v.setParagraphs([ParagraphBlock(id: BlockID("t"), style: .title, runs: [])], width: 300)
+        v.setParagraphs([ParagraphBlock(id: BlockID("t"), style: .body, runs: [])], width: 300)
         v.frame = CGRect(x: 0, y: 0, width: 300, height: 200); v.layoutIfNeeded()
         let box = v.boxes[0] as! BlockBox
         XCTAssertTrue(box.isTopLevelBlock, "top-level boxes are flagged during layout")
         let d = box.placeholderDraw()!
         let seam = v.placeholderDraws().first!
-        XCTAssertEqual(d.text, "Title")
+        XCTAssertEqual(d.text, "Type something…")
         XCTAssertEqual(d.origin.x, seam.origin.x, accuracy: 0.01)
         XCTAssertEqual(d.origin.y, seam.origin.y, accuracy: 0.01)
     }

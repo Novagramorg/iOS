@@ -243,6 +243,17 @@ public extension Api {
                 return ("textDate", [("flags", ConstructorParameterDescription(self.flags)), ("text", ConstructorParameterDescription(self.text)), ("date", ConstructorParameterDescription(self.date))])
             }
         }
+        public class Cons_textDiff: TypeConstructorDescription {
+            public var text: Api.RichText
+            public var oldText: Api.RichText
+            public init(text: Api.RichText, oldText: Api.RichText) {
+                self.text = text
+                self.oldText = oldText
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("textDiff", [("text", ConstructorParameterDescription(self.text)), ("oldText", ConstructorParameterDescription(self.oldText))])
+            }
+        }
         public class Cons_textEmail: TypeConstructorDescription {
             public var text: Api.RichText
             public var email: String
@@ -421,6 +432,7 @@ public extension Api {
         case textConcat(Cons_textConcat)
         case textCustomEmoji(Cons_textCustomEmoji)
         case textDate(Cons_textDate)
+        case textDiff(Cons_textDiff)
         case textEmail(Cons_textEmail)
         case textEmpty
         case textFixed(Cons_textFixed)
@@ -515,6 +527,13 @@ public extension Api {
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 _data.text.serialize(buffer, true)
                 serializeInt32(_data.date, buffer: buffer, boxed: false)
+                break
+            case .textDiff(let _data):
+                if boxed {
+                    buffer.appendInt32(-1769551024)
+                }
+                _data.text.serialize(buffer, true)
+                _data.oldText.serialize(buffer, true)
                 break
             case .textEmail(let _data):
                 if boxed {
@@ -657,6 +676,8 @@ public extension Api {
                 return ("textCustomEmoji", [("documentId", ConstructorParameterDescription(_data.documentId)), ("alt", ConstructorParameterDescription(_data.alt))])
             case .textDate(let _data):
                 return ("textDate", [("flags", ConstructorParameterDescription(_data.flags)), ("text", ConstructorParameterDescription(_data.text)), ("date", ConstructorParameterDescription(_data.date))])
+            case .textDiff(let _data):
+                return ("textDiff", [("text", ConstructorParameterDescription(_data.text)), ("oldText", ConstructorParameterDescription(_data.oldText))])
             case .textEmail(let _data):
                 return ("textEmail", [("text", ConstructorParameterDescription(_data.text)), ("email", ConstructorParameterDescription(_data.email))])
             case .textEmpty:
@@ -844,6 +865,24 @@ public extension Api {
             let _c3 = _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.RichText.textDate(Cons_textDate(flags: _1!, text: _2!, date: _3!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_textDiff(_ reader: BufferReader) -> RichText? {
+            var _1: Api.RichText?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.RichText
+            }
+            var _2: Api.RichText?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.RichText
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.RichText.textDiff(Cons_textDiff(text: _1!, oldText: _2!))
             }
             else {
                 return nil
@@ -1083,68 +1122,6 @@ public extension Api {
             let _c3 = _3 != nil
             if _c1 && _c2 && _c3 {
                 return Api.RichText.textUrl(Cons_textUrl(text: _1!, url: _2!, webpageId: _3!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum SavedContact: TypeConstructorDescription {
-        public class Cons_savedPhoneContact: TypeConstructorDescription {
-            public var phone: String
-            public var firstName: String
-            public var lastName: String
-            public var date: Int32
-            public init(phone: String, firstName: String, lastName: String, date: Int32) {
-                self.phone = phone
-                self.firstName = firstName
-                self.lastName = lastName
-                self.date = date
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("savedPhoneContact", [("phone", ConstructorParameterDescription(self.phone)), ("firstName", ConstructorParameterDescription(self.firstName)), ("lastName", ConstructorParameterDescription(self.lastName)), ("date", ConstructorParameterDescription(self.date))])
-            }
-        }
-        case savedPhoneContact(Cons_savedPhoneContact)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .savedPhoneContact(let _data):
-                if boxed {
-                    buffer.appendInt32(289586518)
-                }
-                serializeString(_data.phone, buffer: buffer, boxed: false)
-                serializeString(_data.firstName, buffer: buffer, boxed: false)
-                serializeString(_data.lastName, buffer: buffer, boxed: false)
-                serializeInt32(_data.date, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .savedPhoneContact(let _data):
-                return ("savedPhoneContact", [("phone", ConstructorParameterDescription(_data.phone)), ("firstName", ConstructorParameterDescription(_data.firstName)), ("lastName", ConstructorParameterDescription(_data.lastName)), ("date", ConstructorParameterDescription(_data.date))])
-            }
-        }
-
-        public static func parse_savedPhoneContact(_ reader: BufferReader) -> SavedContact? {
-            var _1: String?
-            _1 = parseString(reader)
-            var _2: String?
-            _2 = parseString(reader)
-            var _3: String?
-            _3 = parseString(reader)
-            var _4: Int32?
-            _4 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.SavedContact.savedPhoneContact(Cons_savedPhoneContact(phone: _1!, firstName: _2!, lastName: _3!, date: _4!))
             }
             else {
                 return nil

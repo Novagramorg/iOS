@@ -4,6 +4,6 @@ import Foundation
 public enum TextNodeRef: Equatable {
     /// The runs of a paragraph block (top-level or inside a table cell).
     case paragraph(BlockID)
-    /// The caption runs of an image block.
+    /// The caption runs of a media block.
     case caption(BlockID)
 }

@@ -1205,7 +1205,7 @@ extension ChatControllerImpl {
                     }
                     return updatedState
                 })
-                self.searchResult.set(.single((results, state, .general(scope: .channels, groupId: nil, tags: nil, minDate: nil, maxDate: nil, folderId: nil))))
+                self.searchResult.set(.single((results, state, .general(scope: .channels, groupId: nil, tags: nil, minDate: nil, maxDate: nil, folderId: nil, communityId: nil))))
             }
         }
         
@@ -2215,15 +2215,6 @@ extension ChatControllerImpl {
                 
                 let text = trimChatInputText(convertMarkdownToAttributes(expandedInputStateAttributedString(editMessage.inputState.inputText)))
 
-                var isSpecialChatContents = false
-                if case .customChatContents = strongSelf.presentationInterfaceState.subject {
-                    isSpecialChatContents = true
-                }
-                var richTextAttribute: RichTextMessageAttribute?
-                if !isSpecialChatContents {
-                    richTextAttribute = richMarkdownAttributeIfNeeded(context: strongSelf.context, attributedText: expandedInputStateAttributedString(editMessage.inputState.inputText))
-                }
-
                 let entities = generateTextEntities(text.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(text))
                 var entitiesAttribute: TextEntitiesMessageAttribute?
                 if !entities.isEmpty {
@@ -2307,12 +2298,7 @@ extension ChatControllerImpl {
                             let currentWebpagePreviewAttribute = currentMessage.webpagePreviewAttribute ?? WebpagePreviewMessageAttribute(leadingPreview: false, forceLargeMedia: nil, isManuallyAdded: true, isSafe: false)
                             let currentRichText = currentMessage.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute
 
-                            if let richTextAttribute = richTextAttribute {
-                                // Rich edit: empty text, no entities, carry the rich attribute.
-                                if currentRichText != richTextAttribute || !currentMessage.text.isEmpty || updatingMedia {
-                                    strongSelf.context.account.pendingUpdateMessageManager.add(messageId: editMessage.messageId, text: "", media: media, entities: nil, richText: richTextAttribute, inlineStickers: inlineStickers, webpagePreviewAttribute: webpagePreviewAttribute, invertMediaAttribute: invertedMediaAttribute, disableUrlPreview: disableUrlPreview)
-                                }
-                            } else {
+                            do {
                                 if currentMessage.text != text.string || currentEntities != entities || currentRichText != nil || updatingMedia || webpagePreviewAttribute != currentWebpagePreviewAttribute || disableUrlPreview {
                                     strongSelf.context.account.pendingUpdateMessageManager.add(messageId: editMessage.messageId, text: text.string, media: media, entities: entitiesAttribute, richText: nil, inlineStickers: inlineStickers, webpagePreviewAttribute: webpagePreviewAttribute, invertMediaAttribute: invertedMediaAttribute, disableUrlPreview: disableUrlPreview)
                                 }
@@ -3834,6 +3820,20 @@ extension ChatControllerImpl {
             |> deliverOnMainQueue).startStandalone()
         }, openLinkEditing: { [weak self] in
             if let strongSelf = self {
+                // New rich-text editor backend: the editor owns the document, so read/apply the link through its
+                // native API rather than the legacy ChatTextInputState. The same chatTextLinkEditController UI is reused.
+                if let richNode = strongSelf.chatDisplayNode.textInputPanelNode?.richTextInputNode, richNode.usesNativeRichTextEngine {
+                    let selectedText = richNode.selectedRichText()
+                    let existingLink = richNode.currentRichTextLinkURL()
+                    let controller = chatTextLinkEditController(context: strongSelf.context, updatedPresentationData: strongSelf.updatedPresentationData, text: strongSelf.presentationData.strings.TextFormat_AddLinkText(selectedText).string, link: existingLink, apply: { [weak richNode] link, _ in
+                        guard let richNode else { return }
+                        if let link {
+                            richNode.applyRichTextLink(link.isEmpty ? nil : link)
+                        }
+                    })
+                    strongSelf.present(controller, in: .window(.root))
+                    return
+                }
                 var selectionRange: Range<Int>?
                 var text: NSAttributedString?
                 var inputMode: ChatInputMode?
@@ -4730,6 +4730,11 @@ extension ChatControllerImpl {
                 return
             }
             self.chatDisplayNode.openAICompose()
+        }, openExpandedInput: { [weak self] in
+            guard let self else {
+                return
+            }
+            self.chatDisplayNode.openExpandedInput()
         }, openSetPeerAvatar: { [weak self] in
             guard let self, let peer = self.presentationInterfaceState.renderedPeer?.peer else {
                 return

@@ -6,8 +6,7 @@ import RichTextEditorCore
 
 final class EditorViewTests: XCTestCase {
     private func singleBlockDoc(_ p: ParagraphBlock) -> Document {
-        Document(metadata: DocumentMetadata(title: "T", createdAt: Date(timeIntervalSince1970: 0),
-                 modifiedAt: Date(timeIntervalSince1970: 0)), blocks: [.paragraph(p)])
+        Document(blocks: [.paragraph(p)])
     }
 
     func test_documentRoundTrips() {

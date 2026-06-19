@@ -2305,7 +2305,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             var topForumTopicItems: [EngineChatList.ForumTopicData] = []
             var autoremoveTimeout: Int32?
             var itemTags: [ChatListItemContent.Tag] = []
-            var isCommunityAvatar = false
+            var isCommunity = false
             var displayCommunityAvatarBadge = false
             
             var groupHiddenByDefault = false
@@ -2332,7 +2332,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     let messagesValue = peerData.messages
                     let peerValue = peerData.peer
                     if case .community = peerValue.peer {
-                        isCommunityAvatar = true
+                        isCommunity = true
                     }
                     if case let .channel(channel) = peerValue.peer, channel.linkedCommunityId != nil {
                         displayCommunityAvatarBadge = true
@@ -3439,7 +3439,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             let isMuted = isRemovedFromTotalUnreadCount
-            if isMuted && !isCommunityAvatar {
+            if isMuted {
                 currentMutedIconImage = PresentationResourcesChatList.mutedIcon(item.presentationData.theme)
             }
             
@@ -3915,6 +3915,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 if case let .peer(peerData) = item.content, case .community = peerData.peer.peer {
                                     //TODO:localize
                                     peerRevealOptions = [
+                                        ItemListRevealOption(key: isMuted ? RevealOptionKey.unmute.rawValue : RevealOptionKey.mute.rawValue, title: isMuted ? item.presentationData.strings.ChatList_Unmute : item.presentationData.strings.ChatList_Mute, icon: isMuted ? unmuteIcon : muteIcon, color: item.presentationData.theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor),
                                         ItemListRevealOption(key: RevealOptionKey.ungroup.rawValue, title: "Ungroup", icon: ungroupCommunityIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor)
                                     ]
                                 } else {
@@ -4147,7 +4148,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     
                     transition.updateFrame(node: strongSelf.avatarContainerNode, frame: avatarFrame)
 
-                    if useChatListLayout && isCommunityAvatar && avatarContentImageSpec == nil, let shadowImage = UIImage(bundleImageName: "Components/CommunityShadow") {
+                    if useChatListLayout && isCommunity && avatarContentImageSpec == nil, let shadowImage = UIImage(bundleImageName: "Components/CommunityShadow") {
                         strongSelf.communityAvatarShadowNode.isHidden = false
                         strongSelf.communityAvatarShadowNode.image = generateTintedImage(image: shadowImage, color: theme.titleColor.withAlphaComponent(0.9))
 

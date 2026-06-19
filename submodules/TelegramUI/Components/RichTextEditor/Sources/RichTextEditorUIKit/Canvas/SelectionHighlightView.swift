@@ -7,7 +7,7 @@ import UIKit
 /// table chrome), so the highlight reads over everything and rides vertical scroll. Table-cell highlights
 /// live in each table's scrolling content view instead (so they ride horizontal overscroll) — see
 /// `CellSelectionView`.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class SelectionHighlightView: UIView {
     weak var canvas: DocumentCanvasView?
     override init(frame: CGRect) {
@@ -27,7 +27,7 @@ final class SelectionHighlightView: UIView {
 /// A dedicated selection-highlight surface hosted INSIDE a table's scrolling content view, kept above the
 /// cell text + cell emoji subviews, so a cell selection draws on top and rides the table's horizontal
 /// scroll/overscroll. The owning `TableBackingView` keeps it frontmost and feeds it the cell rects.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class CellSelectionView: UIView {
     weak var owner: TableBackingView?
     override init(frame: CGRect) {
@@ -49,7 +49,7 @@ final class CellSelectionView: UIView {
 /// table's scrolling content view) so it sits ON TOP of the wash and rides the right scroll — replacing
 /// the old CGContext blit. Non-interactive: the handle DRAG is a proximity-gated pan on the canvas
 /// (`isSelectionDragTouch`), independent of this view.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class SelectionHandleView: UIView {
     static let knobRadius: CGFloat = 5.5
     static let stemWidth: CGFloat = 2
@@ -74,10 +74,16 @@ final class SelectionHandleView: UIView {
                       width: 2 * r, height: caret.height + 2 * r)
     }
 
+    /// The handle fill color. Defaults to `.systemBlue` (the editor theme's accent overrides it; `.tintColor`
+    /// is iOS 15+ and a stored-property default can't be availability-gated).
+    var accentColor: UIColor = .systemBlue {
+        didSet { setNeedsDisplay() }
+    }
+
     override func draw(_ rect: CGRect) {
         guard let ctx = UIGraphicsGetCurrentContext() else { return }
         let r = Self.knobRadius, sw = Self.stemWidth
-        UIColor.tintColor.setFill()
+        accentColor.setFill()
         // Stem: the caret-height portion of the bounds (the remaining 2r is the knob's room).
         ctx.fill(CGRect(x: bounds.midX - sw / 2, y: isStart ? 2 * r : 0, width: sw, height: bounds.height - 2 * r))
         // Knob: a filled circle at the top (START) or bottom (END).

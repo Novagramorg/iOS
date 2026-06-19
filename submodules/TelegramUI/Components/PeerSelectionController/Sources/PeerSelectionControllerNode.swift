@@ -791,7 +791,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                     hasEntityKeyboard: hasEntityKeyboard,
                     gesture: gesture,
                     sourceSendButton: node.view,
-                    textInputView: textInputNode.textView,
+                    textInputSource: textInputNode.textView,
                     emojiViewProvider: textInputPanelNode.emojiViewProvider,
                     completion: {
                     },
@@ -860,6 +860,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         }, presentInputTextTranslation: { _, _ in
         }, sendEmoji: { _, _, _ in
         }, openAICompose: {
+        }, openExpandedInput: {
         }, openSetPeerAvatar: {
         }, updateHistoryFilter: { _ in
         }, updateChatLocationThread: { _, _ in

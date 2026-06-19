@@ -4,6 +4,7 @@ import UIKit
 @testable import RichTextEditorUIKit
 import RichTextEditorCore
 
+@available(iOS 16.0, *)
 final class CanvasHitTestTests: XCTestCase {
     private func canvas() -> DocumentCanvasView {
         let v = DocumentCanvasView()
@@ -33,8 +34,10 @@ final class CanvasHitTestTests: XCTestCase {
         // default handle knobs leak at the container origin. Not creating it removes that leak at the source.
         let v = canvas()
         v.installSelectionInteractions()
-        XCTAssertFalse(v.interactions.contains { $0 is UITextSelectionDisplayInteraction },
-                       "the canvas must not attach a UITextSelectionDisplayInteraction (it would leak OS handle chrome)")
+        if #available(iOS 17.0, *) {   // the type itself is iOS 17+ (it's what we assert we DON'T install)
+            XCTAssertFalse(v.interactions.contains { $0 is UITextSelectionDisplayInteraction },
+                           "the canvas must not attach a UITextSelectionDisplayInteraction (it would leak OS handle chrome)")
+        }
         // The edit-menu interaction IS still installed (selection still works end-to-end).
         XCTAssertTrue(v.interactions.contains { $0 is UIEditMenuInteraction })
     }

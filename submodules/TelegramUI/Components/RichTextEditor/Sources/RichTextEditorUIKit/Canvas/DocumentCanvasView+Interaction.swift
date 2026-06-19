@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 import UIKit
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     func installSelectionInteractions() {
         if gestureRecognizers?.isEmpty ?? true {
@@ -21,7 +21,11 @@ extension DocumentCanvasView {
             addGestureRecognizer(handlePan)
             selectionHandlePan = handlePan
         }
-        installEditMenuInteraction()
+        // iOS 16+ installs the UIEditMenuInteraction; below 16 the canvas presents via UIMenuController on
+        // demand (no persistent interaction to install) — see DocumentCanvasView+EditMenu.
+        if #available(iOS 16.0, *) {
+            installEditMenuInteraction()
+        }
         // We deliberately do NOT add a `UITextSelectionDisplayInteraction`. The canvas draws ALL of its own
         // selection visuals — the caret (`CaretView`), the selection wash (`SelectionHighlightView` on the
         // canvas + `CellSelectionView` inside a table's scroll content), and the two handle "lollipops"
@@ -59,7 +63,7 @@ extension DocumentCanvasView {
     func handleTap(at point: CGPoint, time now: TimeInterval) {
         // An image atom has no word/paragraph to escalate to — route EVERY tap on an image to the
         // single-tap (two-step select/menu) handler, bypassing multi-tap escalation.
-        if let img = imageBox(atGap: closestGlobalPosition(to: point)), img.imageRect().contains(point) {
+        if let img = mediaBox(atGap: closestGlobalPosition(to: point)), img.mediaRect().contains(point) {
             lastTapTime = now; lastTapLocation = point; tapCount = 1
             performSingleTap(at: point)
             return
@@ -104,6 +108,12 @@ extension DocumentCanvasView {
     func performSingleTap(at point: CGPoint) {
         let wasMenuVisible = editMenuVisible               // capture before the system auto-dismisses on touch-down
         ensureFirstResponder()
+        // A tap BELOW the document's last block, when that block is a quote, starts a new body paragraph
+        // after it — the only way to escape a trailing quote (nothing exists below it to tap into).
+        if let last = boxes.last as? BlockBox, last.style == .quote, point.y > last.frame.maxY {
+            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing quote
+            return
+        }
         if let hit = tableHandle(at: point), let action = tableHandleTap(at: point) {
             switch action {
             case .select(let kind):                        // 1st tap → select the row/column (no menu yet)
@@ -127,7 +137,7 @@ extension DocumentCanvasView {
         // Tap on an image body (resolves to its gap AND the point is inside the image) → atom-select /
         // menu. MUST precede the clear below (else a 2nd tap on a selected image would clear it before
         // its menu could open).
-        if let img = imageBox(atGap: p), img.imageRect().contains(point) {
+        if let img = mediaBox(atGap: p), img.mediaRect().contains(point) {
             handleImageTap(img, wasMenuVisible: wasMenuVisible)
             return
         }
@@ -159,17 +169,25 @@ extension DocumentCanvasView {
         case .began:
             dismissEditMenu()
             setCaret(global: p)
-            loupeSession = UITextLoupeSession.begin(at: point, fromSelectionWidgetView: nil, in: self)
+            // The magnifier loupe is iOS 17+; below it, the long-press still places the caret + (on release)
+            // presents the menu — just without the magnifier.
+            if #available(iOS 17.0, *) {
+                loupeSession = UITextLoupeSession.begin(at: point, fromSelectionWidgetView: nil, in: self)
+            }
         case .changed:
             setCaret(global: p)
-            // At an image gap caretRect(for:) is .zero; the loupe wants CGRectNull there (no caret) so it
-            // tracks the touch instead of snapping toward the view origin. No real caret sits at {0,0}.
-            let caret = caretRect(for: DocumentTextPosition(p))
-            loupeSession?.move(to: point, withCaretRect: caret == .zero ? .null : caret,
-                               trackingCaret: caret != .zero)
+            if #available(iOS 17.0, *) {
+                // At an image gap caretRect(for:) is .zero; the loupe wants CGRectNull there (no caret) so it
+                // tracks the touch instead of snapping toward the view origin. No real caret sits at {0,0}.
+                let caret = caretRect(for: DocumentTextPosition(p))
+                loupeSession?.move(to: point, withCaretRect: caret == .zero ? .null : caret,
+                                   trackingCaret: caret != .zero)
+            }
         case .ended, .cancelled, .failed:
-            loupeSession?.invalidate()
-            loupeSession = nil
+            if #available(iOS 17.0, *) {
+                loupeSession?.invalidate()
+                loupeSession = nil
+            }
             if g.state == .ended { setCaret(global: p); presentEditMenu() }
         default:
             break
@@ -205,7 +223,7 @@ extension DocumentCanvasView {
     }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView: UIGestureRecognizerDelegate {
     override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
         guard g === selectionHandlePan else { return true }   // only gate our handle pan; everything else passes

@@ -8,7 +8,7 @@ import RichTextEditorCore
 /// scanned per region with Foundation `.byWords`; crossing a region boundary uses the canvas's
 /// `nextTextPosition`/`prevTextPosition` so blocks/cells/captions never glue into one word. Paragraph/
 /// line == one leaf region. Every returned position is renderable by construction.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class DocumentTokenizer: NSObject, UITextInputTokenizer {
     private unowned let canvas: DocumentCanvasView
     init(canvas: DocumentCanvasView) { self.canvas = canvas; super.init() }

@@ -1372,6 +1372,9 @@ final class LocationPickerControllerNode: ViewControllerTracingNode, CLLocationM
                         subtitle = self.presentationData.strings.Location_PollSubtitle_Explanation
                     case .option:
                         subtitle = self.presentationData.strings.Location_PollSubtitle_PollOption
+                    case .richText:
+                        //TODO:localize
+                        subtitle = "Add media"
                     }
                 default:
                     break

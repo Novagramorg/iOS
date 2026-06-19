@@ -56,12 +56,28 @@ final class BlockStackTests: XCTestCase {
                  mapper: AttributedStringMapper(), width: 300)
     }
 
+    /// The advance between two consecutive bullet list items (which carry no paragraph spacing between them).
+    private func consecutiveListItemAdvance() -> CGFloat {
+        let s = BlockStack(boxes: [listBox("la"), listBox("lb")])
+        s.layout(origin: .zero, width: 300)
+        return (s.boxes[1] as! BlockBox).textOrigin.y - (s.boxes[0] as! BlockBox).textOrigin.y
+    }
+
     func test_consecutiveListItems_spacedLikeIntraParagraphLines() {
         let stack = BlockStack(boxes: [listBox("a"), listBox("b")])
         stack.layout(origin: .zero, width: 300)
         let advance = (stack.boxes[1] as! BlockBox).textOrigin.y - (stack.boxes[0] as! BlockBox).textOrigin.y
-        XCTAssertEqual(advance, intraParagraphLineAdvance(), accuracy: 1.0)
-        // Frames stay contiguous (no overlap) — the existing stacking invariant holds.
+        // Engine-aware: TextKit 2 bakes the full lineHeightMultiple into a single line, so a single-line item
+        // advances by exactly one intra-paragraph line. TextKit 1 applies the multiple BETWEEN lines (not
+        // around a lone line), so a single-line item is its natural (shorter) height — the invariant that
+        // still matters is that items pack TIGHT (no paragraph gap), i.e. no looser than one text line.
+        if stack.boxes[0].textLayout is BlockLayoutTK1 {
+            XCTAssertGreaterThan(advance, 0)
+            XCTAssertLessThanOrEqual(advance, intraParagraphLineAdvance() + 1.0)
+        } else {
+            XCTAssertEqual(advance, intraParagraphLineAdvance(), accuracy: 1.0)
+        }
+        // Frames stay contiguous (no overlap) on both engines — the core stacking invariant.
         XCTAssertEqual(stack.boxes[1].frame.minY, stack.boxes[0].frame.maxY, accuracy: 0.5)
     }
 
@@ -127,8 +143,15 @@ final class BlockStackTests: XCTestCase {
         ])
         stack.layout(origin: .zero, width: 300)
         let advance = (stack.boxes[1] as! BlockBox).textOrigin.y - (stack.boxes[0] as! BlockBox).textOrigin.y
-        // The list-item→paragraph boundary is NOT collapsed: well above one line's advance.
-        XCTAssertGreaterThan(advance, intraParagraphLineAdvance() + 10)
+        // The list-item→paragraph boundary is NOT collapsed: it carries real paragraph spacing. On TextKit 2
+        // that's well above one line's advance; TextKit 1's single-line blocks are shorter, so assert the
+        // engine-relative invariant — the boundary advances clearly MORE than two tight consecutive list
+        // items would (which have no paragraph gap between them).
+        if stack.boxes[0].textLayout is BlockLayoutTK1 {
+            XCTAssertGreaterThan(advance, consecutiveListItemAdvance() + 10)
+        } else {
+            XCTAssertGreaterThan(advance, intraParagraphLineAdvance() + 10)
+        }
     }
 }
 #endif

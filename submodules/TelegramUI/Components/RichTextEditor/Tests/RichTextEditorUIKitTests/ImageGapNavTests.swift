@@ -18,7 +18,7 @@ final class ImageGapNavTests: XCTestCase {
         v.imageProvider = tealProvider()
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Above")])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Cap")])),
             .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Below")])),
         ], width: 300)
@@ -30,7 +30,7 @@ final class ImageGapNavTests: XCTestCase {
     }
 
     func test_upFromImageGap_movesToBlockAbove() {
-        let v = canvas(); let img = v.boxes[1] as! ImageBlockBox
+        let v = canvas(); let img = v.boxes[1] as! MediaBlockBox
         let up = upDown(v, from: img.nodeStart, down: false)
         XCTAssertNotEqual(up, img.nodeStart, "Up from the image gap must move (was a no-op)")
         XCTAssertTrue(v.isRenderablePosition(up), "the destination MUST be a renderable caret slot (else the caret hides)")
@@ -40,7 +40,7 @@ final class ImageGapNavTests: XCTestCase {
     }
 
     func test_downFromImageGap_movesIntoCaption() {
-        let v = canvas(); let img = v.boxes[1] as! ImageBlockBox
+        let v = canvas(); let img = v.boxes[1] as! MediaBlockBox
         let down = upDown(v, from: img.nodeStart, down: true)
         XCTAssertNotEqual(down, img.nodeStart, "Down from the image gap must move (was a no-op)")
         XCTAssertTrue(v.isRenderablePosition(down), "the destination MUST be renderable")
@@ -60,7 +60,7 @@ final class ImageGapNavTests: XCTestCase {
     }
 
     /// Builds [Heading paragraph, `cols`-column / 2-row table (row 0 header), `image`] at `width`.
-    private func tableThenImage(cols: Int, image: ImageBlock, width: CGFloat = 390) -> DocumentCanvasView {
+    private func tableThenImage(cols: Int, image: MediaBlock, width: CGFloat = 390) -> DocumentCanvasView {
         let v = DocumentCanvasView()
         v.imageProvider = tealProvider()
         func cell(_ id: String, _ t: String) -> Cell {
@@ -72,13 +72,13 @@ final class ImageGapNavTests: XCTestCase {
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Heading")])),
             .table(TableBlock(id: BlockID("t"), columns: columns, rows: [header, body])),
-            .image(image),
+            .media(image),
         ], width: width)
         v.frame = CGRect(x: 0, y: 0, width: width, height: 600); v.layoutIfNeeded()
         return v
     }
-    private func fullBleedImage() -> ImageBlock {   // no displayWidth ⇒ fills the canvas; leading edge at x≈0
-        ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+    private func fullBleedImage() -> MediaBlock {   // no displayWidth ⇒ fills the canvas; leading edge at x≈0
+        MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                    caption: [TextRun(text: "Cap")])
     }
 
@@ -86,7 +86,7 @@ final class ImageGapNavTests: XCTestCase {
         // [paragraph, table, image] — Up from the image gap must ENTER the table's LAST ROW, not skip the
         // table (whose node boundary is non-renderable) to the heading before it.
         let v = tableThenImage(cols: 2, image: fullBleedImage())
-        let img = v.boxes[2] as! ImageBlockBox
+        let img = v.boxes[2] as! MediaBlockBox
         let table = v.boxes[1] as! TableBlockBox
         let up = upDown(v, from: img.nodeStart, down: false)
         XCTAssertTrue(v.isRenderablePosition(up), "Up must land on a renderable slot, not the table's degenerate boundary")
@@ -95,11 +95,11 @@ final class ImageGapNavTests: XCTestCase {
     }
 
     func test_upFromImageGap_aboveFullBleedImage_landsInColumn0() {
-        // The gap caret is drawn at the image's leading edge (`caretRect` → `imageRect().minX`). A full-bleed
+        // The gap caret is drawn at the image's leading edge (`caretRect` → `mediaRect().minX`). A full-bleed
         // image's leading edge is the page's left, so Up lands under it = column 0 — the common real-world
         // case. (A regression to the earlier `midX` mapping would land in the MIDDLE column instead.)
         let v = tableThenImage(cols: 3, image: fullBleedImage())
-        let img = v.boxes[2] as! ImageBlockBox
+        let img = v.boxes[2] as! MediaBlockBox
         let table = v.boxes[1] as! TableBlockBox
         let up = upDown(v, from: img.nodeStart, down: false)
         XCTAssertTrue(v.isRenderablePosition(up), "Up must land on a renderable slot")
@@ -110,14 +110,14 @@ final class ImageGapNavTests: XCTestCase {
     }
 
     func test_upFromImageGap_aboveTable_alignedImage_landsUnderGapColumn() {
-        // A narrow RIGHT-aligned image's leading edge (`imageRect().minX`) sits over the LAST column of a
+        // A narrow RIGHT-aligned image's leading edge (`mediaRect().minX`) sits over the LAST column of a
         // 3-column table, so Up lands there (column 2) — proving the column genuinely FOLLOWS the gap caret's
         // drawn x and is not hard-coded to column 0. (80pt-wide, right-aligned over a 390pt canvas →
         // minX ≈ 310, inside the 3rd column's band — boundary-free.)
-        let rightImg = ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+        let rightImg = MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                                   displayWidth: 80, alignment: .right, caption: [TextRun(text: "Cap")])
         let v = tableThenImage(cols: 3, image: rightImg)
-        let img = v.boxes[2] as! ImageBlockBox
+        let img = v.boxes[2] as! MediaBlockBox
         let table = v.boxes[1] as! TableBlockBox
         let up = upDown(v, from: img.nodeStart, down: false)
         XCTAssertTrue(v.isRenderablePosition(up), "Up must land on a renderable slot")
@@ -131,7 +131,7 @@ final class ImageGapNavTests: XCTestCase {
         // Tapping an image parks the caret on its gap. The OS only re-reads `selectedTextRange` after the
         // input delegate is notified — without `selectionDidChange`, the OS keeps the STALE prior caret and a
         // hardware Arrow key navigates from the previous position instead of the image (the reported bug).
-        let v = canvas(); let img = v.boxes[1] as! ImageBlockBox
+        let v = canvas(); let img = v.boxes[1] as! MediaBlockBox
         v.setCaret(global: v.boxes[0].textStart)        // caret somewhere ABOVE the image
         let spy = InputDelegateSpy(); v.inputDelegate = spy
         v.selectImage(img)
@@ -147,12 +147,12 @@ final class ImageGapNavTests: XCTestCase {
         let v = DocumentCanvasView()
         v.imageProvider = tealProvider()
         v.setBlocks([
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Cap")])),
             .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Below")])),
         ], width: 300)
         v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
-        let img = v.boxes[0] as! ImageBlockBox
+        let img = v.boxes[0] as! MediaBlockBox
         XCTAssertEqual(upDown(v, from: img.nodeStart, down: false), img.nodeStart,
                        "Up from a leading image's gap stays put (nothing above)")
     }

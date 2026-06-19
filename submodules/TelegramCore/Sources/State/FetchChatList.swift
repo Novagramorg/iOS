@@ -145,6 +145,12 @@ private func parseDialogs(accountPeerId: PeerId, apiDialogs: [Api.Dialog], apiMe
                 }
                 
                 notificationSettings[peerId] = TelegramPeerNotificationSettings(apiSettings: apiNotificationSettings)
+            case let .dialogCommunity(dialogCommunityData):
+                let peerId = peerIdFromApiCommunityId(dialogCommunityData.communityId)
+                if let community = peers.get(peerId) as? TelegramCommunity, community.collapsedInDialogs == true {
+                    itemIds.append(peerId)
+                }
+                notificationSettings[peerId] = TelegramPeerNotificationSettings(apiSettings: dialogCommunityData.notifySettings)
             case let .dialogFolder(dialogFolderData):
                 let (folder, unreadMutedPeersCount, unreadMutedMessagesCount) = (dialogFolderData.folder, dialogFolderData.unreadMutedPeersCount, dialogFolderData.unreadMutedMessagesCount)
                 switch folder {

@@ -2,13 +2,13 @@
 import UIKit
 
 /// A position = a UTF-16 offset within the active block (Phase 1 is single-block).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class DocumentTextPosition: UITextPosition {
     let offset: Int
     init(_ offset: Int) { self.offset = offset }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class DocumentTextRange: UITextRange {
     let from: DocumentTextPosition
     let to: DocumentTextPosition
@@ -18,7 +18,7 @@ final class DocumentTextRange: UITextRange {
     override var isEmpty: Bool { from.offset == to.offset }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class DocumentSelectionRect: UITextSelectionRect {
     private let _rect: CGRect
     private let _containsStart: Bool

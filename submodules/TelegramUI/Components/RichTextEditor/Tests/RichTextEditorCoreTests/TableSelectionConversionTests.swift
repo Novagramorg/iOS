@@ -11,8 +11,6 @@ final class TableSelectionConversionTests: XCTestCase {
                                                                      runs: [TextRun(text: "X")]))])
         }
         return Document(
-            metadata: .init(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                            modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [.table(TableBlock(id: BlockID("t1"),
                 columns: [ColumnSpec(width: 1), ColumnSpec(width: 1)],
                 rows: [Row(id: BlockID("r0"), cells: [cell("a"), cell("b")])]))])
@@ -39,8 +37,6 @@ final class TableSelectionConversionTests: XCTestCase {
                                                                      runs: [TextRun(text: "X")]))])
         }
         return Document(
-            metadata: .init(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                            modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [.table(TableBlock(id: BlockID("t1"),
                         columns: [ColumnSpec(width: 1), ColumnSpec(width: 1)],
                         rows: [Row(id: BlockID("r0"), cells: [cell("a"), cell("b")])])),

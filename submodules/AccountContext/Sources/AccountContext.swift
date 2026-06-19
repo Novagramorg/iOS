@@ -1761,6 +1761,8 @@ public protocol AccountContext: AnyObject {
     func joinGroupCall(peerId: EnginePeer.Id, invite: String?, requestJoinAsPeerId: ((@escaping (EnginePeer.Id?) -> Void) -> Void)?, activeCall: EngineGroupCallDescription)
     func joinConferenceCall(call: JoinCallLinkInformation, isVideo: Bool, unmuteByDefault: Bool)
     func requestCall(peerId: EnginePeer.Id, isVideo: Bool, completion: @escaping () -> Void)
+    
+    func getAppConfigValue(_ key: String) -> Any?
 }
 
 public struct AntiSpamBotConfiguration {

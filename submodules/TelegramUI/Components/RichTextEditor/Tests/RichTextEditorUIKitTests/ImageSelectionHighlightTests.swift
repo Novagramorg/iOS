@@ -4,6 +4,7 @@ import UIKit
 @testable import RichTextEditorUIKit
 import RichTextEditorCore
 
+@available(iOS 16.0, *)
 final class ImageSelectionHighlightTests: XCTestCase {
     /// ["Above", image(caption "Caption"), "Below"] at 300pt, with a teal stand-in image provider.
     func canvas() -> DocumentCanvasView {
@@ -12,20 +13,20 @@ final class ImageSelectionHighlightTests: XCTestCase {
             UIColor.systemTeal.setFill(); c.fill(CGRect(x: 0, y: 0, width: 80, height: 50)) } }
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Above")])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Caption")])),
             .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Below")])),
         ], width: 300)
         v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
         return v
     }
-    func img(_ v: DocumentCanvasView) -> ImageBlockBox { v.boxes[1] as! ImageBlockBox }
+    func img(_ v: DocumentCanvasView) -> MediaBlockBox { v.boxes[1] as! MediaBlockBox }
 
     func test_isImageSelected_whenTapSelected() {
         let v = canvas(); let i = img(v)
         v.imageSelection = i.id
         XCTAssertTrue(v.isImageSelected(i))
-        XCTAssertEqual(v.imageSelectionTintRect(for: i), i.imageRect())
+        XCTAssertEqual(v.imageSelectionTintRect(for: i), i.mediaRect())
     }
     func test_isImageSelected_whenRangeCoversAtom() {
         let v = canvas(); let i = img(v)
@@ -116,7 +117,7 @@ final class ImageSelectionHighlightTests: XCTestCase {
     }
     func test_performSingleTap_onImage_selectsAtom() {
         let v = canvas(); let i = img(v)
-        let c = CGPoint(x: i.imageRect().midX, y: i.imageRect().midY)
+        let c = CGPoint(x: i.mediaRect().midX, y: i.mediaRect().midY)
         v.performSingleTap(at: c)
         XCTAssertEqual(v.imageSelection, i.id)
     }
@@ -136,7 +137,7 @@ final class ImageSelectionHighlightTests: XCTestCase {
     }
     func test_handleTap_secondTapOnSelectedImage_keepsSelection() {
         let v = canvas(); let i = img(v)
-        let c = CGPoint(x: i.imageRect().midX, y: i.imageRect().midY)
+        let c = CGPoint(x: i.mediaRect().midX, y: i.mediaRect().midY)
         v.handleTap(at: c, time: 100)        // 1st tap selects
         XCTAssertEqual(v.imageSelection, i.id)
         v.handleTap(at: c, time: 100.1)      // quick 2nd tap → menu branch, NOT word-escalate / deselect
@@ -171,7 +172,7 @@ final class ImageSelectionHighlightTests: XCTestCase {
             Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id+"p"), runs: [TextRun(text: t)]))])
         }
         v.setBlocks([
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Cap")])),
             .table(TableBlock(id: BlockID("t"),
                 columns: [ColumnSpec(width: 100), ColumnSpec(width: 100)],
@@ -183,7 +184,7 @@ final class ImageSelectionHighlightTests: XCTestCase {
     }
     func test_selectingTable_clearsImageSelection() {
         let v = canvasWithImageAndTable()
-        let i = v.boxes[0] as! ImageBlockBox
+        let i = v.boxes[0] as! MediaBlockBox
         v.selectImage(i)
         let t = v.boxes[1] as! TableBlockBox
         v.head = t.cellTextStart(row: 1, column: 0)!; v.anchor = v.head
@@ -197,7 +198,7 @@ final class ImageSelectionHighlightTests: XCTestCase {
         v.head = t.cellTextStart(row: 1, column: 0)!; v.anchor = v.head
         v.selectTableColumn(0)
         XCTAssertNotNil(v.tableSelection)
-        let i = v.boxes[0] as! ImageBlockBox
+        let i = v.boxes[0] as! MediaBlockBox
         v.selectImage(i)
         XCTAssertNil(v.tableSelection, "selecting an image clears the table selection")
         XCTAssertEqual(v.imageSelection, i.id)
@@ -222,7 +223,7 @@ final class ImageSelectionHighlightTests: XCTestCase {
         let v = canvas(); let i = img(v)
         v.selectImage(i)
         v.deleteBackward()
-        XCTAssertFalse(v.boxes.contains { $0 is ImageBlockBox })
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox })
         XCTAssertNil(v.imageSelection)
     }
     func test_deleteSelectedImage_isUndoable() {
@@ -230,9 +231,9 @@ final class ImageSelectionHighlightTests: XCTestCase {
         let um = UndoManager(); um.groupsByEvent = false; v.undoManagerOverride = um
         v.selectImage(i)
         um.beginUndoGrouping(); v.deleteBackward(); um.endUndoGrouping()
-        XCTAssertFalse(v.boxes.contains { $0 is ImageBlockBox })
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox })
         um.undo()
-        XCTAssertTrue(v.boxes.contains { $0 is ImageBlockBox })
+        XCTAssertTrue(v.boxes.contains { $0 is MediaBlockBox })
     }
 
     // MARK: – Change 1: setBlocks clears structural selections

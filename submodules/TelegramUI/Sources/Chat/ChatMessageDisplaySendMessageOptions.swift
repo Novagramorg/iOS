@@ -147,7 +147,7 @@ func chatMessageDisplaySendMessageOptions(selfController: ChatControllerImpl, no
                 hasEntityKeyboard: hasEntityKeyboard,
                 gesture: gesture,
                 sourceSendButton: node.view,
-                textInputView: textInputView,
+                textInputSource: textInputView,
                 emojiViewProvider: selfController.chatDisplayNode.textInputPanelNode?.emojiViewProvider,
                 wallpaperBackgroundNode: selfController.chatDisplayNode.backgroundNode,
                 completion: { [weak selfController] in
@@ -211,14 +211,6 @@ func chatMessageDisplaySendMessageOptions(selfController: ChatControllerImpl, no
                     )
                 }
             }
-            
-            var richTextPreview: ChatSendMessageContextScreenRichTextPreview?
-            if case .customChatContents = selfController.presentationInterfaceState.subject {
-            } else if mediaPreview == nil,
-                      let attributedText = textInputView.attributedText,
-                      let attribute = richMarkdownAttributeIfNeeded(context: selfController.context, attributedText: attributedText) {
-                richTextPreview = ChatSendMessageRichTextPreview(context: selfController.context, instantPage: attribute.instantPage)
-            }
 
             let controller = makeChatSendMessageActionSheetController(
                 initialData: initialData,
@@ -251,7 +243,7 @@ func chatMessageDisplaySendMessageOptions(selfController: ChatControllerImpl, no
                 hasEntityKeyboard: hasEntityKeyboard,
                 gesture: gesture,
                 sourceSendButton: node.view,
-                textInputView: textInputView,
+                textInputSource: textInputView,
                 emojiViewProvider: selfController.chatDisplayNode.textInputPanelNode?.emojiViewProvider,
                 wallpaperBackgroundNode: selfController.chatDisplayNode.backgroundNode,
                 completion: { [weak selfController] in
@@ -293,10 +285,10 @@ func chatMessageDisplaySendMessageOptions(selfController: ChatControllerImpl, no
                     }
                     selfController.push(c)
                 },
-                reactionItems: (!textInputView.text.isEmpty || mediaPreview != nil) ? effectItems : nil,
+                reactionItems: (!((textInputView.attributedText?.string ?? "").isEmpty) || mediaPreview != nil) ? effectItems : nil,
                 availableMessageEffects: availableMessageEffects,
                 isPremium: hasPremium,
-                richTextPreview: richTextPreview
+                richTextPreview: nil
             )
             selfController.sendMessageActionsController = controller
             if layout.isNonExclusive {

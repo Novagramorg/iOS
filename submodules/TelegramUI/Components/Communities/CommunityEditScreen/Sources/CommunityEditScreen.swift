@@ -1178,6 +1178,7 @@ private final class CommunityEditScreenComponent: Component {
             contentHeight += permissionsSectionSize.height + 46.0
 
             let adminsCount = self.cachedData?.adminsCount
+            let removedUsersCount = self.cachedData?.kickedCount
             let pendingRequests = self.cachedData?.pendingRequests
             let managementSectionSize = self.managementSection.update(
                 transition: transition,
@@ -1215,7 +1216,7 @@ private final class CommunityEditScreenComponent: Component {
                             id: "removedUsers",
                             title: "Removed Users",
                             icon: self.cachedBannedIcon,
-                            count: nil,
+                            count: removedUsersCount,
                             countStyle: .plain,
                             theme: theme,
                             presentationData: presentationData,

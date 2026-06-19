@@ -7,8 +7,7 @@ import RichTextEditorCore
 final class CanvasFacadeTests: XCTestCase {
     func test_multiParagraphRoundTrips() {
         let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        let doc = Document(metadata: DocumentMetadata(title: "T", createdAt: Date(timeIntervalSince1970: 0),
-                            modifiedAt: Date(timeIntervalSince1970: 0)), blocks: [
+        let doc = Document(blocks: [
             .paragraph(ParagraphBlock(id: BlockID("a"), style: .heading1, runs: [TextRun(text: "Title")])),
             .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Body one.")])),
             .paragraph(ParagraphBlock(id: BlockID("c"), runs: [TextRun(text: "Body two.")])),
@@ -27,9 +26,7 @@ final class CanvasFacadeTests: XCTestCase {
         let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 10)],
                                rows: [Row(id: BlockID("r"), cells: [Cell(id: BlockID("c"))])])
-        editor.document = Document(metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                            modifiedAt: Date(timeIntervalSince1970: 0)),
-                            blocks: [.paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "P")])),
+        editor.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "P")])),
                                      .table(table)])
         editor.layoutIfNeeded()
         XCTAssertTrue(editor.document.blocks.contains { if case .table = $0 { return true } else { return false } })
@@ -40,8 +37,6 @@ final class CanvasFacadeTests: XCTestCase {
         let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 10)],
                                rows: [Row(id: BlockID("r"), cells: [Cell(id: BlockID("c"))])])
         editor.document = Document(
-            metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [
                 .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Alpha")])),
                 .table(table),
@@ -75,8 +70,6 @@ final class CanvasFacadeTests: XCTestCase {
     func test_facadeSetList_appliesAcrossSelection() {
         let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         editor.document = Document(
-            metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [.paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Item")]))])
         editor.layoutIfNeeded()
         editor.selectAll()
@@ -92,8 +85,6 @@ final class CanvasFacadeTests: XCTestCase {
                               rows: [Row(id: BlockID(id + "r"), cells: [Cell(id: BlockID(id + "c"))])]))
         }
         editor.document = Document(
-            metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [
                 table("t0"),                                                       // leading non-paragraph
                 .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Alpha")])),
@@ -118,11 +109,9 @@ final class CanvasFacadeTests: XCTestCase {
         let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 10)],
                                rows: [Row(id: BlockID("r"), cells: [Cell(id: BlockID("c"))])])
         editor.document = Document(
-            metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [
                 .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Alpha")])),
-                .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+                .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                                   caption: [TextRun(text: "Cap")])),
                 .table(table),
                 .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Beta")])),
@@ -130,23 +119,19 @@ final class CanvasFacadeTests: XCTestCase {
         editor.layoutIfNeeded()
         let out = editor.document.blocks
         XCTAssertEqual(out.count, 4)
-        guard case .paragraph = out[0], case .image(let img) = out[1], case .table = out[2], case .paragraph = out[3]
+        guard case .paragraph = out[0], case .media(let img) = out[1], case .table = out[2], case .paragraph = out[3]
         else { return XCTFail("order/type not preserved") }
         XCTAssertEqual(img.caption.map(\.text).joined(), "Cap")
     }
 
-    func test_facadeInsertImage_addsImageBlock() {
+    func test_facadeInsertMedia_addsMediaBlock() {
         let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
         editor.document = Document(
-            metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [.paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Alpha")]))])
         editor.layoutIfNeeded()
         editor.selectAll()
-        let s = CGSize(width: 60, height: 40)
-        let image = UIGraphicsImageRenderer(size: s).image { c in UIColor.systemPink.setFill(); c.fill(CGRect(origin: .zero, size: s)) }
-        editor.insertImage(image, naturalSize: s)
-        XCTAssertTrue(editor.document.blocks.contains { if case .image = $0 { return true } else { return false } })
+        editor.insertMedia(mediaID: "m1", naturalSize: CGSize(width: 60, height: 40), kind: .image)
+        XCTAssertTrue(editor.document.blocks.contains { if case .media = $0 { return true } else { return false } })
     }
 
     func test_tableRoundTripsThroughCanvas_inOrder() {
@@ -156,8 +141,6 @@ final class CanvasFacadeTests: XCTestCase {
                 Cell(id: BlockID("a"), blocks: [.paragraph(ParagraphBlock(id: BlockID("ap"), runs: [TextRun(text: "A")]))]),
                 Cell(id: BlockID("b"), blocks: [.paragraph(ParagraphBlock(id: BlockID("bp"), runs: [TextRun(text: "B")]))])])])
         editor.document = Document(
-            metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [
                 .paragraph(ParagraphBlock(id: BlockID("p0"), runs: [TextRun(text: "Above")])),
                 .table(table),

@@ -8,16 +8,22 @@ import Translation
 /// features of UITextView/UITextInteraction/WebKit/PDFKit), so we add them ourselves and present modals
 /// from the owning view controller found via the responder chain. Writing Tools, when the OS surfaces it,
 /// rides in `suggestedActions`.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// Append our items to the system-suggested actions (which carry Cut/Copy/Paste/Select and, on a
-    /// capable device, Writing Tools).
+    /// capable device, Writing Tools). iOS 16+ only — the `UIEditMenuInteraction` delegate hook; the iOS
+    /// 13–15 `UIMenuController` fallback builds its flat items in DocumentCanvasView+EditMenu.
+    @available(iOS 16.0, *)
     func editMenuInteraction(_ interaction: UIEditMenuInteraction,
                              menuFor configuration: UIEditMenuConfiguration,
                              suggestedActions: [UIMenuElement]) -> UIMenu? {
         if tableSelection != nil { return structuralMenu() }   // table row/column actions — system suggestedActions (Cut/Copy/Paste) are irrelevant to a structural pick
         if imageSelection != nil { return imageSelectionMenu() }   // image atom: Delete only (Cut/Copy → Phase 5d)
-        return UIMenu(children: suggestedActions + customEditMenuElements())
+        let defaults = suggestedActions + customEditMenuElements()
+        if selFrom < selTo, let provider = hostContextMenuItemsProvider {
+            return UIMenu(children: provider(defaults))
+        }
+        return UIMenu(children: defaults)
     }
 
     /// Our custom elements for the current selection — empty when the selection is collapsed.

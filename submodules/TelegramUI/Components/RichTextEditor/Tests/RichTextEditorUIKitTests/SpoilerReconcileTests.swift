@@ -4,6 +4,7 @@ import UIKit
 @testable import RichTextEditorUIKit
 import RichTextEditorCore
 
+@available(iOS 16.0, *)
 final class SpoilerReconcileTests: XCTestCase {
     /// True iff a display-only clear foreground covers the local offset (i.e. the spoiler text is hidden).
     private func isHiddenClear(_ layout: BlockLayout, atLocal offset: Int) -> Bool {
@@ -21,17 +22,20 @@ final class SpoilerReconcileTests: XCTestCase {
 
     /// Reveal must remove the clear-foreground hide AND bump renderVersion so the backing view repaints the
     /// text (the "text doesn't display on reveal" regression — the dust dissolved to nothing before this).
-    func test_reveal_removesHide_andBumpsRenderVersion_soTextRepaints() {
+    func test_reveal_removesHide_andBumpsRenderVersion_soTextRepaints() throws {
         let c = DocumentCanvasView()
         c.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "open secret end")]))], width: 320)
         c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         c.layoutIfNeeded()
+        c.simulateParentLayout()
         let start = c.boxes[0].textStart
         c.anchor = start + 5; c.head = start + 11      // "secret"
         c.toggleSpoiler()
         c.anchor = start; c.head = start               // caret outside → hidden
         c.layoutIfNeeded()
-        let layout = c.boxes[0].textLayout
+        guard let layout = c.boxes[0].textLayout as? BlockLayout else {
+            throw XCTSkip("spoiler-hide display is TextKit-2 only (disabled on the TK1 back-port)")
+        }
         XCTAssertTrue(isHiddenClear(layout, atLocal: 7), "hidden spoiler text is drawn clear")
         let beforeReveal = layout.renderVersion
         c.anchor = start + 7; c.head = start + 7       // caret inside → reveal
@@ -46,6 +50,7 @@ final class SpoilerReconcileTests: XCTestCase {
         c.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "open secret end")]))], width: 320)
         c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         c.layoutIfNeeded()
+        c.simulateParentLayout()
         let start = c.boxes[0].textStart
         c.anchor = start + 5; c.head = start + 11      // "secret"
         c.toggleSpoiler()

@@ -30,6 +30,7 @@ import ForwardAccessoryPanelNode
 import ChatOverscrollControl
 import ChatInputPanelNode
 import ChatInputContextPanelNode
+import ChatSendMessageActionUI
 import TextSelectionNode
 import ReplyAccessoryPanelNode
 import SuggestPostAccessoryPanelNode
@@ -68,6 +69,8 @@ import TextProcessingScreen
 import Pasteboard
 import UndoUI
 import BrowserUI
+import RichTextAttachmentScreen
+import RichTextEditorCore
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -1932,8 +1935,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     strongSelf.updateInputPanelBackgroundExpansion(transition: transition)
                     
                     if applyAutocorrection, let textInputPanelNode = strongSelf.textInputPanelNode {
-                        if let textInputNode = textInputPanelNode.textInputNode, textInputNode.isFirstResponder() {
-                            Keyboard.applyAutocorrection(textView: textInputNode.textView)
+                        if let richTextInputNode = textInputPanelNode.richTextInputNode, richTextInputNode.isInputFirstResponder {
+                            richTextInputNode.applyAutocorrection()
                         }
                     }
                 }
@@ -2788,10 +2791,16 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             let panelFrame = inputContextPanelNode.placement == .overTextInput ? inputContextPanelsOverMainPanelFrame : inputContextPanelsFrame
             if immediatelyLayoutInputContextPanelAndAnimateAppearance {
                 inputContextPanelNode.frame = panelFrame
+                if let emojisPanelNode = inputContextPanelNode as? EmojisChatInputContextPanelNode {
+                    emojisPanelNode.cursorAnchorX = self.textInputPanelNode?.currentCaretRect(in: emojisPanelNode.view)?.midX
+                }
                 inputContextPanelNode.updateLayout(size: panelFrame.size, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, bottomInset: insets.bottom + inputPanelsHeight + 8.0, transition: .immediate, interfaceState: self.chatPresentationInterfaceState)
             }
-            
+
             transition.updateFrame(node: inputContextPanelNode, frame: panelFrame)
+            if let emojisPanelNode = inputContextPanelNode as? EmojisChatInputContextPanelNode {
+                emojisPanelNode.cursorAnchorX = self.textInputPanelNode?.currentCaretRect(in: emojisPanelNode.view)?.midX
+            }
             inputContextPanelNode.updateLayout(size: panelFrame.size, leftInset: layout.safeInsets.left, rightInset: layout.safeInsets.right, bottomInset: insets.bottom + inputPanelsHeight + 8.0, transition: transition, interfaceState: self.chatPresentationInterfaceState)
         }
         
@@ -3773,7 +3782,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         
             var waitForKeyboardLayout = false
             let customTextView = self.chatPresentationInterfaceStateTextFieldView(chatPresentationInterfaceState)
-            if let textView = self.textInputPanelNode?.textInputNode?.textView {
+            if let richTextInputNode = self.textInputPanelNode?.richTextInputNode {
                 let updatedInputView = self.chatPresentationInterfaceStateInputView(chatPresentationInterfaceState)
                 if let customTextView {
                     if customTextView.isActive {
@@ -3786,9 +3795,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                     }
                 } else {
-                    if textView.inputView !== updatedInputView {
-                        textView.inputView = updatedInputView
-                        if textView.isFirstResponder {
+                    if richTextInputNode.keyboardInputView !== updatedInputView {
+                        richTextInputNode.keyboardInputView = updatedInputView
+                        if richTextInputNode.isInputFirstResponder {
                             if self.chatPresentationInterfaceStateRequiresInputFocus(chatPresentationInterfaceState), let validLayout = self.validLayout {
                                 if case .compact = validLayout.0.metrics.widthClass {
                                     waitForKeyboardLayout = true
@@ -3796,7 +3805,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                     waitForKeyboardLayout = true
                                 }
                             }
-                            textView.reloadInputViews()
+                            richTextInputNode.reloadInputViews()
                         }
                     }
                 }
@@ -4034,8 +4043,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
     
-    func textInputView() -> UITextView? {
-        return self.textInputPanelNode?.textInputNode?.textView
+    func textInputView() -> ChatSendMessageContextScreenTextInputSource? {
+        guard let richTextInputNode = self.textInputPanelNode?.richTextInputNode else { return nil }
+        return ChatRichTextInputMorphSource(richTextInputNode)
     }
     
     func updateRecordedMediaDeleted(_ isDeleted: Bool) {
@@ -4560,6 +4570,27 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
     
+    func openExpandedInput() {
+        guard let textInputPanelNode = self.textInputPanelNode else {
+            return
+        }
+        
+        if #available (iOS 17.0, *) {
+            let editorScreen = RichTextAttachmentScreen(
+                context: self.context,
+                initialContents: textInputPanelNode.richTextInputNode?.richTextDocument,
+                sendMessage: { [weak self] document, _ in
+                    // media is ignored: the expand-from-composer path does not wire an image picker
+                    // (presentAttachmentMenu is nil), so the editor accumulates no media here.
+                    self?.textInputPanelNode?.richTextInputNode?.setRichTextDocument(document)
+                },
+                presentAttachmentMenu: nil
+            )
+            editorScreen.navigationPresentation = .modal
+            self.controller?.push(editorScreen)
+        }
+    }
+
     func openAICompose() {
         Task { @MainActor [weak self] in
             guard let self else {
@@ -4730,8 +4761,8 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         self.historyNode.justSentTextMessage = true
         
-        if let textInputNode = textInputPanelNode.textInputNode, textInputNode.isFirstResponder() {
-            Keyboard.applyAutocorrection(textView: textInputNode.textView)
+        if let richTextInputNode = textInputPanelNode.richTextInputNode, richTextInputNode.isInputFirstResponder {
+            richTextInputNode.applyAutocorrection()
         }
         
         var effectivePresentationInterfaceState = self.chatPresentationInterfaceState
@@ -4903,24 +4934,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                 }
                 
-                var isSpecialChatContents = false
-                if case .customChatContents = self.chatPresentationInterfaceState.subject {
-                    isSpecialChatContents = true
-                }
-                if !"".isEmpty, !isSpecialChatContents, let attribute = richMarkdownAttributeIfNeeded(context: self.context, attributedText: effectiveInputText) {
-                    let attributes: [MessageAttribute] = [attribute]
-                    var richBubbleUpEmojiOrStickersets: [ItemCollectionId] = []
-                    for (_, packId) in bubbleUpEmojiOrStickersetsById {
-                        if !richBubbleUpEmojiOrStickersets.contains(packId) {
-                            richBubbleUpEmojiOrStickersets.append(packId)
-                        }
-                    }
-                    if richBubbleUpEmojiOrStickersets.count > 1 {
-                        richBubbleUpEmojiOrStickersets.removeAll()
-                    }
-                    messages.append(.message(text: "", attributes: attributes, inlineStickers: inlineStickers, mediaReference: nil, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: richBubbleUpEmojiOrStickersets))
-                    mediaReference = nil
-                } else {
+                do {
                     for text in breakChatInputText(trimChatInputText(inputText)) {
                         if text.length != 0 {
                             var attributes: [MessageAttribute] = []

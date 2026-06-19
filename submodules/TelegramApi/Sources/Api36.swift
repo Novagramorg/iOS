@@ -657,6 +657,52 @@ public extension Api.messages {
     }
 }
 public extension Api.messages {
+    enum ComposedRichMessageWithAI: TypeConstructorDescription {
+        public class Cons_composedRichMessageWithAI: TypeConstructorDescription {
+            public var result: Api.RichMessage
+            public init(result: Api.RichMessage) {
+                self.result = result
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("composedRichMessageWithAI", [("result", ConstructorParameterDescription(self.result))])
+            }
+        }
+        case composedRichMessageWithAI(Cons_composedRichMessageWithAI)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .composedRichMessageWithAI(let _data):
+                if boxed {
+                    buffer.appendInt32(1279604680)
+                }
+                _data.result.serialize(buffer, true)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .composedRichMessageWithAI(let _data):
+                return ("composedRichMessageWithAI", [("result", ConstructorParameterDescription(_data.result))])
+            }
+        }
+
+        public static func parse_composedRichMessageWithAI(_ reader: BufferReader) -> ComposedRichMessageWithAI? {
+            var _1: Api.RichMessage?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.RichMessage
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.messages.ComposedRichMessageWithAI.composedRichMessageWithAI(Cons_composedRichMessageWithAI(result: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.messages {
     enum DhConfig: TypeConstructorDescription {
         public class Cons_dhConfig: TypeConstructorDescription {
             public var g: Int32
@@ -1795,73 +1841,6 @@ public extension Api.messages {
             else {
                 return nil
             }
-        }
-    }
-}
-public extension Api.messages {
-    enum FoundStickerSets: TypeConstructorDescription {
-        public class Cons_foundStickerSets: TypeConstructorDescription {
-            public var hash: Int64
-            public var sets: [Api.StickerSetCovered]
-            public init(hash: Int64, sets: [Api.StickerSetCovered]) {
-                self.hash = hash
-                self.sets = sets
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("foundStickerSets", [("hash", ConstructorParameterDescription(self.hash)), ("sets", ConstructorParameterDescription(self.sets))])
-            }
-        }
-        case foundStickerSets(Cons_foundStickerSets)
-        case foundStickerSetsNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .foundStickerSets(let _data):
-                if boxed {
-                    buffer.appendInt32(-1963942446)
-                }
-                serializeInt64(_data.hash, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.sets.count))
-                for item in _data.sets {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .foundStickerSetsNotModified:
-                if boxed {
-                    buffer.appendInt32(223655517)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .foundStickerSets(let _data):
-                return ("foundStickerSets", [("hash", ConstructorParameterDescription(_data.hash)), ("sets", ConstructorParameterDescription(_data.sets))])
-            case .foundStickerSetsNotModified:
-                return ("foundStickerSetsNotModified", [])
-            }
-        }
-
-        public static func parse_foundStickerSets(_ reader: BufferReader) -> FoundStickerSets? {
-            var _1: Int64?
-            _1 = reader.readInt64()
-            var _2: [Api.StickerSetCovered]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StickerSetCovered.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.messages.FoundStickerSets.foundStickerSets(Cons_foundStickerSets(hash: _1!, sets: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_foundStickerSetsNotModified(_ reader: BufferReader) -> FoundStickerSets? {
-            return Api.messages.FoundStickerSets.foundStickerSetsNotModified
         }
     }
 }

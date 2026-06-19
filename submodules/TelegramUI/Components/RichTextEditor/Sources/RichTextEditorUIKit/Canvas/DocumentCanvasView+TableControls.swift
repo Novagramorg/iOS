@@ -3,19 +3,19 @@ import UIKit
 import RichTextEditorCore
 
 /// A whole-row or whole-column structural selection within a table — a contiguous, ≥1-wide range.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 enum TableStructuralSelection: Equatable { case rows(ClosedRange<Int>); case columns(ClosedRange<Int>) }
 
 /// What a tap on a table handle does: select its row/column, or — if that one is already selected —
 /// open the context menu.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 enum TableHandleTap: Equatable { case select(TableStructuralSelection); case menu }
 
 /// Which end of a structural range a resize knob moves: the lower bound (left/top) or upper (right/bottom).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 enum TableRangeEnd: Equatable { case lower, upper }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// Hit/draw rects for the row (left gutter) and column (below table) handles. Draw and hit-test share
     /// these rects, so the visible-band clip in `drawTableChrome` is draw-only — a scrolled-off handle is

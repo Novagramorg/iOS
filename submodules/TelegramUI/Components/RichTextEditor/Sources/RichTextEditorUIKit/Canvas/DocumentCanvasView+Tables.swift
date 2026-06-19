@@ -7,7 +7,7 @@ import RichTextEditorCore
 /// is the existing whole-document `[Block]` snapshot. The structural commands below no-op when the
 /// caret isn't in a table; `insertTable` is the inverse — it no-ops when the caret IS in a table (or
 /// on an image/gap).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// The table box containing the caret (`head`), its index in `boxes`, and the caret's (row, col).
     func activeTable() -> (box: TableBlockBox, index: Int, row: Int, col: Int)? {
@@ -90,6 +90,25 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Removes the table the caret is in (one undo step). The caret lands at the start of the block that
+    /// took the table's place — the block after it, or the previous block if the table was last, or a fresh
+    /// empty paragraph if the table was the document's only block. No-op when the caret isn't in a table.
+    func deleteTable() {
+        guard let a = activeTable() else { return }
+        editing {
+            var nb = boxes
+            nb.remove(at: a.index)
+            if nb.isEmpty {
+                nb.append(BlockBox(paragraph: ParagraphBlock(id: BlockID.generate()), mapper: mapper, width: effectiveWidth))
+            }
+            boxes = nb
+            recomputeSpans()
+            let targetIndex = min(a.index, boxes.count - 1)
+            let caret = snapToRenderable(boxes[targetIndex].textStart, forward: true)
+            anchor = caret; head = caret
+        }
+    }
+
     func deleteTableColumn() {
         guard let a = activeTable() else { return }
         guard case .table(let table) = a.box.currentBlock() else { return }
@@ -121,7 +140,7 @@ extension DocumentCanvasView {
         }
     }
 
-    /// Creates an empty `rows`×`columns` table (row 0 a header) at the caret, mirroring `insertImage`:
+    /// Creates an empty `rows`×`columns` table (row 0 a header) at the caret, mirroring `insertMedia`:
     /// clears any selection, then splits the caret's paragraph if mid-text, else inserts at the block
     /// boundary. No-op unless the caret is in a top-level paragraph (no nested tables; not on an
     /// image/gap) — guarded BEFORE `editing { }` so a no-op registers no undo entry. Caret lands in the

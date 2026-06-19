@@ -11,7 +11,7 @@ final class GapCursorTests: XCTestCase {
             UIColor.systemTeal.setFill(); c.fill(CGRect(x: 0, y: 0, width: 80, height: 50)) } }
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Above")])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Cap")])),
         ], width: 300)
         v.frame = CGRect(x: 0, y: 0, width: 300, height: 300); v.layoutIfNeeded()
@@ -27,8 +27,8 @@ final class GapCursorTests: XCTestCase {
 
     func test_tapOnImageArea_landsOnGap() {
         let v = canvas()
-        let img = v.boxes[1] as! ImageBlockBox
-        let p = CGPoint(x: img.imageRect().midX, y: img.imageRect().midY)
+        let img = v.boxes[1] as! MediaBlockBox
+        let p = CGPoint(x: img.mediaRect().midX, y: img.mediaRect().midY)
         XCTAssertEqual(v.closestGlobalPosition(to: p), img.nodeStart)
     }
 
@@ -64,7 +64,7 @@ final class GapCursorTests: XCTestCase {
         v.imageProvider = { _ in UIGraphicsImageRenderer(size: CGSize(width: 80, height: 50)).image { c in
             UIColor.systemTeal.setFill(); c.fill(CGRect(x: 0, y: 0, width: 80, height: 50)) } }
         v.setBlocks([
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Cap")])),
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "After")])),
         ], width: 300)

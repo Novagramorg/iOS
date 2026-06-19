@@ -37,8 +37,6 @@ final class EmojiRefTests: XCTestCase {
         XCTAssertEqual(p.text, "Hi\u{FFFC}!")
         XCTAssertEqual(p.utf16Count, 4)
         let root = DocumentTree.build(from: Document(
-            metadata: .init(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                            modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [.paragraph(p)]))
         XCTAssertEqual(root.children[0].nodeSize, 6)   // text 4 + 2 (open/close); position model unchanged
     }

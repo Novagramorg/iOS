@@ -1,7 +1,7 @@
 import Foundation
 
 /// A `.rtdoc` document package: a folder containing `document.json` and an `assets/` directory
-/// keyed by `ImageBlock.assetID` (filename). UIKit-free; image bytes are opaque `Data`.
+/// keyed by `MediaBlock.mediaID` (filename). UIKit-free; media bytes are opaque `Data`.
 public struct DocumentPackage: Equatable {
     public var document: Document
     public var assets: [String: Data]

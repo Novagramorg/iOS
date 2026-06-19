@@ -193,6 +193,7 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
             case createSticker
             case createAvatar(mode: PeerType)
             case poll(mode: PollMode, asFile: Bool)
+            case richText(asFile: Bool)
         }
         
         case assets(PHAssetCollection?, AssetsMode)
@@ -2108,6 +2109,11 @@ public final class MediaPickerScreenImpl: ViewController, MediaPickerScreen, Att
                     case .option:
                         self.titleView.subtitle = presentationData.strings.MediaPicker_PollSubtitle_PollOption
                     }
+                    self.titleView.isEnabled = true
+                case .richText:
+                    self.titleView.title = presentationData.strings.MediaPicker_Recents
+                    //TODO:localize
+                    self.titleView.subtitle = "Add media"
                     self.titleView.isEnabled = true
                 }
             }

@@ -2,22 +2,22 @@
 import UIKit
 import RichTextEditorCore
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// True when `img` should render its selection tint — either it is the tap-selected atom, or a
     /// non-collapsed text selection spans across its atom (a range flowing over it). A collapsed gap
     /// caret and a caption-only selection are both excluded.
     /// (`selFrom <= nodeStart && selTo >= textStart` ⇒ the range runs from at/before the gap to at/after
     /// the caption start, i.e. it fully contains the image atom.)
-    func isImageSelected(_ img: ImageBlockBox) -> Bool {
+    func isImageSelected(_ img: MediaBlockBox) -> Bool {
         if imageSelection == img.id { return true }
         return selFrom != selTo && selFrom <= img.nodeStart && selTo >= img.textStart
     }
 
     /// The canvas-coords rect the selection tint fills for `img`, or nil when it isn't selected.
     /// Single geometry seam so a unit test and the actual draw cannot diverge.
-    func imageSelectionTintRect(for img: ImageBlockBox) -> CGRect? {
-        isImageSelected(img) ? img.imageRect() : nil
+    func imageSelectionTintRect(for img: MediaBlockBox) -> CGRect? {
+        isImageSelected(img) ? img.mediaRect() : nil
     }
 
     func clearImageSelection() {
@@ -33,7 +33,7 @@ extension DocumentCanvasView {
     /// Selects the top-level image `img` as an atom: parks the (hidden) caret at its gap, sets
     /// `imageSelection`, and clears any table structural selection. The tint over the image is the
     /// indicator. Mirrors `selectTableRows`.
-    func selectImage(_ img: ImageBlockBox) {
+    func selectImage(_ img: MediaBlockBox) {
         finalizeMarkedText()        // a deliberate selection change finalizes marked text (uniform invariant)
         clearTableSelection()
         // Bracket the caret move with the input-delegate notification (like `setCaret`) so the OS re-reads
@@ -48,7 +48,7 @@ extension DocumentCanvasView {
 
     /// Two-step tap on an image (mirrors the table-handle two-step): first tap selects it; a tap on the
     /// already-selected image toggles its edit menu (reusing the flicker guard).
-    func handleImageTap(_ img: ImageBlockBox, wasMenuVisible: Bool) {
+    func handleImageTap(_ img: MediaBlockBox, wasMenuVisible: Bool) {
         if imageSelection != img.id {
             dismissEditMenu()
             selectImage(img)

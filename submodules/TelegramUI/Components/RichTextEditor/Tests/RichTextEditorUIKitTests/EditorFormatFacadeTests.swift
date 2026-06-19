@@ -8,9 +8,7 @@ final class EditorFormatFacadeTests: XCTestCase {
     func editor() -> RichTextEditorView {
         let e = RichTextEditorView()
         e.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
-        e.document = Document(metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                                         modifiedAt: Date(timeIntervalSince1970: 0)),
-                              blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
+        e.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
         e.layoutIfNeeded()
         return e
     }

@@ -19,6 +19,7 @@ final class EmojiTableHostingTests: XCTestCase {
         c.setBlocks([.table(table)], width: 320)
         c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         c.layoutIfNeeded()
+        c.simulateParentLayout()
         // Place the caret in cell (0,0) and insert an emoji there.
         if let t = c.boxes.first as? TableBlockBox, let start = t.cellTextStart(row: 0, column: 0) {
             c.anchor = start; c.head = start

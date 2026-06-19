@@ -172,6 +172,10 @@ func apiInputPeerOrSelf(_ peer: Peer, accountPeerId: PeerId) -> Api.InputPeer? {
     return apiInputPeer(peer)
 }
 
+func peerIdFromApiCommunityId(_ communityId: Int64) -> PeerId {
+    return PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(communityId))
+}
+
 func apiInputChannel(_ peer: Peer) -> Api.InputChannel? {
     if let channel = peer as? TelegramChannel, let accessHash = channel.accessHash {
         return Api.InputChannel.inputChannel(.init(channelId: channel.id.id._internalGetInt64Value(), accessHash: accessHash.value))
@@ -180,6 +184,19 @@ func apiInputChannel(_ peer: Peer) -> Api.InputChannel? {
     } else {
         return nil
     }
+}
+
+func apiInputDialogPeer(_ peer: Peer) -> Api.InputDialogPeer? {
+    if peer is TelegramCommunity {
+        guard let inputChannel = apiInputChannel(peer) else {
+            return nil
+        }
+        return .inputDialogPeerCommunity(.init(community: inputChannel))
+    }
+    guard let inputPeer = apiInputPeer(peer) else {
+        return nil
+    }
+    return .inputDialogPeer(.init(peer: inputPeer))
 }
 
 func apiInputChannel(_ peer: Peer, sourceMessageId: MessageId?, transaction: Transaction) -> Api.InputChannel? {

@@ -10,6 +10,7 @@ final class SpoilerTapRevealTests: XCTestCase {
         c.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "open secret end")]))], width: 320)
         c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         c.layoutIfNeeded()
+        c.simulateParentLayout()
         let start = c.boxes[0].textStart
         c.anchor = start + 5; c.head = start + 11
         c.toggleSpoiler()

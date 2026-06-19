@@ -15,9 +15,7 @@ final class CanvasSpanTests: XCTestCase {
 
     func test_spansMatchCorePositionModel() {
         let v = canvas(["One", "Two", "Three"])
-        let doc = Document(metadata: .init(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                           modifiedAt: Date(timeIntervalSince1970: 0)),
-                           blocks: v.currentParagraphs().map { .paragraph($0) })
+        let doc = Document(blocks: v.currentParagraphs().map { .paragraph($0) })
         let tree = DocumentTree.build(from: doc)
         XCTAssertEqual(v.documentSize, DocumentTree.documentSize(doc))
         for box in v.boxes {
