@@ -6024,6 +6024,28 @@ public extension Api.functions.messages {
     }
 }
 public extension Api.functions.messages {
+    static func composeRichMessageWithAI(flags: Int32, text: Api.InputRichMessage, translateToLang: String?, tone: Api.InputAiComposeTone?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.ComposedRichMessageWithAI>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1260065081)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        text.serialize(buffer, true)
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeString(translateToLang!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 2) != 0 {
+            tone!.serialize(buffer, true)
+        }
+        return (FunctionDescription(name: "messages.composeRichMessageWithAI", parameters: [("flags", ConstructorParameterDescription(flags)), ("text", ConstructorParameterDescription(text)), ("translateToLang", ConstructorParameterDescription(translateToLang)), ("tone", ConstructorParameterDescription(tone))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.ComposedRichMessageWithAI? in
+            let reader = BufferReader(buffer)
+            var result: Api.messages.ComposedRichMessageWithAI?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.messages.ComposedRichMessageWithAI
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.messages {
     static func createChat(flags: Int32, users: [Api.InputUser], title: String, ttlPeriod: Int32?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.InvitedUsers>) {
         let buffer = Buffer()
         buffer.appendInt32(-1831936556)
@@ -9445,12 +9467,15 @@ public extension Api.functions.messages {
     }
 }
 public extension Api.functions.messages {
-    static func searchGlobal(flags: Int32, folderId: Int32?, q: String, filter: Api.MessagesFilter, minDate: Int32, maxDate: Int32, offsetRate: Int32, offsetPeer: Api.InputPeer, offsetId: Int32, limit: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.Messages>) {
+    static func searchGlobal(flags: Int32, folderId: Int32?, community: Api.InputChannel?, q: String, filter: Api.MessagesFilter, minDate: Int32, maxDate: Int32, offsetRate: Int32, offsetPeer: Api.InputPeer, offsetId: Int32, limit: Int32) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.Messages>) {
         let buffer = Buffer()
-        buffer.appendInt32(1271290010)
+        buffer.appendInt32(1629922364)
         serializeInt32(flags, buffer: buffer, boxed: false)
         if Int(flags) & Int(1 << 0) != 0 {
             serializeInt32(folderId!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 4) != 0 {
+            community!.serialize(buffer, true)
         }
         serializeString(q, buffer: buffer, boxed: false)
         filter.serialize(buffer, true)
@@ -9460,7 +9485,7 @@ public extension Api.functions.messages {
         offsetPeer.serialize(buffer, true)
         serializeInt32(offsetId, buffer: buffer, boxed: false)
         serializeInt32(limit, buffer: buffer, boxed: false)
-        return (FunctionDescription(name: "messages.searchGlobal", parameters: [("flags", ConstructorParameterDescription(flags)), ("folderId", ConstructorParameterDescription(folderId)), ("q", ConstructorParameterDescription(q)), ("filter", ConstructorParameterDescription(filter)), ("minDate", ConstructorParameterDescription(minDate)), ("maxDate", ConstructorParameterDescription(maxDate)), ("offsetRate", ConstructorParameterDescription(offsetRate)), ("offsetPeer", ConstructorParameterDescription(offsetPeer)), ("offsetId", ConstructorParameterDescription(offsetId)), ("limit", ConstructorParameterDescription(limit))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.Messages? in
+        return (FunctionDescription(name: "messages.searchGlobal", parameters: [("flags", ConstructorParameterDescription(flags)), ("folderId", ConstructorParameterDescription(folderId)), ("community", ConstructorParameterDescription(community)), ("q", ConstructorParameterDescription(q)), ("filter", ConstructorParameterDescription(filter)), ("minDate", ConstructorParameterDescription(minDate)), ("maxDate", ConstructorParameterDescription(maxDate)), ("offsetRate", ConstructorParameterDescription(offsetRate)), ("offsetPeer", ConstructorParameterDescription(offsetPeer)), ("offsetId", ConstructorParameterDescription(offsetId)), ("limit", ConstructorParameterDescription(limit))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.Messages? in
             let reader = BufferReader(buffer)
             var result: Api.messages.Messages?
             if let signature = reader.readInt32() {
@@ -10508,6 +10533,42 @@ public extension Api.functions.messages {
             var result: Api.messages.TranscribedAudio?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.messages.TranscribedAudio
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.messages {
+    static func translateRichMessage(flags: Int32, peer: Api.InputPeer?, id: [Int32]?, text: [Api.InputRichMessage]?, toLang: String, tone: String?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.TranslatedRichMessage>) {
+        let buffer = Buffer()
+        buffer.appendInt32(441720836)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            peer!.serialize(buffer, true)
+        }
+        if Int(flags) & Int(1 << 0) != 0 {
+            buffer.appendInt32(481674261)
+            buffer.appendInt32(Int32(id!.count))
+            for item in id! {
+                serializeInt32(item, buffer: buffer, boxed: false)
+            }
+        }
+        if Int(flags) & Int(1 << 1) != 0 {
+            buffer.appendInt32(481674261)
+            buffer.appendInt32(Int32(text!.count))
+            for item in text! {
+                item.serialize(buffer, true)
+            }
+        }
+        serializeString(toLang, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 2) != 0 {
+            serializeString(tone!, buffer: buffer, boxed: false)
+        }
+        return (FunctionDescription(name: "messages.translateRichMessage", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("id", ConstructorParameterDescription(id)), ("text", ConstructorParameterDescription(text)), ("toLang", ConstructorParameterDescription(toLang)), ("tone", ConstructorParameterDescription(tone))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.messages.TranslatedRichMessage? in
+            let reader = BufferReader(buffer)
+            var result: Api.messages.TranslatedRichMessage?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.messages.TranslatedRichMessage
             }
             return result
         })

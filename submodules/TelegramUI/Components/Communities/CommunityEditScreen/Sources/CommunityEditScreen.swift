@@ -14,6 +14,10 @@ import ListTextFieldItemComponent
 import AlertComponent
 import ItemListUI
 import PeerInfoUI
+import AvatarNode
+import MapResourceToAvatarSizes
+import PlainButtonComponent
+import RadialStatusNode
 
 private enum CommunityAddChatsMode: Equatable {
     case allMembers
@@ -45,6 +49,235 @@ private let navigationCheckImage: UIImage = {
         context.strokePath()
     })!.withRenderingMode(.alwaysTemplate)
 }()
+
+private final class CommunityAvatarComponent: Component {
+    typealias EnvironmentType = Empty
+
+    let context: AccountContext
+    let theme: PresentationTheme
+    let peer: EnginePeer
+    let isEnabled: Bool
+    let uploadingImage: UIImage?
+    let uploadProgress: CGFloat?
+    let action: () -> Void
+
+    init(
+        context: AccountContext,
+        theme: PresentationTheme,
+        peer: EnginePeer,
+        isEnabled: Bool,
+        uploadingImage: UIImage?,
+        uploadProgress: CGFloat?,
+        action: @escaping () -> Void
+    ) {
+        self.context = context
+        self.theme = theme
+        self.peer = peer
+        self.isEnabled = isEnabled
+        self.uploadingImage = uploadingImage
+        self.uploadProgress = uploadProgress
+        self.action = action
+    }
+
+    static func ==(lhs: CommunityAvatarComponent, rhs: CommunityAvatarComponent) -> Bool {
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.peer != rhs.peer {
+            return false
+        }
+        if lhs.isEnabled != rhs.isEnabled {
+            return false
+        }
+        if lhs.uploadingImage !== rhs.uploadingImage {
+            return false
+        }
+        if lhs.uploadProgress != rhs.uploadProgress {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private let avatarShadow = UIImageView()
+        private let avatarNode: AvatarNode
+        private let uploadingImageView = UIImageView()
+        private let uploadingOverlayView = UIView()
+        private let statusNode: RadialStatusNode
+        private let button = HighlightTrackingButton()
+        private let actionButton = ComponentView<Empty>()
+
+        private var component: CommunityAvatarComponent?
+
+        override init(frame: CGRect) {
+            self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: floor(100.0 * 16.0 / 37.0)))
+            self.statusNode = RadialStatusNode(backgroundNodeColor: UIColor(rgb: 0x000000, alpha: 0.6))
+
+            super.init(frame: frame)
+
+            self.avatarShadow.image = UIImage(bundleImageName: "Components/CommunityShadow")
+            self.uploadingImageView.contentMode = .scaleAspectFill
+            self.uploadingImageView.clipsToBounds = true
+            self.uploadingImageView.isUserInteractionEnabled = false
+            self.uploadingImageView.isHidden = true
+            self.uploadingOverlayView.backgroundColor = UIColor(white: 0.0, alpha: 0.4)
+            self.uploadingOverlayView.isUserInteractionEnabled = false
+            self.uploadingOverlayView.isHidden = true
+            self.statusNode.isUserInteractionEnabled = false
+            self.addSubview(self.avatarShadow)
+            self.addSubnode(self.avatarNode)
+            self.addSubview(self.uploadingImageView)
+            self.addSubview(self.uploadingOverlayView)
+            self.addSubnode(self.statusNode)
+            self.addSubview(self.button)
+
+            self.button.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        @objc private func pressed() {
+            guard self.component?.isEnabled == true else {
+                return
+            }
+            self.component?.action()
+        }
+
+        func transitionView() -> UIView {
+            if self.component?.uploadingImage != nil {
+                return self.uploadingImageView
+            } else {
+                return self.avatarNode.view
+            }
+        }
+
+        func update(component: CommunityAvatarComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+            self.component = component
+
+            let avatarSize = CGSize(width: 100.0, height: 100.0)
+            let avatarFrame = CGRect(
+                origin: CGPoint(
+                    x: floorToScreenPixels((availableSize.width - avatarSize.width) / 2.0),
+                    y: 0.0
+                ),
+                size: avatarSize
+            )
+
+            let hasAvatar = !component.peer.profileImageRepresentations.isEmpty || component.uploadingImage != nil
+            let overrideImage: AvatarNodeImageOverride?
+            if !hasAvatar {
+                overrideImage = .editAvatarIcon(forceNone: true)
+            } else {
+                overrideImage = nil
+            }
+
+            self.avatarNode.font = avatarPlaceholderFont(size: floor(avatarSize.width * 16.0 / 37.0))
+            self.avatarNode.setPeer(
+                context: component.context,
+                theme: component.theme,
+                peer: component.peer,
+                overrideImage: overrideImage,
+                clipStyle: .roundedRect,
+                synchronousLoad: false,
+                displayDimensions: avatarSize
+            )
+
+            self.avatarNode.frame = avatarFrame
+            self.uploadingImageView.layer.cornerRadius = floor(avatarSize.width * 0.25)
+            self.uploadingOverlayView.layer.cornerRadius = floor(avatarSize.width * 0.25)
+            self.button.frame = avatarFrame.insetBy(dx: -8.0, dy: -8.0)
+            self.button.isUserInteractionEnabled = component.isEnabled
+
+            if let uploadingImage = component.uploadingImage {
+                self.uploadingImageView.isHidden = false
+                self.uploadingOverlayView.isHidden = false
+                self.uploadingImageView.image = uploadingImage
+                self.uploadingImageView.frame = avatarFrame
+                self.uploadingOverlayView.frame = avatarFrame
+
+                let statusSize = CGSize(width: 50.0, height: 50.0)
+                self.statusNode.frame = CGRect(
+                    origin: CGPoint(
+                        x: floorToScreenPixels(avatarFrame.midX - statusSize.width * 0.5),
+                        y: floorToScreenPixels(avatarFrame.midY - statusSize.height * 0.5)
+                    ),
+                    size: statusSize
+                )
+                self.statusNode.transitionToState(.progress(color: .white, lineWidth: nil, value: component.uploadProgress, cancelEnabled: false, animateRotation: true))
+            } else {
+                self.uploadingImageView.isHidden = true
+                self.uploadingImageView.image = nil
+                self.uploadingOverlayView.isHidden = true
+                self.statusNode.transitionToState(.none)
+            }
+
+            //TODO:localize
+            let actionButtonText = hasAvatar ? "Change Photo" : "Set Photo"
+            let actionButtonSize = self.actionButton.update(
+                transition: .immediate,
+                component: AnyComponent(PlainButtonComponent(
+                    content: AnyComponent(Text(
+                        text: actionButtonText,
+                        font: Font.regular(17.0),
+                        color: component.theme.list.itemAccentColor
+                    )),
+                    contentInsets: UIEdgeInsets(top: -8.0, left: -8.0, bottom: -8.0, right: -8.0),
+                    action: { [weak self] in
+                        guard self?.component?.isEnabled == true else {
+                            return
+                        }
+                        self?.component?.action()
+                    },
+                    isEnabled: component.isEnabled,
+                    animateScale: false,
+                    animateContents: false
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width, height: 44.0)
+            )
+            if let actionButtonView = self.actionButton.view {
+                if actionButtonView.superview == nil {
+                    self.addSubview(actionButtonView)
+                }
+                let actionButtonFrame = CGRect(
+                    origin: CGPoint(
+                        x: floorToScreenPixels((availableSize.width - actionButtonSize.width) / 2.0),
+                        y: avatarFrame.maxY + 30.0
+                    ),
+                    size: actionButtonSize
+                )
+                actionButtonView.frame = actionButtonFrame
+            }
+
+            if hasAvatar, let shadowImage = self.avatarShadow.image {
+                self.avatarShadow.isHidden = false
+                self.avatarShadow.tintColor = component.theme.list.freeTextColor
+
+                let aspectRatio = shadowImage.size.width / shadowImage.size.height
+                let shadowSize = CGSize(width: avatarSize.width * aspectRatio, height: avatarSize.height)
+                let shadowFrame = shadowSize.centered(around: avatarFrame.center).offsetBy(dx: -13.0, dy: 0.0)
+                self.avatarShadow.frame = shadowFrame
+            } else {
+                self.avatarShadow.isHidden = true
+            }
+
+            return CGSize(width: availableSize.width, height: avatarSize.height + 30.0 + actionButtonSize.height + 12.0)
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: CGRect())
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, transition: transition)
+    }
+}
 
 private final class ItemAccessoryComponent: Component {
     enum CountStyle: Equatable {
@@ -211,6 +444,7 @@ private final class CommunityEditScreenComponent: Component {
     final class View: UIView, UIScrollViewDelegate {
         private let scrollView: ScrollView
 
+        private let avatarHeader = ComponentView<Empty>()
         private let titleSection = ComponentView<Empty>()
         private let permissionsSection = ComponentView<Empty>()
         private let managementSection = ComponentView<Empty>()
@@ -235,10 +469,15 @@ private final class CommunityEditScreenComponent: Component {
         private var didInitializeState = false
         private var isSaving = false
         private var isDeleting = false
+        private var isUpdatingAvatar = false
+        private var uploadingAvatarImage: UIImage?
+        private var avatarUploadProgress: CGFloat?
 
         private var dataDisposable: Disposable?
         private let saveDisposable = MetaDisposable()
         private let deleteDisposable = MetaDisposable()
+        private let avatarDisposable = MetaDisposable()
+        private let avatarUploadStatusDisposable = MetaDisposable()
 
         private let cachedAdminsIcon = renderSettingsIcon(name: "Item List/Icons/Admin", backgroundColors: [UIColor(rgb: 0x34C759)])
         private let cachedRequestsIcon = renderSettingsIcon(name: "Item List/Icons/Requests", backgroundColors: [UIColor(rgb: 0x0079ff)])
@@ -271,6 +510,8 @@ private final class CommunityEditScreenComponent: Component {
             self.dataDisposable?.dispose()
             self.saveDisposable.dispose()
             self.deleteDisposable.dispose()
+            self.avatarDisposable.dispose()
+            self.avatarUploadStatusDisposable.dispose()
         }
 
         func scrollToTop() {
@@ -366,6 +607,144 @@ private final class CommunityEditScreenComponent: Component {
                     AlertScreen.Action(title: environment.strings.Common_OK, type: .default)
                 ]
             ), in: .window(.root))
+        }
+
+        private func openAvatarSetup() {
+            guard let component = self.component, let environment = self.environment, let controller = environment.controller(), let community = self.community else {
+                return
+            }
+            if self.isSaving || self.isDeleting || self.isUpdatingAvatar {
+                return
+            }
+
+            let peer = EnginePeer(community)
+            component.context.sharedContext.displaySetPhoto(
+                parentController: controller,
+                context: component.context,
+                peer: peer,
+                canDelete: !peer.profileImageRepresentations.isEmpty,
+                performDelete: { [weak self] in
+                    self?.confirmRemoveAvatar()
+                },
+                completion: { _ in },
+                completedWithUploadingImage: { [weak self] image, uploadStatus in
+                    guard let self else {
+                        return nil
+                    }
+                    self.isUpdatingAvatar = true
+                    self.uploadingAvatarImage = image
+                    self.avatarUploadProgress = 0.027
+                    self.state?.updated(transition: .easeInOut(duration: 0.2))
+                    self.avatarUploadStatusDisposable.set((uploadStatus
+                    |> deliverOnMainQueue).startStrict(next: { [weak self] status in
+                        guard let self else {
+                            return
+                        }
+                        switch status {
+                        case let .progress(value):
+                            self.avatarUploadProgress = max(0.027, CGFloat(value))
+                            if !self.isUpdatingAvatar {
+                                self.isUpdatingAvatar = true
+                            }
+                            self.state?.updated(transition: .easeInOut(duration: 0.2))
+                        case .done:
+                            self.isUpdatingAvatar = false
+                            self.uploadingAvatarImage = nil
+                            self.avatarUploadProgress = nil
+                            self.state?.updated(transition: .easeInOut(duration: 0.2))
+                        }
+                    }, completed: { [weak self] in
+                        guard let self, self.isUpdatingAvatar else {
+                            return
+                        }
+                        self.isUpdatingAvatar = false
+                        self.uploadingAvatarImage = nil
+                        self.avatarUploadProgress = nil
+                        self.state?.updated(transition: .easeInOut(duration: 0.2))
+                    }))
+                    return (self.avatarHeader.view as? CommunityAvatarComponent.View)?.transitionView()
+                }
+            )
+        }
+
+        private func confirmRemoveAvatar() {
+            guard let component = self.component, let environment = self.environment else {
+                return
+            }
+            if self.isSaving || self.isDeleting || self.isUpdatingAvatar {
+                return
+            }
+
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let actionSheet = ActionSheetController(presentationData: presentationData)
+            actionSheet.setItemGroups([
+                ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: presentationData.strings.Settings_RemoveConfirmation, color: .destructive, action: { [weak self, weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                        self?.removeAvatar()
+                    })
+                ]),
+                ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: environment.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                    })
+                ])
+            ])
+            environment.controller()?.present(actionSheet, in: .window(.root))
+        }
+
+        private func removeAvatar() {
+            guard let component = self.component else {
+                return
+            }
+            if self.isSaving || self.isDeleting || self.isUpdatingAvatar {
+                return
+            }
+
+            self.isUpdatingAvatar = true
+            self.uploadingAvatarImage = nil
+            self.avatarUploadProgress = nil
+            self.state?.updated(transition: .easeInOut(duration: 0.2))
+
+            let signal = component.context.engine.peers.updatePeerPhoto(peerId: component.communityId, photo: nil, mapResourceToAvatarSizes: { resource, representations in
+                return mapResourceToAvatarSizes(engine: component.context.engine, resource: resource, representations: representations)
+            })
+            |> mapError { _ -> CommunityEditSaveError in
+                return .generic
+            }
+
+            self.avatarDisposable.set((signal
+            |> deliverOnMainQueue).startStrict(next: { [weak self] result in
+                guard let self else {
+                    return
+                }
+                switch result {
+                case .complete:
+                    self.isUpdatingAvatar = false
+                    self.uploadingAvatarImage = nil
+                    self.avatarUploadProgress = nil
+                    self.state?.updated(transition: .easeInOut(duration: 0.2))
+                case .progress:
+                    break
+                }
+            }, error: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                self.isUpdatingAvatar = false
+                self.uploadingAvatarImage = nil
+                self.avatarUploadProgress = nil
+                self.state?.updated(transition: .easeInOut(duration: 0.2))
+                self.presentError()
+            }, completed: { [weak self] in
+                guard let self, self.isUpdatingAvatar else {
+                    return
+                }
+                self.isUpdatingAvatar = false
+                self.uploadingAvatarImage = nil
+                self.avatarUploadProgress = nil
+                self.state?.updated(transition: .easeInOut(duration: 0.2))
+            }))
         }
 
         private func confirmDeleteCommunity() {
@@ -681,10 +1060,41 @@ private final class CommunityEditScreenComponent: Component {
             self.backgroundColor = theme.list.blocksBackgroundColor
             self.scrollView.backgroundColor = theme.list.blocksBackgroundColor
 
-            var contentHeight = environment.navigationHeight + 16.0
+            var contentHeight = environment.navigationHeight - 36.0
 
             let resetTitleText = self.resetTitleText
             self.resetTitleText = nil
+
+            if let community = self.community {
+                var transition = transition
+                if self.avatarHeader.view == nil {
+                    transition = .immediate
+                }
+                let peer = EnginePeer(community)
+                let avatarHeaderSize = self.avatarHeader.update(
+                    transition: transition,
+                    component: AnyComponent(CommunityAvatarComponent(
+                        context: component.context,
+                        theme: theme,
+                        peer: peer,
+                        isEnabled: !(self.isSaving || self.isDeleting || self.isUpdatingAvatar),
+                        uploadingImage: self.uploadingAvatarImage,
+                        uploadProgress: self.avatarUploadProgress,
+                        action: { [weak self] in
+                            self?.openAvatarSetup()
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width, height: 120.0)
+                )
+                if let avatarHeaderView = self.avatarHeader.view {
+                    if avatarHeaderView.superview == nil {
+                        self.scrollView.addSubview(avatarHeaderView)
+                    }
+                    transition.setFrame(view: avatarHeaderView, frame: CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: avatarHeaderSize))
+                }
+                contentHeight += avatarHeaderSize.height + 32.0
+            }
 
             let titleSectionSize = self.titleSection.update(
                 transition: transition,
@@ -768,6 +1178,7 @@ private final class CommunityEditScreenComponent: Component {
             contentHeight += permissionsSectionSize.height + 46.0
 
             let adminsCount = self.cachedData?.adminsCount
+            let removedUsersCount = self.cachedData?.kickedCount
             let pendingRequests = self.cachedData?.pendingRequests
             let managementSectionSize = self.managementSection.update(
                 transition: transition,
@@ -805,7 +1216,7 @@ private final class CommunityEditScreenComponent: Component {
                             id: "removedUsers",
                             title: "Removed Users",
                             icon: self.cachedBannedIcon,
-                            count: nil,
+                            count: removedUsersCount,
                             countStyle: .plain,
                             theme: theme,
                             presentationData: presentationData,
@@ -892,7 +1303,7 @@ public final class CommunityEditScreen: ViewControllerComponentContainer {
             updatedPresentationData: nil
         )
 
-        self.title = "Edit Community"
+        self.title = ""
         self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "___done", style: .plain, target: self, action: #selector(self.savePressed))
 

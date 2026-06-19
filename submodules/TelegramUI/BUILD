@@ -479,6 +479,7 @@ swift_library(
         "//submodules/TelegramUI/Components/MarqueeComponent",
         "//submodules/TelegramUI/Components/Communities/CommunitiesScreen",
         "//submodules/TelegramUI/Components/Communities/CommunityAddScreen",
+        "//submodules/TelegramUI/Components/Communities/CommunityAdminApprovalScreen",
         "//submodules/TelegramUI/Components/Communities/CommunityEditScreen",
         "//submodules/TelegramUI/Components/Communities/CommunityPrivateChatScreen",
         "//submodules/TelegramUI/Components/Communities/CommunityRequestsScreen",

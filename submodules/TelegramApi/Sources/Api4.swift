@@ -1723,18 +1723,20 @@ public extension Api {
             public var chatPhoto: Api.Photo
             public var linkedPeers: [Api.CommunityPeer]
             public var adminsCount: Int32?
-            public var pendingRequests: Int32?
-            public init(flags: Int32, id: Int64, about: String, chatPhoto: Api.Photo, linkedPeers: [Api.CommunityPeer], adminsCount: Int32?, pendingRequests: Int32?) {
+            public var kickedCount: Int32?
+            public var peerLinkRequestsPending: Int32?
+            public init(flags: Int32, id: Int64, about: String, chatPhoto: Api.Photo, linkedPeers: [Api.CommunityPeer], adminsCount: Int32?, kickedCount: Int32?, peerLinkRequestsPending: Int32?) {
                 self.flags = flags
                 self.id = id
                 self.about = about
                 self.chatPhoto = chatPhoto
                 self.linkedPeers = linkedPeers
                 self.adminsCount = adminsCount
-                self.pendingRequests = pendingRequests
+                self.kickedCount = kickedCount
+                self.peerLinkRequestsPending = peerLinkRequestsPending
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("communityFull", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("about", ConstructorParameterDescription(self.about)), ("chatPhoto", ConstructorParameterDescription(self.chatPhoto)), ("linkedPeers", ConstructorParameterDescription(self.linkedPeers)), ("adminsCount", ConstructorParameterDescription(self.adminsCount)), ("pendingRequests", ConstructorParameterDescription(self.pendingRequests))])
+                return ("communityFull", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("about", ConstructorParameterDescription(self.about)), ("chatPhoto", ConstructorParameterDescription(self.chatPhoto)), ("linkedPeers", ConstructorParameterDescription(self.linkedPeers)), ("adminsCount", ConstructorParameterDescription(self.adminsCount)), ("kickedCount", ConstructorParameterDescription(self.kickedCount)), ("peerLinkRequestsPending", ConstructorParameterDescription(self.peerLinkRequestsPending))])
             }
         }
         case channelFull(Cons_channelFull)
@@ -1941,7 +1943,7 @@ public extension Api {
                 break
             case .communityFull(let _data):
                 if boxed {
-                    buffer.appendInt32(-13940614)
+                    buffer.appendInt32(-877157113)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt64(_data.id, buffer: buffer, boxed: false)
@@ -1955,8 +1957,11 @@ public extension Api {
                 if Int(_data.flags) & Int(1 << 1) != 0 {
                     serializeInt32(_data.adminsCount!, buffer: buffer, boxed: false)
                 }
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeInt32(_data.kickedCount!, buffer: buffer, boxed: false)
+                }
                 if Int(_data.flags) & Int(1 << 0) != 0 {
-                    serializeInt32(_data.pendingRequests!, buffer: buffer, boxed: false)
+                    serializeInt32(_data.peerLinkRequestsPending!, buffer: buffer, boxed: false)
                 }
                 break
             }
@@ -1969,7 +1974,7 @@ public extension Api {
             case .chatFull(let _data):
                 return ("chatFull", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("about", ConstructorParameterDescription(_data.about)), ("participants", ConstructorParameterDescription(_data.participants)), ("chatPhoto", ConstructorParameterDescription(_data.chatPhoto)), ("notifySettings", ConstructorParameterDescription(_data.notifySettings)), ("exportedInvite", ConstructorParameterDescription(_data.exportedInvite)), ("botInfo", ConstructorParameterDescription(_data.botInfo)), ("pinnedMsgId", ConstructorParameterDescription(_data.pinnedMsgId)), ("folderId", ConstructorParameterDescription(_data.folderId)), ("call", ConstructorParameterDescription(_data.call)), ("ttlPeriod", ConstructorParameterDescription(_data.ttlPeriod)), ("groupcallDefaultJoinAs", ConstructorParameterDescription(_data.groupcallDefaultJoinAs)), ("themeEmoticon", ConstructorParameterDescription(_data.themeEmoticon)), ("requestsPending", ConstructorParameterDescription(_data.requestsPending)), ("recentRequesters", ConstructorParameterDescription(_data.recentRequesters)), ("availableReactions", ConstructorParameterDescription(_data.availableReactions)), ("reactionsLimit", ConstructorParameterDescription(_data.reactionsLimit))])
             case .communityFull(let _data):
-                return ("communityFull", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("about", ConstructorParameterDescription(_data.about)), ("chatPhoto", ConstructorParameterDescription(_data.chatPhoto)), ("linkedPeers", ConstructorParameterDescription(_data.linkedPeers)), ("adminsCount", ConstructorParameterDescription(_data.adminsCount)), ("pendingRequests", ConstructorParameterDescription(_data.pendingRequests))])
+                return ("communityFull", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("about", ConstructorParameterDescription(_data.about)), ("chatPhoto", ConstructorParameterDescription(_data.chatPhoto)), ("linkedPeers", ConstructorParameterDescription(_data.linkedPeers)), ("adminsCount", ConstructorParameterDescription(_data.adminsCount)), ("kickedCount", ConstructorParameterDescription(_data.kickedCount)), ("peerLinkRequestsPending", ConstructorParameterDescription(_data.peerLinkRequestsPending))])
             }
         }
 
@@ -2359,8 +2364,12 @@ public extension Api {
                 _6 = reader.readInt32()
             }
             var _7: Int32?
-            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
                 _7 = reader.readInt32()
+            }
+            var _8: Int32?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _8 = reader.readInt32()
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
@@ -2368,9 +2377,10 @@ public extension Api {
             let _c4 = _4 != nil
             let _c5 = _5 != nil
             let _c6 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _6 != nil
-            let _c7 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _7 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
-                return Api.ChatFull.communityFull(Cons_communityFull(flags: _1!, id: _2!, about: _3!, chatPhoto: _4!, linkedPeers: _5!, adminsCount: _6, pendingRequests: _7))
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _8 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 {
+                return Api.ChatFull.communityFull(Cons_communityFull(flags: _1!, id: _2!, about: _3!, chatPhoto: _4!, linkedPeers: _5!, adminsCount: _6, kickedCount: _7, peerLinkRequestsPending: _8))
             }
             else {
                 return nil

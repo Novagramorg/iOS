@@ -1549,7 +1549,30 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 })
             }
         }
-        
+
+        self.chatListDisplayNode.mainContainerNode.openCommunity = { [weak self] communityId in
+            guard let self else {
+                return
+            }
+            self.push(self.context.sharedContext.makeCommunityViewScreen(context: self.context, communityId: communityId))
+        }
+
+        self.chatListDisplayNode.mainContainerNode.ungroupCommunity = { [weak self] communityId in
+            guard let self else {
+                return
+            }
+            self.present(textAlertController(context: self.context, title: "Ungroup Chats?", text: "Chats from this community will appear separately in your chat list.", actions: [
+                TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .defaultDestructiveAction, title: "Ungroup", action: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    let _ = (self.context.engine.peers.toggleCommunityCollapsedInDialogs(communityId: communityId, collapsed: false)
+                    |> deliverOnMainQueue).startStandalone()
+                })
+            ]), in: .window(.root))
+        }
+
         self.chatListDisplayNode.mainContainerNode.groupSelected = { [weak self] groupId in
             guard let self else {
                 return
@@ -2898,7 +2921,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     private func openCommunityView(communityId: EnginePeer.Id) {
-        self.push(self.context.sharedContext.makeCommunityViewScreen(context: self.context, communityId: communityId))
+        self.push(self.context.sharedContext.makeCommunityViewScreen(context: self.context, communityId: communityId, style: .plain, presentation: .fullScreen))
     }
     
     private weak var storyCameraTooltip: TooltipScreen?

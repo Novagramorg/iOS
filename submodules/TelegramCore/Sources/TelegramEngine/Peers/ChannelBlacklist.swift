@@ -121,6 +121,15 @@ func _internal_updateChannelMemberBannedRights(account: Account, peerId: PeerId,
                                 }
                                 
                                 return updatedData
+                            } else if let cachedData = cachedData as? CachedCommunityData {
+                                var updatedData = cachedData
+                                if isKicked != wasKicked {
+                                    if let kickedCount = updatedData.kickedCount {
+                                        updatedData = updatedData.withUpdatedKickedCount(max(0, kickedCount + (isKicked ? 1 : -1)))
+                                    }
+                                }
+
+                                return updatedData
                             } else {
                                 return cachedData
                             }

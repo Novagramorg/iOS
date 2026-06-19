@@ -110,6 +110,8 @@ public final class ChatListNodeInteraction {
     let openChatFolderUpdates: () -> Void
     let hideChatFolderUpdates: () -> Void
     let openStories: (ChatListNode.OpenStoriesSubject, ASDisplayNode?) -> Void
+    let openCommunity: (EnginePeer.Id) -> Void
+    let ungroupCommunity: (EnginePeer.Id) -> Void
     let openStarsTopup: (Int64?) -> Void
     let editPeer: (ChatListItem) -> Void
     let openWebApp: (TelegramUser) -> Void
@@ -171,6 +173,8 @@ public final class ChatListNodeInteraction {
         openChatFolderUpdates: @escaping () -> Void,
         hideChatFolderUpdates: @escaping () -> Void,
         openStories: @escaping (ChatListNode.OpenStoriesSubject, ASDisplayNode?) -> Void,
+        openCommunity: @escaping (EnginePeer.Id) -> Void = { _ in },
+        ungroupCommunity: @escaping (EnginePeer.Id) -> Void = { _ in },
         openStarsTopup: @escaping (Int64?) -> Void,
         editPeer: @escaping (ChatListItem) -> Void,
         openWebApp: @escaping (TelegramUser) -> Void,
@@ -219,6 +223,8 @@ public final class ChatListNodeInteraction {
         self.openChatFolderUpdates = openChatFolderUpdates
         self.hideChatFolderUpdates = hideChatFolderUpdates
         self.openStories = openStories
+        self.openCommunity = openCommunity
+        self.ungroupCommunity = ungroupCommunity
         self.openStarsTopup = openStarsTopup
         self.editPeer = editPeer
         self.openWebApp = openWebApp
@@ -1217,6 +1223,8 @@ public final class ChatListNode: ListViewImpl {
     public var hidePsa: ((EnginePeer.Id) -> Void)?
     public var activateChatPreview: ((ChatListItem, Int64?, ASDisplayNode, ContextGesture?, CGPoint?) -> Void)?
     public var openStories: ((ChatListNode.OpenStoriesSubject, ASDisplayNode?) -> Void)?
+    public var openCommunity: ((EnginePeer.Id) -> Void)?
+    public var ungroupCommunity: ((EnginePeer.Id) -> Void)?
     public var openBirthdaySetup: (() -> Void)?
     public var openPremiumManagement: (() -> Void)?
     public var openStarsTopup: ((Int64?) -> Void)?
@@ -1845,6 +1853,16 @@ public final class ChatListNode: ListViewImpl {
                 return
             }
             self.openStories?(subject, itemNode)
+        }, openCommunity: { [weak self] communityId in
+            guard let self else {
+                return
+            }
+            self.openCommunity?(communityId)
+        }, ungroupCommunity: { [weak self] communityId in
+            guard let self else {
+                return
+            }
+            self.ungroupCommunity?(communityId)
         }, openStarsTopup: { [weak self] amount in
             guard let self else {
                 return

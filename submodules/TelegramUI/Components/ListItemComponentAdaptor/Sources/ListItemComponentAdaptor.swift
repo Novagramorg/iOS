@@ -11,18 +11,25 @@ public protocol _ListItemComponentAdaptorItemGenerator: AnyObject, Equatable {
 
 public final class ListItemComponentAdaptor: Component {
     public typealias ItemGenerator = _ListItemComponentAdaptorItemGenerator
+
+    public enum ActionMode {
+        case button
+        case gesture
+    }
     
     private let itemGenerator: AnyObject
     private let isEqualImpl: (AnyObject) -> Bool
     private let itemImpl: () -> ListViewItem
     private let params: ListViewItemLayoutParams
     private let action: (() -> Void)?
+    private let actionMode: ActionMode
     private let tag: AnyObject?
 
     public init<ItemGeneratorType: ItemGenerator>(
         itemGenerator: ItemGeneratorType,
         params: ListViewItemLayoutParams,
         action: (() -> Void)? = nil,
+        actionMode: ActionMode = .button,
         tag: AnyObject? = nil
     ) {
         self.itemGenerator = itemGenerator
@@ -38,6 +45,7 @@ public final class ListItemComponentAdaptor: Component {
         }
         self.params = params
         self.action = action
+        self.actionMode = actionMode
         self.tag = tag
     }
     
@@ -51,6 +59,9 @@ public final class ListItemComponentAdaptor: Component {
         if (lhs.action == nil) != (rhs.action == nil) {
             return false
         }
+        if lhs.actionMode != rhs.actionMode {
+            return false
+        }
         if lhs.tag !== rhs.tag {
             return false
         }
@@ -59,6 +70,7 @@ public final class ListItemComponentAdaptor: Component {
     
     public final class View: UIView, ComponentTaggedView {
         private var button: HighlightTrackingButton?
+        private var tapGestureRecognizer: UITapGestureRecognizer?
         public var itemNode: ListViewItemNode?
         
         private var component: ListItemComponentAdaptor?
@@ -78,6 +90,51 @@ public final class ListItemComponentAdaptor: Component {
                 return
             }
             component.action?()
+        }
+
+        @objc private func tapGesture(_ recognizer: UITapGestureRecognizer) {
+            guard case .ended = recognizer.state, let component = self.component else {
+                return
+            }
+            component.action?()
+        }
+
+        private func updateActionControls(component: ListItemComponentAdaptor, itemNode: ListViewItemNode, size: CGSize, transition: ComponentTransition) {
+            itemNode.isUserInteractionEnabled = component.action == nil || component.actionMode == .gesture
+            if component.action != nil && component.actionMode == .button {
+                let button: HighlightTrackingButton
+                if let current = self.button {
+                    button = current
+                } else {
+                    button = HighlightTrackingButton()
+                    self.button = button
+                    self.addSubview(button)
+                    button.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
+                    button.highligthedChanged = { [weak self] isHighlighted in
+                        guard let self, let itemNode = self.itemNode else {
+                            return
+                        }
+                        itemNode.setHighlighted(isHighlighted, at: itemNode.bounds.center, animated: !isHighlighted)
+                    }
+                }
+
+                transition.setFrame(view: button, frame: CGRect(origin: CGPoint(), size: size))
+            } else if let button = self.button {
+                self.button = nil
+                button.removeFromSuperview()
+            }
+
+            if component.action != nil && component.actionMode == .gesture {
+                if self.tapGestureRecognizer == nil {
+                    let tapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:)))
+                    tapGestureRecognizer.cancelsTouchesInView = false
+                    self.tapGestureRecognizer = tapGestureRecognizer
+                    self.addGestureRecognizer(tapGestureRecognizer)
+                }
+            } else if let tapGestureRecognizer = self.tapGestureRecognizer {
+                self.tapGestureRecognizer = nil
+                self.removeGestureRecognizer(tapGestureRecognizer)
+            }
         }
         
         func update(component: ListItemComponentAdaptor, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -120,29 +177,7 @@ public final class ListItemComponentAdaptor: Component {
                 )
                 
                 if let resultSize {
-                    itemNode.isUserInteractionEnabled = component.action == nil
-                    if component.action != nil {
-                        let button: HighlightTrackingButton
-                        if let current = self.button {
-                            button = current
-                        } else {
-                            button = HighlightTrackingButton()
-                            self.button = button
-                            self.addSubview(button)
-                            button.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
-                            button.highligthedChanged = { [weak self] isHighlighted in
-                                guard let self, let itemNode = self.itemNode else {
-                                    return
-                                }
-                                itemNode.setHighlighted(isHighlighted, at: itemNode.bounds.center, animated: !isHighlighted)
-                            }
-                        }
-                        
-                        transition.setFrame(view: button, frame: CGRect(origin: CGPoint(), size: resultSize))
-                    } else if let button = self.button {
-                        self.button = nil
-                        button.removeFromSuperview()
-                    }
+                    self.updateActionControls(component: component, itemNode: itemNode, size: resultSize, transition: transition)
                     
                     transition.setFrame(view: itemNode.view, frame: CGRect(origin: CGPoint(), size: resultSize))
                     return resultSize
@@ -166,28 +201,7 @@ public final class ListItemComponentAdaptor: Component {
                     }
                 )
                 if let itemNode {
-                    itemNode.isUserInteractionEnabled = component.action == nil
-                    if component.action != nil {
-                        let button: HighlightTrackingButton
-                        if let current = self.button {
-                            button = current
-                        } else {
-                            button = HighlightTrackingButton()
-                            self.button = button
-                            self.addSubview(button)
-                            button.addTarget(self, action: #selector(self.pressed), for: .touchUpInside)
-                            button.highligthedChanged = { [weak self] isHighlighted in
-                                guard let self, let itemNode = self.itemNode else {
-                                    return
-                                }
-                                itemNode.setHighlighted(isHighlighted, at: itemNode.bounds.center, animated: !isHighlighted)
-                            }
-                        }
-                        transition.setFrame(view: button, frame: CGRect(origin: CGPoint(), size: itemNode.bounds.size))
-                    } else if let button = self.button {
-                        self.button = nil
-                        button.removeFromSuperview()
-                    }
+                    self.updateActionControls(component: component, itemNode: itemNode, size: itemNode.bounds.size, transition: transition)
                     
                     self.itemNode = itemNode
                     self.addSubnode(itemNode)

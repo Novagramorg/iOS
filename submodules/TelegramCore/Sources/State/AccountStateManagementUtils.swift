@@ -1305,6 +1305,8 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                     } else {
                         updatedState.updatePeerChatUnreadMark(peerId, threadId: nil, namespace: Namespaces.Message.Cloud, value: (flags & (1 << 0)) != 0)
                     }
+                case .dialogPeerCommunity:
+                    break
                 case .dialogPeerFolder:
                     break
                 }
@@ -1335,6 +1337,10 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                         let (peer, topMsgId) = (notifyForumTopicData.peer, notifyForumTopicData.topMsgId)
                         let notificationSettings = TelegramPeerNotificationSettings(apiSettings: apiNotificationSettings)
                         updatedState.updateNotificationSettings(.peer(peerId: peer.peerId, threadId: Int64(topMsgId)), notificationSettings: notificationSettings)
+                    case let .notifyCommunity(notifyCommunityData):
+                        let communityId = notifyCommunityData.communityId
+                        let notificationSettings = TelegramPeerNotificationSettings(apiSettings: apiNotificationSettings)
+                        updatedState.updateNotificationSettings(.peer(peerId: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(communityId)), threadId: nil), notificationSettings: notificationSettings)
                     case .notifyUsers:
                         updatedState.updateGlobalNotificationSettings(.privateChats, notificationSettings: MessageNotificationSettings(apiSettings: apiNotificationSettings))
                     case .notifyChats:
@@ -1630,12 +1636,10 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 let (flags, folderId, peer) = (updateDialogPinnedData.flags, updateDialogPinnedData.folderId, updateDialogPinnedData.peer)
                 let groupId: PeerGroupId = folderId.flatMap(PeerGroupId.init(rawValue:)) ?? .root
                 let item: PinnedItemId
-                switch peer {
-                    case let .dialogPeer(dialogPeerData):
-                        let peer = dialogPeerData.peer
-                        item = .peer(peer.peerId)
-                    case .dialogPeerFolder:
-                        preconditionFailure()
+                if let peerId = peer.peerId {
+                    item = .peer(peerId)
+                } else {
+                    preconditionFailure()
                 }
                 if (flags & (1 << 0)) != 0 {
                     updatedState.addUpdatePinnedItemIds(groupId: groupId, operation: .pin(item))
@@ -1647,15 +1651,10 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                 let groupId: PeerGroupId = folderId.flatMap(PeerGroupId.init(rawValue:)) ?? .root
                 if let order = order {
                     updatedState.addUpdatePinnedItemIds(groupId: groupId, operation: .reorder(order.map {
-                        let item: PinnedItemId
-                        switch $0 {
-                            case let .dialogPeer(dialogPeerData):
-                                let peer = dialogPeerData.peer
-                                item = .peer(peer.peerId)
-                            case .dialogPeerFolder:
-                                preconditionFailure()
+                        guard let peerId = $0.peerId else {
+                            preconditionFailure()
                         }
-                        return item
+                        return .peer(peerId)
                     }))
                 } else {
                     updatedState.addUpdatePinnedItemIds(groupId: groupId, operation: .sync)
@@ -1672,13 +1671,7 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
             case let .updatePinnedSavedDialogs(updatePinnedSavedDialogsData):
                 if let order = updatePinnedSavedDialogsData.order {
                     updatedState.addUpdatePinnedSavedItemIds(operation: .reorder(order.compactMap {
-                        switch $0 {
-                        case let .dialogPeer(dialogPeerData):
-                            let peer = dialogPeerData.peer
-                            return .peer(peer.peerId)
-                        case .dialogPeerFolder:
-                            return nil
-                        }
+                        return $0.peerId.map(PinnedItemId.peer)
                     }))
                 } else {
                     updatedState.addUpdatePinnedSavedItemIds(operation: .sync)
@@ -3040,16 +3033,16 @@ private func resolveAssociatedMessages(accountPeerId: PeerId, postbox: Postbox, 
 }
 
 private func resolveMissingPeerChatInfos(accountPeerId: PeerId, network: Network, state: AccountMutableState) -> Signal<(AccountMutableState, Bool), NoError> {
-    var missingPeers: [PeerId: Api.InputPeer] = [:]
+    var missingPeers: [PeerId: Api.InputDialogPeer] = [:]
     var hadError = false
     
     for peerId in state.initialState.peerIdsRequiringLocalChatState {
         if state.peerChatInfos[peerId] == nil {
-            if let peer = state.peers[peerId], let inputPeer = apiInputPeer(peer) {
-                missingPeers[peerId] = inputPeer
+            if let peer = state.peers[peerId], let inputDialogPeer = apiInputDialogPeer(peer) {
+                missingPeers[peerId] = inputDialogPeer
             } else {
                 hadError = true
-                Logger.shared.log("State", "can't fetch chat info for peer \(peerId): can't create inputPeer")
+                Logger.shared.log("State", "can't fetch chat info for peer \(peerId): can't create inputDialogPeer")
             }
         }
     }
@@ -3058,7 +3051,7 @@ private func resolveMissingPeerChatInfos(accountPeerId: PeerId, network: Network
         return .single((state, hadError))
     } else {
         Logger.shared.log("State", "will fetch chat info for \(missingPeers.count) peers")
-        let signal = network.request(Api.functions.messages.getPeerDialogs(peers: missingPeers.values.map { .inputDialogPeer(.init(peer: $0)) }))
+        let signal = network.request(Api.functions.messages.getPeerDialogs(peers: Array(missingPeers.values)))
         |> map(Optional.init)
         
         return signal
@@ -3138,6 +3131,11 @@ private func resolveMissingPeerChatInfos(accountPeerId: PeerId, network: Network
                                 if let pts = pts {
                                     channelStates[peer.peerId] = ChannelState(pts: pts, invalidatedPts: pts, synchronizedUntilMessageId: nil)
                                 }
+                            case let .dialogCommunity(dialogCommunityData):
+                                let peerId = peerIdFromApiCommunityId(dialogCommunityData.communityId)
+                                let notificationSettings = TelegramPeerNotificationSettings(apiSettings: dialogCommunityData.notifySettings)
+                                updatedState.updateNotificationSettings(.peer(peerId: peerId, threadId: nil), notificationSettings: notificationSettings)
+                                updatedState.peerChatInfos[peerId] = PeerChatInfo(notificationSettings: notificationSettings)
                             case .dialogFolder:
                                 assertionFailure()
                                 break
@@ -3291,8 +3289,8 @@ func keepPollingChannel(accountPeerId: PeerId, postbox: Postbox, network: Networ
 func resetChannels(accountPeerId: PeerId, postbox: Postbox, network: Network, peers: [Peer], state: AccountMutableState) -> Signal<AccountMutableState, NoError> {
     var inputPeers: [Api.InputDialogPeer] = []
     for peer in peers {
-        if let inputPeer = apiInputPeer(peer) {
-            inputPeers.append(.inputDialogPeer(.init(peer: inputPeer)))
+        if let inputDialogPeer = apiInputDialogPeer(peer) {
+            inputPeers.append(inputDialogPeer)
         }
     }
     return network.request(Api.functions.messages.getPeerDialogs(peers: inputPeers))
@@ -3357,6 +3355,10 @@ func resetChannels(accountPeerId: PeerId, postbox: Postbox, network: Network, pe
                                 apiChannelPts = pts
                                 groupId = PeerGroupId(rawValue: folderId ?? 0)
                                 apiTtlPeriod = ttlPeriod
+                            case let .dialogCommunity(dialogCommunityData):
+                                let peerId = peerIdFromApiCommunityId(dialogCommunityData.communityId)
+                                notificationSettings[peerId] = TelegramPeerNotificationSettings(apiSettings: dialogCommunityData.notifySettings)
+                                continue loop
                             case .dialogFolder:
                                 assertionFailure()
                                 continue loop
@@ -3699,6 +3701,8 @@ private func pollChannel(accountPeerId: PeerId, postbox: Postbox, network: Netwo
                     if let pts = pts {
                         parameters = (peer, pts, topMessage, readInboxMaxId, readOutboxMaxId, unreadCount, unreadMentionsCount, unreadReactionsCount, unreadPollVoteCount, ttlPeriod)
                     }
+                case .dialogCommunity:
+                    break
                 case .dialogFolder:
                     break
                 }

@@ -288,6 +288,10 @@ public extension TelegramEngine {
             return _internal_communityPeerLinkRequests(account: self.account, communityId: communityId, offset: offset, limit: limit)
         }
 
+        public func communityPeerLinkRequestsContext(communityId: PeerId, initialLimit: Int32 = 100) -> CommunityPeerLinkRequestsContext {
+            return CommunityPeerLinkRequestsContext(account: self.account, communityId: communityId, initialLimit: initialLimit)
+        }
+
         public func toggleCommunityPeerLinkRequestApproval(communityId: PeerId, peerId: PeerId, approve: Bool) -> Signal<Never, CommunityPeerRequestApprovalError> {
             return _internal_toggleCommunityPeerLinkRequestApproval(account: self.account, communityId: communityId, peerId: peerId, approve: approve)
         }

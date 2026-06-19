@@ -1205,7 +1205,7 @@ extension ChatControllerImpl {
                     }
                     return updatedState
                 })
-                self.searchResult.set(.single((results, state, .general(scope: .channels, groupId: nil, tags: nil, minDate: nil, maxDate: nil, folderId: nil))))
+                self.searchResult.set(.single((results, state, .general(scope: .channels, groupId: nil, tags: nil, minDate: nil, maxDate: nil, folderId: nil, communityId: nil))))
             }
         }
         

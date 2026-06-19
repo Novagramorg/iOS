@@ -1,4 +1,62 @@
 public extension Api.messages {
+    enum SearchCounter: TypeConstructorDescription {
+        public class Cons_searchCounter: TypeConstructorDescription {
+            public var flags: Int32
+            public var filter: Api.MessagesFilter
+            public var count: Int32
+            public init(flags: Int32, filter: Api.MessagesFilter, count: Int32) {
+                self.flags = flags
+                self.filter = filter
+                self.count = count
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("searchCounter", [("flags", ConstructorParameterDescription(self.flags)), ("filter", ConstructorParameterDescription(self.filter)), ("count", ConstructorParameterDescription(self.count))])
+            }
+        }
+        case searchCounter(Cons_searchCounter)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .searchCounter(let _data):
+                if boxed {
+                    buffer.appendInt32(-398136321)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                _data.filter.serialize(buffer, true)
+                serializeInt32(_data.count, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .searchCounter(let _data):
+                return ("searchCounter", [("flags", ConstructorParameterDescription(_data.flags)), ("filter", ConstructorParameterDescription(_data.filter)), ("count", ConstructorParameterDescription(_data.count))])
+            }
+        }
+
+        public static func parse_searchCounter(_ reader: BufferReader) -> SearchCounter? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.MessagesFilter?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.MessagesFilter
+            }
+            var _3: Int32?
+            _3 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.messages.SearchCounter.searchCounter(Cons_searchCounter(flags: _1!, filter: _2!, count: _3!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.messages {
     enum SearchResultsCalendar: TypeConstructorDescription {
         public class Cons_searchResultsCalendar: TypeConstructorDescription {
             public var flags: Int32
@@ -666,6 +724,56 @@ public extension Api.messages {
             let _c5 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _5 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 {
                 return Api.messages.TranscribedAudio.transcribedAudio(Cons_transcribedAudio(flags: _1!, transcriptionId: _2!, text: _3!, trialRemainsNum: _4, trialRemainsUntilDate: _5))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.messages {
+    enum TranslatedRichMessage: TypeConstructorDescription {
+        public class Cons_translatedRichMessage: TypeConstructorDescription {
+            public var result: [Api.RichMessage]
+            public init(result: [Api.RichMessage]) {
+                self.result = result
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("translatedRichMessage", [("result", ConstructorParameterDescription(self.result))])
+            }
+        }
+        case translatedRichMessage(Cons_translatedRichMessage)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .translatedRichMessage(let _data):
+                if boxed {
+                    buffer.appendInt32(1107532175)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.result.count))
+                for item in _data.result {
+                    item.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .translatedRichMessage(let _data):
+                return ("translatedRichMessage", [("result", ConstructorParameterDescription(_data.result))])
+            }
+        }
+
+        public static func parse_translatedRichMessage(_ reader: BufferReader) -> TranslatedRichMessage? {
+            var _1: [Api.RichMessage]?
+            if let _ = reader.readInt32() {
+                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.RichMessage.self)
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.messages.TranslatedRichMessage.translatedRichMessage(Cons_translatedRichMessage(result: _1!))
             }
             else {
                 return nil
@@ -2017,81 +2125,6 @@ public extension Api.payments {
             let _c11 = _11 != nil
             if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 {
                 return Api.payments.PaymentReceipt.paymentReceiptStars(Cons_paymentReceiptStars(flags: _1!, date: _2!, botId: _3!, title: _4!, description: _5!, photo: _6, invoice: _7!, currency: _8!, totalAmount: _9!, transactionId: _10!, users: _11!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.payments {
-    indirect enum PaymentResult: TypeConstructorDescription {
-        public class Cons_paymentResult: TypeConstructorDescription {
-            public var updates: Api.Updates
-            public init(updates: Api.Updates) {
-                self.updates = updates
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("paymentResult", [("updates", ConstructorParameterDescription(self.updates))])
-            }
-        }
-        public class Cons_paymentVerificationNeeded: TypeConstructorDescription {
-            public var url: String
-            public init(url: String) {
-                self.url = url
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("paymentVerificationNeeded", [("url", ConstructorParameterDescription(self.url))])
-            }
-        }
-        case paymentResult(Cons_paymentResult)
-        case paymentVerificationNeeded(Cons_paymentVerificationNeeded)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .paymentResult(let _data):
-                if boxed {
-                    buffer.appendInt32(1314881805)
-                }
-                _data.updates.serialize(buffer, true)
-                break
-            case .paymentVerificationNeeded(let _data):
-                if boxed {
-                    buffer.appendInt32(-666824391)
-                }
-                serializeString(_data.url, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .paymentResult(let _data):
-                return ("paymentResult", [("updates", ConstructorParameterDescription(_data.updates))])
-            case .paymentVerificationNeeded(let _data):
-                return ("paymentVerificationNeeded", [("url", ConstructorParameterDescription(_data.url))])
-            }
-        }
-
-        public static func parse_paymentResult(_ reader: BufferReader) -> PaymentResult? {
-            var _1: Api.Updates?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.Updates
-            }
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.payments.PaymentResult.paymentResult(Cons_paymentResult(updates: _1!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_paymentVerificationNeeded(_ reader: BufferReader) -> PaymentResult? {
-            var _1: String?
-            _1 = parseString(reader)
-            let _c1 = _1 != nil
-            if _c1 {
-                return Api.payments.PaymentResult.paymentVerificationNeeded(Cons_paymentVerificationNeeded(url: _1!))
             }
             else {
                 return nil

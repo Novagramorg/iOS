@@ -51,6 +51,7 @@ private final class CommunitiesScreenComponent: Component {
     final class View: UIView, UIScrollViewDelegate {
         private let scrollView: ScrollView
 
+        private let avatarShadow = UIImageView()
         private let peerAvatar = ComponentView<Empty>()
         private let navigationTitle = ComponentView<Empty>()
         private let titleTransformContainer: UIView
@@ -89,7 +90,9 @@ private final class CommunitiesScreenComponent: Component {
 
             self.titleTransformContainer = UIView()
             self.titleTransformContainer.isUserInteractionEnabled = false
-
+            
+            self.avatarShadow.image = UIImage(bundleImageName: "Components/CommunityShadow")
+            
             super.init(frame: frame)
 
             self.scrollView.delegate = self
@@ -403,16 +406,26 @@ private final class CommunitiesScreenComponent: Component {
                 )
                 if let avatarView = self.peerAvatar.view {
                     if avatarView.superview == nil {
+                        self.scrollView.addSubview(self.avatarShadow)
                         self.scrollView.addSubview(avatarView)
                     }
-                    transition.setFrame(view: avatarView, frame: CGRect(
+                    let avatarFrame = CGRect(
                         origin: CGPoint(
                             x: floorToScreenPixels((availableSize.width - avatarSize.width) / 2.0),
                             y: contentHeight
                         ),
                         size: avatarSize
-                    ))
-                    transition.setAlpha(view: avatarView, alpha: 1.0)
+                    )
+                    transition.setFrame(view: avatarView, frame: avatarFrame)
+                    
+                    if let shadowImage = self.avatarShadow.image {
+                        self.avatarShadow.tintColor = theme.list.freeTextColor
+                        
+                        let aspectRatio = shadowImage.size.width / shadowImage.size.height
+                        let shadowSize = CGSize(width: avatarSize.width * aspectRatio, height: avatarSize.width)
+                        let shadowFrame = shadowSize.centered(around: avatarFrame.center).offsetBy(dx: -13.0, dy: 0.0)
+                        transition.setFrame(view: self.avatarShadow, frame: shadowFrame)
+                    }
                 }
 
                 contentHeight += avatarSize.height + 18.0

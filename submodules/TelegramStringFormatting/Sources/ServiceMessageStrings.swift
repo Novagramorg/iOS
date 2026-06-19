@@ -1899,13 +1899,22 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 }
             case let .communityChanged(communityId):
                 var communityName = ""
+                let peerName = message.author?.compactDisplayTitle ?? ""
                 if let communityId, let community = message.peers[communityId] as? TelegramCommunity {
                     communityName = community.title
                 }
                 if !communityName.isEmpty {
-                    attributedString = NSAttributedString(string: "Added to \"\(communityName)\" community", font: titleFont, textColor: primaryTextColor)
+                    if message.author?.id == accountPeerId {
+                        attributedString = NSAttributedString(string: "You added this group to \"\(communityName)\" community", font: titleFont, textColor: primaryTextColor)
+                    } else {
+                        attributedString = NSAttributedString(string: "\(peerName) added this group to \"\(communityName)\" community", font: titleFont, textColor: primaryTextColor)
+                    }
                 } else {
-                    attributedString = NSAttributedString(string: "Removed from a community", font: titleFont, textColor: primaryTextColor)
+                    if message.author?.id == accountPeerId {
+                        attributedString = NSAttributedString(string: "You removed this group from a community", font: titleFont, textColor: primaryTextColor)
+                    } else {
+                        attributedString = NSAttributedString(string: "\(peerName) removed this group from a community", font: titleFont, textColor: primaryTextColor)
+                    }
                 }
             case .unknown:
                 attributedString = nil

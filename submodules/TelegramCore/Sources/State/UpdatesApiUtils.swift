@@ -290,7 +290,22 @@ extension Api.Dialog {
         switch self {
             case let .dialog(dialogData):
                 return dialogData.peer.peerId
+            case let .dialogCommunity(dialogCommunityData):
+                return peerIdFromApiCommunityId(dialogCommunityData.communityId)
             case .dialogFolder:
+                return nil
+        }
+    }
+}
+
+extension Api.DialogPeer {
+    var peerId: PeerId? {
+        switch self {
+            case let .dialogPeer(dialogPeerData):
+                return dialogPeerData.peer.peerId
+            case let .dialogPeerCommunity(dialogPeerCommunityData):
+                return peerIdFromApiCommunityId(dialogPeerCommunityData.communityId)
+            case .dialogPeerFolder:
                 return nil
         }
     }

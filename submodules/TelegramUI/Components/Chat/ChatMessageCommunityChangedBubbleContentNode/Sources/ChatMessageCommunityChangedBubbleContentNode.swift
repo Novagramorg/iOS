@@ -29,6 +29,7 @@ private func communityChangedPeer(message: EngineRawMessage) -> (EnginePeer.Id, 
 public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleContentNode {
     private var mediaBackgroundContent: WallpaperBubbleBackgroundNode?
     private let mediaBackgroundNode: NavigationBackgroundNode
+    private let avatarShadowNode: ASImageNode
     private let avatarNode: AvatarNode
     private let subtitleNode: TextNode
     
@@ -42,6 +43,11 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
         self.mediaBackgroundNode.clipsToBounds = true
         self.mediaBackgroundNode.cornerRadius = 24.0
         
+        self.avatarShadowNode = ASImageNode()
+        self.avatarShadowNode.displaysAsynchronously = false
+        self.avatarShadowNode.displayWithoutProcessing = true
+        self.avatarShadowNode.isHidden = true
+
         self.avatarNode = AvatarNode(font: avatarPlaceholderFont(size: 28.0))
         self.avatarNode.isUserInteractionEnabled = false
         
@@ -60,6 +66,7 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
         super.init()
         
         self.addSubnode(self.mediaBackgroundNode)
+        self.addSubnode(self.avatarShadowNode)
         self.addSubnode(self.avatarNode)
         self.addSubnode(self.subtitleNode)
         self.addSubnode(self.buttonNode)
@@ -121,7 +128,11 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                 } ?? ""
                 let text: String
                 if let community {
-                    text = "\(authorName) added this group to \(community.title) community."
+                    if item.message.author?.id == item.context.account.peerId {
+                        text = "You added this group to \(community.title) community."
+                    } else {
+                        text = "\(authorName) added this group to \(community.title) community."
+                    }
                 } else {
                     text = "\(authorName) added this group to a community."
                 }
@@ -143,9 +154,20 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                         strongSelf.mediaBackgroundNode.frame = mediaBackgroundFrame
                         strongSelf.mediaBackgroundNode.updateColor(color: selectDateFillStaticColor(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), enableBlur: item.controllerInteraction.enableFullTranslucency && dateFillNeedsBlur(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper), transition: .immediate)
                         strongSelf.mediaBackgroundNode.update(size: mediaBackgroundFrame.size, transition: .immediate)
-                        strongSelf.buttonNode.backgroundColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor(rgb: 0xffffff, alpha: 0.12) : UIColor(rgb: 0x000000, alpha: 0.12)
+                        let buttonColor = item.presentationData.theme.theme.overallDarkAppearance ? UIColor(rgb: 0xffffff, alpha: 0.12) : UIColor(rgb: 0x000000, alpha: 0.12)
+                        strongSelf.buttonNode.backgroundColor = buttonColor
                         
                         let avatarFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((backgroundSize.width - imageSize.width) / 2.0), y: 15.0), size: imageSize)
+                        if let shadowImage = UIImage(bundleImageName: "Components/CommunityShadow"), community != nil {
+                            strongSelf.avatarShadowNode.isHidden = false
+                            strongSelf.avatarShadowNode.image = generateTintedImage(image: shadowImage, color: buttonColor.withMultipliedAlpha(4.0))
+
+                            let aspectRatio = shadowImage.size.width / shadowImage.size.height
+                            let shadowSize = CGSize(width: imageSize.width * aspectRatio, height: imageSize.width)
+                            strongSelf.avatarShadowNode.frame = shadowSize.centered(around: avatarFrame.center).offsetBy(dx: -12.0, dy: 0.0)
+                        } else {
+                            strongSelf.avatarShadowNode.isHidden = true
+                        }
                         strongSelf.avatarNode.frame = avatarFrame
                         if let community {
                             strongSelf.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme.theme, peer: EnginePeer(community), clipStyle: .roundedRect, synchronousLoad: synchronousLoads, displayDimensions: imageSize)

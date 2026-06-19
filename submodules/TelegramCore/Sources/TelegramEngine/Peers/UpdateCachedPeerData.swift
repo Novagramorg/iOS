@@ -969,7 +969,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                 }
                                             }
                                         case let .communityFull(communityFullData):
-                                            let (about, chatPhoto, apiLinkedPeers, adminsCount, pendingRequests) = (communityFullData.about, communityFullData.chatPhoto, communityFullData.linkedPeers, communityFullData.adminsCount, communityFullData.pendingRequests)
+                                            let (about, chatPhoto, apiLinkedPeers, adminsCount, kickedCount, pendingRequests) = (communityFullData.about, communityFullData.chatPhoto, communityFullData.linkedPeers, communityFullData.adminsCount, communityFullData.kickedCount, communityFullData.peerLinkRequestsPending)
                                             
                                             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
@@ -1006,6 +1006,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                     .withUpdatedPhoto(photo)
                                                     .withUpdatedLinkedPeers(linkedPeers)
                                                     .withUpdatedAdminsCount(adminsCount)
+                                                    .withUpdatedKickedCount(kickedCount)
                                                     .withUpdatedPendingRequests(pendingRequests)
                                             })
                                         case .chatFull:

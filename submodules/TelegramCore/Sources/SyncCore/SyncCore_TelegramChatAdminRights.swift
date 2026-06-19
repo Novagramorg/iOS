@@ -40,7 +40,7 @@ public struct TelegramChatAdminRightsFlags: OptionSet, Hashable {
     }
     
     public static var allCommunity: TelegramChatAdminRightsFlags {
-        return [.canChangeInfo, .canBanUsers, .canManageLinkedPeers]
+        return [.canChangeInfo, .canBanUsers, .canManageLinkedPeers, .canAddAdmins]
     }
     
     public static let internal_groupSpecific: TelegramChatAdminRightsFlags = [

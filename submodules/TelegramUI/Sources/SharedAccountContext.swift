@@ -2714,10 +2714,32 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         completion: @escaping (UIImage?) -> Void,
         completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
     ) {
+        self.displaySetPhoto(
+            parentController: parentController,
+            context: context,
+            peer: peer,
+            canDelete: !peer.profileImageRepresentations.isEmpty,
+            performDelete: {},
+            completion: completion,
+            completedWithUploadingImage: completedWithUploadingImage
+        )
+    }
+
+    public func displaySetPhoto(
+        parentController: ViewController,
+        context: AccountContext,
+        peer: EnginePeer,
+        canDelete: Bool,
+        performDelete: @escaping () -> Void,
+        completion: @escaping (UIImage?) -> Void,
+        completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
+    ) {
         PeerInfoScreenImpl.displaySetPhoto(
             parentController: parentController,
             context: context,
             peer: peer,
+            canDelete: canDelete,
+            performDelete: performDelete,
             completion: completion,
             completedWithUploadingImage: completedWithUploadingImage
         )
@@ -4330,11 +4352,19 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
 
     public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
-        return CommunityRequestsScreen(context: context, communityId: communityId)
+        return self.makeCommunityRequestsScreen(context: context, communityId: communityId, existingContext: nil)
+    }
+
+    public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController {
+        return CommunityRequestsScreen(context: context, communityId: communityId, existingContext: existingContext)
     }
 
     public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
-        return CommunityViewScreen(context: context, communityId: communityId)
+        return self.makeCommunityViewScreen(context: context, communityId: communityId, style: .grouped, presentation: .sheet)
+    }
+
+    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) -> ViewController {
+        return CommunityViewScreen(context: context, communityId: communityId, style: style, presentation: presentation)
     }
 
     public func makeCocoonInfoScreen(context: AccountContext) -> ViewController {

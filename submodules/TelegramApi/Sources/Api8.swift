@@ -1,4 +1,492 @@
 public extension Api {
+    enum GeoPoint: TypeConstructorDescription {
+        public class Cons_geoPoint: TypeConstructorDescription {
+            public var flags: Int32
+            public var long: Double
+            public var lat: Double
+            public var accessHash: Int64
+            public var accuracyRadius: Int32?
+            public init(flags: Int32, long: Double, lat: Double, accessHash: Int64, accuracyRadius: Int32?) {
+                self.flags = flags
+                self.long = long
+                self.lat = lat
+                self.accessHash = accessHash
+                self.accuracyRadius = accuracyRadius
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("geoPoint", [("flags", ConstructorParameterDescription(self.flags)), ("long", ConstructorParameterDescription(self.long)), ("lat", ConstructorParameterDescription(self.lat)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("accuracyRadius", ConstructorParameterDescription(self.accuracyRadius))])
+            }
+        }
+        case geoPoint(Cons_geoPoint)
+        case geoPointEmpty
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .geoPoint(let _data):
+                if boxed {
+                    buffer.appendInt32(-1297942941)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeDouble(_data.long, buffer: buffer, boxed: false)
+                serializeDouble(_data.lat, buffer: buffer, boxed: false)
+                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeInt32(_data.accuracyRadius!, buffer: buffer, boxed: false)
+                }
+                break
+            case .geoPointEmpty:
+                if boxed {
+                    buffer.appendInt32(286776671)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .geoPoint(let _data):
+                return ("geoPoint", [("flags", ConstructorParameterDescription(_data.flags)), ("long", ConstructorParameterDescription(_data.long)), ("lat", ConstructorParameterDescription(_data.lat)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("accuracyRadius", ConstructorParameterDescription(_data.accuracyRadius))])
+            case .geoPointEmpty:
+                return ("geoPointEmpty", [])
+            }
+        }
+
+        public static func parse_geoPoint(_ reader: BufferReader) -> GeoPoint? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Double?
+            _2 = reader.readDouble()
+            var _3: Double?
+            _3 = reader.readDouble()
+            var _4: Int64?
+            _4 = reader.readInt64()
+            var _5: Int32?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _5 = reader.readInt32()
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.GeoPoint.geoPoint(Cons_geoPoint(flags: _1!, long: _2!, lat: _3!, accessHash: _4!, accuracyRadius: _5))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_geoPointEmpty(_ reader: BufferReader) -> GeoPoint? {
+            return Api.GeoPoint.geoPointEmpty
+        }
+    }
+}
+public extension Api {
+    enum GeoPointAddress: TypeConstructorDescription {
+        public class Cons_geoPointAddress: TypeConstructorDescription {
+            public var flags: Int32
+            public var countryIso2: String
+            public var state: String?
+            public var city: String?
+            public var street: String?
+            public init(flags: Int32, countryIso2: String, state: String?, city: String?, street: String?) {
+                self.flags = flags
+                self.countryIso2 = countryIso2
+                self.state = state
+                self.city = city
+                self.street = street
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("geoPointAddress", [("flags", ConstructorParameterDescription(self.flags)), ("countryIso2", ConstructorParameterDescription(self.countryIso2)), ("state", ConstructorParameterDescription(self.state)), ("city", ConstructorParameterDescription(self.city)), ("street", ConstructorParameterDescription(self.street))])
+            }
+        }
+        case geoPointAddress(Cons_geoPointAddress)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .geoPointAddress(let _data):
+                if boxed {
+                    buffer.appendInt32(-565420653)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeString(_data.countryIso2, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    serializeString(_data.state!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    serializeString(_data.city!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 2) != 0 {
+                    serializeString(_data.street!, buffer: buffer, boxed: false)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .geoPointAddress(let _data):
+                return ("geoPointAddress", [("flags", ConstructorParameterDescription(_data.flags)), ("countryIso2", ConstructorParameterDescription(_data.countryIso2)), ("state", ConstructorParameterDescription(_data.state)), ("city", ConstructorParameterDescription(_data.city)), ("street", ConstructorParameterDescription(_data.street))])
+            }
+        }
+
+        public static func parse_geoPointAddress(_ reader: BufferReader) -> GeoPointAddress? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: String?
+            _2 = parseString(reader)
+            var _3: String?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                _3 = parseString(reader)
+            }
+            var _4: String?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                _4 = parseString(reader)
+            }
+            var _5: String?
+            if Int(_1 ?? 0) & Int(1 << 2) != 0 {
+                _5 = parseString(reader)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.GeoPointAddress.geoPointAddress(Cons_geoPointAddress(flags: _1!, countryIso2: _2!, state: _3, city: _4, street: _5))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum GlobalPrivacySettings: TypeConstructorDescription {
+        public class Cons_globalPrivacySettings: TypeConstructorDescription {
+            public var flags: Int32
+            public var noncontactPeersPaidStars: Int64?
+            public var disallowedGifts: Api.DisallowedGiftsSettings?
+            public init(flags: Int32, noncontactPeersPaidStars: Int64?, disallowedGifts: Api.DisallowedGiftsSettings?) {
+                self.flags = flags
+                self.noncontactPeersPaidStars = noncontactPeersPaidStars
+                self.disallowedGifts = disallowedGifts
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("globalPrivacySettings", [("flags", ConstructorParameterDescription(self.flags)), ("noncontactPeersPaidStars", ConstructorParameterDescription(self.noncontactPeersPaidStars)), ("disallowedGifts", ConstructorParameterDescription(self.disallowedGifts))])
+            }
+        }
+        case globalPrivacySettings(Cons_globalPrivacySettings)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .globalPrivacySettings(let _data):
+                if boxed {
+                    buffer.appendInt32(-29248689)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 5) != 0 {
+                    serializeInt64(_data.noncontactPeersPaidStars!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 6) != 0 {
+                    _data.disallowedGifts!.serialize(buffer, true)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .globalPrivacySettings(let _data):
+                return ("globalPrivacySettings", [("flags", ConstructorParameterDescription(_data.flags)), ("noncontactPeersPaidStars", ConstructorParameterDescription(_data.noncontactPeersPaidStars)), ("disallowedGifts", ConstructorParameterDescription(_data.disallowedGifts))])
+            }
+        }
+
+        public static func parse_globalPrivacySettings(_ reader: BufferReader) -> GlobalPrivacySettings? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
+                _2 = reader.readInt64()
+            }
+            var _3: Api.DisallowedGiftsSettings?
+            if Int(_1 ?? 0) & Int(1 << 6) != 0 {
+                if let signature = reader.readInt32() {
+                    _3 = Api.parse(reader, signature: signature) as? Api.DisallowedGiftsSettings
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _2 != nil
+            let _c3 = (Int(_1 ?? 0) & Int(1 << 6) == 0) || _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.GlobalPrivacySettings.globalPrivacySettings(Cons_globalPrivacySettings(flags: _1!, noncontactPeersPaidStars: _2, disallowedGifts: _3))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum GroupCall: TypeConstructorDescription {
+        public class Cons_groupCall: TypeConstructorDescription {
+            public var flags: Int32
+            public var id: Int64
+            public var accessHash: Int64
+            public var participantsCount: Int32
+            public var title: String?
+            public var streamDcId: Int32?
+            public var recordStartDate: Int32?
+            public var scheduleDate: Int32?
+            public var unmutedVideoCount: Int32?
+            public var unmutedVideoLimit: Int32
+            public var version: Int32
+            public var inviteLink: String?
+            public var sendPaidMessagesStars: Int64?
+            public var defaultSendAs: Api.Peer?
+            public init(flags: Int32, id: Int64, accessHash: Int64, participantsCount: Int32, title: String?, streamDcId: Int32?, recordStartDate: Int32?, scheduleDate: Int32?, unmutedVideoCount: Int32?, unmutedVideoLimit: Int32, version: Int32, inviteLink: String?, sendPaidMessagesStars: Int64?, defaultSendAs: Api.Peer?) {
+                self.flags = flags
+                self.id = id
+                self.accessHash = accessHash
+                self.participantsCount = participantsCount
+                self.title = title
+                self.streamDcId = streamDcId
+                self.recordStartDate = recordStartDate
+                self.scheduleDate = scheduleDate
+                self.unmutedVideoCount = unmutedVideoCount
+                self.unmutedVideoLimit = unmutedVideoLimit
+                self.version = version
+                self.inviteLink = inviteLink
+                self.sendPaidMessagesStars = sendPaidMessagesStars
+                self.defaultSendAs = defaultSendAs
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("groupCall", [("flags", ConstructorParameterDescription(self.flags)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("participantsCount", ConstructorParameterDescription(self.participantsCount)), ("title", ConstructorParameterDescription(self.title)), ("streamDcId", ConstructorParameterDescription(self.streamDcId)), ("recordStartDate", ConstructorParameterDescription(self.recordStartDate)), ("scheduleDate", ConstructorParameterDescription(self.scheduleDate)), ("unmutedVideoCount", ConstructorParameterDescription(self.unmutedVideoCount)), ("unmutedVideoLimit", ConstructorParameterDescription(self.unmutedVideoLimit)), ("version", ConstructorParameterDescription(self.version)), ("inviteLink", ConstructorParameterDescription(self.inviteLink)), ("sendPaidMessagesStars", ConstructorParameterDescription(self.sendPaidMessagesStars)), ("defaultSendAs", ConstructorParameterDescription(self.defaultSendAs))])
+            }
+        }
+        public class Cons_groupCallDiscarded: TypeConstructorDescription {
+            public var id: Int64
+            public var accessHash: Int64
+            public var duration: Int32
+            public init(id: Int64, accessHash: Int64, duration: Int32) {
+                self.id = id
+                self.accessHash = accessHash
+                self.duration = duration
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("groupCallDiscarded", [("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("duration", ConstructorParameterDescription(self.duration))])
+            }
+        }
+        case groupCall(Cons_groupCall)
+        case groupCallDiscarded(Cons_groupCallDiscarded)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .groupCall(let _data):
+                if boxed {
+                    buffer.appendInt32(-273500649)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt64(_data.id, buffer: buffer, boxed: false)
+                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
+                serializeInt32(_data.participantsCount, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 3) != 0 {
+                    serializeString(_data.title!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 4) != 0 {
+                    serializeInt32(_data.streamDcId!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 5) != 0 {
+                    serializeInt32(_data.recordStartDate!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 7) != 0 {
+                    serializeInt32(_data.scheduleDate!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 10) != 0 {
+                    serializeInt32(_data.unmutedVideoCount!, buffer: buffer, boxed: false)
+                }
+                serializeInt32(_data.unmutedVideoLimit, buffer: buffer, boxed: false)
+                serializeInt32(_data.version, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 16) != 0 {
+                    serializeString(_data.inviteLink!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 20) != 0 {
+                    serializeInt64(_data.sendPaidMessagesStars!, buffer: buffer, boxed: false)
+                }
+                if Int(_data.flags) & Int(1 << 21) != 0 {
+                    _data.defaultSendAs!.serialize(buffer, true)
+                }
+                break
+            case .groupCallDiscarded(let _data):
+                if boxed {
+                    buffer.appendInt32(2004925620)
+                }
+                serializeInt64(_data.id, buffer: buffer, boxed: false)
+                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
+                serializeInt32(_data.duration, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .groupCall(let _data):
+                return ("groupCall", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("participantsCount", ConstructorParameterDescription(_data.participantsCount)), ("title", ConstructorParameterDescription(_data.title)), ("streamDcId", ConstructorParameterDescription(_data.streamDcId)), ("recordStartDate", ConstructorParameterDescription(_data.recordStartDate)), ("scheduleDate", ConstructorParameterDescription(_data.scheduleDate)), ("unmutedVideoCount", ConstructorParameterDescription(_data.unmutedVideoCount)), ("unmutedVideoLimit", ConstructorParameterDescription(_data.unmutedVideoLimit)), ("version", ConstructorParameterDescription(_data.version)), ("inviteLink", ConstructorParameterDescription(_data.inviteLink)), ("sendPaidMessagesStars", ConstructorParameterDescription(_data.sendPaidMessagesStars)), ("defaultSendAs", ConstructorParameterDescription(_data.defaultSendAs))])
+            case .groupCallDiscarded(let _data):
+                return ("groupCallDiscarded", [("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("duration", ConstructorParameterDescription(_data.duration))])
+            }
+        }
+
+        public static func parse_groupCall(_ reader: BufferReader) -> GroupCall? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int64?
+            _3 = reader.readInt64()
+            var _4: Int32?
+            _4 = reader.readInt32()
+            var _5: String?
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
+                _5 = parseString(reader)
+            }
+            var _6: Int32?
+            if Int(_1 ?? 0) & Int(1 << 4) != 0 {
+                _6 = reader.readInt32()
+            }
+            var _7: Int32?
+            if Int(_1 ?? 0) & Int(1 << 5) != 0 {
+                _7 = reader.readInt32()
+            }
+            var _8: Int32?
+            if Int(_1 ?? 0) & Int(1 << 7) != 0 {
+                _8 = reader.readInt32()
+            }
+            var _9: Int32?
+            if Int(_1 ?? 0) & Int(1 << 10) != 0 {
+                _9 = reader.readInt32()
+            }
+            var _10: Int32?
+            _10 = reader.readInt32()
+            var _11: Int32?
+            _11 = reader.readInt32()
+            var _12: String?
+            if Int(_1 ?? 0) & Int(1 << 16) != 0 {
+                _12 = parseString(reader)
+            }
+            var _13: Int64?
+            if Int(_1 ?? 0) & Int(1 << 20) != 0 {
+                _13 = reader.readInt64()
+            }
+            var _14: Api.Peer?
+            if Int(_1 ?? 0) & Int(1 << 21) != 0 {
+                if let signature = reader.readInt32() {
+                    _14 = Api.parse(reader, signature: signature) as? Api.Peer
+                }
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _5 != nil
+            let _c6 = (Int(_1 ?? 0) & Int(1 << 4) == 0) || _6 != nil
+            let _c7 = (Int(_1 ?? 0) & Int(1 << 5) == 0) || _7 != nil
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 7) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 10) == 0) || _9 != nil
+            let _c10 = _10 != nil
+            let _c11 = _11 != nil
+            let _c12 = (Int(_1 ?? 0) & Int(1 << 16) == 0) || _12 != nil
+            let _c13 = (Int(_1 ?? 0) & Int(1 << 20) == 0) || _13 != nil
+            let _c14 = (Int(_1 ?? 0) & Int(1 << 21) == 0) || _14 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 && _c11 && _c12 && _c13 && _c14 {
+                return Api.GroupCall.groupCall(Cons_groupCall(flags: _1!, id: _2!, accessHash: _3!, participantsCount: _4!, title: _5, streamDcId: _6, recordStartDate: _7, scheduleDate: _8, unmutedVideoCount: _9, unmutedVideoLimit: _10!, version: _11!, inviteLink: _12, sendPaidMessagesStars: _13, defaultSendAs: _14))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_groupCallDiscarded(_ reader: BufferReader) -> GroupCall? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: Int64?
+            _2 = reader.readInt64()
+            var _3: Int32?
+            _3 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.GroupCall.groupCallDiscarded(Cons_groupCallDiscarded(id: _1!, accessHash: _2!, duration: _3!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
+    enum GroupCallDonor: TypeConstructorDescription {
+        public class Cons_groupCallDonor: TypeConstructorDescription {
+            public var flags: Int32
+            public var peerId: Api.Peer?
+            public var stars: Int64
+            public init(flags: Int32, peerId: Api.Peer?, stars: Int64) {
+                self.flags = flags
+                self.peerId = peerId
+                self.stars = stars
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("groupCallDonor", [("flags", ConstructorParameterDescription(self.flags)), ("peerId", ConstructorParameterDescription(self.peerId)), ("stars", ConstructorParameterDescription(self.stars))])
+            }
+        }
+        case groupCallDonor(Cons_groupCallDonor)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .groupCallDonor(let _data):
+                if boxed {
+                    buffer.appendInt32(-297595771)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 3) != 0 {
+                    _data.peerId!.serialize(buffer, true)
+                }
+                serializeInt64(_data.stars, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .groupCallDonor(let _data):
+                return ("groupCallDonor", [("flags", ConstructorParameterDescription(_data.flags)), ("peerId", ConstructorParameterDescription(_data.peerId)), ("stars", ConstructorParameterDescription(_data.stars))])
+            }
+        }
+
+        public static func parse_groupCallDonor(_ reader: BufferReader) -> GroupCallDonor? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.Peer?
+            if Int(_1 ?? 0) & Int(1 << 3) != 0 {
+                if let signature = reader.readInt32() {
+                    _2 = Api.parse(reader, signature: signature) as? Api.Peer
+                }
+            }
+            var _3: Int64?
+            _3 = reader.readInt64()
+            let _c1 = _1 != nil
+            let _c2 = (Int(_1 ?? 0) & Int(1 << 3) == 0) || _2 != nil
+            let _c3 = _3 != nil
+            if _c1 && _c2 && _c3 {
+                return Api.GroupCallDonor.groupCallDonor(Cons_groupCallDonor(flags: _1!, peerId: _2, stars: _3!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     enum GroupCallMessage: TypeConstructorDescription {
         public class Cons_groupCallMessage: TypeConstructorDescription {
             public var flags: Int32
@@ -1557,109 +2045,6 @@ public extension Api {
             let _c4 = (Int(_1 ?? 0) & Int(1 << 2) == 0) || _4 != nil
             if _c1 && _c2 && _c3 && _c4 {
                 return Api.InputBotInlineMessage.inputBotInlineMessageText(Cons_inputBotInlineMessageText(flags: _1!, message: _2!, entities: _3, replyMarkup: _4))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api {
-    enum InputBotInlineMessageID: TypeConstructorDescription {
-        public class Cons_inputBotInlineMessageID: TypeConstructorDescription {
-            public var dcId: Int32
-            public var id: Int64
-            public var accessHash: Int64
-            public init(dcId: Int32, id: Int64, accessHash: Int64) {
-                self.dcId = dcId
-                self.id = id
-                self.accessHash = accessHash
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputBotInlineMessageID", [("dcId", ConstructorParameterDescription(self.dcId)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash))])
-            }
-        }
-        public class Cons_inputBotInlineMessageID64: TypeConstructorDescription {
-            public var dcId: Int32
-            public var ownerId: Int64
-            public var id: Int32
-            public var accessHash: Int64
-            public init(dcId: Int32, ownerId: Int64, id: Int32, accessHash: Int64) {
-                self.dcId = dcId
-                self.ownerId = ownerId
-                self.id = id
-                self.accessHash = accessHash
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("inputBotInlineMessageID64", [("dcId", ConstructorParameterDescription(self.dcId)), ("ownerId", ConstructorParameterDescription(self.ownerId)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash))])
-            }
-        }
-        case inputBotInlineMessageID(Cons_inputBotInlineMessageID)
-        case inputBotInlineMessageID64(Cons_inputBotInlineMessageID64)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .inputBotInlineMessageID(let _data):
-                if boxed {
-                    buffer.appendInt32(-1995686519)
-                }
-                serializeInt32(_data.dcId, buffer: buffer, boxed: false)
-                serializeInt64(_data.id, buffer: buffer, boxed: false)
-                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
-                break
-            case .inputBotInlineMessageID64(let _data):
-                if boxed {
-                    buffer.appendInt32(-1227287081)
-                }
-                serializeInt32(_data.dcId, buffer: buffer, boxed: false)
-                serializeInt64(_data.ownerId, buffer: buffer, boxed: false)
-                serializeInt32(_data.id, buffer: buffer, boxed: false)
-                serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .inputBotInlineMessageID(let _data):
-                return ("inputBotInlineMessageID", [("dcId", ConstructorParameterDescription(_data.dcId)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash))])
-            case .inputBotInlineMessageID64(let _data):
-                return ("inputBotInlineMessageID64", [("dcId", ConstructorParameterDescription(_data.dcId)), ("ownerId", ConstructorParameterDescription(_data.ownerId)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash))])
-            }
-        }
-
-        public static func parse_inputBotInlineMessageID(_ reader: BufferReader) -> InputBotInlineMessageID? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: Int64?
-            _3 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.InputBotInlineMessageID.inputBotInlineMessageID(Cons_inputBotInlineMessageID(dcId: _1!, id: _2!, accessHash: _3!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_inputBotInlineMessageID64(_ reader: BufferReader) -> InputBotInlineMessageID? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Int64?
-            _2 = reader.readInt64()
-            var _3: Int32?
-            _3 = reader.readInt32()
-            var _4: Int64?
-            _4 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            let _c4 = _4 != nil
-            if _c1 && _c2 && _c3 && _c4 {
-                return Api.InputBotInlineMessageID.inputBotInlineMessageID64(Cons_inputBotInlineMessageID64(dcId: _1!, ownerId: _2!, id: _3!, accessHash: _4!))
             }
             else {
                 return nil

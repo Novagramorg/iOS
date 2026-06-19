@@ -1,4 +1,71 @@
 public extension Api.messages {
+    enum FoundStickerSets: TypeConstructorDescription {
+        public class Cons_foundStickerSets: TypeConstructorDescription {
+            public var hash: Int64
+            public var sets: [Api.StickerSetCovered]
+            public init(hash: Int64, sets: [Api.StickerSetCovered]) {
+                self.hash = hash
+                self.sets = sets
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("foundStickerSets", [("hash", ConstructorParameterDescription(self.hash)), ("sets", ConstructorParameterDescription(self.sets))])
+            }
+        }
+        case foundStickerSets(Cons_foundStickerSets)
+        case foundStickerSetsNotModified
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .foundStickerSets(let _data):
+                if boxed {
+                    buffer.appendInt32(-1963942446)
+                }
+                serializeInt64(_data.hash, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.sets.count))
+                for item in _data.sets {
+                    item.serialize(buffer, true)
+                }
+                break
+            case .foundStickerSetsNotModified:
+                if boxed {
+                    buffer.appendInt32(223655517)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .foundStickerSets(let _data):
+                return ("foundStickerSets", [("hash", ConstructorParameterDescription(_data.hash)), ("sets", ConstructorParameterDescription(_data.sets))])
+            case .foundStickerSetsNotModified:
+                return ("foundStickerSetsNotModified", [])
+            }
+        }
+
+        public static func parse_foundStickerSets(_ reader: BufferReader) -> FoundStickerSets? {
+            var _1: Int64?
+            _1 = reader.readInt64()
+            var _2: [Api.StickerSetCovered]?
+            if let _ = reader.readInt32() {
+                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.StickerSetCovered.self)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            if _c1 && _c2 {
+                return Api.messages.FoundStickerSets.foundStickerSets(Cons_foundStickerSets(hash: _1!, sets: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_foundStickerSetsNotModified(_ reader: BufferReader) -> FoundStickerSets? {
+            return Api.messages.FoundStickerSets.foundStickerSetsNotModified
+        }
+    }
+}
+public extension Api.messages {
     enum FoundStickers: TypeConstructorDescription {
         public class Cons_foundStickers: TypeConstructorDescription {
             public var flags: Int32
@@ -1824,64 +1891,6 @@ public extension Api.messages {
         }
         public static func parse_savedReactionTagsNotModified(_ reader: BufferReader) -> SavedReactionTags? {
             return Api.messages.SavedReactionTags.savedReactionTagsNotModified
-        }
-    }
-}
-public extension Api.messages {
-    enum SearchCounter: TypeConstructorDescription {
-        public class Cons_searchCounter: TypeConstructorDescription {
-            public var flags: Int32
-            public var filter: Api.MessagesFilter
-            public var count: Int32
-            public init(flags: Int32, filter: Api.MessagesFilter, count: Int32) {
-                self.flags = flags
-                self.filter = filter
-                self.count = count
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("searchCounter", [("flags", ConstructorParameterDescription(self.flags)), ("filter", ConstructorParameterDescription(self.filter)), ("count", ConstructorParameterDescription(self.count))])
-            }
-        }
-        case searchCounter(Cons_searchCounter)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .searchCounter(let _data):
-                if boxed {
-                    buffer.appendInt32(-398136321)
-                }
-                serializeInt32(_data.flags, buffer: buffer, boxed: false)
-                _data.filter.serialize(buffer, true)
-                serializeInt32(_data.count, buffer: buffer, boxed: false)
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .searchCounter(let _data):
-                return ("searchCounter", [("flags", ConstructorParameterDescription(_data.flags)), ("filter", ConstructorParameterDescription(_data.filter)), ("count", ConstructorParameterDescription(_data.count))])
-            }
-        }
-
-        public static func parse_searchCounter(_ reader: BufferReader) -> SearchCounter? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: Api.MessagesFilter?
-            if let signature = reader.readInt32() {
-                _2 = Api.parse(reader, signature: signature) as? Api.MessagesFilter
-            }
-            var _3: Int32?
-            _3 = reader.readInt32()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.messages.SearchCounter.searchCounter(Cons_searchCounter(flags: _1!, filter: _2!, count: _3!))
-            }
-            else {
-                return nil
-            }
         }
     }
 }

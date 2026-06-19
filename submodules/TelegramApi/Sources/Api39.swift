@@ -1,4 +1,79 @@
 public extension Api.payments {
+    indirect enum PaymentResult: TypeConstructorDescription {
+        public class Cons_paymentResult: TypeConstructorDescription {
+            public var updates: Api.Updates
+            public init(updates: Api.Updates) {
+                self.updates = updates
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("paymentResult", [("updates", ConstructorParameterDescription(self.updates))])
+            }
+        }
+        public class Cons_paymentVerificationNeeded: TypeConstructorDescription {
+            public var url: String
+            public init(url: String) {
+                self.url = url
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("paymentVerificationNeeded", [("url", ConstructorParameterDescription(self.url))])
+            }
+        }
+        case paymentResult(Cons_paymentResult)
+        case paymentVerificationNeeded(Cons_paymentVerificationNeeded)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .paymentResult(let _data):
+                if boxed {
+                    buffer.appendInt32(1314881805)
+                }
+                _data.updates.serialize(buffer, true)
+                break
+            case .paymentVerificationNeeded(let _data):
+                if boxed {
+                    buffer.appendInt32(-666824391)
+                }
+                serializeString(_data.url, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .paymentResult(let _data):
+                return ("paymentResult", [("updates", ConstructorParameterDescription(_data.updates))])
+            case .paymentVerificationNeeded(let _data):
+                return ("paymentVerificationNeeded", [("url", ConstructorParameterDescription(_data.url))])
+            }
+        }
+
+        public static func parse_paymentResult(_ reader: BufferReader) -> PaymentResult? {
+            var _1: Api.Updates?
+            if let signature = reader.readInt32() {
+                _1 = Api.parse(reader, signature: signature) as? Api.Updates
+            }
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.payments.PaymentResult.paymentResult(Cons_paymentResult(updates: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_paymentVerificationNeeded(_ reader: BufferReader) -> PaymentResult? {
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.payments.PaymentResult.paymentVerificationNeeded(Cons_paymentVerificationNeeded(url: _1!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.payments {
     enum ResaleStarGifts: TypeConstructorDescription {
         public class Cons_resaleStarGifts: TypeConstructorDescription {
             public var flags: Int32
@@ -2072,179 +2147,6 @@ public extension Api.phone {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.phone.PhoneCall.phoneCall(Cons_phoneCall(phoneCall: _1!, users: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.photos {
-    enum Photo: TypeConstructorDescription {
-        public class Cons_photo: TypeConstructorDescription {
-            public var photo: Api.Photo
-            public var users: [Api.User]
-            public init(photo: Api.Photo, users: [Api.User]) {
-                self.photo = photo
-                self.users = users
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("photo", [("photo", ConstructorParameterDescription(self.photo)), ("users", ConstructorParameterDescription(self.users))])
-            }
-        }
-        case photo(Cons_photo)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .photo(let _data):
-                if boxed {
-                    buffer.appendInt32(539045032)
-                }
-                _data.photo.serialize(buffer, true)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.users.count))
-                for item in _data.users {
-                    item.serialize(buffer, true)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .photo(let _data):
-                return ("photo", [("photo", ConstructorParameterDescription(_data.photo)), ("users", ConstructorParameterDescription(_data.users))])
-            }
-        }
-
-        public static func parse_photo(_ reader: BufferReader) -> Photo? {
-            var _1: Api.Photo?
-            if let signature = reader.readInt32() {
-                _1 = Api.parse(reader, signature: signature) as? Api.Photo
-            }
-            var _2: [Api.User]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.photos.Photo.photo(Cons_photo(photo: _1!, users: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-    }
-}
-public extension Api.photos {
-    enum Photos: TypeConstructorDescription {
-        public class Cons_photos: TypeConstructorDescription {
-            public var photos: [Api.Photo]
-            public var users: [Api.User]
-            public init(photos: [Api.Photo], users: [Api.User]) {
-                self.photos = photos
-                self.users = users
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("photos", [("photos", ConstructorParameterDescription(self.photos)), ("users", ConstructorParameterDescription(self.users))])
-            }
-        }
-        public class Cons_photosSlice: TypeConstructorDescription {
-            public var count: Int32
-            public var photos: [Api.Photo]
-            public var users: [Api.User]
-            public init(count: Int32, photos: [Api.Photo], users: [Api.User]) {
-                self.count = count
-                self.photos = photos
-                self.users = users
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("photosSlice", [("count", ConstructorParameterDescription(self.count)), ("photos", ConstructorParameterDescription(self.photos)), ("users", ConstructorParameterDescription(self.users))])
-            }
-        }
-        case photos(Cons_photos)
-        case photosSlice(Cons_photosSlice)
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .photos(let _data):
-                if boxed {
-                    buffer.appendInt32(-1916114267)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.photos.count))
-                for item in _data.photos {
-                    item.serialize(buffer, true)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.users.count))
-                for item in _data.users {
-                    item.serialize(buffer, true)
-                }
-                break
-            case .photosSlice(let _data):
-                if boxed {
-                    buffer.appendInt32(352657236)
-                }
-                serializeInt32(_data.count, buffer: buffer, boxed: false)
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.photos.count))
-                for item in _data.photos {
-                    item.serialize(buffer, true)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.users.count))
-                for item in _data.users {
-                    item.serialize(buffer, true)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .photos(let _data):
-                return ("photos", [("photos", ConstructorParameterDescription(_data.photos)), ("users", ConstructorParameterDescription(_data.users))])
-            case .photosSlice(let _data):
-                return ("photosSlice", [("count", ConstructorParameterDescription(_data.count)), ("photos", ConstructorParameterDescription(_data.photos)), ("users", ConstructorParameterDescription(_data.users))])
-            }
-        }
-
-        public static func parse_photos(_ reader: BufferReader) -> Photos? {
-            var _1: [Api.Photo]?
-            if let _ = reader.readInt32() {
-                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Photo.self)
-            }
-            var _2: [Api.User]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.photos.Photos.photos(Cons_photos(photos: _1!, users: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_photosSlice(_ reader: BufferReader) -> Photos? {
-            var _1: Int32?
-            _1 = reader.readInt32()
-            var _2: [Api.Photo]?
-            if let _ = reader.readInt32() {
-                _2 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Photo.self)
-            }
-            var _3: [Api.User]?
-            if let _ = reader.readInt32() {
-                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
-            }
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            let _c3 = _3 != nil
-            if _c1 && _c2 && _c3 {
-                return Api.photos.Photos.photosSlice(Cons_photosSlice(count: _1!, photos: _2!, users: _3!))
             }
             else {
                 return nil

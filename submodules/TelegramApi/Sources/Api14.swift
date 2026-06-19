@@ -1,4 +1,84 @@
 public extension Api {
+    enum InputStickerSetItem: TypeConstructorDescription {
+        public class Cons_inputStickerSetItem: TypeConstructorDescription {
+            public var flags: Int32
+            public var document: Api.InputDocument
+            public var emoji: String
+            public var maskCoords: Api.MaskCoords?
+            public var keywords: String?
+            public init(flags: Int32, document: Api.InputDocument, emoji: String, maskCoords: Api.MaskCoords?, keywords: String?) {
+                self.flags = flags
+                self.document = document
+                self.emoji = emoji
+                self.maskCoords = maskCoords
+                self.keywords = keywords
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputStickerSetItem", [("flags", ConstructorParameterDescription(self.flags)), ("document", ConstructorParameterDescription(self.document)), ("emoji", ConstructorParameterDescription(self.emoji)), ("maskCoords", ConstructorParameterDescription(self.maskCoords)), ("keywords", ConstructorParameterDescription(self.keywords))])
+            }
+        }
+        case inputStickerSetItem(Cons_inputStickerSetItem)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .inputStickerSetItem(let _data):
+                if boxed {
+                    buffer.appendInt32(853188252)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                _data.document.serialize(buffer, true)
+                serializeString(_data.emoji, buffer: buffer, boxed: false)
+                if Int(_data.flags) & Int(1 << 0) != 0 {
+                    _data.maskCoords!.serialize(buffer, true)
+                }
+                if Int(_data.flags) & Int(1 << 1) != 0 {
+                    serializeString(_data.keywords!, buffer: buffer, boxed: false)
+                }
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .inputStickerSetItem(let _data):
+                return ("inputStickerSetItem", [("flags", ConstructorParameterDescription(_data.flags)), ("document", ConstructorParameterDescription(_data.document)), ("emoji", ConstructorParameterDescription(_data.emoji)), ("maskCoords", ConstructorParameterDescription(_data.maskCoords)), ("keywords", ConstructorParameterDescription(_data.keywords))])
+            }
+        }
+
+        public static func parse_inputStickerSetItem(_ reader: BufferReader) -> InputStickerSetItem? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Api.InputDocument?
+            if let signature = reader.readInt32() {
+                _2 = Api.parse(reader, signature: signature) as? Api.InputDocument
+            }
+            var _3: String?
+            _3 = parseString(reader)
+            var _4: Api.MaskCoords?
+            if Int(_1 ?? 0) & Int(1 << 0) != 0 {
+                if let signature = reader.readInt32() {
+                    _4 = Api.parse(reader, signature: signature) as? Api.MaskCoords
+                }
+            }
+            var _5: String?
+            if Int(_1 ?? 0) & Int(1 << 1) != 0 {
+                _5 = parseString(reader)
+            }
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 0) == 0) || _4 != nil
+            let _c5 = (Int(_1 ?? 0) & Int(1 << 1) == 0) || _5 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 {
+                return Api.InputStickerSetItem.inputStickerSetItem(Cons_inputStickerSetItem(flags: _1!, document: _2!, emoji: _3!, maskCoords: _4, keywords: _5))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api {
     enum InputStickeredMedia: TypeConstructorDescription {
         public class Cons_inputStickeredMediaDocument: TypeConstructorDescription {
             public var id: Api.InputDocument
