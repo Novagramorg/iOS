@@ -4,9 +4,6 @@ import RichTextEditorCore   // NOT @testable — verifies the public surface
 final class PublicAPISmokeTests: XCTestCase {
     func test_buildSerializeResolveSelect_endToEnd() throws {
         let doc = Document(
-            metadata: DocumentMetadata(title: "Doc",
-                                       createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [.paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "Hello")]))])
 
         let data = try DocumentCodec.encode(doc)

@@ -29,9 +29,7 @@ final class CanvasTableCommandTests: XCTestCase {
     }
     /// documentSize must equal the Core token count for the current content.
     func assertSpansMatchCore(_ v: DocumentCanvasView, _ msg: String = "") {
-        let doc = Document(metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                                      modifiedAt: Date(timeIntervalSince1970: 0)),
-                           blocks: v.currentBlocks())
+        let doc = Document(blocks: v.currentBlocks())
         XCTAssertEqual(v.documentSizeValue, DocumentTree.documentSize(doc), "span math \(msg)")
     }
 

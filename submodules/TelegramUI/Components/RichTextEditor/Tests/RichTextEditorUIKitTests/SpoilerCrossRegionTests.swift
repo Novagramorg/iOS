@@ -110,11 +110,11 @@ final class SpoilerCrossRegionTests: XCTestCase {
 
     func test_spoilerInImageCaption_hidesWithDust() {
         let v = DocumentCanvasView()
-        let img = ImageBlock(id: BlockID("i"), assetID: "x", naturalSize: Size2D(width: 40, height: 40),
+        let img = MediaBlock(id: BlockID("i"), mediaID: "x", naturalSize: Size2D(width: 40, height: 40),
                              caption: [TextRun(text: "Caption")])
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("lead"), runs: [TextRun(text: "Lead")])),
-            .image(img),
+            .media(img),
         ], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
         let cap = v.allLeafRegions().first { $0.ref == .caption(BlockID("i")) }!

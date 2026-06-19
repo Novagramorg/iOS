@@ -3,6 +3,7 @@ import XCTest
 import UIKit
 @testable import RichTextEditorUIKit
 
+@available(iOS 16.0, *)
 final class BlockLayoutTests: XCTestCase {
     private func layout(_ s: String) -> BlockLayout {
         BlockLayout(attributedString: NSAttributedString(string: s,

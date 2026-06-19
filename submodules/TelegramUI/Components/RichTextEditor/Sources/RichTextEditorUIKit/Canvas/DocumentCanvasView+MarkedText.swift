@@ -6,14 +6,19 @@ import RichTextEditorCore
 // (UITextInput: UIKeyInput: UITextInputTraits); these are @objc-optional members we override.
 // Autocorrect/spell-check are ON because system inline predictions reportedly require them
 // (and they're standard for a text editor). inlinePredictionType opts in to the iOS 17+ feature.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     var autocorrectionType: UITextAutocorrectionType { get { .yes } set { } }
     var spellCheckingType: UITextSpellCheckingType { get { .yes } set { } }
+}
+
+// `UITextInlinePredictionType` is iOS 17+; below it the trait simply isn't offered (no inline predictions).
+@available(iOS 17.0, *)
+extension DocumentCanvasView {
     var inlinePredictionType: UITextInlinePredictionType { get { .yes } set { } }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     var markedTextRange: UITextRange? {
         guard let m = markedRange else { return nil }
@@ -75,7 +80,7 @@ extension DocumentCanvasView {
         anchor = selStart; head = clampGlobal(selStart + selectedRange.length)
         textInputDelegate?.selectionDidChange(self)
 
-        invalidateIntrinsicContentSize(); setNeedsLayout(); setNeedsDisplay(); refreshSelectionUI()
+        notifyContentSizeChanged(); setNeedsDisplay(); refreshSelectionUI()
         onSelectionChange?()   // a growing composition advances the caret — scroll it into view (CJK/IME typing)
     }
 
@@ -149,7 +154,7 @@ extension DocumentCanvasView {
         ghostStyledLayout = nil
         guard let m = markedRange, markedTextIsPrediction,
               let (region, _) = leafRegion(containingGlobal: m.from) else { return }
-        region.layout.setGhostForeground(.placeholderText,
+        region.layout.setGhostForeground(self.mapper.theme.placeholder,
                                          start: m.from - region.globalStart,
                                          end: m.to - region.globalStart)
         ghostStyledLayout = region.layout

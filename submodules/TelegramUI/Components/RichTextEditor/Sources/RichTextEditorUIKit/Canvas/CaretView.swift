@@ -6,7 +6,7 @@ import UIKit
 /// see `installSelectionInteractions`) so that, when the caret sits inside a horizontally-scrollable table
 /// cell, it can be hosted INSIDE the table's scrolling content view and ride the scroll/overscroll bounce —
 /// exactly like the selection fill and handles already do. We own the blink here.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class CaretView: UIView {
     private static let blinkKey = "caretBlink"
 
@@ -14,10 +14,16 @@ final class CaretView: UIView {
     /// idempotency of `DocumentCanvasView.updateCaretView` — a no-op update must not restart the blink.
     private(set) var blinkResetCount = 0
 
+    /// The caret fill color. Defaults to `.systemBlue` (the editor theme's accent overrides it; `.tintColor`
+    /// would be iOS 15+ and a stored-property default can't be availability-gated).
+    var accentColor: UIColor = .systemBlue {
+        didSet { backgroundColor = accentColor }
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = false
-        backgroundColor = .tintColor
+        backgroundColor = accentColor
         layer.cornerRadius = 1
         isHidden = true
     }
@@ -25,7 +31,7 @@ final class CaretView: UIView {
 
     override func tintColorDidChange() {
         super.tintColorDidChange()
-        backgroundColor = .tintColor
+        backgroundColor = accentColor
     }
 
     /// Adds the repeating opacity blink (1 → 0, autoreversing) if it isn't already running. Solid at first.

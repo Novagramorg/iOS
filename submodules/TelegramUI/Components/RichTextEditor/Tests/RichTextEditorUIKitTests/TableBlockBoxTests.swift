@@ -22,9 +22,7 @@ final class TableBlockBoxTests: XCTestCase {
             .paragraph(ParagraphBlock(id: BlockID("bot"), runs: [TextRun(text: "Bot")])),
         ], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
-        let doc = Document(metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                                      modifiedAt: Date(timeIntervalSince1970: 0)),
-                           blocks: v.currentBlocks())
+        let doc = Document(blocks: v.currentBlocks())
         let tree = DocumentTree.build(from: doc)
         XCTAssertEqual(v.documentSizeValue, DocumentTree.documentSize(doc))
         // Each cell's paragraph text node global start matches Core.
@@ -135,7 +133,7 @@ extension TableBlockBoxTests {
         XCTAssertFalse(rect.contains(CGPoint(x: body.midX, y: body.midY)))           // not the body row
         XCTAssertGreaterThan(rect.width, t.cellRect(row: 0, column: 0)!.width)       // spans the full table width
         var alpha: CGFloat = 1
-        TableBlockBox.headerRowBackground.getWhite(nil, alpha: &alpha)
+        RichTextEditorTheme.default.tableHeaderBackground.getWhite(nil, alpha: &alpha)
         XCTAssertLessThan(alpha, 1)                                                  // a translucent gray tint
     }
 

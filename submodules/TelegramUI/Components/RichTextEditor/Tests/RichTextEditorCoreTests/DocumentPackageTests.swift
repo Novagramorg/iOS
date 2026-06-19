@@ -4,10 +4,7 @@ import XCTest
 final class DocumentPackageTests: XCTestCase {
     func test_package_writeThenReadRoundTrips() throws {
         let doc = Document(
-            metadata: DocumentMetadata(title: "T",
-                                       createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
-            blocks: [.image(ImageBlock(id: BlockID("i1"), assetID: "i1.png",
+            blocks: [.media(MediaBlock(id: BlockID("i1"), mediaID: "i1.png",
                                        naturalSize: Size2D(width: 1, height: 1)))]
         )
         let pkg = DocumentPackage(document: doc, assets: ["i1.png": Data([0xDE, 0xAD])])

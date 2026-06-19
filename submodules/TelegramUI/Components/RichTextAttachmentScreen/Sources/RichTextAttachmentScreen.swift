@@ -9,12 +9,19 @@ import TelegramPresentationData
 import GlassBarButtonComponent
 import BundleIconComponent
 import MultilineTextComponent
+import EdgeEffect
 import RichTextEditorCore
 import RichTextEditorUIKit
-import PhotosUI
+import ContextUI
+import Postbox
+import TelegramCore
 
-@available(iOS 17.0, *)
 public class RichTextAttachmentScreen: ViewControllerComponentContainer, AttachmentContainable {
+    public enum RichTextAttachment {
+        case image(ImageMediaReference)
+        case file(FileMediaReference)
+    }
+    
     public var requestAttachmentMenuExpansion: () -> Void = {}
     public var updateNavigationStack: (@escaping ([AttachmentContainable]) -> ([AttachmentContainable], AttachmentMediaPickerContext?)) -> Void = { _ in }
     public var parentController: () -> ViewController? = { return nil }
@@ -36,12 +43,18 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         }
     }
 
-    public init(context: AccountContext) {
+    private let sendMessage: (Document, [String: Media]) -> Void
+
+    public init(context: AccountContext, initialContents: Document? = nil, sendMessage: @escaping (Document, [String: Media]) -> Void, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+        self.sendMessage = sendMessage
+
         let overNavigationContainer = SparseContainerView()
 
         super.init(context: context, component: RichTextAttachmentScreenComponent(
             context: context,
-            overNavigationContainer: overNavigationContainer
+            initialContents: initialContents,
+            overNavigationContainer: overNavigationContainer,
+            presentAttachmentMenu: presentAttachmentMenu
         ), navigationBarAppearance: .transparent, theme: .default)
 
         self._hasGlassStyle = true
@@ -60,47 +73,69 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     }
 
     fileprivate func donePressed() {
-        // TODO: produce a rich-text message from the editor and send it once the
-        // RichTextEditor demo is moved in. For now Done is a placeholder that dismisses.
+        if let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View {
+            self.sendMessage(componentView.currentDocument, componentView.currentMedia)
+        }
         self.dismiss()
     }
 }
 
-@available(iOS 17.0, *)
 final class RichTextAttachmentScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     // Held for the next step: the RichTextEditor demo will read context and add
     // its editor view into the View's content container.
     let context: AccountContext
+    let initialContents: Document?
     let overNavigationContainer: UIView
+    let presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
 
-    init(context: AccountContext, overNavigationContainer: UIView) {
+    init(context: AccountContext, initialContents: Document?, overNavigationContainer: UIView, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
         self.context = context
+        self.initialContents = initialContents
         self.overNavigationContainer = overNavigationContainer
+        self.presentAttachmentMenu = presentAttachmentMenu
     }
 
     static func ==(lhs: RichTextAttachmentScreenComponent, rhs: RichTextAttachmentScreenComponent) -> Bool {
         return true
     }
 
-    final class View: UIView, PHPickerViewControllerDelegate {
+    final class View: UIView {
         private let title = ComponentView<Empty>()
         private let cancelButton = ComponentView<Empty>()
         private let doneButton = ComponentView<Empty>()
-        private let contentContainer = UIView()
         
         private let editor = RichTextEditorView()
+        // Frosted fade at the screen top (mirrors ComposePollScreen) — scrolling content dissolves into the
+        // nav region. Overlaid above the editor; the nav buttons live in the separate over-nav container.
+        private let topEdgeEffectView = EdgeEffectView()
+
+        /// The current editor document, read by the controller's `donePressed`.
+        var currentDocument: Document {
+            return self.editor.document
+        }
+
+        /// Picked media keyed by the opaque `mediaID` handed to the editor. Read by `donePressed`.
+        private var attachedMedia: [String: Media] = [:]
+
+        /// The picked media map, keyed by the editor's `mediaID`. Read by the controller's `donePressed`.
+        var currentMedia: [String: Media] {
+            return self.attachedMedia
+        }
 
         private var component: RichTextAttachmentScreenComponent?
         private var environment: EnvironmentType?
         
-        private var bar: UIView?
+        private let actionBar = ComponentView<Empty>()
+
+        private var emojiKeyboard: RichTextEmojiKeyboardController?
+        private var componentState: EmptyComponentState?
+        private var isUpdating = false
+        private var lastTabBarVisible: Bool?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
-
-            self.addSubview(self.contentContainer)
         }
 
         required init?(coder: NSCoder) {
@@ -117,139 +152,37 @@ final class RichTextAttachmentScreenComponent: Component {
             })
         }
 
-        /// An inline custom-emoji run (one U+FFFC carrying an EmojiRef) — resolved to a view by the provider.
-        private func emojiRun(_ id: String, _ instance: String) -> TextRun {
-            TextRun(text: "\u{FFFC}", attributes: CharacterAttributes(emoji: EmojiRef(id: id, instanceID: instance, altText: ":\(id):")))
-        }
-        
-        /// A horizontally-scrollable button bar so every command stays reachable on a phone-width screen.
-        /// Buttons (and menu-buttons) don't become first responder, so the editor keeps its selection.
-        private func makeToolbar() -> UIView {
-            func button(_ title: String, _ action: @escaping () -> Void) -> UIButton {
-                var cfg = UIButton.Configuration.gray()
-                cfg.title = title
-                cfg.baseForegroundColor = .label
-                return UIButton(configuration: cfg, primaryAction: UIAction { _ in action() })
-            }
-            func menuButton(_ title: String, _ menu: UIMenu) -> UIButton {
-                var cfg = UIButton.Configuration.gray()
-                cfg.title = title
-                cfg.baseForegroundColor = .label
-                let b = UIButton(configuration: cfg)
-                b.menu = menu
-                b.showsMenuAsPrimaryAction = true
-                return b
-            }
-
-            let buttons: [UIButton] = [
-                button("B") { [weak self] in self?.editor.toggleBold() },
-                button("I") { [weak self] in self?.editor.toggleItalic() },
-                button("S") { [weak self] in self?.editor.toggleStrikethrough() },
-                button("<>") { [weak self] in self?.editor.toggleInlineCode() },
-                button("Spoiler") { [weak self] in self?.editor.toggleSpoiler() },
-                menuButton("Style", styleMenu()),
-                menuButton("List", listMenu()),
-                button("Indent") { [weak self] in self?.editor.indent() },
-                button("Outdent") { [weak self] in self?.editor.outdent() },
-                menuButton("Align", alignMenu()),
-                menuButton("Table", tableMenu()),
-                button("Image") { [weak self] in self?.presentImagePicker() },
-                button("Link") { [weak self] in self?.presentLinkPrompt() },
-                menuButton("Emoji", emojiMenu()),
-                button("Undo") { [weak self] in self?.editor.undo() },
-                button("Redo") { [weak self] in self?.editor.redo() },
-            ]
-
-            let stack = UIStackView(arrangedSubviews: buttons)
-            stack.axis = .horizontal
-            stack.spacing = 8
-            stack.alignment = .center
-            stack.isLayoutMarginsRelativeArrangement = true
-            stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12)
-            stack.translatesAutoresizingMaskIntoConstraints = false
-
-            let scroll = UIScrollView()
-            scroll.showsHorizontalScrollIndicator = false
-            scroll.addSubview(stack)
-            NSLayoutConstraint.activate([
-                stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-                stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-                stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
-                stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
-                stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
-            ])
-            return scroll
-        }
-
-        private func styleMenu() -> UIMenu {
-            let names: [(String, ParagraphStyleName)] = [("Title", .title), ("Heading 1", .heading1),
-                ("Heading 2", .heading2), ("Heading 3", .heading3), ("Body", .body), ("Quote", .quote)]
-            return UIMenu(title: "Style", children: names.map { n in
-                UIAction(title: n.0) { [weak self] _ in self?.editor.setParagraphStyle(n.1) }
-            })
-        }
-        private func listMenu() -> UIMenu {
-            UIMenu(title: "List", children: [
-                UIAction(title: "None") { [weak self] _ in self?.editor.setList(nil) },
-                UIAction(title: "Bullet") { [weak self] _ in self?.editor.setList(.bullet) },
-                UIAction(title: "Numbered") { [weak self] _ in self?.editor.setList(.ordered) },
-            ])
-        }
-        private func alignMenu() -> UIMenu {
-            let items: [(String, TextAlignment)] = [("Left", .left), ("Center", .center), ("Right", .right), ("Justify", .justified)]
-            return UIMenu(title: "Align", children: items.map { i in
-                UIAction(title: i.0) { [weak self] _ in self?.editor.setAlignment(i.1) }
-            })
-        }
-        private func emojiMenu() -> UIMenu {
-            UIMenu(title: "Emoji", children: [
-                UIAction(title: "Insert ★ (static)") { [weak self] _ in self?.editor.insertEmoji(id: "star", altText: ":star:") },
-                UIAction(title: "Insert ◐ (animated)") { [weak self] _ in self?.editor.insertEmoji(id: "spinner", altText: ":spinner:") },
-            ])
-        }
-
-        private func tableMenu() -> UIMenu {
-            UIMenu(title: "Table", children: [
-                UIAction(title: "Insert Table 2×2") { [weak self] _ in self?.editor.insertTable(rows: 2, cols: 2) },
-                UIAction(title: "Insert Wide Table 7×3") { [weak self] _ in self?.editor.insertTable(rows: 3, cols: 7) },
-                UIAction(title: "Insert Row Above") { [weak self] _ in self?.editor.insertTableRowAbove() },
-                UIAction(title: "Insert Row Below") { [weak self] _ in self?.editor.insertTableRowBelow() },
-                UIAction(title: "Delete Row") { [weak self] _ in self?.editor.deleteTableRow() },
-                UIAction(title: "Insert Column Left") { [weak self] _ in self?.editor.insertTableColumnLeft() },
-                UIAction(title: "Insert Column Right") { [weak self] _ in self?.editor.insertTableColumnRight() },
-                UIAction(title: "Delete Column") { [weak self] _ in self?.editor.deleteTableColumn() },
-                UIAction(title: "Align Column Left") { [weak self] _ in self?.editor.setTableColumnAlignment(.left) },
-                UIAction(title: "Align Column Center") { [weak self] _ in self?.editor.setTableColumnAlignment(.center) },
-                UIAction(title: "Align Column Right") { [weak self] _ in self?.editor.setTableColumnAlignment(.right) },
-            ])
-        }
-
         // MARK: Phase 5b — image picker + link prompt
 
         private func presentImagePicker() {
             guard let component = self.component else {
                 return
             }
-            
-            var config = PHPickerConfiguration()
-            config.filter = .images
-            config.selectionLimit = 1
-            let picker = PHPickerViewController(configuration: config)
-            picker.delegate = self
-            
-            component.context.sharedContext.mainWindow?.presentNative(picker)
-        }
-
-        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            picker.dismiss(animated: true)
-            guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else { return }
-            provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-                guard let image = object as? UIImage else { return }
-                DispatchQueue.main.async {
-                    self?.editor.becomeFirstResponder()
-                    self?.editor.insertImage(image, naturalSize: image.size)
+            component.presentAttachmentMenu?({ [weak self] attachment in
+                guard let self else {
+                    return
                 }
-            }
+                let media: Media
+                let kind: MediaKind
+                let naturalSize: CGSize
+                switch attachment {
+                case let .image(imageReference):
+                    let image = imageReference.media
+                    media = image
+                    kind = .image
+                    naturalSize = image.representations.last?.dimensions.cgSize ?? CGSize(width: 1, height: 1)
+                case let .file(fileReference):
+                    let file = fileReference.media
+                    guard file.isVideo else { return }   // v1: only video files are supported
+                    media = file
+                    kind = .video
+                    naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
+                }
+                guard let mediaId = media.id else { return }
+                let mediaID = "\(mediaId.namespace):\(mediaId.id)"
+                self.attachedMedia[mediaID] = media
+                self.editor.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind)
+            })
         }
 
         private func presentLinkPrompt() {
@@ -281,18 +214,34 @@ final class RichTextAttachmentScreenComponent: Component {
             component.context.sharedContext.mainWindow?.presentNative(alert)
         }
 
+        private func presentActionMenu(from sourceView: UIView, items: [ContextMenuItem]) {
+            guard let component = self.component else { return }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+            let controller = makeContextController(
+                presentationData: presentationData,
+                source: .reference(RichTextActionContextReferenceSource(sourceView: sourceView)),
+                items: .single(ContextController.Items(content: .list(items))),
+                gesture: nil
+            )
+            self.environment?.controller()?.presentInGlobalOverlay(controller)
+        }
+
         func update(component: RichTextAttachmentScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             let environment = environment[EnvironmentType.self].value
+            self.componentState = state
             self.environment = environment
-            
+
+            self.isUpdating = true
+            defer { self.isUpdating = false }
+
             if self.component == nil {
-                let table = TableBlock(id: BlockID("t"),
+                /*let table = TableBlock(id: BlockID("t"),
                     columns: [ColumnSpec(width: 140), ColumnSpec(width: 110), ColumnSpec(width: 110)],
                     rows: [
                         Row(id: BlockID("r0"), isHeader: true, cells: [textCell("h0", ["Name"]), textCell("h1", ["Mass (suns)"]), textCell("h2", ["Distance"])]),
                         Row(id: BlockID("r1"), cells: [
                             Cell(id: BlockID("c0"), blocks: [.paragraph(ParagraphBlock(id: BlockID("c0p"),
-                                runs: [TextRun(text: "Sagittarius A* "), emojiRun("spinner", "cell-spin")]))]),
+                                runs: [TextRun(text: "Sagittarius A*")]))]),
                             textCell("c1", ["4.3 M"]), textCell("c2", ["26,000 ly"])]),
                         Row(id: BlockID("r2"), cells: [textCell("d0", ["M87*"]), textCell("d1", ["6.5 B"]), textCell("d2", ["53M ly"])]),
                     ])
@@ -310,72 +259,68 @@ final class RichTextAttachmentScreenComponent: Component {
                             textCell("w13", ["D"]), textCell("w14", ["E"]), textCell("w15", ["F"]),
                             textCell("w16", ["G"]),
                         ]),
-                    ])
-                editor.document = Document(
-                    metadata: DocumentMetadata(title: "Into the Dark", createdAt: Date(timeIntervalSince1970: 0),
-                                               modifiedAt: Date(timeIntervalSince1970: 0)),
-                    blocks: [
-                        .paragraph(ParagraphBlock(id: BlockID("title"), style: .title, runs: [TextRun(text: "Into the Dark")])),
-                        .paragraph(ParagraphBlock(id: BlockID("intro"), runs: [
-                            TextRun(text: "Black holes "), emojiRun("spinner", "intro-spin"),
-                            TextRun(text: " are the strangest objects we know "), emojiRun("star", "intro-star"),
-                            TextRun(text: ". Places where gravity pulls so hard that not even light escapes."),
-                        ])),
-                        .paragraph(ParagraphBlock(id: BlockID("spoilerDemo"), runs: [
-                            TextRun(text: "Tap to reveal: "),
-                            TextRun(text: "this is a hidden spoiler", attributes: CharacterAttributes(spoiler: true)),
-                        ])),
-                        .paragraph(ParagraphBlock(id: BlockID("h"), style: .heading1, runs: [TextRun(text: "Three things to know")])),
-                        .paragraph(ParagraphBlock(id: BlockID("l0"), list: ListMembership(marker: .bullet, level: 0), runs: [TextRun(text: "Form when massive stars collapse")])),
-                        .paragraph(ParagraphBlock(id: BlockID("l1"), list: ListMembership(marker: .bullet, level: 0), runs: [TextRun(text: "The point of no return is the event horizon")])),
-                        .paragraph(ParagraphBlock(id: BlockID("l2"), list: ListMembership(marker: .bullet, level: 0), runs: [TextRun(text: "Time slows as you approach one")])),
-                        .paragraph(ParagraphBlock(id: BlockID("q"), style: .quote, runs: [TextRun(text: "Black holes are where the universe stops making sense. They bend time, swallow light, and remind us how little we really understand.")])),
-                        .paragraph(ParagraphBlock(id: BlockID("famous"), style: .heading1, runs: [TextRun(text: "Famous black holes")])),
-                        .table(table),
-                        .paragraph(ParagraphBlock(id: BlockID("wide"), style: .heading1, runs: [TextRun(text: "Wide table (horizontal scroll)")])),
-                        .table(wideTable),
-                        .paragraph(ParagraphBlock(id: BlockID("end"), runs: [TextRun(text: "")])),
-                    ])
+                    ])*/
+                // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
+                // current document when expanding); an empty document when none is provided.
+                editor.document = component.initialContents ?? Document()
 
-                editor.registerEmojiViewProvider { id, size in
-                    switch id {
-                    case "spinner":
-                        let v = UIView(frame: CGRect(origin: .zero, size: size))
-                        v.backgroundColor = .clear
-                        let dot = CALayer()
-                        dot.frame = CGRect(x: size.width * 0.15, y: size.height * 0.15,
-                                           width: size.width * 0.7, height: size.height * 0.7)
-                        dot.cornerRadius = dot.frame.width / 2
-                        dot.backgroundColor = UIColor.systemPurple.cgColor
-                        let spin = CABasicAnimation(keyPath: "transform.rotation.z")
-                        spin.fromValue = 0; spin.toValue = 2 * Double.pi
-                        spin.duration = 1.0; spin.repeatCount = .infinity; spin.isRemovedOnCompletion = false
-                        dot.add(spin, forKey: "spin")
-                        v.layer.addSublayer(dot)
-                        return v
-                    default: // a static colored square ("star")
-                        let v = UIView(frame: CGRect(origin: .zero, size: size))
-                        v.backgroundColor = .systemYellow
-                        v.layer.cornerRadius = 3
-                        return v
+                let emojiKeyboard = RichTextEmojiKeyboardController(context: component.context, editor: editor, requestLayout: { [weak self] in
+                    guard let self, !self.isUpdating else { return }
+                    self.componentState?.updated(transition: .spring(duration: 0.4))
+                })
+                self.emojiKeyboard = emojiKeyboard
+
+                editor.registerEmojiViewProvider { [weak self] id, size in
+                    return self?.emojiKeyboard?.customEmojiView(forId: id, size: size)
+                }
+
+                editor.registerMediaViewProvider { [weak self] mediaID, _ in
+                    guard let self, let component = self.component,
+                          let media = self.attachedMedia[mediaID] else { return nil }
+                    return MediaItemNodeView(context: component.context, media: EngineMedia(media))
+                }
+                
+                editor.onBecameFirstResponder = { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    if let controller = self.environment?.controller() as? RichTextAttachmentScreen {
+                        controller.requestAttachmentMenuExpansion()
                     }
                 }
 
-                let bar = makeToolbar()
-                self.bar = bar
-                bar.translatesAutoresizingMaskIntoConstraints = true
-                editor.translatesAutoresizingMaskIntoConstraints = false
-                self.addSubview(bar)
+                // The editor no longer drives its own layout/keyboard insets; it just tells us when anything
+                // changes so we re-run this update (which calls editor.update(size:insets:)). The isUpdating
+                // guard only defends the SYNCHRONOUS loop (update → editor.update → onChange → update);
+                // editor.update/performLayout don't fire onChange synchronously, so it can't loop. Async
+                // onChange (user edits/caret moves) skips the guard and correctly schedules a re-layout.
+                editor.onChange = { [weak self] in
+                    guard let self, !self.isUpdating else { return }
+                    self.componentState?.updated(transition: .immediate)
+                }
+
                 self.addSubview(editor)
+                self.addSubview(self.topEdgeEffectView)
             }
             self.component = component
 
             let barButtonSize = CGSize(width: 44.0, height: 44.0)
+            
+            let editorState = self.editor.currentState()
+            var cancelButtonFitSize = barButtonSize
+            if !"".isEmpty {
+                if editorState.canUndo {
+                    cancelButtonFitSize.width += barButtonSize.width
+                }
+                if editorState.canRedo {
+                    cancelButtonFitSize.width += barButtonSize.width
+                }
+            }
 
             let cancelButtonSize = self.cancelButton.update(
                 transition: transition,
                 component: AnyComponent(GlassBarButtonComponent(
-                    size: barButtonSize,
+                    size: cancelButtonFitSize,
                     backgroundColor: nil,
                     isDark: environment.theme.overallDarkAppearance,
                     state: .glass,
@@ -403,17 +348,18 @@ final class RichTextAttachmentScreenComponent: Component {
                 transition.setFrame(view: cancelButtonView, frame: cancelButtonFrame)
             }
 
-            //TODO:localize
             let doneButtonSize = self.doneButton.update(
                 transition: transition,
                 component: AnyComponent(GlassBarButtonComponent(
-                    size: nil,
+                    size: barButtonSize,
                     backgroundColor: environment.theme.list.itemCheckColors.fillColor,
                     isDark: environment.theme.overallDarkAppearance,
                     state: .tintedGlass,
                     isEnabled: true,
                     component: AnyComponentWithIdentity(id: "done", component: AnyComponent(
-                        Text(text: "Done", font: Font.semibold(17.0), color: environment.theme.list.itemCheckColors.foregroundColor)
+                        BundleIconComponent(
+                            name: "Navigation/Done", tintColor: environment.theme.list.itemCheckColors.foregroundColor
+                        )
                     )),
                     action: { [weak self] _ in
                         guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
@@ -458,17 +404,208 @@ final class RichTextAttachmentScreenComponent: Component {
                 }
                 transition.setFrame(view: titleView, frame: titleFrame)
             }
+            
+            self.backgroundColor = environment.theme.list.plainBackgroundColor
 
-            // Content region (editor seam) — empty in this step.
-            let contentFrame = CGRect(origin: CGPoint(x: 0.0, y: environment.navigationHeight), size: CGSize(width: availableSize.width, height: max(0.0, availableSize.height - environment.navigationHeight)))
-            transition.setFrame(view: self.contentContainer, frame: contentFrame)
+            let emojiPanelHeight = self.emojiKeyboard?.updatePanel(container: self, availableSize: availableSize, environment: environment, transition: transition) ?? 0.0
+            let editorTop = environment.navigationHeight
+            let editorFrame = CGRect(x: environment.safeInsets.left, y: 0.0,
+                                     width: availableSize.width - environment.safeInsets.left - environment.safeInsets.right,
+                                     height: availableSize.height)
+            self.editor.frame = editorFrame
             
-            self.backgroundColor = .white
-            
-            if let bar = self.bar {
-                bar.frame = CGRect(origin: CGPoint(x: environment.safeInsets.left, y: environment.navigationHeight), size: CGSize(width: availableSize.width - environment.safeInsets.left - environment.safeInsets.right, height: 50.0))
+            var barActions: [RichTextActionBarComponent.Action] = []
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("paragraphStyle"), icon: "RichText/ToolParagraphStyle",
+                action: editorState.isInTable ? nil : { [weak self] sourceView in
+                    guard let self else { return }
+                    let current = self.editor.currentState().paragraphStyle
+                    let entries: [(String, ParagraphStyleName)] = [
+                        ("Heading 1", .heading1), ("Heading 2", .heading2),
+                        ("Heading 3", .heading3), ("Body", .body)]
+                    let items: [ContextMenuItem] = entries.map { (title, style) in
+                        .action(ContextMenuActionItem(text: title, icon: { theme in
+                            style == current
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            self?.editor.setParagraphStyle(style)
+                        }))
+                    }
+                    self.presentActionMenu(from: sourceView, items: items)
+                },
+                isSelected: false
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("list"), icon: "RichText/ToolList",
+                action: editorState.isInTable ? nil : { [weak self] sourceView in
+                    guard let self else { return }
+                    let current = self.editor.currentState().listMarker
+                    let entries: [(String, ListMarker?)] = [("None", nil), ("Bulleted", .bullet), ("Numbered", .ordered)]
+                    let items: [ContextMenuItem] = entries.map { (title, marker) in
+                        .action(ContextMenuActionItem(text: title, icon: { theme in
+                            marker == current
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            self?.editor.setList(marker)
+                        }))
+                    }
+                    self.presentActionMenu(from: sourceView, items: items)
+                },
+                isSelected: editorState.listMarker != nil
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("quote"), icon: "RichText/ToolQuote",
+                action: editorState.isInTable ? nil : { [weak self] _ in
+                    guard let self else { return }
+                    // Re-read live state at tap time rather than the build-time snapshot.
+                    let isQuote = self.editor.currentState().paragraphStyle == .quote
+                    self.editor.setParagraphStyle(isQuote ? .body : .quote)
+                },
+                isSelected: editorState.paragraphStyle == .quote
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("table"), icon: "RichText/ToolTable",
+                action: { [weak self] sourceView in
+                    guard let self else { return }
+                    var items: [ContextMenuItem] = []
+                    if self.editor.currentState().isInTable {
+                        items.append(.action(ContextMenuActionItem(text: "Insert Row Above", icon: { _ in nil }, action: { [weak self] _, f in
+                            f(.default); self?.editor.insertTableRowAbove()
+                        })))
+                        items.append(.action(ContextMenuActionItem(text: "Insert Row Below", icon: { _ in nil }, action: { [weak self] _, f in
+                            f(.default); self?.editor.insertTableRowBelow()
+                        })))
+                        items.append(.action(ContextMenuActionItem(text: "Delete Row", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
+                            f(.default); self?.editor.deleteTableRow()
+                        })))
+                        items.append(.action(ContextMenuActionItem(text: "Insert Column Left", icon: { _ in nil }, action: { [weak self] _, f in
+                            f(.default); self?.editor.insertTableColumnLeft()
+                        })))
+                        items.append(.action(ContextMenuActionItem(text: "Insert Column Right", icon: { _ in nil }, action: { [weak self] _, f in
+                            f(.default); self?.editor.insertTableColumnRight()
+                        })))
+                        items.append(.action(ContextMenuActionItem(text: "Delete Column", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
+                            f(.default); self?.editor.deleteTableColumn()
+                        })))
+                        for (title, alignment) in [("Align Left", TextAlignment.left), ("Align Center", .center), ("Align Right", .right)] {
+                            items.append(.action(ContextMenuActionItem(text: title, icon: { _ in nil }, action: { [weak self] _, f in
+                                f(.default); self?.editor.setTableColumnAlignment(alignment)
+                            })))
+                        }
+                        items.append(.action(ContextMenuActionItem(text: "Delete Table", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
+                            f(.default); self?.editor.deleteTable()
+                        })))
+                    } else {
+                        items.append(.action(ContextMenuActionItem(text: "Insert Table", icon: { _ in nil }, action: { [weak self] _, f in
+                            f(.default); self?.editor.insertTable(rows: 2, cols: 2)
+                        })))
+                    }
+                    self.presentActionMenu(from: sourceView, items: items)
+                },
+                isSelected: false
+            ))
+            if component.presentAttachmentMenu != nil {
+                barActions.append(RichTextActionBarComponent.Action(
+                    id: AnyHashable("attach"), icon: "RichText/ToolAttach",
+                    action: editorState.isInTable ? nil : { [weak self] _ in self?.presentImagePicker() },
+                    isSelected: false
+                ))
             }
-            self.editor.frame = CGRect(origin: CGPoint(x: environment.safeInsets.left, y: environment.navigationHeight + 50.0), size: CGSize(width: availableSize.width - environment.safeInsets.left - environment.safeInsets.right, height: availableSize.height - 50.0 - environment.navigationHeight - environment.safeInsets.bottom))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("link"), icon: "RichText/ToolLink",
+                action: editorState.hasSelection ? { [weak self] _ in self?.presentLinkPrompt() } : nil,
+                isSelected: editorState.link != nil
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("bold"), icon: "RichText/ToolBold",
+                action: { [weak self] _ in self?.editor.toggleBold() },
+                isSelected: editorState.bold
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("italic"), icon: "RichText/ToolItalic",
+                action: { [weak self] _ in self?.editor.toggleItalic() },
+                isSelected: editorState.italic
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("underline"), icon: "RichText/ToolUnderline",
+                action: { [weak self] _ in self?.editor.toggleUnderline() },
+                isSelected: editorState.underline
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("strike"), icon: "RichText/ToolStrike",
+                action: { [weak self] _ in self?.editor.toggleStrikethrough() },
+                isSelected: editorState.strikethrough
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("emoji"), icon: "RichText/ToolEmoji",
+                action: { [weak self] _ in self?.emojiKeyboard?.toggle() },
+                isSelected: self.emojiKeyboard?.isEmojiMode ?? false
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("code"), icon: "RichText/ToolCode",
+                action: { [weak self] _ in self?.editor.toggleInlineCode() },
+                isSelected: editorState.code
+            ))
+            
+            let tabBarBottomInset = max(environment.inputHeight, emojiPanelHeight, environment.additionalInsets.bottom)
+            
+            var sideInset: CGFloat = 12.0
+            if tabBarBottomInset <= 28.0 {
+                sideInset = 20.0
+            }
+            
+            let actionBarSize = self.actionBar.update(
+                transition: transition,
+                component: AnyComponent(RichTextActionBarComponent(
+                    theme: environment.theme,
+                    actions: barActions
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - (sideInset + environment.safeInsets.left) * 2.0, height: 44.0)
+            )
+            
+            var bottomInset = max(environment.inputHeight, emojiPanelHeight, environment.safeInsets.bottom)
+            
+            let actionBarFrame = CGRect(origin: CGPoint(x: sideInset + environment.safeInsets.left, y: availableSize.height - bottomInset - 6.0 - actionBarSize.height), size: actionBarSize)
+            if let actionBarView = self.actionBar.view {
+                if actionBarView.superview == nil {
+                    self.addSubview(actionBarView)
+                }
+                transition.setFrame(view: actionBarView, frame: actionBarFrame)
+            }
+            bottomInset += 6.0 + actionBarSize.height + 6.0
+            
+            // The editor no longer tracks the keyboard; supply the bottom obstruction as a scroll inset.
+            // Only one of (system keyboard / emoji panel) is up at a time (the emoji panel uses an
+            // EmptyInputView, so inputHeight ≈ 0 while it shows); the home-indicator safe area is the floor.
+            _ = self.editor.update(size: editorFrame.size,
+                                   insets: UIEdgeInsets(top: editorTop, left: 0.0, bottom: bottomInset, right: 0.0),
+                                   contentMargins: UIEdgeInsets(top: 12.0, left: 0.0, bottom: 12.0, right: 0.0))
+
+            // Top edge effect (mirrors ComposePollScreen): a blurred gradient at the screen top that content
+            // fades under. Content color = the screen background (.white, matching self.backgroundColor).
+            let edgeEffectHeight: CGFloat = 88.0
+            let topEdgeEffectFrame = CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: edgeEffectHeight))
+            transition.setFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
+            self.topEdgeEffectView.update(content: .white, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
+
+            // While the emoji panel is up, hide the AttachmentController's bottom menu/tab bar so the
+            // container collapses that panel and re-lays out this screen at full height — otherwise the
+            // emoji panel renders behind the attachment menu (mirrors ComposePollScreen).
+            let isTabBarVisible = !(self.emojiKeyboard?.isEmojiMode ?? false)
+            if self.lastTabBarVisible != isTabBarVisible {
+                self.lastTabBarVisible = isTabBarVisible
+                if let controller = environment.controller() as? RichTextAttachmentScreen {
+                    let tabBarTransition = transition.containedViewLayoutTransition
+                    DispatchQueue.main.async { [weak controller] in
+                        controller?.updateTabBarVisibility(isTabBarVisible, tabBarTransition)
+                    }
+                }
+            }
 
             return availableSize
         }
@@ -480,5 +617,16 @@ final class RichTextAttachmentScreenComponent: Component {
 
     func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
+    }
+}
+
+@available(iOS 13.0, *)
+private final class RichTextActionContextReferenceSource: ContextReferenceContentSource {
+    private let sourceView: UIView
+    init(sourceView: UIView) { self.sourceView = sourceView }
+    func transitionInfo() -> ContextControllerReferenceViewInfo? {
+        return ContextControllerReferenceViewInfo(referenceView: self.sourceView,
+            contentAreaInScreenSpace: UIScreen.main.bounds,
+            insets: UIEdgeInsets(top: -4.0, left: 0.0, bottom: -4.0, right: 0.0), actionsPosition: .top)
     }
 }

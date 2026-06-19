@@ -45,6 +45,7 @@ swift_library(
         "//submodules/TelegramUI/Components/ChatTextInputMediaRecordingButton",
         "//submodules/ChatContextQuery",
         "//submodules/TelegramUI/Components/Chat/ChatInputTextNode",
+        "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
         "//submodules/TelegramUI/Components/Chat/ChatInputPanelNode",
         "//submodules/TelegramNotices",
         "//submodules/AnimatedCountLabelNode",

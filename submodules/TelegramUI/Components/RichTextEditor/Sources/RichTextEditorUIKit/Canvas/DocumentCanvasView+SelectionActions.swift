@@ -5,7 +5,7 @@ import RichTextEditorCore
 /// Pure, directly-callable selection logic, factored OUT of the gesture/menu callbacks so it can be
 /// unit-tested without synthesizing touch events. The recognizers (DocumentCanvasView+Interaction) and
 /// the menu actions (DocumentCanvasView+EditMenu) are thin wrappers over these.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// What a single tap at `resolved` should do. `.toggleMenu` — the tap landed on the existing collapsed
     /// caret OR inside the active selection → toggle the edit menu, KEEPING the current caret/selection (the

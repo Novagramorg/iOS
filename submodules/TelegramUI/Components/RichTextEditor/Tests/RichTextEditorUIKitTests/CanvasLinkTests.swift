@@ -104,7 +104,7 @@ final class CanvasLinkTests: XCTestCase {
         selectParagraph(v, "h", 1, 4)
         v.setLink("https://x.com")
         let r = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("h")) }!
-        let storage = r.layout.contentStorage.textStorage!
+        let storage = r.layout.backingStorage!
         let attrs = storage.attributes(at: 2, effectiveRange: nil)   // within the linked "ell"
         XCTAssertEqual(attrs[.link] as? String, "https://x.com")
         XCTAssertNotNil(attrs[.foregroundColor], "live storage carries the link foreground color")

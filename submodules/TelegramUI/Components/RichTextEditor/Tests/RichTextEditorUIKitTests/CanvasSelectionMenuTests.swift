@@ -141,10 +141,10 @@ final class CanvasSelectionMenuTests: XCTestCase {
         let v = DocumentCanvasView()
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hi")])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 40, height: 40))),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 40, height: 40))),
         ], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
-        let gap = v.boxes.first { $0 is ImageBlockBox }!.nodeStart
+        let gap = v.boxes.first { $0 is MediaBlockBox }!.nodeStart
         v.anchor = gap; v.head = gap
         v.selectWord(at: gap)
         XCTAssertEqual(v.selFrom, gap); XCTAssertEqual(v.selTo, gap)   // no word at a structural gap → unchanged
@@ -163,10 +163,10 @@ final class CanvasSelectionMenuTests: XCTestCase {
         let v = DocumentCanvasView()
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hi")])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 40, height: 40))),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 40, height: 40))),
         ], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
-        let gap = v.boxes.first { $0 is ImageBlockBox }!.nodeStart
+        let gap = v.boxes.first { $0 is MediaBlockBox }!.nodeStart
         v.anchor = gap; v.head = gap
         XCTAssertFalse(v.canPerformAction(#selector(UIResponderStandardEditActions.select(_:)), withSender: nil),
                        "Select is meaningless at an image gap (no word)")

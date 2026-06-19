@@ -3,11 +3,15 @@ import UIKit
 
 /// One paragraph block's TextKit 2 layout context (line layout only). All geometry is returned in
 /// the block's own container coordinate space (origin 0,0); the document view offsets it.
-@available(iOS 17.0, *)
-final class BlockLayout {
+@available(iOS 16.0, *)
+final class BlockLayout: BlockLayoutEngine {
     let contentStorage: NSTextContentStorage
     let layoutManager: NSTextLayoutManager
     let container: NSTextContainer
+
+    /// `BlockLayoutEngine` accessors abstracting the TextKit 2 internals the editor used to reach directly.
+    var backingStorage: NSTextStorage? { contentStorage.textStorage }
+    var containerWidth: CGFloat { container.size.width }
 
     /// Bumped on every change that affects what `drawText` produces (storage replacement or a
     /// display-only rendering attribute). A cheap, collision-free repaint signal — see
@@ -110,15 +114,86 @@ final class BlockLayout {
         return rects
     }
 
+    /// Selection rects styled like UITextView for the highlight WASH (not the glyph-hugging
+    /// `selectionRects` used by the OS witness / edit-menu / spoiler / marked-text geometry): a line the
+    /// selection covers from its END extends to the text container's trailing edge, and a line it covers
+    /// from its BEGINNING extends to the leading edge (x = 0, the container's far left) — so an indented
+    /// paragraph (quote / list) fills the full width on its covered lines instead of hugging the indented
+    /// glyphs. A line is covered to its end when the selection continues onto the next line (its segment
+    /// isn't the last) OR it is the last segment and `fillTrailingLine` (the selection continues past this
+    /// layout's last character — the block's trailing newline / next block is selected). A line is covered
+    /// from its beginning for every continuation line (i > 0) and, for the first line, when the selection
+    /// starts at the layout's very beginning (`start == 0`, i.e. the whole first line is covered). The line
+    /// where the selection genuinely begins / ends mid-text keeps hugging the glyphs on that side.
+    func selectionFillRects(start: Int, end: Int, fillTrailingLine: Bool) -> [CGRect] {
+        guard start < end, let range = textRange(start, end) else { return [] }
+        let edge = container.size.width
+        var segs: [CGRect] = []
+        layoutManager.enumerateTextSegments(in: range, type: .selection, options: []) { _, frame, _, _ in
+            segs.append(frame)
+            return true
+        }
+        let coveredFromStart = (start == 0)
+        return segs.enumerated().map { i, seg in
+            let toLeadingEdge = (i > 0) || coveredFromStart                  // covered from the line's beginning
+            let toTrailingEdge = (i < segs.count - 1) || fillTrailingLine    // covered to the line's end
+            let left = toLeadingEdge ? min(seg.minX, 0) : seg.minX
+            let right = toTrailingEdge ? max(seg.maxX, edge) : seg.maxX
+            return CGRect(x: left, y: seg.minY, width: right - left, height: seg.height)
+        }
+    }
+
+    /// The on-screen box of the inline attachment occupying `[offset, offset+1)` — its true glyph box,
+    /// derived from the attachment's own baseline-relative `attachmentBounds` and the line's baseline.
+    /// NOT the full line-fragment rect `selectionRects` returns (which is `lineHeight × lineHeightMultiple`
+    /// tall, so a host view sized to it stretches the emoji ~10% and pokes beyond the text). Returns nil
+    /// when no glyph is laid out at the offset.
+    func attachmentBox(at offset: Int) -> CGRect? {
+        guard let range = textRange(offset, offset + 1),
+              let attachment = attributedString.attribute(.attachment, at: offset, effectiveRange: nil) as? NSTextAttachment
+        else { return nil }
+        let attrs = attributedString.attributes(at: offset, effectiveRange: nil)
+        var result: CGRect?
+        // The selection segment gives the glyph's horizontal slot (minX) and its line fragment. `baselinePosition`
+        // is the baseline measured from the FRAGMENT TOP (frame.minY), so the absolute baseline is
+        // `frame.minY + baselinePosition` — using it raw would collapse every wrapped line onto line 1. The
+        // attachment's own `attachmentBounds` is baseline-relative with +y up (bottom = descender, top =
+        // ascender), so in container coords (y down) the box top = baseline − bounds.maxY.
+        layoutManager.enumerateTextSegments(in: range, type: .selection, options: []) { _, frame, baselinePosition, container in
+            let baseline = frame.minY + baselinePosition
+            let bounds = attachment.attachmentBounds(for: attrs, location: range.location,
+                                                     textContainer: container, proposedLineFragment: frame,
+                                                     position: CGPoint(x: frame.minX, y: baseline))
+            var box = CGRect(x: frame.minX + bounds.minX, y: baseline - bounds.maxY,
+                             width: bounds.width, height: bounds.height)
+            // An emoji renders a touch larger than its reserved glyph box (`renderBoost`). Grow the VISIBLE
+            // box symmetrically so it stays square and centered on the glyph — the reservation (and thus the
+            // line height) is untouched, so the extra size bleeds into the line's leading.
+            if let boost = (attachment as? EmojiTextAttachment)?.renderBoost, boost > 0 {
+                box = box.insetBy(dx: -boost / 2, dy: -boost / 2)
+            }
+            result = box
+            return false
+        }
+        return result
+    }
+
     func closestOffset(toPoint point: CGPoint) -> Int {
         // Pick by line first, then by x within that line: a tap in a line's vertical band must map to
         // that line even if a longer line above has an end-caret that's horizontally nearer (e.g.
         // tapping the empty space to the right of a short last line). `dy` is the vertical distance to
         // the caret's line band (0 when the tap is inside it); ties on the same line break on `dx`.
+        let ns = attributedString.string as NSString
         var best = 0
         var bestDy = CGFloat.greatestFiniteMagnitude
         var bestDx = CGFloat.greatestFiniteMagnitude
         for offset in 0...length {
+            // Skip offsets INSIDE a composed character sequence (a surrogate-pair / ZWJ / variation-selector
+            // emoji is ONE caret stop). A mid-cluster caret would let a later insert/delete split the cluster,
+            // leaving a stray code unit (the "service character"). Endpoints (0, length) are always stops.
+            if offset > 0, offset < length, ns.rangeOfComposedCharacterSequence(at: offset).location != offset {
+                continue
+            }
             let caret = caretRect(atOffset: offset)
             let dy = point.y < caret.minY ? caret.minY - point.y
                    : point.y > caret.maxY ? point.y - caret.maxY : 0

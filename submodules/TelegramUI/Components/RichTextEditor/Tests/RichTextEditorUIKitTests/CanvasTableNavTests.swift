@@ -137,13 +137,13 @@ final class CanvasTableNavTests: XCTestCase {
     func test_backspaceAtFirstCellStart_withImageBefore_movesToCaptionEnd() {
         let v = DocumentCanvasView()
         v.setBlocks([
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Cap")])),
             .table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 140), ColumnSpec(width: 140)],
                 rows: [Row(id: BlockID("r0"), cells: [cell("a", "Alpha"), cell("b", "Beta")])])),
         ], width: 340)
         v.frame = CGRect(x: 0, y: 0, width: 340, height: 500); v.layoutIfNeeded()
-        let imageBox = v.boxes.first { $0 is ImageBlockBox }!
+        let imageBox = v.boxes.first { $0 is MediaBlockBox }!
         let ap = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("ap")) }!
         let sizeBefore = v.documentSizeValue
         v.selectedTextRange = DocumentTextRange(DocumentTextPosition(ap.globalStart), DocumentTextPosition(ap.globalStart))

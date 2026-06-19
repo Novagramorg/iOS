@@ -8,9 +8,6 @@ import RichTextEditorCore
 /// `position(from:offset:)`. These lock the invariant the fix enforces: that primitive — and the
 /// document-bound positions — can only ever land on a RENDERABLE caret slot, never a structural token.
 final class CaretRenderableTests: XCTestCase {
-    private func meta() -> DocumentMetadata {
-        DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0), modifiedAt: Date(timeIntervalSince1970: 0))
-    }
     private func cell(_ id: String, _ t: String) -> Cell {
         Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "p"), runs: [TextRun(text: t)]))])
     }
@@ -91,7 +88,7 @@ final class CaretRenderableTests: XCTestCase {
     func test_trailingImage_endpointIsRenderable() {
         let v = canvas([
             .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Top")])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Capt")])),
         ])
         let end = (v.endOfDocument as! DocumentTextPosition).offset

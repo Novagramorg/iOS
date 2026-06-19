@@ -4,11 +4,9 @@ import XCTest
 final class TextMappingTests: XCTestCase {
     private func tree() -> DocNode {
         DocumentTree.build(from: Document(
-            metadata: .init(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                            modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [
                 .paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "One")])),
-                .image(ImageBlock(id: BlockID("i1"), assetID: "a",
+                .media(MediaBlock(id: BlockID("i1"), mediaID: "a",
                                   naturalSize: Size2D(width: 1, height: 1),
                                   caption: [TextRun(text: "Hi")])),
             ]))

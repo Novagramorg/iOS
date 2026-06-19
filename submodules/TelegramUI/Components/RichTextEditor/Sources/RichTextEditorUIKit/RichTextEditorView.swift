@@ -4,13 +4,71 @@ import RichTextEditorCore
 
 /// Public façade. Renders all block types (paragraphs, images, tables) in a vertical canvas
 /// with continuous cross-block selection.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     private let scrollView = UIScrollView()
     let canvas = DocumentCanvasView()
-    private var metadata = DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                            modifiedAt: Date(timeIntervalSince1970: 0))
-    private var assets: [String: UIImage] = [:]
+
+    /// Floor for the content height returned by `update(...)`/`performLayout`. Defaults to 44pt (a document
+    /// editor wants a tappable minimum body). A compact host (e.g. the chat composer) sets it to 0 so the
+    /// measured height hugs the actual text and the host owns the minimum field height.
+    public var minimumContentHeight: CGFloat = 44
+
+    /// Host-settable colors. Defaults to `.default` (today's look). Assigning re-applies colors to the live
+    /// editor: the mapper (text/link), the caret/selection/blockquote accent, and a reload so boxes rebuild
+    /// with the themed mapper. A reload resets the live selection — theme changes are host-driven (e.g. an
+    /// app appearance switch), so this is acceptable.
+    public var theme: RichTextEditorTheme = .default {
+        didSet {
+            canvas.applyTheme(theme)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
+    /// Fires (no payload) whenever anything changes — a content edit, a content-size change, or a
+    /// selection/caret move. The host responds by re-running its own layout (which calls
+    /// `update(size:insets:)`). May fire more than once per logical change; treat it as idempotent.
+    public var onChange: (() -> Void)?
+
+    /// Fires once when the editor gains first-responder focus (the editing surface becomes first
+    /// responder) — not on a repeat tap while already focused. A host can react by showing chrome.
+    public var onBecameFirstResponder: (() -> Void)?
+
+    /// Fires once when the editor loses first-responder focus (resigns first responder). A host can
+    /// react by dismissing a panel / chrome.
+    public var onResignedFirstResponder: (() -> Void)?
+
+    /// Transform the editor's default edit-menu elements into the final set. `defaultElements` is the system
+    /// suggested actions (Cut/Copy/Paste/Select + Writing Tools) followed by the editor's own custom items
+    /// (the built-in "Format" submenu + Look Up / Translate / Share). Return the elements to present.
+    /// Consulted ONLY for a non-collapsed selection, ONLY on iOS 16+ (`UIEditMenuInteraction`); on iOS 13–15
+    /// the editor's built-in items are shown unchanged. nil ⇒ default menu.
+    public var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])? {
+        get { canvas.hostContextMenuItemsProvider }
+        set { canvas.hostContextMenuItemsProvider = newValue }
+    }
+
+    /// A read-only snapshot of the editor at the current selection — drives a host toolbar's per-action
+    /// availability + selected state. Pure: never mutates or fires `onChange`.
+    public struct EditorState: Equatable {
+        public let bold: Bool
+        public let italic: Bool
+        public let underline: Bool
+        public let strikethrough: Bool
+        public let code: Bool
+        public let paragraphStyle: ParagraphStyleName?
+        public let listMarker: ListMarker?
+        public let link: String?
+        public let hasSelection: Bool
+        public let isInTable: Bool
+        public let canUndo: Bool
+        public let canRedo: Bool
+    }
+
+    public func currentState() -> EditorState { canvas.currentState() }
 
     public override init(frame: CGRect) {
         super.init(frame: frame)
@@ -19,71 +77,99 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         // recognizer — that delay compounded the tap-to-caret latency. The handle-pan↔scroll arbitration
         // is gate-only (DocumentCanvasView.gestureRecognizerShouldBegin), so this is safe.
         scrollView.delaysContentTouches = false
+        // The parent owns insets exactly (via update(size:insets:)). The editor frame can reach into the
+        // bottom safe area, so the default .automatic adjustment would ADD the home-indicator inset on top
+        // of the parent's contentInset.bottom (double-counting it at rest). .never keeps the inset contract exact.
+        scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.delegate = self
         scrollView.addSubview(canvas)
         canvas.installSelectionInteractions()
-        canvas.imageProvider = { [weak self] id in self?.assets[id] }
         // The canvas is sized frame-based in layoutSubviews, so a content-height change (typing wraps a
         // line, a cell grows, undo, …) must re-trigger our layout — otherwise it only updates on the next
         // layout pass (e.g. a rotation).
-        canvas.onContentSizeChange = { [weak self] in self?.setNeedsLayout() }
+        canvas.onContentSizeChange = { [weak self] in self?.onChange?() }   // pure relay; the host re-lays-out via update()
         // The OS moves the caret via arrows through the canvas's selectedTextRange setter, which can land
         // it off-screen (e.g. arrowing up out of a tall image to the block above). Scroll it back into view.
-        canvas.onSelectionChange = { [weak self] in self?.scrollCaretIntoView() }
-        let nc = NotificationCenter.default
-        nc.addObserver(self, selector: #selector(keyboardFrameWillChange(_:)),
-                       name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
-        nc.addObserver(self, selector: #selector(keyboardWillHide(_:)),
-                       name: UIResponder.keyboardWillHideNotification, object: nil)
+        canvas.onSelectionChange = { [weak self] in self?.scrollCaretIntoView(); self?.onChange?() }
+        // Surface first-responder transitions (the canvas is the actual first responder) to the host.
+        canvas.onBecameFirstResponder = { [weak self] in self?.onBecameFirstResponder?() }
+        canvas.onResignedFirstResponder = { [weak self] in self?.onResignedFirstResponder?() }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
-    deinit { NotificationCenter.default.removeObserver(self) }
 
     public var document: Document {
-        get { Document(metadata: metadata, blocks: canvas.currentBlocks()) }
+        get { Document(blocks: canvas.currentBlocks()) }
         set {
-            metadata = newValue.metadata
             var blocks = newValue.blocks
             if blocks.isEmpty { blocks = [.paragraph(ParagraphBlock(id: BlockID.generate()))] }
             canvas.reload(blocks, width: bounds.width)
-            setNeedsLayout()
+            performLayout(size: bounds.size)   // explicit parent-driven layout for the content swap (no self-schedule)
         }
     }
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        scrollView.frame = bounds
-        canvas.setParagraphsWidthIfNeeded(bounds.width)
-        let height = canvas.intrinsicContentSize.height
-        canvas.frame = CGRect(x: 0, y: 0, width: bounds.width, height: max(height, 44))
-        canvas.layoutIfNeeded()
-        scrollView.contentSize = CGSize(width: bounds.width, height: canvas.frame.height)
+        performLayout(size: bounds.size)
     }
 
-    // MARK: Keyboard avoidance
-
-    /// The vertical overlap (points) between the scroll view's window-space frame and the keyboard's
-    /// window-space frame — i.e. the bottom inset the scroll content needs so nothing hides behind the
-    /// keyboard. 0 when they don't intersect (keyboard offscreen / below the editor).
-    static func keyboardOverlap(scrollFrameInWindow: CGRect, keyboardFrameInWindow: CGRect) -> CGFloat {
-        let intersection = scrollFrameInWindow.intersection(keyboardFrameInWindow)
-        return intersection.isNull ? 0 : intersection.height
+    /// Parent-driven layout. Lays the document out at `size.width`, applies `insets` to the internal scroll
+    /// view (bottom = the keyboard/input-panel overlap the parent owns), and returns the measured content
+    /// height (a 44pt minimum, matching the laid-out canvas) so a content-hugging host can size to it; a
+    /// fixed-region host ignores it. The view does NOT set its own frame — the parent does that, then calls
+    /// this (and may use the return to pick the frame).
+    ///
+    /// `contentMargins` is interior padding that is PART of the content (distinct from `insets`): the text
+    /// lays out inset by it (wrapping narrower, offset from the edges), the content height grows by
+    /// top+bottom, and the margin area still hit-tests to the nearest position. Insets are non-interactable
+    /// bands the content scrolls UNDER (nav bar / keyboard / input panel). Both are layout-affecting inputs,
+    /// so — like `insets` — margins are applied HERE rather than via a side-effecting property setter (which
+    /// would hide a re-layout and could re-enter `onChange`); pass them every `update`, and they persist
+    /// across intervening system layout passes until the next `update`.
+    @discardableResult
+    public func update(size: CGSize, insets: UIEdgeInsets, contentMargins: UIEdgeInsets = .zero) -> CGFloat {
+        scrollView.contentInset = insets
+        scrollView.verticalScrollIndicatorInsets = insets
+        canvas.contentMargins = contentMargins
+        return performLayout(size: size)
     }
 
-    /// Applies `overlap` as the scroll view's bottom content + indicator inset. Internal so the keyboard
-    /// notification handler and tests share one path.
-    func applyKeyboardOverlap(_ overlap: CGFloat) {
-        scrollView.contentInset.bottom = overlap
-        scrollView.verticalScrollIndicatorInsets.bottom = overlap
+    /// Sizes the scroll view + canvas to `size` and returns the measured CONTENT height (min 44). The
+    /// canvas is laid out at least as tall as the VISIBLE viewport (`size.height` minus the top/bottom
+    /// content insets) even when the content is shorter, so its tap/long-press/loupe recognizers receive
+    /// touches anywhere in the unobscured editor area — a tap in the empty space below the text maps to the
+    /// nearest position (document end), matching UITextView. Flooring at the visible height (not the full
+    /// frame) keeps the scroll content == visible area for a short doc, so the scrollable range is zero (no
+    /// phantom scroll/bounce over the inset bands); the insets are read here so a later `update` with new
+    /// insets re-flows the content size. Insets themselves are NOT written here, so a system layout pass
+    /// (rotation, etc.) never clobbers the parent-applied inset; only `update(size:insets:)` changes them.
+    @discardableResult
+    private func performLayout(size: CGSize) -> CGFloat {
+        scrollView.frame = CGRect(origin: .zero, size: size)
+        canvas.setParagraphsWidthIfNeeded(size.width)
+        let contentHeight = max(canvas.intrinsicContentSize.height, self.minimumContentHeight)
+        let insets = scrollView.contentInset
+        let visibleHeight = max(size.height - insets.top - insets.bottom, 0)   // unobscured viewport
+        let canvasHeight = max(contentHeight, visibleHeight)   // fill the visible area so empty-area taps still hit the canvas
+        canvas.frame = CGRect(x: 0, y: 0, width: size.width, height: canvasHeight)
+        canvas.layoutContent()   // drive the canvas layout explicitly (not via the needsLayout flag), so a
+                                 // setting applied just above (margins, width) takes effect even when the
+                                 // canvas frame didn't change (e.g. a short doc whose height is floored).
+        scrollView.contentSize = CGSize(width: size.width, height: canvasHeight)
+        return contentHeight
     }
+
     /// Test accessor: the current bottom content inset.
     var bottomContentInsetForTesting: CGFloat { scrollView.contentInset.bottom }
+    /// Test accessor: the scroll view's content height (the scrollable extent).
+    var scrollContentHeightForTesting: CGFloat { scrollView.contentSize.height }
     /// Test accessor: the scroll view's content offset (read to assert caret-follow scrolling; set to
     /// simulate the caret being scrolled off-screen).
     var contentOffsetForTesting: CGPoint {
         get { scrollView.contentOffset }
         set { scrollView.contentOffset = newValue }
     }
+    /// Test accessor: the underlying canvas (to set up selection in unit tests).
+    var canvasForTesting: DocumentCanvasView { canvas }
 
     public func toggleBold() { canvas.toggleBold() }
     public func toggleItalic() { canvas.toggleItalic() }
@@ -105,6 +191,8 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func insertTableColumnLeft() { canvas.insertTableColumnLeft() }
     public func insertTableColumnRight() { canvas.insertTableColumnRight() }
     public func deleteTableColumn() { canvas.deleteTableColumn() }
+    /// Deletes the table the caret is in (no-op otherwise).
+    public func deleteTable() { canvas.deleteTable() }
     public func setTableColumnAlignment(_ alignment: TextAlignment) { canvas.setTableColumnAlignment(alignment) }
 
     /// Inserts an empty `rows`×`cols` table (row 0 a header) at the caret. No-op unless the caret is in
@@ -118,6 +206,13 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// The link the entire selection carries (for prefilling a link editor), or nil.
     public func currentLink() -> String? { canvas.currentLink() }
 
+    /// The plain text of the current selection (empty string when the selection is collapsed). Used by a
+    /// host link editor to label the prompt and decide add-vs-edit.
+    public func selectedText() -> String {
+        guard let range = canvas.selectedTextRange else { return "" }
+        return canvas.text(in: range) ?? ""
+    }
+
     /// Increases the list nesting level of the touched list items (no-op on non-list paragraphs).
     public func indent() { canvas.indent() }
     /// Decreases the list nesting level of the touched list items (clamps at 0; no-op on non-list).
@@ -126,6 +221,26 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Inserts an inline custom emoji `id` (host-resolved to a view via `registerEmojiViewProvider`) at
     /// the caret. `altText` is its plain-text / Markdown form (optional).
     public func insertEmoji(id: String, altText: String? = nil) { canvas.insertEmoji(id: id, altText: altText) }
+
+    /// Inserts plain `text` at the caret (replacing any selection) in one undo step. Used for unicode
+    /// emoji and any programmatic plain-text insertion.
+    public func insertText(_ text: String) { canvas.insertText(text) }
+
+    /// Deletes one unit before the caret (drives a custom keyboard's backspace key).
+    public func deleteBackward() { canvas.deleteBackward() }
+
+    /// A custom input view that replaces the system keyboard while the editor is first responder.
+    /// Set an `EmptyInputView` to hide the keyboard while showing a separate input panel (the caret
+    /// stays visible because the canvas remains first responder); `nil` restores the system keyboard.
+    public var customInputView: UIView? {
+        get { canvas.customInputView }
+        set {
+            canvas.customInputView = newValue
+            if canvas.isFirstResponder {
+                canvas.reloadInputViews()
+            }
+        }
+    }
 
     /// Registers the closure that turns an emoji `id` (+ requested square size) into a FRESH, non-
     /// interactive view. The editor owns/positions/removes it and makes it ride scrolling.
@@ -146,22 +261,34 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         set { canvas.blockViewOverscan = newValue }
     }
 
-    public func insertImage(_ image: UIImage, naturalSize: CGSize) {
-        let assetID = BlockID.generate().rawValue
-        assets[assetID] = image
-        canvas.insertImage(image, naturalSize: naturalSize, assetID: assetID)
+    /// Inserts a media block (`kind`) at the caret. The host resolves `mediaID` to a view via
+    /// `registerMediaViewProvider`. `naturalSize` drives the block's aspect-correct display height.
+    public func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind) {
+        canvas.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind)
     }
 
-    /// Registers an image for an assetID referenced by the loaded document (demo/asset-store seam).
-    public func registerAsset(_ image: UIImage, forAssetID assetID: String) {
-        assets[assetID] = image
-        canvas.setNeedsDisplay()
+    /// Registers the closure that turns a media `mediaID` (+ the medium's natural size) into a FRESH
+    /// `RichTextMediaItemView`. Called once per occurrence; the editor owns/positions/resizes/culls it.
+    public func registerMediaViewProvider(
+        _ provider: @escaping (_ mediaID: String, _ naturalSize: CGSize) -> RichTextMediaItemView?
+    ) {
+        canvas.mediaViewProvider = provider
     }
 
-    /// Demo helper: place a gap cursor just before the first image block.
-    public func placeGapCursorBeforeFirstImage() {
-        canvas.placeGapCursorBeforeFirstImage()
+    /// Hide a media view when its canvas frame is more than this far outside the viewport (default 50pt).
+    public var mediaCullMargin: CGFloat {
+        get { canvas.mediaCullMargin }
+        set { canvas.mediaCullMargin = newValue }
     }
+
+    /// Test seam: the hosted media view for the first media block in `document`, if realized.
+    func hostedMediaViewForTesting(forFirstMediaBlock document: Document) -> RichTextMediaItemView? {
+        for block in document.blocks { if case let .media(m) = block { return canvas.hostedMediaViewForTesting(m.id) } }
+        return nil
+    }
+
+    /// Test seam: the number of realized hosted media views.
+    var hostedMediaCountForTesting: Int { canvas.hostedMediaCountForTesting }
 
     /// Demo helper: select from mid-way through the 2nd block to mid-way through the 3rd.
     public func selectRangeAcrossFirstTwoBodyParagraphs() {
@@ -189,43 +316,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     @discardableResult
     public override func becomeFirstResponder() -> Bool { canvas.becomeFirstResponder() }
 
-    // MARK: Keyboard notification handlers
-
-    @objc private func keyboardFrameWillChange(_ note: Notification) {
-        // Only react to our own keyboard (the editor is focused); hide is handled separately so the
-        // inset still resets if focus was already lost.
-        guard canvas.isFirstResponder,
-              let info = note.userInfo,
-              let endFrame = (info[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
-        else { return }
-        // The keyboard frame is in screen coordinates; for a standard single-window app this matches the
-        // window. Convert the scroll view's frame to window space for the overlap.
-        let scrollInWindow = convert(scrollView.frame, to: nil)
-        let overlap = Self.keyboardOverlap(scrollFrameInWindow: scrollInWindow, keyboardFrameInWindow: endFrame)
-        animateAlongsideKeyboard(info) {
-            self.applyKeyboardOverlap(overlap)
-        } completion: {
-            self.scrollCaretIntoView(animated: true)   // keyboard show: a single, non-arrow event → smooth scroll is fine
-        }
-    }
-
-    @objc private func keyboardWillHide(_ note: Notification) {
-        animateAlongsideKeyboard(note.userInfo, { self.applyKeyboardOverlap(0) }, completion: nil)
-    }
-
-    /// Runs `changes` inside the keyboard's own animation (duration + curve from the notification),
-    /// falling back to a no-animation apply if the info is missing.
-    private func animateAlongsideKeyboard(_ info: [AnyHashable: Any]?, _ changes: @escaping () -> Void,
-                                          completion: (() -> Void)?) {
-        let duration = (info?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
-        let curveRaw = (info?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt)
-            ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
-        UIView.animate(withDuration: duration, delay: 0,
-                       options: UIView.AnimationOptions(rawValue: curveRaw << 16),
-                       animations: changes) { _ in completion?() }
-    }
-
-    /// Scrolls the outer scroll view so the caret is visible (above the keyboard; respects contentInset).
+    /// Scrolls the outer scroll view so the caret is visible (above the bottom inset; respects contentInset).
     /// Arrow-key nav drives this via `onSelectionChange` with `animated: false`: a synchronous scroll
     /// settles before the setter returns, so a rapid second arrow queries a stable layout. An ANIMATED
     /// scroll mutates `contentOffset` mid-flight, and a second arrow then computes its destination against
@@ -233,11 +324,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// when the caret is actually outside the visible band, so in-screen nav/typing never churns the scroll.
     private func scrollCaretIntoView(animated: Bool = false) {
         guard canvas.isFirstResponder else { return }
-        // After a content-changing edit the canvas frame + scroll `contentSize` are invalidated but not yet
-        // flushed (`onContentSizeChange` only schedules our layout). Flush now so `caretRect` and the
-        // scrollable extent reflect the edit before we measure/scroll. No-op for arrow nav (no pending
-        // layout), so that path is unchanged.
-        layoutIfNeeded()
+        // Lay the canvas out explicitly so `caretRect` + the scrollable extent reflect the latest edit
+        // before we measure/scroll — the editor convention is parent-driven layout, so we don't rely on a
+        // pending self-scheduled pass. Idempotent for arrow nav (content unchanged → same layout).
+        performLayout(size: bounds.size)
         var caret = canvas.caretRect(for: DocumentTextPosition(canvas.head))
         guard caret != .zero, !caret.isNull else { return }
         // An image-gap caret is full-image-height; its whole rect would never fit the visible band (→ always
@@ -252,5 +342,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         canvas.viewportDidChange()   // realize/recycle block views + emoji + blockquote underlay for the new viewport
     }
+
+    // MARK: - Composer-host scroll accessors (internal — consumed by RichTextEditorView+ComposerHost.swift)
+
+    var scrollViewContentOffset: CGPoint { self.scrollView.contentOffset }
+    func setScrollViewIndicatorInsets(_ insets: UIEdgeInsets) { self.scrollView.verticalScrollIndicatorInsets = insets }
 }
 #endif

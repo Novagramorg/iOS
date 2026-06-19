@@ -4,6 +4,7 @@ import UIKit
 @testable import RichTextEditorUIKit
 import RichTextEditorCore
 
+@available(iOS 16.0, *)
 final class CanvasEditMenuActionsTests: XCTestCase {
     func canvas() -> DocumentCanvasView {
         let v = DocumentCanvasView()

@@ -2,7 +2,7 @@
 import UIKit
 import RichTextEditorCore
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// Inserts an inline emoji (one `U+FFFC` carrying an `EmojiRef`) at the caret, in whatever leaf
     /// region (body paragraph / image caption / table cell) owns it. Clears any selection first. The
@@ -33,7 +33,12 @@ extension DocumentCanvasView {
             // incl. empty captions/cells), then stamp our attachment over them. Any inherited attachment
             // from a neighbouring emoji is replaced; read-back is emoji-only regardless, so nothing leaks.
             var attrs = typingAttributeDict(region: region, atLocal: local)
-            attrs[.attachment] = EmojiTextAttachment(ref: ref, scale: mapper.emojiScale)
+            // Match the body render-boost the mapper bakes in on reload (captions/cells are body-styled, so
+            // an unresolved ref defaults to .body) — otherwise a freshly-inserted body emoji would render at
+            // its bare glyph box until the next full document reload.
+            let regionStyle = boxes.compactMap { $0 as? BlockBox }.first { $0.textRef == region.ref }?.style ?? .body
+            attrs[.attachment] = EmojiTextAttachment(ref: ref, scale: mapper.emojiScale,
+                                                     renderBoost: mapper.emojiRenderBoost(for: regionStyle))
             let frag = NSAttributedString(string: "\u{FFFC}", attributes: attrs)
             region.layout.replace(start: local, end: local, with: frag)
             recomputeSpans()
@@ -43,7 +48,7 @@ extension DocumentCanvasView {
     }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// One emoji occurrence found in the laid-out text.
     private struct EmojiOccurrence { let ref: EmojiRef; let canvasRect: CGRect; let regionStart: Int }
@@ -59,8 +64,7 @@ extension DocumentCanvasView {
             let full = NSRange(location: 0, length: attr.length)
             attr.enumerateAttribute(.attachment, in: full, options: []) { value, range, _ in
                 guard let att = value as? EmojiTextAttachment,
-                      let box = region.layout.selectionRects(start: range.location,
-                                                             end: range.location + range.length).first
+                      let box = region.layout.attachmentBox(at: range.location)
                 else { return }
                 let canvasRect = box.offsetBy(dx: region.canvasOrigin.x, dy: region.canvasOrigin.y)
                 occ.append(EmojiOccurrence(ref: att.ref, canvasRect: canvasRect, regionStart: region.globalStart))

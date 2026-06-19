@@ -22,6 +22,8 @@ final class EmojiViewHostingTests: XCTestCase {
         c.emojiViewProvider = { p.make($0, $1) }
         c.setBlocks([.paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "ab")]))], width: 320)
         c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+        c.layoutIfNeeded()
+        c.simulateParentLayout()
         c.anchor = c.boxes[0].textStart + 1; c.head = c.anchor
         c.insertEmoji(id: "star", altText: nil)
         c.layoutIfNeeded()
@@ -78,8 +80,6 @@ final class EmojiViewHostingTests: XCTestCase {
             let v = UIView(frame: CGRect(origin: .zero, size: size)); v.accessibilityIdentifier = id; return v
         }
         editor.document = Document(
-            metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                       modifiedAt: Date(timeIntervalSince1970: 0)),
             blocks: [.paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "ab")]))])
         editor.layoutIfNeeded()
         editor.insertEmoji(id: "star", altText: ":star:")

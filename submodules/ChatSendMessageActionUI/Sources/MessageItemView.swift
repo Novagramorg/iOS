@@ -245,7 +245,7 @@ final class MessageItemView: UIView {
     }
     
     func animateIn(
-        sourceTextInputView: ChatInputTextView?,
+        textInputSource: ChatSendMessageContextScreenTextInputSource?,
         isEditMessage: Bool,
         transition: ComponentTransition
     ) {
@@ -260,7 +260,7 @@ final class MessageItemView: UIView {
     }
     
     func animateOut(
-        sourceTextInputView: ChatInputTextView?,
+        textInputSource: ChatSendMessageContextScreenTextInputSource?,
         toEmpty: Bool,
         isEditMessage: Bool,
         transition: ComponentTransition
@@ -286,7 +286,7 @@ final class MessageItemView: UIView {
         textString: NSAttributedString,
         richTextPreview: ChatSendMessageContextScreenRichTextPreview?,
         maxRichBubbleWidth: CGFloat,
-        sourceTextInputView: ChatInputTextView?,
+        textInputSource: ChatSendMessageContextScreenTextInputSource?,
         emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?,
         sourceMediaPreview: ChatSendMessageContextScreenMediaPreview?,
         mediaCaptionIsAbove: Bool,
@@ -419,8 +419,8 @@ final class MessageItemView: UIView {
                     self.textNode = textNode
                     self.textClippingContainer.addSubview(textNode.view)
                     
-                    if let sourceTextInputView {
-                        var textContainerInset = sourceTextInputView.defaultTextContainerInset
+                    if let textInputSource {
+                        var textContainerInset = textInputSource.defaultTextContainerInset
                         textContainerInset.right = 0.0
                         textNode.textView.defaultTextContainerInset = textContainerInset
                     }
@@ -436,8 +436,8 @@ final class MessageItemView: UIView {
                 
                 let mainColor = presentationData.theme.chat.message.outgoing.accentControlColor
                 let mappedLineStyle: ChatInputTextView.Theme.Quote.LineStyle
-                if let sourceTextInputView, let textTheme = sourceTextInputView.theme {
-                    switch textTheme.quote.lineStyle {
+                if let textInputSource, let lineStyle = textInputSource.quoteLineStyle {
+                    switch lineStyle {
                     case .solid:
                         mappedLineStyle = .solid(color: mainColor)
                     case .doubleDashed:
@@ -508,8 +508,8 @@ final class MessageItemView: UIView {
                 let textClippingContainerFrame = CGRect(origin: CGPoint(x: backgroundFrame.minX + 1.0, y: backgroundFrame.minY + 1.0), size: CGSize(width: backgroundFrame.width - 1.0 - 7.0, height: backgroundFrame.height - 1.0 - 1.0))
                 
                 var textClippingContainerBounds = CGRect(origin: CGPoint(), size: textClippingContainerFrame.size)
-                if explicitBackgroundSize != nil, let sourceTextInputView {
-                    textClippingContainerBounds.origin.y = sourceTextInputView.contentOffset.y
+                if explicitBackgroundSize != nil, let textInputSource {
+                    textClippingContainerBounds.origin.y = textInputSource.contentOffset.y
                 } else {
                     textClippingContainerBounds.origin.y = unclippedPositionedTextHeight - backgroundSize.height + 4.0
                     textClippingContainerBounds.origin.y = max(0.0, textClippingContainerBounds.origin.y)
@@ -623,8 +623,8 @@ final class MessageItemView: UIView {
                 self.textNode = textNode
                 self.textClippingContainer.addSubview(textNode.view)
                 
-                if let sourceTextInputView {
-                    textNode.textView.defaultTextContainerInset = sourceTextInputView.defaultTextContainerInset
+                if let textInputSource {
+                    textNode.textView.defaultTextContainerInset = textInputSource.defaultTextContainerInset
                 }
                 
                 let messageAttributedText = NSMutableAttributedString(attributedString: textString)
@@ -638,8 +638,8 @@ final class MessageItemView: UIView {
             
             let mainColor = presentationData.theme.chat.message.outgoing.accentControlColor
             let mappedLineStyle: ChatInputTextView.Theme.Quote.LineStyle
-            if let sourceTextInputView, let textTheme = sourceTextInputView.theme {
-                switch textTheme.quote.lineStyle {
+            if let textInputSource, let lineStyle = textInputSource.quoteLineStyle {
+                switch lineStyle {
                 case .solid:
                     mappedLineStyle = .solid(color: mainColor)
                 case .doubleDashed:
@@ -664,8 +664,8 @@ final class MessageItemView: UIView {
             let textPositioningInsets = UIEdgeInsets(top: -5.0, left: 0.0, bottom: -4.0, right: -4.0)
             
             var currentRightInset: CGFloat = 0.0
-            if let sourceTextInputView {
-                currentRightInset = sourceTextInputView.currentRightInset
+            if let textInputSource {
+                currentRightInset = textInputSource.currentRightInset
             }
             let textHeight = textNode.textHeightForWidth(maxTextWidth, rightInset: currentRightInset)
             textNode.updateLayout(size: CGSize(width: maxTextWidth, height: textHeight))
@@ -731,8 +731,8 @@ final class MessageItemView: UIView {
             let textClippingContainerFrame = CGRect(origin: CGPoint(x: 1.0, y: 1.0), size: CGSize(width: backgroundSize.width - 1.0 - 7.0, height: backgroundSize.height - 1.0 - 1.0))
             
             var textClippingContainerBounds = CGRect(origin: CGPoint(), size: textClippingContainerFrame.size)
-            if explicitBackgroundSize != nil, let sourceTextInputView {
-                textClippingContainerBounds.origin.y = sourceTextInputView.contentOffset.y
+            if explicitBackgroundSize != nil, let textInputSource {
+                textClippingContainerBounds.origin.y = textInputSource.contentOffset.y
             } else {
                 textClippingContainerBounds.origin.y = unclippedPositionedTextHeight - backgroundSize.height + 4.0
                 textClippingContainerBounds.origin.y = max(0.0, textClippingContainerBounds.origin.y)

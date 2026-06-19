@@ -266,7 +266,7 @@ private final class AttachButtonComponent: CombinedComponent {
                 imageName = "Chat/Attach Menu/Reply"
             case .richText:
                 //TODO:localize
-                name = "Text"
+                name = "Article"
                 imageName = "Chat/Attach Menu/Todo"
             }
 
@@ -1389,7 +1389,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                         hasEntityKeyboard: hasEntityKeyboard,
                         gesture: gesture,
                         sourceSendButton: node.view,
-                        textInputView: textInputNode.textView,
+                        textInputSource: textInputNode.textView,
                         emojiViewProvider: textInputPanelNode.emojiViewProvider,
                         completion: {
                         },
@@ -1467,6 +1467,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
         }, presentInputTextTranslation: { _, _ in
         }, sendEmoji: { _, _, _ in
         }, openAICompose: {
+        }, openExpandedInput: {
         }, openSetPeerAvatar: {
         }, updateHistoryFilter: { _ in
         }, updateChatLocationThread: { _, _ in
@@ -2199,7 +2200,7 @@ final class AttachmentPanel: ASDisplayNode, ASScrollViewDelegate, ASGestureRecog
                 accessibilityTitle = self.presentationData.strings.Attachment_Reply
             case .richText:
                 //TODO:localize
-                accessibilityTitle = "Text"
+                accessibilityTitle = "Article"
             }
             buttonView.isAccessibilityElement = true
             buttonView.accessibilityLabel = accessibilityTitle

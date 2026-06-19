@@ -5,7 +5,7 @@ import RichTextEditorCore
 /// A table block: a grid of cells, each cell a `BlockStack`. Token size follows the Core model
 /// (table = Σrows + 2; row = Σcells + 2; cell = Σblocks + 2). Cells are laid out row-major; the
 /// canvas treats the whole table as one `CanvasBlock` and recurses via `leafRegions()`.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class TableBlockBox: CanvasBlock {
     let id: BlockID
     let columns: [ColumnSpec]
@@ -40,12 +40,6 @@ final class TableBlockBox: CanvasBlock {
     /// (Step 2). Tunable via the demo screenshot. Columns still scale-to-fit while every column stays at or
     /// above this; once one would drop below it, the table keeps its natural width and scrolls.
     static let minColumnWidth: CGFloat = 100
-    static let gridColor = UIColor { tc in
-        tc.userInterfaceStyle == .dark ? UIColor(white: 0.27, alpha: 1) : UIColor(white: 0.88, alpha: 1)  // ≈#E0E0E0 light
-    }
-    /// Header-row (row 0) background tint: gray at 0.1 alpha.
-    static let headerRowBackground = UIColor(white: 0.5, alpha: 0.1)
-
     init(table: TableBlock, mapper: AttributedStringMapper, width: CGFloat) {
         id = table.id
         columns = table.columns
@@ -61,7 +55,7 @@ final class TableBlockBox: CanvasBlock {
                 BlockStack(boxes: c.blocks.compactMap { block in
                     switch block {
                     case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: 100)
-                    case .image(let img): return ImageBlockBox(image: img, mapper: mapper, width: 100)
+                    case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: 100)
                     case .table: return nil   // no nested tables in v1
                     }
                 })
@@ -333,7 +327,7 @@ final class TableBlockBox: CanvasBlock {
         // Header-row tint, clipped to the rounded border so the top corners round with the table.
         if let headerRect = headerRowBackgroundRect() {
             ctx.saveGState(); outer.addClip()
-            TableBlockBox.headerRowBackground.setFill(); ctx.fill(headerRect)
+            mapper.theme.tableHeaderBackground.setFill(); ctx.fill(headerRect)
             ctx.restoreGState()
         }
         var y = frame.minY + TableBlockBox.border
@@ -352,7 +346,7 @@ final class TableBlockBox: CanvasBlock {
             y += rowHeights[r] + TableBlockBox.border
         }
         // grid lines (interior dividers + outer border), using cached geometry
-        TableBlockBox.gridColor.setStroke()
+        mapper.theme.tableBorder.setStroke()
         ctx.setLineWidth(TableBlockBox.border)
         if columnWidths.count > 1 {
             var cx = frame.minX + TableBlockBox.border
@@ -405,8 +399,8 @@ final class TableBlockBox: CanvasBlock {
     // caret resting on a table boundary is snapped into a cell first (see `caretSnappedIntoCell`) — but
     // keeping this per-instance contains any future accidental write to one table rather than leaking
     // it into a process-wide shared layout.
-    private let emptyLayout = BlockLayout(attributedString: NSAttributedString(string: ""), width: 1)
-    var textLayout: BlockLayout { emptyLayout }
+    private let emptyLayout = makeBlockLayout(attributedString: NSAttributedString(string: ""), width: 1)
+    var textLayout: BlockLayoutEngine { emptyLayout }
     var textStart: Int { nodeStart }
     var textLength: Int { 0 }
     var textRef: TextNodeRef { .paragraph(id) }

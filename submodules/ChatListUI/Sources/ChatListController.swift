@@ -5226,7 +5226,13 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     case .joined:
                         didJoin = true
                     case let .webView(webView):
-                        self.context.sharedContext.openJoinChatWebView(context: self.context, parentController: self, updatedPresentationData: nil, webView: webView)
+                        let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId))
+                        |> deliverOnMainQueue).startStandalone(next: { [weak self] peer in
+                            guard let self, let peer else {
+                                return
+                            }
+                            self.context.sharedContext.openJoinChatWebView(context: self.context, parentController: self, updatedPresentationData: nil, webView: webView, chatTitle: peer.compactDisplayTitle)
+                        })
                     }
                 }, error: { [weak self] error in
                     guard let strongSelf = self else {

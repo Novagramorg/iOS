@@ -15,6 +15,7 @@ final class InputDelegateSpy: NSObject, UITextInputDelegate {
     func conversationContext(_ context: UIConversationContext?, didChange ti: UITextInput?) {}
 }
 
+@available(iOS 16.0, *)
 final class MarkedTextTests: XCTestCase {
     // Shared harness: two body paragraphs, laid out, first-responder-free (witnesses don't need focus).
     func makeCanvas(_ texts: [String] = ["Alpha", "Beta"]) -> DocumentCanvasView {
@@ -31,7 +32,9 @@ final class MarkedTextTests: XCTestCase {
 
     func test_predictionTraits_areEnabled() {
         let v = makeCanvas()
-        XCTAssertEqual(v.inlinePredictionType, .yes)
+        if #available(iOS 17.0, *) {   // inline predictions are iOS 17+ (absent below)
+            XCTAssertEqual(v.inlinePredictionType, .yes)
+        }
         XCTAssertEqual(v.autocorrectionType, .yes)
         XCTAssertEqual(v.spellCheckingType, .yes)
     }
@@ -178,7 +181,7 @@ final class MarkedTextTests: XCTestCase {
     func test_setMarkedText_inImageCaption_fallsBackToPlainInsert_noStrandedComposition() {
         let v = DocumentCanvasView()
         v.setBlocks([
-            .image(ImageBlock(id: BlockID("img"), assetID: "a", naturalSize: Size2D(width: 100, height: 80),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "a", naturalSize: Size2D(width: 100, height: 80),
                               caption: [TextRun(text: "Cap")])),
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Body")])),
         ], width: 300)

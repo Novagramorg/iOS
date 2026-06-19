@@ -7,24 +7,24 @@ import RichTextEditorCore
 /// across cells like selection itself. Attribute-only (no span change), wrapped in `editing { }` so
 /// undo is the existing whole-document `[Block]` snapshot. A collapsed caret is a no-op (collapsed
 /// "typing attributes" are deferred).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension DocumentCanvasView {
     /// The (storage, range) pairs a character-format command applies to. When a table row/column is
     /// structurally selected, that's every cell's full text in the row/column (so toolbar formatting
     /// works on the whole row/column). Otherwise it's the text selection's intersection with each leaf
     /// region — body paragraphs, captions, and table cells alike. Empty when nothing applies (e.g. a
     /// bare collapsed caret).
-    func characterFormatTargets() -> [(storage: NSTextStorage, range: NSRange, layout: BlockLayout)] {
+    func characterFormatTargets() -> [(storage: NSTextStorage, range: NSRange, layout: BlockLayoutEngine)] {
         if let regions = tableStructuralSelectionRegions() {
             return regions.compactMap { r in
-                guard r.length > 0, let storage = r.layout.contentStorage.textStorage else { return nil }
+                guard r.length > 0, let storage = r.layout.backingStorage else { return nil }
                 return (storage, NSRange(location: 0, length: r.length), r.layout)
             }
         }
         guard selFrom < selTo else { return [] }
         return allLeafRegions().compactMap { r in
             let a = max(selFrom, r.globalStart), b = min(selTo, r.globalStart + r.length)
-            guard a < b, let storage = r.layout.contentStorage.textStorage else { return nil }
+            guard a < b, let storage = r.layout.backingStorage else { return nil }
             return (storage, NSRange(location: a - r.globalStart, length: b - a), r.layout)
         }
     }
@@ -47,15 +47,52 @@ extension DocumentCanvasView {
         }
     }
 
+    // MARK: - Format predicates (shared by toggle and state reader)
+
+    func rangeIsBold(_ storage: NSTextStorage, _ range: NSRange) -> Bool {
+        var all = true
+        storage.enumerateAttribute(.font, in: range, options: []) { v, _, stop in
+            let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)
+            if !f.fontDescriptor.symbolicTraits.contains(.traitBold) { all = false; stop.pointee = true }
+        }
+        return all
+    }
+
+    func rangeIsItalic(_ storage: NSTextStorage, _ range: NSRange) -> Bool {
+        var all = true
+        storage.enumerateAttribute(.font, in: range, options: []) { v, _, stop in
+            let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)
+            if !f.fontDescriptor.symbolicTraits.contains(.traitItalic) { all = false; stop.pointee = true }
+        }
+        return all
+    }
+
+    func rangeIsUnderline(_ storage: NSTextStorage, _ range: NSRange) -> Bool {
+        var all = true
+        storage.enumerateAttribute(.underlineStyle, in: range, options: []) { v, _, stop in
+            if ((v as? Int) ?? 0) == 0 { all = false; stop.pointee = true }
+        }
+        return all
+    }
+
+    func rangeIsStrikethrough(_ storage: NSTextStorage, _ range: NSRange) -> Bool {
+        var all = true
+        storage.enumerateAttribute(.strikethroughStyle, in: range, options: []) { v, _, stop in
+            if ((v as? Int) ?? 0) == 0 { all = false; stop.pointee = true }
+        }
+        return all
+    }
+
+    func rangeIsInlineCode(_ storage: NSTextStorage, _ range: NSRange) -> Bool {
+        var all = true
+        storage.enumerateAttribute(.rtInlineCode, in: range, options: []) { v, _, stop in
+            if ((v as? Bool) ?? false) == false { all = false; stop.pointee = true }
+        }
+        return all
+    }
+
     func toggleBold() {
-        applyCharacterToggle(isSet: { storage, range in
-            var all = true
-            storage.enumerateAttribute(.font, in: range, options: []) { v, _, stop in
-                let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)
-                if !f.fontDescriptor.symbolicTraits.contains(.traitBold) { all = false; stop.pointee = true }
-            }
-            return all
-        }, setOn: { storage, range, allOn in
+        applyCharacterToggle(isSet: { s, r in self.rangeIsBold(s, r) }, setOn: { storage, range, allOn in
             storage.enumerateAttribute(.font, in: range, options: []) { v, sub, _ in
                 let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)
                 var t = f.fontDescriptor.symbolicTraits
@@ -68,14 +105,7 @@ extension DocumentCanvasView {
     }
 
     func toggleItalic() {
-        applyCharacterToggle(isSet: { storage, range in
-            var all = true
-            storage.enumerateAttribute(.font, in: range, options: []) { v, _, stop in
-                let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)
-                if !f.fontDescriptor.symbolicTraits.contains(.traitItalic) { all = false; stop.pointee = true }
-            }
-            return all
-        }, setOn: { storage, range, allOn in
+        applyCharacterToggle(isSet: { s, r in self.rangeIsItalic(s, r) }, setOn: { storage, range, allOn in
             storage.enumerateAttribute(.font, in: range, options: []) { v, sub, _ in
                 let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)
                 var t = f.fontDescriptor.symbolicTraits
@@ -88,26 +118,14 @@ extension DocumentCanvasView {
     }
 
     func toggleStrikethrough() {
-        applyCharacterToggle(isSet: { storage, range in
-            var all = true
-            storage.enumerateAttribute(.strikethroughStyle, in: range, options: []) { v, _, stop in
-                if ((v as? Int) ?? 0) == 0 { all = false; stop.pointee = true }
-            }
-            return all
-        }, setOn: { storage, range, allOn in
+        applyCharacterToggle(isSet: { s, r in self.rangeIsStrikethrough(s, r) }, setOn: { storage, range, allOn in
             if allOn { storage.removeAttribute(.strikethroughStyle, range: range) }
             else { storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
         })
     }
 
     func toggleUnderline() {
-        applyCharacterToggle(isSet: { storage, range in
-            var all = true
-            storage.enumerateAttribute(.underlineStyle, in: range, options: []) { v, _, stop in
-                if ((v as? Int) ?? 0) == 0 { all = false; stop.pointee = true }
-            }
-            return all
-        }, setOn: { storage, range, allOn in
+        applyCharacterToggle(isSet: { s, r in self.rangeIsUnderline(s, r) }, setOn: { storage, range, allOn in
             if allOn { storage.removeAttribute(.underlineStyle, range: range) }
             else { storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
         })
@@ -133,13 +151,7 @@ extension DocumentCanvasView {
     /// carry emphasis, so toggling off restores a plain system font at the same size (any bold/italic
     /// inside is intentionally dropped); the named-style font returns on the next model round-trip.
     func toggleInlineCode() {
-        applyCharacterToggle(isSet: { storage, range in
-            var all = true
-            storage.enumerateAttribute(.rtInlineCode, in: range, options: []) { v, _, stop in
-                if ((v as? Bool) ?? false) == false { all = false; stop.pointee = true }
-            }
-            return all
-        }, setOn: { storage, range, allOn in
+        applyCharacterToggle(isSet: { s, r in self.rangeIsInlineCode(s, r) }, setOn: { storage, range, allOn in
             storage.enumerateAttribute(.font, in: range, options: []) { v, sub, _ in
                 let size = ((v as? UIFont) ?? UIFont.systemFont(ofSize: 16)).pointSize
                 if allOn {

@@ -6,7 +6,7 @@ import RichTextEditorCore
 /// UIKit requires that `UIScrollView.panGestureRecognizer.delegate` stays the scroll view itself, so
 /// we override `gestureRecognizerShouldBegin` here (on the owning view) rather than replacing the delegate.
 /// Gate-only: no `require(toFail:)` / simultaneous recognition — consistent with the project policy.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class TableScrollView: UIScrollView {
     weak var canvas: DocumentCanvasView?
 
@@ -26,7 +26,7 @@ final class TableScrollView: UIScrollView {
 /// native horizontal scrolling and its `contentOffset.x` is the single source of truth for the table's
 /// scroll position (pooled by `BlockID`, so it survives box rebuilds/undo). The canvas stays the sole
 /// `UITextInput`; this view never becomes first responder.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class TableBackingView: BlockBackingView, UIScrollViewDelegate {
     let scroll = TableScrollView()
     private let content = TableContentView()
@@ -167,7 +167,7 @@ final class TableBackingView: BlockBackingView, UIScrollViewDelegate {
 }
 
 /// The single scrolling content view inside a `TableBackingView`; draws the whole grid.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class TableContentView: UIView {
     weak var owner: TableBackingView?
     override func draw(_ rect: CGRect) {

@@ -11,9 +11,9 @@ public enum DocumentTree {
         case .paragraph(let p):
             return .paragraph(id: p.id,
                               children: [.text(length: p.utf16Count, ref: .paragraph(p.id))])
-        case .image(let img):
-            return .imageBlock(id: img.id, children: [
-                .imageAtom(id: img.id),
+        case .media(let img):
+            return .mediaBlock(id: img.id, children: [
+                .mediaAtom(id: img.id),
                 .paragraph(id: img.id,
                            children: [.text(length: img.captionUTF16Count, ref: .caption(img.id))]),
             ])

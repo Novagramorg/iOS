@@ -12,11 +12,15 @@ swift_library(
     deps = [
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
+        "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/AppBundle",
         "//submodules/TelegramUI/Components/Chat/ChatInputTextNode/ChatInputTextViewImpl",
         "//submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView",
         "//submodules/AccountContext",
         "//submodules/TelegramUI/Components/TextNodeWithEntities",
+        "//submodules/InvisibleInkDustNode",
+        "//submodules/TelegramUI/Components/EmojiTextAttachmentView",
+        "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
     ],
     visibility = [
         "//visibility:public",

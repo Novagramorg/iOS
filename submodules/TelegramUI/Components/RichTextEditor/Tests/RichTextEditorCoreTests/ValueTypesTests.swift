@@ -13,6 +13,6 @@ final class ValueTypesTests: XCTestCase {
         XCTAssertEqual(TextAlignment.justified.rawValue, "justified")
         XCTAssertEqual(ParagraphStyleName.heading1.rawValue, "heading1")
         XCTAssertEqual(ListMarker.ordered.rawValue, "ordered")
-        XCTAssertEqual(ImageAlignment.center.rawValue, "center")
+        XCTAssertEqual(MediaAlignment.center.rawValue, "center")
     }
 }

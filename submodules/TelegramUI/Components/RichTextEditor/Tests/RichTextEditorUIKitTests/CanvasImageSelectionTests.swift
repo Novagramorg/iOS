@@ -11,7 +11,7 @@ final class CanvasImageSelectionTests: XCTestCase {
             UIColor.systemTeal.setFill(); c.fill(CGRect(x: 0, y: 0, width: 80, height: 50)) } }
         v.setBlocks([
             .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Above")])),
-            .image(ImageBlock(id: BlockID("img"), assetID: "x", naturalSize: Size2D(width: 80, height: 50),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 80, height: 50),
                               caption: [TextRun(text: "Caption")])),
             .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Below")])),
         ], width: 300)
@@ -33,18 +33,18 @@ final class CanvasImageSelectionTests: XCTestCase {
 
     func test_caretInCaption_isBelowImage() {
         let v = canvas()
-        let imgBox = v.boxes[1] as! ImageBlockBox
+        let imgBox = v.boxes[1] as! MediaBlockBox
         let caret = v.caretRect(for: DocumentTextPosition(imgBox.textStart))
-        XCTAssertGreaterThan(caret.minY, imgBox.imageRect().minY)   // caption caret sits below the image
+        XCTAssertGreaterThan(caret.minY, imgBox.mediaRect().minY)   // caption caret sits below the image
     }
 
     func test_caretAtImageGap_isVerticalBarAtImageLeadingEdge() {
         let v = canvas()
-        let imgBox = v.boxes[1] as! ImageBlockBox
+        let imgBox = v.boxes[1] as! MediaBlockBox
         // The gap before the image atom is a real caret position; we must report a drawable rect so
         // UITextSelectionDisplayInteraction renders the native caret there (not .zero, which is invisible).
         let caret = v.caretRect(for: DocumentTextPosition(imgBox.nodeStart))
-        let img = imgBox.imageRect()
+        let img = imgBox.mediaRect()
         XCTAssertFalse(caret.isEmpty, "gap caret must be a drawable rect, not .zero")
         XCTAssertEqual(caret.minX, img.minX, accuracy: 0.5, "vertical caret sits at the image's leading edge")
         XCTAssertEqual(caret.height, img.height, accuracy: 0.5, "caret spans the image height")
@@ -52,11 +52,11 @@ final class CanvasImageSelectionTests: XCTestCase {
 
     func test_typingInCaption_editsCaptionText() {
         let v = canvas()
-        let imgBox = v.boxes[1] as! ImageBlockBox
+        let imgBox = v.boxes[1] as! MediaBlockBox
         v.selectedTextRange = DocumentTextRange(DocumentTextPosition(imgBox.textStart + 7),
                                                 DocumentTextPosition(imgBox.textStart + 7)) // end of "Caption"
         v.insertText("!")
-        guard case .image(let out) = v.boxes[1].currentBlock() else { return XCTFail() }
+        guard case .media(let out) = v.boxes[1].currentBlock() else { return XCTFail() }
         XCTAssertEqual(out.caption.map(\.text).joined(), "Caption!")
     }
 }

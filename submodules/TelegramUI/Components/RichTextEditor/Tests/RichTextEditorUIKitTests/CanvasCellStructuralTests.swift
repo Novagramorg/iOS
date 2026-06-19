@@ -43,9 +43,7 @@ final class CanvasCellStructuralTests: XCTestCase {
         v.selectedTextRange = DocumentTextRange(DocumentTextPosition(cellA.globalStart + 2),
                                                 DocumentTextPosition(cellA.globalStart + 2))
         v.insertText("\n")
-        let doc = Document(metadata: DocumentMetadata(title: "", createdAt: Date(timeIntervalSince1970: 0),
-                                                      modifiedAt: Date(timeIntervalSince1970: 0)),
-                           blocks: v.currentBlocks())
+        let doc = Document(blocks: v.currentBlocks())
         XCTAssertEqual(v.documentSizeValue, DocumentTree.documentSize(doc))
     }
 

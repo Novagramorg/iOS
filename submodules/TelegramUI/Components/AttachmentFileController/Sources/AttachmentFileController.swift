@@ -554,6 +554,7 @@ public enum AttachmentFileControllerSource: Equatable {
     
     case generic
     case poll(PollMode)
+    case richText
 }
 
 public func makeAttachmentFileControllerImpl(

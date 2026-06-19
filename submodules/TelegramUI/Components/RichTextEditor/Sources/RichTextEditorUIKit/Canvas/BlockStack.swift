@@ -4,7 +4,7 @@ import RichTextEditorCore
 
 /// A vertical run of `CanvasBlock`s — the shared engine for the document body and for each table
 /// cell. Owns span math (relative to a `baseOffset`) and vertical layout (relative to an origin).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class BlockStack {
     var boxes: [CanvasBlock]
     private(set) var baseOffset: Int = 0
@@ -35,8 +35,13 @@ final class BlockStack {
     /// insets of two adjacent blocks together make their gap: list items stack tight (0); two body
     /// paragraphs sit at half the default; a block facing a quote or table reserves extra margin;
     /// otherwise the default.
+    /// The base inter-block vertical inset (each side; two facing insets make a gap). Defaults to the
+    /// document metric (`BlockBox.defaultVerticalInset`, 8pt). A compact host (chat composer) sets the root
+    /// stack's base to 0 so a lone paragraph hugs its text height; nested (table-cell) stacks keep the default.
+    var verticalInsetBase: CGFloat = BlockBox.defaultVerticalInset
+
     private func facingInset(of box: BlockBox, toward neighbor: CanvasBlock?) -> CGFloat {
-        let base = BlockBox.defaultVerticalInset
+        let base = self.verticalInsetBase
         if neighbor is TableBlockBox { return base + BlockStack.framedNeighborMargin }
         guard let n = neighbor as? BlockBox else { return base }
         if box.listMembership != nil && n.listMembership != nil { return 0 }

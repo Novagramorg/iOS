@@ -17,7 +17,7 @@ private final class BundleHelper: NSObject {
 /// `textNode`), so the text-mask half of Telegram's reveal is omitted; the emitter + its mask are kept
 /// faithfully. Non-interactive; the canvas owns hit-test + reveal (`point(inside:)` just reports the run's
 /// rects so a tap "lands" on dust).
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 final class SpoilerDustView: UIView {
     /// Hosts the emitter layer; gets the radial reveal mask (mirrors Telegram's `emitterNode`).
     private let emitterContainer = UIView()
@@ -238,7 +238,7 @@ final class SpoilerDustView: UIView {
 
 /// Private `CAEmitterBehavior` bridge (no public API exists for the twinkle / attractor). Ported from the
 /// reference's `LegacyComponents` category.
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension CAEmitterCell {
     static func createEmitterBehavior(type: String) -> NSObject {
         let selector = ["behaviorWith", "Type:"].joined()
@@ -250,7 +250,7 @@ extension CAEmitterCell {
     }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 13.0, *)
 extension CAEmitterLayer {
     /// Birth rate of the first emitter cell (test seam).
     var birthRateForCellForTesting: Float { (emitterCells?.first?.birthRate) ?? 0 }

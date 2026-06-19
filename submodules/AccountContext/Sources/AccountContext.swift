@@ -1172,7 +1172,6 @@ public enum JoinAffiliateProgramScreenMode {
         }
     }
 
-    
     case join(Join)
     case active(Active)
 }
@@ -1190,18 +1189,20 @@ public enum JoinSubjectScreenMode {
         public let isPublic: Bool
         public let isRequest: Bool
         public let verificationStatus: VerificationStatus?
+        public let nameColor: PeerNameColor?
         public let image: TelegramMediaImageRepresentation?
         public let title: String
         public let about: String?
         public let memberCount: Int32
         public let members: [EnginePeer]
         
-        public init(link: String, isGroup: Bool, isPublic: Bool, isRequest: Bool, verificationStatus: VerificationStatus?, image: TelegramMediaImageRepresentation?, title: String, about: String?, memberCount: Int32, members: [EnginePeer]) {
+        public init(link: String, isGroup: Bool, isPublic: Bool, isRequest: Bool, verificationStatus: VerificationStatus?, nameColor: PeerNameColor?, image: TelegramMediaImageRepresentation?, title: String, about: String?, memberCount: Int32, members: [EnginePeer]) {
             self.link = link
             self.isGroup = isGroup
             self.isPublic = isPublic
             self.isRequest = isRequest
             self.verificationStatus = verificationStatus
+            self.nameColor = nameColor
             self.image = image
             self.title = title
             self.about = about
@@ -1546,7 +1547,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeMiniAppListScreen(context: AccountContext, initialData: MiniAppListScreenInitialData) -> ViewController
     func makeIncomingMessagePrivacyScreen(context: AccountContext, value: GlobalPrivacySettings.NonContactChatsPrivacy, exceptions: SelectivePrivacySettings, update: @escaping (GlobalPrivacySettings.NonContactChatsPrivacy) -> Void) -> ViewController
     func openWebApp(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, botPeer: EnginePeer, chatPeer: EnginePeer?, threadId: Int64?, buttonText: String, url: String, simple: Bool, source: ChatOpenWebViewSource, skipTermsOfService: Bool, payload: String?, verifyAgeCompletion: ((Int) -> Void)?)
-    func openJoinChatWebView(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, webView: JoinChatWebView)
+    func openJoinChatWebView(context: AccountContext, parentController: ViewController, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, webView: JoinChatWebView, chatTitle: String)
     func makeAffiliateProgramSetupScreenInitialData(context: AccountContext, peerId: EnginePeer.Id, mode: AffiliateProgramSetupScreenMode) -> Signal<AffiliateProgramSetupScreenInitialData, NoError>
     func makeAffiliateProgramSetupScreen(context: AccountContext, initialData: AffiliateProgramSetupScreenInitialData) -> ViewController
     func makeAffiliateProgramJoinScreen(context: AccountContext, sourcePeer: EnginePeer, commissionPermille: Int32, programDuration: Int32?, revenuePerUser: Double, mode: JoinAffiliateProgramScreenMode) -> ViewController
@@ -1736,6 +1737,8 @@ public protocol AccountContext: AnyObject {
     func joinGroupCall(peerId: EnginePeer.Id, invite: String?, requestJoinAsPeerId: ((@escaping (EnginePeer.Id?) -> Void) -> Void)?, activeCall: EngineGroupCallDescription)
     func joinConferenceCall(call: JoinCallLinkInformation, isVideo: Bool, unmuteByDefault: Bool)
     func requestCall(peerId: EnginePeer.Id, isVideo: Bool, completion: @escaping () -> Void)
+    
+    func getAppConfigValue(_ key: String) -> Any?
 }
 
 public struct AntiSpamBotConfiguration {
