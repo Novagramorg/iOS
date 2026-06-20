@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to AI assistants working with the **Fenixuz fork of Telegram-iOS**.
+This file provides guidance to AI assistants working with the **Novagram fork of Telegram-iOS** (internal codename **Fenixuz**).
 
-## Fenixuz fork — context
+## Novagram fork — context
 
-- Brand: **Fenixuz** (organization: **Vipads MCHJ**, Apple Team ID `ZDBP5RSRZF`, Apple ID `vipadsllc@gmail.com`).
+- Brand: **Novagram** — the user-visible app name + icon since 2026-06-20 (previously "Fenixuz" / display name "Fenix Uz"). **`Fenixuz` remains the internal codename**: every module path (`submodules/Fenixuz/`), bundle id (`uz.fenixuz.app`), UserDefaults suite, and file/type name (`FenixuzL10n`, `FenixuzDemoCodeFetcher`, …) deliberately stays `Fenixuz` for upstream-merge stability — **do NOT rename them**. Only user-facing strings, the display name, the icon, and the brand accent color (Novagram blue `#0A9BF5`) are "Novagram". Organization: **Vipads MCHJ**, Apple Team ID `ZDBP5RSRZF`, Apple ID `vipadsllc@gmail.com`.
 - **Apple team rule** — every Apple reference (certs, App Store Connect, provisioning profiles, App Groups, keychain groups, `DEVELOPMENT_TEAM` in pbxproj/xcconfig) MUST point to Team ID `ZDBP5RSRZF` (Vipads MCHJ). Never a personal team. Development certs may display the individual developer's name in their label ("Apple Development: Azimjon Abdurasulov") because Apple labels Dev certs by Apple ID owner — but the **Team ID** under which they are issued is always `ZDBP5RSRZF`.
 - App Store bundle: `uz.fenixuz.app` (kept in `build-system/appstore-configuration.json` for release builds).
 - Simulator/dev bundle: `ph.telegra.Telegraph` (kept in `build-system/my-config.json`, fake codesigning).
@@ -32,7 +32,7 @@ submodules/Fenixuz/
 ├── ChatLock/          (FenixuzChatLock)         — Pincode + manager
 ├── EditedHistory/     (FenixuzEditedHistory)    — Edited message history viewer
 ├── ForeignUserBlock/  (FenixuzForeignUserBlock) — Country code helpers
-├── ProMessager/       (FenixuzProMessager)      — "Fenixuz" Settings UI (5 controllers)
+├── ProMessager/       (FenixuzProMessager)      — "NovagramPro" Settings UI (5 controllers)
 ├── SpeechToText/      (FenixuzSpeechToText)     — STT manager
 └── Tasks/             (FenixuzTasks)            — Vazifalar tab + Todo + Scheduled
 ```

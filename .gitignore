@@ -101,3 +101,7 @@ build-system/example-configuration/variables.bzl
 
 # Local-only metadata / tooling drafts
 fastlane/
+
+# App Store screenshot/privacy assets (large binaries, not source)
+screenshots/
+fenixuz-privacy-fullpage.png
