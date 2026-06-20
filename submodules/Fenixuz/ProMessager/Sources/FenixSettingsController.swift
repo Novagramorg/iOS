@@ -1106,7 +1106,7 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         statePromise.get()
     ) |> deliverOnMainQueue
         |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
-            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Fenixuz"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+            let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Novagram"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
             let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: fenixSettingsEntries(presentationData: presentationData, state: state), style: .blocks)
             return (controllerState, (listState, arguments))
         }
@@ -1216,9 +1216,9 @@ private enum FenixWhiteThemeStrings {
 
     static func toggleSubtitle(langCode: String) -> String {
         switch langCode {
-        case "uz": return "Yorqin (oq) temada Fenixuz yashil rangini accent sifatida qo'llaydi"
-        case "ru": return "Применяет фирменный зелёный Fenixuz в качестве акцента в светлой теме"
-        default:   return "Applies Fenixuz emerald as the accent color in the light theme"
+        case "uz": return "Yorqin (oq) temada Novagram ko'k rangini accent sifatida qo'llaydi"
+        case "ru": return "Применяет фирменный синий Novagram в качестве акцента в светлой теме"
+        default:   return "Applies Novagram blue as the accent color in the light theme"
         }
     }
 

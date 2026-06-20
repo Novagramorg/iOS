@@ -54,6 +54,7 @@ private final class ChatListFilterPresetControllerArguments {
     let peerContextAction: (EnginePeer, ASDisplayNode, ContextGesture?, CGPoint?) -> Void
     let updateTagColor: (PeerNameColor?) -> Void
     let openTagColorPremium: () -> Void
+    let openIconPicker: () -> Void // FENIX-HOOK #18
     
     init(
         context: AccountContext,
@@ -77,7 +78,8 @@ private final class ChatListFilterPresetControllerArguments {
         linkContextAction: @escaping (ExportedChatFolderLink?, ASDisplayNode, ContextGesture?) -> Void,
         peerContextAction: @escaping (EnginePeer, ASDisplayNode, ContextGesture?, CGPoint?) -> Void,
         updateTagColor: @escaping (PeerNameColor?) -> Void,
-        openTagColorPremium: @escaping () -> Void
+        openTagColorPremium: @escaping () -> Void,
+        openIconPicker: @escaping () -> Void
     ) {
         self.context = context
         self.updateState = updateState
@@ -101,6 +103,7 @@ private final class ChatListFilterPresetControllerArguments {
         self.peerContextAction = peerContextAction
         self.updateTagColor = updateTagColor
         self.openTagColorPremium = openTagColorPremium
+        self.openIconPicker = openIconPicker
     }
 }
 
@@ -233,6 +236,7 @@ private enum ChatListFilterPresetEntry: ItemListNodeEntry {
     case screenHeader
     case nameHeader(title: String, enableAnimations: Bool?)
     case name(placeholder: String, value: NSAttributedString, inputMode: ListComposePollOptionComponent.InputMode?, enableAnimations: Bool)
+    case icon(emoticon: String?)
     case includePeersHeader(String)
     case addIncludePeer(title: String)
     case includeCategory(index: Int, category: ChatListFilterIncludeCategory, title: String, isRevealed: Bool)
@@ -257,7 +261,7 @@ private enum ChatListFilterPresetEntry: ItemListNodeEntry {
         switch self {
         case .screenHeader:
             return ChatListFilterPresetControllerSection.screenHeader.rawValue
-        case .nameHeader, .name:
+        case .nameHeader, .name, .icon:
             return ChatListFilterPresetControllerSection.name.rawValue
         case .includePeersHeader, .addIncludePeer, .includeCategory, .includePeer, .includePeerInfo, .includeExpand:
             return ChatListFilterPresetControllerSection.includePeers.rawValue
@@ -278,6 +282,8 @@ private enum ChatListFilterPresetEntry: ItemListNodeEntry {
             return .index(1)
         case .name:
             return .index(2)
+        case .icon:
+            return .index(17)
         case .includePeersHeader:
             return .index(3)
         case .addIncludePeer:
@@ -327,6 +333,8 @@ private enum ChatListFilterPresetEntry: ItemListNodeEntry {
             return ChatListFilterPresetEntrySortId(section: 1, index: 0)
         case .name:
             return ChatListFilterPresetEntrySortId(section: 1, index: 1)
+        case .icon:
+            return ChatListFilterPresetEntrySortId(section: 1, index: 2)
         case .includePeersHeader:
             return ChatListFilterPresetEntrySortId(section: 2, index: 0)
         case .addIncludePeer:
@@ -403,6 +411,16 @@ private enum ChatListFilterPresetEntry: ItemListNodeEntry {
                     arguments.toggleNameInputMode()
                 }
             )
+        case let .icon(emoticon):
+            let iconTitle: String
+            switch presentationData.strings.primaryComponent.languageCode {
+            case "uz": iconTitle = "Papka ikonkasi"
+            case "ru": iconTitle = "Значок папки"
+            default: iconTitle = "Folder Icon"
+            }
+            return ItemListDisclosureItem(presentationData: presentationData, title: iconTitle, label: emoticon ?? "", sectionId: self.section, style: .blocks, action: {
+                arguments.openIconPicker()
+            })
         case .includePeersHeader(let text), .excludePeersHeader(let text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case .includePeerInfo(let text), .excludePeerInfo(let text):
@@ -553,6 +571,7 @@ private struct ChatListFilterPresetControllerState: Equatable {
     var changedName: Bool
     var nameInputMode: ListComposePollOptionComponent.InputMode = .keyboard
     var color: PeerNameColor?
+    var emoticon: String? // FENIX-HOOK #18 folder icon
     var colorUpdated: Bool = false
     var includeCategories: ChatListFilterPeerCategories
     var excludeMuted: Bool
@@ -602,6 +621,7 @@ private func chatListFilterPresetControllerEntries(context: AccountContext, pres
     
     entries.append(.nameHeader(title: presentationData.strings.ChatListFolder_NameSectionHeader, enableAnimations: state.name.entities.isEmpty ? nil : state.name.enableAnimations))
     entries.append(.name(placeholder: presentationData.strings.ChatListFolder_NamePlaceholder, value: state.name.rawAttributedString, inputMode: state.nameInputMode, enableAnimations: state.name.enableAnimations))
+    entries.append(.icon(emoticon: state.emoticon))
     
     entries.append(.includePeersHeader(presentationData.strings.ChatListFolder_IncludedSectionHeader))
     if includePeers.count < limit {
@@ -1401,6 +1421,7 @@ public func chatListFilterPresetController(context: AccountContext, currentPrese
         name: initialName,
         changedName: initialPreset != nil,
         color: initialPreset?.data?.color,
+        emoticon: (initialPreset?.id).flatMap({ UserDefaults(suiteName: "pro_messager")?.string(forKey: "fenix_folder_icon_\($0)") }),
         includeCategories: initialPreset?.data?.categories ?? [],
         excludeMuted: initialPreset?.data?.excludeMuted ?? false,
         excludeRead: initialPreset?.data?.excludeRead ?? false,
@@ -1472,6 +1493,7 @@ public func chatListFilterPresetController(context: AccountContext, currentPrese
     
     var presentControllerImpl: ((ViewController, Any?) -> Void)?
     var pushControllerImpl: ((ViewController) -> Void)?
+    var presentUIKitImpl: ((UIViewController) -> Void)? // FENIX-HOOK #18
     var dismissImpl: (() -> Void)?
     var focusOnNameImpl: (() -> Void)?
     var clearFocusImpl: (() -> Void)?
@@ -1991,6 +2013,19 @@ public func chatListFilterPresetController(context: AccountContext, currentPrese
                 controller?.replace(with: c)
             }
             pushControllerImpl?(controller)
+        },
+        openIconPicker: {
+            // FENIX-HOOK #18 — present the LOCAL grid icon picker (no server / premium)
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let picker = FenixuzFolderIconPickerController(presentationData: presentationData, currentIcon: stateValue.with({ $0 }).emoticon)
+            picker.onIconSelected = { emoji in
+                updateState { current in
+                    var state = current
+                    state.emoticon = emoji
+                    return state
+                }
+            }
+            presentUIKitImpl?(picker)
         }
     )
         
@@ -2006,6 +2041,12 @@ public func chatListFilterPresetController(context: AccountContext, currentPrese
                 var filterId = currentPreset?.id ?? -1
                 if currentPreset == nil {
                     filterId = context.engine.peers.generateNewChatListFilterId(filters: filters)
+                }
+                // FENIX-HOOK #18 — persist folder icon LOCALLY (no server / premium)
+                if let fenixIcon = state.emoticon {
+                    UserDefaults(suiteName: "pro_messager")?.set(fenixIcon, forKey: "fenix_folder_icon_\(filterId)")
+                } else {
+                    UserDefaults(suiteName: "pro_messager")?.removeObject(forKey: "fenix_folder_icon_\(filterId)")
                 }
                 var updatedFilter: ChatListFilter = .filter(id: filterId, title: state.name, emoticon: currentPreset?.emoticon, data: ChatListFilterData(isShared: currentPreset?.data?.isShared ?? false, hasSharedLinks: currentPreset?.data?.hasSharedLinks ?? false, categories: state.includeCategories, excludeMuted: state.excludeMuted, excludeRead: state.excludeRead, excludeArchived: state.excludeArchived, includePeers: includePeers, excludePeers: state.additionallyExcludePeers, color: state.color))
                 
@@ -2125,6 +2166,9 @@ public func chatListFilterPresetController(context: AccountContext, currentPrese
     }
     pushControllerImpl = { [weak controller] c in
         controller?.push(c)
+    }
+    presentUIKitImpl = { [weak controller] vc in
+        controller?.present(vc, animated: true, completion: nil)
     }
     dismissImpl = { [weak controller] in
         let _ = controller?.dismiss()

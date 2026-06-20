@@ -50,7 +50,7 @@
 "PUSH_MESSAGE_STICKER" = "%1$@|sent you a %2$@sticker";
 "PUSH_CHAT_MESSAGE_STICKER" = "%2$@|%1$@ sent a %3$@sticker";
 
-"PUSH_CONTACT_JOINED" = "%1$@|joined Fenixuz!";
+"PUSH_CONTACT_JOINED" = "%1$@|joined Novagram!";
 
 "PUSH_CHANNEL_MESSAGE_TEXT" = "%1$@|%2$@";
 "PUSH_CHANNEL_MESSAGE_NOTEXT" = "%1$@|posted a message";
@@ -205,7 +205,7 @@
 "PUSH_PINNED_GIF" = "%1$@|pinned a GIF";
 "PUSH_PINNED_PAID_MEDIA" = "%1$@|pinned a paid post for %2$@";
 
-"PUSH_CONTACT_JOINED" = "%1$@|joined Fenixuz!";
+"PUSH_CONTACT_JOINED" = "%1$@|joined Novagram!";
 
 "PUSH_AUTH_UNKNOWN" = "New login|from unrecognized device %1$@";
 "PUSH_AUTH_REGION" = "New login|from unrecognized device %1$@, location: %2$@";
@@ -401,38 +401,38 @@
 "Date.ChatDateHeaderYear" = "%1$@ %2$@, %3$@";
 
 // Tour
-"Tour.Title1" = "Fenixuz";
+"Tour.Title1" = "Novagram";
 "Tour.Text1" = "The world's **fastest** messaging app.\nIt is **free** and **secure**.";
 
 "Tour.Title2" = "Fast";
-"Tour.Text2" = "**Fenixuz** delivers messages\nfaster than any other application.";
+"Tour.Text2" = "**Novagram** delivers messages\nfaster than any other application.";
 
 "Tour.Title3" = "Powerful";
-"Tour.Text3" = "**Fenixuz** has no limits on\nthe size of your media and chats.";
+"Tour.Text3" = "**Novagram** has no limits on\nthe size of your media and chats.";
 
 "Tour.Title4" = "Secure";
-"Tour.Text4" = "**Fenixuz** keeps your messages\nsafe from hacker attacks.";
+"Tour.Text4" = "**Novagram** keeps your messages\nsafe from hacker attacks.";
 
 "Tour.Title5" = "Cloud-Based";
-"Tour.Text5" = "**Fenixuz** lets you access your\nmessages from multiple devices.";
+"Tour.Text5" = "**Novagram** lets you access your\nmessages from multiple devices.";
 
 "Tour.Title6" = "Free";
-"Tour.Text6" = "**Fenixuz** provides free unlimited\ncloud storage for chats and media.";
+"Tour.Text6" = "**Novagram** provides free unlimited\ncloud storage for chats and media.";
 
 "Tour.StartButton" = "Start Messaging";
 
 // Login
 "Login.PhoneAndCountryHelp" = "Please confirm your country code\nand enter your phone number.";
-"Login.CodeSentInternal" = "We've sent the code to the **Fenixuz** app on your other device";
+"Login.CodeSentInternal" = "We've sent the code to the **Novagram** app on your other device";
 "Login.HaveNotReceivedCodeInternal" = "Didn't get the code?";
 "Login.CodeSentSms" = "We've sent you an SMS with the code";
 "Login.Code" = "Code";
-"Login.WillCallYou" = "Fenixuz will call you in %@";
-"Login.CallRequestState2" = "Requesting a call from Fenixuz…";
-"Login.CallRequestState3" = "Fenixuz dialed your number\n[Didn't get the code?]";
+"Login.WillCallYou" = "Novagram will call you in %@";
+"Login.CallRequestState2" = "Requesting a call from Novagram…";
+"Login.CallRequestState3" = "Novagram dialed your number\n[Didn't get the code?]";
 "Login.EmailNotConfiguredError" = "An email account is required so that you can send us details about the error.\n\nPlease go to your device‘s settings > Passwords & Accounts > Add account and set up an email account.";
 "Login.EmailCodeSubject" = "%@, no code";
-"Login.EmailCodeBody" = "My phone number is:\n%@\nI can't get an activation code for Fenixuz.";
+"Login.EmailCodeBody" = "My phone number is:\n%@\nI can't get an activation code for Novagram.";
 "Login.UnknownError" = "An error occurred, please try again later.";
 "Login.InvalidCodeError" = "Invalid code, please try again.";
 "Login.NetworkError" = "Please check your internet connection and try again.";
@@ -443,13 +443,13 @@
 "Login.InvalidLastNameError" = "Sorry, this last name can't be used.";
 
 "Login.InvalidPhoneEmailSubject" = "Invalid phone number: %@";
-"Login.InvalidPhoneEmailBody" = "I'm trying to use my mobile phone number: %1$@\nBut Fenixuz says it's invalid. Please help.\n\nApp version: %2$@\nOS version: %3$@\nLocale: %4$@\nMNC: %5$@";
+"Login.InvalidPhoneEmailBody" = "I'm trying to use my mobile phone number: %1$@\nBut Novagram says it's invalid. Please help.\n\nApp version: %2$@\nOS version: %3$@\nLocale: %4$@\nMNC: %5$@";
 
 "Login.PhoneBannedEmailSubject" = "Banned phone number: %@";
-"Login.PhoneBannedEmailBody" = "I'm trying to use my mobile phone number: %1$@\nBut Fenixuz says it's banned. Please help.\n\nApp version: %2$@\nOS version: %3$@\nLocale: %4$@\nMNC: %5$@";
+"Login.PhoneBannedEmailBody" = "I'm trying to use my mobile phone number: %1$@\nBut Novagram says it's banned. Please help.\n\nApp version: %2$@\nOS version: %3$@\nLocale: %4$@\nMNC: %5$@";
 
-"Login.PhoneGenericEmailSubject" = "Fenixuz iOS error: %@";
-"Login.PhoneGenericEmailBody" = "I'm trying to use my mobile phone number: %1$@\nBut Fenixuz shows an error. Please help.\n\nError: %2$@\nApp version: %3$@\nOS version: %4$@\nLocale: %5$@\nMNC: %6$@";
+"Login.PhoneGenericEmailSubject" = "Novagram iOS error: %@";
+"Login.PhoneGenericEmailBody" = "I'm trying to use my mobile phone number: %1$@\nBut Novagram shows an error. Please help.\n\nError: %2$@\nApp version: %3$@\nOS version: %4$@\nLocale: %5$@\nMNC: %6$@";
 
 "Login.PhonePaidEmailSubject" = "Payment Issue";
 
@@ -492,11 +492,11 @@
 "Contacts.TabTitle" = "Contacts";
 "Contacts.Title" = "Contacts";
 "Contacts.FailedToSendInvitesMessage" = "An error occurred.";
-"Contacts.AccessDeniedError" = "Fenixuz does not have access to your contacts";
-"Contacts.AccessDeniedHelpLandscape" = "Please go to your %@ Settings — Privacy — Contacts.\nThen select ON for Fenixuz.";
-"Contacts.AccessDeniedHelpPortrait" = "Please go to your %@ Settings — Privacy — Contacts. Then select ON for Fenixuz.";
+"Contacts.AccessDeniedError" = "Novagram does not have access to your contacts";
+"Contacts.AccessDeniedHelpLandscape" = "Please go to your %@ Settings — Privacy — Contacts.\nThen select ON for Novagram.";
+"Contacts.AccessDeniedHelpPortrait" = "Please go to your %@ Settings — Privacy — Contacts. Then select ON for Novagram.";
 "Contacts.AccessDeniedHelpON" = "ON";
-"Contacts.InviteToTelegram" = "Invite to Fenixuz";
+"Contacts.InviteToTelegram" = "Invite to Novagram";
 "Contacts.InviteFriends" = "Invite Friends";
 "Contacts.SelectAll" = "Select All";
 
@@ -580,7 +580,7 @@
 "Notification.CreatedChannel" = "Channel created";
 "Notification.CreatedGroup" = "Group created";
 "Notification.CreatedChatWithTitle" = "%@ created the group \"%@\" ";
-"Notification.Joined" = "%@ joined Fenixuz";
+"Notification.Joined" = "%@ joined Novagram";
 "Notification.ChangedGroupName" = "%@ changed group name to \"%@\" ";
 "Notification.NewAuthDetected" = "%1$@,\nWe detected a login into your account from a new device on %2$@, %3$@ at %4$@\n\nDevice: %5$@\nLocation: %6$@\n\nIf this wasn't you, you can go to Settings — Privacy and Security — Sessions and terminate that session.\n\nIf you think that somebody logged in to your account against your will, you can enable two-step verification in Privacy and Security settings.\n\nSincerely,\nThe Telegram Team";
 "Notification.MessageLifetimeChanged" = "%1$@ set the self-destruct timer to %2$@";
@@ -679,7 +679,7 @@
 "UserInfo.NotificationsDisabled" = "Disabled";
 "UserInfo.NotificationsEnable" = "Enable";
 "UserInfo.NotificationsDisable" = "Disable";
-"UserInfo.Invite" = "Invite to Fenixuz";
+"UserInfo.Invite" = "Invite to Novagram";
 
 // New Contact
 "NewContact.Title" = "New Contact";
@@ -836,9 +836,9 @@
 "BroadcastListInfo.AddRecipient" = "Add Recipient";
 
 "Settings.LogoutConfirmationTitle" = "Log out?";
-"Settings.LogoutConfirmationText" = "\nNote that you can seamlessly use Fenixuz on all your devices at once.\n\nRemember, logging out kills all your Secret Chats.";
+"Settings.LogoutConfirmationText" = "\nNote that you can seamlessly use Novagram on all your devices at once.\n\nRemember, logging out kills all your Secret Chats.";
 
-"Login.PadPhoneHelp" = "\nYou can use your main mobile number to log in to Fenixuz on all devices.\nDon't use your iPad's SIM number here — we'll need to send you an SMS.\n\nIs this number correct?\n{number}";
+"Login.PadPhoneHelp" = "\nYou can use your main mobile number to log in to Novagram on all devices.\nDon't use your iPad's SIM number here — we'll need to send you an SMS.\n\nIs this number correct?\n{number}";
 "Login.PadPhoneHelpTitle" = "Your Number";
 
 "MessageTimer.Custom" = "Custom";
@@ -935,7 +935,7 @@
 
 "Username.Title" = "Username";
 "Username.Placeholder" = "Your Username";
-"Username.Help" = "You can choose a username on **Fenixuz**. If you do, other people will be able to find you by this username and contact you without knowing your phone number.\n\nYou can use **a-z**, **0-9** and underscores. Minimum length is **5** characters.";
+"Username.Help" = "You can choose a username on **Novagram**. If you do, other people will be able to find you by this username and contact you without knowing your phone number.\n\nYou can use **a-z**, **0-9** and underscores. Minimum length is **5** characters.";
 "Username.InvalidTooShort" = "A username must have at least 5 characters.";
 "Username.InvalidStartsWithNumber" = "Sorry, a username can't start with a number.";
 "Username.InvalidCharacters" = "Sorry, this username is invalid.";
@@ -1052,9 +1052,9 @@
 "ChangePhoneNumberCode.Code" = "YOUR CODE";
 "ChangePhoneNumberCode.CodePlaceholder" = "Code";
 "ChangePhoneNumberCode.Help" = "We have sent you an SMS with the code";
-"ChangePhoneNumberCode.CallTimer" = "Fenixuz will call you in %@";
-"ChangePhoneNumberCode.RequestingACall" = "Requesting a call from Fenixuz...";
-"ChangePhoneNumberCode.Called" = "Fenixuz dialed your number";
+"ChangePhoneNumberCode.CallTimer" = "Novagram will call you in %@";
+"ChangePhoneNumberCode.RequestingACall" = "Requesting a call from Novagram...";
+"ChangePhoneNumberCode.Called" = "Novagram dialed your number";
 
 "LoginPassword.Title" = "Your Password";
 "LoginPassword.PasswordPlaceholder" = "Password";
@@ -1206,7 +1206,7 @@
 "SharedMedia.EmptyFilesText" = "You can send and receive\nfiles of any type up to 1.5 GB each\nand access them anywhere.";
 
 "ShareFileTip.Title" = "Sharing Files";
-"ShareFileTip.Text" = "You can share **uncompressed** media files from your Camera Roll here.\n\nTo share files of any other type, open them on your %@ (e.g. in your browser), tap **Open in...** or the action button and choose Fenixuz.";
+"ShareFileTip.Text" = "You can share **uncompressed** media files from your Camera Roll here.\n\nTo share files of any other type, open them on your %@ (e.g. in your browser), tap **Open in...** or the action button and choose Novagram.";
 "ShareFileTip.CloseTip" = "Close Tip";
 
 "DialogList.SearchSectionDialogs" = "Chats and Contacts";
@@ -1236,16 +1236,16 @@
 "PasscodeSettings.EncryptData" = "Encrypt Local Database";
 "PasscodeSettings.EncryptDataHelp" = "Experimental feature, use with caution. Encrypt your local Telegram data, using a derivative of your passcode as the key.";
 
-"EnterPasscode.EnterTitle" = "Enter your Fenixuz Passcode";
+"EnterPasscode.EnterTitle" = "Enter your Novagram Passcode";
 "EnterPasscode.ChangeTitle" = "Change Passcode";
-"EnterPasscode.EnterPasscode" = "Enter your Fenixuz Passcode";
+"EnterPasscode.EnterPasscode" = "Enter your Novagram Passcode";
 "EnterPasscode.EnterNewPasscodeNew" = "Enter a passcode";
 "EnterPasscode.EnterNewPasscodeChange" = "Enter your new passcode";
 "EnterPasscode.RepeatNewPasscode" = "Re-enter your new passcode";
 "EnterPasscode.EnterCurrentPasscode" = "Enter your current passcode";
-"EnterPasscode.TouchId" = "Unlock Fenixuz";
+"EnterPasscode.TouchId" = "Unlock Novagram";
 
-"DialogList.PasscodeLockHelp" = "Tap to lock Fenixuz";
+"DialogList.PasscodeLockHelp" = "Tap to lock Novagram";
 
 "PasscodeSettings.AutoLock" = "Auto-Lock";
 "PasscodeSettings.AutoLock.Disabled" = "Disabled";
@@ -1264,32 +1264,32 @@
 
 "AccessDenied.Title" = "Please Allow Access";
 
-"AccessDenied.Contacts" = "Fenixuz messaging is based on your existing contact list.\n\nPlease go to Settings > Privacy > Contacts and set Fenixuz to ON.";
+"AccessDenied.Contacts" = "Novagram messaging is based on your existing contact list.\n\nPlease go to Settings > Privacy > Contacts and set Novagram to ON.";
 
-"AccessDenied.VoiceMicrophone" = "Fenixuz needs access to your microphone to send voice messages.\n\nPlease go to Settings > Privacy > Microphone and set Fenixuz to ON.";
+"AccessDenied.VoiceMicrophone" = "Novagram needs access to your microphone to send voice messages.\n\nPlease go to Settings > Privacy > Microphone and set Novagram to ON.";
 
-"AccessDenied.VideoMicrophone" = "Fenixuz needs access to your microphone to record sound in videos recording.\n\nPlease go to Settings > Privacy > Microphone and set Fenixuz to ON.";
+"AccessDenied.VideoMicrophone" = "Novagram needs access to your microphone to record sound in videos recording.\n\nPlease go to Settings > Privacy > Microphone and set Novagram to ON.";
 
-"AccessDenied.MicrophoneRestricted" = "Microphone access is restricted for Fenixuz.\n\nPlease go to Settings > General > Restrictions > Microphone and set Fenixuz to ON.";
+"AccessDenied.MicrophoneRestricted" = "Microphone access is restricted for Novagram.\n\nPlease go to Settings > General > Restrictions > Microphone and set Novagram to ON.";
 
 
-"AccessDenied.Camera" = "Fenixuz needs access to your camera to take photos and videos.\n\nPlease go to Settings > Privacy > Camera and set Fenixuz to ON.";
+"AccessDenied.Camera" = "Novagram needs access to your camera to take photos and videos.\n\nPlease go to Settings > Privacy > Camera and set Novagram to ON.";
 
-"AccessDenied.CameraRestricted" = "Camera access is restricted for Fenixuz.\n\nPlease go to Settings > General > Restrictions > Camera and set Fenixuz to ON.";
+"AccessDenied.CameraRestricted" = "Camera access is restricted for Novagram.\n\nPlease go to Settings > General > Restrictions > Camera and set Novagram to ON.";
 
 "AccessDenied.CameraDisabled" = "Camera access is globally restricted on your phone.\n\nPlease go to Settings > General > Restrictions and set Camera to ON";
 
-"AccessDenied.PhotosAndVideos" = "Fenixuz needs access to your photo library to send photos and videos.\n\nPlease go to Settings > Privacy > Photos and set Fenixuz to ON.";
+"AccessDenied.PhotosAndVideos" = "Novagram needs access to your photo library to send photos and videos.\n\nPlease go to Settings > Privacy > Photos and set Novagram to ON.";
 
-"AccessDenied.SaveMedia" = "Fenixuz needs access to your photo library to save photos and videos.\n\nPlease go to Settings > Privacy > Photos and set Fenixuz to ON.";
+"AccessDenied.SaveMedia" = "Novagram needs access to your photo library to save photos and videos.\n\nPlease go to Settings > Privacy > Photos and set Novagram to ON.";
 
-"AccessDenied.PhotosRestricted" = "Photo access is restricted for Fenixuz.\n\nPlease go to Settings > General > Restrictions > Photos and set Fenixuz to ON.";
+"AccessDenied.PhotosRestricted" = "Photo access is restricted for Novagram.\n\nPlease go to Settings > General > Restrictions > Photos and set Novagram to ON.";
 
-"AccessDenied.LocationDenied" = "Fenixuz needs access to your location so that you can share it with your contacts.\n\nPlease go to Settings > Privacy > Location Services and set Fenixuz to ON.";
+"AccessDenied.LocationDenied" = "Novagram needs access to your location so that you can share it with your contacts.\n\nPlease go to Settings > Privacy > Location Services and set Novagram to ON.";
 
-"AccessDenied.LocationDisabled" = "Fenixuz needs access to your location so that you can share it with your contacts.\n\nPlease go to Settings > Privacy > Location Services and set it to ON.";
+"AccessDenied.LocationDisabled" = "Novagram needs access to your location so that you can share it with your contacts.\n\nPlease go to Settings > Privacy > Location Services and set it to ON.";
 
-"AccessDenied.LocationTracking" = "Fenixuz needs access to your location to show you on the map.\n\nPlease go to Settings > Privacy > Location Services and set it to ON.";
+"AccessDenied.LocationTracking" = "Novagram needs access to your location to show you on the map.\n\nPlease go to Settings > Privacy > Location Services and set it to ON.";
 
 "AccessDenied.Settings" = "Settings";
 
@@ -1427,7 +1427,7 @@
 "Conversation.FileDropbox" = "Dropbox";
 
 "Conversation.FileOpenIn" = "Open in...";
-"Conversation.FileHowToText" = "To share files of any type, open them on your %@ (e.g. in your browser), tap **Open in...** or the action button and choose Fenixuz.";
+"Conversation.FileHowToText" = "To share files of any type, open them on your %@ (e.g. in your browser), tap **Open in...** or the action button and choose Novagram.";
 
 "Map.LocationTitle" = "Location";
 "Map.OpenInMaps" = "Open in Maps";
@@ -1463,7 +1463,7 @@
 
 "ChangePhone.ErrorOccupied" = "The number %@ is already connected to a Telegram account. Please delete that account before migrating to the new number.";
 
-"AccessDenied.LocationTracking" = "Fenixuz needs access to your location to show you on the map.\n\nPlease go to Settings > Privacy > Location Services and set it to ON.";
+"AccessDenied.LocationTracking" = "Novagram needs access to your location to show you on the map.\n\nPlease go to Settings > Privacy > Location Services and set it to ON.";
 
 "PrivacySettings.AuthSessions" = "Active Sessions";
 "AuthSessions.Title" = "Active Sessions";
@@ -1473,7 +1473,7 @@
 "AuthSessions.TerminateSession" = "Terminate session";
 "AuthSessions.OtherSessions" = "ACTIVE SESSIONS";
 "AuthSessions.EmptyTitle" = "No other sessions";
-"AuthSessions.EmptyText" = "You can log in to Fenixuz from other mobile, tablet and desktop devices, using the same phone number. All your data will be instantly synchronized.";
+"AuthSessions.EmptyText" = "You can log in to Novagram from other mobile, tablet and desktop devices, using the same phone number. All your data will be instantly synchronized.";
 "AuthSessions.AppUnofficial" = "(ID: %@)";
 
 "WebPreview.GettingLinkInfo" = "Getting Link Info...";
@@ -1486,7 +1486,7 @@
 
 "GroupInfo.InviteLink.Title" = "Invite Link";
 "GroupInfo.InviteLink.LinkSection" = "LINK";
-"GroupInfo.InviteLink.Help" = "Anyone who has Fenixuz installed will be able to join your group by following this link.";
+"GroupInfo.InviteLink.Help" = "Anyone who has Novagram installed will be able to join your group by following this link.";
 "GroupInfo.InviteLink.CopyLink" = "Copy Link";
 "GroupInfo.InviteLink.RevokeLink" = "Revoke Link";
 "GroupInfo.InviteLink.ShareLink" = "Share Link";
@@ -1573,7 +1573,7 @@
 
 "Login.PhoneNumberHelp" = "Help";
 "Login.EmailPhoneSubject" = "Invalid number %@";
-"Login.EmailPhoneBody" = "I'm trying to use my mobile phone number: %@\nBut Fenixuz says it's invalid. Please help.\nAdditional Info: %@, %@.";
+"Login.EmailPhoneBody" = "I'm trying to use my mobile phone number: %@\nBut Novagram says it's invalid. Please help.\nAdditional Info: %@, %@.";
 
 "SharedMedia.TitleLink" = "Shared Links";
 "SharedMedia.EmptyLinksText" = "All links shared in this chat will appear here.";
@@ -1600,7 +1600,7 @@
 "Channel.Edit.LinkItem" = "Link";
 
 "Channel.Username.Title" = "Link";
-"Channel.Username.Help" = "You can choose a channel name on **Fenixuz**. If you do, other people will be able to find your channel by this name.\n\nYou can use **a-z**, **0-9** and underscores. Minimum length is **5** characters.";
+"Channel.Username.Help" = "You can choose a channel name on **Novagram**. If you do, other people will be able to find your channel by this name.\n\nYou can use **a-z**, **0-9** and underscores. Minimum length is **5** characters.";
 "Channel.Username.LinkHint" = "This link opens your channel in Telegram:[\nhttps://t.me/%@]";
 "Channel.Username.InvalidTooShort" = "Channel names must have at least 5 characters.";
 "Channel.Username.InvalidStartsWithNumber" = "Channel names can't start with a number.";
@@ -1646,7 +1646,7 @@
 
 "Channel.Setup.Title" = "Channel";
 
-"Channel.Username.CreatePublicLinkHelp" = "People can share this link with others and find your channel using Fenixuz search.";
+"Channel.Username.CreatePublicLinkHelp" = "People can share this link with others and find your channel using Novagram search.";
 "Channel.Username.CreatePrivateLinkHelp" = "People can join your channel by following this link. You can revoke the link at any time.";
 
 "Channel.Setup.PublicNoLink" = "Please choose a link for your public channel, so that people can find it in search and share with others.\n\nIf you're not interested, we suggest creating a private channel instead.";
@@ -1772,7 +1772,7 @@
 
 "Group.Management.AddModeratorHelp" = "You can add admins to help you manage your group.";
 
-"Watch.AppName" = "Fenixuz";
+"Watch.AppName" = "Novagram";
 "Watch.Compose.AddContact" = "Choose Contact";
 "Watch.Compose.CreateMessage" = "Create Message";
 "Watch.Compose.CurrentLocation" = "Current Location";
@@ -1807,7 +1807,7 @@
 
 "Watch.Message.ForwardedFrom" = "Forwarded from";
 
-"Watch.Notification.Joined" = "Joined Fenixuz";
+"Watch.Notification.Joined" = "Joined Novagram";
 
 "Watch.MessageView.Title" = "Message";
 "Watch.MessageView.Forward" = "Forward";
@@ -1821,9 +1821,9 @@
 "Watch.Stickers.StickerPacks" = "Sticker Sets";
 
 "Watch.Location.Current" = "Current Location";
-"Watch.Location.Access" = "Allow Fenixuz to access location on your phone";
+"Watch.Location.Access" = "Allow Novagram to access location on your phone";
 
-"Watch.AuthRequired" = "Log in to Fenixuz on your phone to get started";
+"Watch.AuthRequired" = "Log in to Novagram on your phone to get started";
 
 "Watch.NoConnection" = "No Connection";
 "Watch.ConnectionDescription" = "Your Watch needs to be connected for the app to work";
@@ -1870,7 +1870,7 @@
 "Cache.ClearProgress" = "Please Wait...";
 "Cache.ClearEmpty" = "Empty";
 "Cache.ByPeerHeader" = "CHATS";
-"Cache.Indexing" = "Fenixuz is calculating current cache size.\nThis can take a few minutes.";
+"Cache.Indexing" = "Novagram is calculating current cache size.\nThis can take a few minutes.";
 
 "ExplicitContent.AlertTitle" = "Sorry";
 "ExplicitContent.AlertChannel" = "You can't access this channel because it violates App Store rules.";
@@ -1951,7 +1951,7 @@
 "PrivacyLastSeenSettings.GroupsAndChannelsHelp" = "Change who can add you to groups and channels.";
 "MusicPlayer.VoiceNote" = "Voice Message";
 
-"Watch.Microphone.Access" = "Allow Fenixuz to access the microphone on your phone";
+"Watch.Microphone.Access" = "Allow Novagram to access the microphone on your phone";
 
 "Settings.AppleWatch" = "Apple Watch";
 "AppleWatch.Title" = "Apple Watch";
@@ -2044,7 +2044,7 @@
 "Group.Setup.TypePublicHelp" = "Public groups can be found in search, chat history is available to everyone and anyone can join.";
 "Group.Setup.TypePrivateHelp" = "Private groups can only be joined if you were invited or have an invite link.";
 
-"Group.Username.CreatePublicLinkHelp" = "People can share this link with others and find your group using Fenixuz search.";
+"Group.Username.CreatePublicLinkHelp" = "People can share this link with others and find your group using Novagram search.";
 "Group.Username.CreatePrivateLinkHelp" = "People can join your group by following this link. You can revoke the link at any time.";
 
 "Conversation.PinMessageAlertGroup" = "Pin this message and notify all members of the group?";
@@ -2148,8 +2148,8 @@
 "Login.CodeSentCall" = "We are calling your phone to dictate a code.";
 
 "Login.WillSendSms" = "You can request an SMS in %@";
-"Login.SmsRequestState2" = "Requesting an SMS from Fenixuz...";
-"Login.SmsRequestState3" = "Fenixuz sent you an SMS\n[Didn't get the code?]";
+"Login.SmsRequestState2" = "Requesting an SMS from Novagram...";
+"Login.SmsRequestState3" = "Novagram sent you an SMS\n[Didn't get the code?]";
 
 "CancelResetAccount.Title" = "Cancel Account Reset";
 "CancelResetAccount.TextSMS" = "Somebody with access to your phone number %@ has requested to delete your Telegram account and reset your 2-Step Verification password.\n\nIf it wasn't you, please enter the code we've just sent you via SMS to your number.";
@@ -2251,7 +2251,7 @@
 "StickerPack.RemoveMaskCount_many" = "Remove %@ Masks";
 "StickerPack.RemoveMaskCount_0" = "Remove %@ Masks";
 
-"Conversation.BotInteractiveUrlAlert" = "Allow %@ to pass your Fenixuz name and id (not your phone number) to pages you open with this bot?";
+"Conversation.BotInteractiveUrlAlert" = "Allow %@ to pass your Novagram name and id (not your phone number) to pages you open with this bot?";
 "StickerPacksSettings.ArchivedMasks" = "Archived Masks";
 "StickerSettings.MaskContextInfo" = "If you archive a set of masks, you can quickly restore it later from the Archived Masks section.";
 "StickerPacksSettings.ArchivedMasks.Info" = "You can have up to 200 sets of masks.
@@ -2259,9 +2259,9 @@ Unused sets are archived when you add more.";
 
 "CloudStorage.Title" = "Cloud Storage";
 
-"Widget.AuthRequired" = "Log in to Fenixuz";
+"Widget.AuthRequired" = "Log in to Novagram";
 "Widget.NoUsers" = "Start messaging to see your friends here";
-"Widget.GalleryTitle" = "Fenixuz";
+"Widget.GalleryTitle" = "Novagram";
 "Widget.GalleryDescription" = "Select chats";
 
 "ShareMenu.CopyShareLinkGame" = "Copy link to game";
@@ -2286,11 +2286,11 @@ Unused sets are archived when you add more.";
 "Conversation.JumpToDate" = "Jump To Date";
 "Conversation.AddToReadingList" = "Add to Reading List";
 
-"AccessDenied.CallMicrophone" = "Fenixuz needs access to your microphone for voice calls.\n\nPlease go to Settings > Privacy > Microphone and set Fenixuz to ON.";
+"AccessDenied.CallMicrophone" = "Novagram needs access to your microphone for voice calls.\n\nPlease go to Settings > Privacy > Microphone and set Novagram to ON.";
 
 "Call.EncryptionKey.Title" = "Encryption Key";
 
-"Application.Name" = "Fenixuz";
+"Application.Name" = "Novagram";
 "DialogList.Pin" = "Pin";
 "DialogList.Unpin" = "Unpin";
 "DialogList.PinLimitError" = "Sorry, you can pin no more than %@ chats to the top.";
@@ -2340,7 +2340,7 @@ Unused sets are archived when you add more.";
 "Calls.AddTab" = "Add Tab";
 "Calls.NewCall" = "New Call";
 
-"Calls.RatingTitle" = "Please rate the quality\nof your Fenixuz call";
+"Calls.RatingTitle" = "Please rate the quality\nof your Novagram call";
 "Calls.SubmitRating" = "Submit";
 
 "Call.Seconds_1" = "%@ second";
@@ -2527,14 +2527,14 @@ Unused sets are archived when you add more.";
 
 "Calls.RatingFeedback" = "Write a comment...";
 
-"Call.StatusIncoming" = "Fenixuz Audio...";
+"Call.StatusIncoming" = "Novagram Audio...";
 "Call.IncomingVoiceCall" = "Incoming Voice Call";
 "Call.IncomingVideoCall" = "Incoming Video Call";
 "Call.StatusRequesting" = "Contacting...";
 "Call.StatusWaiting" = "Waiting...";
 "Call.StatusRinging" = "Ringing...";
 "Call.StatusConnecting" = "Connecting...";
-"Call.StatusOngoing" = "Fenixuz Audio %@";
+"Call.StatusOngoing" = "Novagram Audio %@";
 "Call.StatusEnded" = "Call Ended";
 "Call.StatusFailed" = "Call Failed";
 "Call.StatusBusy" = "Busy";
@@ -2599,7 +2599,7 @@ Unused sets are archived when you add more.";
 "Call.AudioRouteHeadphones" = "Headphones";
 "Call.AudioRouteHide" = "Hide";
 
-"Call.PhoneCallInProgressMessage" = "You can’t place a Fenixuz call if you’re already on a phone call.";
+"Call.PhoneCallInProgressMessage" = "You can’t place a Novagram call if you’re already on a phone call.";
 "Call.RecordingDisabledMessage" = "Please end your call before recording a voice message.";
 
 "Call.EmojiDescription" = "If these emoji are the same on %@'s screen, this call is 100%% secure.";
@@ -2609,8 +2609,8 @@ Unused sets are archived when you add more.";
 "Conversation.HoldForAudio" = "Hold to record audio. Tap to switch to video.";
 "Conversation.HoldForVideo" = "Hold to record video. Tap to switch to audio.";
 
-"UserInfo.TelegramCall" = "Fenixuz Call";
-"UserInfo.TelegramVideoCall" = "Fenixuz Video Call";
+"UserInfo.TelegramCall" = "Novagram Call";
+"UserInfo.TelegramVideoCall" = "Novagram Video Call";
 "UserInfo.PhoneCall" = "Phone Call";
 
 "SharedMedia.CategoryMedia" = "Media";
@@ -2618,8 +2618,8 @@ Unused sets are archived when you add more.";
 "SharedMedia.CategoryLinks" = "Links";
 "SharedMedia.CategoryOther" = "Audio";
 
-"AccessDenied.VideoMessageCamera" = "Fenixuz needs access to your camera to send video messages.\n\nPlease go to Settings > Privacy > Camera and set Fenixuz to ON.";
-"AccessDenied.VideoMessageMicrophone" = "Fenixuz needs access to your microphone to send video messages.\n\nPlease go to Settings > Privacy > Microphone and set Fenixuz to ON.";
+"AccessDenied.VideoMessageCamera" = "Novagram needs access to your camera to send video messages.\n\nPlease go to Settings > Privacy > Camera and set Novagram to ON.";
+"AccessDenied.VideoMessageMicrophone" = "Novagram needs access to your microphone to send video messages.\n\nPlease go to Settings > Privacy > Microphone and set Novagram to ON.";
 
 "ChatSettings.AutomaticVideoMessageDownload" = "AUTOMATIC VIDEO MESSAGE DOWNLOAD";
 
@@ -2645,7 +2645,7 @@ Unused sets are archived when you add more.";
 
 "Privacy.PaymentsTitle" = "PAYMENTS";
 "Privacy.PaymentsClearInfo" = "Clear payment & shipping info";
-"Privacy.PaymentsClearInfoHelp" = "You can delete your shipping info and instruct all payment providers to remove your saved credit cards. Note that Fenixuz never stores your credit card data.";
+"Privacy.PaymentsClearInfoHelp" = "You can delete your shipping info and instruct all payment providers to remove your saved credit cards. Note that Novagram never stores your credit card data.";
 "Privacy.PaymentsClear.PaymentInfo" = "Payment Info";
 "Privacy.PaymentsClear.ShippingInfo" = "Shipping Info";
 
@@ -2798,7 +2798,7 @@ Unused sets are archived when you add more.";
 
 "Contacts.PhoneNumber" = "Phone Number";
 "Contacts.AddPhoneNumber" = "Add %@";
-"Contacts.ShareTelegram" = "Share Fenixuz";
+"Contacts.ShareTelegram" = "Share Novagram";
 
 "Conversation.ViewChannel" = "VIEW CHANNEL";
 "Conversation.ViewGroup" = "VIEW GROUP";
@@ -2865,7 +2865,7 @@ Unused sets are archived when you add more.";
 "Privacy.Calls.P2PHelp" = "Disabling peer-to-peer will relay all calls through Telegram servers to avoid revealing your IP address, but will slightly decrease audio quality.";
 
 "Privacy.Calls.Integration" = "iOS Call Integration";
-"Privacy.Calls.IntegrationHelp" = "iOS Call Integration shows Fenixuz calls on the lock screen and in the system's call history. If iCloud sync is enabled, your call history is shared with Apple.";
+"Privacy.Calls.IntegrationHelp" = "iOS Call Integration shows Novagram calls on the lock screen and in the system's call history. If iCloud sync is enabled, your call history is shared with Apple.";
 
 "Call.ReportPlaceholder" = "What went wrong?";
 "Call.ReportIncludeLog" = "Send technical information";
@@ -2885,12 +2885,12 @@ Unused sets are archived when you add more.";
 
 "Stickers.FrequentlyUsed" = "Recently Used";
 
-"Contacts.ImportersCount_1" = "1 contact on Fenixuz";
-"Contacts.ImportersCount_2" = "2 contacts on Fenixuz";
-"Contacts.ImportersCount_3_10" = "%@ contacts on Fenixuz";
-"Contacts.ImportersCount_any" = "%@ contacts on Fenixuz";
-"Contacts.ImportersCount_many" = "%@ contacts on Fenixuz";
-"Contacts.ImportersCount_0" = "%@ contacts on Fenixuz";
+"Contacts.ImportersCount_1" = "1 contact on Novagram";
+"Contacts.ImportersCount_2" = "2 contacts on Novagram";
+"Contacts.ImportersCount_3_10" = "%@ contacts on Novagram";
+"Contacts.ImportersCount_any" = "%@ contacts on Novagram";
+"Contacts.ImportersCount_many" = "%@ contacts on Novagram";
+"Contacts.ImportersCount_0" = "%@ contacts on Novagram";
 
 "Conversation.ContextMenuBan" = "Restrict";
 
@@ -2898,13 +2898,13 @@ Unused sets are archived when you add more.";
 "SocksProxySetup.UseForCallsHelp" = "Proxy servers may degrade the quality of your calls.";
 
 "InviteText.URL" = "https://telegram.org/dl";
-"InviteText.SingleContact" = "Hey, I'm using Fenixuz to chat. Join me! Download it here: %@";
-"InviteText.ContactsCountText_1" = "Hey, I'm using Fenixuz to chat. Join me! Download it here: {url}";
-"InviteText.ContactsCountText_2" = "Hey, I'm using Fenixuz to chat – and so are 2 of our other contacts. Join us! Download it here: {url}";
-"InviteText.ContactsCountText_3_10" = "Hey, I'm using Fenixuz to chat – and so are %@ of our other contacts. Join us! Download it here: {url}";
-"InviteText.ContactsCountText_any" = "Hey, I'm using Fenixuz to chat – and so are %@ of our other contacts. Join us! Download it here: {url}";
-"InviteText.ContactsCountText_many" = "Hey, I'm using Fenixuz to chat – and so are %@ of our other contacts. Join us! Download it here: {url}";
-"InviteText.ContactsCountText_0" = "Hey, I'm using Fenixuz to chat. Join me! Download it here: {url}";
+"InviteText.SingleContact" = "Hey, I'm using Novagram to chat. Join me! Download it here: %@";
+"InviteText.ContactsCountText_1" = "Hey, I'm using Novagram to chat. Join me! Download it here: {url}";
+"InviteText.ContactsCountText_2" = "Hey, I'm using Novagram to chat – and so are 2 of our other contacts. Join us! Download it here: {url}";
+"InviteText.ContactsCountText_3_10" = "Hey, I'm using Novagram to chat – and so are %@ of our other contacts. Join us! Download it here: {url}";
+"InviteText.ContactsCountText_any" = "Hey, I'm using Novagram to chat – and so are %@ of our other contacts. Join us! Download it here: {url}";
+"InviteText.ContactsCountText_many" = "Hey, I'm using Novagram to chat – and so are %@ of our other contacts. Join us! Download it here: {url}";
+"InviteText.ContactsCountText_0" = "Hey, I'm using Novagram to chat. Join me! Download it here: {url}";
 
 "Invite.LargeRecipientsCountWarning" = "Please note that it may take some time for your device to send all of these invitations";
 
@@ -3060,12 +3060,12 @@ Unused sets are archived when you add more.";
 
 "NotificationSettings.ContactJoined" = "New Contacts";
 
-"AccessDenied.LocationAlwaysDenied" = "If you'd like to share your Live Location with friends, Fenixuz needs location access when the app is in the background.\n\nPlease go to Settings > Privacy > Location Services and set Fenixuz to Always.";
+"AccessDenied.LocationAlwaysDenied" = "If you'd like to share your Live Location with friends, Novagram needs location access when the app is in the background.\n\nPlease go to Settings > Privacy > Location Services and set Novagram to Always.";
 
 "UserInfo.UnblockConfirmation" = "Unblock %@?";
 
 "Login.BannedPhoneSubject" = "Banned phone number: %@";
-"Login.BannedPhoneBody" = "I'm trying to use my mobile phone number: %@\nBut Fenixuz says it's banned. Please help.";
+"Login.BannedPhoneBody" = "I'm trying to use my mobile phone number: %@\nBut Novagram says it's banned. Please help.";
 
 "Conversation.StopLiveLocation" = "Stop Sharing";
 
@@ -3136,7 +3136,7 @@ Unused sets are archived when you add more.";
 "Channel.Setup.TypePrivateHelp" = "Private channels can only be joined if you were invited or have an invite link.";
 "Group.Username.InvalidTooShort" = "Group names must have at least 5 characters.";
 "Group.Username.InvalidStartsWithNumber" = "Group names can't start with a number.";
-"Group.Username.CreatePublicLinkHelp" = "People can share this link with others and find your group using Fenixuz search.";
+"Group.Username.CreatePublicLinkHelp" = "People can share this link with others and find your group using Novagram search.";
 "Channel.TypeSetup.Title" = "Channel Type";
 
 "Group.Setup.TypePrivate" = "Private";
@@ -3148,16 +3148,16 @@ Unused sets are archived when you add more.";
 
 "Privacy.PaymentsClearInfoDoneHelp" = "Payment & shipping info cleared.";
 
-"InfoPlist.NSContactsUsageDescription" = "Fenixuz will continuously upload your contacts to its heavily encrypted cloud servers to let you connect with your friends across all your devices.";
-"InfoPlist.NSLocationWhenInUseUsageDescription" = "When you send your location to your friends, Fenixuz needs access to show them a map.";
+"InfoPlist.NSContactsUsageDescription" = "Novagram will continuously upload your contacts to its heavily encrypted cloud servers to let you connect with your friends across all your devices.";
+"InfoPlist.NSLocationWhenInUseUsageDescription" = "When you send your location to your friends, Novagram needs access to show them a map.";
 "InfoPlist.NSCameraUsageDescription" = "We need this so that you can take and share photos and videos, as well as make video calls.";
 "InfoPlist.NSPhotoLibraryUsageDescription" = "We need this so that you can share photos and videos from your photo library.";
 "InfoPlist.NSPhotoLibraryAddUsageDescription" = "We need this so that you can save photos and videos to your photo library.";
 "InfoPlist.NSMicrophoneUsageDescription" = "We need this so that you can record and share voice messages and videos with sound.";
 "InfoPlist.NSSiriUsageDescription" = "You can use Siri to send messages.";
-"InfoPlist.NSLocationAlwaysAndWhenInUseUsageDescription" = "When you choose to share your Live Location with friends in a chat, Fenixuz needs background access to your location to keep them updated for the duration of the live sharing.";
-"InfoPlist.NSLocationAlwaysUsageDescription" = "When you choose to share your live location with friends in a chat, Fenixuz needs background access to your location to keep them updated for the duration of the live sharing. You also need this to send locations from an Apple Watch.";
-"InfoPlist.NSLocationWhenInUseUsageDescription" = "When you send your location to your friends, Fenixuz needs access to show them a map.";
+"InfoPlist.NSLocationAlwaysAndWhenInUseUsageDescription" = "When you choose to share your Live Location with friends in a chat, Novagram needs background access to your location to keep them updated for the duration of the live sharing.";
+"InfoPlist.NSLocationAlwaysUsageDescription" = "When you choose to share your live location with friends in a chat, Novagram needs background access to your location to keep them updated for the duration of the live sharing. You also need this to send locations from an Apple Watch.";
+"InfoPlist.NSLocationWhenInUseUsageDescription" = "When you send your location to your friends, Novagram needs access to show them a map.";
 "InfoPlist.NSFaceIDUsageDescription" = "You can use Face ID to unlock the app.";
 
 "Privacy.Calls.P2PNever" = "Never";
@@ -3248,7 +3248,7 @@ Unused sets are archived when you add more.";
 "AuthSessions.Sessions" = "Sessions";
 "AuthSessions.LoggedIn" = "Websites";
 "AuthSessions.LogOutApplications" = "Disconnect All Websites";
-"AuthSessions.LogOutApplicationsHelp" = "You can log in on websites that support signing in with Fenixuz.";
+"AuthSessions.LogOutApplicationsHelp" = "You can log in on websites that support signing in with Novagram.";
 "AuthSessions.LoggedInWithTelegram" = "CONNECTED WEBSITES";
 "AuthSessions.LogOut" = "Disconnect";
 "AuthSessions.Message" = "You allowed this bot to message you when you logged in on %@.";
@@ -3301,7 +3301,7 @@ Unused sets are archived when you add more.";
 
 "DialogList.AdLabel" = "Proxy Sponsor";
 "DialogList.AdNoticeAlert" = "The proxy you are using displays a sponsored channel in your chat list.";
-"SocksProxySetup.AdNoticeHelp" = "This proxy may display a sponsored channel in your chat list. This doesn't reveal your Fenixuz traffic.";
+"SocksProxySetup.AdNoticeHelp" = "This proxy may display a sponsored channel in your chat list. This doesn't reveal your Novagram traffic.";
 
 "SocksProxySetup.ShareProxyList" = "Share Proxy List";
 
@@ -3320,7 +3320,7 @@ Unused sets are archived when you add more.";
 
 "Login.TermsOfService.ProceedBot" = "Please agree and proceed to %@.";
 
-"Login.TermsOfServiceSignupDecline" = "We're very sorry, but this means you can't sign up for Fenixuz.\n\nUnlike others, we don't use your data for ad targeting or other commercial purposes. Fenixuz only stores the information it needs to function as a feature-rich cloud service. You can adjust how we use your data (e.g., delete synced contacts) in Privacy & Security settings.\n\nBut if you're generally not OK with Fenixuz's modest needs, it won't be possible for us to provide this service.";
+"Login.TermsOfServiceSignupDecline" = "We're very sorry, but this means you can't sign up for Novagram.\n\nUnlike others, we don't use your data for ad targeting or other commercial purposes. Novagram only stores the information it needs to function as a feature-rich cloud service. You can adjust how we use your data (e.g., delete synced contacts) in Privacy & Security settings.\n\nBut if you're generally not OK with Novagram's modest needs, it won't be possible for us to provide this service.";
 
 "UserInfo.BotPrivacy" = "Privacy Policy";
 
@@ -3333,7 +3333,7 @@ Unused sets are archived when you add more.";
 "PrivacyPolicy.AgeVerificationAgree" = "Agree";
 
 "PrivacyPolicy.DeclineTitle" = "Decline";
-"PrivacyPolicy.DeclineMessage" = "We're very sorry, but this means we must part ways here. Unlike others, we don't use your data for ad targeting or other commercial purposes. Fenixuz only stores the information it needs to function as a feature-rich cloud service. You can adjust how we use your data (e.g., delete synced contacts) in Privacy & Security settings.\n\nBut if you're generally not OK with Fenixuz's modest needs, it won't be possible for us to provide this service.";
+"PrivacyPolicy.DeclineMessage" = "We're very sorry, but this means we must part ways here. Unlike others, we don't use your data for ad targeting or other commercial purposes. Novagram only stores the information it needs to function as a feature-rich cloud service. You can adjust how we use your data (e.g., delete synced contacts) in Privacy & Security settings.\n\nBut if you're generally not OK with Novagram's modest needs, it won't be possible for us to provide this service.";
 "PrivacyPolicy.DeclineDeclineAndDelete" = "Decline and Delete";
 
 "PrivacyPolicy.DeclineLastWarning" = "Warning, this will irreversibly delete your Telegram account along with all the data you store in the Telegram cloud.\n\nWe will provide a tool to download your data before June, 23 – so you may want to wait a little before deleting.";
@@ -3370,7 +3370,7 @@ Unused sets are archived when you add more.";
 "Passport.DeletePassport" = "Delete Telegram Passport";
 "Passport.DeletePassportConfirmation" = "Are you sure you want to delete your Telegram Passport? All details will be lost.";
 
-"Passport.PasswordHelp" = "Please enter your Fenixuz Password\nto decrypt your data";
+"Passport.PasswordHelp" = "Please enter your Novagram Password\nto decrypt your data";
 "Passport.PasswordPlaceholder" = "Enter your password";
 "Passport.InvalidPasswordError" = "Invalid password. Please try again.";
 "Passport.FloodError" = "Limit exceeded. Please try again later.";
@@ -3379,7 +3379,7 @@ Unused sets are archived when you add more.";
 "Passport.ForgottenPassword" = "Forgotten Password";
 "Passport.PasswordReset" = "All documents uploaded to your Telegram Passport will be lost. You will be able to upload new documents.";
 
-"Passport.PasswordDescription" = "Please create a password to secure your personal data with end-to-end encryption.\n\nThis password will also be required whenever you log in to Fenixuz on a new device.";
+"Passport.PasswordDescription" = "Please create a password to secure your personal data with end-to-end encryption.\n\nThis password will also be required whenever you log in to Novagram on a new device.";
 "Passport.PasswordCreate" = "Create a Password";
 "Passport.PasswordCompleteSetup" = "Complete Password Setup";
 "Passport.PasswordNext" = "Next";
@@ -3499,14 +3499,14 @@ Unused sets are archived when you add more.";
 
 "Passport.Phone.Title" = "Phone Number";
 "Passport.Phone.UseTelegramNumber" = "Use %@";
-"Passport.Phone.UseTelegramNumberHelp" = "Use the same phone number as on Fenixuz.";
+"Passport.Phone.UseTelegramNumberHelp" = "Use the same phone number as on Novagram.";
 "Passport.Phone.EnterOtherNumber" = "OR ENTER NEW PHONE NUMBER";
 "Passport.Phone.Help" = "Note: You will receive a confirmation code on the phone number you provide.";
 "Passport.Phone.Delete" = "Delete Phone Number";
 
 "Passport.Email.Title" = "Email";
 "Passport.Email.UseTelegramEmail" = "Use %@";
-"Passport.Email.UseTelegramEmailHelp" = "Use the same address as on Fenixuz.";
+"Passport.Email.UseTelegramEmailHelp" = "Use the same address as on Novagram.";
 "Passport.Email.EnterOtherEmail" = "OR ENTER NEW EMAIL ADDRESS";
 "Passport.Email.EmailPlaceholder" = "Enter your email address";
 "Passport.Email.Help" = "Note: You will receive a confirmation code to the email address you provide.";
@@ -3579,15 +3579,15 @@ Unused sets are archived when you add more.";
 
 "Passport.NotLoggedInMessage" = "Please log in to your account to use Telegram Passport";
 
-"Update.Title" = "Fenixuz Update";
-"Update.AppVersion" = "Fenixuz %@";
-"Update.UpdateApp" = "Update Fenixuz";
+"Update.Title" = "Novagram Update";
+"Update.AppVersion" = "Novagram %@";
+"Update.UpdateApp" = "Update Novagram";
 "Update.Skip" = "Skip";
 
 "ReportPeer.ReasonCopyright" = "Copyright";
 
 "PrivacySettings.DataSettings" = "Data Settings";
-"PrivacySettings.DataSettingsHelp" = "Control which of your data is stored in the cloud and used by Fenixuz to enable advanced features.";
+"PrivacySettings.DataSettingsHelp" = "Control which of your data is stored in the cloud and used by Novagram to enable advanced features.";
 
 "PrivateDataSettings.Title" = "Data Settings";
 "Privacy.ChatsTitle" = "CHATS";
@@ -3772,8 +3772,8 @@ Unused sets are archived when you add more.";
 
 "SocksProxySetup.PasteFromClipboard" = "Paste From Clipboard";
 
-"Share.AuthTitle" = "Log in to Fenixuz";
-"Share.AuthDescription" = "Open Fenixuz and log in to share.";
+"Share.AuthTitle" = "Log in to Novagram";
+"Share.AuthDescription" = "Open Novagram and log in to share.";
 
 "Notifications.DisplayNamesOnLockScreen" = "Names on lock-screen";
 "Notifications.DisplayNamesOnLockScreenInfoWithLink" = "Display names in notifications when the device is locked. To disable, make sure that \"Show Previews\" is also set to \"When Unlocked\" or \"Never\" in [iOS Settings]";
@@ -3861,7 +3861,7 @@ Unused sets are archived when you add more.";
 "InstantPage.RelatedArticleAuthorAndDateTitle" = "%1$@ • %2$@";
 
 "AuthCode.Alert" = "Your login code is %@. Enter it in the Telegram app where you are trying to log in.\n\nDo not give this code to anyone.";
-"Login.CheckOtherSessionMessages" = "Check your Fenixuz messages";
+"Login.CheckOtherSessionMessages" = "Check your Novagram messages";
 "Login.SendCodeViaSms" = "Get the code via SMS";
 "Login.SendCodeViaCall" = "Call me to dictate the code";
 "Login.SendCodeViaFlashCall" = "Get the code via phone call";
@@ -3871,7 +3871,7 @@ Unused sets are archived when you add more.";
 "Login.CodeExpired" = "Code expired, please login again.";
 "Login.CancelSignUpConfirmation" = "Do you want to stop the registration process?";
 
-"Passcode.AppLockedAlert" = "Fenixuz\nLocked";
+"Passcode.AppLockedAlert" = "Novagram\nLocked";
 
 "ChatList.ReadAll" = "Read All";
 "ChatList.Read" = "Read";
@@ -3891,7 +3891,7 @@ Unused sets are archived when you add more.";
 "Permissions.Skip" = "Skip";
 
 "Permissions.ContactsTitle.v0" = "Sync Your Contacts";
-"Permissions.ContactsText.v0" = "See who's on Fenixuz and switch seamlessly, without having to \"add\" your friends.";
+"Permissions.ContactsText.v0" = "See who's on Novagram and switch seamlessly, without having to \"add\" your friends.";
 "Permissions.ContactsAllow.v0" = "Allow Access";
 "Permissions.ContactsAllowInSettings.v0" = "Allow in Settings";
 
@@ -3902,7 +3902,7 @@ Unused sets are archived when you add more.";
 "Permissions.NotificationsAllowInSettings.v0" = "Turn ON in Settings";
 
 "Permissions.CellularDataTitle.v0" = "Enable Cellular Data";
-"Permissions.CellularDataText.v0" = "Don't worry, Fenixuz keeps network usage to a minimum. You can further control this in Settings > Data and Storage.";
+"Permissions.CellularDataText.v0" = "Don't worry, Novagram keeps network usage to a minimum. You can further control this in Settings > Data and Storage.";
 "Permissions.CellularDataAllowInSettings.v0" = "Turn ON in Settings";
 
 "Permissions.SiriTitle.v0" = "Turn ON Siri";
@@ -3913,11 +3913,11 @@ Unused sets are archived when you add more.";
 "Permissions.PrivacyPolicy" = "Privacy Policy";
 
 "Contacts.PermissionsTitle" = "Access to Contacts";
-"Contacts.PermissionsText" = "Please allow Fenixuz access to your phonebook to seamlessly find all your friends.";
+"Contacts.PermissionsText" = "Please allow Novagram access to your phonebook to seamlessly find all your friends.";
 "Contacts.PermissionsAllow" = "Allow Access";
 "Contacts.PermissionsAllowInSettings" = "Allow in Settings";
 "Contacts.PermissionsSuppressWarningTitle" = "Keep contacts disabled?";
-"Contacts.PermissionsSuppressWarningText" = "You won't know when your friends join Fenixuz and become available to chat. We recommend enabling access to contacts in Settings.";
+"Contacts.PermissionsSuppressWarningText" = "You won't know when your friends join Novagram and become available to chat. We recommend enabling access to contacts in Settings.";
 "Contacts.PermissionsKeepDisabled" = "Keep Disabled";
 "Contacts.PermissionsEnable" = "Enable";
 
@@ -3929,7 +3929,7 @@ Unused sets are archived when you add more.";
 "Notifications.PermissionsAllowInSettings" = "Turn ON in Settings";
 "Notifications.PermissionsOpenSettings" = "Open Settings";
 "Notifications.PermissionsSuppressWarningTitle" = "Keep notifications disabled?";
-"Notifications.PermissionsSuppressWarningText" = "You may miss important messages on Fenixuz due to your current settings.\n\nFor better results, enable alerts or banners and try muting certain chats or chat types in Fenixuz settings.";
+"Notifications.PermissionsSuppressWarningText" = "You may miss important messages on Novagram due to your current settings.\n\nFor better results, enable alerts or banners and try muting certain chats or chat types in Novagram settings.";
 "Notifications.PermissionsKeepDisabled" = "Keep Disabled";
 "Notifications.PermissionsEnable" = "Enable";
 
@@ -3987,7 +3987,7 @@ Unused sets are archived when you add more.";
 "AttachmentMenu.WebSearch" = "Web Search";
 
 "Conversation.UnsupportedMediaPlaceholder" = "This message is not supported on your version of Telegram. Please update to the latest version.";
-"Conversation.UpdateTelegram" = "UPDATE FENIXUZ";
+"Conversation.UpdateTelegram" = "UPDATE NOVAGRAM";
 
 "Cache.LowDiskSpaceText" = "Your phone has run out of available storage. Please free some space to download or upload media.";
 
@@ -3997,7 +3997,7 @@ Unused sets are archived when you add more.";
 "Contacts.SortedByName" = "Sorted by Name";
 "Contacts.SortedByPresence" = "Sorted by Last Seen Time";
 
-"NotificationSettings.ContactJoinedInfo" = "Receive push notifications when one of your contacts becomes available on Fenixuz.";
+"NotificationSettings.ContactJoinedInfo" = "Receive push notifications when one of your contacts becomes available on Novagram.";
 
 "GroupInfo.Permissions" = "Permissions";
 "GroupInfo.Permissions.Title" = "Permissions";
@@ -4124,7 +4124,7 @@ Unused sets are archived when you add more.";
 "Undo.DeletedChannel" = "Deleted channel";
 "Undo.DeletedGroup" = "Deleted group";
 
-"AccessDenied.Wallpapers" = "Fenixuz needs access to your photo library to set a custom chat background.\n\nPlease go to Settings > Privacy > Photos and set Fenixuz to ON.";
+"AccessDenied.Wallpapers" = "Novagram needs access to your photo library to set a custom chat background.\n\nPlease go to Settings > Privacy > Photos and set Novagram to ON.";
 
 "Conversation.ChatBackground" = "Chat Background";
 "Conversation.ViewBackground" = "VIEW BACKGROUND";
@@ -4423,14 +4423,14 @@ Unused sets are archived when you add more.";
 "ChatList.ClearChatConfirmation" = "Are you sure you want to delete all\nmessages in the chat with %@?";
 
 "Settings.CheckPhoneNumberTitle" = "Is %@ still your number?";
-"Settings.CheckPhoneNumberText" = "Keep your number up to date to ensure you can always log in to Fenixuz. [Learn more]()";
+"Settings.CheckPhoneNumberText" = "Keep your number up to date to ensure you can always log in to Novagram. [Learn more]()";
 "Settings.KeepPhoneNumber" = "Keep %@";
 "Settings.ChangePhoneNumber" = "Change Number";
 "Settings.CheckPhoneNumberFAQAnchor" = "q-i-have-a-new-phone-number-what-do-i-do";
 
 "Undo.ChatDeletedForBothSides" = "Chat deleted for both sides";
 
-"AppUpgrade.Running" = "Optimizing Fenixuz...
+"AppUpgrade.Running" = "Optimizing Novagram...
 This may take a while, depending on the size of the database. Please keep the app open until the process is finished.
 
 Sorry for the inconvenience.";
@@ -4494,8 +4494,8 @@ Sorry for the inconvenience.";
 
 "Privacy.AddNewPeer" = "Add Users or Groups";
 "PrivacyPhoneNumberSettings.WhoCanSeeMyPhoneNumber" = "WHO CAN SEE MY PHONE NUMBER";
-"PrivacyPhoneNumberSettings.CustomHelp" = "Users who already have your number saved in the contacts will also see it on Fenixuz.";
-"PrivacyPhoneNumberSettings.CustomDisabledHelp" = "Users who add your number to their contacts will see it on Fenixuz only if they are your contacts.";
+"PrivacyPhoneNumberSettings.CustomHelp" = "Users who already have your number saved in the contacts will also see it on Novagram.";
+"PrivacyPhoneNumberSettings.CustomDisabledHelp" = "Users who add your number to their contacts will see it on Novagram only if they are your contacts.";
 
 "PrivacyPhoneNumberSettings.DiscoveryHeader" = "WHO CAN FIND ME BY MY NUMBER";
 
@@ -4506,7 +4506,7 @@ Sorry for the inconvenience.";
 "PrivacySettings.PasscodeOff" = "Off";
 "PrivacySettings.PasscodeOn" = "On";
 
-"UserInfo.BlockConfirmationTitle" = "Do you want to block %@ from messaging and calling you on Fenixuz?";
+"UserInfo.BlockConfirmationTitle" = "Do you want to block %@ from messaging and calling you on Novagram?";
 "UserInfo.BlockActionTitle" = "Block %@";
 "ReportSpam.DeleteThisChat" = "Delete this Chat";
 
@@ -4671,7 +4671,7 @@ Sorry for the inconvenience.";
 
 "Group.PublicLink.Title" = "Public Link";
 "Group.PublicLink.Placeholder" = "link";
-"Group.PublicLink.Info" = "People can share this link with others and find your group using Fenixuz search.\n\nYou can use **a-z**, **0-9** and underscores. Minimum length is **5** characters.";
+"Group.PublicLink.Info" = "People can share this link with others and find your group using Novagram search.\n\nYou can use **a-z**, **0-9** and underscores. Minimum length is **5** characters.";
 
 "CreateGroup.ErrorLocatedGroupsTooMuch" = "Sorry, you have too many location-based groups already. Please delete one of your existing ones first.";
 
@@ -5050,11 +5050,11 @@ Sorry for the inconvenience.";
 "Group.ErrorSupergroupConversionNotPossible" = "Sorry, you are a member of too many groups and channels. Please leave some before creating a new one.";
 
 "ClearCache.StorageTitle" = "%@ STORAGE";
-"ClearCache.StorageCache" = "Fenixuz Cache";
-"ClearCache.StorageServiceFiles" = "Fenixuz Service Files";
+"ClearCache.StorageCache" = "Novagram Cache";
+"ClearCache.StorageServiceFiles" = "Novagram Service Files";
 "ClearCache.StorageOtherApps" = "Other Apps";
 "ClearCache.StorageFree" = "Free";
-"ClearCache.ClearCache" = "Clear Fenixuz Cache";
+"ClearCache.ClearCache" = "Clear Novagram Cache";
 "ClearCache.Clear" = "Clear";
 "ClearCache.Forever" = "Forever";
 
@@ -5119,7 +5119,7 @@ Sorry for the inconvenience.";
 "AuthSessions.AddDevice.InvalidQRCode" = "Invalid QR Code";
 "AuthSessions.AddDeviceIntro.Title" = "Log in by QR Code";
 "AuthSessions.AddDeviceIntro.Text1" = "Download Telegram on your computer from [desktop.telegram.org]()";
-"AuthSessions.AddDeviceIntro.Text2" = "Run Fenixuz on your computer to get the QR code";
+"AuthSessions.AddDeviceIntro.Text2" = "Run Novagram on your computer to get the QR code";
 "AuthSessions.AddDeviceIntro.Text3" = "Scan the QR code to connect your account";
 "AuthSessions.AddDeviceIntro.Action" = "Scan QR Code";
 "AuthSessions.AddedDeviceTitle" = "Login Successful";
@@ -5132,7 +5132,7 @@ Sorry for the inconvenience.";
 "Map.Home" = "Home";
 "Map.Work" = "Work";
 "Map.HomeAndWorkTitle" = "Home & Work Addresses";
-"Map.HomeAndWorkInfo" = "Fenixuz uses the Home and Work addresses from your Contact Card.\n\nKeep your Contact Card up to date for quick access to sending Home and Work addresses.";
+"Map.HomeAndWorkInfo" = "Novagram uses the Home and Work addresses from your Contact Card.\n\nKeep your Contact Card up to date for quick access to sending Home and Work addresses.";
 "Map.SearchNoResultsDescription" = "There were no results for \"%@\".\nTry a new search.";
 
 "ChatList.Search.ShowMore" = "Show more";
@@ -5675,9 +5675,9 @@ Sorry for the inconvenience.";
 "Call.Audio" = "audio";
 "Call.AudioRouteMute" = "Mute Yourself";
 
-"AccessDenied.VideoCallCamera" = "Fenixuz needs access to your camera to make video calls.\n\nPlease go to Settings > Privacy > Camera and set Fenixuz to ON.";
+"AccessDenied.VideoCallCamera" = "Novagram needs access to your camera to make video calls.\n\nPlease go to Settings > Privacy > Camera and set Novagram to ON.";
 
-"Call.AccountIsLoggedOnCurrentDevice" = "Sorry, you can't call %@ because that account is logged in to Fenixuz on the device you're using for the call.";
+"Call.AccountIsLoggedOnCurrentDevice" = "Sorry, you can't call %@ because that account is logged in to Novagram on the device you're using for the call.";
 
 "ChatList.Search.FilterChats" = "Chats";
 "ChatList.Search.FilterMedia" = "Media";
@@ -5829,7 +5829,7 @@ Sorry for the inconvenience.";
 "Conversation.EditingPhotoPanelTitle" = "Edit Photo";
 
 "Media.LimitedAccessTitle" = "Limited Access to Media";
-"Media.LimitedAccessText" = "You've given Fenixuz access only to select number of photos.";
+"Media.LimitedAccessText" = "You've given Novagram access only to select number of photos.";
 "Media.LimitedAccessManage" = "Manage";
 "Media.LimitedAccessSelectMore" = "Select More Photos...";
 "Media.LimitedAccessChangeSettings" = "Change Settings";
@@ -6029,8 +6029,8 @@ Sorry for the inconvenience.";
 "InviteLink.PeopleJoined_3_10" = "%@ people joined";
 "InviteLink.PeopleJoined_many" = "%@ people joined";
 "InviteLink.PeopleJoined_any" = "%@ people joined";
-"InviteLink.CreatePrivateLinkHelp" = "Anyone who has Fenixuz installed will be able to join your group by following this link.";
-"InviteLink.CreatePrivateLinkHelpChannel" = "Anyone who has Fenixuz installed will be able to join your channel by following this link.";
+"InviteLink.CreatePrivateLinkHelp" = "Anyone who has Novagram installed will be able to join your group by following this link.";
+"InviteLink.CreatePrivateLinkHelpChannel" = "Anyone who has Novagram installed will be able to join your channel by following this link.";
 "InviteLink.Manage" = "Manage Invite Links";
 
 "InviteLink.PeopleJoinedShortNoneExpired" = "no one joined";
@@ -6090,8 +6090,8 @@ Sorry for the inconvenience.";
 "InviteLink.Create.Revoke" = "Revoke Link";
 
 "InviteLink.QRCode.Title" = "Invite by QR Code";
-"InviteLink.QRCode.Info" = "Everyone on Fenixuz can scan this code to join your group.";
-"InviteLink.QRCode.InfoChannel" = "Everyone on Fenixuz can scan this code to join your channel.";
+"InviteLink.QRCode.Info" = "Everyone on Novagram can scan this code to join your group.";
+"InviteLink.QRCode.InfoChannel" = "Everyone on Novagram can scan this code to join your channel.";
 "InviteLink.QRCode.Share" = "Share QR Code";
 
 "InviteLink.InviteLink" = "Invite Link";
@@ -6173,7 +6173,7 @@ Sorry for the inconvenience.";
 "Message.ImportedDateFormat" = "%1$@, %2$@ Imported %3$@";
 
 "ChatImportActivity.Title" = "Importing Chat";
-"ChatImportActivity.OpenApp" = "Open Fenixuz";
+"ChatImportActivity.OpenApp" = "Open Novagram";
 "ChatImportActivity.Retry" = "Retry";
 "ChatImportActivity.InProgress" = "Please keep this window open\nuntil the import is completed.";
 "ChatImportActivity.ErrorNotAdmin" = "You need to be an admin in the group to import messages.";
@@ -6235,7 +6235,7 @@ Sorry for the inconvenience.";
 "Report.AdditionalDetailsText" = "Please enter any additional details relevant for your report.";
 "Report.AdditionalDetailsPlaceholder" = "Additional details...";
 "Report.Report" = "Report";
-"Report.Succeed" = "Fenixuz moderators will study your report. Thank you!";
+"Report.Succeed" = "Novagram moderators will study your report. Thank you!";
 
 "Conversation.AutoremoveRemainingTime" = "auto-deletes in %@";
 "Conversation.AutoremoveRemainingDays_1" = "auto-deletes in %@ day";
@@ -6325,7 +6325,7 @@ Sorry for the inconvenience.";
 "Widget.UpdatedAt" = "Updated {}";
 
 "Intents.ErrorLockedTitle" = "Locked";
-"Intents.ErrorLockedText" = "Open Fenixuz and enter passcode to edit widget.";
+"Intents.ErrorLockedText" = "Open Novagram and enter passcode to edit widget.";
 
 "Conversation.GigagroupDescription" = "Only admins can send messages in this group.";
 
@@ -6631,7 +6631,7 @@ Sorry for the inconvenience.";
 "ScheduledIn.Years_any" = "%@ years";
 "ScheduledIn.Months_many" = "%@ years";
 
-"Checkout.PaymentLiabilityAlert" = "Neither Fenixuz, nor {target} will have access to your credit card information. Credit card details will be handled only by the payment system, {payment_system}.\n\nPayments will go directly to the developer of {target}. Fenixuz cannot provide any guarantees, so proceed at your own risk. In case of problems, please contact the developer of {target} or your bank.";
+"Checkout.PaymentLiabilityAlert" = "Neither Novagram, nor {target} will have access to your credit card information. Credit card details will be handled only by the payment system, {payment_system}.\n\nPayments will go directly to the developer of {target}. Novagram cannot provide any guarantees, so proceed at your own risk. In case of problems, please contact the developer of {target} or your bank.";
 
 "Checkout.OptionalTipItem" = "Tip (Optional)";
 "Checkout.TipItem" = "Tip";
@@ -6649,7 +6649,7 @@ Sorry for the inconvenience.";
 "Privacy.PaymentsClear.ShippingInfoCleared" = "Shipping info cleared.";
 "Privacy.PaymentsClear.AllInfoCleared" = "Payment and shipping info cleared.";
 
-"Settings.Tips" = "Fenixuz Features";
+"Settings.Tips" = "Novagram Features";
 "Settings.TipsUsername" = "TelegramTips";
 
 "Calls.NoVoiceAndVideoCallsPlaceholder" = "Your recent voice and video calls will appear here.";
@@ -7298,8 +7298,8 @@ Sorry for the inconvenience.";
 "Contacts.QrCode.MyCode" = "My QR Code";
 "Contacts.QrCode.NoCodeFound" = "No valid QR code found in the image. Please try again.";
 
-"AccessDenied.QrCode" = "Fenixuz needs access to your photo library to scan QR codes.\n\nOpen your device's Settings > Privacy > Photos and set Fenixuz to ON.";
-"AccessDenied.QrCamera" = "Fenixuz needs access to your camera to scan QR codes.\n\nOpen your device's Settings > Privacy > Camera and set Fenixuz to ON.";
+"AccessDenied.QrCode" = "Novagram needs access to your photo library to scan QR codes.\n\nOpen your device's Settings > Privacy > Photos and set Novagram to ON.";
+"AccessDenied.QrCamera" = "Novagram needs access to your camera to scan QR codes.\n\nOpen your device's Settings > Privacy > Camera and set Novagram to ON.";
 
 "Share.ShareToInstagramStories" = "Share to Instagram Stories";
 
@@ -7412,8 +7412,8 @@ Sorry for the inconvenience.";
 "Attachment.MediaAccessText" = "Share an unlimited number of photos and videos of up to 2 GB each.";
 "Attachment.MediaAccessStoryText" = "Share an unlimited number of photos and videos of up to 2 GB each.";
 
-"Attachment.LimitedMediaAccessText" = "You have limited Fenixuz from accessing all of your photos.";
-"Attachment.CameraAccessText" = "Fenixuz needs camera access so that you can take photos and videos.";
+"Attachment.LimitedMediaAccessText" = "You have limited Novagram from accessing all of your photos.";
+"Attachment.CameraAccessText" = "Novagram needs camera access so that you can take photos and videos.";
 "Attachment.Manage" = "Manage";
 
 "Attachment.OpenSettings" = "Go to Settings";
@@ -7448,7 +7448,7 @@ Sorry for the inconvenience.";
 "DownloadList.RemoveFileAlertRemove" = "Remove";
 
 "DownloadList.ClearAlertTitle" = "Downloaded Files";
-"DownloadList.ClearAlertText" = "Fenixuz allows to store all received and sent\ndocuments in the cloud and save storage\nspace on your device.";
+"DownloadList.ClearAlertText" = "Novagram allows to store all received and sent\ndocuments in the cloud and save storage\nspace on your device.";
 
 "ChatList.Search.FilterDownloads" = "Downloads";
 
@@ -7457,8 +7457,8 @@ Sorry for the inconvenience.";
 "LiveStream.ViewerCount_any" = "%@ viewers";
 "LiveStream.Watching" = "watching";
 
-"LiveStream.NoSignalAdminText" = "Oops! Fenixuz doesn't see any stream\ncoming from your streaming app.\n\nPlease make sure you entered the right Server\nURL and Stream Key in your app.";
-"LiveStream.NoSignalUserText" = "%@ is currently not broadcasting live\nstream data to Fenixuz.";
+"LiveStream.NoSignalAdminText" = "Oops! Novagram doesn't see any stream\ncoming from your streaming app.\n\nPlease make sure you entered the right Server\nURL and Stream Key in your app.";
+"LiveStream.NoSignalUserText" = "%@ is currently not broadcasting live\nstream data to Novagram.";
 
 "LiveStream.ViewCredentials" = "View Stream Key";
 
@@ -7547,7 +7547,7 @@ Sorry for the inconvenience.";
 "Notifications.UploadError.TooLong.Title" = "%@ is too long.";
 "Notifications.UploadError.TooLong.Text" = "Duration must be less than %@.";
 "Notifications.UploadSuccess.Title" = "Sound Added";
-"Notifications.UploadSuccess.Text" = "The sound **%@** was added to your Fenixuz tones.";
+"Notifications.UploadSuccess.Text" = "The sound **%@** was added to your Novagram tones.";
 "Notifications.SaveSuccess.Text" = "You can now use this sound as a notification tone in your [custom notification settings]().";
 
 "Conversation.DeleteTimer.SetupTitle" = "Auto-Delete After...";
@@ -7635,7 +7635,7 @@ Sorry for the inconvenience.";
 "Premium.AppIcons.Proceed" = "Unlock Premium Icons";
 "Premium.NoAds.Proceed" = "About Telegram Premium";
 
-"AccessDenied.LocationPreciseDenied" = "To share your specific location in this chat, please go to Settings > Privacy > Location Services > Fenixuz and set Precise Location to On.";
+"AccessDenied.LocationPreciseDenied" = "To share your specific location in this chat, please go to Settings > Privacy > Location Services > Novagram and set Precise Location to On.";
 
 "Chat.MultipleTypingPair" = "%@ and %@";
 "Chat.MultipleTypingMore" = "%@ and %@ others";
@@ -7718,7 +7718,7 @@ Sorry for the inconvenience.";
 "Premium.VoiceToTextStandaloneInfo" = "Subscribe to **Telegram Premium** to be able to convert voice and video messages to text.";
 
 "Premium.NoAds" = "No Ads";
-"Premium.NoAdsInfo" = "No more ads in public channels where Fenixuz sometimes shows ads.";
+"Premium.NoAdsInfo" = "No more ads in public channels where Novagram sometimes shows ads.";
 "Premium.NoAdsStandaloneInfo" = "Remove ads such as this one by subscribing to **Telegram Premium**.";
 
 "Premium.Reactions" = "Unique Reactions";
@@ -7735,13 +7735,13 @@ Sorry for the inconvenience.";
 "Premium.ChatManagementStandaloneInfo" = "Subscribers of **Telegram Premium** can set the default folder, auto-archive and hide new chats from non-contacts.";
 
 "Premium.Badge" = "Profile Badge";
-"Premium.BadgeInfo" = "A badge next to your name showing that you are helping support Fenixuz.";
+"Premium.BadgeInfo" = "A badge next to your name showing that you are helping support Novagram.";
 
 "Premium.Avatar" = "Animated Profile Pictures";
 "Premium.AvatarInfo" = "Video avatars animated in chat lists and chats to allow for additional self-expression.";
 
-"Premium.AppIcon" = "Fenixuz App Icon";
-"Premium.AppIconInfo" = "Choose from a selection of Fenixuz app icons for your homescreen.";
+"Premium.AppIcon" = "Novagram App Icon";
+"Premium.AppIconInfo" = "Choose from a selection of Novagram app icons for your homescreen.";
 
 "Premium.AppIconStandalone" = "Additional App Icons";
 "Premium.AppIconStandaloneInfo" = "Unlock a wider range of app icons by subscribing to **Telegram Premium**.";
@@ -7752,7 +7752,7 @@ Sorry for the inconvenience.";
 "Premium.AboutTitle" = "ABOUT TELEGRAM PREMIUM";
 "Premium.AboutText" = "While the free version of Telegram already gives its users more than any other messaging application, **Telegram Premium** pushes its capabilities even further.\n\n**Telegram Premium** is a paid option, because most Premium Features require additional expenses from Telegram to third parties such as data center providers and server manufacturers. Contributions from **Telegram Premium** users allow us to cover such costs and also help Telegram stay free for everyone.";
 
-"Premium.Terms" = "By purchasing a Premium subscription, you agree to the Fenixuz [Terms of Service](terms) and [Privacy Policy](privacy).";
+"Premium.Terms" = "By purchasing a Premium subscription, you agree to the Novagram [Terms of Service](terms) and [Privacy Policy](privacy).";
 
 "Conversation.CopyProtectionSavingDisabledSecret" = "Saving is restricted";
 "Conversation.CopyProtectionForwardingDisabledSecret" = "Forwarding is restricted";
@@ -8058,7 +8058,7 @@ Sorry for the inconvenience.";
 "Login.Edit" = "Edit";
 "Login.Yes" = "Yes";
 
-"Checkout.PaymentLiabilityBothAlert" = "Fenixuz will not have access to your credit card information. Credit card details will be handled only by the payment system, {target}.\n\nPayments will go directly to the developer of {target}. Fenixuz cannot provide any guarantees, so proceed at your own risk. In case of problems, please contact the developer of {target} or your bank.";
+"Checkout.PaymentLiabilityBothAlert" = "Novagram will not have access to your credit card information. Credit card details will be handled only by the payment system, {target}.\n\nPayments will go directly to the developer of {target}. Novagram cannot provide any guarantees, so proceed at your own risk. In case of problems, please contact the developer of {target} or your bank.";
 
 "Settings.ChangeProfilePhoto" = "Change Profile Photo";
 
@@ -8089,7 +8089,7 @@ Sorry for the inconvenience.";
 "Login.WrongCodeError" = "Wrong code, please try again.";
 
 "PrivacySettings.LoginEmail" = "Login Email";
-"PrivacySettings.LoginEmailInfo" = "Change your email address for Fenixuz login codes.";
+"PrivacySettings.LoginEmailInfo" = "Change your email address for Novagram login codes.";
 "Login.EmailChanged" = "Your email has been changed.";
 "PrivacySettings.LoginEmailAlertText" = "This email address will be used every time you login to your Telegram account from a new device.";
 "PrivacySettings.LoginEmailAlertChange" = "Change Email";
@@ -8337,10 +8337,10 @@ Sorry for the inconvenience.";
 "Navigation.AllChats" = "All Chats";
 
 "Group.Management.AntiSpam" = "Aggressive Anti-Spam";
-"Group.Management.AntiSpamInfo" = "Fenixuz will filter more spam but may occasionally affect ordinary messages. You can report false positives in Recent Actions.";
+"Group.Management.AntiSpamInfo" = "Novagram will filter more spam but may occasionally affect ordinary messages. You can report false positives in Recent Actions.";
 
 "Group.Management.AntiSpamMagic" = "magic";
-"Group.AdminLog.AntiSpamTitle" = "Fenixuz Anti-Spam";
+"Group.AdminLog.AntiSpamTitle" = "Novagram Anti-Spam";
 "Group.AdminLog.AntiSpamText" = "You can manage anti-spam settings in Group Info > [Administrators]().";
 
 "ChatList.ThreadHideAction" = "Hide";
@@ -8364,7 +8364,7 @@ Sorry for the inconvenience.";
 "DialogList.SearchSectionMessagesIn" = "Messages in %@";
 
 "Conversation.ContextMenuReportFalsePositive" = "Report False Positive";
-"Group.AdminLog.AntiSpamFalsePositiveReportedText" = "Fenixuz moderators will review your report. Thank you!";
+"Group.AdminLog.AntiSpamFalsePositiveReportedText" = "Novagram moderators will review your report. Thank you!";
 
 "ChatList.EmptyTopicsDescription" = "Older messages from this group have been moved to \"General\".";
 
@@ -8617,8 +8617,8 @@ Sorry for the inconvenience.";
 "StorageManagement.TitleCleared" = "Storage Cleared";
 
 "StorageManagement.DescriptionCleared" = "All media can be re-downloaded from the Telegram cloud if you need it again.";
-"StorageManagement.DescriptionChatUsage" = "This chat uses %1$@% of your Fenixuz cache.";
-"StorageManagement.DescriptionAppUsage" = "Fenixuz uses %1$@% of your free disk space.";
+"StorageManagement.DescriptionChatUsage" = "This chat uses %1$@% of your Novagram cache.";
+"StorageManagement.DescriptionAppUsage" = "Novagram uses %1$@% of your free disk space.";
 
 "StorageManagement.ClearAll" = "Clear Entire Cache";
 "StorageManagement.ClearSelected" = "Clear Selected";
@@ -9025,7 +9025,7 @@ Sorry for the inconvenience.";
 "PowerSavingScreen.OptionAutoplayEmojiText" = "Loop animated emoji in messages, reactions, statuses.";
 
 "PowerSavingScreen.OptionAutoplayEffectsTitle" = "Interface Effects";
-"PowerSavingScreen.OptionAutoplayEffectsText" = "Various effects and animations that make Fenixuz look amazing.";
+"PowerSavingScreen.OptionAutoplayEffectsText" = "Various effects and animations that make Novagram look amazing.";
 
 "PowerSavingScreen.OptionBackgroundTitle" = "Extended Background Time";
 "PowerSavingScreen.OptionBackgroundText" = "Update chats faster when switching between apps.";
@@ -9090,7 +9090,7 @@ Sorry for the inconvenience.";
 
 "Login.Email.CantAccess" = "Can't access this email?";
 "Login.Email.ResetTitle" = "Reset Email";
-"Login.Email.ResetText" = "You can change your login email if you are logged into Fenixuz from another device. Otherwise, if you don't have access to email %1$@, you can reset this email with an **SMS** code **%2$@**.";
+"Login.Email.ResetText" = "You can change your login email if you are logged into Novagram from another device. Otherwise, if you don't have access to email %1$@, you can reset this email with an **SMS** code **%2$@**.";
 "Login.Email.Reset" = "Reset";
 "Login.Email.ResetNowViaSMS" = "Reset now via SMS";
 "Login.Email.WillBeResetIn" = "Email will be reset %@";
@@ -9299,7 +9299,7 @@ Sorry for the inconvenience.";
 "ChatListFilter.LinkActionDelete" = "Delete";
 
 "InviteLink.QRCodeFolder.Title" = "Invite by QR Code";
-"InviteLink.QRCodeFolder.Text" = "Everyone on Fenixuz can scan this code to add this folder and join the chats included in this invite link.";
+"InviteLink.QRCodeFolder.Text" = "Everyone on Novagram can scan this code to add this folder and join the chats included in this invite link.";
 
 "FolderLinkPreview.IconTabLeft" = "All Chats";
 "FolderLinkPreview.IconTabRight" = "Personal";
@@ -9386,7 +9386,7 @@ Sorry for the inconvenience.";
 "ChatList.PremiumRestoreDiscountTitle" = "Get Premium back with up to %@ off";
 "ChatList.PremiumRestoreDiscountText" = "Your Telegram Premium has recently expired. Tap here to extend it.";
 
-"Login.ErrorAppOutdated" = "Please update Fenixuz to the latest version to log in.";
+"Login.ErrorAppOutdated" = "Please update Novagram to the latest version to log in.";
 
 "Login.GetCodeViaFragment" = "Get a code via Fragment";
 
@@ -9556,7 +9556,7 @@ Sorry for the inconvenience.";
 "Story.CaptionShowMore" = "Show more";
 
 "Story.UnsupportedText" = "This story is not supported by\nyour version of Telegram.";
-"Story.UnsupportedAction" = "Update Fenixuz";
+"Story.UnsupportedAction" = "Update Novagram";
 
 "Story.ScreenshotBlockedTitle" = "Screenshot Blocked";
 "Story.ScreenshotBlockedText" = "The story you tried to take a\nscreenshot of is protected from\ncopying by its creator.";
@@ -9631,7 +9631,7 @@ Sorry for the inconvenience.";
 "Story.Camera.SwipeLeftRelease" = "Release to lock";
 "Story.Camera.SwipeRightToFlip" = "Swipe right to flip";
 
-"Story.Camera.AccessPlaceholderTitle" = "Allow Fenixuz to access your camera and microphone";
+"Story.Camera.AccessPlaceholderTitle" = "Allow Novagram to access your camera and microphone";
 "Story.Camera.AccessPlaceholderText" = "This lets you share photos and record videos.";
 "Story.Camera.AccessOpenSettings" = "Open Settings";
 
@@ -9916,7 +9916,7 @@ Sorry for the inconvenience.";
 "MediaPicker.Timer.Video.KeepTooltip" = "Video will be kept in chat.";
 
 "WebApp.AllowWriteTitle" = "Allow Sending Messages?";
-"WebApp.AllowWriteConfirmation" = "This will allow the bot **%@** to message you on Fenixuz.";
+"WebApp.AllowWriteConfirmation" = "This will allow the bot **%@** to message you on Novagram.";
 
 "WebApp.SharePhoneTitle" = "Share Phone Number?";
 "WebApp.SharePhoneConfirmation" = "**%@** will know your phone number. This can be useful for integration with other services.";
@@ -9935,7 +9935,7 @@ Sorry for the inconvenience.";
 "Gallery.ViewOnceVideoTooltip" = "This video can only be viewed once.";
 
 "WebApp.DisclaimerTitle" = "Terms of Use";
-"WebApp.DisclaimerText" = "You are about to use a mini app operated by an independent party not affiliated with Fenixuz. You must agree to the Terms of Use of mini apps to continue.";
+"WebApp.DisclaimerText" = "You are about to use a mini app operated by an independent party not affiliated with Novagram. You must agree to the Terms of Use of mini apps to continue.";
 "WebApp.DisclaimerAgree" = "I agree to the [Terms of Use]()";
 "WebApp.DisclaimerContinue" = "Continue";
 "WebApp.Disclaimer_URL" = "https://telegram.org/tos/mini-apps";
@@ -9944,7 +9944,7 @@ Sorry for the inconvenience.";
 "WebApp.ShortcutsSettingsAdded" = "**%@** shortcut added in attachment menu and Settings.";
 
 "WebApp.AllowWriteTitle" = "Allow Sending Messages?";
-"WebApp.AllowWriteConfirmation" = "This will allow the bot **%@** to message you on Fenixuz.";
+"WebApp.AllowWriteConfirmation" = "This will allow the bot **%@** to message you on Novagram.";
 
 "AuthSessions.MessageApp" = "You allowed this bot to message you when you opened %@.";
 
@@ -10146,7 +10146,7 @@ Sorry for the inconvenience.";
 "NameColor.ChatPreview.ReplyText.Channel" = "Reply to your channel message";
 "NameColor.ChatPreview.MessageText.Account" = "Your name and replies to your messages will be shown in the selected color.";
 "NameColor.ChatPreview.MessageText.Channel" = "The name of your channek and replies to its messages will be shown in the selected color.";
-"NameColor.ChatPreview.LinkSite" = "Fenixuz";
+"NameColor.ChatPreview.LinkSite" = "Novagram";
 "NameColor.ChatPreview.LinkTitle" = "Link Preview";
 "NameColor.ChatPreview.LinkText" = "Your selected color will also tint the link preview.";
 "NameColor.ChatPreview.Description.Account" = "You can choose an individual color to tint your name, the links you send, and replies to your messages.";
@@ -10312,7 +10312,7 @@ Sorry for the inconvenience.";
 
 "Stats.Boosts.PrepaidGiveawaysTitle" = "PREPAID GIVEAWAYS";
 "Stats.Boosts.PrepaidGiveawayCount_1" = "%@ Telegram Premium";
-"Stats.Boosts.PrepaidGiveawayCount_any" = "%@ Fenixuz Premiums";
+"Stats.Boosts.PrepaidGiveawayCount_any" = "%@ Novagram Premiums";
 "Stats.Boosts.PrepaidGiveawayMonths" = "%@-month subscriptions";
 "Stats.Boosts.PrepaidGiveawaysInfo" = "Select a giveaway you already paid for to set it up.";
 "Stats.Boosts.ShortMonth" = "%@m";
@@ -10354,15 +10354,15 @@ Sorry for the inconvenience.";
 "Chat.Giveaway.Info.EndedTitle" = "Giveaway Ended";
 "Chat.Giveaway.Info.AlmostOver" = "The giveaway is almost over.";
 "Chat.Giveaway.Info.OngoingIntro" = "The giveaway is sponsored by the admins of **%1$@**, who acquired %2$@ for %3$@ for its followers.";
-"Chat.Giveaway.Info.OngoingNewMany" = "On **%1$@**, Fenixuz will automatically select %2$@ that joined **%3$@** and %4$@ after **%5$@**.";
-"Chat.Giveaway.Info.OngoingNew" = "On **%1$@**, Fenixuz will automatically select %2$@ that joined **%3$@** after **%4$@**.";
-"Chat.Giveaway.Info.OngoingMany" = "On **%1$@**, Fenixuz will automatically select %2$@ of **%3$@** and %4$@.";
-"Chat.Giveaway.Info.Ongoing" = "On **%1$@**, Fenixuz will automatically select %2$@ of **%3$@**.";
+"Chat.Giveaway.Info.OngoingNewMany" = "On **%1$@**, Novagram will automatically select %2$@ that joined **%3$@** and %4$@ after **%5$@**.";
+"Chat.Giveaway.Info.OngoingNew" = "On **%1$@**, Novagram will automatically select %2$@ that joined **%3$@** after **%4$@**.";
+"Chat.Giveaway.Info.OngoingMany" = "On **%1$@**, Novagram will automatically select %2$@ of **%3$@** and %4$@.";
+"Chat.Giveaway.Info.Ongoing" = "On **%1$@**, Novagram will automatically select %2$@ of **%3$@**.";
 "Chat.Giveaway.Info.EndedIntro" = "The giveaway was sponsored by the admins of **%1$@**, who acquired %2$@ for %3$@ for its followers.";
-"Chat.Giveaway.Info.EndedNewMany" = "On **%1$@**, Fenixuz automatically selected %2$@ that joined **%3$@** and other listed channels after **%4$@**.";
-"Chat.Giveaway.Info.EndedNew" = "On **%1$@**, Fenixuz automatically selected %2$@ that joined **%3$@** after **%4$@**.";
-"Chat.Giveaway.Info.EndedMany" = "On **%1$@**, Fenixuz automatically selected %2$@ of **%3$@** and other listed channels.";
-"Chat.Giveaway.Info.Ended" = "On **%1$@**, Fenixuz automatically selected %2$@ of **%3$@**.";
+"Chat.Giveaway.Info.EndedNewMany" = "On **%1$@**, Novagram automatically selected %2$@ that joined **%3$@** and other listed channels after **%4$@**.";
+"Chat.Giveaway.Info.EndedNew" = "On **%1$@**, Novagram automatically selected %2$@ that joined **%3$@** after **%4$@**.";
+"Chat.Giveaway.Info.EndedMany" = "On **%1$@**, Novagram automatically selected %2$@ of **%3$@** and other listed channels.";
+"Chat.Giveaway.Info.Ended" = "On **%1$@**, Novagram automatically selected %2$@ of **%3$@**.";
 "Chat.Giveaway.Info.NotAllowedJoinedEarly" = "You are not eligible to participate in this giveaway, because you joined this channel on **%@**, which is before the contest started.";
 "Chat.Giveaway.Info.NotAllowedAdmin" = "You are not eligible to participate in this giveaway, because you are an admin of participating channel (**%@**).";
 "Chat.Giveaway.Info.NotAllowedCountry" = "You are not eligible to participate in this giveaway, because your country is not included in the terms of the giveaway.";
@@ -10501,16 +10501,16 @@ Sorry for the inconvenience.";
 "Conversation.FreeTranscriptionCooldownTooltip_any" = "You have used all your **%@** free transcriptions this week.";
 "Conversation.FreeTranscriptionWaitOrSubscribe" = "Wait until **%@** to use it again or subscribe to [Telegram Premium]() now.";
 
-"Notification.GiveawayResults_1" = "**%@** winner of the giveaway was randomly selected by Fenixuz and received their gift link in a private message.";
-"Notification.GiveawayResults_any" = "**%@** winners of the giveaway were randomly selected by Fenixuz and received their gift links in private messages.";
+"Notification.GiveawayResults_1" = "**%@** winner of the giveaway was randomly selected by Novagram and received their gift link in a private message.";
+"Notification.GiveawayResults_any" = "**%@** winners of the giveaway were randomly selected by Novagram and received their gift links in private messages.";
 
-"Notification.GiveawayResultsNoWinners_1" = "Due to the giveaway terms, no winners could be selected by Fenixuz, a gift link was forwarded to channel administrators.";
-"Notification.GiveawayResultsNoWinners_any" = "Due to the giveaway terms, no winners could be selected by Fenixuz, all **%@** gift links were forwarded to channel administrators.";
-"Notification.GiveawayResultsNoWinners.Group_1" = "Due to the giveaway terms, no winners could be selected by Fenixuz, a gift link was forwarded to group administrators.";
-"Notification.GiveawayResultsNoWinners.Group_any" = "Due to the giveaway terms, no winners could be selected by Fenixuz, all **%@** gift links were forwarded to group administrators.";
+"Notification.GiveawayResultsNoWinners_1" = "Due to the giveaway terms, no winners could be selected by Novagram, a gift link was forwarded to channel administrators.";
+"Notification.GiveawayResultsNoWinners_any" = "Due to the giveaway terms, no winners could be selected by Novagram, all **%@** gift links were forwarded to channel administrators.";
+"Notification.GiveawayResultsNoWinners.Group_1" = "Due to the giveaway terms, no winners could be selected by Novagram, a gift link was forwarded to group administrators.";
+"Notification.GiveawayResultsNoWinners.Group_any" = "Due to the giveaway terms, no winners could be selected by Novagram, all **%@** gift links were forwarded to group administrators.";
 
-"Notification.GiveawayResultsMixedWinners_1" = "**%@** winner of the giveaway was randomly selected by Fenixuz and received their gift link in a private message.";
-"Notification.GiveawayResultsMixedWinners_any" = "**%@** winners of the giveaway were randomly selected by Fenixuz and received their gift links in private messages.";
+"Notification.GiveawayResultsMixedWinners_1" = "**%@** winner of the giveaway was randomly selected by Novagram and received their gift link in a private message.";
+"Notification.GiveawayResultsMixedWinners_any" = "**%@** winners of the giveaway were randomly selected by Novagram and received their gift links in private messages.";
 "Notification.GiveawayResultsMixedUnclaimed_1" = "**%@** undistributed gift link was forwarded to channel administrators";
 "Notification.GiveawayResultsMixedUnclaimed_any" = "**%@** undistributed gift links were forwarded to channel administrators";
 "Notification.GiveawayResultsMixedUnclaimed.Group_1" = "**%@** undistributed gift link was forwarded to group administrators";
@@ -10666,8 +10666,8 @@ Sorry for the inconvenience.";
 
 "Chat.Giveaway.Message.WinnersSelectedTitle.One" = "Winner Selected!";
 "Chat.Giveaway.Message.WinnersSelectedTitle.Many" = "Winners Selected!";
-"Chat.Giveaway.Message.WinnersSelectedText_1" = "**%@** winner of the [Giveaway]() was randomly selected by Fenixuz.";
-"Chat.Giveaway.Message.WinnersSelectedText_any" = "**%@** winners of the [Giveaway]() were randomly selected by Fenixuz.";
+"Chat.Giveaway.Message.WinnersSelectedText_1" = "**%@** winner of the [Giveaway]() was randomly selected by Novagram.";
+"Chat.Giveaway.Message.WinnersSelectedText_any" = "**%@** winners of the [Giveaway]() were randomly selected by Novagram.";
 
 "Chat.Giveaway.Message.WinnersTitle.One" = "Winner";
 "Chat.Giveaway.Message.WinnersTitle.Many" = "Winners";
@@ -10705,9 +10705,9 @@ Sorry for the inconvenience.";
 "Premium.Gift.GiftMultipleSubscriptions_1" = "Gift %@ Subscription";
 "Premium.Gift.GiftMultipleSubscriptions_any" = "Gift %@ Subscriptions";
 
-"Message.GiveawayEndedWinners_1" = "%@ winner of the giveaway was randomly selected by Fenixuz";
-"Message.GiveawayEndedWinners_any" = "%@ winners of the giveaway was randomly selected by Fenixuz";
-"Message.GiveawayEndedNoWinners" = "Due to the giveaway terms, no winners could be selected by Fenixuz";
+"Message.GiveawayEndedWinners_1" = "%@ winner of the giveaway was randomly selected by Novagram";
+"Message.GiveawayEndedWinners_any" = "%@ winners of the giveaway was randomly selected by Novagram";
+"Message.GiveawayEndedNoWinners" = "Due to the giveaway terms, no winners could be selected by Novagram";
 
 "Story.ViewMessage" = "View Message";
 
@@ -10828,7 +10828,7 @@ Sorry for the inconvenience.";
 
 "Channel.Appearance.ExampleReplyText" = "Reply to your channel";
 "Channel.Appearance.ExampleText" = "The color you select will be used for the channel's name";
-"Channel.Appearance.ExampleLinkWebsite" = "Fenixuz";
+"Channel.Appearance.ExampleLinkWebsite" = "Novagram";
 "Channel.Appearance.ExampleLinkTitle" = "Link Preview";
 "Channel.Appearance.ExampleLinkText" = "This preview will also be tinted.";
 
@@ -11029,7 +11029,7 @@ Sorry for the inconvenience.";
 
 "Conversation.ForwardOptions.SenderNamesRemoved" = "Sender names removed";
 
-"Login.Announce.Info" = "Notify people on Fenixuz who know my phone number that I signed up.";
+"Login.Announce.Info" = "Notify people on Novagram who know my phone number that I signed up.";
 "Login.Announce.Notify" = "Notify";
 "Login.Announce.DontNotify" = "Do Not Notify";
 
@@ -11706,7 +11706,7 @@ Sorry for the inconvenience.";
 
 "Stats.Monetization" = "Monetization";
 
-"Monetization.Header" = "Fenixuz shares 50% of the revenue from ads displayed in your channel. [Learn More >]()";
+"Monetization.Header" = "Novagram shares 50% of the revenue from ads displayed in your channel. [Learn More >]()";
 "Monetization.ImpressionsTitle" = "AD IMPRESSIONS (BY HOURS)";
 "Monetization.AdRevenueTitle" = "AD REVENUE";
 "Monetization.OverviewTitle" = "PROCEEDS OVERVIEW";
@@ -11753,9 +11753,9 @@ Sorry for the inconvenience.";
 "Monetization.Intro.Title" = "Earn From Your Channel";
 "Monetization.Intro.Bot.Title" = "Earn From Your Bot";
 
-"Monetization.Intro.Ads.Title" = "Fenixuz Ads";
-"Monetization.Intro.Ads.Text" = "Fenixuz can display ads in your channel.";
-"Monetization.Intro.Bot.Ads.Text" = "Fenixuz can display ads in your bot.";
+"Monetization.Intro.Ads.Title" = "Novagram Ads";
+"Monetization.Intro.Ads.Text" = "Novagram can display ads in your channel.";
+"Monetization.Intro.Bot.Ads.Text" = "Novagram can display ads in your bot.";
 
 "Monetization.Intro.Split.Title" = "50:50 Revenue Split";
 "Monetization.Intro.Split.Text" = "You receive 50% of the ad revenue in TON.";
@@ -11764,33 +11764,33 @@ Sorry for the inconvenience.";
 "Monetization.Intro.Withdrawal.Text" = "You can withdraw your TON any time.";
 
 "Monetization.Intro.Info.Title" = "What's #TON?";
-"Monetization.Intro.Info.Text" = "TON is a blockchain platform and cryptocurrency that Fenixuz uses for its high speed and commissions on transactions. [Learn More >]()";
+"Monetization.Intro.Info.Text" = "TON is a blockchain platform and cryptocurrency that Novagram uses for its high speed and commissions on transactions. [Learn More >]()";
 "Monetization.Intro.Info.Text_URL" = "https://ton.org";
 
 "Monetization.Intro.Understood" = "Understood";
 
 "ReportAd.Title" = "Report Ad";
-"ReportAd.Help" = "Learn more about [Fenixuz Ad Policies and Guidelines]().";
+"ReportAd.Help" = "Learn more about [Novagram Ad Policies and Guidelines]().";
 "ReportAd.Help_URL" = "https://ads.telegram.org/guidelines";
 "ReportAd.Reported" = "We will review this ad to ensure it matches our [Ad Policies and Guidelines]().";
-"ReportAd.Hidden" = "You will no longer see ads from Fenixuz.";
+"ReportAd.Hidden" = "You will no longer see ads from Novagram.";
 
 "AdsInfo.Title" = "About These Ads";
-"AdsInfo.Info" = "Fenixuz Ads are very different from ads on other platforms. Ads such as this one:";
+"AdsInfo.Info" = "Novagram Ads are very different from ads on other platforms. Ads such as this one:";
 "AdsInfo.Respect.Title" = "Respect Your Privacy";
-"AdsInfo.Respect.Text" = "Ads on Fenixuz do not use your personal information and are based on the channel in which you see them.";
-"AdsInfo.Bot.Respect.Text" = "Ads on Fenixuz do not use your personal information and are based on the bot in which you see them.";
+"AdsInfo.Respect.Text" = "Ads on Novagram do not use your personal information and are based on the channel in which you see them.";
+"AdsInfo.Bot.Respect.Text" = "Ads on Novagram do not use your personal information and are based on the bot in which you see them.";
 "AdsInfo.Split.Title" = "Help the Channel Creator";
-"AdsInfo.Split.Text" = "50% of the revenue from Fenixuz Ads goes to the owner of the channel where they are displayed.";
+"AdsInfo.Split.Text" = "50% of the revenue from Novagram Ads goes to the owner of the channel where they are displayed.";
 "AdsInfo.Bot.Split.Title" = "Help the Bot Creator";
-"AdsInfo.Bot.Split.Text" = "50% of the revenue from Fenixuz Ads goes to the owner of the bot where they are displayed.";
+"AdsInfo.Bot.Split.Text" = "50% of the revenue from Novagram Ads goes to the owner of the bot where they are displayed.";
 "AdsInfo.Ads.Title" = "Can Be Removed";
 "AdsInfo.Ads.Text" = "You can turn off ads by subscribing to [Telegram Premium](), and Level %@ channels can remove them for their subscribers.";
 "AdsInfo.Bot.Ads.Text" = "You can turn off ads by subscribing to [Telegram Premium]().";
 
 "AdsInfo.Launch.Title" = "Can I Launch an Ad?";
-"AdsInfo.Launch.Text" = "Anyone can create ads to display in this channel – with minimal budgets. Check out the Fenixuz Ad Platform for details. [Learn More >]()";
-"AdsInfo.Bot.Launch.Text" = "Anyone can create ads to display in this bot – with minimal budgets. Check out the Fenixuz Ad Platform for details. [Learn More >]()";
+"AdsInfo.Launch.Text" = "Anyone can create ads to display in this channel – with minimal budgets. Check out the Novagram Ad Platform for details. [Learn More >]()";
+"AdsInfo.Bot.Launch.Text" = "Anyone can create ads to display in this bot – with minimal budgets. Check out the Novagram Ad Platform for details. [Learn More >]()";
 "AdsInfo.Launch.Text_URL" = "https://promote.telegram.org";
 
 "AdsInfo.Understood" = "Understood";
@@ -11930,7 +11930,7 @@ Sorry for the inconvenience.";
 
 "Business.AdsTitle" = "ADS IN CHANNELS";
 "Business.DontHideAds" = "Do Not Hide Ads";
-"Business.AdsInfo" = "As a Premium subscriber, you don't see any ads on Fenixuz, but you can turn them on, for example, to view your own ads that you launched on the [Fenixuz Ad Platform >]()";
+"Business.AdsInfo" = "As a Premium subscriber, you don't see any ads on Novagram, but you can turn them on, for example, to view your own ads that you launched on the [Novagram Ad Platform >]()";
 "Business.AdsInfo_URL" = "https://promote.telegram.org";
 
 "ChatList.PremiumGraceTitle" = "⚠️ Don't lose access to Telegram Premium!";
@@ -12234,19 +12234,19 @@ Sorry for the inconvenience.";
 "Chat.Context.Phone.CreateNewContact" = "Create New Contact";
 "Chat.Context.Phone.AddToExistingContact" = "Add to Existing Contact";
 "Chat.Context.Phone.SendMessage" = "Send Message";
-"Chat.Context.Phone.TelegramVoiceCall" = "Fenixuz Voice Call";
-"Chat.Context.Phone.TelegramVideoCall" = "Fenixuz Video Call";
-"Chat.Context.Phone.InviteToTelegram" = "Invite to Fenixuz";
+"Chat.Context.Phone.TelegramVoiceCall" = "Novagram Voice Call";
+"Chat.Context.Phone.TelegramVideoCall" = "Novagram Video Call";
+"Chat.Context.Phone.InviteToTelegram" = "Invite to Novagram";
 "Chat.Context.Phone.CallViaCarrier" = "Call via Carrier";
 "Chat.Context.Phone.CopyNumber" = "Copy Number";
-"Chat.Context.Phone.NotOnTelegram" = "This number is not on Fenixuz.";
+"Chat.Context.Phone.NotOnTelegram" = "This number is not on Novagram.";
 "Chat.Context.Phone.ViewProfile" = "View Profile";
 
 "Chat.Context.Username.SendMessage" = "Send Message";
 "Chat.Context.Username.OpenGroup" = "Open Group";
 "Chat.Context.Username.OpenChannel" = "Open Channel";
 "Chat.Context.Username.Copy" = "Copy Username";
-"Chat.Context.Username.NotOnTelegram" = "This user doesn't exist on Fenixuz.";
+"Chat.Context.Username.NotOnTelegram" = "This user doesn't exist on Novagram.";
 
 "Chat.Context.Hashtag.Search" = "Search";
 "Chat.Context.Hashtag.Copy" = "Copy Hashtag";
@@ -12271,7 +12271,7 @@ Sorry for the inconvenience.";
 "Conversation.ContextMenuEditFactCheck" = "Edit Fact Check";
 
 "Stars.Intro.Title" = "Telegram Stars";
-"Stars.Intro.Description" = "Buy Stars to unlock content and services in miniapps on Fenixuz.";
+"Stars.Intro.Description" = "Buy Stars to unlock content and services in miniapps on Novagram.";
 "Stars.Intro.Balance" = "Balance";
 "Stars.Intro.YourBalance" = "your balance";
 "Stars.Intro.Buy" = "Buy More Stars";
@@ -12292,7 +12292,7 @@ Sorry for the inconvenience.";
 "Stars.Intro.Transaction.FragmentWithdrawal.Title" = "Withdrawal";
 "Stars.Intro.Transaction.FragmentWithdrawal.Subtitle" = "via Fragment";
 "Stars.Intro.Transaction.TelegramAds.Title" = "Withdrawal";
-"Stars.Intro.Transaction.TelegramAds.Subtitle" = "via Fenixuz Ads";
+"Stars.Intro.Transaction.TelegramAds.Subtitle" = "via Novagram Ads";
 "Stars.Intro.Transaction.Gift" = "Gift";
 "Stars.Intro.Transaction.ConvertedGift" = "Converted Gift";
 "Stars.Intro.Transaction.Unsupported.Title" = "Unsupported";
@@ -12342,7 +12342,7 @@ Sorry for the inconvenience.";
 "Stars.Transaction.FragmentWithdrawal.Title" = "Stars Withdrawal";
 "Stars.Transaction.FragmentWithdrawal.Subtitle" = "Fragment";
 "Stars.Transaction.TelegramAds.Title" = "Stars Withdrawal";
-"Stars.Transaction.TelegramAds.Subtitle" = "Fenixuz Ads";
+"Stars.Transaction.TelegramAds.Subtitle" = "Novagram Ads";
 "Stars.Transaction.Unsupported.Title" = "Unsupported";
 "Stars.Transaction.Refund" = "Refund";
 
@@ -12525,7 +12525,7 @@ Sorry for the inconvenience.";
 "WebApp.Share" = "Share";
 
 "Stars.Purchase.GiftStars" = "Gift Stars";
-"Stars.Purchase.GiftInfo" = "With Stars, **%1$@** will be able to unlock content and services on Fenixuz. [See Examples >]()";
+"Stars.Purchase.GiftInfo" = "With Stars, **%1$@** will be able to unlock content and services on Novagram. [See Examples >]()";
 
 "Stars.Purchase.SubscriptionInfo" = "Buy Stars to subscribe for **%@**.";
 "Stars.Purchase.SubscriptionRenewInfo" = "Buy Stars to keep your subscription for **%@**.";
@@ -12546,8 +12546,8 @@ Sorry for the inconvenience.";
 
 "Notification.StarsGift.Title_1" = "%@ Star";
 "Notification.StarsGift.Title_any" = "%@ Stars";
-"Notification.StarsGift.Subtitle" = "Use Stars to unlock content and services on Fenixuz.";
-"Notification.StarsGift.SubtitleYou" = "With Stars, %@ will be able to unlock content and services on Fenixuz.";
+"Notification.StarsGift.Subtitle" = "Use Stars to unlock content and services on Novagram.";
+"Notification.StarsGift.SubtitleYou" = "With Stars, %@ will be able to unlock content and services on Novagram.";
 "Notification.StarsGift.UnknownUser" = "Unknown user";
 
 "Bot.Settings" = "Bot Settings";
@@ -12560,7 +12560,7 @@ Sorry for the inconvenience.";
 "Browser.ContextMenu.CopyLink" = "Copy Link";
 "Browser.ContextMenu.Share" = "Share";
 
-"WebBrowser.Telegram" = "Fenixuz";
+"WebBrowser.Telegram" = "Novagram";
 
 "Monetization.Proceeds.Ton.Info" = "TON from your total balance can be used for ads or withdrawn as rewards 3 days after they are earned.";
 "Monetization.Proceeds.Stars.Info" = "Stars from your total balance can be used for ads or withdrawn as rewards 21 days after they are earned.";
@@ -12587,10 +12587,10 @@ Sorry for the inconvenience.";
 "Stars.Intro.StarsSent.ViewChat" = "View Chat";
 
 "Stars.Gift.Received.Title" = "Received Gift";
-"Stars.Gift.Received.Text" = "Use Stars to unlock content and services on Fenixuz. [See Examples >]()";
+"Stars.Gift.Received.Text" = "Use Stars to unlock content and services on Novagram. [See Examples >]()";
 
 "Stars.Gift.Sent.Title" = "Sent Gift";
-"Stars.Gift.Sent.Text" = "With Stars, %@ will be able to unlock content and services on Fenixuz. [See Examples >]()";
+"Stars.Gift.Sent.Text" = "With Stars, %@ will be able to unlock content and services on Novagram. [See Examples >]()";
 
 "WebBrowser.Reload" = "Reload";
 "WebBrowser.Share" = "Share";
@@ -12605,11 +12605,11 @@ Sorry for the inconvenience.";
 "WebBrowser.AddressBar.ShowMore" = "Show More";
 
 "WebBrowser.OpenLinksIn.Title" = "OPEN LINKS IN";
-"WebBrowser.AutoLogin" = "Auto-Login via Fenixuz";
+"WebBrowser.AutoLogin" = "Auto-Login via Novagram";
 "WebBrowser.AutoLogin.Info" = "Use your Telegram account to automatically log in to websites opened in the in-app browser.";
 
 "WebBrowser.ClearCookies" = "Clear Cookies";
-"WebBrowser.ClearCookies.Info" = "Delete all cookies in the Fenixuz in-app browser. This action will sign you out of most websites.";
+"WebBrowser.ClearCookies.Info" = "Delete all cookies in the Novagram in-app browser. This action will sign you out of most websites.";
 "WebBrowser.ClearCookies.Succeed" = "Cookies cleared.";
 
 "WebBrowser.Exceptions.Title" = "NEVER OPEN IN THE IN-APP BROWSER";
@@ -12635,7 +12635,7 @@ Sorry for the inconvenience.";
 
 "WebBrowser.Done" = "Done";
 
-"AccessDenied.LocationWeather" = "Fenixuz needs access to your location so that you can add the weather widget to your stories.\n\nPlease go to Settings > Privacy > Location Services and set Fenixuz to ON.";
+"AccessDenied.LocationWeather" = "Novagram needs access to your location so that you can add the weather widget to your stories.\n\nPlease go to Settings > Privacy > Location Services and set Novagram to ON.";
 
 "Story.Editor.TooltipWeatherLimitText" = "You can't add more than one weather sticker to a story.";
 
@@ -12765,7 +12765,7 @@ Sorry for the inconvenience.";
 "Stars.Intro.Transaction.SubscriptionFee.Title" = "Monthly Subscription Fee";
 "Stars.Intro.Transaction.Reaction.Title" = "Star Reaction";
 
-"Stars.Purchase.GenericPurchasePurpose" = "Buy Stars to unlock content and services on Fenixuz.";
+"Stars.Purchase.GenericPurchasePurpose" = "Buy Stars to unlock content and services on Novagram.";
 "Stars.Purchase.PurchasePurpose.subs" = "Buy Stars to keep all your subscriptions.";
 
 "Stars.Transfer.Subscribe.Channel.Title" = "Subscribe";
@@ -12953,8 +12953,8 @@ Sorry for the inconvenience.";
 "Premium.BoostByGiveawayDescription" = "Get more boosts and subscribers for your channel by giving away prizes. [Get boosts >]()";
 "Premium.Group.BoostByGiveawayDescription" = "Get more boosts and members for your group by giving away prizes. [Get boosts >]()";
 
-"Notification.StarsGiveawayResultsNoWinners" = "Due to the giveaway terms, no winners could be selected by Fenixuz, all stars were credited to channel administrators.";
-"Notification.StarsGiveawayResultsNoWinners.Group" = "Due to the giveaway terms, no winners could be selected by Fenixuz, all stars were credited to group administrators.";
+"Notification.StarsGiveawayResultsNoWinners" = "Due to the giveaway terms, no winners could be selected by Novagram, all stars were credited to channel administrators.";
+"Notification.StarsGiveawayResultsNoWinners.Group" = "Due to the giveaway terms, no winners could be selected by Novagram, all stars were credited to group administrators.";
 
 "Notification.StarsGiveaway.Title" = "Congratulations!";
 "Notification.StarsGiveaway.Subtitle" = "You won a prize in a giveaway organized by **%1$@**.\n\nYour prize is **%2$@**.";
@@ -12975,7 +12975,7 @@ Sorry for the inconvenience.";
 "Stars.Info.Gift.Title" = "Send Gifts to Friends";
 "Stars.Info.Gift.Text" = "Give your friends gifts that can be kept on their profiles or converted to Stars.";
 "Stars.Info.Miniapp.Title" = "Use Stars in Miniapps";
-"Stars.Info.Miniapp.Text" = "Buy additional content and services in Fenixuz miniapps. [See Examples >]()";
+"Stars.Info.Miniapp.Text" = "Buy additional content and services in Novagram miniapps. [See Examples >]()";
 "Stars.Info.Media.Title" = "Unlock Content in Channels";
 "Stars.Info.Media.Text" = "Get access to paid content and services in Telegram channels.";
 "Stars.Info.Reaction.Title" = "Send Star Reactions";
@@ -13122,7 +13122,7 @@ Sorry for the inconvenience.";
 "Notification.PremiumGift.YearsTitle_any" = "%@ Years Premium";
 "Notification.PremiumGift.More" = "more";
 
-"Notification.PremiumGift.SubscriptionDescription" = "Subscription for exclusive Fenixuz features.";
+"Notification.PremiumGift.SubscriptionDescription" = "Subscription for exclusive Novagram features.";
 
 "Notification.StarsGift.Stars_1" = "%@ Star";
 "Notification.StarsGift.Stars_any" = "%@ Stars";
@@ -13163,7 +13163,7 @@ Sorry for the inconvenience.";
 "Stars.Transaction.TelegramBotApi.Messages_1" = "%@ Message";
 "Stars.Transaction.TelegramBotApi.Messages_any" = "%@ Messages";
 
-"Monetization.Bot.Header" = "Fenixuz shares 50% of the revenue from ads displayed in your bot. [Learn More >]()";
+"Monetization.Bot.Header" = "Novagram shares 50% of the revenue from ads displayed in your bot. [Learn More >]()";
 "Monetization.Bot.BalanceTitle" = "AVAILABLE BALANCE";
 
 "Resolve.ChannelErrorNotFound" = "Sorry, this channel doesn't seem to exist.";
@@ -13373,7 +13373,7 @@ Sorry for the inconvenience.";
 "AffiliateSetup.IntroNew.Title1" = "Share revenue with affiliates";
 "AffiliateSetup.IntroNew.Text1" = "Set the commission for revenue generated by users referred to you.";
 "AffiliateSetup.IntroNew.Title2" = "Launch your affiliate program";
-"AffiliateSetup.IntroNew.Text2" = "Fenixuz will feature your program for millions of potential affiliates.";
+"AffiliateSetup.IntroNew.Text2" = "Novagram will feature your program for millions of potential affiliates.";
 "AffiliateSetup.IntroNew.Title3" = "Let affiliates promote you";
 "AffiliateSetup.IntroNew.Text3" = "Affiliates will share your referral link with their audience.";
 
@@ -13488,8 +13488,8 @@ Sorry for the inconvenience.";
 "Gift.Upgrade.Unique.Description" = "Get a unique number, model, backdrop, and symbol for your gift.";
 "Gift.Upgrade.Unique.IncludeDescription" = "The recipient will get a unique number, model, backdrop, and symbol for the gift.";
 "Gift.Upgrade.Transferable.Title" = "Transferable";
-"Gift.Upgrade.Transferable.Description" = "Send your upgraded gift to any of your friends on Fenixuz.";
-"Gift.Upgrade.Transferable.IncludeDescription" = "The recipient will be able to send the gift to anyone Fenixuz.";
+"Gift.Upgrade.Transferable.Description" = "Send your upgraded gift to any of your friends on Novagram.";
+"Gift.Upgrade.Transferable.IncludeDescription" = "The recipient will be able to send the gift to anyone Novagram.";
 "Gift.Upgrade.Tradable.Title" = "Tradable";
 "Gift.Upgrade.Tradable.Description" = "Sell or auction your gift on third-party NFT marketplaces.";
 "Gift.Upgrade.Tradable.IncludeDescription" = "The recipient will be able to auction the gift on third-party NFT marketplaces.";
@@ -13530,7 +13530,7 @@ Sorry for the inconvenience.";
 "Gift.Transfer.UnlockPending.Text.Days_any" = "%@ days";
 
 "Gift.Transfer.UpdateRequired.Title" = "Update Required";
-"Gift.Transfer.UpdateRequired.Text" = "Please update your Fenixuz application to the latest version.";
+"Gift.Transfer.UpdateRequired.Text" = "Please update your Novagram application to the latest version.";
 
 "Gift.Transfer.Confirmation.Title" = "Confirm Transfer";
 "Gift.Transfer.Confirmation.TextFree" = "Dou you want to transfer ownership of **%1$@** to **%2$@**?";
@@ -13719,8 +13719,8 @@ Sorry for the inconvenience.";
 
 "PeerInfo.Gifts.SendGift" = "Send Gift";
 "PeerInfo.Gifts.ChannelNotify" = "Notify About New Gifts";
-"PeerInfo.Gifts.ChannelNotifyTooltip" = "You will receive a message from Fenixuz when your channel receives a gift.";
-"PeerInfo.Gifts.ChannelNotifyDisabledTooltip" = "You will not receive a message from Fenixuz when your channel receives a gift.";
+"PeerInfo.Gifts.ChannelNotifyTooltip" = "You will receive a message from Novagram when your channel receives a gift.";
+"PeerInfo.Gifts.ChannelNotifyDisabledTooltip" = "You will not receive a message from Novagram when your channel receives a gift.";
 
 "Notification.StarsGift.Channel.Sent" = "%1$@ sent a gift to %2$@ for %3$@";
 
@@ -14074,7 +14074,7 @@ Sorry for the inconvenience.";
 
 "FrozenAccount.Title" = "Your Account is Frozen";
 "FrozenAccount.Violation.Title" = "Violation of Terms";
-"FrozenAccount.Violation.Text" = "Your account was frozen for breaking Fenixuz's Terms and Conditions.";
+"FrozenAccount.Violation.Text" = "Your account was frozen for breaking Novagram's Terms and Conditions.";
 "FrozenAccount.ReadOnly.Title" = "Read-Only Mode";
 "FrozenAccount.ReadOnly.Text" = "You can access your account but can't send messages or take actions.";
 "FrozenAccount.Appeal.Title" = "Appeal Before Deactivation";
@@ -14084,7 +14084,7 @@ Sorry for the inconvenience.";
 
 "AdsInfo.Search.Respect.Text" = "Ads like this do not use your personal information and are based on the search query you entered.";
 "AdsInfo.Search.Ads.Text" = "You can turn off ads by subscribing to [Telegram Premium]().";
-"AdsInfo.Search.Launch.Text" = "Anyone can create an ad to display in search results for any query. Check out the Fenixuz Ad Platform for details. [Learn More >]()";
+"AdsInfo.Search.Launch.Text" = "Anyone can create an ad to display in search results for any query. Check out the Novagram Ad Platform for details. [Learn More >]()";
 
 "ChatList.FrozenAccount.Title" = "Your account is frozen";
 "ChatList.FrozenAccount.Text" = "Tap to view details and submit an appeal.";
@@ -14098,9 +14098,9 @@ Sorry for the inconvenience.";
 
 "Login.Fee.Title" = "SMS Fee";
 "Login.Fee.SmsCost.Title" = "High SMS Costs";
-"Login.Fee.SmsCost.Text" = "Telecom providers in your country (%@) charge Fenixuz very high prices for SMS.";
+"Login.Fee.SmsCost.Text" = "Telecom providers in your country (%@) charge Novagram very high prices for SMS.";
 "Login.Fee.Verification.Title" = "Verification Required";
-"Login.Fee.Verification.Text" = "Fenixuz needs to send you an SMS with a verification code to confirm your phone number.";
+"Login.Fee.Verification.Text" = "Novagram needs to send you an SMS with a verification code to confirm your phone number.";
 "Login.Fee.Support.Title" = "Support via [Telegram Premium >]()";
 "Login.Fee.Support.Text" = "Sign up for a 1-week Telegram Premium subscription to help cover the SMS costs.";
 "Login.Fee.SignUp" = "Sign Up for %@";
@@ -14123,10 +14123,10 @@ Sorry for the inconvenience.";
 
 "VideoChat.RevokeLink" = "Revoke Link";
 
-"InviteLink.GroupCallLinkHelp" = "Anyone on Fenixuz can join your call by following the link below.";
+"InviteLink.GroupCallLinkHelp" = "Anyone on Novagram can join your call by following the link below.";
 "InviteLink.CallLinkTitle" = "Call Link";
 "InviteLink.CreatedGroupCallFooter" = "Be the first to join the call and add people from there. [Open Call >](open_call)";
-"InviteLink.QRCode.InfoGroupCall" = "Everyone on Fenixuz can scan this code to join your group call.";
+"InviteLink.QRCode.InfoGroupCall" = "Everyone on Novagram can scan this code to join your group call.";
 
 "Call.GenericGroupCallTitle" = "Group Call";
 
@@ -14298,7 +14298,7 @@ Sorry for the inconvenience.";
 
 "Premium.CreateMultipleStories" = "Create Multiple Stories";
 
-"FrozenAccount.Violation.TextNew" = "Your account was frozen for breaking Fenixuz's [Terms and Conditions]().";
+"FrozenAccount.Violation.TextNew" = "Your account was frozen for breaking Novagram's [Terms and Conditions]().";
 "FrozenAccount.Violation.TextNew_URL" = "https://telegram.org/tos";
 
 "Stars.Purchase.BuyStarGiftInfo" = "Buy Stars to acquire a unique collectible.";
@@ -14342,7 +14342,7 @@ Sorry for the inconvenience.";
 "Chat.TrimVoiceMessageToResume.Text" = "Audio outside that range will be discarded, and recording will start immediately.";
 "Chat.TrimVoiceMessageToResume.Proceed" = "Proceed";
 
-"Contacts.LimitedAccess.Text" = "You have limited Fenixuz from accessing all of your contacts.";
+"Contacts.LimitedAccess.Text" = "You have limited Novagram from accessing all of your contacts.";
 "Contacts.LimitedAccess.Manage" = "MANAGE";
 
 "Media.PhotoHdOn" = "The photo will be sent in high quality.";
@@ -14586,10 +14586,10 @@ Sorry for the inconvenience.";
 "BalanceNeeded.FragmentSubtitle" = "You can add funds to your balance via the third-party platform Fragment.";
 "BalanceNeeded.FragmentAction" = "Add Funds via Fragment";
 
-"Settings.Ton.Description" = "Use TON to submit post suggestions to channels on Fenixuz.";
+"Settings.Ton.Description" = "Use TON to submit post suggestions to channels on Novagram.";
 
 "Settings.TransactionsTon.Title" = "TON";
-"Settings.TransactionsTon.Subtitle" = "Use TON to submit post suggestions to channels on Fenixuz.";
+"Settings.TransactionsTon.Subtitle" = "Use TON to submit post suggestions to channels on Novagram.";
 
 "Chat.DeletePaidMessageStars.Title" = "Stars Will Be Lost";
 "Chat.DeletePaidMessageStars.Text" = "You won't receive **Stars** for this post if you delete it now. The post must remain visible for at least **24 hours** after publication.";
@@ -14657,9 +14657,9 @@ Sorry for the inconvenience.";
 
 "Settings.MyTon" = "My TON";
 
-"Stars.Gift.Ton.Text" = "Use TON to submit post suggestions to channels on Fenixuz.";
+"Stars.Gift.Ton.Text" = "Use TON to submit post suggestions to channels on Novagram.";
 "Stars.Ton.Title" = "TON";
-"Stars.Ton.Description" = "Use TON to submit post suggestions to channels on Fenixuz.";
+"Stars.Ton.Description" = "Use TON to submit post suggestions to channels on Novagram.";
 
 "Notification.Ton.Subtitle" = "Use TON to submit post suggestions to channels.";
 "Notification.Ton.SubtitleYou" = "With TON, %@ will be able to submit post suggestions to channels.";
@@ -14687,7 +14687,7 @@ Sorry for the inconvenience.";
 
 "Chat.SensitiveContentShort" = "18+";
 
-"AccessDenied.AgeVerificationCamera" = "Fenixuz needs access to your camera for age verification.\n\nOpen your device's Settings > Privacy > Camera and set Fenixuz to ON.";
+"AccessDenied.AgeVerificationCamera" = "Novagram needs access to your camera for age verification.\n\nOpen your device's Settings > Privacy > Camera and set Novagram to ON.";
 
 "PeerInfo.Gifts.Collections.All" = "All Gifts";
 "PeerInfo.Gifts.Collections.Add" = "Add Collection";
@@ -14734,8 +14734,8 @@ Sorry for the inconvenience.";
 "Gift.Options.Gift.BuyLimitReached_any" = "You've already sent %@ of these gifts, and it's the limit.";
 
 "AgeVerification.Title" = "Age Verification";
-"AgeVerification.Text" = "To access this content, you must confirm you are at least **18** years old.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Fenixuz.";
-"AgeVerification.Text.GB" = "To access this content, you must confirm you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Fenixuz.";
+"AgeVerification.Text" = "To access this content, you must confirm you are at least **18** years old.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Novagram.";
+"AgeVerification.Text.GB" = "To access this content, you must confirm you are at least **18** years old as required by UK law.\n\nThis is a one-time process using your phone's camera. Your selfie will not be stored by Novagram.";
 "AgeVerification.Verify" = "Verify My Age";
 
 "AgeVerification.Unavailable.Title" = "18+";
@@ -14827,7 +14827,7 @@ Sorry for the inconvenience.";
 "Stories.DeleteAlbum.Confirmation" = "Delete %@?";
 
 "ProfileLevelInfo.Title" = "Rating";
-"ProfileLevelInfo.MyText" = "The rating reflects your activity on Fenixuz. What affects it:";
+"ProfileLevelInfo.MyText" = "The rating reflects your activity on Novagram. What affects it:";
 "ProfileLevelInfo.MyDescriptionToday_1" = "The rating updates today.\n\%@ point is pending.";
 "ProfileLevelInfo.MyDescriptionToday_any" = "The rating updates today.\n\%@ points are pending.";
 "ProfileLevelInfo.MyDescriptionDays_1" = "%@ day";
@@ -14844,13 +14844,13 @@ Sorry for the inconvenience.";
 "ProfileLevelInfo.MyDescriptionInPreviewToday_1" = "This will be your rating today,\n after %@ is added. [Back >]()";
 "ProfileLevelInfo.MyDescriptionInPreviewToday_any" = "This will be your rating today,\n after %@ added. [Back >]()";
 
-"ProfileLevelInfo.OtherDescription" = "The rating reflects **%@'s** activity on Fenixuz. What affects it:";
+"ProfileLevelInfo.OtherDescription" = "The rating reflects **%@'s** activity on Novagram. What affects it:";
 "ProfileLevelInfo.LevelIndex_1" = "Level %@";
 "ProfileLevelInfo.LevelIndex_any" = "Level %@";
 "ProfileLevelInfo.CloseButton" = "Understood";
 
-"ProfileLevelInfo.Item0.Title" = "Gifts from Fenixuz";
-"ProfileLevelInfo.Item0.Text" = "100% of the Stars spent on gifts purchased from Fenixuz.";
+"ProfileLevelInfo.Item0.Title" = "Gifts from Novagram";
+"ProfileLevelInfo.Item0.Text" = "100% of the Stars spent on gifts purchased from Novagram.";
 "ProfileLevelInfo.Item0.Badge" = "ADDED";
 "ProfileLevelInfo.Item1.Title" = "Gifts and Posts from Users";
 "ProfileLevelInfo.Item1.Text" = "20% of the Stars spent on gifts or posts from users and channels.";
@@ -14884,7 +14884,7 @@ Sorry for the inconvenience.";
 "Gift.Upgrade.GiftTitle" = "Make Unique";
 "Gift.Upgrade.GiftDescription" = "Let %@ turn this gift into a unique collectible.";
 "Gift.Upgrade.Unique.GiftDescription" = "%@ will get a unique number, model, backdrop, and symbol for the gift.";
-"Gift.Upgrade.Transferable.GiftDescription" = "%@ will be able to send the gift to anyone Fenixuz.";
+"Gift.Upgrade.Transferable.GiftDescription" = "%@ will be able to send the gift to anyone Novagram.";
 "Gift.Upgrade.Tradable.GiftDescription" = "%@ will be able to auction the gift on third-party NFT marketplaces.";
 
 "Notification.StarGift.Subtitle.Upgrade.Prepaid" = "%@ can now turn this gift to a unique collectible";
@@ -14966,13 +14966,13 @@ Sorry for the inconvenience.";
 "Gift.Upgrade.Skip" = "Skip";
 "Gift.Upgrade.UpgradeNext" = "Upgrade Next Gift";
 
-"Gift.Value.DescriptionAveragePrice" = "This is the average sale price of **%@** on Fenixuz and Fragment over the past month.";
+"Gift.Value.DescriptionAveragePrice" = "This is the average sale price of **%@** on Novagram and Fragment over the past month.";
 "Gift.Value.DescriptionLastPriceFragment" = "This is the last price at which **%@** was last sold on Fragment.";
-"Gift.Value.DescriptionLastPriceTelegram" = "This is the last price at which **%@** was last sold on Fenixuz.";
+"Gift.Value.DescriptionLastPriceTelegram" = "This is the last price at which **%@** was last sold on Novagram.";
 
-"Gift.Value.LastPriceInfo" = "**%1$@** is the last price for %2$@ gifts listed on Fenixuz and Fragment.";
-"Gift.Value.MinimumPriceInfo" = "**%1$@** is the floor price for %2$@ gifts listed on Fenixuz and Fragment.";
-"Gift.Value.AveragePriceInfo" = "**%1$@** is the average sale price for %2$@ gifts listed on Fenixuz and Fragment over the past month.";
+"Gift.Value.LastPriceInfo" = "**%1$@** is the last price for %2$@ gifts listed on Novagram and Fragment.";
+"Gift.Value.MinimumPriceInfo" = "**%1$@** is the floor price for %2$@ gifts listed on Novagram and Fragment.";
+"Gift.Value.AveragePriceInfo" = "**%1$@** is the average sale price for %2$@ gifts listed on Novagram and Fragment over the past month.";
 
 "Gift.Value.InitialSale" = "Initial Sale";
 "Gift.Value.InitialPrice" = "Initial Price";
@@ -14980,7 +14980,7 @@ Sorry for the inconvenience.";
 "Gift.Value.LastPrice" = "Last Price";
 "Gift.Value.MinimumPrice" = "Minimum Price";
 "Gift.Value.AveragePrice" = "Average Price";
-"Gift.Value.ForSaleOnTelegram" = "for sale on Fenixuz";
+"Gift.Value.ForSaleOnTelegram" = "for sale on Novagram";
 "Gift.Value.ForSaleOnFragment" = "for sale on Fragment";
 
 "Gift.View.Context.SetAsTheme" = "Set as Theme in...";
@@ -15110,7 +15110,7 @@ Error: %8$@";
 "Gift.UnavailableAction.Text" = "Transfer this gift to your Telegram account on Fragment to unlock this action.";
 "Gift.UnavailableAction.OpenFragment" = "Open Fragment";
 
-"Gift.Unique.Telegram" = "Fenixuz";
+"Gift.Unique.Telegram" = "Novagram";
 
 "VoiceChat.ContextEnableMessages" = "Enable Messages";
 "VoiceChat.ContextDisableMessages" = "Disable Messages";
@@ -15129,7 +15129,7 @@ Error: %8$@";
 
 "ProfileLevelInfo.NegativeRating" = "Negative rating";
 
-"Notification.StarsGift.Assigned" = "You started displaying %@ on your Fenixuz profile page.";
+"Notification.StarsGift.Assigned" = "You started displaying %@ on your Novagram profile page.";
 
 "Gift.View.SenderInfo" = "**%@** sent you this gift on **%@**.";
 
@@ -15174,7 +15174,7 @@ Error: %8$@";
 "Gift.Setup.AuctionInfo.Bidders_1" = "%@ bidder";
 "Gift.Setup.AuctionInfo.Bidders_any" = "%@ bidders";
 
-"PrivacySettings.LoginEmailSetupInfo" = "Setup your email address for Fenixuz login codes.";
+"PrivacySettings.LoginEmailSetupInfo" = "Setup your email address for Novagram login codes.";
 
 "LoginEmail.Title" = "Add Email";
 "LoginEmail.Description" = "Please add your email address to keep access to your account.";
@@ -15201,7 +15201,7 @@ Error: %8$@";
 "Gift.Auction.TimeLeftMinutes" = "{m}:{s} left";
 "Gift.Auction.ItemsBought_1" = "item bought";
 "Gift.Auction.ItemsBought_any" = "items bought";
-"Gift.Auction.ForSaleOnTelegram" = "for sale on Fenixuz";
+"Gift.Auction.ForSaleOnTelegram" = "for sale on Novagram";
 "Gift.Auction.ForSaleOnFragment" = "for sale on Fragment";
 "Gift.Auction.AveragePriceInfo" = "**%1$@** is the average sale price for %2$@ gifts.";
 "Gift.Auction.Stars_1" = "%@ Star";
@@ -15342,8 +15342,8 @@ Error: %8$@";
 
 "AddContact.Title" = "New Contact";
 "AddContact.PhoneNumber.IsContact"= "This phone number is already in your contacts. [View >]()";
-"AddContact.PhoneNumber.Registered"= "This phone number is on Fenixuz.";
-"AddContact.PhoneNumber.NotRegistered"= "This phone number is not on Fenixuz. [Invite >]()";
+"AddContact.PhoneNumber.Registered"= "This phone number is on Novagram.";
+"AddContact.PhoneNumber.NotRegistered"= "This phone number is not on Novagram. [Invite >]()";
 "AddContact.SyncToPhone" = "Sync Contact to Phone";
 "AddContact.NotePlaceholder" = "Add notes only visible to you";
 "AddContact.AddQR" = "Add via QR Code";
@@ -15545,11 +15545,11 @@ Error: %8$@";
 "Passkeys.ListFooter" = "Your passkeys are stored securely in your password manager.";
 
 "Gift.Demo.Title" = "Unique Collectibles";
-"Gift.Demo.Description" = "Fenixuz Gifts are collectible items you can trade or showcase on your profile.";
+"Gift.Demo.Description" = "Novagram Gifts are collectible items you can trade or showcase on your profile.";
 "Gift.Demo.Unique.Title" = "Unique";
 "Gift.Demo.Unique.Text" = "Upgrade your gifts to get a unique number, model, backdrop and symbol.";
 "Gift.Demo.Tradable.Title" = "Tradable";
-"Gift.Demo.Tradable.Text" = "Sell your gift on Fenixuz or on third-party NFT marketplaces.";
+"Gift.Demo.Tradable.Text" = "Sell your gift on Novagram or on third-party NFT marketplaces.";
 "Gift.Demo.Wearable.Title" = "Wearable";
 "Gift.Demo.Wearable.Text" = "Display gifts on your page and set them as profile covers or statuses.";
 "Gift.Demo.Understood" = "Understood";
@@ -15574,7 +15574,7 @@ Error: %8$@";
 
 "Gift.Auction.GiftAuction" = "Gift Auction";
 "Gift.Auction.UpcomingAuction" = "Upcoming Auction";
-"Gift.Auction.LearnMore" = "Learn more about Fenixuz Gifts >";
+"Gift.Auction.LearnMore" = "Learn more about Novagram Gifts >";
 
 "Gift.AuctionBid.UpcomingTitle" = "Place an Early Bid";
 
@@ -15599,7 +15599,7 @@ Error: %8$@";
 "Gift.WearPreview.Limited" = "limited";
 "Gift.WearPreview.Upgraded" = "upgraded";
 "Gift.WearPreview.FreeUpgrade" = "Free\nUpgrade";
-"Gift.WearPreview.LearnMore" = "Learn more about wearing Fenixuz Gifts >";
+"Gift.WearPreview.LearnMore" = "Learn more about wearing Novagram Gifts >";
 
 "Notification.StarGift.Sold" = "sold";
 "Notification.StarGiftOffer.Offer" = "**%1$@** offered you **%2$@** for your gift **%3$@**.";
@@ -15643,7 +15643,7 @@ Error: %8$@";
 "CocoonInfo.Private.Title" = "Private";
 "CocoonInfo.Private.Text" = "No third party can access any data, such as translations, inside Cocoon.";
 "CocoonInfo.Efficient.Title" = "Efficient";
-"CocoonInfo.Efficient.Text" = "Cocoon has allowed Fenixuz to reduce translation costs by 6x.";
+"CocoonInfo.Efficient.Text" = "Cocoon has allowed Novagram to reduce translation costs by 6x.";
 "CocoonInfo.ForEveryone.Title" = "For Everyone";
 "CocoonInfo.ForEveryone.Text" = "Any developer can use Cocoon for AI features. Learn more at [@cocoon](telegram) or [cocoon.org](web).";
 "CocoonInfo.IntergrateInfo" = "Want to integrate Cocoon into your projects?\nReach out at [t.me/cocoon?direct]()";
@@ -15849,8 +15849,8 @@ Error: %8$@";
 "Gift.Craft.UnavailableBlockchain.Text" = "This gift can't be used as the first one in crafting because it has been recorded on the blockchain.";
 
 "AuthConfirmation.Emoji.Title" = "Tap the emoji shown\non your other device";
-"AuthConfirmation.Emoji.Description" = "Fenixuz wants to make sure it's really you.";
-"AuthConfirmation.Emoji.DescriptionFirst" = "Fenixuz wants to make sure it's really you trying to log in to **%@**.";
+"AuthConfirmation.Emoji.Description" = "Novagram wants to make sure it's really you.";
+"AuthConfirmation.Emoji.DescriptionFirst" = "Novagram wants to make sure it's really you trying to log in to **%@**.";
 
 "Chat.TagPlaceholder" = "Tag";
 
@@ -16203,7 +16203,7 @@ Error: %8$@";
 "Attachment.ChatsMusic" = "YOUR CHATS";
 "Attachment.PublicMusic" = "PUBLIC CHATS";
 
-"PeerInfo.UnofficialSecurityRisk" = "%@ uses an unofficial Fenixuz client – messages to this user may be less secure.";
+"PeerInfo.UnofficialSecurityRisk" = "%@ uses an unofficial Novagram client – messages to this user may be less secure.";
 
 "Gallery.Live" = "LIVE";
 

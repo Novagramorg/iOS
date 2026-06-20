@@ -442,17 +442,17 @@ ok "Build muvaffaqiyatli tugadi"
 step ".app fayl tayyorlanmoqda..."
 
 # Bazel target nomi `Telegram` bo'lgani uchun IPA hali Telegram.ipa nomi bilan
-# yoziladi, lekin ichidagi .app esa Fenixuz.app (bundle_name = "Fenixuz" tufayli).
-# Keyingi qadamlar uchun IPA ni ham Fenixuz.ipa ga ko'chiramiz, real qurilmaga
+# yoziladi, lekin ichidagi .app esa Novagram.app (bundle_name = "Novagram" tufayli).
+# Keyingi qadamlar uchun IPA ni ham Novagram.ipa ga ko'chiramiz, real qurilmaga
 # yoki TestFlight ga yuklaganda fayl nomi to'g'ri ko'rinsin.
 APP_PATH=""
-APP_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Fenixuz.app" -maxdepth 5 2>/dev/null | head -1 || true)
+APP_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Novagram.app" -maxdepth 5 2>/dev/null | head -1 || true)
 if [ -z "$APP_PATH" ]; then
     APP_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Telegram.app" -maxdepth 5 2>/dev/null | head -1 || true)
 fi
 
 if [ -z "$APP_PATH" ]; then
-    IPA_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Fenixuz.ipa" -maxdepth 5 2>/dev/null | head -1 || true)
+    IPA_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Novagram.ipa" -maxdepth 5 2>/dev/null | head -1 || true)
     if [ -z "$IPA_PATH" ]; then
         IPA_PATH=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -name "Telegram.ipa" -maxdepth 5 2>/dev/null | head -1 || true)
     fi
@@ -468,13 +468,13 @@ fi
 [ -z "$APP_PATH" ] && err ".app fayl topilmadi. bazel-bin/Telegram/ papkasini tekshiring."
 ok "App: $(basename "$APP_PATH")"
 
-# Telegram.ipa ni Fenixuz.ipa ga ko'chiramiz (bundle_name attributi .app ni
+# Telegram.ipa ni Novagram.ipa ga ko'chiramiz (bundle_name attributi .app ni
 # qayta nomlaydi, lekin .ipa fayl nomi Bazel target nomidan kelib chiqadi).
 TELEGRAM_IPA=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -maxdepth 2 -name "Telegram.ipa" 2>/dev/null | head -1 || true)
 if [ -n "$TELEGRAM_IPA" ]; then
-    FENIXUZ_IPA="$(dirname "$TELEGRAM_IPA")/Fenixuz.ipa"
-    cp -f "$TELEGRAM_IPA" "$FENIXUZ_IPA"
-    ok "IPA qayta nomlandi: Fenixuz.ipa"
+    NOVAGRAM_IPA="$(dirname "$TELEGRAM_IPA")/Novagram.ipa"
+    cp -f "$TELEGRAM_IPA" "$NOVAGRAM_IPA"
+    ok "IPA qayta nomlandi: Novagram.ipa"
 fi
 
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist" 2>/dev/null || \

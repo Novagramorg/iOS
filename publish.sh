@@ -212,7 +212,7 @@ TELEGRAM_IPA=$(find "$SCRIPT_DIR/bazel-bin/Telegram" -maxdepth 2 -name "Telegram
 [ -z "$TELEGRAM_IPA" ] && err "Telegram.ipa topilmadi."
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-OUT_IPA="$OUTPUT_DIR/Fenixuz-${VERSION}-${BUILD_NUMBER}-${TIMESTAMP}.ipa"
+OUT_IPA="$OUTPUT_DIR/Novagram-${VERSION}-${BUILD_NUMBER}-${TIMESTAMP}.ipa"
 cp -f "$TELEGRAM_IPA" "$OUT_IPA"
 
 ok "IPA: $OUT_IPA  ($(du -h "$OUT_IPA" | awk '{print $1}'))"
@@ -244,7 +244,7 @@ echo "  1. Transporter.app oching (Mac App Store'dan bepul yuklab oling)"
 echo "  2. Apple ID bilan kirish (Vipads MCHJ team admin)"
 echo "  3. + yoki drag-drop:   $OUT_IPA"
 echo "  4. DELIVER tugmasini bosish (5-15 daqiqa upload)"
-echo "  5. App Store Connect → My Apps → Fenixuz → TestFlight"
+echo "  5. App Store Connect → My Apps → Novagram → TestFlight"
 echo "     Build 5-15 daqiqa ichida \"Processing\" → \"Ready to Test\""
 echo "  6. Build'ni TestFlight Internal Testing'ga ulang"
 echo "  7. App Store Review uchun \"Submit for Review\""

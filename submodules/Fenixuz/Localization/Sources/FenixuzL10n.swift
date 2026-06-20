@@ -195,7 +195,7 @@ public struct FenixuzL10n {
     }
 
     public func tasks_relative_format(today: Bool, tomorrow: Bool, yesterday: Bool, time: String) -> String {
-        if today    { return "\(tasks_relative_today), \(time)" }
+        if today { return "\(tasks_relative_today), \(time)" }
         if tomorrow { return "\(tasks_relative_tomorrow), \(time)" }
         if yesterday { return "\(tasks_relative_yesterday), \(time)" }
         return time
@@ -204,7 +204,7 @@ public struct FenixuzL10n {
     // MARK: - Settings → Fenixuz screen
     // Section headers, item titles, item subtitles, section footers, generic on/off labels.
 
-    public var settings_title: String { "Fenixuz" } // Brand name — never translated
+    public var settings_title: String { "Novagram" } // Brand name — never translated
 
     public var settings_state_enabled: String {
         pick(en: "On", uz: "Yoqilgan", ru: "Включено")
@@ -608,9 +608,9 @@ public struct FenixuzL10n {
 
     public var tips_stt_body: String {
         pick(
-            en: "Tap the microphone button next to the text field to convert voice to text instantly. Enable it in Fenixuz → Voice → Text settings.",
-            uz: "Matn maydonidagi mikrofon tugmasini bosib, ovozingizni darhol matnga aylantiring. Fenixuz → Ovoz → Matn sozlamalarida yoqing.",
-            ru: "Нажмите кнопку микрофона рядом с полем ввода, чтобы мгновенно преобразовать голос в текст. Включите в настройках Fenixuz → Голос → Текст."
+            en: "Tap the microphone button next to the text field to convert voice to text instantly. Enable it in Novagram → Voice → Text settings.",
+            uz: "Matn maydonidagi mikrofon tugmasini bosib, ovozingizni darhol matnga aylantiring. Novagram → Ovoz → Matn sozlamalarida yoqing.",
+            ru: "Нажмите кнопку микрофона рядом с полем ввода, чтобы мгновенно преобразовать голос в текст. Включите в настройках Novagram → Голос → Текст."
         )
     }
 
@@ -660,9 +660,9 @@ public struct FenixuzL10n {
 
     public var tips_autoText_body: String {
         pick(
-            en: "Automatically add a custom text at the end of every outgoing message — a signature, hashtag, or anything you like. Configure in Fenixuz → Messages.",
-            uz: "Har bir chiquvchi xabar oxiriga avtomatik matn qo'shing — imzo, hashtag yoki xohlagan narsa. Fenixuz → Xabarlar sozlamalarida o'rnatiladi.",
-            ru: "Автоматически добавляйте произвольный текст в конец каждого исходящего сообщения — подпись, хэштег или что угодно. Настраивается в Fenixuz → Сообщения."
+            en: "Automatically add a custom text at the end of every outgoing message — a signature, hashtag, or anything you like. Configure in Novagram → Messages.",
+            uz: "Har bir chiquvchi xabar oxiriga avtomatik matn qo'shing — imzo, hashtag yoki xohlagan narsa. Novagram → Xabarlar sozlamalarida o'rnatiladi.",
+            ru: "Автоматически добавляйте произвольный текст в конец каждого исходящего сообщения — подпись, хэштег или что угодно. Настраивается в Novagram → Сообщения."
         )
     }
 
@@ -673,22 +673,22 @@ public struct FenixuzL10n {
 
     public var tips_translate_body: String {
         pick(
-            en: "Translate any message with one tap. Long-press a message and choose \"Translate\". Enable the button in Fenixuz → Messages settings.",
-            uz: "Har qanday xabarni bir teginishda tarjima qiling. Xabarga uzoq bosib, \"Tarjima\" ni tanlang. Fenixuz → Xabarlar sozlamalarida yoqiladi.",
-            ru: "Переводите любое сообщение одним нажатием. Зажмите сообщение и выберите «Перевести». Включается в настройках Fenixuz → Сообщения."
+            en: "Translate any message with one tap. Long-press a message and choose \"Translate\". Enable the button in Novagram → Messages settings.",
+            uz: "Har qanday xabarni bir teginishda tarjima qiling. Xabarga uzoq bosib, \"Tarjima\" ni tanlang. Novagram → Xabarlar sozlamalarida yoqiladi.",
+            ru: "Переводите любое сообщение одним нажатием. Зажмите сообщение и выберите «Перевести». Включается в настройках Novagram → Сообщения."
         )
     }
 
     // Fenixuz Settings hub
     public var tips_fenixHub_title: String {
-        pick(en: "Fenixuz Settings Hub", uz: "Fenixuz sozlamalari markazi", ru: "Центр настроек Fenixuz")
+        pick(en: "Novagram Settings Hub", uz: "Novagram sozlamalari markazi", ru: "Центр настроек Novagram")
     }
 
     public var tips_fenixHub_body: String {
         pick(
-            en: "All Fenixuz features in one place. Open your Telegram Settings and tap the gold \"Fenixuz\" row to access Ghost mode, STT, auto-text, translate, chat lock, and more.",
-            uz: "Barcha Fenixuz imkoniyatlari bir joyda. Telegram Sozlamalariga kirib, oltin rang \"Fenixuz\" qatoriga bosing — Ghost rejimi, STT, avto-matn, tarjima, chat qulfi va boshqalar.",
-            ru: "Все функции Fenixuz в одном месте. Откройте Настройки Telegram и нажмите золотую строку «Fenixuz» — Ghost-режим, STT, авто-текст, перевод, блокировка чатов и многое другое."
+            en: "All Novagram features in one place. Open your Telegram Settings and tap the gold \"Novagram\" row to access Ghost mode, STT, auto-text, translate, chat lock, and more.",
+            uz: "Barcha Novagram imkoniyatlari bir joyda. Telegram Sozlamalariga kirib, oltin rang \"Novagram\" qatoriga bosing — Ghost rejimi, STT, avto-matn, tarjima, chat qulfi va boshqalar.",
+            ru: "Все функции Novagram в одном месте. Откройте Настройки Telegram и нажмите золотую строку «Novagram» — Ghost-режим, STT, авто-текст, перевод, блокировка чатов и многое другое."
         )
     }
 
@@ -724,9 +724,9 @@ public struct FenixuzL10n {
 
     public func update_message(version: String) -> String {
         pick(
-            en: "A new version (\(version)) of Fenixuz is available on the App Store.",
-            uz: "Fenixuz'ning yangi versiyasi (\(version)) App Store'da mavjud.",
-            ru: "Новая версия Fenixuz (\(version)) доступна в App Store."
+            en: "A new version (\(version)) of Novagram is available on the App Store.",
+            uz: "Novagram'ning yangi versiyasi (\(version)) App Store'da mavjud.",
+            ru: "Новая версия Novagram (\(version)) доступна в App Store."
         )
     }
 
@@ -773,22 +773,22 @@ public struct FenixuzL10n {
     // MARK: - About FenixPro (Settings → FenixPro → About)
 
     public var about_rowTitle: String {
-        pick(en: "About FenixPro", uz: "FenixPro haqida", ru: "О FenixPro")
+        pick(en: "About NovagramPro", uz: "NovagramPro haqida", ru: "О NovagramPro")
     }
 
     public var about_screenTitle: String {
-        pick(en: "About FenixPro", uz: "FenixPro haqida", ru: "О FenixPro")
+        pick(en: "About NovagramPro", uz: "NovagramPro haqida", ru: "О NovagramPro")
     }
 
     public var about_introHeader: String {
-        pick(en: "WHAT IS FENIXPRO", uz: "FENIXPRO NIMA", ru: "ЧТО ТАКОЕ FENIXPRO")
+        pick(en: "WHAT IS NOVAGRAMPRO", uz: "NOVAGRAMPRO NIMA", ru: "ЧТО ТАКОЕ NOVAGRAMPRO")
     }
 
     public var about_introBody: String {
         pick(
-            en: "FenixPro is Telegram with a set of extra tools built on top. Everything below is included — no subscription, no paywall. Each feature can be turned on or off in FenixPro settings.",
-            uz: "FenixPro — bu ustiga qo'shimcha vositalar qo'shilgan Telegram. Quyidagilarning barchasi bepul — obuna ham, to'lov ham yo'q. Har bir imkoniyatni FenixPro sozlamalarida yoqish yoki o'chirish mumkin.",
-            ru: "FenixPro — это Telegram с набором дополнительных инструментов. Всё перечисленное ниже бесплатно — без подписки и без платного доступа. Каждую функцию можно включить или выключить в настройках FenixPro."
+            en: "NovagramPro is Telegram with a set of extra tools built on top. Everything below is included — no subscription, no paywall. Each feature can be turned on or off in NovagramPro settings.",
+            uz: "NovagramPro — bu ustiga qo'shimcha vositalar qo'shilgan Telegram. Quyidagilarning barchasi bepul — obuna ham, to'lov ham yo'q. Har bir imkoniyatni NovagramPro sozlamalarida yoqish yoki o'chirish mumkin.",
+            ru: "NovagramPro — это Telegram с набором дополнительных инструментов. Всё перечисленное ниже бесплатно — без подписки и без платного доступа. Каждую функцию можно включить или выключить в настройках NovagramPro."
         )
     }
 
@@ -889,9 +889,9 @@ public struct FenixuzL10n {
 
     public var about_footer: String {
         pick(
-            en: "FenixPro is built on top of Telegram. All your chats, contacts and data stay in your regular Telegram account.",
-            uz: "FenixPro Telegram asosida qurilgan. Barcha chatlaringiz, kontaktlaringiz va ma'lumotlaringiz oddiy Telegram accountingizda qoladi.",
-            ru: "FenixPro построен на основе Telegram. Все ваши чаты, контакты и данные остаются в вашем обычном аккаунте Telegram."
+            en: "NovagramPro is built on top of Telegram. All your chats, contacts and data stay in your regular Telegram account.",
+            uz: "NovagramPro Telegram asosida qurilgan. Barcha chatlaringiz, kontaktlaringiz va ma'lumotlaringiz oddiy Telegram accountingizda qoladi.",
+            ru: "NovagramPro построен на основе Telegram. Все ваши чаты, контакты и данные остаются в вашем обычном аккаунте Telegram."
         )
     }
 }

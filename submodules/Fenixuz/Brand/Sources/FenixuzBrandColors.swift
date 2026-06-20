@@ -8,15 +8,15 @@ import UIKit
 // shu yerdan rang oladi. Hech qachon hard-code qilingan hex'lar boshqa joyda.
 
 public enum FenixuzBrandColors {
-    // MARK: - Brand greens (signature)
-    public static let brand50  = UIColor(rgb: 0xECFDF5)
-    public static let brand100 = UIColor(rgb: 0xD1FAE5)
-    public static let brand300 = UIColor(rgb: 0x6EE7B7)
-    public static let brand400 = UIColor(rgb: 0x34D399)
-    public static let brand500 = UIColor(rgb: 0x10B981)   // Primary brand
-    public static let brand600 = UIColor(rgb: 0x059669)   // Primary hover
-    public static let brand700 = UIColor(rgb: 0x047857)   // Primary deep
-    public static let brand900 = UIColor(rgb: 0x064E3B)
+    // MARK: - Brand blues (Novagram signature) — matches the app icon's blue
+    public static let brand50  = UIColor(rgb: 0xEAF6FF)
+    public static let brand100 = UIColor(rgb: 0xCFE9FF)
+    public static let brand300 = UIColor(rgb: 0x7CC3FD)
+    public static let brand400 = UIColor(rgb: 0x36A8FA)
+    public static let brand500 = UIColor(rgb: 0x0A9BF5)   // Primary brand (Novagram blue)
+    public static let brand600 = UIColor(rgb: 0x0A85E8)   // Primary hover / CTA button
+    public static let brand700 = UIColor(rgb: 0x086FC6)   // Primary deep
+    public static let brand900 = UIColor(rgb: 0x07406F)
 
     // MARK: - Ink (dark text / dark backgrounds)
     public static let inkBase = UIColor(rgb: 0x0F1115)    // Dark bg (dark mode)
@@ -45,15 +45,15 @@ public enum FenixuzBrandColors {
     // MARK: - White / light-theme accent (Feature #23)
     //
     // Used when the user turns on "Brand accent in light theme" in Fenix Settings.
-    // We re-use brand500 (emerald #10B981) as the accent — same hue family as the
+    // We re-use brand500 (Novagram blue #0A9BF5) as the accent — same hue family as the
     // login screen so the brand stays coherent across dark & light modes.
     // Light-theme specific tones for tinting tappable elements and highlights.
-    public static let lightThemeAccent: UIColor = brand500   // #10B981 — primary tint
+    public static let lightThemeAccent: UIColor = brand500   // #0A9BF5 — primary tint
     // Raw RGB of lightThemeAccent (== brand500). The theme engine's
     // PresentationThemeAccentColor.accentColor wants a UInt32, not a UIColor.
-    public static let lightThemeAccentValue: UInt32 = 0x10B981
-    public static let lightThemeAccentLight: UIColor = brand100   // #D1FAE5 — selection bg, badge fill
-    public static let lightThemeAccentDeep: UIColor = brand600   // #059669 — pressed / active state
+    public static let lightThemeAccentValue: UInt32 = 0x0A9BF5
+    public static let lightThemeAccentLight: UIColor = brand100   // #CFE9FF — selection bg, badge fill
+    public static let lightThemeAccentDeep: UIColor = brand600   // #0A85E8 — pressed / active state
 }
 
 // MARK: - UIColor convenience

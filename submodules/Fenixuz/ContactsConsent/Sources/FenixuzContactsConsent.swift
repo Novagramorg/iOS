@@ -88,7 +88,7 @@ public enum FenixuzContactsConsent {
 
         let title = "Sync Your Contacts?"
         let message = """
-        Fenixuz will upload your phone contacts to Telegram servers so you can find friends who already use the app. Your contacts are transmitted encrypted and you can disable Contact Sync anytime in Settings → Privacy and Security → Data Settings.
+        Novagram will upload your phone contacts to Telegram servers so you can find friends who already use the app. Your contacts are transmitted encrypted and you can disable Contact Sync anytime in Settings → Privacy and Security → Data Settings.
 
         By tapping Continue, you agree to our Privacy Policy:
         \(privacyPolicyURL)

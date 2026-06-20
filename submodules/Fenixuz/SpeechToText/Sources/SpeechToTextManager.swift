@@ -90,7 +90,7 @@ public final class SpeechToTextManager {
         guard let speechRecognizer = self.speechRecognizer else {
             // Apple has no speech recogniser for this language at all (e.g. Uzbek).
             let langName = SpeechToTextManager.languageName(for: self.requestedLocaleId)
-            self.onError?("«\(langName)» tili ovozdan-matnga aylantirishni qo'llab-quvvatlamaydi. Sozlamalar → Fenixuz → Ovoz tili dan qo'llab-quvvatlanadigan til (masalan, Ruscha) tanlang.")
+            self.onError?("«\(langName)» tili ovozdan-matnga aylantirishni qo'llab-quvvatlamaydi. Sozlamalar → Novagram → Ovoz tili dan qo'llab-quvvatlanadigan til (masalan, Ruscha) tanlang.")
             self.onStop?()
             return
         }

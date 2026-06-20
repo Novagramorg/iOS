@@ -12,7 +12,6 @@
 
 | # | Feature | Qiymat | Effort | No-Backend yo'l (hook) |
 |:-:|---|:--:|:--:|---|
-| **#41** | Kanal avto-pin (til bo'yicha onboarding) | 🔥 HIGH | M | resolve channel by username → native join → chat-list pin; first-launch flag |
 | **#18** | Folder icon picker (native field bor, UI yo'q) | Med | S-M | `ChatListFilter.emoticon` allaqachon bor+synced — faqat **picker UI** kerak |
 | **#45** | Join-request avto-qabul (per-channel) | Med | M | native `_internal_updateInvitationRequest(approve:)` + per-channel flag + arrival hook |
 | **#19** | Default folders (first-launch) | Med | M | first-launch flag → default folder(lar) auto-create (native ChatListFilter create) |
@@ -28,27 +27,21 @@
 - Yetishmaydi: folder tahrirlash ekranida (`ChatListFilterPresetController.swift`) emoticon tanlash UI qatori.
 - Hook: preset controller'ga emoji-picker row qo'shish → `filter.emoticon` set. Bazel dep o'zgartirish shart emas (native field).
 
-**2. #41 — Kanal avto-pin** *(eng yuqori qiymat)*
-- Til (`uz`/`ru`/`en`) aniqlash → mos Pro Messenger kanal username'ini resolve (`resolvePeerByName`) → native join → chat-list'da pin (`togglePeerChatPinned`/pin API) → obunadan keyin yashirish opsiyasi.
-- First-launch flag (UserDefaults `fenix_channel_autopin_done`).
-- Yangi module: `submodules/Fenixuz/ChannelAutoPin/`. Hook: AppDelegate first-launch yoki ChatListController appear.
-- ⚠️ **Kerak:** har til uchun kanal username'lari (Azimjon beradi). ⚠️ Apple/UX: roziliksiz auto-join — onboarding sifatida ko'rsatish tavsiya.
-
-**3. #45 — Join-request avto-qabul**
+**2. #45 — Join-request avto-qabul**
 - ProMessager Settings'da per-channel toggle (yoki kanal context menyusida).
 - Native `_internal_updateInvitationRequest(approve: true)` (`InvitationLinks.swift:7`) — manual'ni avtomatga aylantirish: join-request kelish path'iga hook, flag bo'lsa auto-approve.
 - UserDefaults: `fenix_autoaccept_<peerId>`.
 
-**4. #19 → #21 → #20 — Folders cluster** *(bog'liq, bitta sprint)*
+**3. #19 → #21 → #20 — Folders cluster** *(bog'liq, bitta sprint)*
 - #19: first-launch flag → default folder(lar) auto-create.
 - #21: #19'dan keyin onboarding modal — Icon/Text stil tanlovi → UserDefaults `fenix_folder_style`.
 - #20: `ChatListFilterTabContainerNode` da icon-only render mode (`shortTitle`/emoji bor) + stil flag'iga bog'lash.
 
-**5. #1 — Bot token login** *(niche, oxirroq)*
+**4. #1 — Bot token login** *(niche, oxirroq)*
 - `importBotAuthorization` (`TelegramApi/.../Api40.swift`) bor, call-site yo'q.
 - AuthorizationUI'ga bot-token input ekrani + `AuthorizationSequenceController` route + xato handling.
 
-**6. #44 — Budilnik** *(eng katta, L)*
+**5. #44 — Budilnik** *(eng katta, L)*
 - Yangi module `submodules/Fenixuz/Alarms/`: unread detect + vaqt+ovoz picker UI + `UNUserNotificationCenter` local notification scheduling (+ background refresh).
 
 ---
@@ -69,6 +62,7 @@
 | #34 | missing | ✅ DONE (2026-06-17) — heart message effect, commit `ea0b5ec` |
 | #36 | missing | NATIVE — `ForwardOptionsMessageAttribute.hideNames` + "Hide Senders Name" UI |
 | #43 | missing | NATIVE — view-once voice/video (`AutoremoveTimeoutMessageAttribute`, `viewOnceTimeout`) |
+| #41 | — | ❌ **RAD ETILDI (2026-06-17)** — roziliksiz auto-join = **Apple xavfi (CRITICAL)** + kanal username hardcode brittle. QURILMAYDI. |
 
 ---
 
@@ -85,10 +79,9 @@
 ## 📌 Tavsiya etilgan tartib
 
 1. **#18** Folder icon picker — arzon, native field tayyor (S-M)
-2. **#41** Kanal avto-pin — eng yuqori qiymat (M, kanal username'lari kerak)
-3. **#45** Join-request avto-qabul (M)
-4. **#19 → #21 → #20** Folders cluster (M, bitta sprint)
-5. **#1** Bot token login (M, niche)
-6. **#44** Budilnik (L, oxirgi)
+2. **#45** Join-request avto-qabul (M)
+3. **#19 → #21 → #20** Folders cluster (M, bitta sprint)
+4. **#1** Bot token login (M, niche)
+5. **#44** Budilnik (L, oxirgi)
 
 > Har feature: implement → `./run.sh -r` (real iPhone) → test → bu faylda ✅ → `git commit`. Upstream fayl tegilsa → `HOOKS.md` (Python).

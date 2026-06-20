@@ -1543,3 +1543,18 @@ No-Backend: heart effekt reaction-asosli (`isPremium == false`) — barcha userl
 Logika: `heart_effect_enabled` true + foydalanuvchi effekt tanlamagan (`messageEffect == nil`) + `messages[0]` `.message` case + **private chat** (`chatLocation.peerId.namespace == CloudUser` — guruh/kanal/secret chatga BIRIKTIRMAYDI, native effekt private-only) + `fenix_heart_effect_id != 0` → `messages[0]` ga `EffectMessageAttribute(id:)` qo'shiladi (faqat allaqachon effekt yo'q bo'lsa). Foydalanuvchi qo'lda tanlagan effektni bekor qilmaydi, forward-only sendga tegmaydi.
 
 Anchor (noyob Python): `attributes.append(EffectMessageAttribute(id: messageEffect.id))`.
+
+
+## 📌 2026-06-17 — Feature #18: Folder Icon Picker
+
+Native `ChatListFilter.emoticon: String?` allaqachon bor + serverga sync bo'ladi, lekin iOS folder-editorida uni tanlash UI yo'q edi. Qo'shildi.
+
+### `submodules/ChatListUI/Sources/ChatListFilterPresetController.swift` — Python bilan qo'llandi, 2026-06-17
+
+- State: `ChatListFilterPresetControllerState` ga `var emoticon: String?` qo'shildi; init `emoticon: initialPreset?.emoticon`.
+- Arguments: `openIconPicker: () -> Void` qo'shildi.
+- Yangi entry `.icon(emoticon:)` — Name seksiyasida, `ItemListDisclosureItem` ("Folder Icon" / "Papka ikonkasi", label = joriy emoji), tap → `arguments.openIconPicker()`.
+- `openIconPicker`: `ActionSheetController` — 18 ta preset emoji (emoji-only buttonlar, til-neytral) + "Remove icon" (destructive) + Cancel; tanlash → `updateState { $0.emoticon = emoji }`.
+- Save-sitelar (5): `.filter(... emoticon: currentPreset?.emoticon/initialPreset?.emoticon ...)` → `emoticon: state.emoticon` (foydalanuvchi tanlovi saqlanadi). Lines 879–1002 (kategoriya update'da emoticon-ni saqlovchi `emoticon: emoticon`) TEGILMADI.
+
+Anchor (noyob Python): `var color: PeerNameColor?\n    var colorUpdated: Bool = false`.

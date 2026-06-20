@@ -54,7 +54,7 @@ public func dateFillNeedsBlur(theme: PresentationTheme, wallpaper: TelegramWallp
 
 public let defaultServiceBackgroundColor = UIColor(rgb: 0x000000, alpha: 0.2)
 public let defaultPresentationTheme = makeDefaultDayPresentationTheme(serviceBackgroundColor: defaultServiceBackgroundColor, day: false, preview: false)
-public let defaultDayAccentColor = UIColor(rgb: 0x10b981)
+public let defaultDayAccentColor = UIColor(rgb: 0x0a9bf5)
 
 public func customizeDefaultDayTheme(theme: PresentationTheme, editing: Bool, title: String?, accentColor: UIColor?, outgoingAccentColor: UIColor?, backgroundColors: [UInt32], bubbleColors: [UInt32], animateBubbleColors: Bool?, wallpaper forcedWallpaper: TelegramWallpaper? = nil, serviceBackgroundColor: UIColor?) -> PresentationTheme {
     if (theme.referenceTheme != .day && theme.referenceTheme != .dayClassic) {
@@ -570,10 +570,10 @@ public func makeDefaultDayPresentationTheme(extendingThemeReference: Presentatio
         verifiedIconFillColor: defaultDayAccentColor,
         verifiedIconForegroundColor: UIColor(rgb: 0xffffff),
         secretIconColor: UIColor(rgb: 0x00b12c),
-        pinnedArchiveAvatarColor: PresentationThemeArchiveAvatarColors(backgroundColors: PresentationThemeGradientColors(topColor: UIColor(rgb: 0x6ee7b7), bottomColor: UIColor(rgb: 0x10b981)), foregroundColor: UIColor(rgb: 0xffffff)),
+        pinnedArchiveAvatarColor: PresentationThemeArchiveAvatarColors(backgroundColors: PresentationThemeGradientColors(topColor: UIColor(rgb: 0x7cc3fd), bottomColor: UIColor(rgb: 0x0a9bf5)), foregroundColor: UIColor(rgb: 0xffffff)),
         unpinnedArchiveAvatarColor: PresentationThemeArchiveAvatarColors(backgroundColors: PresentationThemeGradientColors(topColor: UIColor(rgb: 0xdedee5), bottomColor: UIColor(rgb: 0xc5c6cc)), foregroundColor: UIColor(rgb: 0xffffff)),
         onlineDotColor: UIColor(rgb: 0x4cc91f),
-        storyUnseenColors: PresentationThemeGradientColors(topColor: UIColor(rgb: 0x6ee7b7), bottomColor: UIColor(rgb: 0x059669)),
+        storyUnseenColors: PresentationThemeGradientColors(topColor: UIColor(rgb: 0x7cc3fd), bottomColor: UIColor(rgb: 0x0a85e8)),
         storyUnseenPrivateColors: PresentationThemeGradientColors(topColor: UIColor(rgb: 0x7CD636), bottomColor: UIColor(rgb: 0x26B470)),
         storySeenColors: PresentationThemeGradientColors(topColor: UIColor(rgb: 0xD8D8E1), bottomColor: UIColor(rgb: 0xD8D8E1))
     )
@@ -811,8 +811,8 @@ public func makeDefaultDayPresentationTheme(extendingThemeReference: Presentatio
         outgoing: PresentationThemePartedColors(
             bubble: PresentationThemeBubbleColor(
                 withWallpaper: PresentationThemeBubbleColorComponents(
-                    fill: [UIColor(rgb: 0x6ee7b7), defaultDayAccentColor],
-                    highlightedFill: UIColor(rgb: 0x6ee7b7).withMultipliedBrightnessBy(0.7),
+                    fill: [UIColor(rgb: 0x7cc3fd), defaultDayAccentColor],
+                    highlightedFill: UIColor(rgb: 0x7cc3fd).withMultipliedBrightnessBy(0.7),
                     stroke: .clear,
                     shadow: nil,
                     reactionInactiveBackground: UIColor(rgb: 0xffffff, alpha: 0.12),
@@ -827,8 +827,8 @@ public func makeDefaultDayPresentationTheme(extendingThemeReference: Presentatio
                     reactionActiveMediaPlaceholder: UIColor(rgb: 0xffffff, alpha: 0.2)
                 ),
                 withoutWallpaper: PresentationThemeBubbleColorComponents(
-                    fill: [UIColor(rgb: 0x6ee7b7), defaultDayAccentColor],
-                    highlightedFill: UIColor(rgb: 0x6ee7b7).withMultipliedBrightnessBy(0.7),
+                    fill: [UIColor(rgb: 0x7cc3fd), defaultDayAccentColor],
+                    highlightedFill: UIColor(rgb: 0x7cc3fd).withMultipliedBrightnessBy(0.7),
                     stroke: .clear,
                     shadow: nil,
                     reactionInactiveBackground: UIColor(rgb: 0xffffff, alpha: 0.12),
