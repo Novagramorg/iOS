@@ -1558,3 +1558,55 @@ Native `ChatListFilter.emoticon: String?` allaqachon bor + serverga sync bo'ladi
 - Save-sitelar (5): `.filter(... emoticon: currentPreset?.emoticon/initialPreset?.emoticon ...)` → `emoticon: state.emoticon` (foydalanuvchi tanlovi saqlanadi). Lines 879–1002 (kategoriya update'da emoticon-ni saqlovchi `emoticon: emoticon`) TEGILMADI.
 
 Anchor (noyob Python): `var color: PeerNameColor?\n    var colorUpdated: Bool = false`.
+
+## 📌 2026-06-20 — 2FA password screen "Back" button (login lockout fix)
+
+Bug: 2-Step Verification "Your Password" ekrani BIRINCHI account login'da (boshqa account yo'q) navigation stack'ning ROOT'i bo'lib qoladi → back button yo'q → user qamalib qoladi, qaytish/dismiss imkonsiz. Tuzatish: root bo'lganda explicit "Back" tugmasi qo'shildi (signUp'dagi `displayCancel` patterniga o'xshash). Tugma `back()` ni chaqiradi (auth state'ni `.phoneEntry` ga qaytaradi).
+
+### `submodules/AuthorizationUI/Sources/AuthorizationSequencePasswordEntryController.swift` — 2026-06-20
+
+- `private let back: () -> Void` property qo'shildi; init `back: @escaping () -> Void` ni `self.back = back` bilan saqlaydi.
+- Init signature: `displayBack: Bool = true` parametri qo'shildi.
+- `navigationBar?.backPressed = { [weak self] in self?.back() }` (oldin to'g'ridan-to'g'ri `back()` edi).
+- `if displayBack { navigationItem.leftBarButtonItem = UIBarButtonItem(title: strings.Common_Back, style: .plain, target: self, action: #selector(self.backPressed)) }`.
+- Yangi `@objc private func backPressed() { self.back() }`.
+
+### `submodules/AuthorizationUI/Sources/AuthorizationSequenceController.swift` — 2026-06-20
+
+- Factory `passwordEntryController(hint:suggestReset:syncContacts:)` → `...syncContacts:displayBack:)`.
+- Init call'ga `}, displayBack: displayBack)` qo'shildi.
+- `.passwordEntry` case (~1326): `displayBack: self.otherAccountPhoneNumbers.1.isEmpty` (splash yo'q = root = tugma ko'rsatiladi; splash bor = auto back chevron ishlaydi, TEGILMADI).
+
+## 📌 2026-06-20 — "Telegram" wordmark → "Novagram" (brand wordmarks only; extensions + targets)
+
+User-visible joylarda app O'ZINI "Telegram" deb ko'rsatayotgan brand wordmark'lar Novagram'ga o'zgartirildi. FAQAT brand wordmark (app o'z nomi) — service/network/feature/URL/legal references TEGILMADI ("Telegram cloud", "Telegram Premium", "The Telegram Team", t.me, telegram.org, Telegram FZ-LLC, "Download Telegram on desktop" — bular Telegram tarmog'iga real ishora, o'zgarmaydi). en.lproj'da 264 ta "Telegram" qiymat bor — ~7 tasi brand wordmark edi (tuzatildi), qolgani service/feature (qoldi). Non-en tillar Telegram serveridan langpack orqali keladi (kodda o'zgartirib bo'lmaydi); barcha hardcoded fix'lar til-neytral.
+
+### `submodules/TelegramCallsUI/Sources/CallKitIntegration.swift:161` — CallKit pill (CIRCLED)
+- `CXProviderConfiguration(localizedName: "Telegram")` → `"Novagram"`. iOS qo'ng'iroq pill/Dynamic Island'da ko'rsatadigan nom. (Icon `Call/CallKitLogo` = monoxrom template glyph, TEGILMADI.)
+
+### `Telegram/Share/en.lproj/Localizable.strings:2-3` — Share extension auth alert
+- `Share.AuthTitle` "Log in to Telegram" → "Log in to Novagram"; `Share.AuthDescription` "Open Telegram and log in to share." → "Open Novagram...". (Main app allaqachon Novagram edi; extension o'z nusxasini saqlaydi — rebrand o'tkazib yuborgan.)
+
+### `Telegram/WidgetKitWidget/en.lproj/Localizable.strings:2` — Widget extension
+- `Widget.AuthRequired` "Open Telegram and log in." → "Open Novagram and log in.".
+
+### `Telegram/SiriIntents/IntentHandler.swift:963` — Siri/Shortcuts widget-edit locked error
+- `NSLocalizedDescriptionKey: "Open Telegram and enter passcode to edit widget."` → "Open Novagram...". (Hardcoded, langpack emas.)
+
+### `submodules/WidgetItems/Sources/WidgetItems.swift:401` — widget locked text (yuqoridagining egizi)
+- `generalLockedText: "Open Telegram and enter passcode to edit widget."` → "Open Novagram...".
+
+### `Telegram/Telegram-iOS/en.lproj/Localizable.strings:7538` — notification sounds header
+- `Notifications.TelegramTones` qiymati "TELEGRAM TONES" → "NOVAGRAM TONES" (app o'z bundled ohanglari; "SYSTEM TONES" ning yonida). KEY o'zgarmadi.
+
+### `submodules/TelegramUI/Sources/StoreDownloadedMedia.swift:12` — Photos albom nomi
+- `let albumName = "Telegram"` → `"Novagram"`. Bitta konstanta lookup (13-qator predicate) + create (25-qator) ni boshqaradi. Eski "Telegram" albom (agar bo'lsa) joyida qoladi — yangi saqlash "Novagram" albomga tushadi (kutilgan rebrand oqibati).
+
+### Contact label (Contacts app'da ko'rinadi; SiriIntents extension o'qiydi)
+- `submodules/AccountContext/Sources/DeviceContactData.swift:211` — WRITE: `label: "Telegram"` → `"Novagram"`.
+- READ sitelar (backward-compat — eski "Telegram" yozuvlar buzilmasligi uchun IKKALASINI ham match qiladi):
+  - `submodules/TelegramUI/Sources/DeviceContactDataManager.swift:148,161,215` (×3) va `Telegram/SiriIntents/IntentContacts.swift:77`: `address.label == "Telegram"` → `(address.label == "Telegram" || address.label == "Novagram")`.
+
+**Barcha edit'lar Python/Bash bilan qilingan (Edit-tool formatter'ni chetlab o'tish uchun) → minimal diff, upstream stil saqlangan.**
+
+Anchor: `case let .passwordEntry(hint, _, _, suggestReset, syncContacts):` va `private func passwordEntryController(hint: String, suggestReset: Bool, syncContacts: Bool`.

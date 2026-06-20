@@ -74,7 +74,7 @@ func matchingDeviceContacts(stableIds: [String]) -> Signal<[MatchingDeviceContac
         
         var contactPeerId: PeerId?
         for address in contact.urlAddresses {
-            if address.label == "Telegram", let peerId = parseAppSpecificContactReference(address.value as String) {
+            if (address.label == "Telegram" || address.label == "Novagram"), let peerId = parseAppSpecificContactReference(address.value as String) {
                 contactPeerId = peerId
             }
         }

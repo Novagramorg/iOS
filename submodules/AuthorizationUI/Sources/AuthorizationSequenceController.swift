@@ -916,7 +916,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
         return self.view.window!
     }
     
-    private func passwordEntryController(hint: String, suggestReset: Bool, syncContacts: Bool) -> AuthorizationSequencePasswordEntryController {
+    private func passwordEntryController(hint: String, suggestReset: Bool, syncContacts: Bool, displayBack: Bool) -> AuthorizationSequencePasswordEntryController {
         var currentController: AuthorizationSequencePasswordEntryController?
         for c in self.viewControllers {
             if let c = c as? AuthorizationSequencePasswordEntryController {
@@ -935,7 +935,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                 let countryCode = AuthorizationSequenceCountrySelectionController.defaultCountryCode()
                 
                 let _ = strongSelf.engine.auth.setState(state: UnauthorizedAccountState(isTestingEnvironment: strongSelf.account.testingEnvironment, masterDatacenterId: strongSelf.account.masterDatacenterId, contents: .phoneEntry(countryCode: countryCode, number: ""))).startStandalone()
-            })
+            }, displayBack: displayBack)
             controller.loginWithPassword = { [weak self, weak controller] password in
                 if let strongSelf = self {
                     controller?.inProgress = true
@@ -1322,7 +1322,7 @@ public final class AuthorizationSequenceController: NavigationController, ASAuth
                     if !self.otherAccountPhoneNumbers.1.isEmpty {
                         controllers.append(self.splashController())
                     }
-                    controllers.append(self.passwordEntryController(hint: hint, suggestReset: suggestReset, syncContacts: syncContacts))
+                    controllers.append(self.passwordEntryController(hint: hint, suggestReset: suggestReset, syncContacts: syncContacts, displayBack: self.otherAccountPhoneNumbers.1.isEmpty))
                     self.setViewControllers(controllers, animated: !self.viewControllers.isEmpty)
                 case let .passwordRecovery(_, _, _, emailPattern, syncContacts):
                     var controllers: [ViewController] = []
