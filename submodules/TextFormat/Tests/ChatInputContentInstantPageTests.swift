@@ -1,4 +1,5 @@
 import XCTest
+import Postbox
 import TelegramCore
 
 final class ChatInputContentInstantPageTests: XCTestCase {
@@ -193,6 +194,116 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         ]), "empty body paragraph")
     }
 
+    // 11. Heading paragraphs at each level (1/2/3) round-trip identically.
+    func test_headings() {
+        func heading(_ style: ChatInputParagraphStyle, _ text: String) -> ChatInputBlock {
+            return .paragraph(ChatInputParagraph(style: style, runs: [ChatInputRun(text: text)]))
+        }
+        assertRoundTrips(ChatInputContent(blocks: [heading(.heading1, "Title")]), "heading1")
+        assertRoundTrips(ChatInputContent(blocks: [heading(.heading2, "Section")]), "heading2")
+        assertRoundTrips(ChatInputContent(blocks: [heading(.heading3, "Subsection")]), "heading3")
+        // All three levels in one document, plus a body paragraph (must not coalesce with headings).
+        assertRoundTrips(ChatInputContent(blocks: [
+            heading(.heading1, "H1"),
+            heading(.heading2, "H2"),
+            heading(.heading3, "H3"),
+            body([ChatInputRun(text: "body")])
+        ]), "all heading levels + body")
+    }
+
+    // 12. A bullet list and an ordered list (each 2 items, level 0) round-trip identically.
+    func test_lists() {
+        func listItem(_ marker: ChatInputListMarker, _ text: String) -> ChatInputBlock {
+            return .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker, level: 0), runs: [ChatInputRun(text: text)]))
+        }
+        assertRoundTrips(ChatInputContent(blocks: [
+            listItem(.bullet, "first"),
+            listItem(.bullet, "second")
+        ]), "two-item bullet list")
+        assertRoundTrips(ChatInputContent(blocks: [
+            listItem(.ordered, "one"),
+            listItem(.ordered, "two")
+        ]), "two-item ordered list")
+        // A bullet list directly followed by an ordered list — they must stay two distinct `.list` blocks and
+        // each item must round-trip back to its own marker.
+        assertRoundTrips(ChatInputContent(blocks: [
+            listItem(.bullet, "b1"),
+            listItem(.bullet, "b2"),
+            listItem(.ordered, "o1"),
+            listItem(.ordered, "o2")
+        ]), "adjacent bullet then ordered list")
+        // A list item carrying an inline attribute on its run still round-trips.
+        var bold = ChatInputInlineAttributes(); bold.bold = true
+        assertRoundTrips(ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .bullet, level: 0), runs: [ChatInputRun(text: "bold", attributes: bold)]))
+        ]), "bullet list item with a bold run")
+    }
+
+    // 13. A 2x2 table (header row, per-column alignment, default width, nil-background cells) round-trips
+    //     identically — built to match exactly what the reverse produces for the non-representable fields
+    //     (column width = 0.0, cell background = nil; table title / vertical-alignment / colspan / rowspan dropped).
+    func test_table() {
+        var bold = ChatInputInlineAttributes(); bold.bold = true
+        let table = ChatInputTable(
+            columns: [
+                ChatInputColumnSpec(width: 0.0, alignment: .left),
+                ChatInputColumnSpec(width: 0.0, alignment: .center)
+            ],
+            rows: [
+                ChatInputTableRow(height: nil, isHeader: true, cells: [
+                    ChatInputTableCell(runs: [ChatInputRun(text: "H1")], background: nil),
+                    ChatInputTableCell(runs: [ChatInputRun(text: "H2")], background: nil)
+                ]),
+                ChatInputTableRow(height: nil, isHeader: false, cells: [
+                    ChatInputTableCell(runs: [ChatInputRun(text: "a", attributes: bold)], background: nil),
+                    ChatInputTableCell(runs: [ChatInputRun(text: "b")], background: nil)
+                ])
+            ]
+        )
+        assertRoundTrips(ChatInputContent(blocks: [.table(table)]), "2x2 table with header row + per-column alignment")
+    }
+
+    // 14. An image medium and a video medium round-trip identically — built with the default
+    //     naturalSize/displayWidth/alignment the reverse restores (the InstantPage image/video block carries
+    //     none of those, so they canonicalize to natural size .zero, nil display width, .center alignment).
+    func test_media() {
+        let imageId = MediaId(namespace: 1, id: 1001)
+        let image = TelegramMediaImage(imageId: imageId, representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        var caption = ChatInputInlineAttributes(); caption.italic = true
+        let imageMedia = ChatInputMedia(
+            media: image,
+            kind: .image,
+            naturalSize: ChatInputSize(width: 0.0, height: 0.0),
+            displayWidth: nil,
+            alignment: .center,
+            caption: [ChatInputRun(text: "a photo", attributes: caption)]
+        )
+        assertRoundTrips(ChatInputContent(blocks: [.media(imageMedia)]), "image medium with a caption")
+
+        let fileId = MediaId(namespace: 1, id: 2002)
+        let file = TelegramMediaFile(
+            fileId: fileId,
+            partialReference: nil,
+            resource: EmptyMediaResource(),
+            previewRepresentations: [],
+            videoThumbnails: [],
+            immediateThumbnailData: nil,
+            mimeType: "video/mp4",
+            size: nil,
+            attributes: [],
+            alternativeRepresentations: []
+        )
+        let videoMedia = ChatInputMedia(
+            media: file,
+            kind: .video,
+            naturalSize: ChatInputSize(width: 0.0, height: 0.0),
+            displayWidth: nil,
+            alignment: .center,
+            caption: []
+        )
+        assertRoundTrips(ChatInputContent(blocks: [.media(videoMedia)]), "video medium with no caption")
+    }
+
     // Bonus: a mixed document combining several block kinds.
     func test_mixedDocument() {
         var bold = ChatInputInlineAttributes(); bold.bold = true
@@ -205,5 +316,20 @@ final class ChatInputContentInstantPageTests: XCTestCase {
             body([ChatInputRun(text: "by ", attributes: ChatInputInlineAttributes()), ChatInputRun(text: "@user", attributes: mention)]),
             .collapsedQuote(ChatInputContent(blocks: [body([ChatInputRun(text: "hidden")])]))
         ]), "mixed multi-block document")
+    }
+
+    // Regression: a non-body paragraph that ALSO carries a list (a degenerate heading+list — the editor's heading/
+    // quote styles and list membership are mutually exclusive in practice) previously infinite-looped the forward
+    // because the list branch didn't guard on `.body`. It must return promptly and canonicalize to its style (the
+    // list is dropped). If the guard regressed, this test would HANG (timeout), not just fail.
+    func test_headingWithList_doesNotHang_canonicalizesToHeading() {
+        let input = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .heading1, list: ChatInputListMembership(marker: .bullet, level: 0), runs: [ChatInputRun(text: "x")]))
+        ])
+        let expected = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .heading1, list: nil, runs: [ChatInputRun(text: "x")]))
+        ])
+        XCTAssertEqual(chatInputContent(fromInstantPage: instantPage(from: input)), expected,
+                       "heading+list canonicalizes to a plain heading (list dropped), no hang")
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Postbox
 
 // A lossless, bidirectional converter between the `ChatInputContent` value model and `InstantPage`.
 //
@@ -15,10 +16,15 @@ import Foundation
 // MARK: - Forward: ChatInputContent -> InstantPage
 
 public func instantPage(from content: ChatInputContent) -> InstantPage {
-    return InstantPage(blocks: instantPageBlocks(from: content), media: [:], isComplete: true, rtl: false, url: "", views: nil)
+    // Collect the concrete media referenced by `.media` blocks: the InstantPage carries `Media` out-of-band in its
+    // `media: [MediaId: Media]` dict and the image/video block holds only the `MediaId`. The reverse re-resolves the
+    // `Media` from this dict, so the round-trip preserves the exact `Media` instance (identity), not a copy.
+    var media: [MediaId: Media] = [:]
+    let blocks = instantPageBlocks(from: content, collectingMediaInto: &media)
+    return InstantPage(blocks: blocks, media: media, isComplete: true, rtl: false, url: "", views: nil)
 }
 
-func instantPageBlocks(from content: ChatInputContent) -> [InstantPageBlock] {
+func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media: inout [MediaId: Media]) -> [InstantPageBlock] {
     var result: [InstantPageBlock] = []
     var i = 0
     while i < content.blocks.count {
@@ -33,8 +39,39 @@ func instantPageBlocks(from content: ChatInputContent) -> [InstantPageBlock] {
                 }
                 result.append(.blockQuote(blocks: quoteParagraphs, caption: .empty, collapsed: isCollapsed))
                 continue
+            } else if let list = p.list, case .body = p.style {
+                // Coalesce a maximal run of consecutive BODY-styled list paragraphs with the SAME marker into one
+                // `.list`. (Adjacent paragraphs with different markers — a bullet list followed by an ordered list —
+                // stay separate `.list` blocks.) `InstantPageListItem` has no indent-level field, so the per-paragraph
+                // `level` is NOT representable: level 0 round-trips exactly, and level > 0 is CANONICALIZED to 0 (the
+                // InstantPage list projection is flat). This mirrors the collapsed-quote/customEmoji canonicalizations.
+                //
+                // The `case .body = p.style` guard is LOAD-BEARING: it must match the inner `while`'s `.body` check. A
+                // non-body paragraph that also carries a list (e.g. a degenerate heading+list — the editor's heading /
+                // quote styles and list membership are mutually exclusive in practice) would otherwise enter this
+                // branch, fail the inner `while` on its first iteration, never advance `i`, and `continue` past the
+                // `i += 1` → an infinite loop / main-thread hang on the draft-save path. With the guard it falls
+                // through to the style switch and canonicalizes to its style (the list is dropped) — consistent with
+                // quote-before-list precedence above.
+                let marker = list.marker
+                var items: [InstantPageListItem] = []
+                while i < content.blocks.count, case let .paragraph(q) = content.blocks[i], let qList = q.list, qList.marker == marker, case .body = q.style {
+                    items.append(.text(richText(from: q.runs), nil, nil))
+                    i += 1
+                }
+                result.append(.list(items: items, ordered: marker == .ordered))
+                continue
             } else {
-                result.append(.paragraph(richText(from: p.runs)))
+                switch p.style {
+                case .heading1:
+                    result.append(.heading(text: richText(from: p.runs), level: 1))
+                case .heading2:
+                    result.append(.heading(text: richText(from: p.runs), level: 2))
+                case .heading3:
+                    result.append(.heading(text: richText(from: p.runs), level: 3))
+                case .body, .quote:
+                    result.append(.paragraph(richText(from: p.runs)))
+                }
             }
         case let .code(c):
             result.append(.preformatted(text: richText(from: c.runs), language: c.language))
@@ -44,7 +81,48 @@ func instantPageBlocks(from content: ChatInputContent) -> [InstantPageBlock] {
             // only in composer display. The reverse canonicalizes `collapsed == true` to `.collapsedQuote` (the more
             // general container — it holds arbitrary nested content, so the normalization is lossless), folding the
             // rare visible-collapse-flagged paragraph. See the reverse for the `collapsed == nil/false` rationale.
-            result.append(.blockQuote(blocks: instantPageBlocks(from: inner), caption: .empty, collapsed: true))
+            result.append(.blockQuote(blocks: instantPageBlocks(from: inner, collectingMediaInto: &media), caption: .empty, collapsed: true))
+        case let .media(m):
+            // Stash the `Media` in the page's `media` dict, keyed by its own `MediaId`; the block carries only the id.
+            // `Media.id` is optional (Postbox protocol), but the composer's inline media is always a concrete
+            // `TelegramMediaImage`/`TelegramMediaFile` which always carries an id — so a nil id never occurs in
+            // practice. Defensively, a nil-id medium is dropped (it could not be resolved back from the dict anyway).
+            guard let mediaId = m.media.id else {
+                break
+            }
+            media[mediaId] = m.media
+            let caption = InstantPageCaption(text: richText(from: m.caption), credit: .empty)
+            switch m.kind {
+            case .image:
+                result.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
+            case .video:
+                result.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
+            }
+        case let .table(t):
+            // `naturalSize`/`displayWidth`/`alignment` of media and `width`/`vertical-alignment`/`colspan`/`rowspan`/
+            // cell-background of a table are NOT representable in the InstantPage projection (see the reverse for the
+            // documented defaults the round-trip restores). Forward each cell's per-column alignment (the editor's
+            // `justified` has no InstantPage equivalent → CANONICALIZED to `.left`), header flag, and runs.
+            let rows = t.rows.map { row -> InstantPageTableRow in
+                let cells = row.cells.enumerated().map { (columnIndex, cell) -> InstantPageTableCell in
+                    let alignment: TableHorizontalAlignment
+                    if columnIndex < t.columns.count {
+                        switch t.columns[columnIndex].alignment {
+                        case .left, .justified:
+                            alignment = .left
+                        case .center:
+                            alignment = .center
+                        case .right:
+                            alignment = .right
+                        }
+                    } else {
+                        alignment = .left
+                    }
+                    return InstantPageTableCell(text: richText(from: cell.runs), header: row.isHeader, alignment: alignment, verticalAlignment: .top, colspan: 1, rowspan: 1)
+                }
+                return InstantPageTableRow(cells: cells)
+            }
+            result.append(.table(title: .empty, rows: rows, bordered: true, striped: false))
         }
         i += 1
     }
@@ -84,15 +162,35 @@ func richText(from runs: [ChatInputRun]) -> RichText {
 // MARK: - Reverse: InstantPage -> ChatInputContent
 
 public func chatInputContent(fromInstantPage page: InstantPage) -> ChatInputContent {
-    return ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: page.blocks))
+    return ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: page.blocks, media: page.media))
 }
 
-func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock]) -> [ChatInputBlock] {
+func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [MediaId: Media] = [:]) -> [ChatInputBlock] {
     var result: [ChatInputBlock] = []
     for block in blocks {
         switch block {
         case let .paragraph(rt):
             result.append(.paragraph(ChatInputParagraph(style: .body, runs: chatInputRuns(fromRichText: rt))))
+        case let .heading(rt, level):
+            // Clamp an out-of-range heading level into the editor's 1...3 band; the forward only emits 1/2/3, but a
+            // cloud-received heading may carry any level (InstantPage's default is 3 — see the decoder's `orElse: 3`).
+            let style: ChatInputParagraphStyle
+            switch max(1, min(3, level)) {
+            case 1: style = .heading1
+            case 2: style = .heading2
+            default: style = .heading3
+            }
+            result.append(.paragraph(ChatInputParagraph(style: style, runs: chatInputRuns(fromRichText: rt))))
+        case let .list(items, ordered):
+            // One body paragraph per `.text` item, all sharing the list marker at level 0 (the forward only emits
+            // `.text` items and only ever produced level 0 — see the forward's level canonicalization note). A
+            // `.blocks`/`.unknown` item (never produced by the forward; only from cloud) is skipped defensively.
+            let marker: ChatInputListMarker = ordered ? .ordered : .bullet
+            for item in items {
+                if case let .text(rt, _, _) = item {
+                    result.append(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker, level: 0), runs: chatInputRuns(fromRichText: rt))))
+                }
+            }
         case let .preformatted(rt, language):
             result.append(.code(ChatInputCode(language: language, runs: chatInputRuns(fromRichText: rt))))
         case let .blockQuote(innerBlocks, _, collapsed):
@@ -104,7 +202,7 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock]) -> [ChatI
             // `.collapsedQuote` (semantically identical — same sent message). Local Postbox coding preserves the flag
             // ("qcol"); only the cloud wire degrades it (documented spec limitation).
             if collapsed == true {
-                result.append(.collapsedQuote(ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: innerBlocks))))
+                result.append(.collapsedQuote(ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: innerBlocks, media: media))))
             } else {
                 // The forward emitted one `.paragraph(rt)` per quote line; map each back to a quote-style paragraph.
                 for inner in innerBlocks {
@@ -112,10 +210,52 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock]) -> [ChatI
                         result.append(.paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: chatInputRuns(fromRichText: rt))))
                     } else {
                         // Defensive: a non-paragraph inside a non-collapsed quote (won't happen from forward) — recurse.
-                        result.append(contentsOf: chatInputBlocks(fromInstantPageBlocks: [inner]))
+                        result.append(contentsOf: chatInputBlocks(fromInstantPageBlocks: [inner], media: media))
                     }
                 }
             }
+        case let .image(id, caption, _, _):
+            // Resolve the concrete `Media` from the page's `media` dict; a missing entry (the forward always stores it,
+            // so this is defensive against a malformed page) drops the block. `naturalSize`/`displayWidth`/`alignment`
+            // are NOT representable in the InstantPage image block, so the reverse restores fixed DEFAULTS — natural
+            // size `.zero`, `displayWidth: nil`, `alignment: .center` (the editor's `ChatInputMedia` default). The
+            // round-trip is therefore identity only for media built with those defaults (a documented canonicalization,
+            // matching the customEmoji/collapsed-quote/list-level pattern; pinned by the media tests).
+            if let media = media[id] {
+                result.append(.media(ChatInputMedia(media: media, kind: .image, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+            }
+        case let .video(id, caption, _, _):
+            // Same default restoration as `.image` (see above) for the non-representable size/width/alignment fields.
+            if let media = media[id] {
+                result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+            }
+        case let .table(_, rows, _, _):
+            // Rebuild the `ChatInputTable`. Columns are inferred from the first row's cell count, each column's
+            // alignment taken from that cell's alignment (the forward stamps every cell in a column with the column's
+            // alignment); column `width` is NOT representable in InstantPage cells → restored as the DEFAULT `0.0`. The
+            // table `title`, per-cell `verticalAlignment`/`colspan`/`rowspan`, and cell `background` are likewise not in
+            // the editor model → dropped/fixed (title unused; background `nil`). Identity therefore holds for a table
+            // whose columns use width `0.0` and whose cells use `background: nil` (the values the reverse yields).
+            var columns: [ChatInputColumnSpec] = []
+            if let firstRow = rows.first {
+                columns = firstRow.cells.map { cell in
+                    let alignment: ChatInputTextAlignment
+                    switch cell.alignment {
+                    case .left: alignment = .left
+                    case .center: alignment = .center
+                    case .right: alignment = .right
+                    }
+                    return ChatInputColumnSpec(width: 0.0, alignment: alignment)
+                }
+            }
+            let outRows = rows.map { row -> ChatInputTableRow in
+                let isHeader = row.cells.first?.header ?? false
+                let cells = row.cells.map { cell in
+                    ChatInputTableCell(runs: chatInputRuns(fromRichText: cell.text ?? .empty), background: nil)
+                }
+                return ChatInputTableRow(height: nil, isHeader: isHeader, cells: cells)
+            }
+            result.append(.table(ChatInputTable(columns: columns, rows: outRows)))
         default:
             break // Non-text InstantPage blocks have no ChatInputContent representation (drafts never carry them).
         }

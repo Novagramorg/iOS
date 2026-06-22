@@ -140,6 +140,96 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertEqual(decoded, content)
     }
 
+    // MARK: - Structural (Document-parity) Codable round-trip
+
+    /// The full Document-parity block set — a heading, two list paragraphs (bullet then ordered), a table (2
+    /// columns with alignments, a header row + a body row, inline-text cells, one cell with a background), and a
+    /// media block (a real `TelegramMediaImage` carried as a Postbox object blob) — round-trips losslessly through
+    /// the REAL persistence path (`AdaptedPostbox*coder`), NOT JSON. This guards the new raw enums' keyed-rawValue
+    /// Codable (no `singleValueContainer`) and the `Media`-blob encode/decode.
+    func test_codable_structuralBlocks_roundTripsViaAdaptedPostbox() throws {
+        let heading = ChatInputParagraph(style: .heading1, runs: [ChatInputRun(text: "Title")])
+        let bullet = ChatInputParagraph(
+            style: .body,
+            list: ChatInputListMembership(marker: .bullet, level: 0),
+            runs: [ChatInputRun(text: "first item")]
+        )
+        let ordered = ChatInputParagraph(
+            style: .body,
+            list: ChatInputListMembership(marker: .ordered, level: 1),
+            runs: [ChatInputRun(text: "second item")]
+        )
+
+        let table = ChatInputTable(
+            columns: [
+                ChatInputColumnSpec(width: 100.0, alignment: .left),
+                ChatInputColumnSpec(width: 200.0, alignment: .right),
+            ],
+            rows: [
+                ChatInputTableRow(height: 30.0, isHeader: true, cells: [
+                    ChatInputTableCell(runs: [ChatInputRun(text: "H1")]),
+                    ChatInputTableCell(runs: [ChatInputRun(text: "H2")], background: ChatInputColor(red: 0.1, green: 0.2, blue: 0.3, alpha: 1.0)),
+                ]),
+                ChatInputTableRow(height: nil, isHeader: false, cells: [
+                    ChatInputTableCell(runs: [ChatInputRun(text: "a")]),
+                    ChatInputTableCell(runs: [ChatInputRun(text: "b")]),
+                ]),
+            ]
+        )
+
+        let image = TelegramMediaImage(
+            imageId: MediaId(namespace: 0, id: 42),
+            representations: [],
+            immediateThumbnailData: nil,
+            reference: nil,
+            partialReference: nil,
+            flags: []
+        )
+        let media = ChatInputMedia(
+            media: image,
+            kind: .image,
+            naturalSize: ChatInputSize(width: 640.0, height: 480.0),
+            displayWidth: 320.0,
+            alignment: .center,
+            caption: [ChatInputRun(text: "caption")]
+        )
+
+        let content = ChatInputContent(schemaVersion: 3, blocks: [
+            .paragraph(heading),
+            .paragraph(bullet),
+            .paragraph(ordered),
+            .table(table),
+            .media(media),
+        ])
+
+        let data = try AdaptedPostboxEncoder().encode(content)
+        let decoded = try AdaptedPostboxDecoder().decode(ChatInputContent.self, from: data)
+        XCTAssertEqual(decoded, content)
+    }
+
+    /// Heading / list-paragraph / table / media blocks are NOT entity-expressible (they require the structured
+    /// `InstantPage` branch); a plain/quote paragraph and a code block ARE.
+    func test_isEntityExpressible_structural_false() {
+        func single(_ block: ChatInputBlock) -> ChatInputContent { ChatInputContent(blocks: [block]) }
+
+        let heading = single(.paragraph(ChatInputParagraph(style: .heading2, runs: [ChatInputRun(text: "h")])))
+        let list = single(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .bullet, level: 0), runs: [ChatInputRun(text: "x")])))
+        let table = single(.table(ChatInputTable(columns: [ChatInputColumnSpec(width: 10.0)], rows: [])))
+        let image = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let media = single(.media(ChatInputMedia(media: image, kind: .image, naturalSize: ChatInputSize(width: 1.0, height: 1.0))))
+        XCTAssertFalse(heading.isEntityExpressible)
+        XCTAssertFalse(list.isEntityExpressible)
+        XCTAssertFalse(table.isEntityExpressible)
+        XCTAssertFalse(media.isEntityExpressible)
+
+        let plain = single(.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "p")])))
+        let quote = single(.paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "q")])))
+        let code = single(.code(ChatInputCode(language: "swift", runs: [ChatInputRun(text: "c")])))
+        XCTAssertTrue(plain.isEntityExpressible)
+        XCTAssertTrue(quote.isEntityExpressible)
+        XCTAssertTrue(code.isEntityExpressible)
+    }
+
     // MARK: - Entity-expressibility + InstantPage plainText fallback
 
     /// Every block type that exists today (paragraph, code, and a nested collapsedQuote) is entity-expressible,

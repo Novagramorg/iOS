@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import AsyncDisplayKit
 import Display
+import Postbox
 import TextFormat
 import TelegramCore
 import RichTextEditorCore
@@ -24,12 +25,21 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)?
 
-    /// fileId → the file-bearing custom-emoji attribute, harvested from each `attributedText` push. The
-    /// editor hosts inline emoji by their `EmojiRef` fileId STRING only (`document(from:)` drops the
-    /// `TelegramMediaFile`), but the host renderer (`EmojiTextAttachmentView`) needs the file — so we cache
-    /// the full attribute here and rebuild it for the editor's view provider. Mirrors
-    /// `RichTextEmojiKeyboardController.emojiFiles`.
+    /// fileId → the file-bearing custom-emoji attribute, harvested from each `attributedText` /
+    /// `setInputContent` push. The editor hosts inline emoji by their `EmojiRef` fileId STRING only
+    /// (`document(from:)` / `document(fromChatInputContent:)` drop the `TelegramMediaFile`), but the host
+    /// renderer (`EmojiTextAttachmentView`) needs the file — so we cache the full attribute here and rebuild it
+    /// for the editor's view provider. Mirrors `RichTextEmojiKeyboardController.emojiFiles`. Also the source the
+    /// direct-bridge `resolveEmoji`/`registerEmoji` closures read/write (see `currentInputContent`/`setInputContent`).
     private var customEmojiAttributes: [Int64: ChatTextInputTextCustomEmojiAttribute] = [:]
+
+    /// `MediaBlock.mediaID` → the concrete `Media` it stands for. The editor stores only the opaque host
+    /// `mediaID` string (it never holds a `Media`), so the node owns the mapping — exactly as
+    /// `RichTextAttachmentScreen.attachedMedia` does. Populated by the direct-bridge `registerMedia` closure
+    /// from each `setInputContent` push and read back by `resolveMedia` in `currentInputContent`, so a medium
+    /// the chat layer sets round-trips through the structural model. A medium the editor never received via this
+    /// path (no entry) resolves to nil and its block is dropped — see `resolveMedia` below.
+    private var mediaByID: [String: Media] = [:]
 
     public var asNode: ASDisplayNode { self }
 
@@ -163,6 +173,99 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
         }
         self.storedDelegate?.chatInputTextNodeDidUpdateText()
+    }
+
+    // MARK: ChatInputContent model — the STRUCTURAL draft currency (direct bridge)
+
+    /// The node's content as the canonical `ChatInputContent` value model. This is the chat layer's draft/state
+    /// read-back (the panel's `inputTextState` reads it, NOT `attributedText`), so it MUST carry the structural
+    /// blocks the `NSAttributedString` vocabulary can't express — media / tables / heading & list information.
+    /// We convert the editor's live `Document` STRAIGHT to `ChatInputContent` via the direct bridge
+    /// (`chatInputContent(fromDocument:)`), bypassing the lossy `Document → NSAttributedString` hop the default
+    /// protocol implementation (and the legacy `attributedText` getter) take. The resolvers map the editor's
+    /// opaque host keys to concrete chat-layer values: an unresolvable emoji degrades to plain text and an
+    /// unresolvable medium is dropped (see `resolveEmojiRef`/`resolveMediaID`). The selection rides the editor's
+    /// flat composer coordinate space (`selectedRange`), mapped into the content's structural selection — the
+    /// same mapping the default implementation uses.
+    public func currentInputContent() -> (content: ChatInputContent, selection: ChatInputSelection) {
+        let content = chatInputContent(
+            fromDocument: self.editorView.document,
+            resolveEmoji: { [weak self] emojiRef in self?.resolveEmojiRef(emojiRef) ?? nil },
+            resolveMedia: { [weak self] mediaID in self?.resolveMediaID(mediaID) ?? nil }
+        )
+        return (content, ChatInputSelection(nsRange: self.selectedRange, in: content))
+    }
+
+    /// Replace the editor's content from a `ChatInputContent`. This is the chat layer's structural SET path
+    /// (draft restore, send-clear, spoiler re-decorate): it MUST land the structural blocks back into the editor
+    /// `Document`, so we convert STRAIGHT via the direct bridge (`document(fromChatInputContent:)`) rather than
+    /// through the flattening `attributedText` setter. The registrars hand the chat-layer identity to the node's
+    /// caches and return the editor-side ref/key: `registerEmoji` records the `TelegramMediaFile` so the editor's
+    /// emoji-view provider can render it, and `registerMedia` records the `Media` so a later `currentInputContent`
+    /// can resolve it back. Pushes through the existing `setRichTextDocument` path (document set + layout refresh)
+    /// to preserve the refresh/`didUpdateText` ordering, then restores the flat composer selection.
+    public func setInputContent(_ content: ChatInputContent, selection: ChatInputSelection) {
+        let newDocument = document(
+            fromChatInputContent: content,
+            registerEmoji: { [weak self] fileId, file in self?.registerEmojiRef(fileId: fileId, file: file) ?? EmojiRef(id: String(fileId), instanceID: BlockID.generate().rawValue, altText: nil) },
+            registerMedia: { [weak self] media in self?.registerMediaValue(media) ?? "" }
+        )
+        self.setRichTextDocument(newDocument)
+        self.selectedRange = selection.nsRange(in: content)
+    }
+
+    /// Direct-bridge `resolveEmoji`: map an editor `EmojiRef` (whose `id` is the fileId STRING, by the node's
+    /// convention) to the chat layer's `(fileId, file)`. The `file` comes from the node's `customEmojiAttributes`
+    /// cache (the editor drops the `TelegramMediaFile`), or nil if this emoji wasn't seen via a file-bearing push.
+    /// A non-numeric `id` (should not occur from this path) returns nil ⇒ the run degrades to plain text, matching
+    /// `ComposerDocumentBridge`'s fallback.
+    private func resolveEmojiRef(_ emojiRef: EmojiRef) -> (fileId: Int64, file: TelegramMediaFile?)? {
+        guard let fileId = Int64(emojiRef.id) else {
+            return nil
+        }
+        return (fileId, self.customEmojiAttributes[fileId]?.file)
+    }
+
+    /// Direct-bridge `registerEmoji`: cache the `TelegramMediaFile` (mirroring the `attributedText`-setter
+    /// harvest — only a file-BEARING attribute is recorded, so a file-less round-trip never clobbers a resolved
+    /// one) and mint the editor `EmojiRef` keyed by the fileId string (the node's convention; `instanceID` via the
+    /// editor's `BlockID.generate()`, as `ComposerDocumentBridge` does).
+    private func registerEmojiRef(fileId: Int64, file: TelegramMediaFile?) -> EmojiRef {
+        if let file {
+            self.customEmojiAttributes[fileId] = ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: file)
+        }
+        return EmojiRef(id: String(fileId), instanceID: BlockID.generate().rawValue, altText: nil)
+    }
+
+    /// Direct-bridge `resolveMedia`: map the editor's opaque `mediaID` back to the concrete `Media` the node
+    /// cached when it last received it (`registerMediaValue`). Nil ⇒ the media block is dropped on read-back
+    /// (an unresolved medium has no `ChatInputMedia` representation).
+    private func resolveMediaID(_ mediaID: String) -> Media? {
+        return self.mediaByID[mediaID]
+    }
+
+    /// Direct-bridge `registerMedia`: cache the `Media` under a stable opaque key derived from its id (matching
+    /// `RichTextAttachmentScreen.attachedMedia`'s `"namespace:id"` convention) and hand that key to the editor.
+    /// The node does NOT itself insert the block into the editor or render it — that is the structural-set path's
+    /// document push plus a media-view provider, which the composer node does not yet wire (see the TODO below);
+    /// the key only needs to round-trip `currentInputContent → setInputContent` consistently, which an id-derived
+    /// key does.
+    private func registerMediaValue(_ media: Media) -> String {
+        let mediaID: String
+        if let id = media.id {
+            mediaID = "\(id.namespace):\(id.id)"
+        } else {
+            // No stable media id (rare): fall back to an object-identity key so the same value still
+            // round-trips within a single set/get cycle.
+            mediaID = "anon:\(ObjectIdentifier(media as AnyObject).hashValue)"
+        }
+        self.mediaByID[mediaID] = media
+        // TODO(parity): wire the editor media-view provider (`registerMediaViewProvider` +
+        // `insertMedia`) so a media block set via the model actually RENDERS in the composer. The editor
+        // exposes no media store, so the node owns `mediaByID`; the model round-trip works (media survives
+        // `currentInputContent`/`setInputContent`), but a media block pushed via `setInputContent` is not yet
+        // displayed — display wiring is a follow-up, tracked here.
+        return mediaID
     }
 
     /// Map the host's theme colors 1:1 into the editor's `RichTextEditorTheme`. Assigning `editorView.theme`

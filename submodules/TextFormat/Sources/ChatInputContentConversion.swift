@@ -108,6 +108,13 @@ public func attributedString(from content: ChatInputContent) -> NSAttributedStri
                 appendRuns(paragraph)
                 i += 1
             }
+        case .media, .table:
+            // INTENTIONAL render-only filter (not deferred): the legacy `UITextView` composer cannot represent a
+            // structural media/table block, so this `NSAttributedString` projection drops them. Heading/list
+            // paragraphs above similarly render as plain text (`appendRuns` ignores heading style + list membership).
+            // `ChatInputContent` stays the sole authoritative storage; this flat view is lossy by design. The native
+            // engine carries these blocks via the direct `Document ↔ ChatInputContent` bridge, never this path.
+            i += 1
         }
     }
     return result

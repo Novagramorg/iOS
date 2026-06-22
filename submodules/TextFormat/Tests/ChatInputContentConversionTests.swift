@@ -279,4 +279,24 @@ final class ChatInputContentConversionTests: XCTestCase {
         }
         XCTAssertTrue(found, "collapsedBlock attribute must survive the round-trip")
     }
+
+    // Legacy composer render-only filter: the flat `NSAttributedString` projection drops `.media`/`.table` blocks and
+    // renders heading/list paragraphs as plain text (the legacy UITextView can't carry structural content).
+    func test_attributedString_filtersStructuralBlocksForLegacyComposer() {
+        let image = TelegramMediaImage(imageId: MediaId(namespace: 1, id: 1001), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let media = ChatInputMedia(media: image, kind: .image, naturalSize: ChatInputSize(width: 0, height: 0), displayWidth: nil, alignment: .center, caption: [ChatInputRun(text: "CAPTION")])
+        let table = ChatInputTable(columns: [ChatInputColumnSpec(width: 0, alignment: .left)], rows: [ChatInputTableRow(height: nil, isHeader: false, cells: [ChatInputTableCell(runs: [ChatInputRun(text: "CELL")], background: nil)])])
+        let content = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .heading1, runs: [ChatInputRun(text: "Title")])),
+            .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .bullet, level: 0), runs: [ChatInputRun(text: "item")])),
+            .table(table),
+            .media(media),
+            .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "after")]))
+        ])
+        let attr = attributedString(from: content)
+        // Heading/list render as plain text; media/table (and their cell/caption text) are dropped — no crash.
+        XCTAssertEqual(attr.string, "Title\nitem\nafter")
+        XCTAssertFalse(attr.string.contains("CELL"), "table cell text must be dropped")
+        XCTAssertFalse(attr.string.contains("CAPTION"), "media caption must be dropped")
+    }
 }

@@ -347,13 +347,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var inputTextState: ChatTextInputState {
         if let richTextInputNode = self.richTextInputNode {
             let selectionRange: Range<Int> = richTextInputNode.selectedRange.location ..< (richTextInputNode.selectedRange.location + richTextInputNode.selectedRange.length)
-            // Piece 3: the GET read-back now routes through the value model. `currentInputContent()` is the node's
-            // semantic content (the legacy node strips display decoration via `stateAttributedStringForText`
-            // internally — the same source this used to read), so `attributedString(from:)` reproduces the former
-            // read-back string modulo freshly-minted custom-emoji objects and the dropped emoji sub-fields. Those
-            // no longer churn change-detection because `ChatTextInputState.==` adopted value equality (compares via
-            // `chatInputContent(from:)`).
-            return ChatTextInputState(inputText: attributedString(from: richTextInputNode.currentInputContent().content), selectionRange: selectionRange)
+            // The GET read-back passes the node's `ChatInputContent` DIRECTLY into the state (no `NSAttributedString`
+            // round-trip): structural blocks (`.media`/`.table`/heading/list) only the native engine produces would
+            // otherwise be flattened away by `attributedString(from:)`. For the legacy node the content is always flat,
+            // so this is identical to the former `attributedString(from:)` round-trip (the conversion is round-trip
+            // identity for flat content); `ChatTextInputState.==` is value-based so the freshly-built content doesn't
+            // churn change-detection. This is the "no NSAttributedString storage in the pipeline" boundary.
+            return ChatTextInputState(content: richTextInputNode.currentInputContent().content, selectionRange: selectionRange)
         } else {
             return ChatTextInputState()
         }
@@ -467,7 +467,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 baseFontSize = 17.0
             }
 
-            let content = chatInputContent(from: updatedState.inputText)
+            // Pass the model content DIRECTLY (not via `updatedState.inputText`, which would flatten structural
+            // blocks through `NSAttributedString`) — see `inputTextState`. Flat for the legacy node, lossless for native.
+            let content = updatedState.content
             let selection = ChatInputSelection(nsRange: NSMakeRange(updatedState.selectionRange.lowerBound, updatedState.selectionRange.count), in: content)
             if !richTextInputNode.usesNativeRichTextEngine {
                 richTextInputNode.applyRenderingConfig(context: context, baseFontSize: baseFontSize, textColor: textColor, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, spoilersRevealed: richTextInputNode.spoilersRevealed, availableEmojis: Set(context.animatedEmojiStickersValue.keys), emojiViewProvider: self.emojiViewProvider)
@@ -544,7 +546,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
             }
             if richTextInputNode.usesNativeRichTextEngine {
-                let content = chatInputContent(from: state.inputText)
+                // Pass the model content DIRECTLY (not via `state.inputText`, which flattens structural blocks through
+                // `NSAttributedString`) — see `inputTextState`. Flat for the legacy node, lossless for native.
+                let content = state.content
                 richTextInputNode.setInputContent(
                     content,
                     selection: ChatInputSelection(nsRange: NSMakeRange(state.selectionRange.lowerBound, state.selectionRange.count), in: content)
@@ -553,7 +557,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 richTextInputNode.applyRenderingConfig(context: context, baseFontSize: baseFontSize, textColor: textColor, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, spoilersRevealed: richTextInputNode.spoilersRevealed, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider)
                 // The node runs the in-place fix-up (`refreshTextInputAttributes`) inside `setInputContent` now,
                 // using the config supplied by `applyRenderingConfig` above — so the panel no longer drives it.
-                let content = chatInputContent(from: state.inputText)
+                // Pass the model content DIRECTLY (not via `state.inputText`, which flattens structural blocks through
+                // `NSAttributedString`) — see `inputTextState`. Flat for the legacy node, lossless for native.
+                let content = state.content
                 richTextInputNode.setInputContent(
                     content,
                     selection: ChatInputSelection(nsRange: NSMakeRange(state.selectionRange.lowerBound, state.selectionRange.count), in: content)
@@ -590,7 +596,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
             }
             if richTextInputNode.usesNativeRichTextEngine {
-                let content = chatInputContent(from: state.inputText)
+                // Pass the model content DIRECTLY (not via `state.inputText`, which flattens structural blocks through
+                // `NSAttributedString`) — see `inputTextState`. Flat for the legacy node, lossless for native.
+                let content = state.content
                 richTextInputNode.setInputContent(
                     content,
                     selection: ChatInputSelection(nsRange: NSMakeRange(state.selectionRange.lowerBound, state.selectionRange.count), in: content)
@@ -599,7 +607,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 richTextInputNode.applyRenderingConfig(context: context, baseFontSize: baseFontSize, textColor: textColor, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, spoilersRevealed: richTextInputNode.spoilersRevealed, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider)
                 // The node runs the in-place fix-up (`refreshTextInputAttributes`) inside `setInputContent` now,
                 // using the config supplied by `applyRenderingConfig` above — so the panel no longer drives it.
-                let content = chatInputContent(from: state.inputText)
+                // Pass the model content DIRECTLY (not via `state.inputText`, which flattens structural blocks through
+                // `NSAttributedString`) — see `inputTextState`. Flat for the legacy node, lossless for native.
+                let content = state.content
                 richTextInputNode.setInputContent(
                     content,
                     selection: ChatInputSelection(nsRange: NSMakeRange(state.selectionRange.lowerBound, state.selectionRange.count), in: content)
