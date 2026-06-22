@@ -76,21 +76,21 @@ extension DocumentCanvasView {
             return
         }
 
-        // Cross-block. A media (image/video) endpoint is REMOVED only when the selection covers its
-        // whole node (the leading gap + the entire caption); a selection that ends/starts PARTWAY through
-        // a caption keeps the image, truncated (the Phase 2c partial behavior — see the truncate branch).
-        // Select-All over a document whose first/last block is an image fully covers that image, so it is
-        // dropped here exactly as a covered MIDDLE image already is.
-        func mediaFullyCovered(_ box: CanvasBlock) -> Bool {
-            box is MediaBlockBox && lo <= box.nodeStart && hi >= box.textStart + box.textLength
+        // Cross-block. A media (image/video) or code endpoint is REMOVED only when the selection covers
+        // its whole node (the leading gap + the entire text); a selection that ends/starts PARTWAY through
+        // the text keeps the block, truncated (the Phase 2c partial behavior — see the truncate branch).
+        // Select-All over a document whose first/last block is an image/code fully covers it, so it is
+        // dropped here exactly as a covered MIDDLE block already is.
+        func endpointFullyCovered(_ box: CanvasBlock) -> Bool {
+            (box is MediaBlockBox || box is CodeBlockBox) && lo <= box.nodeStart && hi >= box.textStart + box.textLength
         }
-        let keepStartMedia = (start.box is MediaBlockBox) && !mediaFullyCovered(start.box)
-        let keepEndMedia = (end.box is MediaBlockBox) && !mediaFullyCovered(end.box)
+        let keepStartMedia = (start.box is MediaBlockBox || start.box is CodeBlockBox) && !endpointFullyCovered(start.box)
+        let keepEndMedia = (end.box is MediaBlockBox || end.box is CodeBlockBox) && !endpointFullyCovered(end.box)
 
-        // Merge path: each endpoint is a paragraph OR a fully-covered media (which contributes nothing
-        // and is dropped). The surviving paragraph is startPrefix + text + endSuffix; replaceSubrange over
-        // [start.index ... end.index] drops every box between the endpoints — including a fully-covered
-        // endpoint image. (Paragraph↔paragraph is the original 2b split/merge, unchanged.)
+        // Merge path: each endpoint is a paragraph OR a fully-covered media/code block (which contributes
+        // nothing and is dropped). The surviving paragraph is startPrefix + text + endSuffix; replaceSubrange
+        // over [start.index ... end.index] drops every box between the endpoints — including a fully-covered
+        // endpoint image or code block. (Paragraph↔paragraph is the original 2b split/merge, unchanged.)
         if !keepStartMedia && !keepEndMedia {
             let headPart = (start.box as? BlockBox)?.currentParagraph().split(at: start.local, newID: BlockID.generate()).0
             let tailPart = (end.box as? BlockBox)?.currentParagraph().split(at: end.local, newID: BlockID.generate()).1
@@ -114,10 +114,11 @@ extension DocumentCanvasView {
             anchor = caret; head = caret
             return
         }
-        // A media endpoint is only PARTIALLY covered (selection starts/ends partway through its caption):
-        // TRUNCATE each endpoint's text region (start keeps [0, start.local) + inserted text; end keeps
-        // [end.local, …)) and drop ONLY the strictly-covered middle boxes. Do NOT remove the endpoint
-        // boxes — a selection ending inside an image caption keeps that image with its surviving suffix.
+        // A media or code endpoint is only PARTIALLY covered (selection starts/ends partway through its
+        // caption/body): TRUNCATE each endpoint's text region (start keeps [0, start.local) + inserted text;
+        // end keeps [end.local, …)) and drop ONLY the strictly-covered middle boxes. Do NOT remove the
+        // endpoint boxes — a selection ending inside an image/code block keeps that image/code block with
+        // its surviving suffix.
         start.box.textLayout.replace(start: start.local, end: start.box.textLength,
                                      with: NSAttributedString(string: text,
                                          attributes: typingAttributesAtGlobal(start.box.textStart + start.local)))
@@ -218,6 +219,54 @@ extension DocumentCanvasView {
             ? table.cellTextStart(row: 0, column: 0)
             : table.cellTextStart(row: table.rowCount - 1, column: table.columnCount - 1)
         return snap ?? pos
+    }
+
+    /// Inserts a literal newline inside the caret's code block (no paragraph split), replacing any
+    /// selection first. Caller checks the caret/selection `head` resolves to a `CodeBlockBox`.
+    /// Wraps itself in `editing { }`.
+    func insertCodeBlockNewline() {
+        guard activeStack(at: head)?.box is CodeBlockBox else { return }
+        let newline = "\n"
+        editing {
+            if selFrom != selTo {
+                applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "")
+            }
+            // Re-resolve after a possible delete (the caret moved); only insert if still in a code block.
+            guard let active = activeStack(at: head), active.box is CodeBlockBox else { return }
+            active.box.textLayout.replace(start: active.local, end: active.local,
+                                          with: NSAttributedString(string: newline, attributes: CodeBlockBox.codeAttributes()))
+            recomputeSpans()
+            let caret = active.box.textStart + active.local + (newline as NSString).length
+            anchor = caret; head = caret
+        }
+    }
+
+    /// True if a collapsed caret sits at the END of a `CodeBlockBox` whose text ends in "\n" (a blank
+    /// trailing line) or is empty — Enter there EXITS the block rather than adding another blank line.
+    func caretAtCodeBlockTrailingBlankLine(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) -> Bool {
+        guard active.box is CodeBlockBox else { return false }
+        let s = active.box.textLayout.attributedString.string as NSString
+        return active.local == s.length && (s.length == 0 || s.hasSuffix("\n"))
+    }
+
+    /// Removes a code block's trailing "\n" (if present) and inserts an empty body paragraph after it;
+    /// caret lands in the new paragraph. Wraps itself in `editing { }`. Mirrors the quote escape hatch
+    /// (`insertEmptyBodyParagraph`) — the only way to start a normal paragraph after a code block that
+    /// ends the document.
+    func exitCodeBlockToBodyParagraph(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        editing {
+            let s = active.box.textLayout.attributedString.string as NSString
+            if s.hasSuffix("\n") {
+                active.box.textLayout.replace(start: s.length - 1, end: s.length, with: NSAttributedString(string: ""))
+            }
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = active.stack.boxes
+            newBoxes.insert(body, at: active.index + 1)
+            active.stack.boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
     }
 
     /// Splits the caret's paragraph at the caret, within whatever `BlockStack` owns the caret (root

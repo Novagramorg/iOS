@@ -35,6 +35,11 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
         case let .table(table):
             pageBlocks.append(tableBlock(table))
             index += 1
+        case let .code(code):
+            // Code blocks are entity-expressible (.Pre); in the rich (InstantPage) path they render as a
+            // preformatted block. Reached only when OTHER content (heading/list/table/media) forced rich layout.
+            pageBlocks.append(.preformatted(text: richText(from: code.runs), language: code.language))
+            index += 1
         case let .media(mediaBlock):
             // Media.id is optional on the protocol; real TelegramMedia* types always return non-nil.
             if let resolved = media[mediaBlock.mediaID], let mediaId = resolved.id {

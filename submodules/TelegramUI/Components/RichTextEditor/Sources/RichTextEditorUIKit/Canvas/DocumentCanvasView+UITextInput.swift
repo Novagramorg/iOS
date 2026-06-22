@@ -228,7 +228,21 @@ extension DocumentCanvasView: UIKeyInput {
             editing { insertParagraphBeforeImage(at: i, text: text == "\n" ? "" : text) }
             return
         }
-        if text == "\n" { insertParagraphBreak(); return }
+        if text == "\n" {
+            if let active = activeStack(at: head), active.box is CodeBlockBox {
+                // Enter on an empty trailing line of a code block EXITS it to a body paragraph (the escape
+                // hatch); otherwise it inserts a literal newline (no paragraph split). A selection always
+                // replaces-with-newline — only a collapsed caret can exit.
+                if selFrom == selTo, caretAtCodeBlockTrailingBlankLine(active) {
+                    exitCodeBlockToBodyParagraph(active)
+                } else {
+                    insertCodeBlockNewline()
+                }
+            } else {
+                insertParagraphBreak()
+            }
+            return
+        }
         if selFrom != selTo {
             editing { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
             return
@@ -337,6 +351,23 @@ extension DocumentCanvasView: UIKeyInput {
             // especially the document's FIRST block, which matches no merge branch below — can't be
             // removed at all. Mirrors empty-list-item Return (DocumentCanvasView+Editing.insertParagraphBreak).
             editing { p.style = .body; restyle(p); recomputeSpans() }
+            return
+        }
+        if let codeBox = pos.box as? CodeBlockBox, codeBox.textLength == 0,
+           let active = activeStack(at: head) {
+            // Backspace in an EMPTY code block converts it to a body paragraph (a `CodeBlockBox` is a
+            // distinct class, so it's REPLACED in its stack with a body `BlockBox`). Mirrors the empty-quote
+            // branch above — without this an empty code block, especially the document's FIRST block, matches
+            // no merge branch below and is undeletable.
+            editing {
+                let body = BlockBox(paragraph: ParagraphBlock(id: codeBox.id, style: .body, runs: []),
+                                    mapper: mapper, width: effectiveWidth)
+                var newBoxes = active.stack.boxes
+                newBoxes.replaceSubrange(active.index...active.index, with: [body])
+                active.stack.boxes = newBoxes
+                recomputeSpans()
+                anchor = body.textStart; head = body.textStart
+            }
             return
         }
         if pos.box is MediaBlockBox, pos.local == 0 {        // caption start → delete the image

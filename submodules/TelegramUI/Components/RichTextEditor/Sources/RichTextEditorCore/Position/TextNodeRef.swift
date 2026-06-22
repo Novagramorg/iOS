@@ -6,4 +6,6 @@ public enum TextNodeRef: Equatable {
     case paragraph(BlockID)
     /// The caption runs of a media block.
     case caption(BlockID)
+    /// The runs of a code block.
+    case code(BlockID)
 }

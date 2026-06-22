@@ -328,6 +328,7 @@ final class DocumentCanvasView: UIView {
             case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: width)
             case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width)
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
+            case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
             }
         }
         recomputeSpans()

@@ -8,8 +8,24 @@ func buildEntityMessage(from blocks: [Block]) -> (text: String, entities: [Messa
     let result = NSMutableAttributedString()
     let marker = true as NSNumber
     var isFirstParagraph = true
+    var prevWasQuote = false
 
     for block in blocks {
+        if case let .code(code) = block {
+            if !isFirstParagraph {
+                result.append(NSAttributedString(string: "\n"))
+            }
+            isFirstParagraph = false
+            let start = result.length
+            result.append(NSAttributedString(string: code.text))   // code runs are always plain text
+            let len = result.length - start
+            if len > 0 {
+                let attr = chatInputCodeBlockAttribute(language: code.language)
+                result.addAttribute(attr.key, value: attr.value, range: NSRange(location: start, length: len))
+            }
+            prevWasQuote = false   // a code block breaks the quote-fusion chain
+            continue
+        }
         guard case let .paragraph(paragraph) = block else {
             continue
         }
@@ -70,15 +86,20 @@ func buildEntityMessage(from blocks: [Block]) -> (text: String, entities: [Messa
         }
 
         if paragraph.style == .quote {
-            let length = result.length - paragraphStart
+            // Extend back over the joining "\n" when the previous block was also a quote, so consecutive
+            // quote lines form ONE contiguous .block run → a single blockquote entity (generateChatInputText
+            // Entities only merges block ranges that exactly touch). A non-quote/code predecessor → no extend.
+            let rangeStart = prevWasQuote ? max(0, paragraphStart - 1) : paragraphStart
+            let length = result.length - rangeStart
             if length > 0 {
                 result.addAttribute(
                     ChatTextInputAttributes.block,
                     value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
-                    range: NSRange(location: paragraphStart, length: length)
+                    range: NSRange(location: rangeStart, length: length)
                 )
             }
         }
+        prevWasQuote = (paragraph.style == .quote)
     }
 
     let entities = generateChatInputTextEntities(result)

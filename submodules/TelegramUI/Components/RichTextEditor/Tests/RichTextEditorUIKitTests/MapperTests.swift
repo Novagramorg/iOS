@@ -46,7 +46,7 @@ final class MapperTests: XCTestCase {
 
     func test_captionUsesSecondaryDefault_andStripsIt() {
         let theme = RichTextEditorTheme(primaryText: .red, secondaryText: .blue, placeholder: .placeholderText,
-                                        accent: .green, tableBorder: .gray, tableHeaderBackground: .gray)
+                                        accent: .green, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .placeholderText)
         let m = AttributedStringMapper(theme: theme)
         // Caption renders in secondary; body renders in primary.
         XCTAssertEqual(m.attributes(for: CharacterAttributes(), style: .caption)[.foregroundColor] as? UIColor, UIColor.blue)
@@ -62,7 +62,7 @@ final class MapperTests: XCTestCase {
 
     func test_linkUsesAccentColor() {
         let theme = RichTextEditorTheme(primaryText: .black, secondaryText: .black, placeholder: .placeholderText,
-                                        accent: .green, tableBorder: .gray, tableHeaderBackground: .gray)
+                                        accent: .green, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .placeholderText)
         let m = AttributedStringMapper(theme: theme)
         let dict = m.attributes(for: CharacterAttributes(link: "https://example.com"), style: .body)
         XCTAssertEqual(dict[.foregroundColor] as? UIColor, UIColor.green)

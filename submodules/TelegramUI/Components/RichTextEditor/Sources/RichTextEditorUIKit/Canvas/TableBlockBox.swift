@@ -57,6 +57,7 @@ final class TableBlockBox: CanvasBlock {
                     case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: 100)
                     case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: 100)
                     case .table: return nil   // no nested tables in v1
+                    case .code: return nil    // no nested code blocks in a table cell in v1
                     }
                 })
             }

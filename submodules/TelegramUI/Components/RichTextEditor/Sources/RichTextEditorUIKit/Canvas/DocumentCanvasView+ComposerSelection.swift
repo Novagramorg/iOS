@@ -7,15 +7,15 @@ extension DocumentCanvasView {
     /// One top-level paragraph's text region, tagged with its start offset in the composer's flat string.
     private struct ComposerParagraph { let globalStart: Int; let length: Int; let flatStart: Int }
 
-    /// The document's top-level PARAGRAPHS in order, each with its start offset in the composer's flat
-    /// UTF-16 string — the paragraphs' text joined by "\n", exactly the representation
-    /// `ComposerDocumentBridge` flattens to/from. Non-paragraph blocks (tables/images) contribute nothing,
-    /// matching the bridge; the chat composer is paragraph-only today regardless.
+    /// The document's top-level text blocks (paragraphs + code blocks) in order, each with its start
+    /// offset in the composer's flat UTF-16 string — the blocks' text joined by "\n", exactly the
+    /// representation `ComposerDocumentBridge` flattens to/from. Non-text blocks (tables/images) contribute
+    /// nothing, matching the bridge.
     private func composerParagraphs() -> [ComposerParagraph] {
         var result: [ComposerParagraph] = []
         var flat = 0
         for box in boxes {
-            guard box is BlockBox, let region = box.leafRegions().first else { continue }
+            guard (box is BlockBox || box is CodeBlockBox), let region = box.leafRegions().first else { continue }
             if !result.isEmpty { flat += 1 }   // the "\n" that joins this paragraph to the previous one
             result.append(ComposerParagraph(globalStart: region.globalStart, length: region.length, flatStart: flat))
             flat += region.length

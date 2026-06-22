@@ -141,7 +141,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             placeholder: colors.placeholder,
             accent: colors.accent,
             tableBorder: colors.tableBorder,
-            tableHeaderBackground: colors.tableHeaderBackground
+            tableHeaderBackground: colors.tableHeaderBackground,
+            codeBackground: colors.tableHeaderBackground  // v1: reuse the subtle panel fill; a dedicated code-bg seam color is a follow-up
         )
     }
 
@@ -211,9 +212,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         case .monospace: self.editorView.toggleInlineCode()
         case .spoiler: self.editorView.toggleSpoiler()
         case .quote: self.editorView.setParagraphStyle(.quote)
-        case .code:
-            // TODO: no code-block paragraph style in the editor yet (deferred editor work). No-op for now.
-            break
+        case .code: self.editorView.makeCodeBlock()
         case .date:
             // TODO: no timestamp-entity model in the editor (deferred). No-op for now.
             break
