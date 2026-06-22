@@ -411,40 +411,66 @@ public struct ChatInterfaceForwardOptionsState: Codable, Equatable {
 }
 
 public struct ChatTextInputState: Codable, Equatable {
-    public var inputText: NSAttributedString
-    public var selectionRange: Range<Int>
-    
+    /// The stored source of truth (Piece 5): the structural value model + a structural (tree-path) selection.
+    public var content: ChatInputContent
+    public var selection: ChatInputSelection
+
+    /// Derived transitional compat view — the chat `NSAttributedString` currency. Readers keep working
+    /// unchanged; the model is the storage. (Removed only once all readers move off it — Option B.)
+    public var inputText: NSAttributedString {
+        return attributedString(from: self.content)
+    }
+
+    /// Derived transitional flat selection (compat), **read-only** — nothing assigns it (selection writes go
+    /// through `init(inputText:selectionRange:)`). New/migrated code should prefer the structural `selection`
+    /// (and semantic mutation methods) over arithmetic on this flat range.
+    public var selectionRange: Range<Int> {
+        let r = self.selection.nsRange(in: self.content)
+        return r.location ..< (r.location + r.length)
+    }
+
+    /// Whether the composer is empty. Cheap structural check on the stored model — prefer this over
+    /// `inputText.string.isEmpty` / `inputText.length == 0`, which now allocate via the derived `inputText`.
+    public var isEmpty: Bool {
+        return self.content.isEmpty
+    }
+
     public static func ==(lhs: ChatTextInputState, rhs: ChatTextInputState) -> Bool {
-        return lhs.inputText.isEqual(to: rhs.inputText) && lhs.selectionRange == rhs.selectionRange
+        // `content` is a value type whose `==` compares custom emoji by `fileId` + `enableAnimation` (the Piece 3
+        // semantics, now intrinsic to the stored model), so this is plain value equality — no reference caveat.
+        return lhs.content == rhs.content && lhs.selection == rhs.selection
     }
-    
+
     public init() {
-        self.inputText = NSAttributedString()
-        self.selectionRange = 0 ..< 0
+        self.content = ChatInputContent()
+        self.selection = ChatInputSelection(nsRange: NSRange(location: 0, length: 0), in: self.content)
     }
-    
+
     public init(inputText: NSAttributedString, selectionRange: Range<Int>) {
-        self.inputText = inputText
-        self.selectionRange = selectionRange
+        self.content = chatInputContent(from: inputText)
+        self.selection = ChatInputSelection(nsRange: NSRange(location: selectionRange.lowerBound, length: selectionRange.upperBound - selectionRange.lowerBound), in: self.content)
     }
-    
+
     public init(inputText: NSAttributedString) {
-        self.inputText = inputText
-        let length = inputText.length
-        self.selectionRange = length ..< length
+        self.content = chatInputContent(from: inputText)
+        self.selection = ChatInputSelection(nsRange: NSRange(location: self.content.length, length: 0), in: self.content)
     }
 
     public init(from decoder: Decoder) throws {
+        // Persisted form is UNCHANGED (`ChatTextInputStateText` + flat selection ints) so existing drafts decode;
+        // only the in-memory storage is structural. Build the model + structural selection from the decoded form.
         let container = try decoder.container(keyedBy: StringCodingKey.self)
-        self.inputText = ((try? container.decode(ChatTextInputStateText.self, forKey: "at")) ?? ChatTextInputStateText()).attributedText()
+        let attributedText = ((try? container.decode(ChatTextInputStateText.self, forKey: "at")) ?? ChatTextInputStateText()).attributedText()
+        self.content = chatInputContent(from: attributedText)
         let rangeFrom = (try? container.decode(Int32.self, forKey: "as0")) ?? 0
         let rangeTo = (try? container.decode(Int32.self, forKey: "as1")) ?? 0
+        let flatRange: NSRange
         if rangeFrom <= rangeTo {
-            self.selectionRange = Int(rangeFrom) ..< Int(rangeTo)
+            flatRange = NSRange(location: Int(rangeFrom), length: Int(rangeTo - rangeFrom))
         } else {
-            let length = self.inputText.length
-            self.selectionRange = length ..< length
+            flatRange = NSRange(location: self.content.length, length: 0)
         }
+        self.selection = ChatInputSelection(nsRange: flatRange, in: self.content)
     }
 
     public func encode(to encoder: Encoder) throws {

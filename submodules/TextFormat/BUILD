@@ -34,6 +34,7 @@ swift_library(
     deps = [
         ":TextFormat",
         "//submodules/TelegramCore:TelegramCore",
+        "//submodules/Postbox:Postbox",
     ],
 )
 

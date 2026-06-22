@@ -952,7 +952,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         var count: Int32
                         if let forwardedCount = self.chatPresentationInterfaceState.interfaceState.forwardMessageIds?.count, forwardedCount > 0 {
                             count = Int32(forwardedCount)
-                            if self.chatPresentationInterfaceState.interfaceState.effectiveInputState.inputText.length > 0 {
+                            if !self.chatPresentationInterfaceState.interfaceState.effectiveInputState.isEmpty {
                                 count += 1
                             }
                         } else {
@@ -3989,7 +3989,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             context: self.context,
             currentInputData: inputMediaNodeData,
             updatedInputData: self.inputMediaNodeDataPromise.get(),
-            defaultToEmojiTab: !self.chatPresentationInterfaceState.interfaceState.effectiveInputState.inputText.string.isEmpty || self.chatPresentationInterfaceState.interfaceState.forwardMessageIds != nil || self.openStickersBeginWithEmoji || self.chatPresentationInterfaceState.focusedPollAddOptionMessageId != nil,
+            defaultToEmojiTab: !self.chatPresentationInterfaceState.interfaceState.effectiveInputState.isEmpty || self.chatPresentationInterfaceState.interfaceState.forwardMessageIds != nil || self.openStickersBeginWithEmoji || self.chatPresentationInterfaceState.focusedPollAddOptionMessageId != nil,
             interaction: ChatEntityKeyboardInputNode.Interaction(chatControllerInteraction: self.controllerInteraction, panelInteraction: interfaceInteraction),
             chatPeerId: peerId,
             stateContext: self.inputMediaNodeStateContext,
@@ -4579,7 +4579,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     // (presentAttachmentMenu is nil), so the editor accumulates no media here.
                     self?.textInputPanelNode?.richTextInputNode?.setRichTextDocument(document)
                 },
-                presentAttachmentMenu: nil
+                presentAttachmentMenu: { [weak self] completion in
+                    guard let self else {
+                        return
+                    }
+                    self.controller?.presentRichTextAttachmentMenu(completion: completion)
+                }
             )
             editorScreen.navigationPresentation = .modal
             self.controller?.push(editorScreen)

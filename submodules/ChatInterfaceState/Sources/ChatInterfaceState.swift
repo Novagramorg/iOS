@@ -544,7 +544,20 @@ public final class ChatInterfaceState: Codable, Equatable {
     }
 
     public func withUpdatedSynchronizeableInputState(_ state: SynchronizeableChatInputState?) -> ChatInterfaceState {
-        var result = self.withUpdatedComposeInputState(ChatTextInputState(inputText: chatInputStateStringWithAppliedEntities(state?.text ?? "", entities: state?.entities ?? []))).withUpdatedReplyMessageSubject((state?.replySubject).flatMap {
+        let inputText = chatInputStateStringWithAppliedEntities(state?.text ?? "", entities: state?.entities ?? [])
+        let inputState: ChatTextInputState
+        if let textSelection = state?.textSelection {
+            // Restore the persisted caret/selection (clamped to the restored text) rather than defaulting to the
+            // end. `textSelection` is set by `synchronizeableInputState` for locally-saved drafts; server drafts
+            // carry `nil`, which correctly falls back to caret-at-end.
+            let length = inputText.length
+            let lowerBound = max(0, min(textSelection.lowerBound, length))
+            let upperBound = max(lowerBound, min(textSelection.upperBound, length))
+            inputState = ChatTextInputState(inputText: inputText, selectionRange: lowerBound ..< upperBound)
+        } else {
+            inputState = ChatTextInputState(inputText: inputText)
+        }
+        var result = self.withUpdatedComposeInputState(inputState).withUpdatedReplyMessageSubject((state?.replySubject).flatMap {
             return ReplyMessageSubject(
                 messageId: $0.messageId,
                 quote: $0.quote,

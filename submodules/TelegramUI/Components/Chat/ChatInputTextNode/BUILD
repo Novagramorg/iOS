@@ -14,6 +14,7 @@ swift_library(
         "//submodules/Display",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/AppBundle",
+        "//submodules/TelegramCore",
         "//submodules/TelegramUI/Components/Chat/ChatInputTextNode/ChatInputTextViewImpl",
         "//submodules/TelegramUI/Components/Chat/MessageInlineBlockBackgroundView",
         "//submodules/AccountContext",

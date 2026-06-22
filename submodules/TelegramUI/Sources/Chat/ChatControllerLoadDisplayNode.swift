@@ -2137,7 +2137,7 @@ extension ChatControllerImpl {
                         }.updatedInputMode({ _ in updatedMode })
                 })
                 
-                if !strongSelf.presentationInterfaceState.interfaceState.effectiveInputState.inputText.string.isEmpty {
+                if !strongSelf.presentationInterfaceState.interfaceState.effectiveInputState.isEmpty {
                     strongSelf.silentPostTooltipController?.dismiss()
                 }
             }

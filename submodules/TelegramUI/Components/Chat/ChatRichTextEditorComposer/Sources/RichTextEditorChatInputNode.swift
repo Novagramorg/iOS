@@ -305,6 +305,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var selectionRect: CGRect { .zero }
     public func firstSelectionRect(forCharacterRange characterRange: NSRange) -> CGRect? { nil }
     public func currentCaretRect() -> CGRect? { nil }
+    public var spoilersRevealed: Bool = false
     public func setSpoilersRevealed(_ revealed: Bool, animated: Bool) { }
     public func prepareForSpoilerReveal() { }
     public func updateRichRendering(textColor: UIColor, fullTranslucency: Bool) { }

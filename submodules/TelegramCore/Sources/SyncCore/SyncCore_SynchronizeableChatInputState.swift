@@ -45,7 +45,11 @@ public struct SynchronizeableChatInputState: Codable, Equatable {
                 self.replySubject = nil
             }
         }
-        self.textSelection = nil
+        if let textSelectionFrom = try? container.decode(Int32.self, forKey: "ts0"), let textSelectionTo = try? container.decode(Int32.self, forKey: "ts1"), textSelectionFrom <= textSelectionTo {
+            self.textSelection = Int(textSelectionFrom) ..< Int(textSelectionTo)
+        } else {
+            self.textSelection = nil
+        }
         self.messageEffectId = try container.decodeIfPresent(Int64.self, forKey: "messageEffectId")
         self.suggestedPost = try container.decodeIfPresent(SuggestedPost.self, forKey: "suggestedPost")
     }
@@ -56,6 +60,10 @@ public struct SynchronizeableChatInputState: Codable, Equatable {
         try container.encode(self.text, forKey: "t")
         try container.encode(self.entities, forKey: "e")
         try container.encode(self.timestamp, forKey: "s")
+        if let textSelection = self.textSelection {
+            try container.encode(Int32(clamping: textSelection.lowerBound), forKey: "ts0")
+            try container.encode(Int32(clamping: textSelection.upperBound), forKey: "ts1")
+        }
         try container.encodeIfPresent(self.replySubject, forKey: "rep")
         try container.encodeIfPresent(self.messageEffectId, forKey: "messageEffectId")
         try container.encodeIfPresent(self.suggestedPost, forKey: "suggestedPost")

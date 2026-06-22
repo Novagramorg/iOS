@@ -7652,7 +7652,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
             
             if self.chatLocation.peerId != nil && self.chatDisplayNode.frameForInputActionButton() != nil {
-                let inputText = self.presentationInterfaceState.interfaceState.effectiveInputState.inputText.string
+                let inputText = self.presentationInterfaceState.interfaceState.effectiveInputState.content.plainText
                 if !inputText.isEmpty {
                     if inputText.count > 4 {
                         let _ = (ApplicationSpecificNotice.getChatMessageOptionsTip(accountManager: self.context.sharedContext.accountManager)
@@ -9889,7 +9889,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         guard let rect = self.chatDisplayNode.frameForInputActionButton(), self.effectiveNavigationController?.topViewController === self, let peerId = self.chatLocation.peerId else {
             return
         }
-        let inputText = self.presentationInterfaceState.interfaceState.effectiveInputState.inputText.string
+        let inputText = self.presentationInterfaceState.interfaceState.effectiveInputState.content.plainText
         guard !inputText.isEmpty else {
             return
         }
@@ -10276,7 +10276,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     
     func clearInputText() {
         self.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
-            if !state.interfaceState.effectiveInputState.inputText.string.isEmpty {
+            if !state.interfaceState.effectiveInputState.isEmpty {
                 return state.updatedInterfaceState { interfaceState in
                     let effectiveInputState = ChatTextInputState(inputText: NSAttributedString(string: ""))
                     return interfaceState.withUpdatedEffectiveInputState(effectiveInputState)
@@ -10687,7 +10687,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     }
     
     public var isSendButtonVisible: Bool {
-        if self.presentationInterfaceState.interfaceState.editMessage != nil || self.presentationInterfaceState.interfaceState.forwardMessageIds != nil || self.presentationInterfaceState.interfaceState.composeInputState.inputText.string.count > 0 {
+        if self.presentationInterfaceState.interfaceState.editMessage != nil || self.presentationInterfaceState.interfaceState.forwardMessageIds != nil || !self.presentationInterfaceState.interfaceState.composeInputState.isEmpty {
             return true
         } else {
             return false
