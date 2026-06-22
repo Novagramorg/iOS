@@ -51,7 +51,7 @@ targets:
     info:
       path: tgwatch Watch App/Info.plist
       properties:
-        CFBundleDisplayName: Telegram
+        CFBundleDisplayName: Novagram
         CFBundleIconName: AppIcon
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

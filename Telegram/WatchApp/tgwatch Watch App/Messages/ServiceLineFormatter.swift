@@ -145,7 +145,7 @@ func serviceLineText(
 
     switch msg.content {
     case .messageContactRegistered:
-        return withActor("joined Telegram", actor: actor, includeActor: includeActor)
+        return withActor("joined Novagram", actor: actor, includeActor: includeActor)
 
     case .messageChatJoinByLink, .messageChatJoinByRequest:
         return withActor("joined the chat", actor: actor, includeActor: includeActor)

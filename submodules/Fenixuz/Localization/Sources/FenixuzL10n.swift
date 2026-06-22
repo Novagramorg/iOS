@@ -738,9 +738,9 @@ public struct FenixuzL10n {
 
     public var tips_fenixHub_body: String {
         pick(
-            en: "All Novagram features in one place. Open your Telegram Settings and tap the gold \"Novagram\" row to access Ghost mode, STT, auto-text, translate, chat lock, and more.",
-            uz: "Barcha Novagram imkoniyatlari bir joyda. Telegram Sozlamalariga kirib, oltin rang \"Novagram\" qatoriga bosing — Ghost rejimi, STT, avto-matn, tarjima, chat qulfi va boshqalar.",
-            ru: "Все функции Novagram в одном месте. Откройте Настройки Telegram и нажмите золотую строку «Novagram» — Ghost-режим, STT, авто-текст, перевод, блокировка чатов и многое другое."
+            en: "All Novagram features in one place. Open your Settings and tap the gold \"Novagram\" row to access Ghost mode, STT, auto-text, translate, chat lock, and more.",
+            uz: "Barcha Novagram imkoniyatlari bir joyda. Sozlamalarga kirib, oltin rang \"Novagram\" qatoriga bosing — Ghost rejimi, STT, avto-matn, tarjima, chat qulfi va boshqalar.",
+            ru: "Все функции Novagram в одном месте. Откройте Настройки и нажмите золотую строку «Novagram» — Ghost-режим, STT, авто-текст, перевод, блокировка чатов и многое другое."
         )
     }
 
