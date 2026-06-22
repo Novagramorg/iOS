@@ -1780,19 +1780,21 @@ extension ChatControllerImpl {
                                 }
                             }
                             
-                            let inputText: NSAttributedString
+                            let editInputState: ChatTextInputState
                             if let richTextAttribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
-                                inputText = chatInputTextWithReattachedCustomEmoji(markdownStringFromInstantPage(richTextAttribute.instantPage))
+                                let content = chatInputContent(fromInstantPage: richTextAttribute.instantPage)
+                                editInputState = ChatTextInputState(content: content, selectionRange: content.length ..< content.length)
                             } else {
-                                inputText = chatInputStateStringWithAppliedEntities(message.text, entities: entities)
+                                let inputText = chatInputStateStringWithAppliedEntities(message.text, entities: entities)
+                                editInputState = ChatTextInputState(inputText: inputText)
                             }
                             var disableUrlPreviews: [String] = []
                             if webpageUrl == nil {
-                                disableUrlPreviews = detectUrls(inputText)
+                                disableUrlPreviews = detectUrls(editInputState.inputText)
                             }
-                            
+
                             var updated = state.updatedInterfaceState { interfaceState in
-                                return interfaceState.withUpdatedEditMessage(ChatEditMessageState(messageId: messageId, inputState: ChatTextInputState(inputText: inputText), disableUrlPreviews: disableUrlPreviews, inputTextMaxLength: inputTextMaxLength, mediaCaptionIsAbove: nil))
+                                return interfaceState.withUpdatedEditMessage(ChatEditMessageState(messageId: messageId, inputState: editInputState, disableUrlPreviews: disableUrlPreviews, inputTextMaxLength: inputTextMaxLength, mediaCaptionIsAbove: nil))
                             }
                             
                             let (updatedState, updatedPreviewQueryState) = updatedChatEditInterfaceMessageState(context: strongSelf.context, state: updated, message: message)
@@ -2215,6 +2217,9 @@ extension ChatControllerImpl {
                 
                 let text = trimChatInputText(convertMarkdownToAttributes(expandedInputStateAttributedString(editMessage.inputState.inputText)))
 
+                let content = editMessage.inputState.content
+                let richText: RichTextMessageAttribute? = content.isEntityExpressible ? nil : RichTextMessageAttribute(instantPage: instantPage(from: content), fullInstantPage: nil)
+
                 let entities = generateTextEntities(text.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(text))
                 var entitiesAttribute: TextEntitiesMessageAttribute?
                 if !entities.isEmpty {
@@ -2259,7 +2264,7 @@ extension ChatControllerImpl {
                     return
                 }
                 
-                if text.length == 0 {
+                if text.length == 0 && content.isEmpty {
                     if strongSelf.presentationInterfaceState.editMessageState?.mediaReference != nil {
                     } else if message.effectiveMedia.contains(where: { media in
                         switch media {
@@ -2299,8 +2304,8 @@ extension ChatControllerImpl {
                             let currentRichText = currentMessage.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute
 
                             do {
-                                if currentMessage.text != text.string || currentEntities != entities || currentRichText != nil || updatingMedia || webpagePreviewAttribute != currentWebpagePreviewAttribute || disableUrlPreview {
-                                    strongSelf.context.account.pendingUpdateMessageManager.add(messageId: editMessage.messageId, text: text.string, media: media, entities: entitiesAttribute, richText: nil, inlineStickers: inlineStickers, webpagePreviewAttribute: webpagePreviewAttribute, invertMediaAttribute: invertedMediaAttribute, disableUrlPreview: disableUrlPreview)
+                                if currentMessage.text != text.string || currentEntities != entities || currentRichText != nil || richText != nil || updatingMedia || webpagePreviewAttribute != currentWebpagePreviewAttribute || disableUrlPreview {
+                                    strongSelf.context.account.pendingUpdateMessageManager.add(messageId: editMessage.messageId, text: richText != nil ? "" : text.string, media: media, entities: richText != nil ? nil : entitiesAttribute, richText: richText, inlineStickers: inlineStickers, webpagePreviewAttribute: webpagePreviewAttribute, invertMediaAttribute: invertedMediaAttribute, disableUrlPreview: disableUrlPreview)
                                 }
                             }
                         }
