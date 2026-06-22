@@ -21,6 +21,17 @@ Add `--continueOnError` after `build` (forwards to bazel's `--keep_going`) when 
 
 The build needs `TELEGRAM_CODESIGNING_GIT_PASSWORD` in the environment. It is set in `~/.zshrc` but Claude Code's bash tool does NOT source shell config by default. Prefix build commands with `source ~/.zshrc 2>/dev/null;` to pick it up.
 
+**Running tests.** `Make.py test` runs Bazel test targets (same config + codesigning as `build`, forced `debug_sim_arm64`). It accepts `--target <label>` (added 2026-06-19; default `Tests/AllTests`) so a single `ios_unit_test` can run in isolation, e.g.:
+
+```sh
+source ~/.zshrc 2>/dev/null; python3 build-system/Make/Make.py --overrideXcodeVersion --cacheDir ~/telegram-bazel-cache \
+ test --configurationPath build-system/appstore-configuration.json \
+ --gitCodesigningRepository git@gitlab.com:peter-iakovlev/fastlanematch.git \
+ --gitCodesigningType development --gitCodesigningUseCurrent --target //submodules/TextFormat:TextFormatTests
+```
+
+The first app-side `ios_unit_test` is `//submodules/TextFormat:TextFormatTests` (the mention/date link codecs). An `ios_unit_test` here needs an `ios_test_runner` pinned to a real device/OS (e.g. `iPhone 17` / `26.5`) — the default runner picks an invalid device and the test process exits 15. **Run new targets via `--target`, not the default suite:** `Tests/AllTests` currently references a dangling `//submodules/TgVoipWebrtc:TgCallsTests`, so the default would fail to build until that suite is repaired.
+
 ## Code Style Guidelines
 - **Naming**: PascalCase for types, camelCase for variables/methods
 - **Imports**: Group and sort imports at the top of files
@@ -33,7 +44,7 @@ The build needs `TELEGRAM_CODESIGNING_GIT_PASSWORD` in the environment. It is se
 - Core launch and application extensions code is in `Telegram/` directory
 - Most code is organized into libraries in `submodules/`
 - External code is located in `third-party/`
-- No tests are used at the moment
+- App-side unit tests are minimal: the first `ios_unit_test` (`//submodules/TextFormat:TextFormatTests`) was added 2026-06-19 (run via `Make.py test --target` — see Build). The RichTextEditor SwiftPM package keeps its own suite (`swift test` / `Scripts/iostest.sh`). Most modules still have no tests.
 
 ## RichTextEditor editor (`submodules/TelegramUI/Components/RichTextEditor`)
 
@@ -44,6 +55,8 @@ Both Bazel targets — `//submodules/TelegramUI/Components/RichTextEditor:RichTe
 **In-progress feature work on branch `feature/richtext-message-serialization` (as of 2026-06-12).** The editor is now **parent-driven**: `RichTextEditorView.update(size:insets:) -> CGFloat` (parent supplies scroll insets; returns measured height), a payload-free `onChange`, `currentState() -> EditorState` (format/style/list/link/selection/in-table + canUndo/canRedo), and `deleteTable()`; the view no longer observes the keyboard. The host `RichTextAttachmentScreen` (a separate module) drives layout from `onChange` and has a bottom **action bar** (`RichTextActionBarComponent`) whose 12 actions + context menus (ContextUI) are wired from `currentState()`. Custom-emoji layout (baseline-aligned square box + 4pt body boost) and a top edge effect also landed. **Runtime verification (logged-in sim) is still pending**, and a few items are deferred (pending caret-formatting; table structural selection → proper delete-table). Full session handoff + the two spec/plan pairs: `~/Documents/RichTextEditor/docs/superpowers/{handoffs/2026-06-12-richtext-session-handoff.md, specs, plans}`.
 
 **Chat composer text context menu (added 2026-06-17, runtime-verified on iOS 26 sim).** The new editor backend now surfaces the composer's **Format** submenu (Bold/Italic/Monospace/Link/Strikethrough/Underline/Quote/Spoiler/Date/Code, secret-chat gated) in its iOS-16 edit menu, via a new `RichTextEditorView.contextMenuItemsProvider` hook that `ChatTextInputPanelNode` installs (it transforms the editor's default menu elements — drops the editor's built-in 3-item Format submenu, splices in the richer one, preserves Look Up/Translate/Share). Actions route to the editor's **native engine** (`toggle*`/`setParagraphStyle(.quote)`); **Link** is wired through the host `openLinkEditing` (branched in `ChatControllerLoadDisplayNode` for the native backend, using the editor's `currentLink()`/`selectedText()`/`setLink`/`removeLink`); **Date/Code are deferred no-ops** (editor lacks a code-block style / timestamp entity). The detailed seam (`ChatRichTextInputNode.contextMenuItemsProvider` / `performFormatAction` / `currentRichTextLinkURL` / `selectedRichText` / `applyRichTextLink` / `usesNativeRichTextEngine`) and the **load-bearing `Display.Window1.hitTest` "EditMenu" match** (without which the iOS-16 edit menu's taps fall through to content app-wide) are documented in the editor's own `CLAUDE.md`. iOS 13–15 keeps the editor's built-in menu (UIMenuController can't carry closure-backed items).
+
+**Composer bridge round-trip — custom emoji / mention / date (added 2026-06-19, `feature/richtext-composer-bridge-gaps`).** The native-engine composer converts to/from the chat `NSAttributedString` currency via `ComposerDocumentBridge` (live) and `EntityMessageBuilder` (send). These now **losslessly round-trip** three previously-dropped inline features: **custom emoji** (`ChatTextInputAttributes.customEmoji` ↔ `EmojiRef`, one `U+FFFC`, original placeholder kept as `altText`), **text mentions**, and **dates** — the latter two encoded into the Document's shared `link` field via `tg://user?id=` / `tg://timestamp?t=` markers from the shared `TextFormat` codec (`MentionDateMarkers.swift`: `mentionMarkdownURL`/`dateMarkdownURL`/`classifyChatLink`/`chatInputLinkAttribute`, with unit tests in `//submodules/TextFormat:TextFormatTests`). The send path is automatic: the builder stamps the chat attributes and `generateChatInputTextEntities` already emits the matching entities. **Creation is unchanged** — the Format▸Date/Code menu items are still no-ops; this is preservation only. **Code blocks still degrade to body** (deferred to a separate spec — needs a `Block.code` variant). **Known accepted limitation:** a `textUrl` link whose string equals a `tg://` marker (via markdown/paste/edit, not the in-app editor) is reinterpreted as a mention/date on round-trip — low-probability, documented in `MentionDateMarkers.swift`. Spec/plan: `docs/superpowers/{specs/2026-06-18-richtext-composer-bridge-gaps-design.md,plans/2026-06-18-richtext-composer-bridge-gaps.md}`.
 
 ## Embedded watch app (`Telegram/WatchApp`)
 

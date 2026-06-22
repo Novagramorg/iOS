@@ -182,6 +182,24 @@ host link UI (a branched `openLinkEditing` in `ChatControllerLoadDisplayNode`, u
 `selectedText()` / `setLink`/`removeLink`). `selectedText() -> String` is the selected substring (for that link
 editor). Spec/plan for this work were intentionally not retained in-tree.
 
+**Composer bridge round-trip — custom emoji / mention / date (added 2026-06-19, `feature/richtext-composer-bridge-gaps`).**
+`ComposerDocumentBridge` (`ChatRichTextEditorComposer`) and `EntityMessageBuilder` (`RichTextEditorMessageConversion`)
+convert the composer's `Document` to/from the chat `NSAttributedString` currency. They now round-trip three inline
+features that previously dropped: **custom emoji** (`ChatTextInputAttributes.customEmoji` ↔ `CharacterAttributes.emoji`
+as a one-`U+FFFC` run; the original placeholder text is kept in `EmojiRef.altText` and re-emitted, since the Document
+interior must stay a single `U+FFFC`), and **mention/date**, which are stored in the Document's existing
+`CharacterAttributes.link` field as `tg://user?id=` / `tg://timestamp?t=` markers — **no new `CharacterAttributes`
+field** (keeps Core markdown-clean). The encode/decode + the chat-attribute emit are centralized in the shared
+`TextFormat` codec `MentionDateMarkers.swift` (`mentionMarkdownURL`/`parseMentionPeerId`, `dateMarkdownURL`/`parseDate`,
+`classifyChatLink`, `chatInputLinkAttribute`) so the three sites (`document(from:)` / `attributedString(from:)` /
+`buildEntityMessage`) + `composerContentEqual` can't drift; unit-tested in `//submodules/TextFormat:TextFormatTests`
+(the repo's first `ios_unit_test`). The send path is automatic — the builder stamps the chat attributes and
+`generateChatInputTextEntities` already emits `.CustomEmoji`/`.TextMention`/`.FormattedDate`. **Creation is unchanged**
+(Date/Code menu items remain no-ops — this is preservation only). **Code blocks still degrade to `.body`** (the
+`Block.code` variant in the Deferred list below). **Known accepted limitation:** a `textUrl` whose string equals a
+`tg://` marker (via markdown/paste/edit) is reinterpreted as a mention/date on round-trip — low-probability,
+documented in `MentionDateMarkers.swift`. Spec/plan in `docs/superpowers/{specs,plans}/2026-06-18-richtext-composer-bridge-gaps*`.
+
 **Load-bearing invariant — the iOS-16 edit menu needs `Display.Window1.hitTest` to forward to it.**
 `UIEditMenuInteraction` hosts its menu in a top-level `_UIEditMenuContainerView` subview of the app window.
 Telegram's `Window1.hitTest` (`submodules/Display/Source/WindowContent.swift`) only forwards touches to window
@@ -192,8 +210,10 @@ custom `UITextInput` presenting `UIEditMenuInteraction` directly. Any editor cha
 edit menu being interactive in the Telegram app depends on this allow-list entry.
 
 **Deferred:** pending caret formatting (inline toggles at a *collapsed* caret are currently inert — they show
-the inherited state but don't affect the next typed char); table structural selection; code-block paragraph
-style + timestamp-entity model (the composer's Code/Date menu items are no-ops until these land).
+the inherited state but don't affect the next typed char); table structural selection; a `Block.code` variant
+for code blocks (until it lands, code blocks degrade to `.body` on the composer bridge and the Code menu item
+stays a no-op — its own spec). Dates now *round-trip* via the link scheme (see the composer-bridge note above),
+but the Date menu item remains a creation no-op (no native timestamp-creation UI yet).
 
 The host action bar (12 icon actions + ContextUI context menus) lives in the separate `RichTextAttachmentScreen`
 module, not this package. Full session handoff: `~/Documents/RichTextEditor/docs/superpowers/handoffs/2026-06-12-richtext-session-handoff.md`.

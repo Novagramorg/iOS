@@ -20,12 +20,24 @@ func buildEntityMessage(from blocks: [Block]) -> (text: String, entities: [Messa
 
         let paragraphStart = result.length
         for run in paragraph.runs {
-            let text: String
             if let emoji = run.attributes.emoji {
-                text = emoji.altText ?? ""
-            } else {
-                text = run.text
+                // Mirror ComposerDocumentBridge: re-emit a customEmoji run; generateChatInputTextEntities
+                // converts it to a .CustomEmoji(fileId:) entity. Prefer altText; fall back to U+FFFC. A
+                // non-numeric id degrades to plain text rather than crashing.
+                let displayText = (emoji.altText?.isEmpty == false) ? emoji.altText! : "\u{FFFC}"
+                let piece = NSMutableAttributedString(string: displayText)
+                let range = NSRange(location: 0, length: piece.length)
+                if let fileId = Int64(emoji.id) {
+                    piece.addAttribute(
+                        ChatTextInputAttributes.customEmoji,
+                        value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil),
+                        range: range
+                    )
+                }
+                result.append(piece)
+                continue
             }
+            let text = run.text
             if text.isEmpty {
                 continue
             }
@@ -51,7 +63,8 @@ func buildEntityMessage(from blocks: [Block]) -> (text: String, entities: [Messa
                 piece.addAttribute(ChatTextInputAttributes.spoiler, value: marker, range: range)
             }
             if let link = attributes.link {
-                piece.addAttribute(ChatTextInputAttributes.textUrl, value: ChatTextInputTextUrlAttribute(url: link), range: range)
+                let attribute = chatInputLinkAttribute(forLink: link)
+                piece.addAttribute(attribute.key, value: attribute.value, range: range)
             }
             result.append(piece)
         }
