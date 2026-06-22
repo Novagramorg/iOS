@@ -6,19 +6,19 @@ public struct EmojiInteraction: Equatable {
     public struct Animation: Equatable {
         public let index: Int
         public let timeOffset: Float
-        
+
         public init(index: Int, timeOffset: Float) {
             self.index = index
             self.timeOffset = timeOffset
         }
     }
-    
+
     public let animations: [Animation]
-    
+
     public init(animations: [Animation]) {
         self.animations = animations
     }
-    
+
     public init?(apiDataJson: Api.DataJSON) {
         if case let .dataJSON(dataJSONData) = apiDataJson {
             let string = dataJSONData.data
@@ -53,11 +53,11 @@ public struct EmojiInteraction: Equatable {
             return nil
         }
     }
-    
+
     fileprivate let roundingBehavior = NSDecimalNumberHandler(roundingMode: .plain, scale: 2, raiseOnExactness: false, raiseOnOverflow: false, raiseOnUnderflow: false, raiseOnDivideByZero: true)
 
     public var apiDataJson: Api.DataJSON {
-        let dict = ["v": 1, "a": self.animations.map({ ["i": $0.index, "t": NSDecimalNumber(value: $0.timeOffset).rounding(accordingToBehavior: roundingBehavior)] as [String : Any] })] as [String : Any]
+        let dict = ["v": 1, "a": self.animations.map({ ["i": $0.index, "t": NSDecimalNumber(value: $0.timeOffset).rounding(accordingToBehavior: roundingBehavior)] as [String: Any] })] as [String: Any]
         if let data = try? JSONSerialization.data(withJSONObject: dict, options: []), let dataString = String(data: data, encoding: .utf8) {
             return .dataJSON(.init(data: dataString))
         } else {
@@ -79,7 +79,7 @@ public enum PeerInputActivity: Comparable {
     case choosingSticker
     case interactingWithEmoji(emoticon: String, messageId: MessageId, interaction: EmojiInteraction?)
     case seeingEmojiInteraction(emoticon: String)
-    
+
     public var key: Int32 {
         switch self {
             case .typingText:
@@ -108,8 +108,8 @@ public enum PeerInputActivity: Comparable {
                 return 11
         }
     }
-    
-    public static func <(lhs: PeerInputActivity, rhs: PeerInputActivity) -> Bool {
+
+    public static func < (lhs: PeerInputActivity, rhs: PeerInputActivity) -> Bool {
         return lhs.key < rhs.key
     }
 }
@@ -155,7 +155,7 @@ extension PeerInputActivity {
             case let .sendMessageEmojiInteractionSeen(sendMessageEmojiInteractionSeenData):
                 let emoticon = sendMessageEmojiInteractionSeenData.emoticon
                 self = .seeingEmojiInteraction(emoticon: emoticon)
-            case .sendMessageTextDraftAction:
+            case .sendMessageTextDraftAction, .inputSendMessageRichMessageDraftAction, .sendMessageRichMessageDraftAction:
                 return nil
         }
     }

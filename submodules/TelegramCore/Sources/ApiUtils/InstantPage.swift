@@ -2,7 +2,6 @@ import Foundation
 import Postbox
 import TelegramApi
 
-
 extension InstantPageCaption {
     convenience init(apiCaption: Api.PageCaption) {
         switch apiCaption {
@@ -37,7 +36,7 @@ extension InstantPageListItem {
                 self = .blocks(blocks.map({ InstantPageBlock(apiBlock: $0) }), nil)
         }
     }
-    
+
     init(apiListOrderedItem: Api.PageListOrderedItem) {
         switch apiListOrderedItem {
             case let .pageListOrderedItemText(pageListOrderedItemTextData):
@@ -99,7 +98,9 @@ extension InstantPageRelatedArticle {
 extension InstantPageBlock {
     init(apiBlock: Api.PageBlock) {
         switch apiBlock {
-            case .pageBlockUnsupported:
+            case .pageBlockUnsupported, .inputPageBlockMap, .pageBlockBlockquoteBlocks, .pageBlockHeading1, .pageBlockHeading2, .pageBlockHeading3, .pageBlockHeading4, .pageBlockHeading5, .pageBlockHeading6, .pageBlockMath, .pageBlockThinking:
+                // 12.8 schema added these page blocks; the fork's InstantPage renderer doesn't model
+                // them, so they fall back to the existing unsupported-block rendering.
                 self = .unsupported
             case let .pageBlockTitle(pageBlockTitleData):
                 let text = pageBlockTitleData.text

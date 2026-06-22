@@ -3,7 +3,6 @@ import Postbox
 import SwiftSignalKit
 import TelegramApi
 
-
 func _internal_clearCloudDraftsInteractively(postbox: Postbox, network: Network, accountPeerId: PeerId) -> Signal<Void, NoError> {
     return network.request(Api.functions.messages.getAllDrafts())
     |> retryRequest
@@ -35,11 +34,11 @@ func _internal_clearCloudDraftsInteractively(postbox: Postbox, network: Network,
                         }
                     }
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                    
+
                     var signals: [Signal<Void, NoError>] = []
                     for key in keys {
-                        _internal_updateChatInputState(transaction: transaction, peerId: key.peerId, threadId: key.threadId,  inputState: nil)
-                        
+                        _internal_updateChatInputState(transaction: transaction, peerId: key.peerId, threadId: key.threadId, inputState: nil)
+
                         if let peer = transaction.getPeer(key.peerId), let inputPeer = apiInputPeer(peer) {
                             var topMsgId: Int32?
                             var monoforumPeerId: Api.InputPeer?
@@ -54,7 +53,7 @@ func _internal_clearCloudDraftsInteractively(postbox: Postbox, network: Network,
                             var replyTo: Api.InputReplyTo?
                             if let topMsgId {
                                 flags |= (1 << 0)
-                                
+
                                 var innerFlags: Int32 = 0
                                 innerFlags |= 1 << 0
                                 replyTo = .inputReplyToMessage(.init(flags: innerFlags, replyToMsgId: 0, topMsgId: topMsgId, replyToPeerId: nil, quoteText: nil, quoteEntities: nil, quoteOffset: nil, monoforumPeerId: nil, todoItemId: nil, pollOption: nil))
@@ -62,7 +61,7 @@ func _internal_clearCloudDraftsInteractively(postbox: Postbox, network: Network,
                                 flags |= (1 << 0)
                                 replyTo = .inputReplyToMonoForum(.init(monoforumPeerId: monoforumPeerId))
                             }
-                            signals.append(network.request(Api.functions.messages.saveDraft(flags: flags, replyTo: replyTo, peer: inputPeer, message: "", entities: nil, media: nil, effect: nil, suggestedPost: nil))
+                            signals.append(network.request(Api.functions.messages.saveDraft(flags: flags, replyTo: replyTo, peer: inputPeer, message: "", entities: nil, media: nil, effect: nil, suggestedPost: nil, richMessage: nil))
                             |> `catch` { _ -> Signal<Api.Bool, NoError> in
                                 return .single(.boolFalse)
                             }
@@ -71,7 +70,7 @@ func _internal_clearCloudDraftsInteractively(postbox: Postbox, network: Network,
                             })
                         }
                     }
-                    
+
                     return combineLatest(signals)
                     |> mapToSignal { _ -> Signal<Void, NoError> in
                         return .complete()

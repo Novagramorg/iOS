@@ -3,7 +3,6 @@ import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
 
-
 public enum JoinLinkInfoError {
     case generic
     case flood
@@ -43,7 +42,7 @@ public enum ExternalJoiningChatState {
             public let isFake: Bool
             public let canRefulfillSubscription: Bool
         }
-        
+
         public let flags: Flags
         public let title: String
         public let about: String?
@@ -55,15 +54,26 @@ public enum ExternalJoiningChatState {
         public let subscriptionFormId: Int64?
         public let verification: PeerVerification?
     }
-    
+
     case invite(Invite)
     case alreadyJoined(EnginePeer)
     case invalidHash
     case peek(EnginePeer, Int32)
 }
 
+func apiUpdatesFromChatInviteJoinResult(_ result: Api.messages.ChatInviteJoinResult) -> Api.Updates {
+    switch result {
+    case let .chatInviteJoinResultOk(data):
+        return data.updates
+    case .chatInviteJoinResultWebView:
+        // The fork's join flow can't complete a web-view (bot/paid-gated) join here; treat as no-op.
+        return .updates(.init(updates: [], users: [], chats: [], date: 0, seq: 0))
+    }
+}
+
 func _internal_joinChatInteractively(with hash: String, account: Account) -> Signal<PeerId?, JoinLinkError> {
     return account.network.request(Api.functions.messages.importChatInvite(hash: hash), automaticFloodWait: false)
+    |> map(apiUpdatesFromChatInviteJoinResult)
     |> mapError { error -> JoinLinkError in
         switch error.errorDescription {
             case "CHANNELS_TOO_MUCH":
@@ -134,7 +144,7 @@ func _internal_joinLinkInformation(_ hash: String, account: Account) -> Signal<E
                         return account.postbox.transaction({ (transaction) -> ExternalJoiningChatState in
                             let parsedPeers = AccumulatedPeers(transaction: transaction, chats: [chat], users: [])
                             updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                            
+
                             return .peek(EnginePeer(peer), expires)
                         })
                         |> castError(JoinLinkInfoError.self)
@@ -154,7 +164,7 @@ public final class JoinCallLinkInformation {
     public let inviter: EnginePeer?
     public let members: [EnginePeer]
     public let totalMemberCount: Int
-    
+
     public init(reference: InternalGroupCallReference, id: Int64, accessHash: Int64, inviter: EnginePeer?, members: [EnginePeer], totalMemberCount: Int) {
         self.reference = reference
         self.id = id

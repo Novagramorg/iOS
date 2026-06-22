@@ -13,7 +13,7 @@ public struct FoundPeer: Equatable {
         self.subscribers = subscribers
     }
 
-    public static func ==(lhs: FoundPeer, rhs: FoundPeer) -> Bool {
+    public static func == (lhs: FoundPeer, rhs: FoundPeer) -> Bool {
         return lhs.peer == rhs.peer && lhs.subscribers == rhs.subscribers
     }
 }
@@ -27,7 +27,7 @@ public enum TelegramSearchPeersScope: Equatable {
 }
 
 public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, network: Network, query: String, scope: TelegramSearchPeersScope) -> Signal<([FoundPeer], [FoundPeer]), NoError> {
-    let searchResult = network.request(Api.functions.contacts.search(q: query, limit: 20), automaticFloodWait: false)
+    let searchResult = network.request(Api.functions.contacts.search(flags: 0, q: query, limit: 20), automaticFloodWait: false)
     |> map(Optional.init)
     |> `catch` { _ in
         return Signal<Api.contacts.Found?, NoError>.single(nil)
@@ -40,9 +40,9 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
                 let (myResults, results, chats, users) = (foundData.myResults, foundData.results, foundData.chats, foundData.users)
                 return postbox.transaction { transaction -> ([FoundPeer], [FoundPeer]) in
                     var subscribers: [PeerId: Int32] = [:]
-                    
+
                     let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
-                    
+
                     for chat in chats {
                         if let groupOrChannel = parseTelegramGroupOrChannel(chat: chat) {
                             switch chat {
@@ -56,9 +56,9 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
                             }
                         }
                     }
-                                        
+
                     updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: parsedPeers)
-                    
+
                     var renderedMyPeers: [FoundPeer] = []
                     for result in myResults {
                         let peerId: PeerId = result.peerId
@@ -73,7 +73,7 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
                             }
                         }
                     }
-                    
+
                     var renderedPeers: [FoundPeer] = []
                     for result in results {
                         let peerId: PeerId = result.peerId
@@ -88,7 +88,7 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
                             }
                         }
                     }
-                    
+
                     switch scope {
                     case .everywhere:
                         break
@@ -145,7 +145,7 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
                         renderedMyPeers = []
                         renderedPeers = []
                     }
-                    
+
                     return (renderedMyPeers, renderedPeers)
                 }
             }
@@ -153,7 +153,7 @@ public func _internal_searchPeers(accountPeerId: PeerId, postbox: Postbox, netwo
             return .single(([], []))
         }
     }
-    
+
     return processedSearchResult
 }
 

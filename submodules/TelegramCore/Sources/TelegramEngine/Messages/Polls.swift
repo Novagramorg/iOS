@@ -28,7 +28,6 @@ func pollCloudMediaToInputMedia(_ media: Media) -> Api.InputMedia? {
     return nil
 }
 
-
 public enum RequestMessageSelectPollOptionError {
     case generic
     case restrictedToSubscribers
@@ -91,7 +90,7 @@ func _internal_requestMessageSelectPollOption(account: Account, messageId: Messa
                                         resultPoll = TelegramMediaPoll(pollId: pollId, publicity: publicity, kind: kind, text: questionText, textEntities: questionEntities, options: answers.map(TelegramMediaPollOption.init(apiOption:)), correctAnswers: nil, results: TelegramMediaPollResults(apiResults: results), isClosed: (flags & (1 << 0)) != 0, deadlineTimeout: closePeriod, deadlineDate: closeDate, pollHash: pollHash, openAnswers: openAnswers, revotingDisabled: revotingDisabled, shuffleAnswers: shuffleAnswers, hideResultsUntilClose: hideResultsUntilClose, attachedMedia: resultPoll?.attachedMedia, restrictToSubscribers: restrictToSubscribers, countries: countries ?? [])
                                     }
                                 }
-                                
+
                                 let resultsMin: Bool
                                 switch results {
                                 case let .pollResults(pollResultsData):
@@ -99,7 +98,7 @@ func _internal_requestMessageSelectPollOption(account: Account, messageId: Messa
                                     resultsMin = (flags & (1 << 0)) != 0
                                 }
                                 resultPoll = resultPoll?.withUpdatedResults(TelegramMediaPollResults(apiResults: results), min: resultsMin)
-                                
+
                                 if let resultPoll = resultPoll {
                                     updateMessageMedia(transaction: transaction, id: pollId, media: resultPoll)
                                 }
@@ -107,7 +106,6 @@ func _internal_requestMessageSelectPollOption(account: Account, messageId: Messa
                                 break
                             }
                         }
-                        break
                     default:
                         break
                     }
@@ -140,7 +138,7 @@ func _internal_addPollOption(account: Account, messageId: MessageId, text: Strin
                 return .generic
             }
             |> mapToSignal { result -> Signal<TelegramMediaPoll?, AddPollOptionError> in
-                return account.postbox.transaction { transaction -> TelegramMediaPoll? in
+                return account.postbox.transaction { _ -> TelegramMediaPoll? in
                     account.stateManager.addUpdates(result)
                     return nil
                 }
@@ -168,7 +166,7 @@ func _internal_deletePollOption(account: Account, messageId: MessageId, opaqueId
                 return .generic
             }
             |> mapToSignal { result -> Signal<TelegramMediaPoll?, DeletePollOptionError> in
-                return account.postbox.transaction { transaction -> TelegramMediaPoll? in
+                return account.postbox.transaction { _ -> TelegramMediaPoll? in
                     account.stateManager.addUpdates(result)
                     return nil
                 }
@@ -202,7 +200,7 @@ func _internal_requestClosePoll(postbox: Postbox, network: Network, stateManager
         }
         var flags: Int32 = 0
         flags |= 1 << 14
-        
+
         var pollFlags: Int32 = 0
         switch poll.kind {
         case let .poll(multipleAnswers):
@@ -225,7 +223,7 @@ func _internal_requestClosePoll(postbox: Postbox, network: Network, stateManager
         var correctAnswersIndices: [Int32]?
         if let correctAnswersValue = poll.correctAnswers {
             pollMediaFlags |= 1 << 0
-            
+
             var indices: [Int32] = []
             for i in 0 ..< poll.options.count {
                 if correctAnswersValue.contains(where: { poll.options[i].opaqueIdentifier == $0 }) {
@@ -269,8 +267,8 @@ func _internal_requestClosePoll(postbox: Postbox, network: Network, stateManager
             mappedSolutionEntities = apiTextAttributeEntities(TextEntitiesMessageAttribute(entities: solution.entities), associatedPeers: SimpleDictionary())
             pollMediaFlags |= 1 << 1
         }
-        
-        return network.request(Api.functions.messages.editMessage(flags: flags, peer: inputPeer, id: messageId.id, message: nil, media: .inputMediaPoll(.init(flags: pollMediaFlags, poll: .poll(.init(id: poll.pollId.id, flags: pollFlags, question: .textWithEntities(.init(text: poll.text, entities: apiEntitiesFromMessageTextEntities(poll.textEntities, associatedPeers: SimpleDictionary()))), answers: poll.options.map({ $0.apiOption }), closePeriod: poll.deadlineTimeout, closeDate: poll.deadlineDate, countriesIso2: poll.countries, hash: 0)), correctAnswers: correctAnswersIndices, attachedMedia: nil, solution: mappedSolution, solutionEntities: mappedSolutionEntities, solutionMedia: nil)), replyMarkup: nil, entities: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, quickReplyShortcutId: nil))
+
+        return network.request(Api.functions.messages.editMessage(flags: flags, peer: inputPeer, id: messageId.id, message: nil, media: .inputMediaPoll(.init(flags: pollMediaFlags, poll: .poll(.init(id: poll.pollId.id, flags: pollFlags, question: .textWithEntities(.init(text: poll.text, entities: apiEntitiesFromMessageTextEntities(poll.textEntities, associatedPeers: SimpleDictionary()))), answers: poll.options.map({ $0.apiOption }), closePeriod: poll.deadlineTimeout, closeDate: poll.deadlineDate, countriesIso2: poll.countries, hash: 0)), correctAnswers: correctAnswersIndices, attachedMedia: nil, solution: mappedSolution, solutionEntities: mappedSolutionEntities, solutionMedia: nil)), replyMarkup: nil, entities: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, quickReplyShortcutId: nil, richMessage: nil))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.Updates?, NoError> in
             return .single(nil)
@@ -288,7 +286,7 @@ final class CachedPollOptionResult: Codable {
     let peerIds: [PeerId]
     let dates: [Int32]
     let count: Int32
-    
+
     public static func key(pollId: MediaId, optionOpaqueIdentifier: Data) -> ValueBoxKey {
         let key = ValueBoxKey(length: 4 + 8 + optionOpaqueIdentifier.count)
         key.setInt32(0, value: pollId.namespace)
@@ -296,13 +294,13 @@ final class CachedPollOptionResult: Codable {
         key.setData(4 + 8, value: optionOpaqueIdentifier)
         return key
     }
-    
+
     public init(peerIds: [PeerId], dates: [Int32], count: Int32) {
         self.peerIds = peerIds
         self.dates = dates
         self.count = count
     }
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: StringCodingKey.self)
 
@@ -310,7 +308,7 @@ final class CachedPollOptionResult: Codable {
         self.dates = try container.decode([Int32].self, forKey: "dates")
         self.count = try container.decode(Int32.self, forKey: "count")
     }
-    
+
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: StringCodingKey.self)
 
@@ -334,9 +332,9 @@ private final class PollResultsOptionContext {
     private var results: [PollResultsOptionState.Voter] = []
     private var count: Int?
     private var populateCache: Bool = true
-    
+
     let state = Promise<PollResultsOptionState>()
-    
+
     init(queue: Queue, account: Account, pollId: MediaId, messageId: MessageId, opaqueIdentifier: Data, count: Int?) {
         self.queue = queue
         self.account = account
@@ -344,7 +342,7 @@ private final class PollResultsOptionContext {
         self.messageId = messageId
         self.opaqueIdentifier = opaqueIdentifier
         self.count = count
-        
+
         self.isLoadingMore = true
         self.disposable.set((account.postbox.transaction { transaction -> (peers: [PollResultsOptionState.Voter], canLoadMore: Bool)? in
             let cachedResult = transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedPollResults, key: CachedPollOptionResult.key(pollId: pollId, optionOpaqueIdentifier: opaqueIdentifier)))?.get(CachedPollOptionResult.self)
@@ -375,11 +373,11 @@ private final class PollResultsOptionContext {
             strongSelf.loadMore()
         }))
     }
-    
+
     deinit {
         self.disposable.dispose()
     }
-    
+
     func loadMore() {
         if self.isLoadingMore {
             return
@@ -487,7 +485,7 @@ private final class PollResultsOptionContext {
         }))
         self.updateState()
     }
-    
+
     func updateState() {
         self.state.set(.single(PollResultsOptionState(peers: self.results, isLoadingMore: self.isLoadingMore, hasLoadedOnce: self.hasLoadedOnce, canLoadMore: self.canLoadMore, count: self.count)))
     }
@@ -497,13 +495,13 @@ public struct PollResultsOptionState: Equatable {
     public struct Voter: Equatable {
         public var peer: RenderedPeer
         public var date: Int32
-        
+
         public init(peer: RenderedPeer, date: Int32) {
             self.peer = peer
             self.date = date
         }
     }
-    
+
     public var peers: [Voter]
     public var isLoadingMore: Bool
     public var hasLoadedOnce: Bool
@@ -517,14 +515,14 @@ public struct PollResultsState: Equatable {
 
 private final class PollResultsContextImpl {
     private let queue: Queue
-    
+
     private var optionContexts: [Data: PollResultsOptionContext] = [:]
-    
+
     let state = Promise<PollResultsState>()
-    
+
     init(queue: Queue, account: Account, messageId: MessageId, poll: TelegramMediaPoll) {
         self.queue = queue
-        
+
         for option in poll.options {
             var count: Int?
             if let voters = poll.results.voters {
@@ -536,7 +534,7 @@ private final class PollResultsContextImpl {
             }
             self.optionContexts[option.opaqueIdentifier] = PollResultsOptionContext(queue: self.queue, account: account, pollId: poll.pollId, messageId: messageId, opaqueIdentifier: option.opaqueIdentifier, count: count)
         }
-        
+
         self.state.set(combineLatest(queue: self.queue, self.optionContexts.map { (opaqueIdentifier, context) -> Signal<(Data, PollResultsOptionState), NoError> in
             return context.state.get()
             |> map { state -> (Data, PollResultsOptionState) in
@@ -550,12 +548,12 @@ private final class PollResultsContextImpl {
             }
             return PollResultsState(options: options)
         })
-        
+
         for (_, context) in self.optionContexts {
             context.loadMore()
         }
     }
-    
+
     func loadMore(optionOpaqueIdentifier: Data) {
         self.optionContexts[optionOpaqueIdentifier]?.loadMore()
     }
@@ -564,7 +562,7 @@ private final class PollResultsContextImpl {
 public final class PollResultsContext {
     private let queue: Queue = Queue()
     private let impl: QueueLocalObject<PollResultsContextImpl>
-    
+
     public var state: Signal<PollResultsState, NoError> {
         return Signal { subscriber in
             let disposable = MetaDisposable()
@@ -576,14 +574,14 @@ public final class PollResultsContext {
             return disposable
         }
     }
-    
+
     init(account: Account, messageId: MessageId, poll: TelegramMediaPoll) {
         let queue = self.queue
         self.impl = QueueLocalObject(queue: queue, generate: {
             return PollResultsContextImpl(queue: queue, account: account, messageId: messageId, poll: poll)
         })
     }
-    
+
     public func loadMore(optionOpaqueIdentifier: Data) {
         self.impl.with { impl in
             impl.loadMore(optionOpaqueIdentifier: optionOpaqueIdentifier)

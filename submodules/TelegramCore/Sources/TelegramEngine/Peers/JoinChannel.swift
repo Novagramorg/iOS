@@ -4,7 +4,6 @@ import TelegramApi
 import SwiftSignalKit
 import MtProtoKit
 
-
 public enum JoinChannelError {
     case generic
     case tooMuchJoined
@@ -17,16 +16,18 @@ func _internal_joinChannel(account: Account, peerId: PeerId, hash: String?) -> S
     |> take(1)
     |> castError(JoinChannelError.self)
     |> mapToSignal { peer -> Signal<RenderedChannelParticipant?, JoinChannelError> in
-        
+
         let request: Signal<Api.Updates, MTRpcError>
         if let hash = hash {
             request = account.network.request(Api.functions.messages.importChatInvite(hash: hash))
+            |> map(apiUpdatesFromChatInviteJoinResult)
         } else if let inputChannel = apiInputChannel(peer) {
             request = account.network.request(Api.functions.channels.joinChannel(channel: inputChannel))
+            |> map(apiUpdatesFromChatInviteJoinResult)
         } else {
             request = .fail(.init())
         }
-        
+
         return request
         |> mapError { error -> JoinChannelError in
             switch error.errorDescription {
@@ -42,9 +43,9 @@ func _internal_joinChannel(account: Account, peerId: PeerId, hash: String?) -> S
         }
         |> mapToSignal { updates -> Signal<RenderedChannelParticipant?, JoinChannelError> in
             account.stateManager.addUpdates(updates)
-            
+
             let channels = updates.chats.compactMap { parseTelegramGroupOrChannel(chat: $0) }.compactMap(apiInputChannel)
-            
+
             if let inputChannel = channels.first {
                 return account.network.request(Api.functions.channels.getParticipant(channel: inputChannel, participant: .inputPeerSelf))
                 |> map(Optional.init)
@@ -78,7 +79,7 @@ func _internal_joinChannel(account: Account, peerId: PeerId, hash: String?) -> S
                                 }
                             }
                         }
-                        
+
                         return RenderedChannelParticipant(participant: updatedParticipant, peer: EnginePeer(peer), peers: peers, presences: presences)
                     }
                     |> castError(JoinChannelError.self)
@@ -86,12 +87,11 @@ func _internal_joinChannel(account: Account, peerId: PeerId, hash: String?) -> S
             } else {
                 return .fail(.generic)
             }
-            
-            
+
         }
         |> afterCompleted {
             if hash == nil {
-                let _ = _internal_requestRecommendedChannels(account: account, peerId: peerId, forceUpdate: true).startStandalone()
+                _ = _internal_requestRecommendedChannels(account: account, peerId: peerId, forceUpdate: true).startStandalone()
             }
         }
     }
