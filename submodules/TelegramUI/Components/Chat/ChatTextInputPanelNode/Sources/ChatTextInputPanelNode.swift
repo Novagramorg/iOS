@@ -371,6 +371,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public var ignoreInputStateUpdates: Bool = false
+    private var ignoreChatInputTextNodeDidUpdateText: Bool = false
     
     override public var context: AccountContext? {
         didSet {
@@ -469,6 +470,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public func updateInputTextState(_ state: ChatTextInputState, keepSendButtonEnabled: Bool, extendedSearchLayout: Bool, accessoryItems: [ChatTextInputAccessoryItem], animated: Bool) {
         if self.ignoreInputStateUpdates {
             return
+        }
+        
+        self.ignoreChatInputTextNodeDidUpdateText = true
+        defer {
+            self.ignoreChatInputTextNodeDidUpdateText = false
         }
         
         if let currentState = self.presentationInterfaceState {
@@ -3867,6 +3873,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     public func chatInputTextNodeDidUpdateText() {
+        if self.ignoreChatInputTextNodeDidUpdateText {
+            return
+        }
         if let richTextInputNode = self.richTextInputNode, let presentationInterfaceState = self.presentationInterfaceState, let context = self.context {
             let baseFontSize = max(minInputFontSize, presentationInterfaceState.fontSize.baseDisplaySize)
             richTextInputNode.refreshTextInputAttributes(context: context, primaryTextColor: presentationInterfaceState.theme.chat.inputPanel.primaryTextColor, accentTextColor: presentationInterfaceState.theme.chat.inputPanel.panelControlAccentColor, baseFontSize: baseFontSize, spoilersRevealed: self.spoilersRevealed, availableEmojis: (self.context?.animatedEmojiStickersValue.keys).flatMap(Set.init) ?? Set(), emojiViewProvider: self.emojiViewProvider)

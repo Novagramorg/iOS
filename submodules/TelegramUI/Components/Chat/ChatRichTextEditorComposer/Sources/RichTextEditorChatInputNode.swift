@@ -3,6 +3,7 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import TextFormat
+import TelegramCore
 import RichTextEditorCore
 import RichTextEditorUIKit
 import ChatInputTextNode
@@ -22,6 +23,13 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     private weak var storedDelegate: ChatInputTextNodeDelegate?
 
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)?
+
+    /// fileId → the file-bearing custom-emoji attribute, harvested from each `attributedText` push. The
+    /// editor hosts inline emoji by their `EmojiRef` fileId STRING only (`document(from:)` drops the
+    /// `TelegramMediaFile`), but the host renderer (`EmojiTextAttachmentView`) needs the file — so we cache
+    /// the full attribute here and rebuild it for the editor's view provider. Mirrors
+    /// `RichTextEmojiKeyboardController.emojiFiles`.
+    private var customEmojiAttributes: [Int64: ChatTextInputTextCustomEmojiAttribute] = [:]
 
     public var asNode: ASDisplayNode { self }
 
@@ -92,6 +100,21 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         self.editorView.onResignedFirstResponder = { [weak self] in
             self?.storedDelegate?.chatInputTextNodeDidFinishEditing()
         }
+
+        // Custom-emoji rendering. The editor hosts each inline emoji via this provider, asking by the
+        // `EmojiRef` fileId string. Forward to the chat host's `emojiViewProvider` (set by the panel),
+        // rebuilding the file-bearing `ChatTextInputTextCustomEmojiAttribute` from the cache harvested in
+        // the `attributedText` setter — the editor carries only the fileId, but the renderer needs the
+        // `TelegramMediaFile`. WITHOUT this, the editor's `canvas.emojiViewProvider` stays nil and an
+        // inserted custom emoji renders blank (only its `U+FFFC` spacer is laid out). The closure reads
+        // `self.emojiViewProvider` lazily, so the panel may set it after this registration. `size` is
+        // ignored: the host renderer picks its own point size and the editor frames the returned view to
+        // the glyph rect.
+        self.editorView.registerEmojiViewProvider { [weak self] id, _ in
+            guard let self, let fileId = Int64(id), let attribute = self.customEmojiAttributes[fileId],
+                  let provider = self.emojiViewProvider else { return nil }
+            return provider(attribute)
+        }
     }
 
     // MARK: Display (Task 3)
@@ -99,6 +122,16 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         get { ComposerDocumentBridge.attributedString(from: self.editorView.document, baseFontSize: self.baseFontSize) }
         set {
             let incoming = newValue ?? NSAttributedString(string: "")
+            // Harvest file-bearing custom-emoji attributes so the editor's fileId-only emoji-view provider
+            // can rebuild them (`document(from:)` keeps only the fileId in the `EmojiRef`, dropping the
+            // `TelegramMediaFile` the renderer needs). Done BEFORE the equality guard so the cache stays
+            // current even when the document is not rebuilt. Only cache a file-BEARING attribute, so a later
+            // file-less round-trip (the getter emits `file: nil`) never clobbers a resolved one.
+            incoming.enumerateAttribute(ChatTextInputAttributes.customEmoji, in: NSRange(location: 0, length: incoming.length), options: []) { value, _, _ in
+                if let attribute = value as? ChatTextInputTextCustomEmojiAttribute, attribute.file != nil {
+                    self.customEmojiAttributes[attribute.fileId] = attribute
+                }
+            }
             let current = ComposerDocumentBridge.attributedString(from: self.editorView.document, baseFontSize: self.baseFontSize)
             if ComposerDocumentBridge.composerContentEqual(incoming, current) {
                 return
