@@ -81,7 +81,7 @@ public func giftSaleAlertController(
     case .stars:
         priceString = strings.Gift_Buy_Confirm_Text_Stars(Int32(clamping: resellAmount.amount.value))
     case .ton:
-        priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)) GRAM**"
+        priceString = "**\(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat, formatString: presentationData.strings.Currency_Grams))**"
     }
     
     let text = strings.Gift_Sell_Confirm_Text(giftTitle, priceString).string
@@ -189,7 +189,7 @@ public func giftSaleAlertController(
     case .stars:
         listString = strings.Gift_Sell_Confirm_ListFor(Int32(resellAmount.amount.value))
     case .ton:
-        listString = strings.Gift_Sell_Confirm_ListForTon(formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat)).string
+        listString = formatTonAmountText(resellAmount.amount.value, dateTimeFormat: presentationData.dateTimeFormat, formatString: strings.Gift_Sell_Confirm_ListForGrams)
     }
     actions.append(.init(id: "list", title: listString, type: .default, action: {
         commit()
