@@ -189,7 +189,15 @@ private func chatInputRuns(
     resolveEmoji: (EmojiRef) -> (fileId: Int64, file: TelegramMediaFile?)?
 ) -> [ChatInputRun] {
     return runs.map { run in
-        ChatInputRun(text: run.text, attributes: chatInputInlineAttributes(fromCharacterAttributes: run.attributes, resolveEmoji: resolveEmoji))
+        let attributes = chatInputInlineAttributes(fromCharacterAttributes: run.attributes, resolveEmoji: resolveEmoji)
+        // A custom emoji is a single `U+FFFC` in the editor `Document`, with its placeholder/alt text on the
+        // `EmojiRef`. The chat currency instead carries that alt text AS the run text under the custom-emoji
+        // entity (matching `chatInputContent(from:)` / `ComposerDocumentBridge`), so the SENT message's text +
+        // entity length are the emoji, not a bare `U+FFFC`. Substitute it when this resolved to a custom emoji.
+        if case .customEmoji? = attributes.entity, let altText = run.attributes.emoji?.altText, !altText.isEmpty {
+            return ChatInputRun(text: altText, attributes: attributes)
+        }
+        return ChatInputRun(text: run.text, attributes: attributes)
     }
 }
 
@@ -388,7 +396,17 @@ private func runs(
     registerEmoji: (Int64, TelegramMediaFile?) -> EmojiRef
 ) -> [TextRun] {
     return runs.map { run in
-        TextRun(text: run.text, attributes: characterAttributes(fromChatInputInlineAttributes: run.attributes, registerEmoji: registerEmoji))
+        var attributes = characterAttributes(fromChatInputInlineAttributes: run.attributes, registerEmoji: registerEmoji)
+        // The reverse of the forward `chatInputRuns` substitution: a custom emoji must be a single `U+FFFC`
+        // in the editor `Document` (the editor's emoji invariant), with the chat-currency run text preserved
+        // as the `EmojiRef.altText` so a later forward pass re-emits it verbatim (and the editor's
+        // `insertEmoji` altText round-trips). `registerEmoji` mints the ref with a nil altText; fill it here.
+        if case .customEmoji? = run.attributes.entity, var emoji = attributes.emoji {
+            emoji.altText = run.text
+            attributes.emoji = emoji
+            return TextRun(text: "\u{FFFC}", attributes: attributes)
+        }
+        return TextRun(text: run.text, attributes: attributes)
     }
 }
 

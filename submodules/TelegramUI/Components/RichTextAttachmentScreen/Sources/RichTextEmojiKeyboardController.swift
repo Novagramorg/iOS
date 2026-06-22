@@ -33,8 +33,26 @@ final class RichTextEmojiKeyboardController {
     private var currentData: ChatEntityKeyboardInputNode.InputData?
 
     /// Files for custom emoji the user has inserted, keyed by fileId — the editor's emoji-view-provider
-    /// resolves these to live `InlineStickerItemLayer` views.
+    /// resolves these to live `InlineStickerItemLayer` views. Seeded on open with the files of any emoji the
+    /// initial document already references (`seedEmojiFiles`), so a custom emoji carried in from the chat
+    /// composer renders without the user re-picking it, and its file survives back out (`currentEmojiFiles`).
     private var emojiFiles: [Int64: TelegramMediaFile] = [:]
+
+    /// Seed the file store with custom-emoji files the initial document references (the editor `Document`
+    /// itself carries only fileIds). Merge rather than replace, so a file the user later picks for the same
+    /// fileId is not lost. Call before the editor's first layout, so the seeded emoji resolve on first render.
+    func seedEmojiFiles(_ files: [Int64: TelegramMediaFile]) {
+        for (fileId, file) in files {
+            self.emojiFiles[fileId] = file
+        }
+    }
+
+    /// The full file store (seeded + user-inserted), keyed by fileId — handed back so the caller can re-attach
+    /// the `TelegramMediaFile` to each custom-emoji run when converting the editor's fileId-only `Document`
+    /// back to the chat currency.
+    var currentEmojiFiles: [Int64: TelegramMediaFile] {
+        return self.emojiFiles
+    }
 
     private(set) var isEmojiMode = false
 

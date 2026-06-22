@@ -839,7 +839,7 @@ extension ChatControllerImpl {
                 case .richText:
                     let controller = RichTextAttachmentScreen(
                         context: context,
-                        sendMessage: { [weak self] document, media in
+                        sendMessage: { [weak self] document, media, _ in
                             guard let strongSelf = self else {
                                 return
                             }
