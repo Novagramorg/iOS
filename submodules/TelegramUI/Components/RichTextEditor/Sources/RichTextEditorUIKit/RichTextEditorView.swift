@@ -73,6 +73,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public override init(frame: CGRect) {
         super.init(frame: frame)
         addSubview(scrollView)
+        scrollView.clipsToBounds = false
         // Don't hold touches during pan-arbitration (~150ms) before delivering them to the canvas's tap
         // recognizer — that delay compounded the tap-to-caret latency. The handle-pan↔scroll arbitration
         // is gate-only (DocumentCanvasView.gestureRecognizerShouldBegin), so this is safe.

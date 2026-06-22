@@ -40,7 +40,7 @@ public enum BlockLayoutBackend {
     /// Force the TextKit-1 engine. Set this manually (e.g. from a debug hook) to `true` before the editor
     /// builds its blocks — it's read at block-construction time, so reopen the composer to apply.
     public static var forceTextKit1: Bool = {
-        #if DEBUG
+        #if DEBUG && false
         return true
         #else
         return false
