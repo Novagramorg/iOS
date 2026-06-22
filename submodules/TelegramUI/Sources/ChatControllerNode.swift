@@ -4772,7 +4772,15 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             } else {
                 effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.composeInputState.inputText)
             }
-            
+
+            let composeContent = effectivePresentationInterfaceState.interfaceState.composeInputState.content
+            // Rich-message routing: new messages only (editMessage == nil), structural content the entity
+            // set can't express (heading/list/table/media), and non-empty. Entity-expressible content
+            // (text/quote/code/collapsed-quote/mention/date/custom-emoji-in-body) keeps the text+entities path.
+            let sendAsRichMessage = effectivePresentationInterfaceState.interfaceState.editMessage == nil
+                && !composeContent.isEntityExpressible
+                && !composeContent.isEmpty
+
             let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
             
             var inlineStickers: [MediaId: Media] = [:]
@@ -4911,6 +4919,32 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                 }
                 
+                if sendAsRichMessage {
+                    var attributes: [MessageAttribute] = [RichTextMessageAttribute(instantPage: instantPage(from: composeContent), fullInstantPage: nil)]
+
+                    // url-preview attribute parity (duplicated, not shared, to keep the text loop byte-identical)
+                    if let urlPreview = self.chatPresentationInterfaceState.urlPreview {
+                        if self.chatPresentationInterfaceState.interfaceState.composeDisableUrlPreviews.contains(urlPreview.url) {
+                            attributes.append(OutgoingContentInfoMessageAttribute(flags: [.disableLinkPreviews]))
+                        } else {
+                            attributes.append(WebpagePreviewMessageAttribute(leadingPreview: !urlPreview.positionBelowText, forceLargeMedia: urlPreview.largeMedia, isManuallyAdded: true, isSafe: false))
+                        }
+                    }
+
+                    // bubble-up parity: same harvested source + dedupe + ">1 → clear" rule as the text loop,
+                    // applied to this single rich message.
+                    var bubbleUpEmojiOrStickersets: [ItemCollectionId] = []
+                    for packId in bubbleUpEmojiOrStickersetsById.values {
+                        if !bubbleUpEmojiOrStickersets.contains(packId) {
+                            bubbleUpEmojiOrStickersets.append(packId)
+                        }
+                    }
+                    if bubbleUpEmojiOrStickersets.count > 1 {
+                        bubbleUpEmojiOrStickersets.removeAll()
+                    }
+
+                    messages.append(.message(text: "", attributes: attributes, inlineStickers: inlineStickers, mediaReference: mediaReference, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets))
+                } else {
                 do {
                     for text in breakChatInputText(trimChatInputText(inputText)) {
                         if text.length != 0 {
@@ -4957,6 +4991,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if let mediaReferenceValue = mediaReference {
                     mediaReference = nil
                     messages.append(.message(text: "", attributes: [], inlineStickers: inlineStickers, mediaReference: mediaReferenceValue, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+                }
                 }
 
                 var forwardingToSameChat = false
