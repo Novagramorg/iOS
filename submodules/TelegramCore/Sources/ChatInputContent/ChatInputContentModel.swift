@@ -127,30 +127,34 @@ public struct ChatInputContent: Equatable, Codable {
         self.blocks = blocks
     }
 
-    /// The flat plain text, identical to `attributedString(from: self).string`: blocks joined by a single
-    /// "\n", a paragraph/code block contributing its runs' text and a `collapsedQuote` contributing one " "
+    /// The flat plain text, identical to `attributedString(from: self).string`: the flat-axis blocks joined by a
+    /// single "\n", a paragraph/code block contributing its runs' text and a `collapsedQuote` contributing one " "
     /// placeholder. (Quote coalescing in the conversion changes only the block *attribute*, not the text, so a
-    /// per-block "\n" join reproduces it exactly.) Lets `inputText`-string readers move to the model — a
-    /// round-trip-parity test guards the equivalence.
+    /// per-block "\n" join reproduces it exactly.) A `.media`/`.table` block is OFF the flat axis — it contributes
+    /// no character AND no separator (matching `attributedString(from:)`, which drops them, and the editor's
+    /// `composerParagraphs()`, which skips them); a non-text block has no flat-text/caret representation. Lets
+    /// `inputText`-string readers move to the model — a round-trip-parity test guards the equivalence.
     public var plainText: String {
         var result = ""
-        var isFirst = true
+        var hasEmitted = false
         for block in self.blocks {
-            if !isFirst {
-                result.append("\n")
-            }
-            isFirst = false
             switch block {
             case let .paragraph(paragraph):
+                if hasEmitted { result.append("\n") }
+                hasEmitted = true
                 result.append(paragraph.text)
             case let .code(code):
+                if hasEmitted { result.append("\n") }
+                hasEmitted = true
                 result.append(code.text)
             case .collapsedQuote:
+                if hasEmitted { result.append("\n") }
+                hasEmitted = true
                 result.append(" ")
-            case .media:
-                result.append(" ")
-            case .table:
-                result.append(" ")
+            case .media, .table:
+                // Off the flat axis: no character AND no separator (see `blockFlatLength`). Matches
+                // `attributedString(from:)` (drops them) and the editor's `composerParagraphs()` (skips them).
+                break
             }
         }
         return result
@@ -161,10 +165,12 @@ public struct ChatInputContent: Equatable, Codable {
         return (self.plainText as NSString).length
     }
 
-    /// Whether the composer text is empty — identical to `plainText.isEmpty` / `length == 0`, but **without
-    /// building the string** (so it's cheap on hot paths, unlike reading the derived `inputText`). Empty iff
-    /// there are no blocks, or exactly one block whose text is empty (2+ blocks always carry an inter-block
-    /// "\n"; a `collapsedQuote` is a non-empty placeholder).
+    /// Whether the composer has NO content — cheaper than `plainText.isEmpty` (it never builds the string).
+    /// Matches `plainText.isEmpty` / `length == 0` for text content, but is **content-aware, not flat-text-aware**:
+    /// a single `.media`/`.table` block has empty flat text yet is NOT empty (a medium/table IS content), so
+    /// `isEmpty == false` while `plainText.isEmpty == true` there. Empty iff there are no blocks, or exactly one
+    /// block whose text is empty (2+ blocks always carry an inter-block "\n"; a `collapsedQuote`/`media`/`table`
+    /// is non-empty).
     public var isEmpty: Bool {
         guard self.blocks.count <= 1 else {
             return false
@@ -690,8 +696,22 @@ public struct ChatInputSelection: Equatable {
 }
 
 public extension ChatInputContent {
+    /// Whether a block lives on the flat caret axis (`plainText`): paragraphs, code, and `collapsedQuote` do (they
+    /// contribute text / a " " placeholder + an inter-block "\n"); `.media`/`.table` do NOT (off-axis — no
+    /// character, no separator), so a non-text block has no flat-text/caret position. Mirrors which blocks
+    /// `attributedString(from:)` emits and the editor's `composerParagraphs()` keeps.
+    private func blockIsFlatParticipating(_ block: ChatInputBlock) -> Bool {
+        switch block {
+        case .paragraph, .code, .collapsedQuote:
+            return true
+        case .media, .table:
+            return false
+        }
+    }
+
     /// Flat (caret) extent of a top-level block in `plainText`: a paragraph/code block contributes its text
-    /// length; a `collapsedQuote` contributes 1 (its folded " " placeholder; its nested content is off-string).
+    /// length; a `collapsedQuote` contributes 1 (its folded " " placeholder; its nested content is off-string);
+    /// a `.media`/`.table` block contributes 0 (off-axis — see `blockIsFlatParticipating`).
     private func blockFlatLength(_ block: ChatInputBlock) -> Int {
         switch block {
         case let .paragraph(paragraph):
@@ -700,16 +720,16 @@ public extension ChatInputContent {
             return (code.text as NSString).length
         case .collapsedQuote:
             return 1
-        case .media:
-            return 1
-        case .table:
-            return 1
+        case .media, .table:
+            return 0
         }
     }
 
     /// Map a structural position to a flat UTF-16 offset into `plainText`. Only depth-1 positions (the editing
     /// surface today) round-trip exactly; a deeper path (into not-yet-unfolded nested content, which has no flat
-    /// representation) clamps to the addressed top-level block's start.
+    /// representation) clamps to the addressed top-level block's start. Off-axis (`.media`/`.table`) blocks
+    /// contribute neither length nor a separator, so the flat space matches `plainText` exactly; a position that
+    /// addresses an off-axis block (defensive — the editor never selects into one) clamps to that boundary.
     func flatOffset(for position: ChatInputPosition) -> Int {
         guard let first = position.path.first else {
             return 0
@@ -719,34 +739,56 @@ public extension ChatInputContent {
             return 0
         }
         let blockIndex = min(max(first.blockIndex, 0), count - 1)
-        var base = 0
-        for i in 0 ..< blockIndex {
-            base += blockFlatLength(self.blocks[i]) + 1 // + inter-block "\n"
+        var flat = 0
+        var hasEmitted = false
+        for i in 0 ... blockIndex {
+            let block = self.blocks[i]
+            guard blockIsFlatParticipating(block) else {
+                // Off-axis block: no flat position. If it is the addressed block, clamp to the current boundary
+                // (== just after the previous participating block; it adds no separator).
+                if i == blockIndex { return flat }
+                continue
+            }
+            if hasEmitted { flat += 1 } // the inter-block "\n" preceding this participating block
+            if i == blockIndex {
+                if position.path.count == 1 {
+                    let leafLength = blockFlatLength(block)
+                    return flat + min(max(position.offset, 0), leafLength)
+                }
+                return flat
+            }
+            hasEmitted = true
+            flat += blockFlatLength(block)
         }
-        if position.path.count == 1 {
-            let leafLength = blockFlatLength(self.blocks[blockIndex])
-            return base + min(max(position.offset, 0), leafLength)
-        }
-        return base
+        return flat
     }
 
     /// Map a flat UTF-16 offset (into `plainText`) to a structural position. Always a depth-1 path — the flat
-    /// string only contains top-level, unfolded content. Offsets straddling an inter-block "\n" resolve cleanly
-    /// (the "\n" is its own index: `endOfBlockI` and `startOfBlockI+1` are distinct consecutive offsets).
+    /// string only contains top-level, unfolded content. Off-axis (`.media`/`.table`) blocks are skipped (they
+    /// hold no flat position), so an offset never resolves INTO one; offsets straddling an inter-block "\n"
+    /// resolve cleanly (the "\n" is its own index: `endOfBlockI` and `startOfBlockI+1` are distinct).
     func position(forFlatOffset rawOffset: Int) -> ChatInputPosition {
         let total = (self.plainText as NSString).length
         let offset = min(max(rawOffset, 0), total)
         var cursor = 0
+        var hasEmitted = false
+        var lastParticipatingIndex = 0
         for (i, block) in self.blocks.enumerated() {
+            guard blockIsFlatParticipating(block) else { continue }
+            if hasEmitted { cursor += 1 } // step past the inter-block "\n" to this block's start
+            hasEmitted = true
             let length = blockFlatLength(block)
             if offset <= cursor + length {
-                return ChatInputPosition(path: [ChatInputPathStep(blockIndex: i)], offset: offset - cursor)
+                return ChatInputPosition(path: [ChatInputPathStep(blockIndex: i)], offset: max(0, offset - cursor))
             }
-            cursor += length + 1
+            cursor += length
+            lastParticipatingIndex = i
         }
-        let lastIndex = max(self.blocks.count - 1, 0)
-        let lastLength = self.blocks.isEmpty ? 0 : blockFlatLength(self.blocks[lastIndex])
-        return ChatInputPosition(path: [ChatInputPathStep(blockIndex: lastIndex)], offset: lastLength)
+        // Past the end, or no participating blocks at all: clamp to the last participating block's end (else the
+        // last block / block 0 at offset 0).
+        let clampIndex = hasEmitted ? lastParticipatingIndex : max(self.blocks.count - 1, 0)
+        let clampLength = self.blocks.indices.contains(clampIndex) ? blockFlatLength(self.blocks[clampIndex]) : 0
+        return ChatInputPosition(path: [ChatInputPathStep(blockIndex: clampIndex)], offset: clampLength)
     }
 }
 

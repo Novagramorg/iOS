@@ -8,6 +8,7 @@ import TextFormat
 import InvisibleInkDustNode
 import EmojiTextAttachmentView
 import RichTextEditorCore
+import RichTextEditorUIKit
 
 /// Host theme colors for the rich-text composer backend, passed across the seam as plain `UIColor`s so
 /// `ChatInputTextNode` need not depend on the editor package. The RichTextEditor backend maps these 1:1
@@ -47,6 +48,12 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// Provider for animated custom-emoji views, resolved at render time. Set after creation.
     var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)? { get set }
 
+    /// Factory the PANEL supplies (it owns `AccountContext`) so the editor can render a `.media` block. The
+    /// native backend forwards it to the editor's media-view provider, resolving its private `mediaByID` →
+    /// this factory; the legacy `UITextView` backend stores it but never uses it (no media). `naturalSize` is
+    /// the medium's natural size, for aspect-correct display. Mirrors `emojiViewProvider`'s host-owned seam.
+    var mediaItemViewFactory: ((_ media: EngineMedia, _ naturalSize: CGSize) -> (UIView & RichTextMediaItemView)?)? { get set }
+
     /// Recompute and lay out the spoiler dust and custom-emoji overlays from the current
     /// attributed text, hosting both inside the composed text view's scrolling content.
     /// `textColor` / `fullTranslucency` are passed live on every call because the host's
@@ -78,16 +85,18 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// The editor's plain-text string (read-only convenience for length/counter checks).
     var text: String { get }
 
-    /// The editor's structured rich-text document, when the backend has one. `nil` for the
-    /// legacy `UITextView`-based impl (it has no `Document` model); the TextKit-2 RichTextEditor
-    /// backend returns its live `Document`. Used to seed an expanded editor with the current content.
-    var richTextDocument: Document? { get }
+    /// Seed for an expanded article editor: the backend's structured `Document` plus its media store
+    /// keyed by the editor's media IDs (carried across the seam as `EngineMedia` because this protocol
+    /// module has no Postbox dep). The legacy `UITextView` backend returns an empty `Document()` + no
+    /// media (it has no `Document` model); the RichTextEditor backend returns its live `Document` and
+    /// `mediaByID`. Used to seed an expanded editor with the current content.
+    func expandedEditorSeed() -> (document: Document, media: [String: EngineMedia])
 
-    /// Replace the editor's structured document (the reverse of `richTextDocument`). No-op on the
-    /// legacy `UITextView` backend (no `Document` model); the RichTextEditor backend replaces its
-    /// live document and refreshes the host. Used to write an expanded editor's result back into
-    /// the composer.
-    func setRichTextDocument(_ document: Document)
+    /// Write an expanded editor's result back into the composer: replace the backend's structured
+    /// content with `document` and its referenced `media` (the reverse of `expandedEditorSeed`). The
+    /// media is keyed by the editor's media IDs. No-op on the legacy `UITextView` backend (no `Document`
+    /// model, no media); the RichTextEditor backend lands both the document and the media and refreshes.
+    func setFromExpandedEditor(document: Document, media: [String: EngineMedia])
 
     /// Apply host theme colors to the editor. No-op on the legacy `UITextView` backend (it themes via
     /// `inputTheme`/`refreshTextInputAttributes`); the RichTextEditor backend maps these into its
@@ -426,6 +435,10 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)?
 
+    // Stored-but-unused: the legacy `UITextView` backend has no media blocks to render, so it satisfies the
+    // protocol but never reads this. The native (`RichTextEditorChatInputNode`) backend wires it to the editor.
+    var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)?
+
     // Bridges to ASDisplayNode for callers that hold this only as a ChatRichTextInputNode.
     var asNode: ASDisplayNode {
         return self
@@ -631,13 +644,13 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
         return self.textInputNodeImpl.textView.text
     }
 
-    /// The legacy `UITextView` backend has no `Document` model.
-    var richTextDocument: Document? {
-        return nil
+    /// The legacy `UITextView` backend has no `Document` model and no media: seed an empty document.
+    func expandedEditorSeed() -> (document: Document, media: [String: EngineMedia]) {
+        return (Document(), [:])
     }
 
-    /// No-op: the legacy `UITextView` backend has no `Document` model to replace.
-    func setRichTextDocument(_ document: Document) {
+    /// No-op: the legacy `UITextView` backend has no `Document` model to replace and no media to land.
+    func setFromExpandedEditor(document: Document, media: [String: EngineMedia]) {
     }
 
     /// No-op: the legacy `UITextView` backend themes via `inputTheme`/`refreshTextInputAttributes`.

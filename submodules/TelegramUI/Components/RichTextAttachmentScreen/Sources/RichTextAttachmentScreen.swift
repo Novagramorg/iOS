@@ -12,6 +12,7 @@ import MultilineTextComponent
 import EdgeEffect
 import RichTextEditorCore
 import RichTextEditorUIKit
+import RichTextEditorMediaView
 import ContextUI
 import Postbox
 import TelegramCore
@@ -45,7 +46,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
 
     private let sendMessage: (Document, [String: Media]) -> Void
 
-    public init(context: AccountContext, initialContents: Document? = nil, sendMessage: @escaping (Document, [String: Media]) -> Void, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+    public init(context: AccountContext, initialContents: Document? = nil, initialMedia: [String: Media] = [:], sendMessage: @escaping (Document, [String: Media]) -> Void, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
         self.sendMessage = sendMessage
 
         let overNavigationContainer = SparseContainerView()
@@ -53,6 +54,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         super.init(context: context, component: RichTextAttachmentScreenComponent(
             context: context,
             initialContents: initialContents,
+            initialMedia: initialMedia,
             overNavigationContainer: overNavigationContainer,
             presentAttachmentMenu: presentAttachmentMenu
         ), navigationBarAppearance: .transparent, theme: .default)
@@ -87,12 +89,14 @@ final class RichTextAttachmentScreenComponent: Component {
     // its editor view into the View's content container.
     let context: AccountContext
     let initialContents: Document?
+    let initialMedia: [String: Media]
     let overNavigationContainer: UIView
     let presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
 
-    init(context: AccountContext, initialContents: Document?, overNavigationContainer: UIView, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+    init(context: AccountContext, initialContents: Document?, initialMedia: [String: Media], overNavigationContainer: UIView, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
         self.context = context
         self.initialContents = initialContents
+        self.initialMedia = initialMedia
         self.overNavigationContainer = overNavigationContainer
         self.presentAttachmentMenu = presentAttachmentMenu
     }
@@ -263,6 +267,9 @@ final class RichTextAttachmentScreenComponent: Component {
                 // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
                 // current document when expanding); an empty document when none is provided.
                 editor.document = component.initialContents ?? Document()
+                // Seed the picked-media store alongside the document (before the media-view provider runs)
+                // so any media referenced by the initial document resolves on first layout.
+                self.attachedMedia = component.initialMedia
 
                 let emojiKeyboard = RichTextEmojiKeyboardController(context: component.context, editor: editor, requestLayout: { [weak self] in
                     guard let self, !self.isUpdating else { return }

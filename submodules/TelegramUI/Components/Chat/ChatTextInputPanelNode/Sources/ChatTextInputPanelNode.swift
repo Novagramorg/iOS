@@ -58,6 +58,7 @@ import ChatRecordingViewOnceButtonNode
 import ChatRecordingPreviewInputPanelNode
 import ChatInputContextPanelNode
 import RasterizedCompositionComponent
+import RichTextEditorUIKit
 
 private let counterFont = Font.with(size: 14.0, design: .regular, traits: [.monospacedNumbers])
 
@@ -668,7 +669,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var touchDownGestureRecognizer: TouchDownGestureRecognizer?
     
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?
-    
+
+    public var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)? {
+        didSet { self.richTextInputNode?.mediaItemViewFactory = self.mediaItemViewFactory }
+    }
+
     private let presentationContext: ChatPresentationContext?
     
     private var tooltipController: TooltipScreen?
@@ -1138,6 +1143,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         richTextInputNode.emojiViewProvider = { [weak self] emoji in
             return self?.emojiViewProvider?(emoji)
         }
+        richTextInputNode.mediaItemViewFactory = self.mediaItemViewFactory
 
         if let textInputBackgroundTapRecognizer = self.textInputBackgroundTapRecognizer {
             self.textInputBackgroundTapRecognizer = nil

@@ -22,6 +22,7 @@ swift_library(
         "//submodules/InvisibleInkDustNode",
         "//submodules/TelegramUI/Components/EmojiTextAttachmentView",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
+        "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
     ],
     visibility = [
         "//visibility:public",

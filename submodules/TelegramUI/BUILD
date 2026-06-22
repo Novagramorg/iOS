@@ -527,6 +527,7 @@ swift_library(
         "//submodules/TelegramUI/Components/RichTextAttachmentScreen",
         "//submodules/TelegramUI/Components/RichTextEditorMessageConversion",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
+        "//submodules/TelegramUI/Components/RichTextEditorMediaView",
     ] + select({
         "@build_bazel_rules_apple//apple:ios_arm64": appcenter_targets,
         "//build-system:ios_sim_arm64": [],

@@ -71,6 +71,7 @@ import UndoUI
 import BrowserUI
 import RichTextAttachmentScreen
 import RichTextEditorCore
+import RichTextEditorMediaView
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -920,6 +921,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.textInputPanelNode = ChatTextInputPanelNode(context: context, presentationInterfaceState: chatPresentationInterfaceState, presentationContext: ChatPresentationContext(context: context, backgroundNode: backgroundNode), presentController: { [weak self] controller in
             self?.interfaceInteraction?.presentController(controller, nil)
         })
+        self.textInputPanelNode?.mediaItemViewFactory = { media, _ in
+            return MediaItemNodeView(context: context, media: media)
+        }
         if let data = self.context.currentAppConfiguration.with({ $0 }).data, let value = data["ios_disable_ai_chat"] as? Double, value == 1.0 {
         } else if let peerId = self.chatPresentationInterfaceState.chatLocation.peerId, peerId.namespace != Namespaces.Peer.SecretChat {
             self.textInputPanelNode?.isAIEnabled = true
@@ -4571,13 +4575,17 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         if #available (iOS 17.0, *) {
+            // Seed the expanded editor with the composer's current document AND its media, and write both
+            // back on send — media flows through the `ChatInputContent` model. The seam carries media as
+            // `EngineMedia` (the protocol module has no Postbox dep); convert at this TelegramUI boundary.
+            let seed = textInputPanelNode.richTextInputNode?.expandedEditorSeed()
             let editorScreen = RichTextAttachmentScreen(
                 context: self.context,
-                initialContents: textInputPanelNode.richTextInputNode?.richTextDocument,
-                sendMessage: { [weak self] document, _ in
-                    // media is ignored: the expand-from-composer path does not wire an image picker
-                    // (presentAttachmentMenu is nil), so the editor accumulates no media here.
-                    self?.textInputPanelNode?.richTextInputNode?.setRichTextDocument(document)
+                initialContents: seed?.document,
+                initialMedia: (seed?.media ?? [:]).mapValues { $0._asMedia() },
+                sendMessage: { [weak self] document, media in
+                    self?.textInputPanelNode?.richTextInputNode?.setFromExpandedEditor(
+                        document: document, media: media.mapValues { EngineMedia($0) })
                 },
                 presentAttachmentMenu: { [weak self] completion in
                     guard let self else {

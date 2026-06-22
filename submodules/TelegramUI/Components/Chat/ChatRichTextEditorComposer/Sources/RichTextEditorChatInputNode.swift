@@ -25,6 +25,11 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)?
 
+    /// Factory the panel supplies (it owns `AccountContext`) to turn a `Media` + natural size into a hosted
+    /// media view. The editor's media-view provider (registered in `didLoad`) resolves its opaque `mediaID` →
+    /// `mediaByID` → this factory. Read lazily, so the panel may set it after `didLoad`. Mirrors `emojiViewProvider`.
+    public var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)?
+
     /// fileId → the file-bearing custom-emoji attribute, harvested from each `attributedText` /
     /// `setInputContent` push. The editor hosts inline emoji by their `EmojiRef` fileId STRING only
     /// (`document(from:)` / `document(fromChatInputContent:)` drop the `TelegramMediaFile`), but the host
@@ -125,6 +130,18 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
                   let provider = self.emojiViewProvider else { return nil }
             return provider(attribute)
         }
+
+        // Media rendering. The editor hosts each `.media` block via this provider, asking by the opaque host
+        // `mediaID` (the node's own key, recorded in `mediaByID` by `registerMediaValue`). Resolve it back to
+        // the concrete `Media` and hand it + the natural size to the panel-supplied factory, which builds the
+        // hosted view (it owns `AccountContext`). WITHOUT this, a `.media` block set via the model round-trips
+        // but never renders. Both `mediaItemViewFactory` and `mediaByID` are read LAZILY, so the panel may set
+        // the factory after this registration. The returned `(UIView & RichTextMediaItemView)?` is assignable
+        // to the provider's `RichTextMediaItemView?` return type.
+        self.editorView.registerMediaViewProvider { [weak self] mediaID, naturalSize in
+            guard let self, let media = self.mediaByID[mediaID], let factory = self.mediaItemViewFactory else { return nil }
+            return factory(EngineMedia(media), naturalSize)
+        }
     }
 
     // MARK: Display (Task 3)
@@ -161,18 +178,26 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             return nil
         }.joined(separator: "\n")
     }
-    /// The editor's live structured document, used to seed an expanded editor with the current content.
-    public var richTextDocument: Document? { self.editorView.document }
+    /// Seed for an expanded article editor: the editor's live `Document` plus its media store keyed by the
+    /// editor's media IDs. Media crosses the protocol seam as `EngineMedia` (the protocol module has no
+    /// Postbox dep); `mediaByID` stays private. Used to seed an expanded editor with the current content.
+    public func expandedEditorSeed() -> (document: Document, media: [String: EngineMedia]) {
+        return (self.editorView.document, self.mediaByID.mapValues { EngineMedia($0) })
+    }
 
-    /// Replace the editor's live document directly (NOT via `attributedText`, which would flatten
-    /// structure beyond the `ChatTextInputAttributes` vocabulary, e.g. tables). Then run the same
-    /// refresh `onChange` performs so the panel re-lays-out and re-reads content.
-    public func setRichTextDocument(_ document: Document) {
-        self.editorView.document = document
-        if self.editorView.bounds.width > 0.0 {
-            _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
-        }
-        self.storedDelegate?.chatInputTextNodeDidUpdateText()
+    /// Write an expanded editor's result back into the composer. We convert the editor `Document` + its
+    /// `media` STRAIGHT to `ChatInputContent` via the direct bridge (`chatInputContent(fromDocument:)`),
+    /// then land it through `setInputContent` — which converts content→Document, populates `mediaByID` via
+    /// its `registerMedia` closure (so pushed media renders), and refreshes layout. The selection is parked
+    /// at the end of the new content. The incoming `media` is keyed by the editor's media IDs.
+    public func setFromExpandedEditor(document: Document, media: [String: EngineMedia]) {
+        let content = chatInputContent(
+            fromDocument: document,
+            resolveEmoji: { [weak self] emojiRef in self?.resolveEmojiRef(emojiRef) ?? nil },
+            resolveMedia: { mediaID in media[mediaID]?._asMedia() }
+        )
+        self.setInputContent(content, selection: ChatInputSelection(
+            nsRange: NSRange(location: content.length, length: 0), in: content))
     }
 
     // MARK: ChatInputContent model — the STRUCTURAL draft currency (direct bridge)
@@ -202,15 +227,21 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// through the flattening `attributedText` setter. The registrars hand the chat-layer identity to the node's
     /// caches and return the editor-side ref/key: `registerEmoji` records the `TelegramMediaFile` so the editor's
     /// emoji-view provider can render it, and `registerMedia` records the `Media` so a later `currentInputContent`
-    /// can resolve it back. Pushes through the existing `setRichTextDocument` path (document set + layout refresh)
-    /// to preserve the refresh/`didUpdateText` ordering, then restores the flat composer selection.
+    /// can resolve it back. Sets the editor's live document directly (NOT via `attributedText`, which would
+    /// flatten structure beyond the `ChatTextInputAttributes` vocabulary, e.g. tables) and runs the same refresh
+    /// `onChange` performs (so the panel re-lays-out and re-reads content), preserving the refresh/`didUpdateText`
+    /// ordering, then restores the flat composer selection.
     public func setInputContent(_ content: ChatInputContent, selection: ChatInputSelection) {
         let newDocument = document(
             fromChatInputContent: content,
             registerEmoji: { [weak self] fileId, file in self?.registerEmojiRef(fileId: fileId, file: file) ?? EmojiRef(id: String(fileId), instanceID: BlockID.generate().rawValue, altText: nil) },
             registerMedia: { [weak self] media in self?.registerMediaValue(media) ?? "" }
         )
-        self.setRichTextDocument(newDocument)
+        self.editorView.document = newDocument
+        if self.editorView.bounds.width > 0.0 {
+            _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+        }
+        self.storedDelegate?.chatInputTextNodeDidUpdateText()
         self.selectedRange = selection.nsRange(in: content)
     }
 
@@ -246,10 +277,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
     /// Direct-bridge `registerMedia`: cache the `Media` under a stable opaque key derived from its id (matching
     /// `RichTextAttachmentScreen.attachedMedia`'s `"namespace:id"` convention) and hand that key to the editor.
-    /// The node does NOT itself insert the block into the editor or render it — that is the structural-set path's
-    /// document push plus a media-view provider, which the composer node does not yet wire (see the TODO below);
-    /// the key only needs to round-trip `currentInputContent → setInputContent` consistently, which an id-derived
-    /// key does.
+    /// The editor stores only this opaque key (it never holds a `Media`); the node's media-view provider
+    /// (registered in `didLoad`) resolves the key back through `mediaByID` to render the block. The key also
+    /// round-trips `currentInputContent → setInputContent` consistently, which an id-derived key does.
     private func registerMediaValue(_ media: Media) -> String {
         let mediaID: String
         if let id = media.id {
@@ -260,11 +290,6 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             mediaID = "anon:\(ObjectIdentifier(media as AnyObject).hashValue)"
         }
         self.mediaByID[mediaID] = media
-        // TODO(parity): wire the editor media-view provider (`registerMediaViewProvider` +
-        // `insertMedia`) so a media block set via the model actually RENDERS in the composer. The editor
-        // exposes no media store, so the node owns `mediaByID`; the model round-trip works (media survives
-        // `currentInputContent`/`setInputContent`), but a media block pushed via `setInputContent` is not yet
-        // displayed — display wiring is a follow-up, tracked here.
         return mediaID
     }
 

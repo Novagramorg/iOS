@@ -100,6 +100,50 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertEqual(ChatInputSelection(nsRange: NSRange(location: 0, length: 0), in: empty).nsRange(in: empty), NSRange(location: 0, length: 0))
     }
 
+    /// Media/table blocks are OFF the flat coordinate axis — they contribute ZERO characters AND no separator,
+    /// exactly as `attributedString(from:)` drops them and the editor's `composerParagraphs()` skips them.
+    /// (Regression for the native-composer caret drift: media/table were given a 1-char placeholder bracketed
+    /// by separators, so the model's flat space disagreed with the editor's `composerSelectedRange` — the caret
+    /// drifted into the non-text block by the count of preceding non-text blocks. `.collapsedQuote` is the only
+    /// off-string block that DOES contribute a " " placeholder, because its `.collapsedBlock` projection does.)
+    func test_flatCoordinates_mediaAndTable_areOffAxis() {
+        func p(_ s: String) -> ChatInputBlock { .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: s)])) }
+        let image = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 7), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let media = ChatInputMedia(media: image, kind: .image, naturalSize: ChatInputSize(width: 1.0, height: 1.0))
+        let table = ChatInputTable(columns: [ChatInputColumnSpec(width: 10.0)], rows: [])
+        // [ "ab", media, "xy", table ] — the two non-text blocks sit between/after the paragraphs.
+        let content = ChatInputContent(blocks: [p("ab"), .media(media), p("xy"), .table(table)])
+
+        // The flat text drops media/table entirely: paragraphs joined by ONE "\n", no placeholder, no extra
+        // separator — and it equals the `NSAttributedString` projection exactly (the documented invariant).
+        XCTAssertEqual(content.plainText, "ab\nxy")
+        XCTAssertEqual(content.length, 5)
+        XCTAssertEqual(content.plainText, attributedString(from: content).string)
+
+        // The caret at the end of "xy" is flat offset 5 (NOT 6/7 with phantom media/table placeholders).
+        XCTAssertEqual(content.flatOffset(for: ChatInputPosition(path: [ChatInputPathStep(blockIndex: 2)], offset: 2)), 5)
+        // The start of "xy" is flat offset 3 — and the inverse maps offset 3 back to block 2 (the paragraph),
+        // never the intervening media block (block 1, which has no flat position).
+        XCTAssertEqual(content.flatOffset(for: ChatInputPosition(path: [ChatInputPathStep(blockIndex: 2)], offset: 0)), 3)
+        XCTAssertEqual(content.position(forFlatOffset: 3), ChatInputPosition(path: [ChatInputPathStep(blockIndex: 2)], offset: 0))
+        XCTAssertEqual(content.position(forFlatOffset: 2), ChatInputPosition(path: [ChatInputPathStep(blockIndex: 0)], offset: 2))
+
+        // Full bijection over every flat NSRange (collapsed carets + spanning ranges).
+        let total = (content.plainText as NSString).length
+        for loc in 0 ... total {
+            for len in 0 ... (total - loc) {
+                let r = NSRange(location: loc, length: len)
+                XCTAssertEqual(ChatInputSelection(nsRange: r, in: content).nsRange(in: content), r, "round-trip failed for \(r)")
+            }
+        }
+
+        // A media-only content has empty flat text but is NOT `isEmpty` (a media block is content).
+        let mediaOnly = ChatInputContent(blocks: [.media(media)])
+        XCTAssertEqual(mediaOnly.plainText, "")
+        XCTAssertTrue(mediaOnly.plainText.isEmpty)
+        XCTAssertFalse(mediaOnly.isEmpty)
+    }
+
     // MARK: - Codable round-trip
 
     /// The content model round-trips losslessly through JSON for every block/run/entity/style case. Note: the
