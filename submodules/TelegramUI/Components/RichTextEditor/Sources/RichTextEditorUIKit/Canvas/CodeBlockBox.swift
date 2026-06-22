@@ -63,6 +63,9 @@ extension CodeBlockBox: CanvasBlock {
     var textLength: Int { length }
     var textRef: TextNodeRef { .code(id) }
     var height: CGFloat { max(layout.boundingHeight, emptyLineHeight) + topInset + bottomInset }
+    func measuredHeight(forWidth width: CGFloat) -> CGFloat {
+        max(layout.boundingHeight(forWidth: max(width - CodeBlockBox.horizontalPadding * 2, 1)), emptyLineHeight) + topInset + bottomInset
+    }
     func setWidth(_ width: CGFloat) { layout.setWidth(max(width - CodeBlockBox.horizontalPadding * 2, 1)) }
     func currentBlock() -> Block { .code(currentCode()) }
     func closestPosition(toCanvasPoint point: CGPoint) -> Int {

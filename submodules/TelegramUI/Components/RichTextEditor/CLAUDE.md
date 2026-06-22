@@ -142,6 +142,12 @@ The façade is now driven by its host rather than self-laying-out:
   set `scrollView.contentInsetAdjustmentBehavior = .never` and **removed all `UIResponder` keyboard
   observation**. A private `performLayout(size:)` sizes the scroll view/canvas; only `update` writes insets
   (so a system `layoutSubviews` pass can't clobber the parent inset). Caret-follow scrolling stays internal.
+- `height(forWidth:) -> CGFloat` — a stateless, side-effect-free content-height measure (the Phase-2
+  follow-up to the composer's `textHeightForWidth`). Mirrors what `update(...)` returns at that width
+  (same `minimumContentHeight` floor + `contentMargins`) but reflows NOTHING live: the per-block
+  `measuredHeight(forWidth:)` chain reads structural insets and measures text via a reused per-engine
+  scratch layout (`BlockLayoutEngine.boundingHeight(forWidth:)`). De-stateful-ized `TableBlockBox.height`
+  in passing (it no longer resizes cell layouts to measure; `recompute()` owns cell layout).
 - `onChange: (() -> Void)?` — payload-free; fires on any edit, content-size change, or selection move
   (funneled from the canvas's `onContentSizeChange` + `onSelectionChange`, the latter fired unconditionally by
   `editing { }`). The host re-runs its layout (→ `update`) in response. **`update` must NOT synchronously fire

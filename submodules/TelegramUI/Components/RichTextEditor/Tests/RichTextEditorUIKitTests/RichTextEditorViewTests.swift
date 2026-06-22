@@ -266,5 +266,35 @@ extension RichTextEditorViewTests {
         e.deleteTable()
         XCTAssertEqual(e.canvas.boxes.count, before, "no-op when the caret isn't in a table")
     }
+
+    // height(forWidth:) equals what update(...) returns for the same width — measure == commit.
+    func test_heightForWidth_matchesUpdate() {
+        let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 300, height: 200))
+        editor.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"),
+            runs: [TextRun(text: "A long enough paragraph to wrap differently at 300 versus 140 points wide.")]))])
+        let committed = editor.update(size: CGSize(width: 300, height: 200), insets: .zero)
+        XCTAssertEqual(editor.height(forWidth: 300), committed, accuracy: 0.5)
+
+        let other = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 140, height: 200))
+        other.document = editor.document
+        let committed140 = other.update(size: CGSize(width: 140, height: 200), insets: .zero)
+        XCTAssertEqual(editor.height(forWidth: 140), committed140, accuracy: 0.5)
+    }
+
+    // The headline guarantee: measuring at another width changes nothing observable.
+    func test_heightForWidth_doesNotMutateLiveLayout() {
+        let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 300, height: 200))
+        editor.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"),
+            runs: [TextRun(text: "A long enough paragraph to wrap differently at narrow widths and grow taller.")]))])
+        _ = editor.update(size: CGSize(width: 300, height: 200), insets: .zero)
+        let canvasFrame = editor.canvas.frame
+        let scrollContent = editor.scrollContentHeightForTesting
+        var changes = 0
+        editor.onChange = { changes += 1 }
+        _ = editor.height(forWidth: 120)
+        XCTAssertEqual(editor.canvas.frame, canvasFrame, "measure must not move the canvas")
+        XCTAssertEqual(editor.scrollContentHeightForTesting, scrollContent, accuracy: 0.001)
+        XCTAssertEqual(changes, 0, "measure must not fire onChange")
+    }
 }
 #endif

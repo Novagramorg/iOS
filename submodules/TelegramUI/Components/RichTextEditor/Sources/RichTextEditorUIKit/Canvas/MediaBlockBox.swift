@@ -112,6 +112,14 @@ final class MediaBlockBox: CanvasBlock {
             + max(caption.boundingHeight, captionEmptyLineHeight) + verticalInset
     }
 
+    func measuredHeight(forWidth width: CGFloat) -> CGFloat {
+        // The image bleeds full-width — its area is sized at canvasWidth (= width + pageMargin*2, mirroring
+        // the live `imageAreaHeight`) — while the caption lays out at the content `width`.
+        let imageArea = imageDisplaySize(maxWidth: max(width + CanvasMetrics.pageMargin * 2, 1)).height
+        return verticalInset + imageArea + captionGap
+            + max(caption.boundingHeight(forWidth: max(width, 1)), captionEmptyLineHeight) + verticalInset
+    }
+
     var textOrigin: CGPoint {
         CGPoint(x: frame.minX,
                 y: frame.minY + verticalInset + imageAreaHeight + captionGap)

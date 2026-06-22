@@ -24,6 +24,11 @@ final class BlockLayoutTK1: BlockLayoutEngine {
 
     private(set) var renderVersion = 0
     private var ghostRange: NSRange?
+
+    private var measureScratch: BlockLayoutTK1?
+    private var memoWidth: CGFloat = .nan
+    private var memoRenderVersion: Int = -1
+    private var memoHeight: CGFloat = 0
     private var spoilerRanges: [NSRange] = []
 
     init(attributedString: NSAttributedString, width: CGFloat) {
@@ -57,6 +62,21 @@ final class BlockLayoutTK1: BlockLayoutEngine {
     var boundingHeight: CGFloat {
         layoutManager.ensureLayout(for: container)
         return layoutManager.usedRect(for: container).height
+    }
+
+    func boundingHeight(forWidth width: CGFloat) -> CGFloat {
+        if abs(width - container.size.width) < 0.5 { return boundingHeight }
+        if memoRenderVersion == renderVersion && abs(memoWidth - width) < 0.5 { return memoHeight }
+        let scratch: BlockLayoutTK1
+        if let s = measureScratch { scratch = s }
+        else { scratch = BlockLayoutTK1(attributedString: attributedString, width: width); measureScratch = scratch }
+        // The reuse is allocation-only: we re-feed the current string + width and reflow each call (a
+        // different width per call is the norm). The live layout is never touched.
+        scratch.attributedString = attributedString
+        scratch.setWidth(width)
+        let h = scratch.boundingHeight
+        memoWidth = width; memoRenderVersion = renderVersion; memoHeight = h
+        return h
     }
 
     /// Baseline of the first laid-out line relative to the layout top. `location(forGlyphAt:).y` is the

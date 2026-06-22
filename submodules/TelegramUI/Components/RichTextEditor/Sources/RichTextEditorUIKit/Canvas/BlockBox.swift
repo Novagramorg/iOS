@@ -105,6 +105,9 @@ final class BlockBox {
     var length: Int { layout.length }
     var textRef: TextNodeRef { .paragraph(id) }
     var height: CGFloat { max(layout.boundingHeight, emptyLineHeight) + topInset + bottomInset }
+    func measuredHeight(forWidth width: CGFloat) -> CGFloat {
+        max(layout.boundingHeight(forWidth: max(width - textInset.x * 2, 1)), emptyLineHeight) + topInset + bottomInset
+    }
     var textOrigin: CGPoint { CGPoint(x: frame.minX + textInset.x, y: frame.minY + topInset) }
 
     /// Height of one line in this paragraph's font, reserved only when the paragraph is EMPTY (TextKit 2

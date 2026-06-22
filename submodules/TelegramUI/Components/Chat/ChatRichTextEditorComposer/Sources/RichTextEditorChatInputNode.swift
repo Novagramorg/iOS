@@ -289,16 +289,12 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public func updateLayout(size: CGSize) {
         _ = self.editorView.update(size: size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
     }
-    /// Phase 1: measures by driving a full `update(...)` (a layout call, not a pure measure) and returning
-    /// its content-driven height. The passed `size.height` only affects the editor's transient viewport
-    /// flooring, NOT the returned content height — so we pass the editor's current committed height to keep
-    /// the layout side-effect consistent with the live size rather than a tall sentinel. A true
-    /// side-effect-free measure is a Phase 2 RichTextEditorView API.
+    /// Measures the editor's content height at `width` with a stateless, side-effect-free measure
+    /// (`RichTextEditorView.height(forWidth:)`) — it does NOT reflow the live editor or touch its
+    /// frames/insets. `rightInset` is recorded for the next real `update(...)`.
     public func textHeightForWidth(_ width: CGFloat, rightInset: CGFloat) -> CGFloat {
         self.trackedRightInset = rightInset
-        let measureHeight = self.editorView.bounds.height
-        let measureSize = CGSize(width: width, height: measureHeight)
-        return self.editorView.update(size: measureSize, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+        return self.editorView.height(forWidth: width)
     }
     public func layoutInputField() {
         _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)

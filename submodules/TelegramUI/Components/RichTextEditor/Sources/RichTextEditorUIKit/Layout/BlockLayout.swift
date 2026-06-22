@@ -18,6 +18,14 @@ final class BlockLayout: BlockLayoutEngine {
     /// `BlockBox.renderSignature`.
     private(set) var renderVersion = 0
 
+    // Stateless measure: a reused scratch layout of THIS engine type (same container config), re-fed
+    // per call, plus a 1-entry (width, renderVersion) memo. Separate from the live stack, so measuring
+    // never disturbs what is displayed.
+    private var measureScratch: BlockLayout?
+    private var memoWidth: CGFloat = .nan
+    private var memoRenderVersion: Int = -1
+    private var memoHeight: CGFloat = 0
+
     /// The text range the inline-prediction ghost foreground was last applied to (nil = none). Tracked so
     /// `setGhostForeground` removes only ITS OWN range instead of blanket-clearing every `.foregroundColor`
     /// rendering attribute — which would wipe a coexisting spoiler hide (both use `.foregroundColor`).
@@ -71,6 +79,21 @@ final class BlockLayout: BlockLayoutEngine {
             return true
         }
         return maxY
+    }
+
+    func boundingHeight(forWidth width: CGFloat) -> CGFloat {
+        if abs(width - container.size.width) < 0.5 { return boundingHeight }   // live width → live layout
+        if memoRenderVersion == renderVersion && abs(memoWidth - width) < 0.5 { return memoHeight }
+        let scratch: BlockLayout
+        if let s = measureScratch { scratch = s }
+        else { scratch = BlockLayout(attributedString: attributedString, width: width); measureScratch = scratch }
+        // The reuse is allocation-only: we re-feed the current string + width and reflow each call (a
+        // different width per call is the norm). The live layout is never touched.
+        scratch.attributedString = attributedString
+        scratch.setWidth(width)
+        let h = scratch.boundingHeight
+        memoWidth = width; memoRenderVersion = renderVersion; memoHeight = h
+        return h
     }
 
     /// Y of the first laid-out text line's baseline, relative to the top of the layout (y = 0, i.e. the

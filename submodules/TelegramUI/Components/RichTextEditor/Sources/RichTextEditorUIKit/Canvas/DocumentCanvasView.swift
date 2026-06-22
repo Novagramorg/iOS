@@ -617,6 +617,13 @@ final class DocumentCanvasView: UIView {
                height: contentMargins.top + boxes.reduce(0) { $0 + $1.height } + contentMargins.bottom)
     }
 
+    /// Stateless content height the document would have at canvas `width` — the measure analogue of
+    /// `intrinsicContentSize.height` (same `contentMargins` + content-width derivation). Never mutates
+    /// the live layout (no box `setWidth`, no frame/overlay/caret change).
+    func measuredContentHeight(forWidth width: CGFloat) -> CGFloat {
+        contentMargins.top + root.measuredHeight(forWidth: contentWidth(forWidth: width)) + contentMargins.bottom
+    }
+
     /// Notifies the host that the content height may have changed (e.g. after an edit), so it re-runs
     /// layout. The editor convention: a view never `setNeedsLayout()`s itself for a content change — it
     /// notifies its parent, which drives layout explicitly. `intrinsicContentSize` is a pure computed

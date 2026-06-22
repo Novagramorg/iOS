@@ -38,6 +38,10 @@ protocol CanvasBlock: AnyObject {
     var frame: CGRect { get set }
     var height: CGFloat { get }
     func setWidth(_ width: CGFloat)
+    /// The block height at box `width`, computed WITHOUT mutating the block (a stateless companion to
+    /// `height`/`setWidth`): width-dependent text via `BlockLayoutEngine.boundingHeight(forWidth:)`,
+    /// structural insets read from current state. Valid once the block has been laid out at least once.
+    func measuredHeight(forWidth width: CGFloat) -> CGFloat
     /// Round-trips this block back to the Core model.
     func currentBlock() -> Block
     /// Maps a point in canvas coordinates to the closest global position this block can host

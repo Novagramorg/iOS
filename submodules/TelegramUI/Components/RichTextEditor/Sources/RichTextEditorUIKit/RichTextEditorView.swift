@@ -159,6 +159,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         return contentHeight
     }
 
+    /// Measures the content height the document would have at `width`, WITHOUT mutating the live layout
+    /// — no reflow of the displayed boxes, no frame/scroll/overlay/caret change, no `onChange`. Applies
+    /// the same `minimumContentHeight` floor and `contentMargins` as `update(...)`, so the measured value
+    /// equals what a subsequent `update` at this width returns (measure == commit). Pure read.
+    public func height(forWidth width: CGFloat) -> CGFloat {
+        max(canvas.measuredContentHeight(forWidth: width), minimumContentHeight)
+    }
+
     /// Test accessor: the current bottom content inset.
     var bottomContentInsetForTesting: CGFloat { scrollView.contentInset.bottom }
     /// Test accessor: the scroll view's content height (the scrollable extent).
