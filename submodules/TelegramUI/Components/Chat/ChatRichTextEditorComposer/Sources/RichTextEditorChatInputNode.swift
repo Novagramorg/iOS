@@ -118,16 +118,20 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
         // Custom-emoji rendering. The editor hosts each inline emoji via this provider, asking by the
         // `EmojiRef` fileId string. Forward to the chat host's `emojiViewProvider` (set by the panel),
-        // rebuilding the file-bearing `ChatTextInputTextCustomEmojiAttribute` from the cache harvested in
-        // the `attributedText` setter — the editor carries only the fileId, but the renderer needs the
-        // `TelegramMediaFile`. WITHOUT this, the editor's `canvas.emojiViewProvider` stays nil and an
-        // inserted custom emoji renders blank (only its `U+FFFC` spacer is laid out). The closure reads
-        // `self.emojiViewProvider` lazily, so the panel may set it after this registration. `size` is
-        // ignored: the host renderer picks its own point size and the editor frames the returned view to
-        // the glyph rect.
+        // passing a `ChatTextInputTextCustomEmojiAttribute`. Prefer the file-bearing attribute cached from a
+        // file-carrying push/type (`customEmojiAttributes`, harvested so the file is available immediately);
+        // otherwise build a FILE-LESS attribute so the renderer (`InlineStickerItemLayer`) resolves the file
+        // by fileId via `resolveInlineStickers`. The file-less fallback is REQUIRED for a draft-restored /
+        // entity-only emoji: a draft persists only the fileId, so its `file` is nil and it was never cached —
+        // without the fallback the guard returned nil and the restored emoji rendered blank ("lost"). This
+        // mirrors the legacy node, which passes its attribute straight to the provider and relies on the same
+        // renderer fallback. The closure reads `self.emojiViewProvider` lazily, so the panel may set it after
+        // this registration. `size` is ignored: the host renderer picks its own point size and the editor
+        // frames the returned view to the glyph rect.
         self.editorView.registerEmojiViewProvider { [weak self] id, _ in
-            guard let self, let fileId = Int64(id), let attribute = self.customEmojiAttributes[fileId],
-                  let provider = self.emojiViewProvider else { return nil }
+            guard let self, let fileId = Int64(id), let provider = self.emojiViewProvider else { return nil }
+            let attribute = self.customEmojiAttributes[fileId]
+                ?? ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil)
             return provider(attribute)
         }
 
