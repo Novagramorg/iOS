@@ -35,6 +35,10 @@ load(
 
 load("@build_bazel_rules_apple//apple:apple.bzl", "local_provisioning_profile")
 
+load("//Telegram:prebuilt_watchos.bzl",
+    "apple_prebuilt_watchos_application",
+)
+
 load("//build-system/bazel-utils:plist_fragment.bzl",
     "plist_fragment",
 )
@@ -94,6 +98,19 @@ config_setting(
     name = "disableProvisioningProfilesSetting",
     flag_values = {
         ":disableProvisioningProfiles": "True",
+    },
+)
+
+bool_flag(
+    name = "embedWatchApp",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "embedWatchAppSetting",
+    flag_values = {
+        ":embedWatchApp": "True",
     },
 )
 
@@ -1724,6 +1741,19 @@ xcode_provisioning_profile(
    provisioning_profile = ":Telegram_local_profile",
 )
 
+apple_prebuilt_watchos_application(
+    name = "TelegramWatchApp",
+    # Watch bundle id tracks the host config ("<host>.watchkitapp"). The rule passes it
+    # to xcodebuild as PRODUCT_BUNDLE_IDENTIFIER (baked + signed); the watch Info.plist
+    # derives WKCompanionAppBundleIdentifier from it via $(PRODUCT_BUNDLE_IDENTIFIER:base),
+    # so the embedded watch app is correct for any host (ph.telegra.Telegraph,
+    # org.telegram.TelegramInternal, ...) with no post-build plist patching.
+    bundle_id = "{telegram_bundle_id}.watchkitapp".format(
+        telegram_bundle_id = telegram_bundle_id,
+    ),
+    tags = ["manual"],
+)
+
 ios_application(
     name = "Telegram",
     bundle_name = "Novagram",
@@ -1773,6 +1803,13 @@ ios_application(
             ":WidgetExtension",
             ":BroadcastUploadExtension",
         ],
+    }),
+    # Embed the in-repo tgwatch watch app (Telegram/WatchApp) under Watch/ only when
+    # --//Telegram:embedWatchApp is set (Make.py sets it for device configs when
+    # --embedWatchApp is passed). Off by default, so simulator/dev builds are unaffected.
+    watch_application = select({
+        ":embedWatchAppSetting": ":TelegramWatchApp",
+        "//conditions:default": None,
     }),
     deps = [
         ":Main",

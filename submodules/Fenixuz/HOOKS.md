@@ -1622,3 +1622,26 @@ User-visible joylarda app O'ZINI "Telegram" deb ko'rsatayotgan brand wordmark'la
 **Barcha edit'lar Python/Bash bilan qilingan (Edit-tool formatter'ni chetlab o'tish uchun) → minimal diff, upstream stil saqlangan.**
 
 Anchor: `case let .passwordEntry(hint, _, _, suggestReset, syncContacts):` va `private func passwordEntryController(hint: String, suggestReset: Bool, syncContacts: Bool`.
+
+## WatchApp restoration (12.8 sync, Phase 6 — 2026-06-22)
+
+The standalone `tgwatch` SwiftUI watch app was deleted from the fork; restored from `upstream/master` (12.8). **Zero Fenixuz hooks live inside `Telegram/WatchApp/`** (verified). Off by default (`embedWatchApp=False`) → **zero effect on simulator `./run.sh`** (build green + app launches, 0 watch build lines). Legacy ObjC `Telegram/Watch/` left untouched.
+
+**What was restored (verbatim from upstream):**
+- `Telegram/WatchApp/` (957 files: `tgwatch.xcodeproj` SwiftUI app + SPM packages TDShim/RLottieKit/WebPKit/OpusKit/QRCodeGenerator).
+- Glue: `Telegram/prebuilt_watchos.bzl`, `Telegram/prebuilt_watchos_build.sh`.
+- `build-system/Make/Make.py` + `RemoteBuild.py` — taken wholesale from upstream (fork had **no** own changes to these; verified no fenix/novagram/apiId markers), restoring the `--embedWatchApp` flow (`set_watch_app`, `resolve_watch_provisioning_profile`, argparse args).
+
+**Fenixuz customization inside the watch tree (re-apply on any future watch re-sync):**
+- Team scrub `C67CF9S4VU` → `ZDBP5RSRZF` (Vipads MCHJ, Apple-team rule) in `Telegram/WatchApp/project.yml:72` (`DEVELOPMENT_TEAM`) + `tgwatch.xcodeproj/project.pbxproj` (`DevelopmentTeam`/`DEVELOPMENT_TEAM` ×3, ~470/634/656).
+
+**`Telegram/BUILD` — 4 ADDITIVE watch splices (take ONLY these; PRESERVE Novagram branding):**
+1. After the `local_provisioning_profile` load: `load("//Telegram:prebuilt_watchos.bzl", "apple_prebuilt_watchos_application")`.
+2. Before `config_setting(name = "projectIncludeReleaseSetting")`: `bool_flag(name="embedWatchApp", default=False)` + `config_setting(name="embedWatchAppSetting", ...)`. (`bool_flag` already loaded.)
+3. Before `ios_application(name = "Telegram", bundle_name = "Novagram",`: the `apple_prebuilt_watchos_application(name="TelegramWatchApp", bundle_id="{telegram_bundle_id}.watchkitapp", tags=["manual"])` target.
+4. Inside that `ios_application` (before `deps = [":Main", ":Lib"]`): `watch_application = select({":embedWatchAppSetting": ":TelegramWatchApp", "//conditions:default": None})`.
+- ⚠️ **BRANDING TRAP:** upstream's `Telegram/BUILD` diff also flips `bundle_name` Novagram→Telegram, swaps Fenix* icons, drops PrivacyManifest — these were **NOT taken**. `bundle_name = "Novagram"`, `alternate_icon_folders` (FenixYellow/Green/Gradient), `composer_icon_folders = []`, `:PrivacyManifest` all preserved.
+
+**Remaining to SHIP the watch (user-side, deferred — not done here):** register App ID `uz.fenixuz.app.watchkitapp` + watchkitapp provisioning profile under team `ZDBP5RSRZF`, drop `WatchApp.mobileprovision` into the codesigning material. Until then keep `publish.sh` **WITHOUT** `--embedWatchApp` (an `--embedWatchApp` distribution build HARD-RAISES without that profile by design). watchOS min target = 26.0. First standalone watch build needs network (QRCodeGenerator SPM resolve).
+
+**Verification:** hook fingerprint identical before/after (371 markers, 0 lost); `./run.sh` green; app launches; 0 watch-related simulator build lines (zero coupling).
