@@ -26,6 +26,7 @@ swift_library(
         "//submodules/ComponentFlow",
         "//submodules/Fenixuz/Localization:FenixuzLocalization",
         "//submodules/Fenixuz/Brand:FenixuzBrand",
+        "//submodules/Fenixuz/UnreadReminder:FenixuzUnreadReminder",
     ],
     visibility = [
         "//visibility:public",

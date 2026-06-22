@@ -1036,6 +1036,38 @@ Reason: the Tips screen must present on the stable Chats window (not racing the 
 
 ---
 
+## 📌 Unread Message Reminder / Xabar eslatmasi (2026-06-22)
+
+New Fenixuz module `FenixuzUnreadReminder` (`submodules/Fenixuz/UnreadReminder/`). Client-side local reminder for unread messages. Settings live in NovagramPro (`FenixSettingsController.swift`, "Xabar eslatmasi" section — pure Fenixuz module, no hook). The manager is started post-login from `ApplicationContext.swift`.
+
+### `submodules/TelegramUI/BUILD`
+
+In the `deps = [...]` list, append (alongside the existing Fenixuz deps):
+
+```python
+"//submodules/Fenixuz/UnreadReminder:FenixuzUnreadReminder",
+```
+
+### `submodules/TelegramUI/Sources/ApplicationContext.swift`
+
+**Imports — append after `import FenixuzUpdateCheck`:**
+
+```swift
+import FenixuzUnreadReminder
+```
+
+**Inside `AuthorizedApplicationContext.init(...)` — immediately after `let capturedRootController = self.rootController`, before the `Queue.mainQueue().after(1.0, { ... })` Tips/UpdateCheck block:**
+
+```swift
+// Fenixuz: start the unread-message reminder manager (Xabar eslatmasi).
+// Self-retained per account; tracks unread state and schedules a local reminder.
+FenixuzUnreadReminderManager.startIfNeeded(context: capturedContext)
+```
+
+Reason: the manager needs a live `AccountContext` (engine + accountManager) to subscribe to the account's total unread count via the public `renderedTotalUnreadCount(accountManager:engine:)` signal, so it belongs here (one `AuthorizedApplicationContext` per primary account). It is **not** deferred — unread tracking should begin as soon as the session is authorized. The manager self-retains in a private static `[Int64: FenixuzUnreadReminderManager]` keyed by account peer id (so the hook stays a single additive line instead of requiring a new stored property on `AuthorizedApplicationContext`). All scheduling uses `UNUserNotificationCenter`; the reminder fires only when the app is backgrounded with messages unread past the configured threshold, and is cancelled on read (count → 0) or foreground. Settings keys (in `pro_messager` suite): `unread_reminder_enabled` (Bool, default false), `unread_reminder_minutes` (Int, default 5), `unread_reminder_sound` (String, default "default").
+
+---
+
 ## 📌 Gold "Fenixuz" Settings row (2026-06-08)
 
 Owner request: the **Fenixuz** entry in Settings must be gold ("tilla") so it stands out in the list.

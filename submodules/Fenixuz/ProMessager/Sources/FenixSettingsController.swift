@@ -15,6 +15,7 @@ import AppBundle
 import ComponentFlow
 import FenixuzLocalization
 import FenixuzBrand
+import FenixuzUnreadReminder
 
 private enum FenixSection: Int32 {
     case accounts = 5
@@ -25,6 +26,7 @@ private enum FenixSection: Int32 {
     case protection = 4
     case appearance = 6
     case chatLock = 7
+    case reminder = 8
 }
 
 private func textStyleDisplayName(_ rawValue: String, l10n: FenixuzL10n) -> String {
@@ -96,6 +98,14 @@ private enum FenixEntry: ItemListNodeEntry {
     case chatLockInfo(PresentationTheme, String)
     case chatLockFooter(PresentationTheme, String)
 
+    // — Unread Message Reminder Section (Xabar eslatmasi) —
+    // isNew: true while this feature's introducedBuild is newer than the seen-build pointer
+    case reminderHeader(String, Bool)
+    case reminderEnabled(PresentationTheme, String, String, Bool)
+    case reminderTime(PresentationTheme, String, String)
+    case reminderSound(PresentationTheme, String, String)
+    case reminderFooter(PresentationTheme, String)
+
     // — Accounts (Fenixuz multi-account) —
     case accountsHeader(String)
     case accountsManager(PresentationTheme, String)
@@ -118,6 +128,8 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.appearance.rawValue
         case .chatLockHeader, .chatLockInfo, .chatLockFooter:
             return FenixSection.chatLock.rawValue
+        case .reminderHeader, .reminderEnabled, .reminderTime, .reminderSound, .reminderFooter:
+            return FenixSection.reminder.rawValue
         case .accountsHeader, .accountsManager, .aboutRow:
             return FenixSection.accounts.rawValue
         }
@@ -171,6 +183,12 @@ private enum FenixEntry: ItemListNodeEntry {
         case .chatLockHeader:            return 60
         case .chatLockInfo:              return 61
         case .chatLockFooter:            return 62
+        // Unread Message Reminder (Xabar eslatmasi)
+        case .reminderHeader:            return 70
+        case .reminderEnabled:           return 71
+        case .reminderTime:              return 72
+        case .reminderSound:             return 73
+        case .reminderFooter:            return 74
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
         case .accountsManager:           return -1
@@ -272,6 +290,17 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .chatLockInfo(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
         case let .chatLockFooter(lhsTheme, lhsText):
             if case let .chatLockFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
+
+        case let .reminderHeader(lhsText, lhsIsNew):
+            if case let .reminderHeader(rhsText, rhsIsNew) = rhs, lhsText == rhsText, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .reminderEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .reminderEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .reminderTime(lhsTheme, lhsTitle, lhsLabel):
+            if case let .reminderTime(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel { return true } else { return false }
+        case let .reminderSound(lhsTheme, lhsTitle, lhsLabel):
+            if case let .reminderSound(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel { return true } else { return false }
+        case let .reminderFooter(lhsTheme, lhsText):
+            if case let .reminderFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
         case let .accountsHeader(lhsText):
             if case let .accountsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
@@ -520,6 +549,38 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .chatLockFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+
+        // ─── UNREAD MESSAGE REMINDER (Xabar eslatmasi) ───
+        case let .reminderHeader(text, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
+            let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
+                ? ItemListSectionHeaderItem.BadgeStyle(
+                    background: UIColor(red: 0.18, green: 0.74, blue: 0.44, alpha: 1.0),
+                    foreground: .white
+                )
+                : nil
+            return ItemListSectionHeaderItem(
+                presentationData: presentationData,
+                text: text,
+                badge: badgeText,
+                badgeStyle: badgeStyle,
+                sectionId: self.section
+            )
+        case let .reminderEnabled(_, title, text, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "bell.badge.fill", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateReminderEnabled(val)
+            })
+        case let .reminderTime(_, title, label):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "clock.fill", color: .blue), title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.openReminderTimeSettings()
+            })
+        case let .reminderSound(_, title, label):
+            return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "speaker.wave.2.fill", color: .pink), title: title, label: label, sectionId: self.section, style: .blocks, action: {
+                arguments.openReminderSoundSettings()
+            })
+        case let .reminderFooter(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
 }
@@ -552,6 +613,10 @@ private struct FenixSettingsState: Equatable {
     var autoStickerEnabled: Bool
     // Feature #34: Heart effect — auto-attach ❤️ message effect to sent messages
     var heartEffectEnabled: Bool
+    // Unread message reminder (Xabar eslatmasi)
+    var reminderEnabled: Bool
+    var reminderMinutes: Int
+    var reminderSound: String
 
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -584,6 +649,10 @@ private struct FenixSettingsState: Equatable {
         self.autoStickerEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_sticker_enabled") ?? false
         // Default off — user opts in (Feature #34)
         self.heartEffectEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "heart_effect_enabled") ?? false
+        // Unread message reminder (Xabar eslatmasi) — default off, 5 min, default sound
+        self.reminderEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "unread_reminder_enabled") as? Bool ?? false
+        self.reminderMinutes = UserDefaults(suiteName: "pro_messager")?.object(forKey: "unread_reminder_minutes") as? Int ?? FenixuzUnreadReminderSettings.defaultMinutes
+        self.reminderSound = UserDefaults(suiteName: "pro_messager")?.string(forKey: "unread_reminder_sound") ?? FenixuzUnreadReminderSettings.defaultSound
     }
 
     static func == (lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
@@ -654,6 +723,15 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.heartEffectEnabled != rhs.heartEffectEnabled {
+            return false
+        }
+        if lhs.reminderEnabled != rhs.reminderEnabled {
+            return false
+        }
+        if lhs.reminderMinutes != rhs.reminderMinutes {
+            return false
+        }
+        if lhs.reminderSound != rhs.reminderSound {
             return false
         }
         return true
@@ -808,6 +886,14 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.chatLockInfo(presentationData.theme, FenixChatLockStrings.infoBody(langCode: langCode)))
     entries.append(.chatLockFooter(presentationData.theme, FenixChatLockStrings.footer(langCode: langCode)))
 
+    // ─── UNREAD MESSAGE REMINDER (Xabar eslatmasi) ───
+    // isNew: hardcoded true — set to false here when this feature is no longer new.
+    entries.append(.reminderHeader(l10n.settings_reminder_sectionTitle, true))
+    entries.append(.reminderEnabled(presentationData.theme, l10n.settings_reminder_enabled_title, l10n.settings_reminder_enabled_subtitle, state.reminderEnabled))
+    entries.append(.reminderTime(presentationData.theme, l10n.settings_reminder_time_title, l10n.settings_reminder_minutesLabel(state.reminderMinutes)))
+    entries.append(.reminderSound(presentationData.theme, l10n.settings_reminder_sound_title, l10n.settings_reminder_soundName(state.reminderSound)))
+    entries.append(.reminderFooter(presentationData.theme, l10n.settings_reminder_footer))
+
     // ItemListController entries should arrive in stableId order to avoid an
     // assertion. Section visual order is controlled by stableId numbering.
     return entries.sorted()
@@ -841,8 +927,11 @@ private final class FenixSettingsArguments {
     let updateSendConfirmEnabled: (Bool) -> Void
     let updateAutoStickerEnabled: (Bool) -> Void
     let updateHeartEffectEnabled: (Bool) -> Void
+    let updateReminderEnabled: (Bool) -> Void
+    let openReminderTimeSettings: () -> Void
+    let openReminderSoundSettings: () -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openCalls = openCalls
@@ -870,6 +959,9 @@ private final class FenixSettingsArguments {
         self.updateSendConfirmEnabled = updateSendConfirmEnabled
         self.updateAutoStickerEnabled = updateAutoStickerEnabled
         self.updateHeartEffectEnabled = updateHeartEffectEnabled
+        self.updateReminderEnabled = updateReminderEnabled
+        self.openReminderTimeSettings = openReminderTimeSettings
+        self.openReminderSoundSettings = openReminderSoundSettings
     }
 }
 
@@ -1099,6 +1191,64 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             state.heartEffectEnabled = value
             return state
         }
+    }, updateReminderEnabled: { value in
+        // Unread message reminder (Xabar eslatmasi) master toggle
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "unread_reminder_enabled")
+        updateState { state in
+            var state = state
+            state.reminderEnabled = value
+            return state
+        }
+    }, openReminderTimeSettings: {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let l10n = FenixuzL10n(presentationData.strings)
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        var items: [ActionSheetItem] = []
+        for minutes in FenixuzUnreadReminderSettings.minuteOptions {
+            items.append(ActionSheetButtonItem(title: l10n.settings_reminder_minutesLabel(minutes), action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                UserDefaults(suiteName: "pro_messager")?.set(minutes, forKey: "unread_reminder_minutes")
+                updateState { state in
+                    var state = state
+                    state.reminderMinutes = minutes
+                    return state
+                }
+            }))
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentControllerImpl?(actionSheet)
+    }, openReminderSoundSettings: {
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let l10n = FenixuzL10n(presentationData.strings)
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        var items: [ActionSheetItem] = []
+        for soundKey in ["default", "none"] {
+            items.append(ActionSheetButtonItem(title: l10n.settings_reminder_soundName(soundKey), action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                UserDefaults(suiteName: "pro_messager")?.set(soundKey, forKey: "unread_reminder_sound")
+                updateState { state in
+                    var state = state
+                    state.reminderSound = soundKey
+                    return state
+                }
+            }))
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentControllerImpl?(actionSheet)
     })
 
     let signal = combineLatest(

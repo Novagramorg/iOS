@@ -301,6 +301,58 @@ public struct FenixuzL10n {
         )
     }
 
+    // Unread message reminder section (Xabar eslatmasi)
+    public var settings_reminder_sectionTitle: String {
+        pick(en: "Message reminder", uz: "Xabar eslatmasi", ru: "Напоминание о сообщении")
+    }
+
+    public var settings_reminder_enabled_title: String {
+        pick(en: "Unread message reminder", uz: "O'qilmagan xabar eslatmasi", ru: "Напоминание о непрочитанном")
+    }
+
+    public var settings_reminder_enabled_subtitle: String {
+        pick(
+            en: "Reminds you about a message left unread within the set time",
+            uz: "Belgilangan vaqt ichida o'qilmagan xabarni eslatadi",
+            ru: "Напоминает о сообщении, не прочитанном в течение заданного времени"
+        )
+    }
+
+    public var settings_reminder_time_title: String {
+        pick(en: "Reminder time", uz: "Eslatma vaqti", ru: "Время напоминания")
+    }
+
+    public var settings_reminder_sound_title: String {
+        pick(en: "Reminder sound", uz: "Eslatma ovozi", ru: "Звук напоминания")
+    }
+
+    public var settings_reminder_footer: String {
+        pick(
+            en: "When the app is in the background and messages stay unread for the set time, a reminder is shown.",
+            uz: "Ilova fonda bo'lganda va xabarlar belgilangan vaqt davomida o'qilmay qolsa, eslatma ko'rsatiladi.",
+            ru: "Когда приложение в фоне и сообщения остаются непрочитанными заданное время, показывается напоминание."
+        )
+    }
+
+    // Minute-option label for the reminder-time picker, e.g. "5 min".
+    public func settings_reminder_minutesLabel(_ minutes: Int) -> String {
+        switch langCode {
+        case "uz": return "\(minutes) daqiqa"
+        case "ru": return "\(minutes) мин"
+        default:   return "\(minutes) min"
+        }
+    }
+
+    // Sound-option display name. Key is one of "default" / "none".
+    public func settings_reminder_soundName(_ key: String) -> String {
+        switch key {
+        case "none":
+            return pick(en: "None", uz: "Yo'q", ru: "Нет")
+        default:
+            return pick(en: "Default notification sound", uz: "Bildirishnoma ovozi", ru: "Звук уведомления по умолчанию")
+        }
+    }
+
     // Chat tools section
     public var settings_chat_firstMessage_title: String {
         pick(en: "Jump to first message", uz: "Birinchi xabarga o'tish", ru: "К первому сообщению")
