@@ -72,6 +72,7 @@ import BrowserUI
 import RichTextAttachmentScreen
 import RichTextEditorCore
 import RichTextEditorMediaView
+import ChatRichTextEditorComposer
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -4575,17 +4576,28 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         if #available (iOS 17.0, *) {
-            // Seed the expanded editor with the composer's current document AND its media, and write both
-            // back on send — media flows through the `ChatInputContent` model. The seam carries media as
-            // `EngineMedia` (the protocol module has no Postbox dep); convert at this TelegramUI boundary.
-            let seed = textInputPanelNode.richTextInputNode?.expandedEditorSeed()
+            // The composer's chat input STATE is the single source of truth for this handoff (both
+            // directions flow through `ChatInputContent`, not a direct node poke), so undo / drafts / send /
+            // state-observers all see one consistent value. OUT: convert the live composer content →
+            // `(Document, media)` to seed the expanded editor. IN: convert the editor's `(document, media)` →
+            // a `ChatTextInputState` and apply it through the canonical interface-state mutation (the panel
+            // SET path then lands it on the node). Media + custom-emoji files ride the `ChatInputContent`
+            // converters (`documentAndMedia` / `chatInputContent(fromDocument:media:)`).
+            let (seedDocument, seedMedia) = documentAndMedia(fromChatInputContent: textInputPanelNode.inputTextState.content)
             let editorScreen = RichTextAttachmentScreen(
                 context: self.context,
-                initialContents: seed?.document,
-                initialMedia: (seed?.media ?? [:]).mapValues { $0._asMedia() },
+                initialContents: seedDocument,
+                initialMedia: seedMedia,
                 sendMessage: { [weak self] document, media in
-                    self?.textInputPanelNode?.richTextInputNode?.setFromExpandedEditor(
-                        document: document, media: media.mapValues { EngineMedia($0) })
+                    guard let self else {
+                        return
+                    }
+                    let content = chatInputContent(fromDocument: document, media: media)
+                    self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                        return state.updatedInterfaceState { interfaceState in
+                            return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                        }
+                    })
                 },
                 presentAttachmentMenu: { [weak self] completion in
                     guard let self else {

@@ -85,19 +85,6 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// The editor's plain-text string (read-only convenience for length/counter checks).
     var text: String { get }
 
-    /// Seed for an expanded article editor: the backend's structured `Document` plus its media store
-    /// keyed by the editor's media IDs (carried across the seam as `EngineMedia` because this protocol
-    /// module has no Postbox dep). The legacy `UITextView` backend returns an empty `Document()` + no
-    /// media (it has no `Document` model); the RichTextEditor backend returns its live `Document` and
-    /// `mediaByID`. Used to seed an expanded editor with the current content.
-    func expandedEditorSeed() -> (document: Document, media: [String: EngineMedia])
-
-    /// Write an expanded editor's result back into the composer: replace the backend's structured
-    /// content with `document` and its referenced `media` (the reverse of `expandedEditorSeed`). The
-    /// media is keyed by the editor's media IDs. No-op on the legacy `UITextView` backend (no `Document`
-    /// model, no media); the RichTextEditor backend lands both the document and the media and refreshes.
-    func setFromExpandedEditor(document: Document, media: [String: EngineMedia])
-
     /// Apply host theme colors to the editor. No-op on the legacy `UITextView` backend (it themes via
     /// `inputTheme`/`refreshTextInputAttributes`); the RichTextEditor backend maps these into its
     /// `RichTextEditorTheme`.
@@ -642,15 +629,6 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     var text: String {
         return self.textInputNodeImpl.textView.text
-    }
-
-    /// The legacy `UITextView` backend has no `Document` model and no media: seed an empty document.
-    func expandedEditorSeed() -> (document: Document, media: [String: EngineMedia]) {
-        return (Document(), [:])
-    }
-
-    /// No-op: the legacy `UITextView` backend has no `Document` model to replace and no media to land.
-    func setFromExpandedEditor(document: Document, media: [String: EngineMedia]) {
     }
 
     /// No-op: the legacy `UITextView` backend themes via `inputTheme`/`refreshTextInputAttributes`.

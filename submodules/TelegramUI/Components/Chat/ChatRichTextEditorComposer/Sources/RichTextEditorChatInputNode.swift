@@ -178,28 +178,6 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             return nil
         }.joined(separator: "\n")
     }
-    /// Seed for an expanded article editor: the editor's live `Document` plus its media store keyed by the
-    /// editor's media IDs. Media crosses the protocol seam as `EngineMedia` (the protocol module has no
-    /// Postbox dep); `mediaByID` stays private. Used to seed an expanded editor with the current content.
-    public func expandedEditorSeed() -> (document: Document, media: [String: EngineMedia]) {
-        return (self.editorView.document, self.mediaByID.mapValues { EngineMedia($0) })
-    }
-
-    /// Write an expanded editor's result back into the composer. We convert the editor `Document` + its
-    /// `media` STRAIGHT to `ChatInputContent` via the direct bridge (`chatInputContent(fromDocument:)`),
-    /// then land it through `setInputContent` — which converts content→Document, populates `mediaByID` via
-    /// its `registerMedia` closure (so pushed media renders), and refreshes layout. The selection is parked
-    /// at the end of the new content. The incoming `media` is keyed by the editor's media IDs.
-    public func setFromExpandedEditor(document: Document, media: [String: EngineMedia]) {
-        let content = chatInputContent(
-            fromDocument: document,
-            resolveEmoji: { [weak self] emojiRef in self?.resolveEmojiRef(emojiRef) ?? nil },
-            resolveMedia: { mediaID in media[mediaID]?._asMedia() }
-        )
-        self.setInputContent(content, selection: ChatInputSelection(
-            nsRange: NSRange(location: content.length, length: 0), in: content))
-    }
-
     // MARK: ChatInputContent model — the STRUCTURAL draft currency (direct bridge)
 
     /// The node's content as the canonical `ChatInputContent` value model. This is the chat layer's draft/state
@@ -275,20 +253,13 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         return self.mediaByID[mediaID]
     }
 
-    /// Direct-bridge `registerMedia`: cache the `Media` under a stable opaque key derived from its id (matching
-    /// `RichTextAttachmentScreen.attachedMedia`'s `"namespace:id"` convention) and hand that key to the editor.
-    /// The editor stores only this opaque key (it never holds a `Media`); the node's media-view provider
-    /// (registered in `didLoad`) resolves the key back through `mediaByID` to render the block. The key also
-    /// round-trips `currentInputContent → setInputContent` consistently, which an id-derived key does.
+    /// Direct-bridge `registerMedia`: cache the `Media` under a stable opaque key (`composerMediaKey`, the
+    /// `"namespace:id"` convention shared with `RichTextAttachmentScreen.attachedMedia`) and hand that key to
+    /// the editor. The editor stores only this opaque key (it never holds a `Media`); the node's media-view
+    /// provider (registered in `didLoad`) resolves the key back through `mediaByID` to render the block. The
+    /// key also round-trips `currentInputContent → setInputContent` consistently, which an id-derived key does.
     private func registerMediaValue(_ media: Media) -> String {
-        let mediaID: String
-        if let id = media.id {
-            mediaID = "\(id.namespace):\(id.id)"
-        } else {
-            // No stable media id (rare): fall back to an object-identity key so the same value still
-            // round-trips within a single set/get cycle.
-            mediaID = "anon:\(ObjectIdentifier(media as AnyObject).hashValue)"
-        }
+        let mediaID = composerMediaKey(media)
         self.mediaByID[mediaID] = media
         return mediaID
     }
