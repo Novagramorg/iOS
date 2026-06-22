@@ -717,6 +717,28 @@ public final class SharedAccountContextImpl: SharedAccountContext {
             for (id, _) in records.sorted(by: { $0.value.sortIndex < $1.value.sortIndex }) where !fenixuzOrdered.contains(id) && pinnedIds.contains(id.int64) && id.int64 != primaryInt64 {
                 fenixuzOrdered.append(id)
             }
+            // Fenixuz fix: when the primary account is logged out (or its record is otherwise missing)
+            // and nothing is pinned, fenixuzOrdered is empty here. An empty working-set loads no account,
+            // picks no primary, and the pipeline falls through to beginNewAuth() below — dumping the user
+            // to the login screen even though their OTHER accounts are still logged in (only suspended),
+            // which reads as "all accounts got removed". Upstream keeps every account live and promotes
+            // the next one to primary; restore that by keeping at least one logged-in record live whenever
+            // any remains. Only fires when the working-set would otherwise be empty (logging out the sole
+            // live account) — the normal case keeps the primary, so this is a no-op there.
+            if fenixuzOrdered.isEmpty, let fallbackId = records.sorted(by: { $0.value.sortIndex < $1.value.sortIndex }).first?.key {
+                fenixuzOrdered.append(fallbackId)
+                // The persisted currentRecordId still points at the just-logged-out record, so the
+                // "current account" badge in the Accounts screen and any cold-launch / extension read of
+                // currentRecord would be stale (no account shows as current). Advance it to the promoted
+                // survivor — same accountManager.transaction pattern already used for record dedup below.
+                // Naturally idempotent: the next pipeline pass sees a valid primary, so fenixuzOrdered is
+                // non-empty and this branch no longer runs.
+                _ = accountManager.transaction({ transaction in
+                    if transaction.getCurrent()?.0 != fallbackId {
+                        transaction.setCurrentId(fallbackId)
+                    }
+                }).start()
+            }
             // Update recency order to include all ordered accounts (for next pass).
             self.fenixuzRecencyOrder = fenixuzOrdered
             let fenixuzWorkingSet = Set(fenixuzOrdered.prefix(self.fenixuzMaxLiveAccounts))

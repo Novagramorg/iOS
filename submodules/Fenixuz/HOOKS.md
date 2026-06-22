@@ -918,6 +918,18 @@ is safe at any account count.
     activate a 6th live account shows a `UIAlertController` warning and aborts. New L10n keys
     `accounts_activate`, `accounts_putToSleep`, `accounts_maxLiveTitle`, `accounts_maxLiveBody`,
     `accounts_maxLiveOk` (en/uz/ru) in `FenixuzL10n.swift`.
+  - **2026-06-22 logout-of-last-live-account fix (CRITICAL):** logging out the only live/primary
+    account dumped the user to the LOGIN SCREEN even though their other accounts were still logged in
+    (they only *looked* removed). Cause: `logoutFromAccount` marks the record `.loggedOut`; the pipeline
+    `map` (~line 645) filters logged-out records out, so `records[primaryId] == nil`; with nothing
+    pinned `fenixuzOrdered` was empty → empty working-set → no account loaded → `primary == nil` →
+    `beginNewAuth()`. No data is ever deleted — every record-removal site is bounded to a single id, so
+    survivors are orphaned, not destroyed, and fully recoverable. Fix (additive, `SharedAccountContext.swift`
+    ~line 720, inside the working-set builder): when `fenixuzOrdered` is empty, promote the lowest-`sortIndex`
+    surviving record into the working-set (restores upstream's "switch to the next account on logout"), then
+    advance the persisted `currentRecordId` to it via `accountManager.transaction { setCurrentId(...) }` so the
+    "current" badge / cold-launch pointer aren't left dangling. No-op in every normal case (valid primary,
+    genuine last-account logout → login screen still correct, auth flow). Nothing removed or commented.
 
 ## 📌 Edited-history gate + Camera picker localization (2026-06-08)
 
