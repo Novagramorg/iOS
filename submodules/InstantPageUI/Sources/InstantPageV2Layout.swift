@@ -712,7 +712,7 @@ private func layoutBlock(
         return layoutCodeBlock(text, language: language, boundingWidth: boundingWidth,
                                horizontalInset: horizontalInset, context: &context)
 
-    case let .blockQuote(blocks, caption):
+    case let .blockQuote(blocks, caption, _):
         return layoutBlockQuote(blocks: blocks, caption: caption,
                                 boundingWidth: boundingWidth, horizontalInset: horizontalInset, kind: kind,
                                 isLast: isLast, context: &context)

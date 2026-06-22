@@ -26,7 +26,7 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                     quotes.append(richText(from: next.runs))
                     index += 1
                 }
-                pageBlocks.append(.blockQuote(blocks: quotes.map { .paragraph($0) }, caption: .empty))
+                pageBlocks.append(.blockQuote(blocks: quotes.map { .paragraph($0) }, caption: .empty, collapsed: nil))
                 continue
             } else {
                 pageBlocks.append(headingOrParagraphBlock(paragraph))
@@ -72,7 +72,7 @@ private func headingOrParagraphBlock(_ paragraph: ParagraphBlock) -> InstantPage
         return .paragraph(text)
     case .quote:
         // Quotes are merged by the caller; this is an unreached fallback for exhaustiveness.
-        return .blockQuote(blocks: [.paragraph(text)], caption: .empty)
+        return .blockQuote(blocks: [.paragraph(text)], caption: .empty, collapsed: nil)
     }
 }
 

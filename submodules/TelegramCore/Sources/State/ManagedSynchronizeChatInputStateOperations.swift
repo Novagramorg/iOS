@@ -250,8 +250,16 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
         if suggestedPost != nil {
             flags |= 1 << 8
         }
-        
-        return network.request(Api.functions.messages.saveDraft(flags: flags, replyTo: replyTo, peer: inputPeer, message: inputState?.text ?? "", entities: apiEntitiesFromMessageTextEntities(inputState?.entities ?? [], associatedPeers: SimpleDictionary()), media: nil, effect: nil, suggestedPost: suggestedPost, richMessage: nil))
+
+        var apiRichMessage: Api.InputRichMessage?
+        if case let .instantPage(page) = inputState?.content {
+            apiRichMessage = RichTextMessageAttribute(instantPage: page, fullInstantPage: nil).apiInputRichMessage()
+        }
+        if apiRichMessage != nil {
+            flags |= 1 << 9
+        }
+
+        return network.request(Api.functions.messages.saveDraft(flags: flags, replyTo: replyTo, peer: inputPeer, message: inputState?.text ?? "", entities: apiEntitiesFromMessageTextEntities(inputState?.entities ?? [], associatedPeers: SimpleDictionary()), media: nil, effect: nil, suggestedPost: suggestedPost, richMessage: apiRichMessage))
         |> delay(2.0, queue: Queue.concurrentDefaultQueue())
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)

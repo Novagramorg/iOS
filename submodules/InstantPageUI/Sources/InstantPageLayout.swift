@@ -513,7 +513,7 @@ public func layoutInstantPageBlock(webpage: TelegramMediaWebpage, userLocation: 
                 }
             }
             return InstantPageLayout(origin: CGPoint(), contentSize: contentSize, items: listItems)
-        case let .blockQuote(blocks, caption):
+        case let .blockQuote(blocks, caption, _):
             let lineInset: CGFloat = 20.0
             let verticalInset: CGFloat = 4.0
             var contentSize = CGSize(width: boundingWidth, height: verticalInset)

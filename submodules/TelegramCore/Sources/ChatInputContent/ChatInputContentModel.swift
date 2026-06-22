@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ChatInputRun: Equatable {
+public struct ChatInputRun: Equatable, Codable {
     public var text: String
     public var attributes: ChatInputInlineAttributes
     public init(text: String, attributes: ChatInputInlineAttributes = ChatInputInlineAttributes()) {
@@ -9,7 +9,7 @@ public struct ChatInputRun: Equatable {
     }
 }
 
-public struct ChatInputInlineAttributes: Equatable {
+public struct ChatInputInlineAttributes: Equatable, Codable {
     public var bold: Bool
     public var italic: Bool
     public var monospace: Bool
@@ -36,7 +36,7 @@ public struct ChatInputInlineAttributes: Equatable {
     }
 }
 
-public enum ChatInputInlineEntity: Equatable {
+public enum ChatInputInlineEntity: Equatable, Codable {
     case mention(EnginePeer.Id)
     case url(String)
     case date(Int32)
@@ -53,9 +53,72 @@ public enum ChatInputInlineEntity: Equatable {
         default: return false
         }
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case peerId
+        case url
+        case date
+        case fileId
+        case enableAnimation
+    }
+
+    private enum Kind: Int32, Codable {
+        case mention
+        case url
+        case date
+        case customEmoji
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Decode the discriminator as the raw `Int32` (NOT `Kind.self`): the Postbox `AdaptedPostbox*coder` does
+        // not support the `singleValueContainer` that a `RawRepresentable` enum's synthesized Codable uses.
+        let kindValue = try container.decode(Int32.self, forKey: .kind)
+        guard let kind = Kind(rawValue: kindValue) else {
+            throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown discriminator \(kindValue)")
+        }
+        switch kind {
+        case .mention:
+            let peerId = try container.decode(Int64.self, forKey: .peerId)
+            self = .mention(EnginePeer.Id(peerId))
+        case .url:
+            self = .url(try container.decode(String.self, forKey: .url))
+        case .date:
+            self = .date(try container.decode(Int32.self, forKey: .date))
+        case .customEmoji:
+            let fileId = try container.decode(Int64.self, forKey: .fileId)
+            let enableAnimation = try container.decode(Bool.self, forKey: .enableAnimation)
+            // `file` is not persisted (reconstructed from a side cache); decode as nil.
+            self = .customEmoji(fileId: fileId, file: nil, enableAnimation: enableAnimation)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .mention(peerId):
+            try container.encode(Kind.mention.rawValue, forKey: .kind)
+            // Deliberately a flat Int64 (not `encode(peerId)`): `EnginePeer.Id`/`PeerId` is itself Codable but wraps
+            // the value in a nested `{internalValue:}` container — the flat form is the leaner persisted shape and
+            // round-trips exactly (`PeerId(toInt64()) == self`). Keep flat; do not "simplify" to `encode(peerId)`.
+            try container.encode(peerId.toInt64(), forKey: .peerId)
+        case let .url(value):
+            try container.encode(Kind.url.rawValue, forKey: .kind)
+            try container.encode(value, forKey: .url)
+        case let .date(value):
+            try container.encode(Kind.date.rawValue, forKey: .kind)
+            try container.encode(value, forKey: .date)
+        case let .customEmoji(fileId, _, enableAnimation):
+            try container.encode(Kind.customEmoji.rawValue, forKey: .kind)
+            // `file` is intentionally not persisted; only fileId + enableAnimation are encoded.
+            try container.encode(fileId, forKey: .fileId)
+            try container.encode(enableAnimation, forKey: .enableAnimation)
+        }
+    }
 }
 
-public struct ChatInputContent: Equatable {
+public struct ChatInputContent: Equatable, Codable {
     public var schemaVersion: Int32
     public var blocks: [ChatInputBlock]
     public init(schemaVersion: Int32 = 1, blocks: [ChatInputBlock] = []) {
@@ -113,17 +176,77 @@ public struct ChatInputContent: Equatable {
             return false
         }
     }
+
+    /// Whether this content can be represented as plain text + message entities (the `.textEntities`
+    /// branch) rather than requiring a structured `InstantPage` (the `.instantPage` branch). True for
+    /// every block today; the deliberate switch with no `default` forces a compile decision the day a
+    /// non-entity-expressible block type is introduced.
+    public var isEntityExpressible: Bool {
+        return self.blocks.allSatisfy { block in
+            switch block {
+            case .paragraph: return true
+            case .code: return true
+            case let .collapsedQuote(content): return content.isEntityExpressible
+            }
+        }
+    }
 }
 
-public enum ChatInputBlock: Equatable {
+public enum ChatInputBlock: Equatable, Codable {
     case paragraph(ChatInputParagraph)
     case code(ChatInputCode)
     /// A collapsed blockquote: a single placeholder in the flat text whose folded content is carried
     /// recursively. Mirrors `ChatTextInputStateText.collapsedQuote` / the `.collapsedBlock` attribute.
     case collapsedQuote(ChatInputContent)
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case paragraph
+        case code
+        case collapsedQuote
+    }
+
+    private enum Kind: Int32, Codable {
+        case paragraph
+        case code
+        case collapsedQuote
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Decode the discriminator as the raw `Int32` (NOT `Kind.self`): the Postbox `AdaptedPostbox*coder` does
+        // not support the `singleValueContainer` that a `RawRepresentable` enum's synthesized Codable uses.
+        let kindValue = try container.decode(Int32.self, forKey: .kind)
+        guard let kind = Kind(rawValue: kindValue) else {
+            throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown discriminator \(kindValue)")
+        }
+        switch kind {
+        case .paragraph:
+            self = .paragraph(try container.decode(ChatInputParagraph.self, forKey: .paragraph))
+        case .code:
+            self = .code(try container.decode(ChatInputCode.self, forKey: .code))
+        case .collapsedQuote:
+            self = .collapsedQuote(try container.decode(ChatInputContent.self, forKey: .collapsedQuote))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .paragraph(paragraph):
+            try container.encode(Kind.paragraph.rawValue, forKey: .kind)
+            try container.encode(paragraph, forKey: .paragraph)
+        case let .code(code):
+            try container.encode(Kind.code.rawValue, forKey: .kind)
+            try container.encode(code, forKey: .code)
+        case let .collapsedQuote(content):
+            try container.encode(Kind.collapsedQuote.rawValue, forKey: .kind)
+            try container.encode(content, forKey: .collapsedQuote)
+        }
+    }
 }
 
-public struct ChatInputParagraph: Equatable {
+public struct ChatInputParagraph: Equatable, Codable {
     public var style: ChatInputParagraphStyle
     public var runs: [ChatInputRun]
     public init(style: ChatInputParagraphStyle = .body, runs: [ChatInputRun] = []) {
@@ -133,12 +256,49 @@ public struct ChatInputParagraph: Equatable {
     public var text: String { runs.map(\.text).joined() }
 }
 
-public enum ChatInputParagraphStyle: Equatable {
+public enum ChatInputParagraphStyle: Equatable, Codable {
     case body
     case quote(isCollapsed: Bool)
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case isCollapsed
+    }
+
+    private enum Kind: Int32, Codable {
+        case body
+        case quote
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Decode the discriminator as the raw `Int32` (NOT `Kind.self`): the Postbox `AdaptedPostbox*coder` does
+        // not support the `singleValueContainer` that a `RawRepresentable` enum's synthesized Codable uses.
+        let kindValue = try container.decode(Int32.self, forKey: .kind)
+        guard let kind = Kind(rawValue: kindValue) else {
+            throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown discriminator \(kindValue)")
+        }
+        switch kind {
+        case .body:
+            self = .body
+        case .quote:
+            self = .quote(isCollapsed: try container.decode(Bool.self, forKey: .isCollapsed))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .body:
+            try container.encode(Kind.body.rawValue, forKey: .kind)
+        case let .quote(isCollapsed):
+            try container.encode(Kind.quote.rawValue, forKey: .kind)
+            try container.encode(isCollapsed, forKey: .isCollapsed)
+        }
+    }
 }
 
-public struct ChatInputCode: Equatable {
+public struct ChatInputCode: Equatable, Codable {
     public var language: String?
     public var runs: [ChatInputRun]
     public init(language: String? = nil, runs: [ChatInputRun] = []) {

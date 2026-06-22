@@ -1,5 +1,6 @@
 import XCTest
 import TelegramCore
+import Postbox
 @testable import TextFormat
 
 final class ChatInputContentModelTests: XCTestCase {
@@ -97,5 +98,78 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertEqual(empty.position(forFlatOffset: 0), ChatInputPosition(path: [ChatInputPathStep(blockIndex: 0)], offset: 0))
         XCTAssertEqual(empty.flatOffset(for: ChatInputPosition(path: [ChatInputPathStep(blockIndex: 0)], offset: 0)), 0)
         XCTAssertEqual(ChatInputSelection(nsRange: NSRange(location: 0, length: 0), in: empty).nsRange(in: empty), NSRange(location: 0, length: 0))
+    }
+
+    // MARK: - Codable round-trip
+
+    /// The content model round-trips losslessly through JSON for every block/run/entity/style case. Note: the
+    /// `customEmoji` `file` is intentionally not persisted (decoded as nil) — but the model's `==` compares only
+    /// fileId + enableAnimation, so dropping `file` still yields identity.
+    func test_codable_roundTripsModelIdentity() throws {
+        var bold = ChatInputInlineAttributes(); bold.bold = true
+        var emoji = ChatInputInlineAttributes(); emoji.entity = .customEmoji(fileId: 42, file: nil, enableAnimation: true)
+        var mention = ChatInputInlineAttributes(); mention.entity = .mention(EnginePeer.Id(7))
+
+        let bodyParagraph = ChatInputParagraph(style: .body, runs: [
+            ChatInputRun(text: "plain"),
+            ChatInputRun(text: "strong", attributes: bold),
+            ChatInputRun(text: "\u{FFFC}", attributes: emoji),
+            ChatInputRun(text: "@me", attributes: mention),
+        ])
+        let quote1 = ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "first line")])
+        let quote2 = ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "second line")])
+        let code = ChatInputCode(language: "swift", runs: [ChatInputRun(text: "let x = 1\nprint(x)")])
+        let folded = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "hidden")])),
+        ])
+
+        let content = ChatInputContent(schemaVersion: 2, blocks: [
+            .paragraph(bodyParagraph),
+            .paragraph(quote1),
+            .paragraph(quote2),
+            .code(code),
+            .collapsedQuote(folded),
+        ])
+
+        // Encode via AdaptedPostbox — the REAL persistence path (ChatTextInputState stores the model under "cm"
+        // through AdaptedPostboxEncoder), NOT JSON. JSON masks the Postbox coder's lack of `singleValueContainer`
+        // (which a `RawRepresentable` enum's synthesized Codable uses) and bare `Int` support, so the enum
+        // discriminators must persist as `Int32` rawValues — this test guards exactly that.
+        let data = try AdaptedPostboxEncoder().encode(content)
+        let decoded = try AdaptedPostboxDecoder().decode(ChatInputContent.self, from: data)
+        XCTAssertEqual(decoded, content)
+    }
+
+    // MARK: - Entity-expressibility + InstantPage plainText fallback
+
+    /// Every block type that exists today (paragraph, code, and a nested collapsedQuote) is entity-expressible,
+    /// so a content built from them takes the `.textEntities` branch (never `.instantPage`).
+    func test_isEntityExpressible_allCurrentBlocks_true() {
+        let content = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "ab")])),
+            .code(ChatInputCode(language: "swift", runs: [ChatInputRun(text: "x\ny")])),
+            .collapsedQuote(ChatInputContent(blocks: [
+                .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")])),
+            ])),
+        ])
+        XCTAssertTrue(content.isEntityExpressible)
+    }
+
+    /// The old-client text fallback joins paragraph / blockQuote / preformatted text with "\n", skipping empty
+    /// pieces (a blockQuote contributes its inner blocks' text, recursively).
+    func test_instantPage_plainText() {
+        let page = InstantPage(
+            blocks: [
+                .paragraph(.plain("a")),
+                .blockQuote(blocks: [.paragraph(.plain("b"))], caption: .empty, collapsed: nil),
+                .paragraph(.plain("c")),
+            ],
+            media: [:],
+            isComplete: true,
+            rtl: false,
+            url: "",
+            views: nil
+        )
+        XCTAssertEqual(page.plainText, "a\nb\nc")
     }
 }

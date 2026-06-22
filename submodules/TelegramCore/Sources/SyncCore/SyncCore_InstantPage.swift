@@ -71,7 +71,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
     case divider
     case anchor(String)
     case list(items: [InstantPageListItem], ordered: Bool)
-    case blockQuote(blocks: [InstantPageBlock], caption: RichText)
+    case blockQuote(blocks: [InstantPageBlock], caption: RichText, collapsed: Bool?)
     case pullQuote(text: RichText, caption: RichText)
     case image(id: MediaId, caption: InstantPageCaption, url: String?, webpageId: MediaId?)
     case video(id: MediaId, caption: InstantPageCaption, autoplay: Bool, loop: Bool)
@@ -124,11 +124,12 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 self = .list(items: decodeListItems(decoder), ordered: decoder.decodeOptionalInt32ForKey("o") != 0)
             case InstantPageBlockType.blockQuote.rawValue:
                 let caption = decoder.decodeObjectForKey("c", decoder: { RichText(decoder: $0) }) as! RichText
+                let collapsed = decoder.decodeOptionalInt32ForKey("qcol").flatMap { $0 != 0 }
                 if let legacyText = decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as? RichText {
-                    self = .blockQuote(blocks: [.paragraph(legacyText)], caption: caption)
+                    self = .blockQuote(blocks: [.paragraph(legacyText)], caption: caption, collapsed: collapsed)
                 } else {
                     let blocks: [InstantPageBlock] = decoder.decodeObjectArrayWithDecoderForKey("b")
-                    self = .blockQuote(blocks: blocks, caption: caption)
+                    self = .blockQuote(blocks: blocks, caption: caption, collapsed: collapsed)
                 }
             case InstantPageBlockType.pullQuote.rawValue:
                 self = .pullQuote(text: decoder.decodeObjectForKey("t", decoder: { RichText(decoder: $0) }) as! RichText, caption: decoder.decodeObjectForKey("c", decoder: { RichText(decoder: $0) }) as! RichText)
@@ -235,10 +236,13 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 encoder.encodeInt32(InstantPageBlockType.list.rawValue, forKey: "r")
                 encoder.encodeObjectArray(items, forKey: "ml")
                 encoder.encodeInt32(ordered ? 1 : 0, forKey: "o")
-            case let .blockQuote(blocks, caption):
+            case let .blockQuote(blocks, caption, collapsed):
                 encoder.encodeInt32(InstantPageBlockType.blockQuote.rawValue, forKey: "r")
                 encoder.encodeObjectArray(blocks, forKey: "b")
                 encoder.encodeObject(caption, forKey: "c")
+                if let collapsed = collapsed {
+                    encoder.encodeInt32(collapsed ? 1 : 0, forKey: "qcol")
+                }
             case let .pullQuote(text, caption):
                 encoder.encodeInt32(InstantPageBlockType.pullQuote.rawValue, forKey: "r")
                 encoder.encodeObject(text, forKey: "t")
@@ -458,8 +462,10 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
                 } else {
                     return false
                 }
-            case let .blockQuote(lhsBlocks, lhsCaption):
-                if case let .blockQuote(rhsBlocks, rhsCaption) = rhs, lhsBlocks == rhsBlocks, lhsCaption == rhsCaption {
+            case let .blockQuote(lhsBlocks, lhsCaption, _):
+                // `collapsed` is intentionally excluded from equality: no layout/render code reads it, so including
+                // it would only add spurious inequality (redraw/diff churn). Revisit alongside collapse rendering.
+                if case let .blockQuote(rhsBlocks, rhsCaption, _) = rhs, lhsBlocks == rhsBlocks, lhsCaption == rhsCaption {
                     return true
                 } else {
                     return false
@@ -643,11 +649,11 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             let caption = try RichText(flatBuffersObject: value.caption)
             if value.blocksCount > 0 {
                 let blocks = try (0 ..< value.blocksCount).map { try InstantPageBlock(flatBuffersObject: value.blocks(at: $0)!) }
-                self = .blockQuote(blocks: blocks, caption: caption)
+                self = .blockQuote(blocks: blocks, caption: caption, collapsed: nil)
             } else if let legacyText = value.text {
-                self = .blockQuote(blocks: [.paragraph(try RichText(flatBuffersObject: legacyText))], caption: caption)
+                self = .blockQuote(blocks: [.paragraph(try RichText(flatBuffersObject: legacyText))], caption: caption, collapsed: nil)
             } else {
-                self = .blockQuote(blocks: [], caption: caption)
+                self = .blockQuote(blocks: [], caption: caption, collapsed: nil)
             }
         case .instantpageblockPullquote:
             guard let value = flatBuffersObject.value(type: TelegramCore_InstantPageBlock_PullQuote.self) else {
@@ -828,7 +834,7 @@ public indirect enum InstantPageBlock: PostboxCoding, Equatable {
             TelegramCore_InstantPageBlock_List.addVectorOf(items: itemsOffset, &builder)
             TelegramCore_InstantPageBlock_List.add(ordered: ordered, &builder)
             offset = TelegramCore_InstantPageBlock_List.endInstantPageBlock_List(&builder, start: start)
-        case let .blockQuote(blocks, caption):
+        case let .blockQuote(blocks, caption, _):
             valueType = .instantpageblockBlockquote
             let blocksOffsets = blocks.map { $0.encodeToFlatBuffers(builder: &builder) }
             let blocksOffset = builder.createVector(ofOffsets: blocksOffsets, len: blocksOffsets.count)
@@ -1649,6 +1655,40 @@ public final class InstantPage: PostboxCoding, Equatable {
         TelegramCore_InstantPage.add(views: self.views ?? Int32.min, &builder)
         
         return TelegramCore_InstantPage.endInstantPage(&builder, start: start)
+    }
+}
+
+public extension InstantPage {
+    /// A plain-text projection of the page's text-bearing blocks, used as the
+    /// old-client text fallback when a draft is carried as an `InstantPage`.
+    ///
+    /// Only `.paragraph`, `.preformatted` and `.blockQuote` contribute text;
+    /// every other block (drafts never contain them) is treated as empty.
+    /// Empty pieces are skipped before joining so there are no leading,
+    /// trailing or doubled `"\n"` separators.
+    var plainText: String {
+        return InstantPage.blocksPlainText(self.blocks)
+    }
+
+    private static func blocksPlainText(_ blocks: [InstantPageBlock]) -> String {
+        var pieces: [String] = []
+        for block in blocks {
+            let text: String
+            switch block {
+            case let .paragraph(t):
+                text = t.plainText
+            case let .preformatted(t, _):
+                text = t.plainText
+            case let .blockQuote(blocks, _, _):
+                text = blocksPlainText(blocks)
+            default:
+                text = ""
+            }
+            if !text.isEmpty {
+                pieces.append(text)
+            }
+        }
+        return pieces.joined(separator: "\n")
     }
 }
 

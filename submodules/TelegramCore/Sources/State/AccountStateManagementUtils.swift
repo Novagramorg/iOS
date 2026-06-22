@@ -1769,7 +1769,13 @@ private func finalStateWithUpdatesAndServerTime(accountPeerId: PeerId, postbox: 
                                 break
                             }
                         }
-                        inputState = SynchronizeableChatInputState(replySubject: replySubject, text: message, entities: messageTextEntitiesFromApiEntities(entities ?? []), timestamp: date, textSelection: nil, messageEffectId: messageEffectId, suggestedPost: parsedSuggestedPost)
+                        let syncContent: SynchronizeableChatInputState.Content
+                        if let apiRichMessage = draftMessageData.richMessage {
+                            syncContent = .instantPage(RichTextMessageAttribute(apiRichMessage: apiRichMessage).instantPage)
+                        } else {
+                            syncContent = .textEntities(text: message, entities: messageTextEntitiesFromApiEntities(entities ?? []))
+                        }
+                        inputState = SynchronizeableChatInputState(replySubject: replySubject, content: syncContent, timestamp: date, textSelection: nil, messageEffectId: messageEffectId, suggestedPost: parsedSuggestedPost)
                 }
                 var threadId: Int64?
                 if let savedPeerId {

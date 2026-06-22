@@ -456,12 +456,27 @@ public struct ChatTextInputState: Codable, Equatable {
         self.selection = ChatInputSelection(nsRange: NSRange(location: self.content.length, length: 0), in: self.content)
     }
 
+    /// Build directly from a structural `ChatInputContent` (the model storage), applying a flat selection
+    /// range against it. Mirrors `init(inputText:selectionRange:)`, but skips the `NSAttributedString`
+    /// round-trip — used by the draft-restore `.instantPage` path, where the content comes straight from
+    /// `chatInputContent(fromInstantPage:)` and would lose structure if flattened to text first.
+    public init(content: ChatInputContent, selectionRange: Range<Int>) {
+        self.content = content
+        self.selection = ChatInputSelection(nsRange: NSRange(location: selectionRange.lowerBound, length: selectionRange.upperBound - selectionRange.lowerBound), in: self.content)
+    }
+
     public init(from decoder: Decoder) throws {
-        // Persisted form is UNCHANGED (`ChatTextInputStateText` + flat selection ints) so existing drafts decode;
-        // only the in-memory storage is structural. Build the model + structural selection from the decoded form.
+        // Prefer the structural model persisted under "cm" (the form written since 2026-06-19); fall back to the
+        // legacy `ChatTextInputStateText` under "at" so existing drafts (no "cm") still decode unchanged. The flat
+        // selection ints (`as0`/`as1`) are persisted by both forms and applied against the resolved `content` here,
+        // so the caret is preserved in both branches.
         let container = try decoder.container(keyedBy: StringCodingKey.self)
-        let attributedText = ((try? container.decode(ChatTextInputStateText.self, forKey: "at")) ?? ChatTextInputStateText()).attributedText()
-        self.content = chatInputContent(from: attributedText)
+        if let content = try? container.decode(ChatInputContent.self, forKey: "cm") {
+            self.content = content
+        } else {
+            let attributedText = ((try? container.decode(ChatTextInputStateText.self, forKey: "at")) ?? ChatTextInputStateText()).attributedText()
+            self.content = chatInputContent(from: attributedText)
+        }
         let rangeFrom = (try? container.decode(Int32.self, forKey: "as0")) ?? 0
         let rangeTo = (try? container.decode(Int32.self, forKey: "as1")) ?? 0
         let flatRange: NSRange
@@ -475,6 +490,11 @@ public struct ChatTextInputState: Codable, Equatable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: StringCodingKey.self)
+
+        // Store the structural model directly under "cm" — this is the preferred persisted form (it keeps the
+        // structure the flat `ChatTextInputStateText` round-trip would fragment, e.g. a multi-line quote). The
+        // legacy `"at"`/`"as0"`/`"as1"` keys below are kept as a back-compat mirror so any old reader still works.
+        try container.encode(self.content, forKey: "cm")
 
         try container.encode(ChatTextInputStateText(attributedText: self.inputText), forKey: "at")
         try container.encode(Int32(self.selectionRange.lowerBound), forKey: "as0")
