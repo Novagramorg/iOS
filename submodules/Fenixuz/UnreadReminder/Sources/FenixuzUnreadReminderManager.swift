@@ -106,8 +106,21 @@ public final class FenixuzUnreadReminderManager {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.queue.async {
-                self?.scheduleReminderIfNeeded()
+            guard let self = self else { return }
+            // Hold a short background task so the notification request is fully registered
+            // before iOS suspends us. Without it, scheduling gets cut off mid-flight and no
+            // reminder is ever set — the user then sees "nothing while locked".
+            var bgTask = UIBackgroundTaskIdentifier.invalid
+            bgTask = UIApplication.shared.beginBackgroundTask(withName: "fenixuzUnreadReminder") {
+                if bgTask != .invalid {
+                    UIApplication.shared.endBackgroundTask(bgTask)
+                    bgTask = .invalid
+                }
+            }
+            self.scheduleReminderIfNeeded()
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
             }
         }
         self.observers.append(didEnterBackground)
@@ -143,16 +156,11 @@ public final class FenixuzUnreadReminderManager {
 
         self.requestAuthorizationIfNeeded()
 
-        let center = UNUserNotificationCenter.current()
-        center.getNotificationSettings { [weak self] settings in
-            guard let self else { return }
-            guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else {
-                return
-            }
-            self.queue.async {
-                self.scheduleReminder(after: remaining)
-            }
-        }
+        // Schedule directly and synchronously. We must NOT gate on an async
+        // getNotificationSettings round-trip here: this runs on didEnterBackground and the
+        // app can be suspended before that XPC callback returns, silently dropping the
+        // reminder. If permission was denied the system simply no-ops the add.
+        self.scheduleReminder(after: remaining)
     }
 
     private func scheduleReminder(after interval: TimeInterval) {
