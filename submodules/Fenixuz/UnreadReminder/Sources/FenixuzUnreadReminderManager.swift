@@ -144,15 +144,15 @@ public final class FenixuzUnreadReminderManager {
         guard FenixuzUnreadReminderSettings.isEnabled else {
             return
         }
-        guard self.unreadCount > 0, let unreadSince = self.unreadSince else {
+        guard self.unreadCount > 0, self.unreadSince != nil else {
             return
         }
 
-        let thresholdSeconds = TimeInterval(max(1, FenixuzUnreadReminderSettings.minutes) * 60)
-        let elapsed = Date().timeIntervalSince(unreadSince)
-        // Fire after the remaining time to reach the threshold; never below 1s
-        // (UNTimeIntervalNotificationTrigger requires a positive interval).
-        let remaining = max(1.0, thresholdSeconds - elapsed)
+        // Fire the FULL threshold after backgrounding — NOT threshold-minus-time-since-first-unread.
+        // Measuring from "first unread" made the reminder fire early (often within 1s) once messages
+        // had already been unread a while across relaunches. Users expect a predictable
+        // "N minutes after I leave the app".
+        let remaining = TimeInterval(max(1, FenixuzUnreadReminderSettings.minutes) * 60)
 
         self.requestAuthorizationIfNeeded()
 
