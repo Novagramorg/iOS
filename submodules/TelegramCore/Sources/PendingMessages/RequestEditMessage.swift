@@ -4,7 +4,8 @@ import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
 
-public enum RequestEditMessageMedia: Equatable {
+
+public enum RequestEditMessageMedia : Equatable {
     case keep
     case update(AnyMediaReference)
 }
@@ -77,7 +78,8 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
             }
             let inputTodo = Api.InputMedia.inputMediaTodo(.init(todo: .todoList(.init(flags: flags, title: .textWithEntities(.init(text: todo.text, entities: apiEntitiesFromMessageTextEntities(todo.textEntities, associatedPeers: SimpleDictionary()))), list: todo.items.map { $0.apiItem }))))
             uploadedMedia = .single(.content(PendingMessageUploadedContentAndReuploadInfo(content: .media(inputTodo, text), reuploadInfo: nil, cacheReferenceKey: nil)))
-        } else if let uploadSignal = generateUploadSignal(forceReupload) {
+        }
+        else if let uploadSignal = generateUploadSignal(forceReupload) {
             uploadedMedia = .single(.progress(PendingMessageUploadedContentProgress(progress: 0.027)))
             |> then(uploadSignal)
             |> map { result -> PendingMessageUploadedContentResult? in
@@ -111,11 +113,11 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
             guard let message = transaction.getMessage(messageId) else {
                 return (nil, nil, SimpleDictionary())
             }
-
+            
             for (_, file) in inlineStickers {
                 transaction.storeMediaIfNotPresent(media: file)
             }
-
+        
             if text.isEmpty {
                 for media in message.media {
                     switch media {
@@ -130,7 +132,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                     }
                 }
             }
-
+        
             var peers = SimpleDictionary<PeerId, Peer>()
 
             if let entities = entities {
@@ -146,18 +148,18 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
         |> mapToSignal { peer, message, associatedPeers -> Signal<RequestEditMessageResult, RequestEditMessageInternalError> in
             if let peer = peer, let message = message, let inputPeer = apiInputPeer(peer) {
                 var flags: Int32 = 1 << 11
-
+                
                 var apiEntities: [Api.MessageEntity]?
                 if let entities = entities {
                     apiEntities = apiTextAttributeEntities(entities, associatedPeers: associatedPeers)
                     flags |= Int32(1 << 3)
                 }
-
+                
                 if disableUrlPreview {
                     flags |= Int32(1 << 1)
                 }
-
-                var inputMedia: Api.InputMedia?
+                
+                var inputMedia: Api.InputMedia? = nil
                 if let pendingMediaContent = pendingMediaContent {
                     switch pendingMediaContent {
                         case let .media(media, _):
@@ -169,7 +171,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                 if let _ = inputMedia {
                     flags |= Int32(1 << 14)
                 }
-
+                
                 var effectiveScheduleTime: Int32?
                 var effectiveScheduleRepeatPeriod: Int32?
                 if messageId.namespace == Namespaces.Message.ScheduledCloud {
@@ -179,27 +181,27 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                         effectiveScheduleTime = message.timestamp
                     }
                     flags |= Int32(1 << 15)
-
+                    
                     if let scheduleInfoAttribute {
                         effectiveScheduleRepeatPeriod = scheduleInfoAttribute.repeatPeriod ?? 0
                         flags |= Int32(1 << 18)
                     }
                 }
-
+                
                 if let webpagePreviewAttribute, webpagePreviewAttribute.leadingPreview {
                     flags |= Int32(1 << 16)
                 }
                 if let _ = invertMediaAttribute {
                     flags |= Int32(1 << 16)
                 }
-
+                
                 var quickReplyShortcutId: Int32?
                 if messageId.namespace == Namespaces.Message.QuickReplyCloud {
                     quickReplyShortcutId = Int32(clamping: message.threadId ?? 0)
                     flags |= Int32(1 << 17)
                 }
-
-                return network.request(Api.functions.messages.editMessage(flags: flags, peer: inputPeer, id: messageId.id, message: text, media: inputMedia, replyMarkup: nil, entities: apiEntities, scheduleDate: effectiveScheduleTime, scheduleRepeatPeriod: effectiveScheduleRepeatPeriod, quickReplyShortcutId: quickReplyShortcutId, richMessage: nil))
+                
+                return network.request(Api.functions.messages.editMessage(flags: flags, peer: inputPeer, id: messageId.id, message: text, media: inputMedia, replyMarkup: nil, entities: apiEntities, scheduleDate: effectiveScheduleTime, scheduleRepeatPeriod: effectiveScheduleRepeatPeriod, quickReplyShortcutId: quickReplyShortcutId))
                 |> map { result -> Api.Updates? in
                     return result
                 }
@@ -229,11 +231,11 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                             if let message = result.messages.first.flatMap({ StoreMessage(apiMessage: $0, accountPeerId: accountPeerId, peerIsForum: peer.isForumOrMonoForum) }) {
                                 toMedia = message.media.first
                             }
-
+                            
                             if case let .update(fromMedia) = media, let toMedia = toMedia {
                                 applyMediaResourceChanges(from: fromMedia.media, to: toMedia, postbox: postbox, force: true)
                             }
-
+                            
                             switch result {
                             case let .updates(updatesData):
                                 let (updates, users, chats) = (updatesData.updates, updatesData.users, updatesData.chats)
@@ -321,7 +323,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                                         let message = data.message
                                         let peers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                                         updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: peers)
-
+                                        
                                         if let message = StoreMessage(apiMessage: message, accountPeerId: accountPeerId, peerIsForum: peer.isForumOrMonoForum), case let .Id(id) = message.id {
                                             transaction.updateMessage(id, update: { previousMessage in
                                                 var updatedFlags = message.flags
@@ -334,12 +336,12 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                                                 } else {
                                                     updatedFlags.remove(.Incoming)
                                                 }
-
+                                                
                                                 var updatedMedia = message.media
                                                 if let previousPaidContent = previousMessage.media.first(where: { $0 is TelegramMediaPaidContent }) as? TelegramMediaPaidContent, case .full = previousPaidContent.extendedMedia.first {
                                                     updatedMedia = previousMessage.media
                                                 }
-
+                                                
                                                 return .update(message.withUpdatedLocalTags(updatedLocalTags).withUpdatedFlags(updatedFlags).withUpdatedMedia(updatedMedia))
                                             })
                                         }
@@ -350,9 +352,9 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                             default:
                                 break
                             }
-
+                            
                             stateManager.addUpdates(result)
-
+                            
                             return .done(true)
                         }
                         |> mapError { _ -> RequestEditMessageInternalError in
@@ -410,7 +412,7 @@ func _internal_requestEditLiveLocation(postbox: Postbox, network: Network, state
             if let _ = proximityNotificationRadius {
                 flags |= 1 << 3
             }
-
+            
             let period: Int32
             if let extendPeriod {
                 if extendPeriod == liveLocationIndefinitePeriod {
@@ -421,13 +423,13 @@ func _internal_requestEditLiveLocation(postbox: Postbox, network: Network, state
             } else {
                 period = liveBroadcastingTimeout
             }
-
+            
             inputMedia = .inputMediaGeoLive(.init(flags: flags, geoPoint: inputGeoPoint, heading: heading, period: period, proximityNotificationRadius: proximityNotificationRadius))
         } else {
             inputMedia = .inputMediaGeoLive(.init(flags: 1 << 0, geoPoint: .inputGeoPoint(.init(flags: 0, lat: media.latitude, long: media.longitude, accuracyRadius: nil)), heading: nil, period: nil, proximityNotificationRadius: nil))
         }
 
-        return network.request(Api.functions.messages.editMessage(flags: 1 << 14, peer: inputPeer, id: messageId.id, message: nil, media: inputMedia, replyMarkup: nil, entities: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, quickReplyShortcutId: nil, richMessage: nil))
+        return network.request(Api.functions.messages.editMessage(flags: 1 << 14, peer: inputPeer, id: messageId.id, message: nil, media: inputMedia, replyMarkup: nil, entities: nil, scheduleDate: nil, scheduleRepeatPeriod: nil, quickReplyShortcutId: nil))
         |> map(Optional.init)
         |> `catch` { _ -> Signal<Api.Updates?, NoError> in
             return .single(nil)
@@ -437,7 +439,7 @@ func _internal_requestEditLiveLocation(postbox: Postbox, network: Network, state
                 stateManager.addUpdates(updates)
             }
             if coordinate == nil && proximityNotificationRadius == nil && extendPeriod == nil {
-                return postbox.transaction { transaction in
+                return postbox.transaction { transaction -> Void in
                     transaction.updateMessage(messageId, update: { currentMessage in
                         var storeForwardInfo: StoreMessageForwardInfo?
                         if let forwardInfo = currentMessage.forwardInfo {

@@ -2,6 +2,7 @@ import Foundation
 import Postbox
 import TelegramApi
 
+
 extension RichText {
     init(apiText: Api.RichText) {
         switch apiText {
@@ -52,10 +53,6 @@ extension RichText {
             case let .textAnchor(textAnchorData):
                 let (text, name) = (textAnchorData.text, textAnchorData.name)
                 self = .anchor(text: RichText(apiText: text), name: name)
-            case .textAutoEmail, .textAutoPhone, .textAutoUrl, .textBankCard, .textBotCommand, .textCashtag, .textCustomEmoji, .textDate, .textHashtag, .textMath, .textMention, .textMentionName, .textSpoiler:
-                // 12.8 schema added these rich-text variants; the fork's RichText model doesn't
-                // represent them and they don't occur in the instant pages it renders. Degrade to empty.
-                self = .empty
         }
     }
 }

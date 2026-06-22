@@ -4,26 +4,27 @@ import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
 
+
 private final class ManagedSynchronizeChatInputStateOperationsHelper {
     var operationDisposables: [Int32: Disposable] = [:]
-
+    
     private let hasRunningOperations: ValuePromise<Bool>
-
+    
     init(hasRunningOperations: ValuePromise<Bool>) {
         self.hasRunningOperations = hasRunningOperations
     }
-
+    
     func update(_ entries: [PeerMergedOperationLogEntry]) -> (disposeOperations: [Disposable], beginOperations: [(PeerMergedOperationLogEntry, MetaDisposable)]) {
         var disposeOperations: [Disposable] = []
         var beginOperations: [(PeerMergedOperationLogEntry, MetaDisposable)] = []
-
+        
         var hasRunningOperationForPeerId = Set<PeerId>()
         var validMergedIndices = Set<Int32>()
         for entry in entries {
             if !hasRunningOperationForPeerId.contains(entry.peerId) {
                 hasRunningOperationForPeerId.insert(entry.peerId)
                 validMergedIndices.insert(entry.mergedIndex)
-
+                
                 if self.operationDisposables[entry.mergedIndex] == nil {
                     let disposable = MetaDisposable()
                     beginOperations.append((entry, disposable))
@@ -31,7 +32,7 @@ private final class ManagedSynchronizeChatInputStateOperationsHelper {
                 }
             }
         }
-
+        
         var removeMergedIndices: [Int32] = []
         for (mergedIndex, disposable) in self.operationDisposables {
             if !validMergedIndices.contains(mergedIndex) {
@@ -39,16 +40,16 @@ private final class ManagedSynchronizeChatInputStateOperationsHelper {
                 disposeOperations.append(disposable)
             }
         }
-
+        
         for mergedIndex in removeMergedIndices {
             self.operationDisposables.removeValue(forKey: mergedIndex)
         }
-
+        
         self.hasRunningOperations.set(!self.operationDisposables.isEmpty)
-
+        
         return (disposeOperations, beginOperations)
     }
-
+    
     func reset() -> [Disposable] {
         let disposables = Array(self.operationDisposables.values)
         self.operationDisposables.removeAll()
@@ -60,14 +61,14 @@ private func withTakenOperation(postbox: Postbox, peerId: PeerId, tag: PeerOpera
     return postbox.transaction { transaction -> Signal<Void, NoError> in
         var result: PeerMergedOperationLogEntry?
         transaction.operationLogUpdateEntry(peerId: peerId, tag: tag, tagLocalIndex: tagLocalIndex, { entry in
-            if let entry = entry, let _ = entry.mergedIndex, entry.contents is SynchronizeChatInputStateOperation {
+            if let entry = entry, let _ = entry.mergedIndex, entry.contents is SynchronizeChatInputStateOperation  {
                 result = entry.mergedEntry!
                 return PeerOperationLogEntryUpdate(mergedIndex: .none, contents: .none)
             } else {
                 return PeerOperationLogEntryUpdate(mergedIndex: .none, contents: .none)
             }
         })
-
+        
         return f(transaction, result)
     } |> switchToLatest
 }
@@ -76,18 +77,18 @@ func managedSynchronizeChatInputStateOperations(postbox: Postbox, network: Netwo
     return Signal { subscriber in
         let hasRunningOperations = ValuePromise<Bool>(false, ignoreRepeated: true)
         let tag: PeerOperationLogTag = OperationLogTags.SynchronizeChatInputStates
-
+        
         let helper = Atomic<ManagedSynchronizeChatInputStateOperationsHelper>(value: ManagedSynchronizeChatInputStateOperationsHelper(hasRunningOperations: hasRunningOperations))
-
+        
         let disposable = postbox.mergedOperationLogView(tag: tag, limit: 10).start(next: { view in
             let (disposeOperations, beginOperations) = helper.with { helper -> (disposeOperations: [Disposable], beginOperations: [(PeerMergedOperationLogEntry, MetaDisposable)]) in
                 return helper.update(view.entries)
             }
-
+            
             for disposable in disposeOperations {
                 disposable.dispose()
             }
-
+            
             for (entry, disposable) in beginOperations {
                 let signal = withTakenOperation(postbox: postbox, peerId: entry.peerId, tag: tag, tagLocalIndex: entry.tagLocalIndex, { transaction, entry -> Signal<Void, NoError> in
                     if let entry = entry {
@@ -99,18 +100,18 @@ func managedSynchronizeChatInputStateOperations(postbox: Postbox, network: Netwo
                     }
                     return .complete()
                 })
-                |> then(postbox.transaction { transaction in
-                    _ = transaction.operationLogRemoveEntry(peerId: entry.peerId, tag: tag, tagLocalIndex: entry.tagLocalIndex)
+                |> then(postbox.transaction { transaction -> Void in
+                    let _ = transaction.operationLogRemoveEntry(peerId: entry.peerId, tag: tag, tagLocalIndex: entry.tagLocalIndex)
                 })
-
+                
                 disposable.set(signal.start())
             }
         })
-
+        
         let statusDisposable = hasRunningOperations.get().start(next: { value in
             subscriber.putNext(value)
         })
-
+        
         return ActionDisposable {
             let disposables = helper.with { helper -> [Disposable] in
                 return helper.reset()
@@ -132,7 +133,7 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
     } else {
         peerChatInterfaceState = transaction.getPeerChatInterfaceState(peerId)
     }
-
+    
     if let peerChatInterfaceState = peerChatInterfaceState, let data = peerChatInterfaceState.data {
         inputState = (try? AdaptedPostboxDecoder().decode(InternalChatInterfaceState.self, from: data))?.synchronizeableInputState
     }
@@ -153,18 +154,18 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
                 topMsgId = Int32(clamping: threadId)
             }
         }
-
+        
         var replyTo: Api.InputReplyTo?
         if let replySubject = inputState?.replySubject {
             flags |= 1 << 0
-
+            
             var innerFlags: Int32 = 0
             if topMsgId != nil {
                 innerFlags |= 1 << 0
             } else if monoforumPeerId != nil {
                 innerFlags |= 1 << 5
             }
-
+            
             var replyToPeer: Api.InputPeer?
             var discard = false
             if replySubject.messageId.peerId != peerId {
@@ -173,14 +174,14 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
                     discard = true
                 }
             }
-
+            
             var quoteText: String?
             var quoteEntities: [Api.MessageEntity]?
             var quoteOffset: Int32?
             if let replyQuote = replySubject.quote {
                 quoteText = replyQuote.text
                 quoteOffset = replyQuote.offset.flatMap { Int32(clamping: $0) }
-
+                
                 if !replyQuote.entities.isEmpty {
                     var associatedPeers = SimpleDictionary<PeerId, Peer>()
                     for entity in replyQuote.entities {
@@ -195,7 +196,7 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
                     quoteEntities = apiEntitiesFromMessageTextEntities(replyQuote.entities, associatedPeers: associatedPeers)
                 }
             }
-
+            
             var replyTodoItemId: Int32?
             var replyPollOption: Buffer?
             switch replySubject.innerSubject {
@@ -206,7 +207,7 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
             default:
                 break
             }
-
+            
             if replyToPeer != nil {
                 innerFlags |= 1 << 1
             }
@@ -230,7 +231,7 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
             }
         } else if let topMsgId {
             flags |= 1 << 0
-
+            
             var innerFlags: Int32 = 0
             innerFlags |= 1 << 0
             replyTo = .inputReplyToMessage(.init(flags: innerFlags, replyToMsgId: topMsgId, topMsgId: topMsgId, replyToPeerId: nil, quoteText: nil, quoteEntities: nil, quoteOffset: nil, monoforumPeerId: nil, todoItemId: nil, pollOption: nil))
@@ -238,7 +239,7 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
             flags |= 1 << 0
             replyTo = .inputReplyToMonoForum(.init(monoforumPeerId: monoforumPeerId))
         }
-
+        
         let suggestedPost = inputState?.suggestedPost.flatMap { suggestedPost -> Api.SuggestedPost in
             var flags: Int32 = 0
             if suggestedPost.timestamp != nil {
@@ -249,8 +250,8 @@ private func synchronizeChatInputState(transaction: Transaction, postbox: Postbo
         if suggestedPost != nil {
             flags |= 1 << 8
         }
-
-        return network.request(Api.functions.messages.saveDraft(flags: flags, replyTo: replyTo, peer: inputPeer, message: inputState?.text ?? "", entities: apiEntitiesFromMessageTextEntities(inputState?.entities ?? [], associatedPeers: SimpleDictionary()), media: nil, effect: nil, suggestedPost: suggestedPost, richMessage: nil))
+        
+        return network.request(Api.functions.messages.saveDraft(flags: flags, replyTo: replyTo, peer: inputPeer, message: inputState?.text ?? "", entities: apiEntitiesFromMessageTextEntities(inputState?.entities ?? [], associatedPeers: SimpleDictionary()), media: nil, effect: nil, suggestedPost: suggestedPost))
         |> delay(2.0, queue: Queue.concurrentDefaultQueue())
         |> `catch` { _ -> Signal<Api.Bool, NoError> in
             return .single(.boolFalse)

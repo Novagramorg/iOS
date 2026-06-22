@@ -4,6 +4,7 @@ import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
 
+
 public enum ChatContextResultMessageDecodingError: Error {
     case generic
 }
@@ -12,14 +13,14 @@ public enum ChatContextResultMessage: PostboxCoding, Equatable, Codable {
     enum CodingKeys: String, CodingKey {
         case data
     }
-
+    
     case auto(caption: String, entities: TextEntitiesMessageAttribute?, replyMarkup: ReplyMarkupMessageAttribute?)
     case text(text: String, entities: TextEntitiesMessageAttribute?, disableUrlPreview: Bool, previewParameters: WebpagePreviewMessageAttribute?, replyMarkup: ReplyMarkupMessageAttribute?)
     case mapLocation(media: TelegramMediaMap, replyMarkup: ReplyMarkupMessageAttribute?)
     case contact(media: TelegramMediaContact, replyMarkup: ReplyMarkupMessageAttribute?)
     case invoice(media: TelegramMediaInvoice, replyMarkup: ReplyMarkupMessageAttribute?)
     case webpage(text: String, entities: TextEntitiesMessageAttribute?, url: String, previewParameters: WebpagePreviewMessageAttribute?, replyMarkup: ReplyMarkupMessageAttribute?)
-
+    
     public init(decoder: PostboxDecoder) {
         switch decoder.decodeInt32ForKey("_v", orElse: 0) {
         case 0:
@@ -38,7 +39,7 @@ public enum ChatContextResultMessage: PostboxCoding, Equatable, Codable {
             self = .auto(caption: "", entities: nil, replyMarkup: nil)
         }
     }
-
+    
     public func encode(_ encoder: PostboxEncoder) {
         switch self {
         case let .auto(caption, entities, replyMarkup):
@@ -118,23 +119,23 @@ public enum ChatContextResultMessage: PostboxCoding, Equatable, Codable {
             }
         }
     }
-
+    
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let data = try container.decode(Data.self, forKey: .data)
         let postboxDecoder = PostboxDecoder(buffer: MemoryBuffer(data: data))
         self = ChatContextResultMessage(decoder: postboxDecoder)
     }
-
+    
     public func encode(to encoder: Encoder) throws {
         let postboxEncoder = PostboxEncoder()
         self.encode(postboxEncoder)
-
+        
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(postboxEncoder.makeData(), forKey: .data)
     }
-
-    public static func == (lhs: ChatContextResultMessage, rhs: ChatContextResultMessage) -> Bool {
+    
+    public static func ==(lhs: ChatContextResultMessage, rhs: ChatContextResultMessage) -> Bool {
         switch lhs {
         case let .auto(lhsCaption, lhsEntities, lhsReplyMarkup):
             if case let .auto(rhsCaption, rhsEntities, rhsReplyMarkup) = rhs {
@@ -242,7 +243,7 @@ public enum ChatContextResult: Equatable, Codable {
         case externalReference
         case internalReference
     }
-
+    
     public struct ExternalReference: Equatable, Codable {
         public let queryId: Int64
         public let id: String
@@ -253,7 +254,7 @@ public enum ChatContextResult: Equatable, Codable {
         public let content: TelegramMediaWebFile?
         public let thumbnail: TelegramMediaWebFile?
         public let message: ChatContextResultMessage
-
+        
         public init(
             queryId: Int64,
             id: String,
@@ -276,7 +277,7 @@ public enum ChatContextResult: Equatable, Codable {
             self.message = message
         }
     }
-
+    
     public struct InternalReference: Equatable, Codable {
         public let queryId: Int64
         public let id: String
@@ -286,7 +287,7 @@ public enum ChatContextResult: Equatable, Codable {
         public let image: TelegramMediaImage?
         public let file: TelegramMediaFile?
         public let message: ChatContextResultMessage
-
+        
         public init(
             queryId: Int64,
             id: String,
@@ -307,13 +308,13 @@ public enum ChatContextResult: Equatable, Codable {
             self.message = message
         }
     }
-
+    
     case externalReference(ExternalReference)
     case internalReference(InternalReference)
-
+    
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
+        
         if let externalReference = try? container.decode(ExternalReference.self, forKey: .externalReference) {
             self = .externalReference(externalReference)
         } else if let internalReference = try? container.decode(InternalReference.self, forKey: .internalReference) {
@@ -322,7 +323,7 @@ public enum ChatContextResult: Equatable, Codable {
             throw ChatContextResultDecodingError.generic
         }
     }
-
+    
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
@@ -341,7 +342,7 @@ public enum ChatContextResult: Equatable, Codable {
                 return internalReference.queryId
         }
     }
-
+    
     public var id: String {
         switch self {
             case let .externalReference(externalReference):
@@ -350,7 +351,7 @@ public enum ChatContextResult: Equatable, Codable {
                 return internalReference.id
         }
     }
-
+    
     public var type: String {
         switch self {
             case let .externalReference(externalReference):
@@ -359,7 +360,7 @@ public enum ChatContextResult: Equatable, Codable {
                 return internalReference.type
         }
     }
-
+    
     public var title: String? {
         switch self {
             case let .externalReference(externalReference):
@@ -368,7 +369,7 @@ public enum ChatContextResult: Equatable, Codable {
                 return internalReference.title
         }
     }
-
+    
     public var description: String? {
         switch self {
             case let .externalReference(externalReference):
@@ -377,7 +378,7 @@ public enum ChatContextResult: Equatable, Codable {
                 return internalReference.description
         }
     }
-
+    
     public var message: ChatContextResultMessage {
         switch self {
             case let .externalReference(externalReference):
@@ -396,8 +397,8 @@ public enum ChatContextResultCollectionPresentation: Int32, Codable {
 public struct ChatContextResultSwitchPeer: Equatable, Codable {
     public let text: String
     public let startParam: String
-
-    public static func == (lhs: ChatContextResultSwitchPeer, rhs: ChatContextResultSwitchPeer) -> Bool {
+    
+    public static func ==(lhs: ChatContextResultSwitchPeer, rhs: ChatContextResultSwitchPeer) -> Bool {
         return lhs.text == rhs.text && lhs.startParam == rhs.startParam
     }
 }
@@ -405,8 +406,8 @@ public struct ChatContextResultSwitchPeer: Equatable, Codable {
 public struct ChatContextResultWebView: Equatable, Codable {
     public let text: String
     public let url: String
-
-    public static func == (lhs: ChatContextResultWebView, rhs: ChatContextResultWebView) -> Bool {
+    
+    public static func ==(lhs: ChatContextResultWebView, rhs: ChatContextResultWebView) -> Bool {
         return lhs.text == rhs.text && lhs.url == rhs.url
     }
 }
@@ -415,13 +416,13 @@ public final class ChatContextResultCollection: Equatable, Codable {
     public struct GeoPoint: Equatable, Codable {
         public let latitude: Double
         public let longitude: Double
-
+        
         public init(latitude: Double, longitude: Double) {
             self.latitude = latitude
             self.longitude = longitude
         }
     }
-
+    
     public let botId: PeerId
     public let peerId: PeerId
     public let query: String
@@ -433,7 +434,7 @@ public final class ChatContextResultCollection: Equatable, Codable {
     public let webView: ChatContextResultWebView?
     public let results: [ChatContextResult]
     public let cacheTimeout: Int32
-
+    
     public init(botId: PeerId, peerId: PeerId, query: String, geoPoint: ChatContextResultCollection.GeoPoint?, queryId: Int64, nextOffset: String?, presentation: ChatContextResultCollectionPresentation, switchPeer: ChatContextResultSwitchPeer?, webView: ChatContextResultWebView?, results: [ChatContextResult], cacheTimeout: Int32) {
         self.botId = botId
         self.peerId = peerId
@@ -447,8 +448,8 @@ public final class ChatContextResultCollection: Equatable, Codable {
         self.results = results
         self.cacheTimeout = cacheTimeout
     }
-
-    public static func == (lhs: ChatContextResultCollection, rhs: ChatContextResultCollection) -> Bool {
+    
+    public static func ==(lhs: ChatContextResultCollection, rhs: ChatContextResultCollection) -> Bool {
         if lhs.botId != rhs.botId {
             return false
         }
@@ -489,9 +490,6 @@ public final class ChatContextResultCollection: Equatable, Codable {
 extension ChatContextResultMessage {
     init(apiMessage: Api.BotInlineMessage) {
         switch apiMessage {
-            case .botInlineMessageRichMessage:
-                // 12.8 RichMessage inline result; the fork doesn't model it — render as empty auto caption.
-                self = .auto(caption: "", entities: nil, replyMarkup: nil)
             case let .botInlineMessageMediaAuto(botInlineMessageMediaAutoData):
                 let (_, message, entities, replyMarkup) = (botInlineMessageMediaAutoData.flags, botInlineMessageMediaAutoData.message, botInlineMessageMediaAutoData.entities, botInlineMessageMediaAutoData.replyMarkup)
                 var parsedEntities: TextEntitiesMessageAttribute?
@@ -564,7 +562,7 @@ extension ChatContextResultMessage {
                 if let replyMarkup = replyMarkup {
                     parsedReplyMarkup = ReplyMarkupMessageAttribute(apiMarkup: replyMarkup)
                 }
-
+            
                 let leadingPreview = (flags & (1 << 3)) != 0
                 var forceLargeMedia: Bool?
                 if (flags & (1 << 4)) != 0 {
@@ -574,12 +572,12 @@ extension ChatContextResultMessage {
                 }
                 let isManuallyAdded = (flags & (1 << 7)) != 0
                 let isSafe = (flags & (1 << 8)) != 0
-
+            
                 var parsedEntities: TextEntitiesMessageAttribute?
                 if let entities = entities, !entities.isEmpty {
                     parsedEntities = TextEntitiesMessageAttribute(entities: messageTextEntitiesFromApiEntities(entities))
                 }
-
+                
                 self = .webpage(
                     text: message,
                     entities: parsedEntities,
@@ -669,12 +667,12 @@ extension ChatContextResultCollection {
 
 public func requestContextResults(engine: TelegramEngine, botId: EnginePeer.Id, query: String, peerId: EnginePeer.Id, offset: String = "", existingResults: ChatContextResultCollection? = nil, incompleteResults: Bool = false, staleCachedResults: Bool = false, limit: Int = 60) -> Signal<RequestChatContextResultsResult?, NoError> {
     return engine.messages.requestChatContextResults(botId: botId, peerId: peerId, query: query, offset: offset, incompleteResults: incompleteResults, staleCachedResults: staleCachedResults)
-    |> `catch` { _ -> Signal<RequestChatContextResultsResult?, NoError> in
+    |> `catch` { error -> Signal<RequestChatContextResultsResult?, NoError> in
         return .single(nil)
     }
     |> mapToSignal { resultsStruct -> Signal<RequestChatContextResultsResult?, NoError> in
         let results = resultsStruct?.results
-
+        
         var collection = existingResults
         var updated: Bool = false
         if let existingResults = existingResults, let results = results {
