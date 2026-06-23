@@ -310,6 +310,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var currentTextInputBackgroundWidthOffset: CGFloat = 0.0
     
     private var enableBounceAnimations: Bool = false
+    private var enableRichTextInput: Bool = false
     
     public var displayAttachmentMenu: () -> Void = { }
     public var sendMessage: () -> Void = { }
@@ -823,6 +824,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.enableBounceAnimations = false
         }*/
         
+        self.enableRichTextInput = true
+        if let data = self.context?.currentAppConfiguration.with({ $0 }).data, data["ios_killswitch_rich_input"] != nil {
+            self.enableRichTextInput = false
+        }
+        
         self.sendAsAvatarContainerNode.activated = { [weak self] gesture, _ in
             guard let strongSelf = self else {
                 return
@@ -1097,7 +1103,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private func loadTextInputNode() {
         let richTextInputNode: ChatRichTextInputNode
-        if self.context?.sharedContext.immediateExperimentalUISettings.debugRichText == true {
+        if self.enableRichTextInput {
             richTextInputNode = RichTextEditorChatInputNode()
         } else {
             richTextInputNode = makeChatRichTextInputNode()
@@ -1283,7 +1289,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         // The expand button (debugRichText) shares the inline AI button's slot, so reserve the same accessory width for either.
-        let isExpandInputEnabled = self.context?.sharedContext.immediateExperimentalUISettings.debugRichText == true
+        let isExpandInputEnabled = self.enableRichTextInput
         if (self.isAIEnabled || isExpandInputEnabled) && width >= 500.0 {
             if firstButton {
                 firstButton = false
@@ -3630,7 +3636,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             )
         }
         
-        let isExpandInputEnabled = self.context?.sharedContext.immediateExperimentalUISettings.debugRichText == true
+        let isExpandInputEnabled = self.enableRichTextInput
         // The expand button occupies the same slot as the AI button; when it is shown, hide the AI button.
         if self.isAIEnabled && !isExpandInputEnabled {
             let aiButton: (button: HighlightTrackingButton, icon: UIImageView)
