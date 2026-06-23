@@ -12,6 +12,7 @@ swift_library(
     deps = [
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramAudio:TelegramAudio",
+        "//submodules/Fenixuz/Vosk:FenixuzVosk",
     ],
     visibility = [
         "//visibility:public",

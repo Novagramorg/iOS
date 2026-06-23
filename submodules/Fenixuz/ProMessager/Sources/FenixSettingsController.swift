@@ -747,6 +747,7 @@ private func sttLanguageDisplayName(_ localeId: String) -> String {
 
 private func sttSupportedLanguages() -> [(String, String)] {
     return [
+        ("uz-UZ", "🇺🇿 O'zbekcha"),
         ("en-US", "🇬🇧 English"),
         ("ru-RU", "🇷🇺 Русский"),
         ("tr-TR", "🇹🇷 Türkçe"),
