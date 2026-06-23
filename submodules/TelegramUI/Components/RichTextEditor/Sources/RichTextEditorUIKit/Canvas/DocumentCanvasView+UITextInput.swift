@@ -72,6 +72,11 @@ extension DocumentCanvasView: UITextInput {
     var selectedTextRange: UITextRange? {
         get { DocumentTextRange(DocumentTextPosition(anchor), DocumentTextPosition(head)) }
         set {
+            // During a floating-cursor (spacebar-trackpad) gesture, the floating handlers
+            // (updateFloatingCursor → moveFloatingCaret) own the caret. iOS ALSO pushes selection RANGES
+            // anchored at the gesture's start position through this setter; applying them turns the cursor
+            // MOVE into a text SELECTION. Ignore them while the gesture owns the caret.
+            if floatingCursorActive { return }
             finalizeMarkedText()     // a deliberate selection move commits a composition / dismisses a prediction
             clearStructuralSelections()
             dismissEditMenuForSelectionOrTextChange()   // system-driven move (keyboard cursor-drag / autocorrect) closes the menu too

@@ -247,6 +247,42 @@ flat-mapping counts a code block's interior. Full SwiftPM suite green (Core 102 
 and the position axis were the load-bearing reuse points — code blocks added zero new invariants there. Spec/plan:
 `docs/superpowers/{specs/2026-06-19-richtext-code-block-design.md,plans/2026-06-19-richtext-code-block.md}`.
 
+**Floating cursor — hold-spacebar-to-move-cursor (added 2026-06-23, runtime-verified 2026-06-24, `feature/richtext-floating-cursor`, phase 1 of 2).**
+The iOS keyboard-as-trackpad gesture is implemented on the canvas (the bare sole `UITextInput`, which own-draws
+everything and installs NO `UITextSelectionDisplayInteraction`) via the three optional `UITextInput` methods
+`begin`/`update`/`endFloatingCursor` (`DocumentCanvasView+FloatingCursor.swift`). **Two runtime discoveries
+corrected the original spec's assumptions** (the spec's relative-delta + hide-steady-caret design did NOT match
+how iOS actually drives a bare `UITextInput` — both are wrong; see the spec's "Runtime corrections" addendum):
+
+1. **The `point` is an ABSOLUTE canvas (content) coordinate**, not a relative delta — it already tracks the cursor
+   across the whole document. So `update` feeds it straight to `closestGlobalPosition` (no delta, no viewport
+   clamp). The clamp in the first cut froze the caret mid-text and couldn't reach the document start.
+2. **`begin`/`update` fire fine on the bare `UITextInput` (no `UITextInteraction` needed), BUT during the gesture
+   iOS ALSO pushes selection RANGES** (anchored at the gesture-start position) through the **`selectedTextRange`
+   setter**; applying them turns the cursor MOVE into a text SELECTION (the headline bug). The setter therefore
+   **ignores writes while `floatingCursorActive`** (`DocumentCanvasView+UITextInput`) — the floating handlers own
+   the caret. **This is the load-bearing invariant of the feature.**
+
+Visual model (matches iOS): a **bright gliding shadow** (`TransientCaretView`) follows the finger **continuously**
+(`moveFloatingCaret(toGlobal:shadowX:)` positions it at the raw `point.x`, clamped to host bounds — only the
+*underlying* caret snaps to a grapheme position), while the **steady `CaretView` becomes a dimmed (alpha 0.4)
+"landing" indicator** at the snapped position via the `floatingCursorActive` branch in `updateCaretView` (NOT
+hidden — the early design hid it, leaving no landing cue). On `end` the shadow fades and the steady caret returns
+to full alpha + blink at the landing. Each `update` moves the caret through a **lightweight bracketed path**
+(`moveFloatingCaret`) that brackets `inputDelegate.selectionWillChange/DidChange` but **deliberately suppresses
+the host scroll-follow** (`onSelectionChange`/`scrollCaretIntoViewIfNeeded`) per-update — the gesture owns
+scrolling via a `CADisplayLink` **vertical auto-scroll** driver (mirrors the table-drag auto-scroll, advances the
+stored `floatingCursorPoint` by the scroll delta); `onSelectionChange` fires once on `end`. `TransientCaretView`
+and the steady caret both host via the extracted `caretHostPlacement(forGlobal:)`/`hostOverlay(_:at:)`, so they
+ride table-cell horizontal scroll. Document-wide landing (body/caption/code/table cells). An interrupted gesture
+(resign-FR / window-removal) is torn down by `cancelFloatingCursor` (invalidates the self-retaining display link).
+**`TransientCaretView` is built generically so phase 2 (text drag-and-drop drop caret via
+`UITextCursorDropPositionAnimator`, iOS 17+, a separate cycle) can adopt it as the animator's `cursorView`.**
+Status: **runtime-verified in the chat composer** (smooth glide, visible landing caret, reaches both ends, no
+stray selection); full SwiftPM suite green (Core 102 + UIKit; incl. `TransientCaretViewTests` + the rewritten
+`FloatingCursorTests`) and the full Bazel app build is green. (Per the module convention, the per-phase
+design spec/plan are not retained in-tree; this note is the in-tree record.)
+
 The host action bar (12 icon actions + ContextUI context menus) lives in the separate `RichTextAttachmentScreen`
 module, not this package. Full session handoff: `~/Documents/RichTextEditor/docs/superpowers/handoffs/2026-06-12-richtext-session-handoff.md`.
 
