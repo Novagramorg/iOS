@@ -190,6 +190,31 @@ the fallback** (nil / secret-chat / empty-media / upload-failure). The real path
   media chain. **Incoming parse** (`SyncCore_RichTextMessageAttribute.swift`) reconstructs `media` from
   `photos`/`documents`.
 
+### Send-options preview (long-press Send)
+
+Long-pressing **Send** opens the send-options context screen (`ChatSendMessageContextScreen`), whose preview
+bubble renders the message as it will be sent. For rich content the bubble shows the actual `InstantPage` via
+`ChatSendMessageRichTextPreview` (wrapping an `InstantPageV2View` in the outgoing message theme), injected through
+the `ChatSendMessageContextScreenRichTextPreview` protocol (mirroring the existing media-preview seam, since
+`ChatSendMessageActionUI` cannot dep `InstantPageUI`).
+
+- **Gating mirrors the real send paths**, built in `Chat/ChatMessageDisplaySendMessageOptions.swift` via the
+  file-private `makeRichTextSendPreview(context:content:mediaPreview:)` (predicate: `mediaPreview == nil &&
+  !content.isEntityExpressible && !content.isEmpty`). New-message branch feeds `composeInputState.content`
+  (matching `ChatControllerNode`'s send gate; additionally skipped for `.customChatContents`); edit branch feeds
+  `editMessage.inputState.content` (matching `ChatControllerLoadDisplayNode`'s edit gate). Plain / entity-expressible
+  content keeps the flat-text morph. With the legacy composer, content is always flat → entity-expressible → no
+  preview (so no `debugRichText` check is needed).
+- **Morph (`MessageItemView`):** the plain-text path morphs a flat-text copy of the live field into the bubble —
+  invisible because the copy is pixel-identical. That copy can't represent rich structure (headings/lists/tables),
+  so the rich path instead captures a **pixel snapshot** of the live input field on the source-state layout (before
+  the screen hard-hides the field), positions it to overlay the field exactly (top-left at `(textInsets.left, 2.0)`,
+  matching the screen's `sourceMessageItemFrame` math), and crossfades that snapshot into the `InstantPageV2View` as
+  the bubble settles. Falls back to the flat-text crossfade if `snapshotView` returns nil.
+- **Clipping:** the page content is clipped to the bubble's inner corner radius (15pt, matching the real rich
+  bubble's `image.defaultCornerRadius`) within the tail-excluded content rect `[1, width − 7]` (same as the text
+  path), so images/tables round to the bubble and stay clear of the outgoing tail.
+
 ---
 
 ## 6. Draft persistence

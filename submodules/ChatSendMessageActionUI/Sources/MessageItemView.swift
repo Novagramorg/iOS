@@ -207,6 +207,7 @@ final class MessageItemView: UIView {
     private var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?
     
     private var richTextPreviewView: UIView?
+    private var richMorphSnapshotView: UIView?
     private var mediaPreviewClippingView: UIView?
     private var mediaPreview: ChatSendMessageContextScreenMediaPreview?
     
@@ -694,12 +695,18 @@ final class MessageItemView: UIView {
             
             let textFrame = CGRect(origin: CGPoint(x: textInsets.left, y: textInsets.top), size: positionedTextSize)
 
-            // The outgoing bubble reserves space on the right for its tail (mirrors the
-            // plain-text path's `backgroundSize.width - 1 - 7`); the left keeps a 1pt border.
-            // The injected page lays out within this content width, so it never runs into the
-            // tail and the bubble can't exceed the available container width.
+            // Rich content (which can include full-bleed images/tables) fills the bubble's internal
+            // area — a 1pt border on the left and a 7pt reservation on the right that clears the
+            // outgoing tail — matching the text path's `backgroundSize.width - 1 - 7` content rect.
+            // The content is then clipped to the bubble's inner corner radius (richContentCornerRadius)
+            // so images/tables round to the bubble instead of overflowing its square corners. The tail
+            // is part of the background shape, drawn outside this clipped content area.
             let richBubbleLeftInset: CGFloat = 1.0
             let richBubbleRightInset: CGFloat = 7.0
+            // Matches ChatMessageItemLayoutConstants.compact.image.defaultCornerRadius (the radius
+            // the real rich bubble clips this same InstantPageV2View content to). Hard-coded to
+            // avoid a ChatMessageItemCommon build dependency for one constant.
+            let richContentCornerRadius: CGFloat = 15.0
 
             var richContentSize: CGSize?
             if let richTextPreview {
@@ -709,11 +716,28 @@ final class MessageItemView: UIView {
                     self.addSubview(richView)
                     self.richTextPreviewView = richView
                 }
+                // Clip the extracted page content to the bubble's inner radius so images/tables
+                // are rounded to match the bubble instead of overflowing its square corners.
+                richView.clipsToBounds = true
+                richView.layer.cornerRadius = richContentCornerRadius
                 let richBoundingWidth = max(1.0, maxRichBubbleWidth - richBubbleLeftInset - richBubbleRightInset)
                 richContentSize = richTextPreview.update(boundingWidth: richBoundingWidth, presentationData: presentationData, transition: transition)
+
+                // Morph stand-in: a pixel snapshot of the live input field, captured on the first
+                // (source-state) layout — before the screen hard-hides the field. The flat text node
+                // can't represent rich structure (headings/lists/tables), so we crossfade this faithful
+                // snapshot — not the flat text — into the rich preview. snapshotView can return nil if
+                // the field isn't rendered; the crossfade falls back to the flat text in that case.
+                if self.richMorphSnapshotView == nil, let textInputSource, let snapshot = textInputSource.sourceView.snapshotView(afterScreenUpdates: false) {
+                    snapshot.isUserInteractionEnabled = false
+                    self.addSubview(snapshot)
+                    self.richMorphSnapshotView = snapshot
+                }
             } else if let richTextPreviewView = self.richTextPreviewView {
                 self.richTextPreviewView = nil
                 richTextPreviewView.removeFromSuperview()
+                self.richMorphSnapshotView?.removeFromSuperview()
+                self.richMorphSnapshotView = nil
             }
 
             let settledContentSize: CGSize
@@ -749,10 +773,26 @@ final class MessageItemView: UIView {
             let isSettled = explicitBackgroundSize == nil
             if let richTextPreviewView = self.richTextPreviewView, let richContentSize {
                 let richAlpha: CGFloat = isSettled ? 1.0 : 0.0
-                let plainAlpha: CGFloat = isSettled ? 0.0 : 1.0
                 transition.setAlpha(view: richTextPreviewView, alpha: richAlpha)
-                transition.setAlpha(view: self.textClippingContainer, alpha: plainAlpha)
                 transition.setFrame(view: richTextPreviewView, frame: CGRect(origin: CGPoint(x: richBubbleLeftInset, y: 1.0), size: richContentSize))
+
+                if let richMorphSnapshotView = self.richMorphSnapshotView {
+                    // The flat text node is meaningless for rich content — keep it hidden and crossfade
+                    // the live-field snapshot instead. In the source state the snapshot is positioned to
+                    // overlay the live input field exactly: the field's top-left sits at
+                    // (textInsets.left, 2.0) within this view, because the screen builds
+                    // sourceMessageItemFrame at (field.minX - sourceMessageTextInsets.left, field.minY - 2.0)
+                    // and passes sourceMessageTextInsets as textInsets. The snapshot's own bounds carry the
+                    // field's size. So when the screen hard-hides the live field, this snapshot already covers
+                    // its pixels and the handoff is invisible; it then fades out as the preview fades in.
+                    self.textClippingContainer.alpha = 0.0
+                    let snapshotAlpha: CGFloat = isSettled ? 0.0 : 1.0
+                    transition.setAlpha(view: richMorphSnapshotView, alpha: snapshotAlpha)
+                    transition.setFrame(view: richMorphSnapshotView, frame: CGRect(origin: CGPoint(x: textInsets.left, y: 2.0), size: richMorphSnapshotView.bounds.size))
+                } else {
+                    let plainAlpha: CGFloat = isSettled ? 0.0 : 1.0
+                    transition.setAlpha(view: self.textClippingContainer, alpha: plainAlpha)
+                }
             } else {
                 transition.setAlpha(view: self.textClippingContainer, alpha: 1.0)
             }
