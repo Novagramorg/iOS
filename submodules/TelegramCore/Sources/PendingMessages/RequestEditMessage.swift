@@ -236,12 +236,17 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                     if let result = result {
                         return postbox.transaction { transaction -> RequestEditMessageResult in
                             var toMedia: Media?
+                            var toRichText: RichTextMessageAttribute?
                             if let message = result.messages.first.flatMap({ StoreMessage(apiMessage: $0, accountPeerId: accountPeerId, peerIsForum: peer.isForumOrMonoForum) }) {
                                 toMedia = message.media.first
+                                toRichText = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute
                             }
-                            
+
                             if case let .update(fromMedia) = media, let toMedia = toMedia {
                                 applyMediaResourceChanges(from: fromMedia.media, to: toMedia, postbox: postbox, force: true)
+                            }
+                            if let richText, let toRichText {
+                                applyMediaResourceChanges(from: richText, to: toRichText, postbox: postbox, force: true)
                             }
                             
                             switch result {
