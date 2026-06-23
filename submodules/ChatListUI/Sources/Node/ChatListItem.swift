@@ -493,6 +493,7 @@ public class ChatListItem: ListViewItem {
     let hiddenOffset: Bool
     let interaction: ChatListNodeInteraction
     let useCommunityViewLayout: Bool
+    let hideCommunityAvatarBadge: Bool
     let communityViewHasNext: Bool?
     
     public let selectable: Bool = true
@@ -516,7 +517,7 @@ public class ChatListItem: ListViewItem {
         }
     }
     
-    public init(presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enabledContextActions: EnabledContextActions?, hiddenOffset: Bool, interaction: ChatListNodeInteraction, useCommunityViewLayout: Bool = false, communityViewHasNext: Bool? = nil) {
+    public init(presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enabledContextActions: EnabledContextActions?, hiddenOffset: Bool, interaction: ChatListNodeInteraction, useCommunityViewLayout: Bool = false, hideCommunityAvatarBadge: Bool = false, communityViewHasNext: Bool? = nil) {
         self.presentationData = presentationData
         self.chatListLocation = chatListLocation
         self.filterData = filterData
@@ -531,6 +532,7 @@ public class ChatListItem: ListViewItem {
         self.hiddenOffset = hiddenOffset
         self.interaction = interaction
         self.useCommunityViewLayout = useCommunityViewLayout
+        self.hideCommunityAvatarBadge = hideCommunityAvatarBadge
         self.communityViewHasNext = communityViewHasNext
     }
     
@@ -866,16 +868,24 @@ private func leftRevealOptions(strings: PresentationStrings, theme: Presentation
     case let .chatList(groupId):
         if case .root = groupId {
             var options: [ItemListRevealOption] = []
-            if isUnread {
-                options.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: strings.DialogList_Read, icon: readIcon, color: theme.list.itemDisclosureActions.inactive.fillColor, iconColor: theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: theme.chatList.dateTextColor))
+            let canToggleReadState: Bool
+            if case .community = peer {
+                canToggleReadState = false
             } else {
-                var canMarkUnread = true
-                if case let .channel(channel) = peer, channel.isForumOrMonoForum {
-                    canMarkUnread = false
-                }
-                
-                if canMarkUnread {
-                    options.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: strings.DialogList_Unread, icon: unreadIcon, color: theme.list.itemDisclosureActions.accent.fillColor, iconColor: theme.list.itemDisclosureActions.accent.foregroundColor, textColor: theme.chatList.dateTextColor))
+                canToggleReadState = true
+            }
+            if canToggleReadState {
+                if isUnread {
+                    options.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: strings.DialogList_Read, icon: readIcon, color: theme.list.itemDisclosureActions.inactive.fillColor, iconColor: theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: theme.chatList.dateTextColor))
+                } else {
+                    var canMarkUnread = true
+                    if case let .channel(channel) = peer, channel.isForumOrMonoForum {
+                        canMarkUnread = false
+                    }
+
+                    if canMarkUnread {
+                        options.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: strings.DialogList_Unread, icon: unreadIcon, color: theme.list.itemDisclosureActions.accent.fillColor, iconColor: theme.list.itemDisclosureActions.accent.foregroundColor, textColor: theme.chatList.dateTextColor))
+                    }
                 }
             }
             if !isEditing {
@@ -2334,7 +2344,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     if case .community = peerValue.peer {
                         isCommunity = true
                     }
-                    if case let .channel(channel) = peerValue.peer, channel.linkedCommunityId != nil {
+                    if !item.hideCommunityAvatarBadge, case let .channel(channel) = peerValue.peer, channel.linkedCommunityId != nil {
                         displayCommunityAvatarBadge = true
                     }
                     let threadInfoValue = peerData.threadInfo
@@ -3933,8 +3943,15 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         case let .custom(actions):
                             peerRevealOptions = []
                             peerLeftRevealOptions = []
-                            
-                            if actions.contains(.toggleUnread) {
+
+                            let isCommunityPeer: Bool
+                            if case .community = peerData.peer.peer {
+                                isCommunityPeer = true
+                            } else {
+                                isCommunityPeer = false
+                            }
+
+                            if actions.contains(.toggleUnread) && !isCommunityPeer {
                                 if unreadCount.unread {
                                     peerLeftRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: item.presentationData.strings.DialogList_Read, icon: readIcon, color: item.presentationData.theme.list.itemDisclosureActions.inactive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral1.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
                                 } else {

@@ -519,6 +519,9 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                 case .globalPosts:
                     break
                 }
+                if let _ = communityId {
+                    flags |= (1 << 4)
+                }
             
                 let filter: Api.MessagesFilter = tags.flatMap { messageFilterForTagMask($0) } ?? .inputMessagesFilterEmpty
                 remoteSearchResult = account.postbox.transaction { transaction -> (Int32, MessageIndex?, Api.InputPeer, Api.InputChannel?) in
@@ -569,9 +572,11 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
             
             if state?.additional == nil {
                 switch location {
-                    case let .general(_, _, tags, minDate, maxDate, _, _):
+                    case let .general(_, _, tags, minDate, maxDate, _, communityId):
                         let secretMessages: [Message]
-                        if case let .general(scope, _, _, _, _, _, _) = location, case .channels = scope {
+                        if let _ = communityId {
+                            secretMessages = []
+                        } else if case let .general(scope, _, _, _, _, _, _) = location, case .channels = scope {
                             secretMessages = []
                         } else {
                             secretMessages = transaction.searchMessages(peerId: nil, query: query, tags: tags)

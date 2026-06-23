@@ -180,6 +180,8 @@ public func chatListFilterPredicate(filter: ChatListFilterData, accountPeerId: E
                 if case .group = channel.info {
                     return false
                 }
+            } else if let _ = peer as? TelegramCommunity {
+                return false
             }
         }
         if !filter.categories.contains(.channels) {

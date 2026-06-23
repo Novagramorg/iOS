@@ -368,19 +368,10 @@ func canReplyInChat(_ chatPresentationInterfaceState: ChatPresentationInterfaceS
 }
 
 private func canReplyToEphemeralMessage(_ message: EngineRawMessage) -> Bool {
-    if message.id.namespace != Namespaces.Message.EphemeralLocal || message.id.id <= 0 {
+    if message.id.namespace != Namespaces.Message.EphemeralLocal {
         return false
     }
-    if message.flags.isSending || !message.flags.intersection([.Failed, .Unsent]).isEmpty {
-        return false
-    }
-    if message.attributes.contains(where: { attribute in
-        if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
-            return attribute.state == .failed
-        } else {
-            return false
-        }
-    }) {
+    if !message.flags.contains(.Incoming) {
         return false
     }
     return true
