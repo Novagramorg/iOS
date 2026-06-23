@@ -220,12 +220,20 @@ the `ChatSendMessageContextScreenRichTextPreview` protocol (mirroring the existi
   divergence note above). So a quote-only message's preview bubble (InstantPage) renders through a different path
   than the eventually-sent message; align the two by passing `.quotesRequireRichContent` at those gates too if a
   pixel-faithful preview is wanted.
-- **Morph (`MessageItemView`):** the plain-text path morphs a flat-text copy of the live field into the bubble —
-  invisible because the copy is pixel-identical. That copy can't represent rich structure (headings/lists/tables),
-  so the rich path instead captures a **pixel snapshot** of the live input field on the source-state layout (before
-  the screen hard-hides the field), positions it to overlay the field exactly (top-left at `(textInsets.left, 2.0)`,
-  matching the screen's `sourceMessageItemFrame` math), and crossfades that snapshot into the `InstantPageV2View` as
-  the bubble settles. Falls back to the flat-text crossfade if `snapshotView` returns nil.
+- **Morph (`MessageItemView`):** the plain-text path morphs a flat-text copy of the live field into the bubble.
+  That copy can't represent rich structure (headings/lists/tables), so the rich path instead captures a **pixel
+  snapshot** of the live input field on the source-state layout (before the screen hard-hides the field), positions
+  it to overlay the field exactly (top-left at `(textInsets.left, 2.0)`, matching the screen's
+  `sourceMessageItemFrame` math), and crossfades that snapshot into the `InstantPageV2View` as the bubble settles.
+  Falls back to the flat-text crossfade if `snapshotView` returns nil.
+- **Flat-copy text color is set per morph state**, keyed off `explicitBackgroundSize == nil` (`isSettled`): the
+  extracted `textString` carries no base foreground color that renders correctly here (the preview node defaults it
+  to **black**), so `MessageItemView` applies one explicitly and re-applies it whenever the state flips (tracked by
+  `textNodeUsesOutgoingColor`). Settled (inside the outgoing bubble) → `chat.message.outgoing.primaryTextColor`;
+  source / animate-out (the copy overlaying the live field) → `chat.inputPanel.inputTextColor`, so the copy matches
+  the still-visible field. This is why a colored outgoing bubble shows the right color (e.g. white) instead of black,
+  and why the dark-theme animate-out doesn't fall back to black. Link entities stay `outgoing.linkTextColor` in both
+  states.
 - **Clipping:** the page content is clipped to the bubble's inner corner radius (15pt, matching the real rich
   bubble's `image.defaultCornerRadius`) within the tail-excluded content rect `[1, width − 7]` (same as the text
   path), so images/tables round to the bubble and stay clear of the outgoing tail.

@@ -203,6 +203,10 @@ final class MessageItemView: UIView {
     
     private let textClippingContainer: UIView
     private var textNode: ChatInputTextNode?
+    // Whether `textNode.attributedText` is currently colored for the settled outgoing bubble
+    // (outgoing primary text color) rather than the source/morph state (input-field color).
+    // nil until the text node is first built. See the recolor in the no-media text path.
+    private var textNodeUsesOutgoingColor: Bool?
     private var customEmojiContainerView: CustomEmojiContainerView?
     private var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?
     
@@ -614,7 +618,12 @@ final class MessageItemView: UIView {
             
             return backgroundFrame.size
         } else {
+            // `explicitBackgroundSize != nil` is the source/morph state (bubble overlays the live
+            // input field); nil is the settled state (the real outgoing bubble).
+            let isSettled = explicitBackgroundSize == nil
+
             let textNode: ChatInputTextNode
+            var textNodeIsNew = false
             if let current = self.textNode {
                 textNode = current
             } else {
@@ -623,20 +632,37 @@ final class MessageItemView: UIView {
                 textNode.isUserInteractionEnabled = false
                 self.textNode = textNode
                 self.textClippingContainer.addSubview(textNode.view)
-                
+
                 if let textInputSource {
                     textNode.textView.defaultTextContainerInset = textInputSource.defaultTextContainerInset
                 }
-                
+                textNodeIsNew = true
+            }
+
+            // The extracted `textString` does not carry a base foreground color that renders correctly
+            // in this preview node — without an explicit color it defaults to black. So set one explicitly,
+            // matching whichever surface the text currently sits on: the settled outgoing bubble uses the
+            // outgoing message's primary text color; the source/morph state (the bubble overlaying the live
+            // input field, including the animate-out back to the field) uses the input field's text color so
+            // the copy matches the still-visible field — e.g. white in a dark theme, where the input-field
+            // default of black would otherwise show through.
+            if textNodeIsNew || self.textNodeUsesOutgoingColor != isSettled {
+                self.textNodeUsesOutgoingColor = isSettled
+
                 let messageAttributedText = NSMutableAttributedString(attributedString: textString)
-                
+
+                let baseTextColor = isSettled
+                    ? presentationData.theme.chat.message.outgoing.primaryTextColor
+                    : presentationData.theme.chat.inputPanel.inputTextColor
+                messageAttributedText.addAttribute(.foregroundColor, value: baseTextColor, range: NSRange(location: 0, length: messageAttributedText.length))
+
                 for entity in generateTextEntities(textString.string, enabledTypes: .all) {
                     messageAttributedText.addAttribute(.foregroundColor, value: presentationData.theme.chat.message.outgoing.linkTextColor, range: NSRange(location: entity.range.lowerBound, length: entity.range.upperBound - entity.range.lowerBound))
                 }
-                
+
                 textNode.attributedText = messageAttributedText
             }
-            
+
             let mainColor = presentationData.theme.chat.message.outgoing.accentControlColor
             let mappedLineStyle: ChatInputTextView.Theme.Quote.LineStyle
             if let textInputSource, let lineStyle = textInputSource.quoteLineStyle {
@@ -769,8 +795,8 @@ final class MessageItemView: UIView {
             self.updateTextContents()
 
             // Blend between the raw plain text (source/morph) and the injected rich layout
-            // (settled). `explicitBackgroundSize != nil` means source-morph; nil means settled.
-            let isSettled = explicitBackgroundSize == nil
+            // (settled). `explicitBackgroundSize != nil` means source-morph; nil means settled
+            // (`isSettled`, computed above).
             if let richTextPreviewView = self.richTextPreviewView, let richContentSize {
                 let richAlpha: CGFloat = isSettled ? 1.0 : 0.0
                 transition.setAlpha(view: richTextPreviewView, alpha: richAlpha)
