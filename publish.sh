@@ -202,7 +202,11 @@ warn "Birinchi opt-build 30-45 daqiqa olishi mumkin (dbg-cache yordam bermaydi).
     --experimental_repository_cache_hardlinks \
     -c opt \
     --ios_multi_cpus=arm64 \
-    --watchos_cpus=arm64_32
+    --watchos_cpus=arm64_32 \
+    --//Telegram:embedWatchApp \
+    --define=watchApiId="$API_ID" \
+    --define=watchApiHash="$API_HASH" \
+    --define=watchProvisioningProfile="$DIST_SRC/Novagram_WatchApp_App_Store.mobileprovision"
 
 ok "App Store build muvaffaqiyatli"
 

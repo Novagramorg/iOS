@@ -134,4 +134,4 @@ fi
 # (that would resolve $OUT_ZIP against the DerivedData dir). --keepParent makes the
 # archive root the .app itself even when $APP is an absolute path.
 rm -f "$OUT_ZIP"
-/usr/bin/ditto -c -k --keepParent "$APP" "$OUT_ZIP"
+/usr/bin/ditto -c -k --keepParent --norsrc --noextattr "$APP" "$OUT_ZIP"
