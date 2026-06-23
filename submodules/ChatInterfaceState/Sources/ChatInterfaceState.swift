@@ -534,7 +534,7 @@ public final class ChatInterfaceState: Codable, Equatable {
             // express (every block type today) — derives the same flat text/entities as before, byte-identical.
             // Only content the entity set can't represent serializes as a structured `.instantPage`.
             let syncContent: SynchronizeableChatInputState.Content
-            if self.composeInputState.content.isEntityExpressible {
+            if self.composeInputState.content.isEntityExpressible() {
                 let sourceText = expandedInputStateAttributedString(self.composeInputState.inputText)
                 syncContent = .textEntities(text: sourceText.string, entities: generateChatInputTextEntities(sourceText))
             } else {

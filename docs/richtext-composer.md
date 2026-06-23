@@ -81,9 +81,12 @@ Conversions:
   masks this). The polymorphic `Media` persists via a concrete-type discriminator + `TelegramMediaImage/File(decoder:)`,
   **not** `decodeRootObjectWithHash` (that needs the app-startup `declareEncodable` registry, empty in tests).
 
-`isEntityExpressible` is the routing switch: text / quote / collapsed-quote / code / mention / date /
+`isEntityExpressible(options:)` is the routing switch: text / quote / collapsed-quote / code / mention / date /
 custom-emoji-in-body are entity-expressible (normal text+entities path); heading / list / table / media are
-not (→ structured `.instantPage` path).
+not (→ structured `.instantPage` path). The `EntityExpressibleOptions` bag narrows this: with
+`.quotesRequireRichContent`, a `.quote` paragraph and a `.collapsedQuote` are treated as NOT entity-expressible,
+so quote-bearing content routes onto the rich path even though entities could represent it (opted into by the
+send-options preview and the attachment-menu rich-editor send — see §5).
 
 ---
 
@@ -161,15 +164,22 @@ as a **`RichTextMessageAttribute`** carrying an `InstantPage`, rendered by the V
 `TelegramCore/Sources/ChatInputContent/ChatInputContentInstantPage.swift`.
 
 - **Send** (`ChatControllerNode.sendCurrentMessage`): reads the structural `composeInputState.content`. When
-  `editMessage == nil && !content.isEntityExpressible && !content.isEmpty`, enqueues **one**
+  `editMessage == nil && !content.isEntityExpressible() && !content.isEmpty`, enqueues **one**
   `.message(text: "", attributes: [RichTextMessageAttribute(instantPage: instantPage(from: content), …)], …)`.
   Entity-expressible content keeps the existing `breakChatInputText` text+entities loop **byte-identical**. The
   custom-emoji premium-lock harvest + early-return stays **before** the branch.
 - **Edit** (`ChatControllerLoadDisplayNode`): LOAD seeds `ChatTextInputState(content: chatInputContent(fromInstantPage:
   richTextAttribute.instantPage))` (structural, media preserved — *not* a markdown flatten); DONE routes by
-  `isEntityExpressible` — non-entity → rebuild `RichTextMessageAttribute` + pass `richText:` (so the backend
+  `isEntityExpressible()` — non-entity → rebuild `RichTextMessageAttribute` + pass `richText:` (so the backend
   uploads media), else demote to plain text+entities. Native path only (the legacy composer flattens structure
   on the first keystroke).
+- **Attachment-menu rich editor** (`ChatControllerOpenAttachmentMenu`'s `.richText` send →
+  `composeRichMessage(from:media:forSendPreview:)` in `RichTextEditorMessageConversion`): passes
+  `forSendPreview: true`, so a **blockquote forces the rich (InstantPage) path here** even though a quote is
+  entity-expressible (`documentNeedsRichLayout` honors the same flag at the editor-`Document` level). The composer
+  Send / Edit gates above pass **default** options, so a quote sent from the composer is still plain text + a
+  blockquote entity — a deliberate, localized divergence (this rich-editor send has no long-press preview; the
+  composer's preview opts into the same quote-as-rich rule, below).
 - **Pending edits display optimistically:** `ChatUpdatingMessageMedia` carries an optional `richText`; the
   bubble prefers `itemAttributes.updatingMedia.map(\.richText) ?? item.message.richText` (display `:360`,
   anchor `:1449`, "Show more" gate `:567` in `ChatMessageRichDataBubbleContentNode`). The render-cache key
@@ -200,11 +210,16 @@ the `ChatSendMessageContextScreenRichTextPreview` protocol (mirroring the existi
 
 - **Gating mirrors the real send paths**, built in `Chat/ChatMessageDisplaySendMessageOptions.swift` via the
   file-private `makeRichTextSendPreview(context:content:mediaPreview:)` (predicate: `mediaPreview == nil &&
-  !content.isEntityExpressible && !content.isEmpty`). New-message branch feeds `composeInputState.content`
-  (matching `ChatControllerNode`'s send gate; additionally skipped for `.customChatContents`); edit branch feeds
-  `editMessage.inputState.content` (matching `ChatControllerLoadDisplayNode`'s edit gate). Plain / entity-expressible
-  content keeps the flat-text morph. With the legacy composer, content is always flat → entity-expressible → no
-  preview (so no `debugRichText` check is needed).
+  !content.isEmpty && !content.isEntityExpressible(options: [.quotesRequireRichContent])`). New-message branch feeds
+  `composeInputState.content` (matching `ChatControllerNode`'s send gate; additionally skipped for
+  `.customChatContents`); edit branch feeds `editMessage.inputState.content` (matching `ChatControllerLoadDisplayNode`'s
+  edit gate). Plain / quote-free entity-expressible content keeps the flat-text morph. With the legacy composer,
+  content is always flat → entity-expressible → no preview (so no `debugRichText` check is needed).
+- **A blockquote previews as a rich bubble** (the `.quotesRequireRichContent` opt-in), even though the composer
+  Send / Edit gates send a quote as plain text + a blockquote entity (they pass default options — see the
+  divergence note above). So a quote-only message's preview bubble (InstantPage) renders through a different path
+  than the eventually-sent message; align the two by passing `.quotesRequireRichContent` at those gates too if a
+  pixel-faithful preview is wanted.
 - **Morph (`MessageItemView`):** the plain-text path morphs a flat-text copy of the live field into the bubble —
   invisible because the copy is pixel-identical. That copy can't represent rich structure (headings/lists/tables),
   so the rich path instead captures a **pixel snapshot** of the live input field on the source-state layout (before

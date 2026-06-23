@@ -845,7 +845,9 @@ extension ChatControllerImpl {
                             }
                             let text: String
                             let attributes: [EngineMessage.Attribute]
-                            switch composeRichMessage(from: document, media: media) {
+                            // Send a quote-bearing document as a rich message (InstantPage) too, even though a
+                            // blockquote is entity-expressible — the rich preview renders the quote faithfully.
+                            switch composeRichMessage(from: document, media: media, forSendPreview: true) {
                             case let .rich(instantPage):
                                 text = ""
                                 attributes = [RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil)]

@@ -4778,7 +4778,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             // set can't express (heading/list/table/media), and non-empty. Entity-expressible content
             // (text/quote/code/collapsed-quote/mention/date/custom-emoji-in-body) keeps the text+entities path.
             let sendAsRichMessage = effectivePresentationInterfaceState.interfaceState.editMessage == nil
-                && !composeContent.isEntityExpressible
+                && !composeContent.isEntityExpressible()
                 && !composeContent.isEmpty
 
             let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack

@@ -21,10 +21,12 @@ extension ChatSendMessageEffect {
 
 // Builds the send-options rich preview when the composed/edited content will be sent as a rich
 // message — mirrors the real send gates (ChatControllerNode.swift for new messages,
-// ChatControllerLoadDisplayNode.swift for edits). Returns nil for plain / entity-expressible
-// content, empty content, or when a media preview is already shown (media-preview-wins).
+// ChatControllerLoadDisplayNode.swift for edits). A blockquote is entity-expressible but is also
+// shown through the rich preview (`.quotesRequireRichContent`), so a quote-bearing message previews
+// as a rich bubble. Returns nil for plain / quote-free entity-expressible content, empty content, or
+// when a media preview is already shown (media-preview-wins).
 private func makeRichTextSendPreview(context: AccountContext, content: ChatInputContent, mediaPreview: ChatSendMessageContextScreenMediaPreview?) -> ChatSendMessageContextScreenRichTextPreview? {
-    guard mediaPreview == nil, !content.isEntityExpressible, !content.isEmpty else {
+    guard mediaPreview == nil, !content.isEmpty, !content.isEntityExpressible(options: [.quotesRequireRichContent]) else {
         return nil
     }
     return ChatSendMessageRichTextPreview(context: context, instantPage: instantPage(from: content))
