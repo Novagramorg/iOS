@@ -6007,11 +6007,15 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
 
         // ── Section A: STT language ──────────────────────────────────────────────────
+        let actionSheet = ActionSheetController(theme: theme)
+        let dismissOuter: () -> Void = { [weak actionSheet] in actionSheet?.dismissAnimated() }
+
         let langItems: [ActionSheetItem] = SpeechToTextManager.supportedLanguages.map { lang in
             let isSelected = (lang.id == currentSttLang)
             let title = isSelected ? "\(lang.name) ✓" : lang.name
-            return ActionSheetButtonItem(title: title, color: .accent, action: { [weak defaults] in
+            return ActionSheetButtonItem(title: title, color: .accent, action: {
                 defaults?.set(lang.id, forKey: "stt_language")
+                dismissOuter()
             })
         }
 
@@ -6019,9 +6023,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let translateToggleTitle = isTranslateOn
             ? "Ovozli tarjima: BOR ✅"
             : "Ovozli tarjima: YO'Q"
-        let translateToggleItem = ActionSheetButtonItem(title: translateToggleTitle, color: .accent, action: { [weak defaults] in
+        let translateToggleItem = ActionSheetButtonItem(title: translateToggleTitle, color: .accent, action: {
             let current = defaults?.bool(forKey: "voice_translate_enabled") ?? false
             defaults?.set(!current, forKey: "voice_translate_enabled")
+            dismissOuter()
         })
 
         // Resolve a display name for the current translate target (match on 2-letter prefix).
@@ -6034,16 +6039,17 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return currentTranslateLang
         }()
         let translateLangTitle = "Tarjima tili: \(resolvedTranslateLangName)"
-        let translateLangItem = ActionSheetButtonItem(title: translateLangTitle, color: .accent, action: { [weak defaults] in
+        let translateLangItem = ActionSheetButtonItem(title: translateLangTitle, color: .accent, action: {
             // Present a second ActionSheet for the translate-target language.
             let innerSheet = ActionSheetController(theme: theme)
             var innerItems: [ActionSheetItem] = SpeechToTextManager.supportedLanguages.map { lang in
                 let langCode = String(lang.id.prefix(2)).lowercased()
                 let isCurrent = (langCode == currentTranslateLang)
                 let title = isCurrent ? "\(lang.name) ✓" : lang.name
-                return ActionSheetButtonItem(title: title, color: .accent, action: { [weak innerSheet, weak defaults] in
-                    innerSheet?.dismissAnimated()
+                return ActionSheetButtonItem(title: title, color: .accent, action: { [weak innerSheet] in
                     defaults?.set(langCode, forKey: "auto_translate_lang")
+                    innerSheet?.dismissAnimated()
+                    dismissOuter()
                 })
             }
             innerItems.append(ActionSheetButtonItem(
@@ -6061,11 +6067,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         let cancelItem = ActionSheetButtonItem(
             title: presentationInterfaceState.strings.Common_Cancel,
             color: .accent, font: .bold,
-            action: { }
+            action: { dismissOuter() }
         )
 
         // ── Assemble ─────────────────────────────────────────────────────────────────
-        let actionSheet = ActionSheetController(theme: theme)
         actionSheet.setItemGroups([
             ActionSheetItemGroup(items: [ActionSheetTextItem(title: "🌐 Til")] + langItems),
             ActionSheetItemGroup(items: [
