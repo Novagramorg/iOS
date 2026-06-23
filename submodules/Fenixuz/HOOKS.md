@@ -702,8 +702,9 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 | `RMIntro/Sources/platform/ios/RMIntroViewController.m` | ~30 lines (loadGL block + updateLayout branch) | Fenixuz logo visible on Apple-Silicon simulator |
 | `sqlcipher/BUILD` | ~10 lines (header split) | Xcode 26.5 SDK sqlite3ext.h module conflict fix |
 | `ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` | +7 lines in icon-frame branch | clamp oversized PDF artboards (FenixGhostActive 455x491 pt → 25x27 pt); set contentMode = .scaleAspectFit (2026-06-08 size fix) |
+| `ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` (2026-06-23) | +4 lines in `setupSttButton()`, +~100 lines new method | STT long-press quick-settings: language picker + voice-translate toggle + translate-target-lang nested sheet (Vosk branch — no Whisper, no BUILD change) |
 
-**Total Telegram-owned files modified: 21** (6 BUILD + 13 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
+**Total Telegram-owned files modified: 22** (6 BUILD + 14 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
 - `submodules/Fenixuz/AppleReview/` — demo-code fetcher + iOS alert
 - `submodules/Fenixuz/AppStoreIAP/` — Apple 3.1.1 IAP gate (May 2026 rejection fix)
 - `submodules/Fenixuz/Brand/` — central colour palette
@@ -782,6 +783,27 @@ Custom Fenixuz speech-to-text round button in the chat input panel (`setupSttBut
   recording tint = red custom glass + white icon + pulse. Fields `sttButtonBackgroundView`/
   `sttButtonIconView` renamed to `sttButtonBackground`/`sttButtonIcon` and retyped; `layoutSttButton`
   now positions in container-content coordinates (dropped the `containerOffset`/`self.view` conversion).
+
+- **2026-06-23 long-press quick-settings (Vosk branch):** holding the STT mic button for 0.4s presents
+  an `ActionSheetController` with two sections:
+  - **Section A "🌐 Til"** — lists `SpeechToTextManager.supportedLanguages` (named tuples `(id, name)`).
+    The currently active locale (`pro_messager` / `"stt_language"`, default `"en-US"`) is marked "✓".
+    Tapping writes the chosen `id` to `"stt_language"`.
+  - **Section B "🔄 Ovozli tarjima"** — (i) toggle button showing "Ovozli tarjima: BOR ✅" /
+    "Ovozli tarjima: YO'Q" that flips `"voice_translate_enabled"` (Bool); (ii) "Tarjima tili: <name>"
+    button that opens a second (nested) `ActionSheetController` listing all `supportedLanguages` to pick
+    the translate target, writing the 2-letter code (`lang.id.prefix(2).lowercased()`) to
+    `"auto_translate_lang"` (default `"en"`). Display name resolved by matching on 2-letter prefix.
+  - **Cancel group** — `presentationData.strings.Common_Cancel`, bold.
+
+  Implementation lives entirely in the new `@objc private func sttButtonLongPressed(_:)` method
+  (~100 lines) and the 4-line `UILongPressGestureRecognizer` setup in `setupSttButton()` (right after
+  `button.addTarget(...sttButtonPressed...)`). No BUILD change needed — `FenixuzSpeechToText` was
+  already the only Fenixuz dep here; no Whisper symbols are used.
+
+  Presentation path: `self.view.window?.endEditing(true)` (dismiss keyboard first) then
+  `interfaceInteraction.chatController()?.present(sheet, in: .window(.root))` — identical to the
+  existing camera-picker long-press action sheet in this file.
 
 ### `submodules/AccountUtils/Sources/AccountUtils.swift` — multi-account limit raised
 
