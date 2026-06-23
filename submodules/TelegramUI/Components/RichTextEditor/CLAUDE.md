@@ -462,6 +462,24 @@ UIKit files.
   `gestureRecognizerShouldBegin` — never `require(toFail:)` or forced simultaneous recognition. The
   single-tap recognizer fires immediately with manual multi-tap escalation in `handleTap` (no
   double-tap-failure delay); the host scroll view sets `delaysContentTouches = false`.
+- **The single-tap "inside the selection/caret" test (`tapOutcome`) is VISUAL, not offset-based.** A tap
+  toggles the edit menu only when its *point* lands on the rendered selection (`selectionRects().contains`)
+  — NOT merely when `closestGlobalPosition` resolves to an offset within `[selFrom, selTo]`. A tap in the
+  empty area beside a selection resolves to a *boundary* offset inside the range but is visually outside, so
+  it must collapse the selection + place the caret (the composer "tap-to-deselect doesn't work" bug). The
+  collapsed-caret branch keeps the offset test (`resolved == head`).
+- **A FOCUSING tap only places the caret — it never opens the menu** (`menuToggleAction`'s `wasFirstResponder`
+  gate). The focus transition is captured by `didJustBecomeFirstResponder` (set in `becomeFirstResponder`,
+  consumed by the next `performSingleTap`), **not** by reading `isFirstResponder` at touch-up: the chat
+  composer focuses the editor on touch-**down** (`ChatTextInputPanelNode`'s `ensureFocusedOnTap`), so by the
+  time the tap handler runs `isFirstResponder` is already true and can't distinguish the focusing tap.
+  Otherwise the empty composer (caret at 0, a focusing tap resolves to 0 == `head` → `.toggleMenu`) pops the
+  menu on the first tap. A second tap on the caret of the now-focused field toggles it normally.
+- **Gesture-driven RANGE selections fire `onSelectionChange`** (`applySelection`, shared by `selectWord` /
+  `selectParagraph` / `selectAllText`), exactly like `setCaret`. The chat composer tracks the editor selection
+  through this hook; without it a double-tap word-selection never reaches the panel's interface state and the
+  next `setInputContent` re-apply collapses it back to the stale caret (the double-tap "flash then deselect"
+  bug). Pairs with the repo-wide invariant *"any caret-moving op must fire `onSelectionChange`."*
 - **Word/paragraph boundaries come from the custom `DocumentTokenizer`**, which scans each leaf region's OWN
   string — not the global axis (whose structural slots the stock tokenizer mis-reads, gluing regions with
   no separator).

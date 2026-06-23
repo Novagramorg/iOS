@@ -107,7 +107,16 @@ extension DocumentCanvasView {
     /// Testable core of the single-tap handler (`point` in canvas coordinates).
     func performSingleTap(at point: CGPoint) {
         let wasMenuVisible = editMenuVisible               // capture before the system auto-dismisses on touch-down
+        let wasFirstResponderAtEntry = isFirstResponder
         ensureFirstResponder()
+        // A FOCUSING tap must only place the caret, never open the menu. "Focusing" = the field wasn't first
+        // responder before this touch — but the chat composer focuses the editor on touch-DOWN (the panel's
+        // `ensureFocusedOnTap`), so `isFirstResponder` is already true here and can't be trusted. Treat the tap
+        // as focusing if it wasn't focused at entry OR a genuine focus transition just happened (the flag set in
+        // becomeFirstResponder, whoever triggered it). Consume the flag so the NEXT tap toggles the menu normally.
+        let justFocused = didJustBecomeFirstResponder
+        didJustBecomeFirstResponder = false
+        let wasFirstResponder = wasFirstResponderAtEntry && !justFocused
         // A tap BELOW the document's last block, when that block is a quote OR a code block, starts a new
         // body paragraph after it — the only way to escape a trailing quote/code block (nothing exists below
         // it to tap into).
@@ -128,7 +137,7 @@ extension DocumentCanvasView {
                 // Toggle like the text menu: tapping the already-selected handle while its menu is open
                 // dismisses it instead of re-presenting (the close-then-reopen flicker).
                 let justDismissed = Date().timeIntervalSinceReferenceDate - lastMenuDismissTime < Self.menuToggleSuppressWindow
-                switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed) {
+                switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed, wasFirstResponder: wasFirstResponder) {
                 case .present: presentEditMenu(sourcePoint: hit.center)
                 case .dismiss: dismissEditMenu()
                 }
@@ -140,18 +149,18 @@ extension DocumentCanvasView {
         // menu. MUST precede the clear below (else a 2nd tap on a selected image would clear it before
         // its menu could open).
         if let img = mediaBox(atGap: p), img.mediaRect().contains(point) {
-            handleImageTap(img, wasMenuVisible: wasMenuVisible)
+            handleImageTap(img, wasMenuVisible: wasMenuVisible, wasFirstResponder: wasFirstResponder)
             return
         }
         clearStructuralSelections()                        // a non-handle, non-image tap clears both structural selections
-        switch tapOutcome(forResolvedPosition: p) {
+        switch tapOutcome(forResolvedPosition: p, point: point) {
         case .toggleMenu:
             // Tap on the caret / inside the selection: toggle the menu, keeping the current selection.
             // The system auto-dismisses the menu on this tap's touch-down (firing willDismiss) BEFORE this
             // handler runs on tap-up, so `wasMenuVisible` is already false — `justDismissed` recognizes that
             // case and suppresses a re-present (the close-then-reopen flicker).
             let justDismissed = Date().timeIntervalSinceReferenceDate - lastMenuDismissTime < Self.menuToggleSuppressWindow
-            switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed) {
+            switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed, wasFirstResponder: wasFirstResponder) {
             case .present: presentEditMenu()
             case .dismiss: dismissEditMenu()
             }

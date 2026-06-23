@@ -194,6 +194,13 @@ final class DocumentCanvasView: UIView {
     var lastTapTime: TimeInterval = 0
     var lastTapLocation: CGPoint = .zero
     var tapCount = 0
+    /// Set on a genuine not-focused→focused transition (`becomeFirstResponder`), consumed by the next
+    /// `performSingleTap`. A FOCUSING tap must only place the caret, never open the menu. We can't detect it
+    /// from `isFirstResponder` at touch-up: the chat composer focuses the editor on touch-DOWN (the panel's
+    /// `ensureFocusedOnTap`), so by the time the tap handler runs `isFirstResponder` is already true. This flag
+    /// captures the transition regardless of who triggered it (touch-down focus or the handler's own
+    /// `ensureFirstResponder`).
+    var didJustBecomeFirstResponder = false
     /// Active magnifier loupe during a long-press caret drag (iOS 17+). Begun on `.began`, moved on
     /// `.changed`, invalidated + niled on `.ended`/`.cancelled`/`.failed`. The storage is untyped because a
     /// stored property can't be `@available`-gated narrower than its enclosing (iOS-16) type, while
@@ -277,7 +284,7 @@ final class DocumentCanvasView: UIView {
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let became = super.becomeFirstResponder()
         if became { updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
-        if became && !wasFirstResponder { onBecameFirstResponder?() }   // only the real not-focused→focused transition
+        if became && !wasFirstResponder { didJustBecomeFirstResponder = true; onBecameFirstResponder?() }   // only the real not-focused→focused transition
         return became
     }
 
@@ -287,6 +294,7 @@ final class DocumentCanvasView: UIView {
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let resigned = super.resignFirstResponder()
         if resigned { updateCaretView(); updateSelectionHandleViews() }   // hide caret + handles (no longer FR)
+        if resigned { didJustBecomeFirstResponder = false }              // don't carry a stale focusing-tap flag across a defocus
         if resigned && wasFirstResponder { onResignedFirstResponder?() } // only the real focused→not-focused transition
         return resigned
     }
