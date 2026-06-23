@@ -6020,10 +6020,20 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
 
         // ── Section B: Voice-translate toggle + target language ──────────────────────
-        let translateToggleTitle = isTranslateOn
-            ? "Ovozli tarjima: BOR ✅"
-            : "Ovozli tarjima: YO'Q"
+        // Mutual-exclusive with "Ask to translate on send" — that one wins when enabled.
+        let askOnSend = defaults?.bool(forKey: "translate_confirm_enabled") ?? false
+        let translateToggleTitle: String
+        if askOnSend {
+            translateToggleTitle = "Ovozli tarjima: o'chiq — \"Yuborishda so'rov\" yoniq"
+        } else {
+            translateToggleTitle = isTranslateOn ? "Ovozli tarjima: BOR ✅" : "Ovozli tarjima: YO'Q"
+        }
         let translateToggleItem = ActionSheetButtonItem(title: translateToggleTitle, color: .accent, action: {
+            if askOnSend {
+                // Voice translate can't be enabled while ask-on-send is on.
+                dismissOuter()
+                return
+            }
             let current = defaults?.bool(forKey: "voice_translate_enabled") ?? false
             defaults?.set(!current, forKey: "voice_translate_enabled")
             dismissOuter()

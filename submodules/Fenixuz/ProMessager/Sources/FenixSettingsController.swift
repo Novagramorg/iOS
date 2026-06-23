@@ -75,7 +75,7 @@ private enum FenixEntry: ItemListNodeEntry {
     case sttEnabled(PresentationTheme, String, String, Bool)
     case sttLanguage(PresentationTheme, String, String)
     // isNew: true while this feature's introducedBuild is newer than the seen-build pointer
-    case voiceTranslate(PresentationTheme, String, String, Bool, Bool)
+    case voiceTranslate(PresentationTheme, String, String, Bool, Bool, Bool)
 
     // — Protection Section —
     case protectionHeader(String)
@@ -259,9 +259,9 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .sttEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .sttLanguage(lhsTheme, lhsTitle, lhsLabel):
             if case let .sttLanguage(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel { return true } else { return false }
-        case let .voiceTranslate(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
-            if case let .voiceTranslate(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
-               lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .voiceTranslate(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew, lhsEnabled):
+            if case let .voiceTranslate(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew, rhsEnabled) = rhs,
+               lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew, lhsEnabled == rhsEnabled { return true } else { return false }
 
         case let .protectionHeader(lhsText):
             if case let .protectionHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
@@ -447,9 +447,10 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListDisclosureItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "globe", color: .blue), title: title, label: label, sectionId: self.section, style: .blocks, action: {
                 arguments.openSttLanguageSettings()
             })
-        case let .voiceTranslate(_, title, text, value, isNew):
+        case let .voiceTranslate(_, title, text, value, isNew, enabled):
             // "character.bubble.fill" is iOS 13+ safe; "translate" is iOS 14+ only.
             // isNew: always true for now — flip to false in the call site when no longer new.
+            // enabled: false when "Ask to translate on send" is on (the two are mutually exclusive).
             let langCode = presentationData.strings.primaryComponent.languageCode
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(
@@ -459,6 +460,7 @@ private enum FenixEntry: ItemListNodeEntry {
                 text: text,
                 titleBadgeComponent: badge,
                 value: value,
+                enabled: enabled,
                 sectionId: self.section,
                 style: .blocks,
                 updated: { val in
@@ -857,7 +859,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     // isNew: hardcoded true — set to false here when this feature is no longer new.
     let voiceTranslateTitle    = FenixVoiceTranslateStrings.toggleTitle(langCode: langCode)
     let voiceTranslateSubtitle = FenixVoiceTranslateStrings.toggleSubtitle(langCode: langCode)
-    entries.append(.voiceTranslate(presentationData.theme, voiceTranslateTitle, voiceTranslateSubtitle, state.voiceTranslateEnabled, true))
+    entries.append(.voiceTranslate(presentationData.theme, voiceTranslateTitle, voiceTranslateSubtitle, state.voiceTranslateEnabled, true, !state.translateConfirmEnabled))
 
     // ─── PROTECTION ───
     entries.append(.protectionHeader(l10n.settings_section_protection))
@@ -1156,9 +1158,14 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
     }, updateSendTranslateConfirm: { value in
         // Feature #37: yuborishdan oldin tarjima tasdiq so'rovi
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "translate_confirm_enabled")
+        // Mutual-exclusive with voice auto-translate: enabling ask-on-send turns voice translate off.
+        if value {
+            UserDefaults(suiteName: "pro_messager")?.set(false, forKey: "voice_translate_enabled")
+        }
         updateState { state in
             var state = state
             state.translateConfirmEnabled = value
+            if value { state.voiceTranslateEnabled = false }
             return state
         }
     }, updateSendConfirmEnabled: { value in
@@ -1443,9 +1450,9 @@ private enum FenixVoiceTranslateStrings {
 
     static func toggleSubtitle(langCode: String) -> String {
         switch langCode {
-        case "uz": return "Nutqni matnga aylantirgandan so'ng avtomatik tarjima qiladi"
-        case "ru": return "Автоматически переводит транскрипцию после распознавания речи"
-        default:   return "Automatically translates the transcription after speech recognition"
+        case "uz": return "Nutqni matnga aylantirgandan so'ng avtomatik tarjima qiladi. \"Yuborishda tarjima so'rovi\" o'chiq bo'lsa ishlaydi"
+        case "ru": return "Автоматически переводит транскрипцию. Работает, когда «Запрос перевода при отправке» выключен"
+        default:   return "Auto-translates the transcription. Works when \"Ask to translate on send\" is off"
         }
     }
 }
@@ -1479,9 +1486,9 @@ private enum FenixSendTranslateStrings {
 
     static func toggleSubtitle(langCode: String) -> String {
         switch langCode {
-        case "uz": return "Send tugmasida tarjima qilib yuborish yoki originalni yuborish so'rovi chiqadi"
-        case "ru": return "При отправке появится диалог: перевести или отправить оригинал"
-        default:   return "Before sending, a dialog asks to translate or send the original"
+        case "uz": return "Send tugmasida tarjima yoki original so'rovi chiqadi. Yoqilsa ovozli auto-tarjima o'chadi"
+        case "ru": return "При отправке диалог: перевести или отправить. Включение отключает голосовой авто-перевод"
+        default:   return "Before sending, a dialog asks to translate or send original. Enabling turns off voice auto-translate"
         }
     }
 }
