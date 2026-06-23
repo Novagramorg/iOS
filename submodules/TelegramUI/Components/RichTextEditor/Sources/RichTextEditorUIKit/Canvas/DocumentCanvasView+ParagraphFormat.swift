@@ -34,6 +34,59 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Toggle the touched top-level paragraphs into a single code block, or (if the selection is already a
+    /// single code block) toggle it back into body paragraphs split on "\n". Top-level only. Runs in
+    /// `editing { }`.
+    func makeCodeBlock() {
+        guard !boxes.isEmpty else { return }
+        let touched = boxes.indices.filter { i in
+            let b = boxes[i]
+            let lo = b.textStart, hi = b.textStart + b.textLength
+            return selFrom <= hi && selTo >= lo
+        }
+        guard let first = touched.first, let last = touched.last else { return }
+        // Gathers flat text from a paragraph or code block; nil for non-text blocks (image/table).
+        func boxText(_ box: CanvasBlock) -> String? {
+            if let p = box as? BlockBox { return p.currentParagraph().text }
+            if let c = box as? CodeBlockBox { return c.currentCode().text }
+            return nil   // media/table: no flat-text representation
+        }
+        let isToggleOff = touched.count == 1 && boxes[first] is CodeBlockBox
+        // Refuse a toggle-ON that spans a non-text block (image/table) — replaceSubrange would
+        // otherwise silently delete it. Must run BEFORE `editing { }` to avoid a no-op undo entry.
+        if !isToggleOff, (first...last).contains(where: { boxText(boxes[$0]) == nil }) { return }
+        editing {
+            if isToggleOff, let codeBox = boxes[first] as? CodeBlockBox {
+                // Toggle OFF: split the code text on "\n" into body paragraphs.
+                let lines = codeBox.currentCode().text.components(separatedBy: "\n")
+                let paras: [CanvasBlock] = lines.map { line in
+                    BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body,
+                                                       runs: line.isEmpty ? [] : [TextRun(text: line)]),
+                             mapper: mapper, width: effectiveWidth)
+                }
+                var newBoxes = boxes
+                newBoxes.replaceSubrange(first...first, with: paras)
+                boxes = newBoxes
+                recomputeSpans()
+                anchor = paras[0].textStart; head = paras[0].textStart
+                return
+            }
+            // Toggle ON: join the touched blocks' text with "\n" into one code block. Existing code
+            // block text is preserved (not dropped); the guard above already ensured every block
+            // in range has a flat-text representation.
+            let text = (first...last).compactMap { boxText(boxes[$0]) }.joined(separator: "\n")
+            let codeBox = CodeBlockBox(code: CodeBlock(id: BlockID.generate(), language: nil,
+                                                       runs: [TextRun(text: text)]),
+                                       mapper: mapper, width: effectiveWidth)
+            var newBoxes = boxes
+            newBoxes.replaceSubrange(first...last, with: [codeBox])
+            boxes = newBoxes
+            recomputeSpans()
+            anchor = codeBox.textStart + codeBox.textLength    // caret at END of new code block
+            head = anchor
+        }
+    }
+
     /// Sets paragraph alignment on the touched paragraphs. Alignment is a pure paragraph-style
     /// property, so `restyle` (which re-applies `.paragraphStyle`) suffices — no font rebuild.
     func setAlignment(_ alignment: TextAlignment) {

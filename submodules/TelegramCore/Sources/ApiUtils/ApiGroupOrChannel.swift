@@ -24,7 +24,7 @@ func imageRepresentationsForApiChatPhoto(_ photo: Api.ChatPhoto) -> [TelegramMed
 }
 
 private func parseTelegramCommunity(communityData: Api.Chat.Cons_community) -> TelegramCommunity {
-    let (flags, collapsedInDialogs, id, accessHash, title, photo, date, adminRights, defaultBannedRights) = (communityData.flags, communityData.collapsedInDialogs, communityData.id, communityData.accessHash, communityData.title, communityData.photo, communityData.date, communityData.adminRights, communityData.defaultBannedRights)
+    let (flags, flags2, id, accessHash, title, photo, date, adminRights, defaultBannedRights) = (communityData.flags, communityData.flags2, communityData.id, communityData.accessHash, communityData.title, communityData.photo, communityData.date, communityData.adminRights, communityData.defaultBannedRights)
     let isMin = (flags & (1 << 12)) != 0
 
     let participationStatus: TelegramCommunityParticipationStatus
@@ -50,18 +50,6 @@ private func parseTelegramCommunity(communityData: Api.Chat.Cons_community) -> T
         communityFlags.insert(.isMin)
     }
 
-    func boolValue(_ value: Api.Bool?) -> Bool? {
-        guard let value else {
-            return nil
-        }
-        switch value {
-        case .boolTrue:
-            return true
-        case .boolFalse:
-            return false
-        }
-    }
-    
     return TelegramCommunity(
         id: PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(id)),
         accessHash: accessHashValue,
@@ -70,7 +58,7 @@ private func parseTelegramCommunity(communityData: Api.Chat.Cons_community) -> T
         creationDate: date,
         participationStatus: participationStatus,
         flags: communityFlags,
-        collapsedInDialogs: boolValue(collapsedInDialogs),
+        collapsedInDialogs: (flags2 & Int32(1 << 20)) != 0,
         adminRights: adminRights.flatMap(TelegramChatAdminRights.init),
         defaultBannedRights: defaultBannedRights.flatMap(TelegramChatBannedRights.init)
     )

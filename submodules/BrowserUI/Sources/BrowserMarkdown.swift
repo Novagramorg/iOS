@@ -1119,7 +1119,7 @@ private func blockIsEntityExpressible(_ block: InstantPageBlock) -> Bool {
         return richTextIsEntityExpressible(text)
     case .preformatted(let text, _):
         return richTextIsEntityExpressible(text)
-    case .blockQuote(let blocks, let caption):
+    case .blockQuote(let blocks, let caption, _):
         guard isEmptyRichText(caption) else { return false }
         return blocks.allSatisfy { child in
             if case let .paragraph(text) = child {
@@ -1441,7 +1441,7 @@ private func markdownBlocks(from node: MarkdownIntentNode, context: MarkdownConv
         guard !childBlocks.isEmpty else {
             return []
         }
-        return [.blockQuote(blocks: childBlocks, caption: .empty)]
+        return [.blockQuote(blocks: childBlocks, caption: .empty, collapsed: nil)]
     case .orderedList:
         guard let items = markdownListItems(from: node.children, ordered: true, context: context, depth: depth + 1) else {
             return nil
@@ -2252,7 +2252,7 @@ private func markdownPlainText(from block: InstantPageBlock, depth: Int = 0) -> 
         return text.plainText
     case let .footer(text):
         return text.plainText
-    case let .blockQuote(blocks, caption):
+    case let .blockQuote(blocks, caption, _):
         let blocksText = blocks.map { markdownPlainText(from: $0, depth: depth + 1) }.joined(separator: "\n")
         return blocksText.isEmpty ? caption.plainText : blocksText
     case let .pullQuote(text, caption):

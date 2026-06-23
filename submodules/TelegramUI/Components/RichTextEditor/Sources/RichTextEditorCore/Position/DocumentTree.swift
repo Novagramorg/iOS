@@ -23,6 +23,11 @@ public enum DocumentTree {
                     .cell(id: cell.id, children: cell.blocks.map(node(for:)))
                 })
             })
+        case .code(let cb):
+            // A code block reuses the paragraph node shape (content + 2 tokens); only the ref
+            // distinguishes it so position mapping can identify it as code.
+            return .paragraph(id: cb.id,
+                              children: [.text(length: cb.utf16Count, ref: .code(cb.id))])
         }
     }
 

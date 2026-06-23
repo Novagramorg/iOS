@@ -64,5 +64,8 @@ public extension RichTextEditorView {
         get { self.canvas.backgroundColor }
         set { self.canvas.backgroundColor = newValue }
     }
+
+    /// Toggle the current selection/paragraph(s) into a code block (or back to body paragraphs).
+    func makeCodeBlock() { self.canvas.makeCodeBlock() }
 }
 #endif

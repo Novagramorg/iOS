@@ -142,6 +142,12 @@ The façade is now driven by its host rather than self-laying-out:
   set `scrollView.contentInsetAdjustmentBehavior = .never` and **removed all `UIResponder` keyboard
   observation**. A private `performLayout(size:)` sizes the scroll view/canvas; only `update` writes insets
   (so a system `layoutSubviews` pass can't clobber the parent inset). Caret-follow scrolling stays internal.
+- `height(forWidth:) -> CGFloat` — a stateless, side-effect-free content-height measure (the Phase-2
+  follow-up to the composer's `textHeightForWidth`). Mirrors what `update(...)` returns at that width
+  (same `minimumContentHeight` floor + `contentMargins`) but reflows NOTHING live: the per-block
+  `measuredHeight(forWidth:)` chain reads structural insets and measures text via a reused per-engine
+  scratch layout (`BlockLayoutEngine.boundingHeight(forWidth:)`). De-stateful-ized `TableBlockBox.height`
+  in passing (it no longer resizes cell layouts to measure; `recompute()` owns cell layout).
 - `onChange: (() -> Void)?` — payload-free; fires on any edit, content-size change, or selection move
   (funneled from the canvas's `onContentSizeChange` + `onSelectionChange`, the latter fired unconditionally by
   `editing { }`). The host re-runs its layout (→ `update`) in response. **`update` must NOT synchronously fire
@@ -182,6 +188,24 @@ host link UI (a branched `openLinkEditing` in `ChatControllerLoadDisplayNode`, u
 `selectedText()` / `setLink`/`removeLink`). `selectedText() -> String` is the selected substring (for that link
 editor). Spec/plan for this work were intentionally not retained in-tree.
 
+**Composer bridge round-trip — custom emoji / mention / date (added 2026-06-19, `feature/richtext-composer-bridge-gaps`).**
+`ComposerDocumentBridge` (`ChatRichTextEditorComposer`) and `EntityMessageBuilder` (`RichTextEditorMessageConversion`)
+convert the composer's `Document` to/from the chat `NSAttributedString` currency. They now round-trip three inline
+features that previously dropped: **custom emoji** (`ChatTextInputAttributes.customEmoji` ↔ `CharacterAttributes.emoji`
+as a one-`U+FFFC` run; the original placeholder text is kept in `EmojiRef.altText` and re-emitted, since the Document
+interior must stay a single `U+FFFC`), and **mention/date**, which are stored in the Document's existing
+`CharacterAttributes.link` field as `tg://user?id=` / `tg://timestamp?t=` markers — **no new `CharacterAttributes`
+field** (keeps Core markdown-clean). The encode/decode + the chat-attribute emit are centralized in the shared
+`TextFormat` codec `MentionDateMarkers.swift` (`mentionMarkdownURL`/`parseMentionPeerId`, `dateMarkdownURL`/`parseDate`,
+`classifyChatLink`, `chatInputLinkAttribute`) so the three sites (`document(from:)` / `attributedString(from:)` /
+`buildEntityMessage`) + `composerContentEqual` can't drift; unit-tested in `//submodules/TextFormat:TextFormatTests`
+(the repo's first `ios_unit_test`). The send path is automatic — the builder stamps the chat attributes and
+`generateChatInputTextEntities` already emits `.CustomEmoji`/`.TextMention`/`.FormattedDate`. **Creation is unchanged**
+(the Date menu item remains a no-op — this is preservation only; **code-block round-tripping + creation landed in the
+follow-up note below**). **Known accepted limitation:** a `textUrl` whose string equals a
+`tg://` marker (via markdown/paste/edit) is reinterpreted as a mention/date on round-trip — low-probability,
+documented in `MentionDateMarkers.swift`. Spec/plan in `docs/superpowers/{specs,plans}/2026-06-18-richtext-composer-bridge-gaps*`.
+
 **Load-bearing invariant — the iOS-16 edit menu needs `Display.Window1.hitTest` to forward to it.**
 `UIEditMenuInteraction` hosts its menu in a top-level `_UIEditMenuContainerView` subview of the app window.
 Telegram's `Window1.hitTest` (`submodules/Display/Source/WindowContent.swift`) only forwards touches to window
@@ -192,8 +216,36 @@ custom `UITextInput` presenting `UIEditMenuInteraction` directly. Any editor cha
 edit menu being interactive in the Telegram app depends on this allow-list entry.
 
 **Deferred:** pending caret formatting (inline toggles at a *collapsed* caret are currently inert — they show
-the inherited state but don't affect the next typed char); table structural selection; code-block paragraph
-style + timestamp-entity model (the composer's Code/Date menu items are no-ops until these land).
+the inherited state but don't affect the next typed char); table structural selection. **Code blocks landed**
+(2026-06-19, `feature/richtext-code-block`) as a first-class multi-line `Block.code` — see the dedicated note
+below; they now losslessly round-trip and Format▸Code creates one. Dates now *round-trip* via the link scheme
+(see the composer-bridge note above), but the Date menu item remains a creation no-op (no native
+timestamp-creation UI yet).
+
+**Composer code blocks — first-class `Block.code` (added 2026-06-19, `feature/richtext-code-block`).** A
+multi-line code block is now a first-class `Block.code(CodeBlock)` (`Core/Model/CodeBlock.swift`: `id` +
+`language: String?` + plain `runs` whose text may contain interior `"\n"`), rendered by a new
+`CodeBlockBox: CanvasBlock` (`Canvas/CodeBlockBox.swift`) — a monospace `BlockLayoutEngine` drawn in a filled
+rounded-rect (themeable `RichTextEditorTheme.codeBackground`) with an optional language label. **It reuses the
+existing position model unchanged:** `Block.code` maps to a `.paragraph` `DocNode` carrying a `TextNodeRef.code`
+leaf, sized `content + 2` exactly like a wrap-heavy paragraph — multi-line interior `"\n"`s need **no** new
+position/selection/tokenizer machinery (they're a linear UTF-16 range TextKit wraps). `currentBlock()` reads
+back the **plain** layout string (display-only monospace attrs never enter the model). Editing affordances
+mirror quotes (`+UITextInput`/`+Editing`/`+Interaction`): **Enter** inserts an interior newline via
+`insertCodeBlockNewline()` (replacing any selection), and **exits** to a new body paragraph on an empty
+trailing line (`exitCodeBlockToBodyParagraph`); **Backspace** in a fully-empty code block un-codes it to body;
+a **tap below** a trailing code block appends a body paragraph; **cross-block** edits treat a code endpoint
+like media (truncate-and-keep partial coverage, drop full coverage) in `applyReplace`. **Creation:**
+`makeCodeBlock()` (`+ParagraphFormat`, façade-forwarded) toggles the touched top-level paragraphs into one code
+block (joining BOTH paragraph and existing-code text, refusing a selection that spans a non-text block) and
+toggles back to body paragraphs split on `"\n"`; wired to the composer's Format▸Code via
+`performFormatAction(.code)`. The chat round-trip is the **bridge** (`ComposerDocumentBridge` two-pass
+`document(from:)` + emit) and **send** (`EntityMessageBuilder` → `.Pre`), centralized through `TextFormat`
+`CodeBlockMarkers.swift` (`chatInputCodeBlockAttribute` / `codeBlockRanges`, unit-tested); the `composerParagraphs`
+flat-mapping counts a code block's interior. Full SwiftPM suite green (Core 102 + UIKit 714); the app build +
+`TextFormatTests` are green; **no logged-in-sim pass yet** (non-gating). The composer flat-coordinate mapping
+and the position axis were the load-bearing reuse points — code blocks added zero new invariants there. Spec/plan:
+`docs/superpowers/{specs/2026-06-19-richtext-code-block-design.md,plans/2026-06-19-richtext-code-block.md}`.
 
 The host action bar (12 icon actions + ContextUI context menus) lives in the separate `RichTextAttachmentScreen`
 module, not this package. Full session handoff: `~/Documents/RichTextEditor/docs/superpowers/handoffs/2026-06-12-richtext-session-handoff.md`.

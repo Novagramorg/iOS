@@ -70,6 +70,13 @@ final class BlockStack {
         return contentHeight
     }
 
+    /// Stateless total height at content `width` — the measure analogue of `layout`'s returned height.
+    /// Reads each box's structural insets (width-independent); never mutates a box. Reused by the
+    /// document root and by each table cell.
+    func measuredHeight(forWidth width: CGFloat) -> CGFloat {
+        boxes.reduce(0) { $0 + $1.measuredHeight(forWidth: width) }
+    }
+
     func leafRegions() -> [LeafTextRegion] { boxes.flatMap { $0.leafRegions() } }
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) { for b in boxes { b.draw(in: ctx, imageProvider: imageProvider) } }
 

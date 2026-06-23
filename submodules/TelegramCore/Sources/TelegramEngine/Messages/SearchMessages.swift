@@ -519,10 +519,6 @@ func _internal_searchMessages(account: Account, location: SearchMessagesLocation
                 case .globalPosts:
                     break
                 }
-                if let _ = communityId {
-                    flags |= (1 << 4)
-                }
-            
                 let filter: Api.MessagesFilter = tags.flatMap { messageFilterForTagMask($0) } ?? .inputMessagesFilterEmpty
                 remoteSearchResult = account.postbox.transaction { transaction -> (Int32, MessageIndex?, Api.InputPeer, Api.InputChannel?) in
                     var inputCommunity: Api.InputChannel?

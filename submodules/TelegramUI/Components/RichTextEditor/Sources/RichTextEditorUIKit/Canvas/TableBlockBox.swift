@@ -57,6 +57,7 @@ final class TableBlockBox: CanvasBlock {
                     case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: 100)
                     case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: 100)
                     case .table: return nil   // no nested tables in v1
+                    case .code: return nil    // no nested code blocks in a table cell in v1
                     }
                 })
             }
@@ -99,22 +100,38 @@ final class TableBlockBox: CanvasBlock {
 
     func setWidth(_ width: CGFloat) { layoutWidth = max(width, 1); computeColumnWidths() }
 
-    private func computeColumnWidths() {
-        // Reserve the (columnCount+1) vertical borders so the TOTAL grid width (Σ columns + borders — see
-        // `gridWidth`/`draw`) equals `layoutWidth` when the table FITS. When it can't (a column would drop
-        // below `minColumnWidth`), keep the natural min width and let the grid overflow → horizontal scroll.
+    // Pure column-width computation for an arbitrary total width (no mutation of self.columnWidths).
+    // internal (not private): shared by the live height path (computeColumnWidths / rowHeightsComputed)
+    // and the stateless measuredHeight, plus TableMeasureTests — keep it non-private.
+    func solveColumnWidths(forWidth width: CGFloat) -> [CGFloat] {
         let borders = CGFloat(columnCount + 1) * TableBlockBox.border
-        let avail = max(layoutWidth - borders, CGFloat(columnCount))
+        let avail = max(width - borders, CGFloat(columnCount))
         let sum = columns.reduce(0) { $0 + CGFloat($1.width) }
         let fit: [CGFloat]
         if sum <= 0 { fit = Array(repeating: avail / CGFloat(max(columnCount, 1)), count: columnCount) }
         else { let scale = avail / sum; fit = columns.map { CGFloat($0.width) * scale } }
-        if fit.allSatisfy({ $0 >= TableBlockBox.minColumnWidth }) {
-            columnWidths = fit  // fits → scale-to-fit (no overflow, no scroll)
-        } else {
-            columnWidths = fit.map { max($0, TableBlockBox.minColumnWidth) }  // overflow → bump cramped columns
-        }
+        if fit.allSatisfy({ $0 >= TableBlockBox.minColumnWidth }) { return fit }
+        return fit.map { max($0, TableBlockBox.minColumnWidth) }
     }
+
+    func cellContentWidth(_ col: Int, in cols: [CGFloat]) -> CGFloat {
+        max(cols[col] - TableBlockBox.border - TableBlockBox.cellPadding * 2, 1)
+    }
+
+    func measuredHeight(forWidth width: CGFloat) -> CGFloat {
+        let cols = solveColumnWidths(forWidth: max(width, 1))
+        var rows: CGFloat = 0
+        for (r, row) in cells.enumerated() {
+            var maxH: CGFloat = 0
+            for (c, stack) in row.enumerated() {
+                maxH = max(maxH, stack.measuredHeight(forWidth: cellContentWidth(c, in: cols)))
+            }
+            rows += max(maxH + TableBlockBox.cellPadding * 2, rowMinHeights[r]) + TableBlockBox.border
+        }
+        return TableBlockBox.border + rows + TableBlockBox.bottomSpacing
+    }
+
+    private func computeColumnWidths() { columnWidths = solveColumnWidths(forWidth: layoutWidth) }
 
     /// Cell content width (column width minus the left border and horizontal padding).
     private func cellContentWidth(_ col: Int) -> CGFloat { max(columnWidths[col] - TableBlockBox.border - TableBlockBox.cellPadding * 2, 1) }
@@ -127,14 +144,14 @@ final class TableBlockBox: CanvasBlock {
     }
 
     /// Row heights = max cell content height in the row + padding, clamped to the model minimum.
+    /// Non-mutating: cell layout is owned by `recompute()`, not by reading height.
     private func rowHeightsComputed() -> [CGFloat] {
+        let cols = columnWidths.isEmpty ? solveColumnWidths(forWidth: layoutWidth) : columnWidths
         var heights: [CGFloat] = []
         for (r, row) in cells.enumerated() {
             var maxH: CGFloat = 0
             for (c, stack) in row.enumerated() {
-                var probe: CGFloat = 0
-                for box in stack.boxes { box.setWidth(cellContentWidth(c)); probe += box.height }
-                maxH = max(maxH, probe)
+                maxH = max(maxH, stack.measuredHeight(forWidth: cellContentWidth(c, in: cols)))
             }
             heights.append(max(maxH + TableBlockBox.cellPadding * 2, rowMinHeights[r]))
         }

@@ -97,9 +97,12 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
             uploadedMedia = .single(nil)
         }
     }
-    return uploadedMedia
+    return uploadedRichMessage(network: network, postbox: postbox, auxiliaryMethods: stateManager.auxiliaryMethods, messageMediaPreuploadManager: messageMediaPreuploadManager, forceReupload: forceReupload, peerId: messageId.peerId, richText: richText)
     |> mapError { _ -> RequestEditMessageInternalError in }
-    |> mapToSignal { uploadedMediaResult -> Signal<RequestEditMessageResult, RequestEditMessageInternalError> in
+    |> mapToSignal { resolvedRichMessage -> Signal<RequestEditMessageResult, RequestEditMessageInternalError> in
+        return uploadedMedia
+        |> mapError { _ -> RequestEditMessageInternalError in }
+        |> mapToSignal { uploadedMediaResult -> Signal<RequestEditMessageResult, RequestEditMessageInternalError> in
         var pendingMediaContent: PendingMessageUploadedContent?
         if let uploadedMediaResult = uploadedMediaResult {
             switch uploadedMediaResult {
@@ -155,9 +158,8 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                     flags |= Int32(1 << 3)
                 }
                 
-                var apiRichMessage: Api.InputRichMessage?
-                if let richText {
-                    apiRichMessage = richText.apiInputRichMessage()
+                let apiRichMessage = resolvedRichMessage
+                if apiRichMessage != nil {
                     flags |= Int32(1 << 23)
                 }
                 
@@ -373,6 +375,7 @@ private func requestEditMessageInternal(accountPeerId: PeerId, postbox: Postbox,
                 return .single(.done(false))
             }
         }
+    }
     }
 }
 

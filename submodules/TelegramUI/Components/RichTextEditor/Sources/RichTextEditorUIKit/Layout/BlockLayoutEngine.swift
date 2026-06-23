@@ -26,6 +26,11 @@ protocol BlockLayoutEngine: AnyObject {
     func caretRect(atOffset offset: Int) -> CGRect
     func selectionRects(start: Int, end: Int) -> [CGRect]
     func selectionFillRects(start: Int, end: Int, fillTrailingLine: Bool) -> [CGRect]
+    /// The laid-out text height at container `width`, computed WITHOUT mutating the live
+    /// container/storage/layout (a separate scratch layout of the same engine type). Used by the
+    /// stateless `measuredHeight(forWidth:)` chain. Returns the live `boundingHeight` when `width`
+    /// already equals the live container width.
+    func boundingHeight(forWidth width: CGFloat) -> CGFloat
     func attachmentBox(at offset: Int) -> CGRect?
     func closestOffset(toPoint point: CGPoint) -> Int
     func drawText(in ctx: CGContext, at origin: CGPoint)
@@ -40,7 +45,7 @@ public enum BlockLayoutBackend {
     /// Force the TextKit-1 engine. Set this manually (e.g. from a debug hook) to `true` before the editor
     /// builds its blocks — it's read at block-construction time, so reopen the composer to apply.
     public static var forceTextKit1: Bool = {
-        #if DEBUG
+        #if DEBUG && false
         return true
         #else
         return false

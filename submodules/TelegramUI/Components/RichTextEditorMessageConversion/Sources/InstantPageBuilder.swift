@@ -26,7 +26,7 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                     quotes.append(richText(from: next.runs))
                     index += 1
                 }
-                pageBlocks.append(.blockQuote(blocks: quotes.map { .paragraph($0) }, caption: .empty))
+                pageBlocks.append(.blockQuote(blocks: quotes.map { .paragraph($0) }, caption: .empty, collapsed: nil))
                 continue
             } else {
                 pageBlocks.append(headingOrParagraphBlock(paragraph))
@@ -34,6 +34,11 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             }
         case let .table(table):
             pageBlocks.append(tableBlock(table))
+            index += 1
+        case let .code(code):
+            // Code blocks are entity-expressible (.Pre); in the rich (InstantPage) path they render as a
+            // preformatted block. Reached only when OTHER content (heading/list/table/media) forced rich layout.
+            pageBlocks.append(.preformatted(text: richText(from: code.runs), language: code.language))
             index += 1
         case let .media(mediaBlock):
             // Media.id is optional on the protocol; real TelegramMedia* types always return non-nil.
@@ -67,7 +72,7 @@ private func headingOrParagraphBlock(_ paragraph: ParagraphBlock) -> InstantPage
         return .paragraph(text)
     case .quote:
         // Quotes are merged by the caller; this is an unreached fallback for exhaustiveness.
-        return .blockQuote(blocks: [.paragraph(text)], caption: .empty)
+        return .blockQuote(blocks: [.paragraph(text)], caption: .empty, collapsed: nil)
     }
 }
 

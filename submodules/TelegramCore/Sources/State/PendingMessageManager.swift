@@ -1833,6 +1833,7 @@ public final class PendingMessageManager {
                 switch content.content {
                     case let .richMessage(assembledRichMessage):
                         apiRichMessage = assembledRichMessage
+                        flags |= Int32(1 << 23)
                         fallthrough
                     case .text:
                         if bubbleUpEmojiOrStickersets {

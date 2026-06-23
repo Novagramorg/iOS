@@ -73,6 +73,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public override init(frame: CGRect) {
         super.init(frame: frame)
         addSubview(scrollView)
+        scrollView.clipsToBounds = false
         // Don't hold touches during pan-arbitration (~150ms) before delivering them to the canvas's tap
         // recognizer — that delay compounded the tap-to-caret latency. The handle-pan↔scroll arbitration
         // is gate-only (DocumentCanvasView.gestureRecognizerShouldBegin), so this is safe.
@@ -156,6 +157,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
                                  // canvas frame didn't change (e.g. a short doc whose height is floored).
         scrollView.contentSize = CGSize(width: size.width, height: canvasHeight)
         return contentHeight
+    }
+
+    /// Measures the content height the document would have at `width`, WITHOUT mutating the live layout
+    /// — no reflow of the displayed boxes, no frame/scroll/overlay/caret change, no `onChange`. Applies
+    /// the same `minimumContentHeight` floor and `contentMargins` as `update(...)`, so the measured value
+    /// equals what a subsequent `update` at this width returns (measure == commit). Pure read.
+    public func height(forWidth width: CGFloat) -> CGFloat {
+        max(canvas.measuredContentHeight(forWidth: width), minimumContentHeight)
     }
 
     /// Test accessor: the current bottom content inset.

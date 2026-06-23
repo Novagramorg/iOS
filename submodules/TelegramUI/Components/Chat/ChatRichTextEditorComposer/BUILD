@@ -12,6 +12,7 @@ swift_library(
     deps = [
         "//submodules/AsyncDisplayKit",
         "//submodules/Display",
+        "//submodules/TelegramCore:TelegramCore",
         "//submodules/TextFormat",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",

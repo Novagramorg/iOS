@@ -334,10 +334,14 @@ private func contentNodeMessagesAndClassesForItem(_ item: ChatMessageItem) -> ([
         }
         
         var richText: RichTextMessageAttribute?
-        for attribute in item.message.attributes {
-            if let attribute = attribute as? RichTextMessageAttribute {
-                richText = attribute
-                break
+        if let updatingMedia = itemAttributes.updatingMedia {
+            richText = updatingMedia.richText
+        } else {
+            for attribute in item.message.attributes {
+                if let attribute = attribute as? RichTextMessageAttribute {
+                    richText = attribute
+                    break
+                }
             }
         }
                 

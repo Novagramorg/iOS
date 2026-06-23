@@ -878,7 +878,6 @@ public extension Api {
         public class Cons_community: TypeConstructorDescription {
             public var flags: Int32
             public var flags2: Int32
-            public var collapsedInDialogs: Api.Bool?
             public var id: Int64
             public var accessHash: Int64?
             public var title: String
@@ -886,10 +885,9 @@ public extension Api {
             public var date: Int32
             public var adminRights: Api.ChatAdminRights?
             public var defaultBannedRights: Api.ChatBannedRights?
-            public init(flags: Int32, flags2: Int32, collapsedInDialogs: Api.Bool?, id: Int64, accessHash: Int64?, title: String, photo: Api.ChatPhoto, date: Int32, adminRights: Api.ChatAdminRights?, defaultBannedRights: Api.ChatBannedRights?) {
+            public init(flags: Int32, flags2: Int32, id: Int64, accessHash: Int64?, title: String, photo: Api.ChatPhoto, date: Int32, adminRights: Api.ChatAdminRights?, defaultBannedRights: Api.ChatBannedRights?) {
                 self.flags = flags
                 self.flags2 = flags2
-                self.collapsedInDialogs = collapsedInDialogs
                 self.id = id
                 self.accessHash = accessHash
                 self.title = title
@@ -899,7 +897,7 @@ public extension Api {
                 self.defaultBannedRights = defaultBannedRights
             }
             public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("community", [("flags", ConstructorParameterDescription(self.flags)), ("flags2", ConstructorParameterDescription(self.flags2)), ("collapsedInDialogs", ConstructorParameterDescription(self.collapsedInDialogs)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("title", ConstructorParameterDescription(self.title)), ("photo", ConstructorParameterDescription(self.photo)), ("date", ConstructorParameterDescription(self.date)), ("adminRights", ConstructorParameterDescription(self.adminRights)), ("defaultBannedRights", ConstructorParameterDescription(self.defaultBannedRights))])
+                return ("community", [("flags", ConstructorParameterDescription(self.flags)), ("flags2", ConstructorParameterDescription(self.flags2)), ("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash)), ("title", ConstructorParameterDescription(self.title)), ("photo", ConstructorParameterDescription(self.photo)), ("date", ConstructorParameterDescription(self.date)), ("adminRights", ConstructorParameterDescription(self.adminRights)), ("defaultBannedRights", ConstructorParameterDescription(self.defaultBannedRights))])
             }
         }
         public class Cons_communityForbidden: TypeConstructorDescription {
@@ -1048,13 +1046,10 @@ public extension Api {
                 break
             case .community(let _data):
                 if boxed {
-                    buffer.appendInt32(1154458365)
+                    buffer.appendInt32(1710221652)
                 }
                 serializeInt32(_data.flags, buffer: buffer, boxed: false)
                 serializeInt32(_data.flags2, buffer: buffer, boxed: false)
-                if Int(_data.flags2) & Int(1 << 20) != 0 {
-                    _data.collapsedInDialogs!.serialize(buffer, true)
-                }
                 serializeInt64(_data.id, buffer: buffer, boxed: false)
                 if Int(_data.flags) & Int(1 << 13) != 0 {
                     serializeInt64(_data.accessHash!, buffer: buffer, boxed: false)
@@ -1096,7 +1091,7 @@ public extension Api {
             case .chatForbidden(let _data):
                 return ("chatForbidden", [("id", ConstructorParameterDescription(_data.id)), ("title", ConstructorParameterDescription(_data.title))])
             case .community(let _data):
-                return ("community", [("flags", ConstructorParameterDescription(_data.flags)), ("flags2", ConstructorParameterDescription(_data.flags2)), ("collapsedInDialogs", ConstructorParameterDescription(_data.collapsedInDialogs)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title)), ("photo", ConstructorParameterDescription(_data.photo)), ("date", ConstructorParameterDescription(_data.date)), ("adminRights", ConstructorParameterDescription(_data.adminRights)), ("defaultBannedRights", ConstructorParameterDescription(_data.defaultBannedRights))])
+                return ("community", [("flags", ConstructorParameterDescription(_data.flags)), ("flags2", ConstructorParameterDescription(_data.flags2)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title)), ("photo", ConstructorParameterDescription(_data.photo)), ("date", ConstructorParameterDescription(_data.date)), ("adminRights", ConstructorParameterDescription(_data.adminRights)), ("defaultBannedRights", ConstructorParameterDescription(_data.defaultBannedRights))])
             case .communityForbidden(let _data):
                 return ("communityForbidden", [("flags", ConstructorParameterDescription(_data.flags)), ("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash)), ("title", ConstructorParameterDescription(_data.title))])
             }
@@ -1345,50 +1340,43 @@ public extension Api {
             _1 = reader.readInt32()
             var _2: Int32?
             _2 = reader.readInt32()
-            var _3: Api.Bool?
-            if Int(_2 ?? 0) & Int(1 << 20) != 0 {
-                if let signature = reader.readInt32() {
-                    _3 = Api.parse(reader, signature: signature) as? Api.Bool
-                }
-            }
+            var _3: Int64?
+            _3 = reader.readInt64()
             var _4: Int64?
-            _4 = reader.readInt64()
-            var _5: Int64?
             if Int(_1 ?? 0) & Int(1 << 13) != 0 {
-                _5 = reader.readInt64()
+                _4 = reader.readInt64()
             }
-            var _6: String?
-            _6 = parseString(reader)
-            var _7: Api.ChatPhoto?
+            var _5: String?
+            _5 = parseString(reader)
+            var _6: Api.ChatPhoto?
             if let signature = reader.readInt32() {
-                _7 = Api.parse(reader, signature: signature) as? Api.ChatPhoto
+                _6 = Api.parse(reader, signature: signature) as? Api.ChatPhoto
             }
-            var _8: Int32?
-            _8 = reader.readInt32()
-            var _9: Api.ChatAdminRights?
+            var _7: Int32?
+            _7 = reader.readInt32()
+            var _8: Api.ChatAdminRights?
             if Int(_1 ?? 0) & Int(1 << 14) != 0 {
                 if let signature = reader.readInt32() {
-                    _9 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
+                    _8 = Api.parse(reader, signature: signature) as? Api.ChatAdminRights
                 }
             }
-            var _10: Api.ChatBannedRights?
+            var _9: Api.ChatBannedRights?
             if Int(_1 ?? 0) & Int(1 << 18) != 0 {
                 if let signature = reader.readInt32() {
-                    _10 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
+                    _9 = Api.parse(reader, signature: signature) as? Api.ChatBannedRights
                 }
             }
             let _c1 = _1 != nil
             let _c2 = _2 != nil
-            let _c3 = (Int(_2 ?? 0) & Int(1 << 20) == 0) || _3 != nil
-            let _c4 = _4 != nil
-            let _c5 = (Int(_1 ?? 0) & Int(1 << 13) == 0) || _5 != nil
+            let _c3 = _3 != nil
+            let _c4 = (Int(_1 ?? 0) & Int(1 << 13) == 0) || _4 != nil
+            let _c5 = _5 != nil
             let _c6 = _6 != nil
             let _c7 = _7 != nil
-            let _c8 = _8 != nil
-            let _c9 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _9 != nil
-            let _c10 = (Int(_1 ?? 0) & Int(1 << 18) == 0) || _10 != nil
-            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 && _c10 {
-                return Api.Chat.community(Cons_community(flags: _1!, flags2: _2!, collapsedInDialogs: _3, id: _4!, accessHash: _5, title: _6!, photo: _7!, date: _8!, adminRights: _9, defaultBannedRights: _10))
+            let _c8 = (Int(_1 ?? 0) & Int(1 << 14) == 0) || _8 != nil
+            let _c9 = (Int(_1 ?? 0) & Int(1 << 18) == 0) || _9 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 && _c8 && _c9 {
+                return Api.Chat.community(Cons_community(flags: _1!, flags2: _2!, id: _3!, accessHash: _4, title: _5!, photo: _6!, date: _7!, adminRights: _8, defaultBannedRights: _9))
             }
             else {
                 return nil

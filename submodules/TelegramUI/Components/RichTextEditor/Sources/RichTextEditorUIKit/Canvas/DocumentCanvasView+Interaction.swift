@@ -108,10 +108,12 @@ extension DocumentCanvasView {
     func performSingleTap(at point: CGPoint) {
         let wasMenuVisible = editMenuVisible               // capture before the system auto-dismisses on touch-down
         ensureFirstResponder()
-        // A tap BELOW the document's last block, when that block is a quote, starts a new body paragraph
-        // after it — the only way to escape a trailing quote (nothing exists below it to tap into).
-        if let last = boxes.last as? BlockBox, last.style == .quote, point.y > last.frame.maxY {
-            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing quote
+        // A tap BELOW the document's last block, when that block is a quote OR a code block, starts a new
+        // body paragraph after it — the only way to escape a trailing quote/code block (nothing exists below
+        // it to tap into).
+        if let last = boxes.last, ((last as? BlockBox)?.style == .quote || last is CodeBlockBox),
+           point.y > last.frame.maxY {
+            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing quote/code block
             return
         }
         if let hit = tableHandle(at: point), let action = tableHandleTap(at: point) {

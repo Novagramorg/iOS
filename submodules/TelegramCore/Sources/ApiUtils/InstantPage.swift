@@ -246,9 +246,9 @@ extension InstantPageBlock {
                 self = .anchor(name)
             case let .pageBlockBlockquote(pageBlockBlockquoteData):
                 let (text, caption) = (pageBlockBlockquoteData.text, pageBlockBlockquoteData.caption)
-                self = .blockQuote(blocks: [.paragraph(RichText(apiText: text))], caption: RichText(apiText: caption))
+                self = .blockQuote(blocks: [.paragraph(RichText(apiText: text))], caption: RichText(apiText: caption), collapsed: nil)
             case let .pageBlockBlockquoteBlocks(pageBlockBlockquoteBlocksData):
-                self = .blockQuote(blocks: pageBlockBlockquoteBlocksData.blocks.map { InstantPageBlock(apiBlock: $0) }, caption: RichText(apiText: pageBlockBlockquoteBlocksData.caption))
+                self = .blockQuote(blocks: pageBlockBlockquoteBlocksData.blocks.map { InstantPageBlock(apiBlock: $0) }, caption: RichText(apiText: pageBlockBlockquoteBlocksData.caption), collapsed: nil)
             case let .pageBlockPullquote(pageBlockPullquoteData):
                 let (text, caption) = (pageBlockPullquoteData.text, pageBlockPullquoteData.caption)
                 self = .pullQuote(text: RichText(apiText: text), caption: RichText(apiText: caption))
@@ -378,7 +378,7 @@ extension InstantPageBlock {
             } else {
                 return .pageBlockList(Api.PageBlock.Cons_pageBlockList(items: items.map { $0.apiInputPageListItem() }))
             }
-        case let .blockQuote(blocks, caption):
+        case let .blockQuote(blocks, caption, _):
             if blocks.isEmpty {
                 return .pageBlockBlockquote(Api.PageBlock.Cons_pageBlockBlockquote(text: RichText.empty.apiRichText(), caption: caption.apiRichText()))
             }

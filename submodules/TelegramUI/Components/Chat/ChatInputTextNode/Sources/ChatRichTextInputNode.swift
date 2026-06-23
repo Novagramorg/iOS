@@ -3,10 +3,12 @@ import UIKit
 import AsyncDisplayKit
 import Display
 import SwiftSignalKit
+import TelegramCore
 import TextFormat
 import InvisibleInkDustNode
 import EmojiTextAttachmentView
 import RichTextEditorCore
+import RichTextEditorUIKit
 
 /// Host theme colors for the rich-text composer backend, passed across the seam as plain `UIColor`s so
 /// `ChatInputTextNode` need not depend on the editor package. The RichTextEditor backend maps these 1:1
@@ -46,6 +48,12 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// Provider for animated custom-emoji views, resolved at render time. Set after creation.
     var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)? { get set }
 
+    /// Factory the PANEL supplies (it owns `AccountContext`) so the editor can render a `.media` block. The
+    /// native backend forwards it to the editor's media-view provider, resolving its private `mediaByID` →
+    /// this factory; the legacy `UITextView` backend stores it but never uses it (no media). `naturalSize` is
+    /// the medium's natural size, for aspect-correct display. Mirrors `emojiViewProvider`'s host-owned seam.
+    var mediaItemViewFactory: ((_ media: EngineMedia, _ naturalSize: CGSize) -> (UIView & RichTextMediaItemView)?)? { get set }
+
     /// Recompute and lay out the spoiler dust and custom-emoji overlays from the current
     /// attributed text, hosting both inside the composed text view's scrolling content.
     /// `textColor` / `fullTranslucency` are passed live on every call because the host's
@@ -76,17 +84,6 @@ public protocol ChatRichTextInputNode: AnyObject {
 
     /// The editor's plain-text string (read-only convenience for length/counter checks).
     var text: String { get }
-
-    /// The editor's structured rich-text document, when the backend has one. `nil` for the
-    /// legacy `UITextView`-based impl (it has no `Document` model); the TextKit-2 RichTextEditor
-    /// backend returns its live `Document`. Used to seed an expanded editor with the current content.
-    var richTextDocument: Document? { get }
-
-    /// Replace the editor's structured document (the reverse of `richTextDocument`). No-op on the
-    /// legacy `UITextView` backend (no `Document` model); the RichTextEditor backend replaces its
-    /// live document and refreshes the host. Used to write an expanded editor's result back into
-    /// the composer.
-    func setRichTextDocument(_ document: Document)
 
     /// Apply host theme colors to the editor. No-op on the legacy `UITextView` backend (it themes via
     /// `inputTheme`/`refreshTextInputAttributes`); the RichTextEditor backend maps these into its
@@ -259,6 +256,134 @@ public protocol ChatRichTextInputNode: AnyObject {
 
     /// Apply (or, for empty/nil, remove) a link over the current selection via the native engine.
     func applyRichTextLink(_ url: String?)
+
+    /// The node's content as the canonical `ChatInputContent` model + opaque selection. Default
+    /// implementations bridge through `attributedText`/`selectedRange` + the TextFormat conversion utility.
+    func currentInputContent() -> (content: ChatInputContent, selection: ChatInputSelection)
+    func setInputContent(_ content: ChatInputContent, selection: ChatInputSelection)
+
+    /// Supply the host rendering inputs the LEGACY backend needs to decorate a `ChatInputContent` into the
+    /// displayed `NSAttributedString` inside `setInputContent` (fonts/colors/spoiler/emoji overlays) AND to run
+    /// the in-place per-edit fix-up (`refreshTextInputAttributes`) the node now drives itself. No-op on the
+    /// native backend (it renders from its own `Document`). `textColor` is the body color for the
+    /// `setInputContent` decorate step (the host's `inputTextColor`); `primaryTextColor` is the body color the
+    /// in-place fix-up re-derives with (the host's `primaryTextColor`) — these are deliberately distinct, so the
+    /// node must carry both. The host calls this whenever those inputs change (theme/energy/spoilers + before a
+    /// drive), so the stored config is never stale for the node's self-refreshes.
+    func applyRenderingConfig(context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, primaryTextColor: UIColor, accentTextColor: UIColor, spoilersRevealed: Bool, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?)
+
+    /// Re-run the full per-text-change decoration the node owns: the in-place fix-up
+    /// (`refreshTextInputAttributes`), the caret typing attributes (`refreshTextInputTypingAttributes`), and the
+    /// spoiler-dust + custom-emoji overlay rebuild (`updateRichRendering`). The host calls this once at each
+    /// text-change moment with the current theme/energy inputs (so values are never stale), instead of driving
+    /// those three steps itself. `textColor` is the overlay/dust color (the host's `inputTextColor`);
+    /// `primaryTextColor` is the body color for the fix-up + typing attributes. The default implementation
+    /// forwards to the three steps in order, so both backends keep their existing behavior.
+    func decorateAfterTextChange(context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, primaryTextColor: UIColor, accentTextColor: UIColor, spoilersRevealed: Bool, fullTranslucency: Bool, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?)
+
+    /// Whether spoilers are currently revealed. The node owns this state: the decoration reads it (via the
+    /// `spoilersRevealed:` arg the host passes from here) and the spoiler-reveal flow (`updateSpoilersRevealed`)
+    /// flips it. Replaces the former host-side flag.
+    var spoilersRevealed: Bool { get set }
+
+    /// Run the spoiler-reveal flow: detect whether the current selection intersects a spoiler and, if that
+    /// changed, reveal it immediately (or hide it after the un-reveal delay), re-decorating with the flipped
+    /// flag and cross-fading the dust. The host calls this at selection-change and after applying the spoiler
+    /// format, passing the live theme inputs; the default implementation owns the whole flow (detection +
+    /// 1.5s hide delay + dust animation), so the chat layer no longer drives it.
+    func updateSpoilersRevealed(context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, primaryTextColor: UIColor, accentTextColor: UIColor, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?, animated: Bool)
+
+    /// Decorate a plain-text replacement fragment (for the paste / `shouldChangeText` splice) the way the node
+    /// renders content: applies font/colors and clears spoiler text using the node's own `spoilersRevealed`.
+    /// Returns the decorated fragment for the host to splice in — so the chat layer no longer calls
+    /// `textAttributedStringForStateText` itself. The host passes the live theme inputs.
+    func decorateReplacementFragment(plainText: String, context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, accentTextColor: UIColor, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?) -> NSAttributedString
+}
+
+public extension ChatRichTextInputNode {
+    func currentInputContent() -> (content: ChatInputContent, selection: ChatInputSelection) {
+        let attr = self.attributedText ?? NSAttributedString()
+        let content = chatInputContent(from: attr)
+        return (content, ChatInputSelection(nsRange: self.selectedRange, in: content))
+    }
+    func setInputContent(_ content: ChatInputContent, selection: ChatInputSelection) {
+        self.attributedText = attributedString(from: content)
+        self.selectedRange = selection.nsRange(in: content)
+    }
+    func applyRenderingConfig(context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, primaryTextColor: UIColor, accentTextColor: UIColor, spoilersRevealed: Bool, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?) {}
+    func decorateAfterTextChange(context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, primaryTextColor: UIColor, accentTextColor: UIColor, spoilersRevealed: Bool, fullTranslucency: Bool, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?) {
+        // The three decoration steps the host used to drive directly in `chatInputTextNodeDidUpdateText`, now
+        // owned by the node — same order, same live inputs. Each step is an existing backend method, so this
+        // forwards identically for both the legacy and native backends.
+        self.refreshTextInputAttributes(context: context, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, baseFontSize: baseFontSize, spoilersRevealed: spoilersRevealed, availableEmojis: availableEmojis, emojiViewProvider: emojiViewProvider)
+        self.refreshTextInputTypingAttributes(textColor: primaryTextColor, baseFontSize: baseFontSize)
+        self.updateRichRendering(textColor: textColor, fullTranslucency: fullTranslucency)
+    }
+
+    func decorateReplacementFragment(plainText: String, context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, accentTextColor: UIColor, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?) -> NSAttributedString {
+        return textAttributedStringForStateText(context: context, stateText: NSAttributedString(string: plainText), fontSize: baseFontSize, textColor: textColor, accentTextColor: accentTextColor, writingDirection: nil, spoilersRevealed: self.spoilersRevealed, availableEmojis: availableEmojis, emojiViewProvider: emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
+            return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)
+        })
+    }
+
+    func updateSpoilersRevealed(context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, primaryTextColor: UIColor, accentTextColor: UIColor, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?, animated: Bool) {
+        // Detect whether the caret/selection now intersects a spoiler (same scan the host used to run).
+        let selectionRange = self.selectedRange
+        var revealed = false
+        if let attributedText = self.attributedText {
+            attributedText.enumerateAttributes(in: NSMakeRange(0, attributedText.length), options: [], using: { attributes, range, _ in
+                if let _ = attributes[ChatTextInputAttributes.spoiler] {
+                    if let _ = selectionRange.intersection(range) {
+                        revealed = true
+                    }
+                }
+            })
+        }
+
+        guard self.spoilersRevealed != revealed else {
+            return
+        }
+        self.spoilersRevealed = revealed
+
+        if revealed {
+            self.applyInternalSpoilersRevealed(true, animated: animated, context: context, baseFontSize: baseFontSize, textColor: textColor, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, availableEmojis: availableEmojis, emojiViewProvider: emojiViewProvider)
+        } else {
+            // Keep the spoiler revealed briefly after the caret leaves it, mirroring the host's prior timing.
+            Queue.mainQueue().after(1.5, { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.applyInternalSpoilersRevealed(false, animated: true, context: context, baseFontSize: baseFontSize, textColor: textColor, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, availableEmojis: availableEmojis, emojiViewProvider: emojiViewProvider)
+            })
+        }
+    }
+}
+
+private extension ChatRichTextInputNode {
+    /// The reveal/hide half of `updateSpoilersRevealed`: prepare the editor, re-decorate the current content
+    /// with the flipped flag (length-preserving, so the selection is kept), then cross-fade the dust. Guards on
+    /// the flag still matching `revealed` (the caret may have moved back during the un-reveal delay). Mirrors
+    /// the host's former `updateInternalSpoilersRevealed`.
+    func applyInternalSpoilersRevealed(_ revealed: Bool, animated: Bool, context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, primaryTextColor: UIColor, accentTextColor: UIColor, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?) {
+        guard self.spoilersRevealed == revealed else {
+            return
+        }
+
+        self.prepareForSpoilerReveal()
+
+        self.refreshTextInputAttributes(context: context, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, baseFontSize: baseFontSize, spoilersRevealed: self.spoilersRevealed, availableEmojis: availableEmojis, emojiViewProvider: emojiViewProvider)
+
+        if !self.usesNativeRichTextEngine {
+            self.applyRenderingConfig(context: context, baseFontSize: baseFontSize, textColor: textColor, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, spoilersRevealed: self.spoilersRevealed, availableEmojis: availableEmojis, emojiViewProvider: emojiViewProvider)
+        }
+        // Re-decorate the current content with the flipped spoilers-revealed flag; the string length is
+        // unchanged, so the selection is preserved across the rewrite. `currentInputContent()` is exactly the
+        // host's former `chatInputContent(from: inputTextState.inputText)` + current selection.
+        let current = self.currentInputContent()
+        self.setInputContent(current.content, selection: current.selection)
+
+        self.setSpoilersRevealed(revealed, animated: animated)
+    }
 }
 
 /// Creates the default composition-based rich text input node.
@@ -271,7 +396,9 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     private var dustNode: InvisibleInkDustNode?
     private var customEmojiContainerView: CustomEmojiContainerView?
-    private var spoilersRevealed: Bool = false
+    // The node owns the spoilers-revealed state (was a host-side flag). Drives the dust alpha in
+    // `updateRichRendering` and the `spoilersRevealed:` decoration arg the host now reads back from here.
+    var spoilersRevealed: Bool = false
 
     // Most recent values supplied by the host via updateRichRendering. The internal
     // layout-driven refresh (onUpdateLayout) reuses them so it renders with the same
@@ -279,7 +406,25 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
     private var lastTextColor: UIColor?
     private var lastFullTranslucency: Bool = true
 
+    // Host rendering inputs for decorating a `ChatInputContent` inside `setInputContent`. Refreshed by the
+    // host (`applyRenderingConfig`) immediately before each `setInputContent` drive, so it is never stale.
+    private struct RenderingConfig {
+        weak var context: AnyObject?
+        var baseFontSize: CGFloat
+        var textColor: UIColor
+        var primaryTextColor: UIColor
+        var accentTextColor: UIColor
+        var spoilersRevealed: Bool
+        var availableEmojis: Set<String>
+        var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?
+    }
+    private var renderingConfig: RenderingConfig?
+
     var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)?
+
+    // Stored-but-unused: the legacy `UITextView` backend has no media blocks to render, so it satisfies the
+    // protocol but never reads this. The native (`RichTextEditorChatInputNode`) backend wires it to the editor.
+    var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)?
 
     // Bridges to ASDisplayNode for callers that hold this only as a ChatRichTextInputNode.
     var asNode: ASDisplayNode {
@@ -486,15 +631,6 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
         return self.textInputNodeImpl.textView.text
     }
 
-    /// The legacy `UITextView` backend has no `Document` model.
-    var richTextDocument: Document? {
-        return nil
-    }
-
-    /// No-op: the legacy `UITextView` backend has no `Document` model to replace.
-    func setRichTextDocument(_ document: Document) {
-    }
-
     /// No-op: the legacy `UITextView` backend themes via `inputTheme`/`refreshTextInputAttributes`.
     func applyRichTextTheme(_ colors: ChatRichTextThemeColors) {
     }
@@ -611,6 +747,56 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     func refreshTextInputTypingAttributes(textColor: UIColor, baseFontSize: CGFloat) {
         refreshChatTextInputTypingAttributes(self.textInputNodeImpl.textView, textColor: textColor, baseFontSize: baseFontSize)
+    }
+
+    // MARK: - ChatInputContent model seam (legacy backend)
+
+    func applyRenderingConfig(context: AnyObject, baseFontSize: CGFloat, textColor: UIColor, primaryTextColor: UIColor, accentTextColor: UIColor, spoilersRevealed: Bool, availableEmojis: Set<String>, emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?) {
+        self.renderingConfig = RenderingConfig(context: context, baseFontSize: baseFontSize, textColor: textColor, primaryTextColor: primaryTextColor, accentTextColor: accentTextColor, spoilersRevealed: spoilersRevealed, availableEmojis: availableEmojis, emojiViewProvider: emojiViewProvider)
+    }
+
+    /// Run the in-place per-edit decoration fix-up on the live text storage, using the host inputs last supplied
+    /// via `applyRenderingConfig`. This is `refreshChatTextInputAttributes` — the typing-maintenance pass
+    /// (mention/url/quote range re-validation + re-decoration), NOT the same as `setInputContent`'s decorate
+    /// step. The node calls this itself (after a content set; later, on its own text changes), so the chat layer
+    /// no longer drives `refreshTextInputAttributes`. No-op until the host has configured the node.
+    private func refreshDecorationFromStoredConfig() {
+        guard let cfg = self.renderingConfig, let context = cfg.context else {
+            return
+        }
+        refreshChatTextInputAttributes(context: context, textView: self.textInputNodeImpl.textView, primaryTextColor: cfg.primaryTextColor, accentTextColor: cfg.accentTextColor, baseFontSize: cfg.baseFontSize, spoilersRevealed: cfg.spoilersRevealed, availableEmojis: cfg.availableEmojis, emojiViewProvider: cfg.emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
+            return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)
+        })
+    }
+
+    func setInputContent(_ content: ChatInputContent, selection: ChatInputSelection) {
+        // Convert the model to its display-neutral string, then decorate it exactly as the host used to
+        // (fonts/colors/spoiler-clear/collapsed-quote attachments). `attributedString(from:)` round-trips the
+        // chat currency for the carried attribute set, so this is byte-identical to the former host path.
+        let semantic = attributedString(from: content)
+        if let cfg = self.renderingConfig, let context = cfg.context {
+            self.attributedText = textAttributedStringForStateText(context: context, stateText: semantic, fontSize: cfg.baseFontSize, textColor: cfg.textColor, accentTextColor: cfg.accentTextColor, writingDirection: nil, spoilersRevealed: cfg.spoilersRevealed, availableEmojis: cfg.availableEmojis, emojiViewProvider: cfg.emojiViewProvider, makeCollapsedQuoteAttachment: { text, attributes in
+                return ChatInputTextCollapsedQuoteAttachmentImpl(text: text, attributes: attributes)
+            })
+        } else {
+            // No host config yet (not expected at a drive site, since the host calls applyRenderingConfig first).
+            self.attributedText = semantic
+        }
+        self.selectedRange = selection.nsRange(in: content)
+
+        // Run the in-place fix-up the host used to call right after `setInputContent` (the former
+        // `refreshTextInputAttributes` at the drive sites). Same function, same stored inputs, same point in the
+        // sequence — so this is a 1:1 relocation. Overlay rebuild (`updateRichRendering`) still self-heals on the
+        // subsequent layout pass (`onUpdateLayout`).
+        self.refreshDecorationFromStoredConfig()
+    }
+
+    func currentInputContent() -> (content: ChatInputContent, selection: ChatInputSelection) {
+        // Strip the display decoration (emoji/collapsed-quote attachments → semantic attributes) before
+        // converting, mirroring the host's `stateAttributedStringForText` read-back.
+        let semantic = stateAttributedStringForText(self.attributedText ?? NSAttributedString())
+        let content = chatInputContent(from: semantic)
+        return (content, ChatInputSelection(nsRange: self.selectedRange, in: content))
     }
 
     func setInputScrollIndicatorInsets(_ insets: UIEdgeInsets) {

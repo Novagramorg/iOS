@@ -526,7 +526,7 @@ private enum RichMediaUploadStep {
     case done(MediaId, UploadedRichMedia)
 }
 
-private func richMessageContentToUpload(
+func richMessageContentToUpload(
     network: Network,
     postbox: Postbox,
     auxiliaryMethods: AccountAuxiliaryMethods,
@@ -645,6 +645,44 @@ private func richMessageContentToUpload(
             let normalized = progressSum / Float(steps.count)
             return .progress(PendingMessageUploadedContentProgress(progress: normalized, mediaProgress: mediaProgress))
         }
+    }
+}
+
+// Resolves a rich attribute to its `Api.InputRichMessage`, uploading inline media via the reused
+// `richMessageContentToUpload` routine. Already-cloud media short-circuits (no network round-trip).
+// `nil` richText, secret chats, media-less rich, and upload failure fall back to the media-less
+// serializer (`apiInputRichMessage()`) so the send/edit still proceeds. Emits exactly once (`take(1)`):
+// callers wrap this in `mapToSignal { ... <network request> }`, so a second emission would re-issue it.
+func uploadedRichMessage(
+    network: Network,
+    postbox: Postbox,
+    auxiliaryMethods: AccountAuxiliaryMethods,
+    messageMediaPreuploadManager: MessageMediaPreuploadManager,
+    forceReupload: Bool,
+    peerId: PeerId,
+    richText: RichTextMessageAttribute?
+) -> Signal<Api.InputRichMessage?, NoError> {
+    guard let richText else {
+        return .single(nil)
+    }
+    if peerId.namespace == Namespaces.Peer.SecretChat || richText.instantPage.media.isEmpty {
+        return .single(richText.apiInputRichMessage())
+    }
+    return richMessageContentToUpload(network: network, postbox: postbox, auxiliaryMethods: auxiliaryMethods, messageMediaPreuploadManager: messageMediaPreuploadManager, forceReupload: forceReupload, peerId: peerId, instantPage: richText.instantPage)
+    |> mapToSignal { result -> Signal<Api.InputRichMessage?, PendingMessageUploadError> in
+        switch result {
+        case let .content(content):
+            if case let .richMessage(assembled) = content.content {
+                return .single(assembled)
+            }
+            return .single(richText.apiInputRichMessage())
+        case .progress:
+            return .complete()
+        }
+    }
+    |> take(1)
+    |> `catch` { _ -> Signal<Api.InputRichMessage?, NoError> in
+        return .single(richText.apiInputRichMessage())
     }
 }
 

@@ -12,6 +12,7 @@ import MultilineTextComponent
 import EdgeEffect
 import RichTextEditorCore
 import RichTextEditorUIKit
+import RichTextEditorMediaView
 import ContextUI
 import Postbox
 import TelegramCore
@@ -43,9 +44,9 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         }
     }
 
-    private let sendMessage: (Document, [String: Media]) -> Void
+    private let sendMessage: (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void
 
-    public init(context: AccountContext, initialContents: Document? = nil, sendMessage: @escaping (Document, [String: Media]) -> Void, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+    public init(context: AccountContext, initialContents: Document? = nil, initialMedia: [String: Media] = [:], initialEmojiFiles: [Int64: TelegramMediaFile] = [:], sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
         self.sendMessage = sendMessage
 
         let overNavigationContainer = SparseContainerView()
@@ -53,6 +54,8 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         super.init(context: context, component: RichTextAttachmentScreenComponent(
             context: context,
             initialContents: initialContents,
+            initialMedia: initialMedia,
+            initialEmojiFiles: initialEmojiFiles,
             overNavigationContainer: overNavigationContainer,
             presentAttachmentMenu: presentAttachmentMenu
         ), navigationBarAppearance: .transparent, theme: .default)
@@ -74,7 +77,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
 
     fileprivate func donePressed() {
         if let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View {
-            self.sendMessage(componentView.currentDocument, componentView.currentMedia)
+            self.sendMessage(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
         }
         self.dismiss()
     }
@@ -87,12 +90,16 @@ final class RichTextAttachmentScreenComponent: Component {
     // its editor view into the View's content container.
     let context: AccountContext
     let initialContents: Document?
+    let initialMedia: [String: Media]
+    let initialEmojiFiles: [Int64: TelegramMediaFile]
     let overNavigationContainer: UIView
     let presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
 
-    init(context: AccountContext, initialContents: Document?, overNavigationContainer: UIView, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+    init(context: AccountContext, initialContents: Document?, initialMedia: [String: Media], initialEmojiFiles: [Int64: TelegramMediaFile], overNavigationContainer: UIView, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
         self.context = context
         self.initialContents = initialContents
+        self.initialMedia = initialMedia
+        self.initialEmojiFiles = initialEmojiFiles
         self.overNavigationContainer = overNavigationContainer
         self.presentAttachmentMenu = presentAttachmentMenu
     }
@@ -122,6 +129,12 @@ final class RichTextAttachmentScreenComponent: Component {
         /// The picked media map, keyed by the editor's `mediaID`. Read by the controller's `donePressed`.
         var currentMedia: [String: Media] {
             return self.attachedMedia
+        }
+
+        /// The custom-emoji file store (seeded + user-inserted), keyed by fileId. Read by the controller's
+        /// `donePressed` so each emoji run's `TelegramMediaFile` is re-attached when converting back.
+        var currentEmojiFiles: [Int64: TelegramMediaFile] {
+            return self.emojiKeyboard?.currentEmojiFiles ?? [:]
         }
 
         private var component: RichTextAttachmentScreenComponent?
@@ -263,12 +276,19 @@ final class RichTextAttachmentScreenComponent: Component {
                 // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
                 // current document when expanding); an empty document when none is provided.
                 editor.document = component.initialContents ?? Document()
+                // Seed the picked-media store alongside the document (before the media-view provider runs)
+                // so any media referenced by the initial document resolves on first layout.
+                self.attachedMedia = component.initialMedia
 
                 let emojiKeyboard = RichTextEmojiKeyboardController(context: component.context, editor: editor, requestLayout: { [weak self] in
                     guard let self, !self.isUpdating else { return }
                     self.componentState?.updated(transition: .spring(duration: 0.4))
                 })
                 self.emojiKeyboard = emojiKeyboard
+                // Seed the keyboard's file store with the files of any custom emoji the initial document
+                // references (the `Document` carries only fileIds) — before the editor's first layout, so a
+                // custom emoji carried in from the chat composer renders, and its file survives back out.
+                emojiKeyboard.seedEmojiFiles(component.initialEmojiFiles)
 
                 editor.registerEmojiViewProvider { [weak self] id, size in
                     return self?.emojiKeyboard?.customEmojiView(forId: id, size: size)

@@ -328,6 +328,7 @@ final class DocumentCanvasView: UIView {
             case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: width)
             case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width)
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
+            case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
             }
         }
         recomputeSpans()
@@ -614,6 +615,13 @@ final class DocumentCanvasView: UIView {
     override var intrinsicContentSize: CGSize {
         CGSize(width: UIView.noIntrinsicMetric,
                height: contentMargins.top + boxes.reduce(0) { $0 + $1.height } + contentMargins.bottom)
+    }
+
+    /// Stateless content height the document would have at canvas `width` — the measure analogue of
+    /// `intrinsicContentSize.height` (same `contentMargins` + content-width derivation). Never mutates
+    /// the live layout (no box `setWidth`, no frame/overlay/caret change).
+    func measuredContentHeight(forWidth width: CGFloat) -> CGFloat {
+        contentMargins.top + root.measuredHeight(forWidth: contentWidth(forWidth: width)) + contentMargins.bottom
     }
 
     /// Notifies the host that the content height may have changed (e.g. after an edit), so it re-runs

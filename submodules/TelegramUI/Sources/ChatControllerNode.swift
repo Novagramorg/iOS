@@ -71,6 +71,8 @@ import UndoUI
 import BrowserUI
 import RichTextAttachmentScreen
 import RichTextEditorCore
+import RichTextEditorMediaView
+import ChatRichTextEditorComposer
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
     let itemNode: OverlayMediaItemNode
@@ -920,6 +922,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         self.textInputPanelNode = ChatTextInputPanelNode(context: context, presentationInterfaceState: chatPresentationInterfaceState, presentationContext: ChatPresentationContext(context: context, backgroundNode: backgroundNode), presentController: { [weak self] controller in
             self?.interfaceInteraction?.presentController(controller, nil)
         })
+        self.textInputPanelNode?.mediaItemViewFactory = { media, _ in
+            return MediaItemNodeView(context: context, media: media)
+        }
         if let data = self.context.currentAppConfiguration.with({ $0 }).data, let value = data["ios_disable_ai_chat"] as? Double, value == 1.0 {
         } else if let peerId = self.chatPresentationInterfaceState.chatLocation.peerId, peerId.namespace != Namespaces.Peer.SecretChat {
             self.textInputPanelNode?.isAIEnabled = true
@@ -956,7 +961,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                             var count: Int32
                             if let forwardedCount = self.chatPresentationInterfaceState.interfaceState.forwardMessageIds?.count, forwardedCount > 0 {
                                 count = Int32(forwardedCount)
-                                if self.chatPresentationInterfaceState.interfaceState.effectiveInputState.inputText.length > 0 {
+                                if !self.chatPresentationInterfaceState.interfaceState.effectiveInputState.isEmpty {
                                     count += 1
                                 }
                             } else {
@@ -3994,7 +3999,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             context: self.context,
             currentInputData: inputMediaNodeData,
             updatedInputData: self.inputMediaNodeDataPromise.get(),
-            defaultToEmojiTab: !self.chatPresentationInterfaceState.interfaceState.effectiveInputState.inputText.string.isEmpty || self.chatPresentationInterfaceState.interfaceState.forwardMessageIds != nil || self.openStickersBeginWithEmoji || self.chatPresentationInterfaceState.focusedPollAddOptionMessageId != nil,
+            defaultToEmojiTab: !self.chatPresentationInterfaceState.interfaceState.effectiveInputState.isEmpty || self.chatPresentationInterfaceState.interfaceState.forwardMessageIds != nil || self.openStickersBeginWithEmoji || self.chatPresentationInterfaceState.focusedPollAddOptionMessageId != nil,
             interaction: ChatEntityKeyboardInputNode.Interaction(chatControllerInteraction: self.controllerInteraction, panelInteraction: interfaceInteraction),
             chatPeerId: peerId,
             stateContext: self.inputMediaNodeStateContext,
@@ -4576,15 +4581,37 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         if #available (iOS 17.0, *) {
+            // The composer's chat input STATE is the single source of truth for this handoff (both
+            // directions flow through `ChatInputContent`, not a direct node poke), so undo / drafts / send /
+            // state-observers all see one consistent value. OUT: convert the live composer content →
+            // `(Document, media, emojiFiles)` to seed the expanded editor. IN: convert the editor's
+            // `(document, media, emojiFiles)` → a `ChatTextInputState` and apply it through the canonical
+            // interface-state mutation (the panel SET path then lands it on the node). Media AND custom-emoji
+            // files ride the `ChatInputContent` converters — the emoji files are required so a custom emoji
+            // round-trips (the editor `Document` carries only fileIds; the file must be re-attached to render).
+            let (seedDocument, seedMedia, seedEmojiFiles) = documentMediaAndEmoji(fromChatInputContent: textInputPanelNode.inputTextState.content)
             let editorScreen = RichTextAttachmentScreen(
                 context: self.context,
-                initialContents: textInputPanelNode.richTextInputNode?.richTextDocument,
-                sendMessage: { [weak self] document, _ in
-                    // media is ignored: the expand-from-composer path does not wire an image picker
-                    // (presentAttachmentMenu is nil), so the editor accumulates no media here.
-                    self?.textInputPanelNode?.richTextInputNode?.setRichTextDocument(document)
+                initialContents: seedDocument,
+                initialMedia: seedMedia,
+                initialEmojiFiles: seedEmojiFiles,
+                sendMessage: { [weak self] document, media, emojiFiles in
+                    guard let self else {
+                        return
+                    }
+                    let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                    self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                        return state.updatedInterfaceState { interfaceState in
+                            return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                        }
+                    })
                 },
-                presentAttachmentMenu: nil
+                presentAttachmentMenu: { [weak self] completion in
+                    guard let self else {
+                        return
+                    }
+                    self.controller?.presentRichTextAttachmentMenu(completion: completion)
+                }
             )
             editorScreen.navigationPresentation = .modal
             self.controller?.push(editorScreen)
@@ -4795,7 +4822,15 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             } else {
                 effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.composeInputState.inputText)
             }
-            
+
+            let composeContent = effectivePresentationInterfaceState.interfaceState.composeInputState.content
+            // Rich-message routing: new messages only (editMessage == nil), structural content the entity
+            // set can't express (heading/list/table/media), and non-empty. Entity-expressible content
+            // (text/quote/code/collapsed-quote/mention/date/custom-emoji-in-body) keeps the text+entities path.
+            let sendAsRichMessage = effectivePresentationInterfaceState.interfaceState.editMessage == nil
+                && !composeContent.isEntityExpressible
+                && !composeContent.isEmpty
+
             let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
             
             var inlineStickers: [MediaId: Media] = [:]
@@ -4934,6 +4969,32 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }
                 }
                 
+                if sendAsRichMessage {
+                    var attributes: [MessageAttribute] = [RichTextMessageAttribute(instantPage: instantPage(from: composeContent), fullInstantPage: nil)]
+
+                    // url-preview attribute parity (duplicated, not shared, to keep the text loop byte-identical)
+                    if let urlPreview = self.chatPresentationInterfaceState.urlPreview {
+                        if self.chatPresentationInterfaceState.interfaceState.composeDisableUrlPreviews.contains(urlPreview.url) {
+                            attributes.append(OutgoingContentInfoMessageAttribute(flags: [.disableLinkPreviews]))
+                        } else {
+                            attributes.append(WebpagePreviewMessageAttribute(leadingPreview: !urlPreview.positionBelowText, forceLargeMedia: urlPreview.largeMedia, isManuallyAdded: true, isSafe: false))
+                        }
+                    }
+
+                    // bubble-up parity: same harvested source + dedupe + ">1 → clear" rule as the text loop,
+                    // applied to this single rich message.
+                    var bubbleUpEmojiOrStickersets: [ItemCollectionId] = []
+                    for packId in bubbleUpEmojiOrStickersetsById.values {
+                        if !bubbleUpEmojiOrStickersets.contains(packId) {
+                            bubbleUpEmojiOrStickersets.append(packId)
+                        }
+                    }
+                    if bubbleUpEmojiOrStickersets.count > 1 {
+                        bubbleUpEmojiOrStickersets.removeAll()
+                    }
+
+                    messages.append(.message(text: "", attributes: attributes, inlineStickers: inlineStickers, mediaReference: mediaReference, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: bubbleUpEmojiOrStickersets))
+                } else {
                 do {
                     for text in breakChatInputText(trimChatInputText(inputText)) {
                         if text.length != 0 {
@@ -4980,6 +5041,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if let mediaReferenceValue = mediaReference {
                     mediaReference = nil
                     messages.append(.message(text: "", attributes: [], inlineStickers: inlineStickers, mediaReference: mediaReferenceValue, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: []))
+                }
                 }
 
                 var forwardingToSameChat = false

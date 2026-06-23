@@ -20,6 +20,8 @@ public struct RichTextEditorTheme {
     public var tableBorder: UIColor
     /// Table header-row background fill.
     public var tableHeaderBackground: UIColor
+    /// Code-block background fill.
+    public var codeBackground: UIColor
 
     public init(
         primaryText: UIColor,
@@ -27,7 +29,8 @@ public struct RichTextEditorTheme {
         placeholder: UIColor,
         accent: UIColor,
         tableBorder: UIColor,
-        tableHeaderBackground: UIColor
+        tableHeaderBackground: UIColor,
+        codeBackground: UIColor
     ) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
@@ -35,6 +38,7 @@ public struct RichTextEditorTheme {
         self.accent = accent
         self.tableBorder = tableBorder
         self.tableHeaderBackground = tableHeaderBackground
+        self.codeBackground = codeBackground
     }
 
     /// Reproduces the editor's prior hardcoded colors exactly (see the design doc's site inventory).
@@ -48,7 +52,10 @@ public struct RichTextEditorTheme {
             tc.userInterfaceStyle == .dark ? UIColor(white: 0.27, alpha: 1) : UIColor(white: 0.88, alpha: 1)
         },
         // Prior `TableBlockBox.headerRowBackground`.
-        tableHeaderBackground: UIColor(white: 0.5, alpha: 0.1)
+        tableHeaderBackground: UIColor(white: 0.5, alpha: 0.1),
+        codeBackground: UIColor { tc in
+            tc.userInterfaceStyle == .dark ? UIColor(white: 0.16, alpha: 1) : UIColor(white: 0.95, alpha: 1)
+        }
     )
 }
 #endif

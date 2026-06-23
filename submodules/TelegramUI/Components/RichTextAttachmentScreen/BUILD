@@ -25,6 +25,7 @@ swift_library(
         "//submodules/Components/MultilineTextComponent",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
+        "//submodules/TelegramUI/Components/RichTextEditorMediaView",
         "//submodules/Components/ViewControllerComponent",
         "//submodules/TelegramUI/Components/EntityKeyboard",
         "//submodules/TelegramUI/Components/ChatEntityKeyboardInputNode",

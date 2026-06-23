@@ -36,7 +36,7 @@ func normalizedBlocks(_ blocks: [Block], media: [String: Media]) -> [Block] {
     var out: [Block] = []
     for block in blocks {
         switch block {
-        case .paragraph, .table:
+        case .paragraph, .table, .code:
             out.append(block)
         case let .media(mediaBlock):
             if media[mediaBlock.mediaID] != nil {
@@ -81,6 +81,10 @@ func documentNeedsRichLayout(_ blocks: [Block]) -> Bool {
         case .media:
             // normalizedBlocks already dropped unresolvable media, so any surviving .media block forces rich layout.
             return true
+        case .code:
+            // A code block is entity-expressible (.Pre) and does NOT force the rich path — it round-trips
+            // through the normal text+entities builder (buildEntityMessage).
+            break
         }
     }
     return false

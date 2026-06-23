@@ -29,7 +29,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     // The synthesized webpage uses a sentinel id (namespace 0, id 0) shared across all richText
     // messages, so we key cache invalidation on the message itself. When the bubble is recycled
     // with a different message we must discard pageView (render context is constructor-fixed).
-    private var pageViewMessageKey: (id: EngineMessage.Id, stableVersion: UInt32, showMoreExpanded: Bool)?
+    private var pageViewMessageKey: (id: EngineMessage.Id, stableVersion: UInt32, pendingEditKey: ObjectIdentifier?, showMoreExpanded: Bool)?
     // messageStableVersion is in the cache key because the synthesized instantPage content
     // mutates between streamed AI message chunks (each chunk bumps stableVersion); without
     // this, the cached layout would shadow newly-arrived content during streaming.
@@ -37,6 +37,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                                     presentationThemeIdentity: ObjectIdentifier,
                                     expandedDetails: [Int: Bool],
                                     messageStableVersion: UInt32,
+                                    pendingEditKey: ObjectIdentifier?,
                                     showMoreExpanded: Bool,
                                     layout: InstantPageV2Layout)?
     private var currentExpandedDetails: [Int: Bool] = [:]
@@ -119,9 +120,9 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
     /// the existing view, updating only the webpage content in place. The view is rebuilt only when
     /// the bubble is recycled with a different message/webpage (different message id).
     private func ensurePageView(item: ChatMessageBubbleContentItem, webpage: TelegramMediaWebpage, showMoreExpanded: Bool) -> InstantPageV2View {
-        let key = (id: item.message.id, stableVersion: item.message.stableVersion, showMoreExpanded: showMoreExpanded)
+        let key = (id: item.message.id, stableVersion: item.message.stableVersion, pendingEditKey: (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }), showMoreExpanded: showMoreExpanded)
         if let existing = self.pageView, let current = self.pageViewMessageKey, current.id == key.id {
-            if current.stableVersion == key.stableVersion && current.showMoreExpanded == key.showMoreExpanded {
+            if current.stableVersion == key.stableVersion && current.pendingEditKey == key.pendingEditKey && current.showMoreExpanded == key.showMoreExpanded {
                 return existing
             }
             // Same message, new chunk: reuse the view. Update only the content-bearing webpage on
@@ -357,7 +358,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 // Resolve the node-local expand state for THIS message (collapsed for any other).
                 let showMoreExpanded = (showMoreExpandedState?.messageId == item.message.id) ? (showMoreExpandedState?.value ?? false) : false
 
-                if let attribute = item.message.richText {
+                if let attribute = (item.attributes.updatingMedia.map(\.richText) ?? item.message.richText) {
                     #if DEBUG && false
                     let instantPage = InstantPage(blocks: [.thinking(.concat([
                         .textCustomEmoji(fileId: 5384559872899555845, alt: "a"),
@@ -393,12 +394,14 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
 
                     let presentationThemeIdentity = ObjectIdentifier(item.presentationData.theme.theme)
                     let currentMessageStableVersion = item.message.stableVersion
+                    let currentPendingEditKey = (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) })
                     if let current = currentPageLayout,
                        current.boundingWidth == suggestedBoundingWidth,
                        current.presentationThemeIdentity == presentationThemeIdentity,
                        current.expandedDetails == currentExpandedDetails,
                        current.showMoreExpanded == showMoreExpanded,
                        current.messageStableVersion == currentMessageStableVersion,
+                       current.pendingEditKey == currentPendingEditKey,
                        current.layout.formattedDateUpdatePeriod == nil {
                         // Reuse the cached layout only when it has no relative `textDate`. A relative
                         // date's formatted string ("N minutes ago") is baked into the laid-out text at
@@ -564,7 +567,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                 // a preview / messageOptions context. When present, the date trails the link's line
                 // by substituting its frame for the last-text-line frame the status machinery consumes.
                 var showMore = false
-                if let attribute = item.message.richText,
+                if let attribute = (item.attributes.updatingMedia.map(\.richText) ?? item.message.richText),
                    !showMoreExpanded,
                    !attribute.instantPage.isComplete,
                    !hasDraft,
@@ -769,12 +772,13 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                             self.statusNode?.pressed = nil
                         }
 
-                        if let pageLayout, let pageWebpage, let _ = item.message.richText {
+                        if let pageLayout, let pageWebpage, let _ = (item.attributes.updatingMedia?.richText ?? item.message.richText) {
                             self.currentPageLayout = (
                                 suggestedBoundingWidth,
                                 ObjectIdentifier(item.presentationData.theme.theme),
                                 self.currentExpandedDetails,
                                 item.message.stableVersion,
+                                (item.attributes.updatingMedia?.richText).map({ ObjectIdentifier($0) }),
                                 showMoreExpanded,
                                 pageLayout
                             )
@@ -1446,7 +1450,7 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
         // 2. Not laid out — it may be buried in a collapsed <details>. Find the path and expand
         //    the first collapsed details on it, then retry after the relayout (post-relayout hook).
         let anchorExpanded = (self.showMoreExpanded?.messageId == item.message.id) ? (self.showMoreExpanded?.value ?? false) : false
-        guard let instantPage = item.message.richText.map({ (anchorExpanded ? $0.fullInstantPage : nil) ?? $0.instantPage }),
+        guard let instantPage = (item.attributes.updatingMedia.map(\.richText) ?? item.message.richText).map({ (anchorExpanded ? $0.fullInstantPage : nil) ?? $0.instantPage }),
               let path = instantPageAnchorPath(in: instantPage, name: anchor),
               !path.isEmpty,
               let collapsedIndex = self.pageView?.firstCollapsedDetails(forOrdinalPath: path)

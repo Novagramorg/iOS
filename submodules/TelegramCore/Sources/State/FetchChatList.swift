@@ -24,7 +24,8 @@ struct ParsedDialogs {
     let storeMessages: [StoreMessage]
     let ttlPeriods: [PeerId: CachedPeerAutoremoveTimeout]
     let viewForumAsMessages: [PeerId: Bool]
-    
+    let inputStates: [(PeerId, Api.DraftMessage)]
+
     let lowerNonPinnedIndex: MessageIndex?
     let referencedFolders: [PeerGroupId: PeerGroupUnreadCountersSummary]
 }
@@ -67,6 +68,7 @@ private func parseDialogs(accountPeerId: PeerId, apiDialogs: [Api.Dialog], apiMe
     
     var referencedFolders: [PeerGroupId: PeerGroupUnreadCountersSummary] = [:]
     var itemIds: [PeerId] = []
+    var inputStates: [(PeerId, Api.DraftMessage)] = []
     
     let peers = AccumulatedPeers(chats: apiChats, users: apiUsers)
     
@@ -127,7 +129,11 @@ private func parseDialogs(accountPeerId: PeerId, apiDialogs: [Api.Dialog], apiMe
                         let channelId = peerChannelData.channelId
                         peerId = PeerId(namespace: Namespaces.Peer.CloudChannel, id: PeerId.Id._internalFromInt64Value(channelId))
                 }
-                
+
+                if let draft = dialogData.draft, case .draftMessage = draft {
+                    inputStates.append((peerId, draft))
+                }
+
                 if readStates[peerId] == nil {
                     readStates[peerId] = [:]
                 }
@@ -201,7 +207,8 @@ private func parseDialogs(accountPeerId: PeerId, apiDialogs: [Api.Dialog], apiMe
         storeMessages: storeMessages,
         ttlPeriods: ttlPeriods,
         viewForumAsMessages: viewForumAsMessages,
-    
+        inputStates: inputStates,
+
         lowerNonPinnedIndex: lowerNonPinnedIndex,
         referencedFolders: referencedFolders
     )
@@ -227,6 +234,7 @@ struct FetchedChatList {
     var folderSummaries: [PeerGroupId: PeerGroupUnreadCountersSummary]
     var peerGroupIds: [PeerId: PeerGroupId]
     var threadInfos: [PeerAndBoundThreadId: StoreMessageHistoryThreadData]
+    var inputStates: [(PeerId, Api.DraftMessage)]
 }
 
 func fetchChatList(accountPeerId: PeerId, postbox: Postbox, network: Network, location: FetchChatListLocation, upperBound: MessageIndex, hash: Int64, limit: Int32) -> Signal<FetchedChatList?, NoError> {
@@ -420,7 +428,12 @@ func fetchChatList(accountPeerId: PeerId, postbox: Postbox, network: Network, lo
                         pinnedItemIds: pinnedItemIds,
                         folderSummaries: folderSummaries,
                         peerGroupIds: peerGroupIds,
-                        threadInfos: [:]
+                        threadInfos: [:],
+                        // A pinned chat appears in both the remote and pinned responses, so the same peer's draft
+                        // can be listed twice here. That is intentionally not deduped: `_internal_applyFetchedChatInputStates`
+                        // is idempotent — after the first apply, the second pass reads the just-written (equal) local
+                        // timestamp and its strict newer-wins guard skips it. Don't drop the guard without deduping here.
+                        inputStates: parsedRemoteChats.inputStates + (parsedPinnedChats?.inputStates ?? [])
                     )
                     return resolveUnknownEmojiFiles(postbox: postbox, source: .network(network), messages: storeMessages, reactions: [], result: result)
                     |> mapToSignal { result in

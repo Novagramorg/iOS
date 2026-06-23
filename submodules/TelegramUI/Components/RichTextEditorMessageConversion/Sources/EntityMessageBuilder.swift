@@ -8,8 +8,24 @@ func buildEntityMessage(from blocks: [Block]) -> (text: String, entities: [Messa
     let result = NSMutableAttributedString()
     let marker = true as NSNumber
     var isFirstParagraph = true
+    var prevWasQuote = false
 
     for block in blocks {
+        if case let .code(code) = block {
+            if !isFirstParagraph {
+                result.append(NSAttributedString(string: "\n"))
+            }
+            isFirstParagraph = false
+            let start = result.length
+            result.append(NSAttributedString(string: code.text))   // code runs are always plain text
+            let len = result.length - start
+            if len > 0 {
+                let attr = chatInputCodeBlockAttribute(language: code.language)
+                result.addAttribute(attr.key, value: attr.value, range: NSRange(location: start, length: len))
+            }
+            prevWasQuote = false   // a code block breaks the quote-fusion chain
+            continue
+        }
         guard case let .paragraph(paragraph) = block else {
             continue
         }
@@ -20,12 +36,24 @@ func buildEntityMessage(from blocks: [Block]) -> (text: String, entities: [Messa
 
         let paragraphStart = result.length
         for run in paragraph.runs {
-            let text: String
             if let emoji = run.attributes.emoji {
-                text = emoji.altText ?? ""
-            } else {
-                text = run.text
+                // Mirror ComposerDocumentBridge: re-emit a customEmoji run; generateChatInputTextEntities
+                // converts it to a .CustomEmoji(fileId:) entity. Prefer altText; fall back to U+FFFC. A
+                // non-numeric id degrades to plain text rather than crashing.
+                let displayText = (emoji.altText?.isEmpty == false) ? emoji.altText! : "\u{FFFC}"
+                let piece = NSMutableAttributedString(string: displayText)
+                let range = NSRange(location: 0, length: piece.length)
+                if let fileId = Int64(emoji.id) {
+                    piece.addAttribute(
+                        ChatTextInputAttributes.customEmoji,
+                        value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil),
+                        range: range
+                    )
+                }
+                result.append(piece)
+                continue
             }
+            let text = run.text
             if text.isEmpty {
                 continue
             }
@@ -51,21 +79,27 @@ func buildEntityMessage(from blocks: [Block]) -> (text: String, entities: [Messa
                 piece.addAttribute(ChatTextInputAttributes.spoiler, value: marker, range: range)
             }
             if let link = attributes.link {
-                piece.addAttribute(ChatTextInputAttributes.textUrl, value: ChatTextInputTextUrlAttribute(url: link), range: range)
+                let attribute = chatInputLinkAttribute(forLink: link)
+                piece.addAttribute(attribute.key, value: attribute.value, range: range)
             }
             result.append(piece)
         }
 
         if paragraph.style == .quote {
-            let length = result.length - paragraphStart
+            // Extend back over the joining "\n" when the previous block was also a quote, so consecutive
+            // quote lines form ONE contiguous .block run → a single blockquote entity (generateChatInputText
+            // Entities only merges block ranges that exactly touch). A non-quote/code predecessor → no extend.
+            let rangeStart = prevWasQuote ? max(0, paragraphStart - 1) : paragraphStart
+            let length = result.length - rangeStart
             if length > 0 {
                 result.addAttribute(
                     ChatTextInputAttributes.block,
                     value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
-                    range: NSRange(location: paragraphStart, length: length)
+                    range: NSRange(location: rangeStart, length: length)
                 )
             }
         }
+        prevWasQuote = (paragraph.style == .quote)
     }
 
     let entities = generateChatInputTextEntities(result)
