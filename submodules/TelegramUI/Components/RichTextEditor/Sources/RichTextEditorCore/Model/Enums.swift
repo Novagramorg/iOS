@@ -11,7 +11,7 @@ public enum ParagraphStyleName: String, Codable, Equatable, CaseIterable {
 }
 
 public enum ListMarker: String, Codable, Equatable, CaseIterable {
-    case bullet, ordered
+    case bullet, ordered, checklist
 }
 
 public enum MediaAlignment: String, Codable, Equatable, CaseIterable {

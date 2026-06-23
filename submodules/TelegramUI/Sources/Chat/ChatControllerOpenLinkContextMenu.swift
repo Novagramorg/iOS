@@ -111,7 +111,6 @@ private func chatLinkContextMenuOpenMode(context: AccountContext, url: String) -
 
 extension ChatControllerImpl {
     private func presentOpenLinkConfirmation(_ url: String, target: ChatLinkReverseOpenTarget) {
-        //TODO:localize
         var exceptionAdded = false
         let disposable = self.context.sharedContext.openUserGeneratedUrl(
             context: self.context,

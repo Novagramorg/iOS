@@ -891,7 +891,7 @@ private final class ChatMessagePollOptionNode: ASDisplayNode {
 
             let shouldHaveRadioNode = optionResult == nil
             let isSelectable: Bool
-            if shouldHaveRadioNode, poll.kind.multipleAnswers, forceSelected == nil, !Namespaces.Message.allNonRegular.contains(message.id.namespace), !Namespaces.Message.allEphemeral.contains(message.id.namespace) {
+            if shouldHaveRadioNode, poll.kind.multipleAnswers, forceSelected == nil, !Namespaces.Message.allNonRegular.contains(message.id.namespace) {
                 isSelectable = true
             } else {
                 isSelectable = false
@@ -2619,7 +2619,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
         
         let canAlwaysViewResults = poll.isCreator
         if !hasSelection || (canAlwaysViewResults && selectedOpaqueIdentifiers.isEmpty) {
-            if !Namespaces.Message.allNonRegular.contains(item.message.id.namespace), !Namespaces.Message.allEphemeral.contains(item.message.id.namespace) {
+            if !Namespaces.Message.allNonRegular.contains(item.message.id.namespace) {
                 switch poll.publicity {
                 case .public:
                     item.controllerInteraction.requestOpenMessagePollResults(item.message.id, pollId)
@@ -3632,7 +3632,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
                     self.buttonNode.isHidden = false
                 }
 
-                if Namespaces.Message.allNonRegular.contains(item.message.id.namespace) || Namespaces.Message.allEphemeral.contains(item.message.id.namespace) {
+                if Namespaces.Message.allNonRegular.contains(item.message.id.namespace) {
                     self.buttonNode.isUserInteractionEnabled = false
                 } else {
                     self.buttonNode.isUserInteractionEnabled = !isPollActionInProgress
@@ -3648,7 +3648,7 @@ public class ChatMessagePollBubbleContentNode: ChatMessageBubbleContentNode {
             self.buttonSubmitActiveTextNode.isHidden = true
         }
 
-        let canDisplayNewOption = poll.openAnswers && !isClosed && poll.pollId.namespace == Namespaces.Media.CloudPoll && !Namespaces.Message.allEphemeral.contains(item.message.id.namespace)
+        let canDisplayNewOption = poll.openAnswers && !isClosed && poll.pollId.namespace == Namespaces.Media.CloudPoll
         let canSubmitNewOption = !self.currentNewOptionText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !(self.currentNewOptionMedia?.requiresUpload ?? false)
         if canDisplayNewOption && canSubmitNewOption {
             self.votersNode.isHidden = true
