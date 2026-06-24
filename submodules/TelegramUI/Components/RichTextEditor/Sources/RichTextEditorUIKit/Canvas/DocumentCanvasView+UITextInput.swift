@@ -10,12 +10,29 @@ extension DocumentCanvasView: UITextInput {
         guard let r = range as? DocumentTextRange else { return nil }
         let lo = clamp(min(r.from.offset, r.to.offset)), hi = clamp(max(r.from.offset, r.to.offset))
         var result = ""
+        // The global position axis carries NO newline character between top-level blocks — only a
+        // structural token gap. A real UITextView returns "\n" there, and the system keyboard depends on
+        // it: the Hangul/CJK IME reads document context through `text(in:)` (it does NOT drive marked text
+        // on this view — it composes via insert + ranged delete/replace), and without the separator it
+        // sees two stacked paragraphs as one continuous line and recomposes a syllable ACROSS the invisible
+        // line break — the reported bug where a trailing consonant from the lower line migrates onto the
+        // line above. So emit "\n" for each top-level paragraph boundary the range crosses, including a
+        // range that lands entirely inside the inter-block gap (the read the keyboard makes immediately
+        // before a lower line's first character). Table-cell boundaries stay glued: a table is one editing
+        // surface, cells don't compose marked text, and cross-cell `text(in:)` is relied on un-separated.
+        var prevTopLevelEnd: Int? = nil
         for region in allLeafRegions() {
-            let a = max(lo, region.globalStart), b = min(hi, region.globalStart + region.length)
+            let rStart = region.globalStart, rEnd = region.globalStart + region.length
+            let topLevel = !isInsideTable(rStart)
+            if topLevel, let prevEnd = prevTopLevelEnd, lo < rStart, hi > prevEnd {
+                result += "\n"   // the requested range covers this paragraph break
+            }
+            defer { prevTopLevelEnd = topLevel ? rEnd : nil }
+            let a = max(lo, rStart), b = min(hi, rEnd)
             guard a < b else { continue }
             let attr = region.layout.attributedString
             let ns = attr.string as NSString
-            let slice = NSRange(location: a - region.globalStart, length: b - a)
+            let slice = NSRange(location: a - rStart, length: b - a)
             // Replace each emoji spacer (U+FFFC + EmojiTextAttachment) with its altText (or nothing);
             // copy every other span verbatim. Keeps non-emoji behaviour identical.
             attr.enumerateAttribute(.attachment, in: slice, options: []) { value, sub, _ in

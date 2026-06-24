@@ -523,6 +523,18 @@ UIKit files.
   **outside** `editing{}` with one undo per composition; a system inline prediction (signalled by
   `setMarkedText` `sel:{0,0}`, ghost trailing) is **dismissed, never committed**, by our finalize
   chokepoints so the keyboard's own accept lands clean.
+- **`text(in:)` MUST emit a `"\n"` at every top-level paragraph boundary** (`DocumentCanvasView+UITextInput`),
+  exactly like a `UITextView` over a `"\n"`-joined string — because the global axis carries NO newline char
+  between blocks, only a structural token gap. The system keyboard reads document context through `text(in:)`,
+  and **not every IME drives `setMarkedText` on this view** — the Hangul (and other CJK) keyboard composes via
+  `insertText` + a ranged `selectedTextRange`-set + `deleteBackward` + `insertText`, tracking positions itself
+  and reading `text(in:)` for context. Without the separator it sees two stacked paragraphs as ONE continuous
+  line and recomposes a syllable **across the invisible line break** — the trailing consonant of the lower line
+  migrates onto the line above (the reported Korean-deletion bug). The `"\n"` is emitted for each crossed
+  boundary, **including a range that lands entirely inside the inter-block gap** (the read the keyboard makes
+  immediately before a lower line's first character). **Table-cell boundaries stay glued** (a table is one
+  editing surface; cells don't compose marked text, and `CanvasCrossCellEditTests`/`test_copy_acrossCells…`
+  rely on the un-separated cross-cell read). Covered by `CanvasTextInputTests.test_textInRange_*`.
 - **PRIVATE API risk:** `SpoilerDustView` uses `CAEmitterBehavior` (`createEmitterBehavior`) for the
   twinkle + finger-attractor explosion — App-Store-review risk, guarded by a live canary test.
 - **View-frame ownership** (the repo-wide rule applies here too): a reusable component lays out against
