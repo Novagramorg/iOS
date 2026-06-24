@@ -254,7 +254,14 @@ private func channelBlacklistControllerEntries(presentationData: PresentationDat
     
     if let participants = participants {
         entries.append(.add(presentationData.theme, presentationData.strings.GroupRemoved_Remove))
-        entries.append(.addInfo(presentationData.theme, isGroup ? presentationData.strings.GroupRemoved_RemoveInfo : presentationData.strings.ChannelRemoved_RemoveInfo))
+        let infoText: String
+        if case .community = peer {
+            //TODO:localize
+            infoText = "Users removed from the community by admins cannot rejoin it via invite links."
+        } else {
+            infoText = isGroup ? presentationData.strings.GroupRemoved_RemoveInfo : presentationData.strings.ChannelRemoved_RemoveInfo
+        }
+        entries.append(.addInfo(presentationData.theme, infoText))
         
         var index: Int32 = 0
         if !participants.isEmpty {

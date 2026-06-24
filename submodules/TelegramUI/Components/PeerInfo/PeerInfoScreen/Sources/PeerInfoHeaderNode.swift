@@ -206,19 +206,6 @@ final class PeerInfoHeaderNode: ASDisplayNode {
     private var currentStarRating: TelegramStarRating?
     private var currentPendingStarRating: TelegramStarPendingRating?
     
-    private func hiddenCommunityStatusText(text: String) -> NSAttributedString {
-        let icon = generateTintedImage(image: generateScaledImage(image: UIImage(bundleImageName: "Chat/Message/Hidden"), size: CGSize(width: 17.0, height: 17.0), opaque: false),
-            color: .white
-        )
-        guard let icon else {
-            return NSAttributedString(string: text)
-        }
-        let result = NSMutableAttributedString(string: " #  \(text)")
-        result.addAttribute(.attachment, value: icon, range: NSRange(location: 1, length: 1))
-        result.addAttribute(.baselineOffset, value: 1.0, range: NSRange(location: 1, length: 1))
-        return result
-    }
-
     init(context: AccountContext, controller: PeerInfoScreenImpl, avatarInitiallyExpanded: Bool, isOpenedFromChat: Bool, isMediaOnly: Bool, isSettings: Bool, isMyProfile: Bool, forumTopicThreadId: Int64?, chatLocation: ChatLocation) {
         self.context = context
         self.controller = controller
@@ -1318,7 +1305,15 @@ final class PeerInfoHeaderNode: ASDisplayNode {
                 subtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(17.0), color: subtitleColor)
                 smallSubtitleAttributes = MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white, shadowColor: titleShadowColor)
                 if statusData.hasHiddenCommunityPrefix {
-                    subtitleAttributedText = self.hiddenCommunityStatusText(text: statusData.text)
+                    let icon = UIImage(bundleImageName: "Chat List/HiddenIcon")?.withRenderingMode(.alwaysTemplate)
+                    if let icon {
+                        let result = NSMutableAttributedString(string: " #  \(statusData.text)")
+                        result.addAttribute(.attachment, value: icon, range: NSRange(location: 1, length: 1))
+                        result.addAttribute(.baselineOffset, value: 1.0, range: NSRange(location: 1, length: 1))
+                        subtitleAttributedText = result
+                    } else {
+                        subtitleAttributedText = NSAttributedString(string: statusData.text)
+                    }
                 }
                 
                 usernameString = ("", MultiScaleTextState.Attributes(font: Font.regular(16.0), color: .white))

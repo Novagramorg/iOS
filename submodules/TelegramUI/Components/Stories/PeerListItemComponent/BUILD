@@ -20,6 +20,7 @@ swift_library(
         "//submodules/TelegramCore",
         "//submodules/Postbox",
         "//submodules/Components/MultilineTextComponent",
+        "//submodules/Components/BundleIconComponent",
         "//submodules/AvatarNode",
         "//submodules/CheckNode",
         "//submodules/TelegramStringFormatting",

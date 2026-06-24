@@ -189,6 +189,11 @@ public enum CommunityViewScreenPresentation: Equatable {
     case fullScreen
 }
 
+public enum CommunityViewScreenDisplayMode: Equatable {
+    case `default`
+    case preview
+}
+
 public enum WallpaperUrlParameter {
     case slug(String, WallpaperPresentationOptions, [UInt32], Int32?, Int32?)
     case color(UIColor)
@@ -1585,6 +1590,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController
     func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
     func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) -> ViewController
+    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation, displayMode: CommunityViewScreenDisplayMode) -> ViewController
     func makeCocoonInfoScreen(context: AccountContext) -> ViewController
     func makeLinkEditController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, text: String, link: String?, apply: @escaping (String?, TelegramMediaWebpage?) -> Void) -> ViewController
 
@@ -1866,6 +1872,26 @@ public struct StickersSearchConfiguration {
     public static func with(appConfiguration: AppConfiguration) -> StickersSearchConfiguration {
         if let data = appConfiguration.data, let suggestOnlyApi = data["stickers_emoji_suggest_only_api"] as? Bool {
             return StickersSearchConfiguration(disableLocalSuggestions: suggestOnlyApi)
+        } else {
+            return .defaultValue
+        }
+    }
+}
+
+public struct CommunitiesConfiguration {
+    static var defaultValue: CommunitiesConfiguration {
+        return CommunitiesConfiguration(peersLimit: 100)
+    }
+    
+    public let peersLimit: Int32
+    
+    fileprivate init(peersLimit: Int32) {
+        self.peersLimit = peersLimit
+    }
+    
+    public static func with(appConfiguration: AppConfiguration) -> CommunitiesConfiguration {
+        if let data = appConfiguration.data, let peersLimit = data["community_peers_limit"] as? Double {
+            return CommunitiesConfiguration(peersLimit: Int32(peersLimit))
         } else {
             return .defaultValue
         }

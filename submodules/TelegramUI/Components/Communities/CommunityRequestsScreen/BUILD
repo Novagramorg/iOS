@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/AccountContext",
+        "//submodules/AnimatedStickerNode",
         "//submodules/TelegramUI/Components/ButtonComponent",
         "//submodules/ComponentFlow",
         "//submodules/Components/MultilineTextComponent",
@@ -20,12 +21,14 @@ swift_library(
         "//submodules/TelegramUI/Components/EdgeEffect",
         "//submodules/SSignalKit/SwiftSignalKit",
         "//submodules/TelegramCore",
+        "//submodules/TelegramAnimatedStickerNode",
         "//submodules/TelegramPresentationData",
         "//submodules/TelegramUI/Components/AlertComponent",
         "//submodules/TelegramUI/Components/Communities/CommunityEditScreen",
         "//submodules/TelegramUI/Components/Communities/CommunityPrivateChatScreen",
         "//submodules/TelegramUI/Components/ListSectionComponent",
         "//submodules/TelegramUI/Components/Stories/PeerListItemComponent",
+        "//submodules/UndoUI",
     ],
     visibility = [
         "//visibility:public",

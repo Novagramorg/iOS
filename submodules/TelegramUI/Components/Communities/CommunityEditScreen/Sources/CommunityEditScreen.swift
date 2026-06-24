@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Display
+import Postbox
 import AccountContext
 import TelegramCore
 import SwiftSignalKit
@@ -8,6 +9,7 @@ import TelegramPresentationData
 import ComponentFlow
 import ViewControllerComponent
 import MultilineTextComponent
+import BundleIconComponent
 import ListSectionComponent
 import ListActionItemComponent
 import ListTextFieldItemComponent
@@ -18,6 +20,8 @@ import AvatarNode
 import MapResourceToAvatarSizes
 import PlainButtonComponent
 import RadialStatusNode
+import PeerListItemComponent
+import PeerSelectionScreen
 
 private enum CommunityAddChatsMode: Equatable {
     case allMembers
@@ -448,6 +452,7 @@ private final class CommunityEditScreenComponent: Component {
         private let titleSection = ComponentView<Empty>()
         private let permissionsSection = ComponentView<Empty>()
         private let managementSection = ComponentView<Empty>()
+        private let chatsSection = ComponentView<Empty>()
         private let deleteSection = ComponentView<Empty>()
 
         private var component: CommunityEditScreenComponent?
@@ -462,6 +467,9 @@ private final class CommunityEditScreenComponent: Component {
 
         private var community: TelegramCommunity?
         private var cachedData: CachedCommunityData?
+        private var linkedPeers: [EnginePeer.Id: EnginePeer] = [:]
+        private var linkedPeerCachedData: [EnginePeer.Id: CachedPeerData] = [:]
+        private var currentLinkedPeerIds: [EnginePeer.Id] = []
         private var currentTitle = ""
         private var initialTitle = ""
         private var selectedMode: CommunityAddChatsMode = .allMembers
@@ -469,11 +477,15 @@ private final class CommunityEditScreenComponent: Component {
         private var didInitializeState = false
         private var isSaving = false
         private var isDeleting = false
+        private var isAddActionInProgress = false
         private var isUpdatingAvatar = false
         private var uploadingAvatarImage: UIImage?
         private var avatarUploadProgress: CGFloat?
 
         private var dataDisposable: Disposable?
+        private let linkedPeersDisposable = MetaDisposable()
+        private let linkedPeerDataDisposable = MetaDisposable()
+        private let addChatDisposable = MetaDisposable()
         private let saveDisposable = MetaDisposable()
         private let deleteDisposable = MetaDisposable()
         private let avatarDisposable = MetaDisposable()
@@ -508,6 +520,9 @@ private final class CommunityEditScreenComponent: Component {
 
         deinit {
             self.dataDisposable?.dispose()
+            self.linkedPeersDisposable.dispose()
+            self.linkedPeerDataDisposable.dispose()
+            self.addChatDisposable.dispose()
             self.saveDisposable.dispose()
             self.deleteDisposable.dispose()
             self.avatarDisposable.dispose()
@@ -574,6 +589,8 @@ private final class CommunityEditScreenComponent: Component {
                 }
                 self.community = community
                 self.cachedData = cachedData as? CachedCommunityData
+                let linkedPeerIds = self.cachedData?.linkedPeers.map(\.peerId) ?? []
+                self.updateLinkedPeerSignals(component: component, ids: linkedPeerIds)
 
                 if let community {
                     let mode = CommunityAddChatsMode(defaultBannedRights: community.defaultBannedRights)
@@ -591,6 +608,56 @@ private final class CommunityEditScreenComponent: Component {
             })
         }
 
+        private func updateLinkedPeerSignals(component: CommunityEditScreenComponent, ids: [EnginePeer.Id]) {
+            if self.currentLinkedPeerIds == ids {
+                return
+            }
+            self.currentLinkedPeerIds = ids
+
+            if ids.isEmpty {
+                self.linkedPeers = [:]
+                self.linkedPeerCachedData = [:]
+                self.linkedPeersDisposable.set(nil)
+                self.linkedPeerDataDisposable.set(nil)
+                self.state?.updated(transition: .immediate)
+                return
+            }
+
+            self.linkedPeersDisposable.set((component.context.engine.data.subscribe(
+                EngineDataMap(ids.map(TelegramEngine.EngineData.Item.Peer.Peer.init(id:)))
+            )
+            |> deliverOnMainQueue).startStrict(next: { [weak self] peersById in
+                guard let self else {
+                    return
+                }
+                var peers: [EnginePeer.Id: EnginePeer] = [:]
+                for id in ids {
+                    if let maybePeer = peersById[id], let peer = maybePeer {
+                        peers[id] = peer
+                    }
+                }
+                self.linkedPeers = peers
+                self.state?.updated(transition: .spring(duration: 0.35))
+            }))
+
+            self.linkedPeerDataDisposable.set((component.context.engine.data.subscribe(
+                EngineDataMap(ids.map(TelegramEngine.EngineData.Item.Peer.CachedData.init(id:)))
+            )
+            |> deliverOnMainQueue).startStrict(next: { [weak self] cachedDataById in
+                guard let self else {
+                    return
+                }
+                var cachedPeerData: [EnginePeer.Id: CachedPeerData] = [:]
+                for id in ids {
+                    if let maybeCachedData = cachedDataById[id], let cachedData = maybeCachedData {
+                        cachedPeerData[id] = cachedData
+                    }
+                }
+                self.linkedPeerCachedData = cachedPeerData
+                self.state?.updated(transition: .spring(duration: 0.35))
+            }))
+        }
+
         private func dismissController() {
             self.environment?.controller()?.dismiss()
         }
@@ -602,7 +669,7 @@ private final class CommunityEditScreenComponent: Component {
             environment.controller()?.present(AlertScreen(
                 context: component.context,
                 title: nil,
-                text: "Something went wrong.",
+                text: environment.strings.Login_UnknownError,
                 actions: [
                     AlertScreen.Action(title: environment.strings.Common_OK, type: .default)
                 ]
@@ -849,6 +916,90 @@ private final class CommunityEditScreenComponent: Component {
             self.pushController(controller)
         }
 
+        private func openPeer(_ peer: EnginePeer) {
+            guard let component = self.component, let environment = self.environment, let navigationController = environment.controller()?.navigationController as? NavigationController else {
+                return
+            }
+            component.context.sharedContext.navigateToChatController(NavigateToChatControllerParams(
+                navigationController: navigationController,
+                context: component.context,
+                chatLocation: .peer(peer),
+                keepStack: .always,
+                forceOpenChat: true
+            ))
+        }
+
+        private func openAddChat() {
+            guard let component = self.component, let environment = self.environment else {
+                return
+            }
+            if self.isSaving || self.isDeleting || self.isAddActionInProgress {
+                return
+            }
+
+            let communitiesConfiguration = CommunitiesConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
+            let linkedPeersCount = Int32(self.cachedData?.linkedPeers.count ?? 0)
+            if linkedPeersCount >= communitiesConfiguration.peersLimit {
+                environment.controller()?.present(AlertScreen(
+                    context: component.context,
+                    title: nil,
+                    text: "Sorry, this community has reached the maximum number of chats.",
+                    actions: [
+                        AlertScreen.Action(title: environment.strings.Common_OK, type: .default)
+                    ]
+                ), in: .window(.root))
+                return
+            }
+
+            self.isAddActionInProgress = true
+            self.state?.updated(transition: .spring(duration: 0.35))
+
+            let excludedPeerIds = Set((self.cachedData?.linkedPeers ?? []).map(\.peerId))
+            self.addChatDisposable.set((component.context.engine.peers.adminedPublicChannels(scope: .forCommunity)
+            |> take(1)
+            |> deliverOnMainQueue).startStrict(next: { [weak self] channels in
+                guard let self else {
+                    return
+                }
+                self.isAddActionInProgress = false
+                self.addChatDisposable.set(nil)
+                self.state?.updated(transition: .spring(duration: 0.35))
+
+                guard let component = self.component, let environment = self.environment else {
+                    return
+                }
+
+                let channels = channels.filter { channel in
+                    !excludedPeerIds.contains(channel.peer.id)
+                }
+                let selectionController = PeerSelectionScreen(
+                    context: component.context,
+                    initialData: PeerSelectionScreen.communityInitialData(channels: channels),
+                    updatedPresentationData: nil,
+                    completion: { [weak self] channel in
+                        guard let self, let component = self.component, let channel else {
+                            return
+                        }
+                        let controller = component.context.sharedContext.makeCommunityAddScreen(
+                            context: component.context,
+                            communityId: component.communityId,
+                            peerId: channel.peer.id,
+                            completed: { [weak self] in
+                                guard let self, let component = self.component else {
+                                    return
+                                }
+                                component.context.account.viewTracker.forceUpdateCachedPeerData(peerId: component.communityId)
+                                self.state?.updated(transition: .spring(duration: 0.35))
+                            }
+                        )
+                        self.environment?.controller()?.present(controller, in: .window(.root))
+                    }
+                )
+                selectionController.navigationPresentation = .modal
+                environment.controller()?.push(selectionController)
+            }))
+        }
+
         private func rightsWithUpdatedMode(_ mode: CommunityAddChatsMode, current: TelegramChatBannedRights?) -> TelegramChatBannedRights {
             var flags = current?.flags ?? TelegramChatBannedRightsFlags()
             switch mode {
@@ -1012,6 +1163,91 @@ private final class CommunityEditScreenComponent: Component {
             )))
         }
 
+        private func chatsHeaderTitle(presentationData: PresentationData) -> String {
+            let count = self.cachedData?.linkedPeers.count ?? 0
+            let formattedCount = presentationStringsFormattedNumber(Int32(clamping: count), presentationData.dateTimeFormat.groupingSeparator)
+            return count == 1 ? "\(formattedCount) CHAT" : "\(formattedCount) CHATS"
+        }
+
+        private func memberCountString(peerId: EnginePeer.Id, presentationData: PresentationData) -> String? {
+            guard let cachedData = self.linkedPeerCachedData[peerId] else {
+                return nil
+            }
+            let count: Int32?
+            if let cachedData = cachedData as? CachedChannelData {
+                count = cachedData.participantsSummary.memberCount
+            } else if let cachedData = cachedData as? CachedGroupData {
+                count = Int32(cachedData.participants?.participants.count ?? 0)
+            } else {
+                count = nil
+            }
+            guard let count else {
+                return nil
+            }
+            let formattedCount = presentationStringsFormattedNumber(count, presentationData.dateTimeFormat.groupingSeparator)
+            return count == 1 ? "\(formattedCount) member" : "\(formattedCount) members"
+        }
+
+        private func addChatItem(
+            theme: PresentationTheme,
+            presentationData: PresentationData
+        ) -> AnyComponentWithIdentity<Empty> {
+            return AnyComponentWithIdentity(id: "addChat", component: AnyComponent(ListActionItemComponent(
+                theme: theme,
+                style: .glass,
+                title: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(
+                        string: "Add Chat to Community",
+                        font: Font.regular(presentationData.listsFontSize.baseDisplaySize),
+                        textColor: theme.list.itemAccentColor
+                    )),
+                    maximumNumberOfLines: 1
+                )),
+                contentInsets: UIEdgeInsets(top: 10.0, left: 0.0, bottom: 10.0, right: 0.0),
+                leftIcon: .custom(AnyComponentWithIdentity(id: "icon", component: AnyComponent(BundleIconComponent(name: "Item List/AddCommunityIcon", tintColor: theme.list.itemAccentColor))), false),
+                accessory: self.isAddActionInProgress ? .activity : nil,
+                action: { [weak self] _ in
+                    self?.openAddChat()
+                },
+                highlighting: (self.isSaving || self.isDeleting || self.isAddActionInProgress) ? .disabled : .default
+            )))
+        }
+
+        private func chatItem(
+            context: AccountContext,
+            peer: EnginePeer,
+            theme: PresentationTheme,
+            presentationData: PresentationData
+        ) -> AnyComponentWithIdentity<Empty> {
+            let subtitle = self.memberCountString(peerId: peer.id, presentationData: presentationData).flatMap {
+                PeerListItemComponent.Subtitle(text: $0, color: .neutral)
+            }
+            return AnyComponentWithIdentity(id: peer.id, component: AnyComponent(PeerListItemComponent(
+                context: context,
+                theme: theme,
+                strings: presentationData.strings,
+                style: .generic,
+                sideInset: 0.0,
+                title: peer.compactDisplayTitle,
+                peer: peer,
+                subtitle: subtitle,
+                subtitleAccessory: .none,
+                presence: nil,
+                rightAccessory: .none,
+                selectionState: .none,
+                isEnabled: !(self.isSaving || self.isDeleting),
+                hasNext: false,
+                extractedTheme: PeerListItemComponent.ExtractedTheme(
+                    inset: 2.0,
+                    background: theme.list.itemBlocksBackgroundColor
+                ),
+                insets: UIEdgeInsets(top: -1.0, left: 0.0, bottom: -1.0, right: 0.0),
+                action: { [weak self] peer, _, _ in
+                    self?.openPeer(peer)
+                }
+            )))
+        }
+
         private func deleteItem(
             theme: PresentationTheme,
             presentationData: PresentationData
@@ -1055,7 +1291,7 @@ private final class CommunityEditScreenComponent: Component {
             let theme = environment.theme
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let sideInset: CGFloat = 16.0 + environment.safeInsets.left
-            let sectionSpacing: CGFloat = 28.0
+            let sectionSpacing: CGFloat = 24.0
 
             self.backgroundColor = theme.list.blocksBackgroundColor
             self.scrollView.backgroundColor = theme.list.blocksBackgroundColor
@@ -1093,8 +1329,8 @@ private final class CommunityEditScreenComponent: Component {
                     }
                     transition.setFrame(view: avatarHeaderView, frame: CGRect(origin: CGPoint(x: 0.0, y: contentHeight), size: avatarHeaderSize))
                 }
-                contentHeight += avatarHeaderSize.height + 32.0
             }
+            contentHeight += 179.0
 
             let titleSectionSize = self.titleSection.update(
                 transition: transition,
@@ -1175,11 +1411,53 @@ private final class CommunityEditScreenComponent: Component {
                 }
                 transition.setFrame(view: permissionsSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: permissionsSectionSize))
             }
-            contentHeight += permissionsSectionSize.height + 46.0
+            contentHeight += permissionsSectionSize.height
+            contentHeight += sectionSpacing
 
             let adminsCount = self.cachedData?.adminsCount
             let removedUsersCount = self.cachedData?.kickedCount
             let pendingRequests = self.cachedData?.pendingRequests
+            var managementItems: [AnyComponentWithIdentity<Empty>] = [
+                self.managementItem(
+                    id: "administrators",
+                    title: "Administrators",
+                    icon: self.cachedAdminsIcon,
+                    count: adminsCount,
+                    countStyle: .plain,
+                    theme: theme,
+                    presentationData: presentationData,
+                    action: { [weak self] in
+                        self?.openAdministrators()
+                    }
+                )
+            ]
+            if let pendingRequests, pendingRequests > 0 {
+                managementItems.append(self.managementItem(
+                    id: "pendingRequests",
+                    title: "Pending Requests",
+                    icon: self.cachedRequestsIcon,
+                    count: pendingRequests,
+                    countStyle: .badge,
+                    theme: theme,
+                    presentationData: presentationData,
+                    action: { [weak self] in
+                        self?.openPendingRequests()
+                    }
+                ))
+            }
+            managementItems.append(self.managementItem(
+                id: "removedUsers",
+                title: "Removed Users",
+                icon: self.cachedBannedIcon,
+                count: removedUsersCount,
+                countStyle: .plain,
+                theme: theme,
+                presentationData: presentationData,
+                action: { [weak self] in
+                    self?.openRemovedUsers()
+                }
+            ))
+
             let managementSectionSize = self.managementSection.update(
                 transition: transition,
                 component: AnyComponent(ListSectionComponent(
@@ -1187,44 +1465,7 @@ private final class CommunityEditScreenComponent: Component {
                     style: .glass,
                     header: nil,
                     footer: nil,
-                    items: [
-                        self.managementItem(
-                            id: "administrators",
-                            title: "Administrators",
-                            icon: self.cachedAdminsIcon,
-                            count: adminsCount,
-                            countStyle: .plain,
-                            theme: theme,
-                            presentationData: presentationData,
-                            action: { [weak self] in
-                                self?.openAdministrators()
-                            }
-                        ),
-                        self.managementItem(
-                            id: "pendingRequests",
-                            title: "Pending Requests",
-                            icon: self.cachedRequestsIcon,
-                            count: pendingRequests,
-                            countStyle: .badge,
-                            theme: theme,
-                            presentationData: presentationData,
-                            action: { [weak self] in
-                                self?.openPendingRequests()
-                            }
-                        ),
-                        self.managementItem(
-                            id: "removedUsers",
-                            title: "Removed Users",
-                            icon: self.cachedBannedIcon,
-                            count: removedUsersCount,
-                            countStyle: .plain,
-                            theme: theme,
-                            presentationData: presentationData,
-                            action: { [weak self] in
-                                self?.openRemovedUsers()
-                            }
-                        )
-                    ]
+                    items: managementItems
                 )),
                 environment: {},
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
@@ -1236,6 +1477,53 @@ private final class CommunityEditScreenComponent: Component {
                 transition.setFrame(view: managementSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: managementSectionSize))
             }
             contentHeight += managementSectionSize.height
+            contentHeight += sectionSpacing
+
+            var chatItems: [AnyComponentWithIdentity<Empty>] = [
+                self.addChatItem(
+                    theme: theme,
+                    presentationData: presentationData
+                )
+            ]
+            let linkedPeerIds = self.cachedData?.linkedPeers.map(\.peerId) ?? []
+            for peerId in linkedPeerIds {
+                guard let peer = self.linkedPeers[peerId] else {
+                    continue
+                }
+                chatItems.append(self.chatItem(
+                    context: component.context,
+                    peer: peer,
+                    theme: theme,
+                    presentationData: presentationData
+                ))
+            }
+
+            let chatsSectionSize = self.chatsSection.update(
+                transition: transition,
+                component: AnyComponent(ListSectionComponent(
+                    theme: theme,
+                    style: .glass,
+                    header: AnyComponent(MultilineTextComponent(
+                        text: .plain(NSAttributedString(
+                            string: self.chatsHeaderTitle(presentationData: presentationData),
+                            font: Font.regular(presentationData.listsFontSize.itemListBaseHeaderFontSize),
+                            textColor: theme.list.freeTextColor
+                        )),
+                        maximumNumberOfLines: 1
+                    )),
+                    footer: nil,
+                    items: chatItems
+                )),
+                environment: {},
+                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+            )
+            if let chatsSectionView = self.chatsSection.view {
+                if chatsSectionView.superview == nil {
+                    self.scrollView.addSubview(chatsSectionView)
+                }
+                transition.setFrame(view: chatsSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: chatsSectionSize))
+            }
+            contentHeight += chatsSectionSize.height
             contentHeight += sectionSpacing
 
             let deleteSectionSize = self.deleteSection.update(

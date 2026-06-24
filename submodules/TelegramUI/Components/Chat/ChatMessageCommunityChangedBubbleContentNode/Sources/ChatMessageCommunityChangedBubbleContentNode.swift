@@ -13,6 +13,7 @@ import AvatarNode
 import ChatMessageBubbleContentNode
 import ChatMessageItemCommon
 import ChatControllerInteraction
+import Markdown
 
 private func communityChangedPeer(message: EngineRawMessage) -> (EnginePeer.Id, TelegramCommunity)? {
     for media in message.media {
@@ -129,15 +130,24 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                 let text: String
                 if let community {
                     if item.message.author?.id == item.context.account.peerId {
-                        text = "You added this group to \(community.title) community."
+                        text = "You added this group to **\(community.title)** community."
                     } else {
-                        text = "\(authorName) added this group to \(community.title) community."
+                        text = "\(authorName) added this group to **\(community.title)** community."
                     }
                 } else {
                     text = "\(authorName) added this group to a community."
                 }
                 
-                let (subtitleLayout, subtitleApply) = makeSubtitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: text, font: Font.regular(13.0), textColor: primaryTextColor, paragraphAlignment: .center), backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
+                let attributedText = parseMarkdownIntoAttributedString(text, attributes: MarkdownAttributes(
+                    body: MarkdownAttributeSet(font: Font.regular(13.0), textColor: primaryTextColor),
+                    bold: MarkdownAttributeSet(font: Font.semibold(13.0), textColor: primaryTextColor),
+                    link: MarkdownAttributeSet(font: Font.regular(13.0), textColor: primaryTextColor),
+                    linkAttribute: { url in
+                        return ("URL", url)
+                    }
+                ), textAlignment: .center)
+                
+                let (subtitleLayout, subtitleApply) = makeSubtitleLayout(TextNodeLayoutArguments(attributedString: attributedText, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 
                 let (buttonTitleLayout, buttonTitleApply) = makeButtonTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: "View", font: Font.semibold(15.0), textColor: primaryTextColor, paragraphAlignment: .center), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: width - 32.0, height: CGFloat.greatestFiniteMagnitude), alignment: .center, cutout: nil, insets: UIEdgeInsets()))
                 

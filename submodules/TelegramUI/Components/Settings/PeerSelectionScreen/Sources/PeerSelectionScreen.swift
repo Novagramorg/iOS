@@ -105,7 +105,11 @@ final class PeerSelectionScreenComponent: Component {
             case let .item(peer, subscriberCount, _):
                 let statusText: String
                 if let subscriberCount, subscriberCount != 0 {
-                    statusText = listNode.presentationData.strings.Conversation_StatusSubscribers(Int32(subscriberCount))
+                    if case let .channel(channel) = peer, case .broadcast = channel.info {
+                        statusText = listNode.presentationData.strings.Conversation_StatusSubscribers(Int32(subscriberCount))
+                    } else {
+                        statusText = listNode.presentationData.strings.Conversation_StatusMembers(Int32(subscriberCount))
+                    }
                 } else {
                     statusText = listNode.presentationData.strings.Channel_Status
                 }
@@ -272,22 +276,31 @@ final class PeerSelectionScreenComponent: Component {
         ) -> CGFloat {
             let rightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
             
-            let closeTitle: String = strings.Common_Cancel
+            let title: String
+            let subtitle: String
+            switch component.initialData.mode {
+            case .personalChannel:
+                title = strings.Settings_PersonalChannelSelectTitle
+                subtitle = strings.Settings_PersonalChannelSelectSubtitle
+            case .community:
+                title = "Add a Chat"
+                subtitle = "Select a group to add to this community"
+            }
             
             let headerContent: ChatListHeaderComponent.Content? = ChatListHeaderComponent.Content(
                 title: "",
                 navigationBackTitle: nil,
                 titleComponent: AnyComponent(VStack([
                     AnyComponentWithIdentity(id: 0, component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: strings.Settings_PersonalChannelSelectTitle, font: Font.semibold(17.0), textColor: theme.rootController.navigationBar.primaryTextColor))
+                        text: .plain(NSAttributedString(string: title, font: Font.semibold(17.0), textColor: theme.rootController.navigationBar.primaryTextColor))
                     ))),
                     AnyComponentWithIdentity(id: 1, component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: strings.Settings_PersonalChannelSelectSubtitle, font: Font.regular(12.0), textColor: theme.rootController.navigationBar.secondaryTextColor))
+                        text: .plain(NSAttributedString(string: subtitle, font: Font.regular(12.0), textColor: theme.rootController.navigationBar.secondaryTextColor))
                     )))
                 ], spacing: 2.0)),
                 chatListTitle: nil,
                 leftButton: isModal ? AnyComponentWithIdentity(id: "close", component: AnyComponent(NavigationButtonComponent(
-                    content: .text(title: closeTitle, isBold: false),
+                    content: .icon(imageName: "Navigation/Close"),
                     pressed: { [weak self] _ in
                         guard let self else {
                             return
@@ -408,7 +421,7 @@ final class PeerSelectionScreenComponent: Component {
             }
             
             if self.component == nil {
-                if let channels = component.initialData.channels, !channels.isEmpty {
+                if let channels = component.initialData.channels {
                     self.channels = channels.map { peer in
                         return PeerSelectionScreen.ChannelInfo(peer: peer.peer, subscriberCount: peer.subscriberCount)
                     }
@@ -575,7 +588,7 @@ final class PeerSelectionScreenComponent: Component {
             contentListNode.update(size: availableSize, insets: UIEdgeInsets(top: navigationHeight, left: environment.safeInsets.left, bottom: listBottomInset, right: environment.safeInsets.right), transition: transition)
             
             var entries: [ContentEntry] = []
-            if component.initialData.channelId != nil && self.searchQuery.isEmpty {
+            if component.initialData.mode == .personalChannel && component.initialData.channelId != nil && self.searchQuery.isEmpty {
                 entries.append(.hide)
             }
             if let channels = self.channels {
@@ -694,13 +707,20 @@ final class PeerSelectionScreenComponent: Component {
 }
 
 public final class PeerSelectionScreen: ViewControllerComponentContainer {
+    public enum Mode {
+        case personalChannel
+        case community
+    }
+
     public final class InitialData {
         public let channelId: EnginePeer.Id?
         public let channels: [TelegramAdminedPublicChannel]?
+        public let mode: Mode
         
-        init(channelId: EnginePeer.Id?, channels: [TelegramAdminedPublicChannel]?) {
+        init(channelId: EnginePeer.Id?, channels: [TelegramAdminedPublicChannel]?, mode: Mode) {
             self.channelId = channelId
             self.channels = channels
+            self.mode = mode
         }
     }
     
@@ -757,10 +777,14 @@ public final class PeerSelectionScreen: ViewControllerComponentContainer {
             if case let .known(value) = personalChannel, let value {
                 channelId = value.peerId
             }
-            return InitialData(channelId: channelId, channels: channels)
+            return InitialData(channelId: channelId, channels: channels, mode: .personalChannel)
         }
     }
-    
+
+    public static func communityInitialData(channels: [TelegramAdminedPublicChannel]) -> InitialData {
+        return InitialData(channelId: nil, channels: channels, mode: .community)
+    }
+
     @objc private func cancelPressed() {
         self.dismiss()
     }

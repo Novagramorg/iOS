@@ -4,9 +4,55 @@ import AsyncDisplayKit
 import Display
 import ComponentFlow
 import ComponentDisplayAdapters
+import ListSectionComponent
 
 public protocol _ListItemComponentAdaptorItemGenerator: AnyObject, Equatable {
     func item() -> ListViewItem
+}
+
+private final class HighlightTrackingTapGestureRecognizer: UITapGestureRecognizer {
+    var highlightChanged: ((CGPoint?, Bool) -> Void)?
+
+    private var highlightedPoint: CGPoint?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        if let touch = touches.first {
+            let point = touch.location(in: self.view)
+            self.highlightedPoint = point
+            self.highlightChanged?(point, true)
+        }
+
+        super.touchesBegan(touches, with: event)
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        self.clearHighlight()
+
+        super.touchesEnded(touches, with: event)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        self.clearHighlight()
+
+        super.touchesCancelled(touches, with: event)
+    }
+
+    override func reset() {
+        self.clearHighlight()
+
+        super.reset()
+    }
+
+    func cancelHighlight() {
+        self.clearHighlight()
+    }
+
+    private func clearHighlight() {
+        if let highlightedPoint = self.highlightedPoint {
+            self.highlightedPoint = nil
+            self.highlightChanged?(highlightedPoint, false)
+        }
+    }
 }
 
 public final class ListItemComponentAdaptor: Component {
@@ -21,6 +67,8 @@ public final class ListItemComponentAdaptor: Component {
     private let isEqualImpl: (AnyObject) -> Bool
     private let itemImpl: () -> ListViewItem
     private let params: ListViewItemLayoutParams
+    private let separatorInset: CGFloat
+    private let separatorAlpha: CGFloat
     private let action: (() -> Void)?
     private let actionMode: ActionMode
     private let tag: AnyObject?
@@ -28,6 +76,8 @@ public final class ListItemComponentAdaptor: Component {
     public init<ItemGeneratorType: ItemGenerator>(
         itemGenerator: ItemGeneratorType,
         params: ListViewItemLayoutParams,
+        separatorInset: CGFloat = 0.0,
+        separatorAlpha: CGFloat = 1.0,
         action: (() -> Void)? = nil,
         actionMode: ActionMode = .button,
         tag: AnyObject? = nil
@@ -44,6 +94,8 @@ public final class ListItemComponentAdaptor: Component {
             return itemGenerator.item()
         }
         self.params = params
+        self.separatorInset = separatorInset
+        self.separatorAlpha = separatorAlpha
         self.action = action
         self.actionMode = actionMode
         self.tag = tag
@@ -54,6 +106,12 @@ public final class ListItemComponentAdaptor: Component {
             return false
         }
         if lhs.params != rhs.params {
+            return false
+        }
+        if lhs.separatorInset != rhs.separatorInset {
+            return false
+        }
+        if lhs.separatorAlpha != rhs.separatorAlpha {
             return false
         }
         if (lhs.action == nil) != (rhs.action == nil) {
@@ -68,12 +126,17 @@ public final class ListItemComponentAdaptor: Component {
         return true
     }
     
-    public final class View: UIView, ComponentTaggedView {
+    public final class View: UIView, ComponentTaggedView, ListSectionComponent.ChildView {
         private var button: HighlightTrackingButton?
-        private var tapGestureRecognizer: UITapGestureRecognizer?
+        private var tapGestureRecognizer: HighlightTrackingTapGestureRecognizer?
         public var itemNode: ListViewItemNode?
         
         private var component: ListItemComponentAdaptor?
+
+        public var customUpdateIsHighlighted: ((Bool) -> Void)?
+        public var enumerateSiblings: (((UIView) -> Void) -> Void)?
+        public private(set) var separatorInset: CGFloat = 0.0
+        public private(set) var separatorAlpha: CGFloat = 1.0
         
         public func matches(tag: Any) -> Bool {
             if let component = self.component, let componentTag = component.tag {
@@ -126,19 +189,34 @@ public final class ListItemComponentAdaptor: Component {
 
             if component.action != nil && component.actionMode == .gesture {
                 if self.tapGestureRecognizer == nil {
-                    let tapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:)))
+                    let tapGestureRecognizer = HighlightTrackingTapGestureRecognizer(target: self, action: #selector(self.tapGesture(_:)))
                     tapGestureRecognizer.cancelsTouchesInView = false
+                    tapGestureRecognizer.highlightChanged = { [weak self] point, isHighlighted in
+                        guard let self, let itemNode = self.itemNode else {
+                            return
+                        }
+                        let itemPoint: CGPoint
+                        if let point {
+                            itemPoint = self.convert(point, to: itemNode.view)
+                        } else {
+                            itemPoint = itemNode.bounds.center
+                        }
+                        itemNode.setHighlighted(isHighlighted, at: itemPoint, animated: !isHighlighted)
+                    }
                     self.tapGestureRecognizer = tapGestureRecognizer
                     self.addGestureRecognizer(tapGestureRecognizer)
                 }
             } else if let tapGestureRecognizer = self.tapGestureRecognizer {
                 self.tapGestureRecognizer = nil
+                tapGestureRecognizer.cancelHighlight()
                 self.removeGestureRecognizer(tapGestureRecognizer)
             }
         }
         
         func update(component: ListItemComponentAdaptor, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
+            self.separatorInset = component.separatorInset
+            self.separatorAlpha = component.separatorAlpha
             
             let item = component.itemImpl()
             

@@ -18,11 +18,13 @@ public enum CommunityPeerLinkError {
     case generic
     case adminRequired
     case requestCreated
+    case peersTooMuch
 }
 
 public enum CommunityPeerRequestApprovalError {
     case generic
     case adminRequired
+    case peersTooMuch
 }
 
 public enum CommunityParticipantBannedError {
@@ -81,19 +83,6 @@ public struct CommunityParticipantJoinedChats: Equatable {
         self.creatorChatIds = creatorChatIds
         self.joinedChatIds = joinedChatIds
         self.peers = peers
-    }
-}
-
-private func apiPeer(_ peerId: PeerId) -> Api.Peer? {
-    switch peerId.namespace {
-    case Namespaces.Peer.CloudUser:
-        return .peerUser(.init(userId: peerId.id._internalGetInt64Value()))
-    case Namespaces.Peer.CloudGroup:
-        return .peerChat(.init(chatId: peerId.id._internalGetInt64Value()))
-    case Namespaces.Peer.CloudChannel:
-        return .peerChannel(.init(channelId: peerId.id._internalGetInt64Value()))
-    default:
-        return nil
     }
 }
 
@@ -251,6 +240,8 @@ func _internal_toggleCommunityPeerLink(account: Account, communityId: PeerId, pe
                 return .requestCreated
             case "CHAT_ADMIN_REQUIRED":
                 return .adminRequired
+            case "COMMUNITY_PEERS_TOO_MUCH":
+                return .peersTooMuch
             default:
                 return .generic
             }
@@ -333,10 +324,14 @@ func _internal_toggleCommunityPeerLinkRequestApproval(account: Account, communit
         let flags: Int32 = approve ? 0 : (1 << 0)
         return account.network.request(Api.functions.communities.togglePeerLinkRequestApproval(flags: flags, community: inputCommunity, peer: inputPeer))
         |> mapError { error -> CommunityPeerRequestApprovalError in
-            if error.errorDescription == "CHAT_ADMIN_REQUIRED" {
+            switch error.errorDescription {
+            case "CHAT_ADMIN_REQUIRED":
                 return .adminRequired
+            case "COMMUNITY_PEERS_TOO_MUCH":
+                return .peersTooMuch
+            default:
+                return .generic
             }
-            return .generic
         }
         |> ignoreValues
     }
@@ -353,10 +348,14 @@ func _internal_toggleAllCommunityPeerLinkRequestApproval(account: Account, commu
         let flags: Int32 = approve ? 0 : (1 << 0)
         return account.network.request(Api.functions.communities.toggleAllPeerLinkRequestApproval(flags: flags, community: inputCommunity))
         |> mapError { error -> CommunityPeerRequestApprovalError in
-            if error.errorDescription == "CHAT_ADMIN_REQUIRED" {
+            switch error.errorDescription {
+            case "CHAT_ADMIN_REQUIRED":
                 return .adminRequired
+            case "COMMUNITY_PEERS_TOO_MUCH":
+                return .peersTooMuch
+            default:
+                return .generic
             }
-            return .generic
         }
         |> ignoreValues
     }
@@ -396,63 +395,6 @@ func _internal_toggleCommunityCollapsedInDialogs(account: Account, communityId: 
             return .generic
         }
         |> mapToSignal { updates -> Signal<Never, CommunityCollapsedInDialogsError> in
-//            let updatedUpdates: Api.Updates
-//            let communityIdValue = communityId.id._internalGetInt64Value()
-//            let updatedCollapsedInDialogs: Api.Bool = collapsed ? .boolTrue : .boolFalse
-//            switch updates {
-//            case let .updates(updatesData):
-//                let updatedChats = updatesData.chats.map { chat -> Api.Chat in
-//                    if case let .community(communityData) = chat, communityData.id == communityIdValue {
-//                        return .community(Api.Chat.Cons_community(
-//                            flags: communityData.flags,
-//                            flags2: communityData.flags2 | (1 << 20),
-//                            id: communityData.id,
-//                            accessHash: communityData.accessHash,
-//                            title: communityData.title,
-//                            photo: communityData.photo,
-//                            date: communityData.date,
-//                            adminRights: communityData.adminRights,
-//                            defaultBannedRights: communityData.defaultBannedRights
-//                        ))
-//                    }
-//                    return chat
-//                }
-//                updatedUpdates = .updates(Api.Updates.Cons_updates(
-//                    updates: updatesData.updates,
-//                    users: updatesData.users,
-//                    chats: updatedChats,
-//                    date: updatesData.date,
-//                    seq: updatesData.seq
-//                ))
-//            case let .updatesCombined(updatesData):
-//                let updatedChats = updatesData.chats.map { chat -> Api.Chat in
-//                    if case let .community(communityData) = chat, communityData.id == communityIdValue {
-//                        return .community(Api.Chat.Cons_community(
-//                            flags: communityData.flags,
-//                            flags2: communityData.flags2 | (1 << 20),
-//                            collapsedInDialogs: updatedCollapsedInDialogs,
-//                            id: communityData.id,
-//                            accessHash: communityData.accessHash,
-//                            title: communityData.title,
-//                            photo: communityData.photo,
-//                            date: communityData.date,
-//                            adminRights: communityData.adminRights,
-//                            defaultBannedRights: communityData.defaultBannedRights
-//                        ))
-//                    }
-//                    return chat
-//                }
-//                updatedUpdates = .updatesCombined(Api.Updates.Cons_updatesCombined(
-//                    updates: updatesData.updates,
-//                    users: updatesData.users,
-//                    chats: updatedChats,
-//                    date: updatesData.date,
-//                    seqStart: updatesData.seqStart,
-//                    seq: updatesData.seq
-//                ))
-//            default:
-//                updatedUpdates = updates
-//            }
             account.stateManager.addUpdates(updates)
             return account.postbox.transaction { transaction -> Void in
                 if var community = transaction.getPeer(communityId) as? TelegramCommunity {

@@ -131,10 +131,19 @@ func chatHistoryViewForLocation(
                 } else {
                     isPossibleIntroLoaded = .single(true)
                 }
+
+                let isPeerHiddenByCollapsedCommunity: Signal<Bool, NoError>
+                if case let .peer(peerId) = chatLocation {
+                    isPeerHiddenByCollapsedCommunity = context.engine.peers.isPeerHiddenByCollapsedCommunity(peerId: peerId)
+                    |> distinctUntilChanged
+                } else {
+                    isPeerHiddenByCollapsedCommunity = .single(false)
+                }
             
-                return combineLatest(signal, isPossibleIntroLoaded)
-                |> map { viewData, isPossibleIntroLoaded -> ChatHistoryViewUpdate in
+                return combineLatest(signal, isPossibleIntroLoaded, isPeerHiddenByCollapsedCommunity)
+                |> map { viewData, isPossibleIntroLoaded, isPeerHiddenByCollapsedCommunity -> ChatHistoryViewUpdate in
                     let (view, updateType, initialData) = viewData
+                    let effectiveIsAddedToChatList = view.isAddedToChatList || isPeerHiddenByCollapsedCommunity
                     
                     let (cachedData, cachedDataMessages, readStateData) = extractAdditionalData(view: view, chatLocation: chatLocation)
                     
@@ -161,7 +170,7 @@ func chatHistoryViewForLocation(
                             }
                         } else if case let .replyThread(message) = chatLocation, message.isMonoforumPost {
                             canScrollToRead = true
-                        } else if view.isAddedToChatList {
+                        } else if effectiveIsAddedToChatList {
                             canScrollToRead = true
                         } else {
                             canScrollToRead = false
@@ -212,10 +221,10 @@ func chatHistoryViewForLocation(
                                     }
                                 }
                             }
-                        } else if view.isAddedToChatList, tag == nil, let historyScrollState = (initialData?.storedInterfaceState).flatMap(_internal_decodeStoredChatInterfaceState).flatMap(ChatInterfaceState.parse)?.historyScrollState {
+                        } else if effectiveIsAddedToChatList, tag == nil, let historyScrollState = (initialData?.storedInterfaceState).flatMap(_internal_decodeStoredChatInterfaceState).flatMap(ChatInterfaceState.parse)?.historyScrollState {
                             scrollPosition = .positionRestoration(index: historyScrollState.messageIndex, relativeOffset: CGFloat(historyScrollState.relativeOffset))
                         } else {
-                            if let _ = chatLocation.peerId, !view.isAddedToChatList {
+                            if let _ = chatLocation.peerId, !effectiveIsAddedToChatList {
                                 if view.holeEarlier && view.entries.count <= 2 {
                                     fadeIn = true
                                     return .Loading(initialData: combinedInitialData, type: .Generic(type: updateType))

@@ -4364,7 +4364,11 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     }
 
     public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) -> ViewController {
-        return CommunityViewScreen(context: context, communityId: communityId, style: style, presentation: presentation)
+        return self.makeCommunityViewScreen(context: context, communityId: communityId, style: style, presentation: presentation, displayMode: .default)
+    }
+
+    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation, displayMode: CommunityViewScreenDisplayMode) -> ViewController {
+        return CommunityViewScreen(context: context, communityId: communityId, style: style, presentation: presentation, displayMode: displayMode)
     }
 
     public func makeCocoonInfoScreen(context: AccountContext) -> ViewController {

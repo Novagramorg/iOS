@@ -9,6 +9,13 @@ public protocol ListSectionComponentChildView: AnyObject {
     var customUpdateIsHighlighted: ((Bool) -> Void)? { get set }
     var enumerateSiblings: (((UIView) -> Void) -> Void)? { get set }
     var separatorInset: CGFloat { get }
+    var separatorAlpha: CGFloat { get }
+}
+
+public extension ListSectionComponentChildView {
+    var separatorAlpha: CGFloat {
+        return 1.0
+    }
 }
 
 public final class ListSectionContentView: UIView {
@@ -162,6 +169,8 @@ public final class ListSectionContentView: UIView {
             cornerRadius = 26.0
         case .legacy:
             cornerRadius = 11.0
+        case .plain:
+            cornerRadius = 0.0
         }
         
         var innerContentHeight: CGFloat = 0.0
@@ -204,9 +213,11 @@ public final class ListSectionContentView: UIView {
                     }
                 }
                 var separatorInset: CGFloat = 0.0
-                let separatorRightInset: CGFloat = configuration.style == .glass ? 16.0 : 0.0
+                var itemSeparatorAlpha: CGFloat = 1.0
+                let separatorRightInset: CGFloat = [.glass, .plain].contains(configuration.style) ? 16.0 : 0.0
                 if let itemComponentView = itemComponentView as? ListSectionComponentChildView {
                     separatorInset = itemComponentView.separatorInset
+                    itemSeparatorAlpha = itemComponentView.separatorAlpha
                 }
                 
                 let itemSeparatorFrame = CGRect(origin: CGPoint(x: separatorInset, y: itemFrame.maxY - UIScreenPixel), size: CGSize(width: width - separatorInset - separatorRightInset, height: UIScreenPixel))
@@ -238,7 +249,7 @@ public final class ListSectionContentView: UIView {
                 let separatorAlpha: CGFloat
                 if configuration.displaySeparators {
                     if index != readyItems.count - 1 {
-                        separatorAlpha = 1.0
+                        separatorAlpha = itemSeparatorAlpha
                     } else {
                         separatorAlpha = 0.0
                     }
@@ -340,6 +351,7 @@ public final class ListSectionComponent: Component {
     public enum Style {
         case glass
         case legacy
+        case plain
     }
     
     public let theme: PresentationTheme
@@ -721,4 +733,3 @@ public final class ListSubSectionComponent: Component {
         return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
-

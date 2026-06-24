@@ -474,6 +474,8 @@ public class ChatListItem: ListViewItem {
             public static let toggleUnread = Actions(rawValue: 1 << 0)
             public static let delete = Actions(rawValue: 1 << 1)
             public static let togglePinned = Actions(rawValue: 1 << 2)
+            public static let remove = Actions(rawValue: 1 << 3)
+            public static let toggleMuted = Actions(rawValue: 1 << 4)
         }
         
         case custom(Actions)
@@ -494,6 +496,7 @@ public class ChatListItem: ListViewItem {
     let interaction: ChatListNodeInteraction
     let useCommunityViewLayout: Bool
     let hideCommunityAvatarBadge: Bool
+    let displayHiddenPeerIcon: Bool
     let communityViewHasNext: Bool?
     
     public let selectable: Bool = true
@@ -517,7 +520,7 @@ public class ChatListItem: ListViewItem {
         }
     }
     
-    public init(presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enabledContextActions: EnabledContextActions?, hiddenOffset: Bool, interaction: ChatListNodeInteraction, useCommunityViewLayout: Bool = false, hideCommunityAvatarBadge: Bool = false, communityViewHasNext: Bool? = nil) {
+    public init(presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enabledContextActions: EnabledContextActions?, hiddenOffset: Bool, interaction: ChatListNodeInteraction, useCommunityViewLayout: Bool = false, hideCommunityAvatarBadge: Bool = false, displayHiddenPeerIcon: Bool = false, communityViewHasNext: Bool? = nil) {
         self.presentationData = presentationData
         self.chatListLocation = chatListLocation
         self.filterData = filterData
@@ -533,6 +536,7 @@ public class ChatListItem: ListViewItem {
         self.interaction = interaction
         self.useCommunityViewLayout = useCommunityViewLayout
         self.hideCommunityAvatarBadge = hideCommunityAvatarBadge
+        self.displayHiddenPeerIcon = displayHiddenPeerIcon
         self.communityViewHasNext = communityViewHasNext
     }
     
@@ -1387,6 +1391,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     private var communityAvatarBadgeBackgroundView: GlassBackgroundView?
     private var communityAvatarBadgeIconView: GlassBackgroundView.ContentImageView?
     public let avatarNode: AvatarNode
+    private var hiddenPeerIconView: UIImageView?
     var avatarIconView: ComponentHostView<Empty>?
     var avatarIconComponent: EmojiStatusComponent?
     var avatarVideoNode: AvatarVideoNode?
@@ -1814,7 +1819,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             self.avatarNode.view.addGestureRecognizer(avatarTapRecognizer)
         }
     }
-    
+
     deinit {
         self.cachedDataDisposable.dispose()
     }
@@ -2035,8 +2040,28 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             } else {
                 avatarClipStyle = .round
             }
+
+            let avatarCutoutRect: CGRect?
+            if item.displayHiddenPeerIcon {
+                let iconSize = CGSize(width: 18.0, height: 18.0)
+                let iconFrame = CGRect(origin: CGPoint(
+                    x: avatarDiameter - iconSize.width - 2.0,
+                    y: avatarDiameter - iconSize.height - 2.0
+                ), size: iconSize)
+                avatarCutoutRect = CGRect(
+                    origin: CGPoint(
+                        x: iconFrame.minX,
+                        y: avatarDiameter - iconFrame.maxY
+                    ),
+                    size: iconFrame.size
+                ).insetBy(dx: -1.0 - UIScreenPixel, dy: -1.0 - UIScreenPixel)
+            } else {
+                avatarCutoutRect = nil
+            }
             
-            if avatarPeer.smallProfileImage != nil && overrideImage == nil {
+            if item.useCommunityViewLayout {
+                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter), cutoutRect: avatarCutoutRect)
+            } else if avatarPeer.smallProfileImage != nil && overrideImage == nil {
                 self.avatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter))
             } else {
                 self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: 60.0, height: 60.0))
@@ -3923,10 +3948,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                 }
                             } else if promoInfo == nil {
                                 if case let .peer(peerData) = item.content, case .community = peerData.peer.peer {
-                                    //TODO:localize
                                     peerRevealOptions = [
                                         ItemListRevealOption(key: isMuted ? RevealOptionKey.unmute.rawValue : RevealOptionKey.mute.rawValue, title: isMuted ? item.presentationData.strings.ChatList_Unmute : item.presentationData.strings.ChatList_Mute, icon: isMuted ? unmuteIcon : muteIcon, color: item.presentationData.theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor),
-                                        ItemListRevealOption(key: RevealOptionKey.ungroup.rawValue, title: "Ungroup", icon: ungroupCommunityIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor)
+                                        ItemListRevealOption(key: RevealOptionKey.ungroup.rawValue, title: item.presentationData.strings.ChatList_Context_Ungroup, icon: ungroupCommunityIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor)
                                     ]
                                 } else {
                                     peerRevealOptions = revealOptions(strings: item.presentationData.strings, theme: item.presentationData.theme, isPinned: isPinned, isMuted: !isAccountPeer ? isMuted : nil, location: item.chatListLocation, peerId: renderedPeer.peerId, accountPeerId: item.context.account.peerId, canDelete: true, isEditing: item.editing, filterData: item.filterData)
@@ -3958,8 +3982,14 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                                     peerLeftRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.toggleMarkedUnread.rawValue, title: item.presentationData.strings.DialogList_Unread, icon: unreadIcon, color: item.presentationData.theme.list.itemDisclosureActions.accent.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.accent.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
                                 }
                             }
+                            if actions.contains(.toggleMuted) {
+                                peerRevealOptions.append(ItemListRevealOption(key: isMuted ? RevealOptionKey.unmute.rawValue : RevealOptionKey.mute.rawValue, title: isMuted ? item.presentationData.strings.ChatList_Unmute : item.presentationData.strings.ChatList_Mute, icon: isMuted ? unmuteIcon : muteIcon, color: item.presentationData.theme.list.itemDisclosureActions.neutral2.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.neutral2.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
+                            }
                             if actions.contains(.delete) {
                                 peerRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: item.presentationData.strings.Common_Delete, icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
+                            } else if actions.contains(.remove) {
+                                //TODO:localize
+                                peerRevealOptions.append(ItemListRevealOption(key: RevealOptionKey.delete.rawValue, title: "Remove", icon: deleteIcon, color: item.presentationData.theme.list.itemDisclosureActions.destructive.fillColor, iconColor: item.presentationData.theme.list.itemDisclosureActions.destructive.foregroundColor, textColor: item.presentationData.theme.chatList.dateTextColor))
                             }
                         }
                     } else {
@@ -4209,7 +4239,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         communityAvatarBadgeBackgroundView.update(size: badgeSize, cornerRadius: badgeSize.height * 0.5, isDark: item.presentationData.theme.overallDarkAppearance, tintColor: .init(kind: .panel), transition: ComponentTransition(transition))
                         transition.updateFrame(view: communityAvatarBadgeBackgroundView, frame: badgeFrame)
 
-                        if let arrowImage = UIImage(bundleImageName: "Media Editor/DownArrow") {
+                        if let arrowImage = UIImage(bundleImageName: "Media Editor/DownArrow")?.withRenderingMode(.alwaysTemplate) {
                             communityAvatarBadgeIconView.image = arrowImage
                             communityAvatarBadgeIconView.tintColor = theme.titleColor
                             let iconFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((badgeSize.width - arrowImage.size.width) * 0.5), y: floorToScreenPixels((badgeSize.height - arrowImage.size.height) * 0.5)), size: arrowImage.size)
@@ -4217,6 +4247,29 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         }
                     } else {
                         strongSelf.communityAvatarBadgeBackgroundView?.isHidden = true
+                    }
+
+                    if item.displayHiddenPeerIcon && item.useCommunityViewLayout {
+                        let hiddenPeerIconView: UIImageView
+                        if let current = strongSelf.hiddenPeerIconView {
+                            hiddenPeerIconView = current
+                        } else {
+                            hiddenPeerIconView = UIImageView()
+                            hiddenPeerIconView.isUserInteractionEnabled = false
+                            hiddenPeerIconView.contentMode = .scaleAspectFit
+                            strongSelf.hiddenPeerIconView = hiddenPeerIconView
+                            strongSelf.avatarContainerNode.view.addSubview(hiddenPeerIconView)
+                        }
+                        hiddenPeerIconView.image = UIImage(bundleImageName: "Chat List/HiddenChatIcon")
+                        let iconSize = CGSize(width: 18.0, height: 18.0)
+                        let iconFrame = CGRect(origin: CGPoint(
+                            x: avatarFrame.width - iconSize.width - 2.0,
+                            y: avatarFrame.height - iconSize.height - 2.0
+                        ), size: iconSize)
+                        transition.updateFrame(view: hiddenPeerIconView, frame: iconFrame)
+                    } else if let hiddenPeerIconView = strongSelf.hiddenPeerIconView {
+                        strongSelf.hiddenPeerIconView = nil
+                        hiddenPeerIconView.removeFromSuperview()
                     }
 
                     transition.updatePosition(node: strongSelf.avatarNode, position: avatarFrame.offsetBy(dx: -avatarFrame.minX, dy: -avatarFrame.minY).center.offsetBy(dx: avatarScaleOffset, dy: 0.0))

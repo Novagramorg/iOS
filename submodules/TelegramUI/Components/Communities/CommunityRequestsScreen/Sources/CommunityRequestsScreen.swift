@@ -16,6 +16,9 @@ import ButtonComponent
 import EdgeEffect
 import CommunityEditScreen
 import CommunityPrivateChatScreen
+import UndoUI
+import AnimatedStickerNode
+import TelegramAnimatedStickerNode
 
 private struct CommunityRequestRow: Equatable {
     let request: CommunityPeerRequest
@@ -24,6 +27,116 @@ private struct CommunityRequestRow: Equatable {
     let memberCount: Int32?
     let isPrivate: Bool
     let isVisible: Bool
+}
+
+private struct PendingCommunityRequestAction {
+    let request: CommunityPeerRequest
+    let approve: Bool
+    var isCommitted: Bool
+}
+
+private final class CommunityRequestsEmptyPlaceholderView: UIView {
+    private let animationNode: AnimatedStickerNode
+    private let title = ComponentView<Empty>()
+    private let text = ComponentView<Empty>()
+
+    override init(frame: CGRect) {
+        self.animationNode = DefaultAnimatedStickerNodeImpl()
+        self.animationNode.setup(
+            source: AnimatedStickerNodeLocalFileSource(name: "TwoFactorSetupRememberSuccess"),
+            width: 192,
+            height: 192,
+            playbackMode: .once,
+            mode: .direct(cachePathPrefix: nil)
+        )
+        self.animationNode.visibility = true
+
+        super.init(frame: frame)
+
+        self.isUserInteractionEnabled = false
+        self.addSubview(self.animationNode.view)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(theme: PresentationTheme, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
+        let imageSpacing: CGFloat = 10.0
+        let textSpacing: CGFloat = 8.0
+        let imageSize = CGSize(width: 112.0, height: 112.0)
+        let imageHeight = availableSize.width < availableSize.height ? imageSize.height + imageSpacing : 0.0
+
+        let textWidth = availableSize.width - 80.0
+        let titleSize = self.title.update(
+            transition: transition,
+            component: AnyComponent(MultilineTextComponent(
+                text: .plain(NSAttributedString(
+                    string: "No Pending Requests",
+                    font: Font.bold(17.0),
+                    textColor: theme.list.freeTextColor
+                )),
+                horizontalAlignment: .center,
+                maximumNumberOfLines: 0
+            )),
+            environment: {},
+            containerSize: CGSize(width: textWidth, height: max(1.0, availableSize.height))
+        )
+        let textSize = self.text.update(
+            transition: transition,
+            component: AnyComponent(MultilineTextComponent(
+                text: .plain(NSAttributedString(
+                    string: "There are no more chats suggested for this community.",
+                    font: Font.regular(14.0),
+                    textColor: theme.list.freeTextColor
+                )),
+                horizontalAlignment: .center,
+                maximumNumberOfLines: 0
+            )),
+            environment: {},
+            containerSize: CGSize(width: textWidth, height: max(1.0, availableSize.height))
+        )
+
+        let totalHeight = imageHeight + titleSize.height + textSpacing + textSize.height
+        let topOffset = floorToScreenPixels(max(0.0, (availableSize.height - totalHeight) / 2.0))
+
+        self.animationNode.updateLayout(size: imageSize)
+        transition.setFrame(view: self.animationNode.view, frame: CGRect(
+            origin: CGPoint(
+                x: floorToScreenPixels((availableSize.width - imageSize.width) / 2.0),
+                y: topOffset
+            ),
+            size: imageSize
+        ))
+        transition.setAlpha(view: self.animationNode.view, alpha: imageHeight > 0.0 ? 1.0 : 0.0)
+
+        if let titleView = self.title.view {
+            if titleView.superview == nil {
+                self.addSubview(titleView)
+            }
+            transition.setFrame(view: titleView, frame: CGRect(
+                origin: CGPoint(
+                    x: floorToScreenPixels((availableSize.width - titleSize.width) / 2.0),
+                    y: topOffset + imageHeight
+                ),
+                size: titleSize
+            ))
+        }
+        if let textView = self.text.view {
+            if textView.superview == nil {
+                self.addSubview(textView)
+            }
+            transition.setFrame(view: textView, frame: CGRect(
+                origin: CGPoint(
+                    x: floorToScreenPixels((availableSize.width - textSize.width) / 2.0),
+                    y: topOffset + imageHeight + titleSize.height + textSpacing
+                ),
+                size: textSize
+            ))
+        }
+
+        return CGSize(width: availableSize.width, height: max(1.0, totalHeight))
+    }
 }
 
 private final class CommunityRequestsScreenComponent: Component {
@@ -62,7 +175,7 @@ private final class CommunityRequestsScreenComponent: Component {
         private let scrollView: ScrollView
         private let approvalInfoText = ComponentView<Empty>()
         private let requestsSection = ComponentView<Empty>()
-        private let emptyText = ComponentView<Empty>()
+        private var emptyPlaceholderView: CommunityRequestsEmptyPlaceholderView?
         private let declineAllButton = ComponentView<Empty>()
         private let addAllButton = ComponentView<Empty>()
         private let bottomEdgeEffectView = EdgeEffectView()
@@ -78,6 +191,8 @@ private final class CommunityRequestsScreenComponent: Component {
         private var peers: [EnginePeer.Id: EnginePeer] = [:]
         private var cachedPeerData: [EnginePeer.Id: EngineCachedPeerData] = [:]
         private var cachedChevronImage: (UIImage, PresentationTheme)?
+        private var pendingRequestActions: [EnginePeer.Id: PendingCommunityRequestAction] = [:]
+        private weak var currentRequestUndoOverlayController: UndoOverlayController?
 
         private var communityDisposable: Disposable?
         private var loadDisposable: Disposable?
@@ -111,6 +226,8 @@ private final class CommunityRequestsScreenComponent: Component {
         }
 
         deinit {
+            self.commitPendingRequestActions()
+            self.currentRequestUndoOverlayController?.dismiss()
             self.communityDisposable?.dispose()
             self.loadDisposable?.dispose()
             self.cachedDataDisposable?.dispose()
@@ -144,6 +261,9 @@ private final class CommunityRequestsScreenComponent: Component {
             }
             var result: [CommunityRequestRow] = []
             for request in requests {
+                if self.pendingRequestActions[request.peerId] != nil {
+                    continue
+                }
                 if let peer = self.peers[request.peerId] {
                     result.append(CommunityRequestRow(
                         request: request,
@@ -216,6 +336,7 @@ private final class CommunityRequestsScreenComponent: Component {
                 }
                 self.requests = result.hasLoadedOnce ? result.requests : nil
                 self.peers = result.peers
+                self.prunePendingRequestActions()
                 self.ensureCachedData(component: component)
                 self.state?.updated(transition: .spring(duration: 0.35))
             })
@@ -303,6 +424,7 @@ private final class CommunityRequestsScreenComponent: Component {
             guard let component = self.component, let environment = self.environment else {
                 return
             }
+            self.commitCurrentRequestUndoOverlay(animateAsReplacement: false)
 
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
             let countText = "\(count)"
@@ -349,14 +471,112 @@ private final class CommunityRequestsScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
+            self.commitCurrentRequestUndoOverlay(animateAsReplacement: false)
             component.requestsContext.updateAll(action: approve ? .approve : .deny)
         }
 
-        private func setRequestApproval(request: CommunityPeerRequest, approve: Bool) {
+        private func prunePendingRequestActions() {
+            guard let requests = self.requests else {
+                return
+            }
+            let requestIds = Set(requests.map(\.peerId))
+            for peerId in Array(self.pendingRequestActions.keys) {
+                if !requestIds.contains(peerId) {
+                    self.pendingRequestActions.removeValue(forKey: peerId)
+                }
+            }
+        }
+
+        private func commitPendingRequestAction(peerId: EnginePeer.Id) {
+            guard var pendingAction = self.pendingRequestActions[peerId], !pendingAction.isCommitted else {
+                return
+            }
             guard let component = self.component else {
                 return
             }
-            component.requestsContext.update(request, action: approve ? .approve : .deny)
+            pendingAction.isCommitted = true
+            self.pendingRequestActions[peerId] = pendingAction
+            component.requestsContext.update(pendingAction.request, action: pendingAction.approve ? .approve : .deny)
+            self.state?.updated(transition: .spring(duration: 0.35))
+        }
+
+        private func commitPendingRequestActions() {
+            let peerIds = Array(self.pendingRequestActions.keys)
+            for peerId in peerIds {
+                self.commitPendingRequestAction(peerId: peerId)
+            }
+        }
+
+        @discardableResult
+        private func commitCurrentRequestUndoOverlay(animateAsReplacement: Bool) -> Bool {
+            guard let currentRequestUndoOverlayController = self.currentRequestUndoOverlayController else {
+                return false
+            }
+            if animateAsReplacement {
+                currentRequestUndoOverlayController.dismissWithCommitActionAndReplacementAnimation()
+            } else {
+                currentRequestUndoOverlayController.dismissWithCommitAction()
+            }
+            self.currentRequestUndoOverlayController = nil
+            return true
+        }
+
+        private func setRequestApproval(request: CommunityPeerRequest, peer: EnginePeer, approve: Bool) {
+            guard let component = self.component, let environment = self.environment, let controller = environment.controller() else {
+                return
+            }
+
+            let animateInAsReplacement = self.commitCurrentRequestUndoOverlay(animateAsReplacement: true)
+
+            let peerId = request.peerId
+            self.pendingRequestActions[peerId] = PendingCommunityRequestAction(
+                request: request,
+                approve: approve,
+                isCommitted: false
+            )
+            self.state?.updated(transition: .spring(duration: 0.35))
+
+            let title: String = peer.compactDisplayTitle
+            let text: String
+            if approve {
+                text = "You've added the group to the community."
+            } else {
+                text = "You declined adding the group to the community."
+            }
+
+            let undoController = UndoOverlayController(
+                presentationData: component.context.sharedContext.currentPresentationData.with { $0 },
+                content: .invitedToVoiceChat(
+                    context: component.context,
+                    peer: peer,
+                    title: title,
+                    text: text,
+                    action: environment.strings.Undo_Undo,
+                    duration: 3.0
+                ),
+                elevatedLayout: false,
+                animateInAsReplacement: animateInAsReplacement,
+                action: { [weak self] action in
+                    guard let self else {
+                        return false
+                    }
+                    switch action {
+                    case .commit:
+                        self.commitPendingRequestAction(peerId: peerId)
+                        return true
+                    case .undo:
+                        if let pendingAction = self.pendingRequestActions[peerId], !pendingAction.isCommitted {
+                            self.pendingRequestActions.removeValue(forKey: peerId)
+                            self.state?.updated(transition: .spring(duration: 0.35))
+                        }
+                        return true
+                    case .info:
+                        return false
+                    }
+                }
+            )
+            self.currentRequestUndoOverlayController = undoController
+            controller.present(undoController, in: .current)
         }
 
         private func openPeer(_ peer: EnginePeer) {
@@ -413,10 +633,10 @@ private final class CommunityRequestsScreenComponent: Component {
                     self?.openRequest(row: row)
                 },
                 add: { [weak self] _ in
-                    self?.setRequestApproval(request: row.request, approve: true)
+                    self?.setRequestApproval(request: row.request, peer: row.peer, approve: true)
                 },
                 decline: { [weak self] _ in
-                    self?.setRequestApproval(request: row.request, approve: false)
+                    self?.setRequestApproval(request: row.request, peer: row.peer, approve: false)
                 }
             )))
         }
@@ -570,10 +790,11 @@ private final class CommunityRequestsScreenComponent: Component {
                     sectionTransition.setFrame(view: sectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: sectionSize))
                     transition.setAlpha(view: sectionView, alpha: 1.0)
                 }
-                if let emptyView = self.emptyText.view {
-                    transition.setAlpha(view: emptyView, alpha: 0.0, completion: { [weak emptyView] _ in
-                        emptyView?.removeFromSuperview()
+                if let emptyPlaceholderView = self.emptyPlaceholderView {
+                    transition.setAlpha(view: emptyPlaceholderView, alpha: 0.0, completion: { [weak emptyPlaceholderView] _ in
+                        emptyPlaceholderView?.removeFromSuperview()
                     })
+                    self.emptyPlaceholderView = nil
                 }
                 contentHeight += sectionSize.height + 24.0
             } else {
@@ -583,32 +804,36 @@ private final class CommunityRequestsScreenComponent: Component {
                     })
                 }
 
-                let emptyString = self.requests == nil ? "Loading..." : "No pending requests"
-                let emptySize = self.emptyText.update(
-                    transition: transition,
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: emptyString,
-                            font: Font.regular(15.0),
-                            textColor: theme.list.freeTextColor
-                        )),
-                        horizontalAlignment: .center,
-                        maximumNumberOfLines: 0
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: contentWidth - 32.0, height: 10000.0)
-                )
-                if let emptyView = self.emptyText.view {
-                    if emptyView.superview == nil {
-                        self.scrollView.addSubview(emptyView)
+                if let _ = self.requests {
+                    var emptyPlaceholderTransition = transition
+                    let emptyPlaceholderView: CommunityRequestsEmptyPlaceholderView
+                    if let current = self.emptyPlaceholderView {
+                        emptyPlaceholderView = current
+                    } else {
+                        emptyPlaceholderTransition = .immediate
+                        
+                        emptyPlaceholderView = CommunityRequestsEmptyPlaceholderView(frame: CGRect())
+                        emptyPlaceholderView.alpha = 0.0
+                        self.emptyPlaceholderView = emptyPlaceholderView
+                        self.scrollView.addSubview(emptyPlaceholderView)
                     }
-                    transition.setFrame(view: emptyView, frame: CGRect(
-                        origin: CGPoint(x: sideInset + 16.0 + floorToScreenPixels((contentWidth - 32.0 - emptySize.width) / 2.0), y: contentHeight),
-                        size: emptySize
-                    ))
-                    transition.setAlpha(view: emptyView, alpha: 1.0)
+
+                    let placeholderTop = contentHeight
+                    let placeholderHeight = max(1.0, availableSize.height - placeholderTop - environment.safeInsets.bottom)
+                    let placeholderWidth = max(1.0, availableSize.width - environment.safeInsets.left - environment.safeInsets.right)
+                    let _ = emptyPlaceholderView.update(
+                        theme: theme,
+                        availableSize: CGSize(width: placeholderWidth, height: placeholderHeight),
+                        transition: emptyPlaceholderTransition
+                    )
+                    let placeholderFrame = CGRect(
+                        origin: CGPoint(x: environment.safeInsets.left, y: placeholderTop),
+                        size: CGSize(width: placeholderWidth, height: placeholderHeight)
+                    )
+                    emptyPlaceholderTransition.setFrame(view: emptyPlaceholderView, frame: placeholderFrame)
+                    transition.setAlpha(view: emptyPlaceholderView, alpha: 1.0)
+                    contentHeight = max(contentHeight, placeholderFrame.maxY + 24.0)
                 }
-                contentHeight += emptySize.height + 24.0
             }
 
             if displaysBulkActions {
