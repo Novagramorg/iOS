@@ -192,11 +192,26 @@ public struct ChatInputContent: Equatable, Codable {
         }
     }
 
+    /// Options that tune which blocks `isEntityExpressible(options:)` accepts on the plain text + entities path.
+    public struct EntityExpressibleOptions: OptionSet {
+        public let rawValue: Int32
+        public init(rawValue: Int32) {
+            self.rawValue = rawValue
+        }
+
+        /// Treat a blockquote (a `.quote` paragraph or a collapsed quote) as NOT entity-expressible, so
+        /// quote-bearing content is routed onto the rich (InstantPage) path even though message entities could
+        /// represent it. The default (no options) keeps a blockquote entity-expressible.
+        public static let quotesRequireRichContent = EntityExpressibleOptions(rawValue: 1 << 0)
+    }
+
     /// Whether this content can be represented as plain text + message entities (the `.textEntities`
     /// branch) rather than requiring a structured `InstantPage` (the `.instantPage` branch). True for
     /// every block today; the deliberate switch with no `default` forces a compile decision the day a
     /// non-entity-expressible block type is introduced.
-    public var isEntityExpressible: Bool {
+    ///
+    /// `options` narrows what counts as entity-expressible — see `EntityExpressibleOptions`.
+    public func isEntityExpressible(options: EntityExpressibleOptions = []) -> Bool {
         return self.blocks.allSatisfy { block in
             switch block {
             case let .paragraph(paragraph):
@@ -205,13 +220,19 @@ public struct ChatInputContent: Equatable, Codable {
                     return false
                 }
                 switch paragraph.style {
-                case .body, .quote:
+                case .body:
                     return true
+                case .quote:
+                    return !options.contains(.quotesRequireRichContent)
                 case .heading1, .heading2, .heading3:
                     return false
                 }
             case .code: return true
-            case let .collapsedQuote(content): return content.isEntityExpressible
+            case let .collapsedQuote(content):
+                if options.contains(.quotesRequireRichContent) {
+                    return false
+                }
+                return content.isEntityExpressible(options: options)
             case .media: return false
             case .table: return false
             }

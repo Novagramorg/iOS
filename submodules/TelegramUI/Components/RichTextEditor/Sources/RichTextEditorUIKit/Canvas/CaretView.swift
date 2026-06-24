@@ -62,5 +62,13 @@ final class CaretView: UIView {
         layer.removeAnimation(forKey: Self.blinkKey)
         isHidden = true
     }
+
+    /// Shows the caret SOLID with no blink. Used as the dimmed "landing" indicator during a floating-cursor
+    /// gesture (the caller sets `alpha` for the dim); the blink is removed so it doesn't pulse the landing.
+    func freezeSolid() {
+        layer.removeAnimation(forKey: Self.blinkKey)
+        layer.opacity = 1
+        isHidden = false
+    }
 }
 #endif

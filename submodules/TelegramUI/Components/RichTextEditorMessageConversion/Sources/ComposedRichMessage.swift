@@ -14,12 +14,16 @@ public enum ComposedRichMessage {
 }
 
 /// Serialize a RichTextEditor `Document` into a `ComposedRichMessage`.
-public func composeRichMessage(from document: Document, media: [String: Media] = [:]) -> ComposedRichMessage {
+///
+/// `forSendPreview`: when set, a blockquote forces the rich (InstantPage) path even though it is otherwise
+/// entity-expressible. The attachment-menu rich editor opts in so a quote is sent as a rich message and renders
+/// through InstantPage; the default keeps quotes on the entity path (the composer / edit / send-options gates).
+public func composeRichMessage(from document: Document, media: [String: Media] = [:], forSendPreview: Bool = false) -> ComposedRichMessage {
     let blocks = trimmedTrailingEmpty(normalizedBlocks(document.blocks, media: media))
     if blocks.isEmpty {
         return .empty
     }
-    if documentNeedsRichLayout(blocks) {
+    if documentNeedsRichLayout(blocks, forSendPreview: forSendPreview) {
         return .rich(instantPage: buildInstantPage(from: blocks, media: media))
     } else {
         let message = buildEntityMessage(from: blocks)
@@ -62,8 +66,9 @@ func trimmedTrailingEmpty(_ blocks: [Block]) -> [Block] {
     return result
 }
 
-/// True when the content needs the rich (InstantPage) path: any table, heading/title, list item, or resolvable media block.
-func documentNeedsRichLayout(_ blocks: [Block]) -> Bool {
+/// True when the content needs the rich (InstantPage) path: any table, heading/title, list item, or resolvable
+/// media block. With `forSendPreview`, a blockquote also forces the rich path (see `composeRichMessage`).
+func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) -> Bool {
     for block in blocks {
         switch block {
         case .table:
@@ -75,7 +80,11 @@ func documentNeedsRichLayout(_ blocks: [Block]) -> Bool {
             switch paragraph.style {
             case .heading1, .heading2, .heading3:
                 return true
-            case .body, .caption, .quote:
+            case .quote:
+                if forSendPreview {
+                    return true
+                }
+            case .body, .caption:
                 break
             }
         case .media:

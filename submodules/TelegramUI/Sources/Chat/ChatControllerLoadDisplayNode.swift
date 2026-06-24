@@ -2218,7 +2218,7 @@ extension ChatControllerImpl {
                 let text = trimChatInputText(convertMarkdownToAttributes(expandedInputStateAttributedString(editMessage.inputState.inputText)))
 
                 let content = editMessage.inputState.content
-                let richText: RichTextMessageAttribute? = content.isEntityExpressible ? nil : RichTextMessageAttribute(instantPage: instantPage(from: content), fullInstantPage: nil)
+                let richText: RichTextMessageAttribute? = content.isEntityExpressible() ? nil : RichTextMessageAttribute(instantPage: instantPage(from: content), fullInstantPage: nil)
 
                 let entities = generateTextEntities(text.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(text))
                 var entitiesAttribute: TextEntitiesMessageAttribute?

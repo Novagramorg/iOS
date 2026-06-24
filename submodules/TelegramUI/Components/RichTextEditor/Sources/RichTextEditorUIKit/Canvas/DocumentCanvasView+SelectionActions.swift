@@ -13,10 +13,15 @@ extension DocumentCanvasView {
     /// — the tap landed elsewhere → place the caret there (collapsing any selection) and dismiss the menu.
     enum TapOutcome: Equatable { case toggleMenu, setCaret(Int) }
 
-    func tapOutcome(forResolvedPosition resolved: Int) -> TapOutcome {
+    func tapOutcome(forResolvedPosition resolved: Int, point: CGPoint) -> TapOutcome {
         if selFrom != selTo {
-            // Tap inside the selection → toggle the menu (keep the selection); outside → collapse to a caret.
-            return (resolved >= selFrom && resolved <= selTo) ? .toggleMenu : .setCaret(resolved)
+            // "Inside" is VISUAL: the tap must land ON the rendered selection (its glyph-hugging rects), not
+            // merely resolve to an offset within [selFrom, selTo]. A tap in the empty area beside the selection
+            // resolves (via closestGlobalPosition) to a boundary offset INSIDE the range but is visually OUTSIDE
+            // — it must collapse the selection + place the caret, not toggle/keep the menu. The offset-only test
+            // kept the selection on any such tap (the composer "tap-to-deselect doesn't work" bug).
+            let onSelection = selectionRects(globalFrom: selFrom, globalTo: selTo).contains { $0.contains(point) }
+            return onSelection ? .toggleMenu : .setCaret(resolved)
         }
         return resolved == head ? .toggleMenu : .setCaret(resolved)
     }
@@ -32,8 +37,14 @@ extension DocumentCanvasView {
     /// A tap on the caret/selection toggles the edit menu: DISMISS when the menu is showing OR was just
     /// auto-dismissed by this same tap; otherwise PRESENT. Pure (unit-tested) — the `justDismissed` race
     /// fix is what stops the close-then-reopen flicker.
-    func menuToggleAction(menuVisible: Bool, justDismissed: Bool) -> MenuToggleAction {
-        (menuVisible || justDismissed) ? .dismiss : .present
+    ///
+    /// `wasFirstResponder` gates the very FIRST (focusing) tap: a tap that brings the field into first-
+    /// responder must only place the caret, never open the menu — otherwise an empty composer field (whose
+    /// caret defaults to position 0, where a focusing tap also resolves → `tapOutcome` `.toggleMenu`) pops the
+    /// edit menu on the first tap. A second tap on the caret of the now-focused field still toggles it.
+    func menuToggleAction(menuVisible: Bool, justDismissed: Bool, wasFirstResponder: Bool) -> MenuToggleAction {
+        guard wasFirstResponder else { return .dismiss }   // a focusing tap places the caret only; never opens the menu
+        return (menuVisible || justDismissed) ? .dismiss : .present
     }
 
     /// Which selection endpoint a drag should move, by global-offset proximity. nil when collapsed.
@@ -71,6 +82,12 @@ extension DocumentCanvasView {
         anchor = clampGlobal(from); head = clampGlobal(to)
         textInputDelegate?.selectionDidChange(self)
         setNeedsDisplay(); refreshSelectionUI()
+        // A gesture-driven RANGE selection (double-tap word / triple-tap paragraph / Select All) is a
+        // caret-moving op and MUST notify the host — exactly as setCaret does. The chat composer tracks the
+        // editor selection through onSelectionChange; without it a word selection never reaches the panel's
+        // interface state, and the next state re-apply (setInputContent) collapses the visible selection back
+        // to the stale caret (the double-tap "flash then deselect" bug).
+        onSelectionChange?()
     }
 }
 #endif

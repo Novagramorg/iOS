@@ -81,9 +81,12 @@ Conversions:
   masks this). The polymorphic `Media` persists via a concrete-type discriminator + `TelegramMediaImage/File(decoder:)`,
   **not** `decodeRootObjectWithHash` (that needs the app-startup `declareEncodable` registry, empty in tests).
 
-`isEntityExpressible` is the routing switch: text / quote / collapsed-quote / code / mention / date /
+`isEntityExpressible(options:)` is the routing switch: text / quote / collapsed-quote / code / mention / date /
 custom-emoji-in-body are entity-expressible (normal text+entities path); heading / list / table / media are
-not (→ structured `.instantPage` path).
+not (→ structured `.instantPage` path). The `EntityExpressibleOptions` bag narrows this: with
+`.quotesRequireRichContent`, a `.quote` paragraph and a `.collapsedQuote` are treated as NOT entity-expressible,
+so quote-bearing content routes onto the rich path even though entities could represent it (opted into by the
+send-options preview and the attachment-menu rich-editor send — see §5).
 
 ---
 
@@ -161,15 +164,22 @@ as a **`RichTextMessageAttribute`** carrying an `InstantPage`, rendered by the V
 `TelegramCore/Sources/ChatInputContent/ChatInputContentInstantPage.swift`.
 
 - **Send** (`ChatControllerNode.sendCurrentMessage`): reads the structural `composeInputState.content`. When
-  `editMessage == nil && !content.isEntityExpressible && !content.isEmpty`, enqueues **one**
+  `editMessage == nil && !content.isEntityExpressible() && !content.isEmpty`, enqueues **one**
   `.message(text: "", attributes: [RichTextMessageAttribute(instantPage: instantPage(from: content), …)], …)`.
   Entity-expressible content keeps the existing `breakChatInputText` text+entities loop **byte-identical**. The
   custom-emoji premium-lock harvest + early-return stays **before** the branch.
 - **Edit** (`ChatControllerLoadDisplayNode`): LOAD seeds `ChatTextInputState(content: chatInputContent(fromInstantPage:
   richTextAttribute.instantPage))` (structural, media preserved — *not* a markdown flatten); DONE routes by
-  `isEntityExpressible` — non-entity → rebuild `RichTextMessageAttribute` + pass `richText:` (so the backend
+  `isEntityExpressible()` — non-entity → rebuild `RichTextMessageAttribute` + pass `richText:` (so the backend
   uploads media), else demote to plain text+entities. Native path only (the legacy composer flattens structure
   on the first keystroke).
+- **Attachment-menu rich editor** (`ChatControllerOpenAttachmentMenu`'s `.richText` send →
+  `composeRichMessage(from:media:forSendPreview:)` in `RichTextEditorMessageConversion`): passes
+  `forSendPreview: true`, so a **blockquote forces the rich (InstantPage) path here** even though a quote is
+  entity-expressible (`documentNeedsRichLayout` honors the same flag at the editor-`Document` level). The composer
+  Send / Edit gates above pass **default** options, so a quote sent from the composer is still plain text + a
+  blockquote entity — a deliberate, localized divergence (this rich-editor send has no long-press preview; the
+  composer's preview opts into the same quote-as-rich rule, below).
 - **Pending edits display optimistically:** `ChatUpdatingMessageMedia` carries an optional `richText`; the
   bubble prefers `itemAttributes.updatingMedia.map(\.richText) ?? item.message.richText` (display `:360`,
   anchor `:1449`, "Show more" gate `:567` in `ChatMessageRichDataBubbleContentNode`). The render-cache key
@@ -189,6 +199,44 @@ the fallback** (nil / secret-chat / empty-media / upload-failure). The real path
 - **Send** routes through `messageContentToUpload` → uploads. **Edit** sequences `uploadedRichMessage` before its
   media chain. **Incoming parse** (`SyncCore_RichTextMessageAttribute.swift`) reconstructs `media` from
   `photos`/`documents`.
+
+### Send-options preview (long-press Send)
+
+Long-pressing **Send** opens the send-options context screen (`ChatSendMessageContextScreen`), whose preview
+bubble renders the message as it will be sent. For rich content the bubble shows the actual `InstantPage` via
+`ChatSendMessageRichTextPreview` (wrapping an `InstantPageV2View` in the outgoing message theme), injected through
+the `ChatSendMessageContextScreenRichTextPreview` protocol (mirroring the existing media-preview seam, since
+`ChatSendMessageActionUI` cannot dep `InstantPageUI`).
+
+- **Gating mirrors the real send paths**, built in `Chat/ChatMessageDisplaySendMessageOptions.swift` via the
+  file-private `makeRichTextSendPreview(context:content:mediaPreview:)` (predicate: `mediaPreview == nil &&
+  !content.isEmpty && !content.isEntityExpressible(options: [.quotesRequireRichContent])`). New-message branch feeds
+  `composeInputState.content` (matching `ChatControllerNode`'s send gate; additionally skipped for
+  `.customChatContents`); edit branch feeds `editMessage.inputState.content` (matching `ChatControllerLoadDisplayNode`'s
+  edit gate). Plain / quote-free entity-expressible content keeps the flat-text morph. With the legacy composer,
+  content is always flat → entity-expressible → no preview (so no `debugRichText` check is needed).
+- **A blockquote previews as a rich bubble** (the `.quotesRequireRichContent` opt-in), even though the composer
+  Send / Edit gates send a quote as plain text + a blockquote entity (they pass default options — see the
+  divergence note above). So a quote-only message's preview bubble (InstantPage) renders through a different path
+  than the eventually-sent message; align the two by passing `.quotesRequireRichContent` at those gates too if a
+  pixel-faithful preview is wanted.
+- **Morph (`MessageItemView`):** the plain-text path morphs a flat-text copy of the live field into the bubble.
+  That copy can't represent rich structure (headings/lists/tables), so the rich path instead captures a **pixel
+  snapshot** of the live input field on the source-state layout (before the screen hard-hides the field), positions
+  it to overlay the field exactly (top-left at `(textInsets.left, 2.0)`, matching the screen's
+  `sourceMessageItemFrame` math), and crossfades that snapshot into the `InstantPageV2View` as the bubble settles.
+  Falls back to the flat-text crossfade if `snapshotView` returns nil.
+- **Flat-copy text color is set per morph state**, keyed off `explicitBackgroundSize == nil` (`isSettled`): the
+  extracted `textString` carries no base foreground color that renders correctly here (the preview node defaults it
+  to **black**), so `MessageItemView` applies one explicitly and re-applies it whenever the state flips (tracked by
+  `textNodeUsesOutgoingColor`). Settled (inside the outgoing bubble) → `chat.message.outgoing.primaryTextColor`;
+  source / animate-out (the copy overlaying the live field) → `chat.inputPanel.inputTextColor`, so the copy matches
+  the still-visible field. This is why a colored outgoing bubble shows the right color (e.g. white) instead of black,
+  and why the dark-theme animate-out doesn't fall back to black. Link entities stay `outgoing.linkTextColor` in both
+  states.
+- **Clipping:** the page content is clipped to the bubble's inner corner radius (15pt, matching the real rich
+  bubble's `image.defaultCornerRadius`) within the tail-excluded content rect `[1, width − 7]` (same as the text
+  path), so images/tables round to the bubble and stay clear of the outgoing tail.
 
 ---
 

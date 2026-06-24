@@ -26,24 +26,39 @@ final class CanvasSelectionMenuTests: XCTestCase {
     func test_tapOutcome_onCaret_togglesMenu() {
         let v = canvas()
         let r = region(v, "h"); v.anchor = r.globalStart + 3; v.head = r.globalStart + 3
-        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + 3), .toggleMenu)
+        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + 3, point: .zero), .toggleMenu)
     }
     func test_tapOutcome_elsewhere_movesCaret() {
         let v = canvas()
         let r = region(v, "h"); v.anchor = r.globalStart + 3; v.head = r.globalStart + 3
-        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + 6), .setCaret(r.globalStart + 6))
+        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + 6, point: .zero), .setCaret(r.globalStart + 6))
     }
     func test_tapOutcome_insideSelection_togglesMenu() {
         let v = canvas()
         let r = region(v, "h"); v.anchor = r.globalStart; v.head = r.globalStart + 5   // "Hello" selected
-        // A tap INSIDE the selection toggles the menu and KEEPS the selection (does not collapse).
-        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + 2), .toggleMenu)
+        let rects = v.selectionRects(globalFrom: v.selFrom, globalTo: v.selTo)
+        let onSelection = CGPoint(x: rects[0].midX, y: rects[0].midY)   // a tap ON the rendered selection
+        // A tap on the selection toggles the menu and KEEPS the selection (does not collapse).
+        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + 2, point: onSelection), .toggleMenu)
     }
     func test_tapOutcome_outsideSelection_setsCaret() {
         let v = canvas()
         let r = region(v, "h"); v.anchor = r.globalStart; v.head = r.globalStart + 3   // "Hel" selected
+        let caret = v.caretRect(for: DocumentTextPosition(r.globalStart + 6))           // past "Hel", off the selection
         // A tap OUTSIDE the selection collapses to a caret there.
-        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + 6), .setCaret(r.globalStart + 6))
+        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + 6, point: CGPoint(x: caret.midX, y: caret.midY)),
+                       .setCaret(r.globalStart + 6))
+    }
+    /// The reported bug: a tap in the EMPTY AREA adjacent to the selection (so `closestGlobalPosition` resolves
+    /// to a boundary offset INSIDE [selFrom, selTo]) but whose POINT is not on the rendered selection must
+    /// collapse the selection + move the caret — NOT toggle/keep the menu. The composer's compact layout makes
+    /// this the common "tap to deselect" gesture; the old offset-only check treated it as "inside".
+    func test_tapOutcome_emptyAreaResolvingInsideRange_setsCaret() {
+        let v = canvas()
+        let r = region(v, "h"); v.anchor = r.globalStart; v.head = r.globalStart + r.length   // whole line selected
+        let farOutside = CGPoint(x: 10_000, y: -10_000)   // nowhere near any selection rect
+        XCTAssertEqual(v.tapOutcome(forResolvedPosition: r.globalStart + r.length, point: farOutside),
+                       .setCaret(r.globalStart + r.length), "an empty-area tap must collapse the selection, not keep it")
     }
     /// Repro for the reported bug: tapping the MIDPOINT of the selection's highlight must NOT collapse it.
     /// Exercises the full single-tap handler (closestGlobalPosition → tapOutcome → toggle/setCaret), not
@@ -59,15 +74,36 @@ final class CanvasSelectionMenuTests: XCTestCase {
         XCTAssertEqual(v.selFrom, r.globalStart, "tap inside the selection must keep it (not collapse)")
         XCTAssertEqual(v.selTo, r.globalStart + 5)
     }
+    /// Tapping OUTSIDE an active selection must collapse it to a caret at the tapped position (not keep the
+    /// selection, not jump the caret elsewhere). Ground-truth for the reported "tap outside doesn't deselect".
+    func test_performSingleTap_outsideSelection_clearsAndMovesCaret() {
+        let v = canvas()
+        let r = region(v, "h"); v.anchor = r.globalStart; v.head = r.globalStart + 5   // "Hello" selected
+        let caret = v.caretRect(for: DocumentTextPosition(r.globalStart + 8))           // inside "world", outside the selection
+        v.performSingleTap(at: CGPoint(x: caret.midX, y: caret.midY))
+        XCTAssertEqual(v.selFrom, v.selTo, "tap outside the selection must collapse it")
+        XCTAssertEqual(v.head, r.globalStart + 8, "the caret moves to the tapped position")
+    }
     /// Flicker fix: a toggle-tap presents only when the menu is neither showing nor just-dismissed. The
     /// system auto-dismisses the menu on the tap (willDismiss → justDismissed) before our delayed handler
     /// runs, so `(menuVisible:false, justDismissed:true)` MUST dismiss (not re-present = the flicker).
     func test_menuToggleAction_suppressesRepresentRightAfterDismiss() {
         let v = canvas()
-        XCTAssertEqual(v.menuToggleAction(menuVisible: false, justDismissed: false), .present)  // caret, no menu → show
-        XCTAssertEqual(v.menuToggleAction(menuVisible: true,  justDismissed: false), .dismiss)  // menu up → hide
-        XCTAssertEqual(v.menuToggleAction(menuVisible: false, justDismissed: true),  .dismiss)  // this tap closed it → don't reopen
-        XCTAssertEqual(v.menuToggleAction(menuVisible: true,  justDismissed: true),  .dismiss)
+        XCTAssertEqual(v.menuToggleAction(menuVisible: false, justDismissed: false, wasFirstResponder: true), .present)  // caret, no menu → show
+        XCTAssertEqual(v.menuToggleAction(menuVisible: true,  justDismissed: false, wasFirstResponder: true), .dismiss)  // menu up → hide
+        XCTAssertEqual(v.menuToggleAction(menuVisible: false, justDismissed: true,  wasFirstResponder: true), .dismiss)  // this tap closed it → don't reopen
+        XCTAssertEqual(v.menuToggleAction(menuVisible: true,  justDismissed: true,  wasFirstResponder: true), .dismiss)
+    }
+    /// Focus-tap fix: a tap that BRINGS the field into first-responder (`wasFirstResponder == false`) must only
+    /// place the caret — never open the menu — even when it lands on the (default) caret with no menu showing.
+    /// This is the empty-field bug: `head` defaults to 0, a focusing tap resolves to 0, `tapOutcome` → `.toggleMenu`,
+    /// and the menu was presented on the very first tap. A second tap on the caret (now first responder) still shows it.
+    func test_menuToggleAction_focusingTap_neverPresents() {
+        let v = canvas()
+        XCTAssertEqual(v.menuToggleAction(menuVisible: false, justDismissed: false, wasFirstResponder: false), .dismiss,
+                       "a tap that focuses the field must not open the menu")
+        XCTAssertEqual(v.menuToggleAction(menuVisible: false, justDismissed: false, wasFirstResponder: true), .present,
+                       "tapping the caret in an already-focused field still toggles the menu open")
     }
     func test_selectWord_atCaret_selectsWord() {
         let v = canvas()
@@ -87,6 +123,35 @@ final class CanvasSelectionMenuTests: XCTestCase {
         let r = region(v, "h"); v.selectParagraph(at: r.globalStart + 4)
         XCTAssertEqual(v.selFrom, r.globalStart)
         XCTAssertEqual(v.selTo, r.globalStart + r.length)   // "Hello world"
+    }
+
+    // MARK: A gesture-driven RANGE selection must notify the host (the double-tap "flash then deselect" bug).
+    // `selectWord`/`selectParagraph`/`selectAllText` go through `applySelection`, which (unlike `setCaret`) did
+    // not fire `onSelectionChange`. The chat composer tracks the editor selection through that hook; without it
+    // a word selection never reaches the panel's interface state, and the next state re-apply (`setInputContent`)
+    // collapses the visible selection back to the stale caret. (No-op in the article editor — no such round-trip.)
+    func test_selectWord_firesOnSelectionChange() {
+        let v = canvas()
+        let r = region(v, "h")
+        var fired = false
+        v.onSelectionChange = { fired = true }
+        v.selectWord(at: r.globalStart + 2)   // double-tap inside "Hello"
+        XCTAssertTrue(fired, "a gesture word-selection must notify the host so the composer tracks the range")
+    }
+    func test_selectParagraph_firesOnSelectionChange() {
+        let v = canvas()
+        let r = region(v, "h")
+        var fired = false
+        v.onSelectionChange = { fired = true }
+        v.selectParagraph(at: r.globalStart + 4)   // triple-tap
+        XCTAssertTrue(fired, "a gesture paragraph-selection must notify the host")
+    }
+    func test_selectAllText_firesOnSelectionChange() {
+        let v = canvas()
+        var fired = false
+        v.onSelectionChange = { fired = true }
+        v.selectAllText()   // Select All menu / Cmd+A
+        XCTAssertTrue(fired, "Select All must notify the host")
     }
 
     // MARK: Tap latency fix — manual multi-tap escalation (no `require(toFail:)` gate → instant caret).

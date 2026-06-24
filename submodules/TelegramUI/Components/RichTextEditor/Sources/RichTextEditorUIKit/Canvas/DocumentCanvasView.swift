@@ -76,6 +76,8 @@ final class DocumentCanvasView: UIView {
     /// into that table's scrolling content view so it rides the scroll/overscroll; otherwise it's a direct
     /// subview of the canvas.
     let caretView = CaretView()
+    /// The own-rendered FLOATING caret for the spacebar-trackpad gesture (see DocumentCanvasView+FloatingCursor).
+    let transientCaretView = TransientCaretView()
     /// Own-drawn selection-handle lollipops (one per endpoint), shown for a ranged selection. Like the
     /// caret, each is hosted in the canvas or a table's scrolling content view per its endpoint's region,
     /// ON TOP of the wash. The handle DRAG is a separate proximity-gated pan (`isSelectionDragTouch`).
@@ -136,6 +138,14 @@ final class DocumentCanvasView: UIView {
     var anchor = 0
     var head = 0
 
+    /// True while a floating-cursor (spacebar-trackpad) gesture owns the caret; turns the steady caret into
+    /// the dimmed "landing" indicator in `updateCaretView`.
+    var floatingCursorActive = false
+    // Floating cursor (spacebar-trackpad) gesture state — see DocumentCanvasView+FloatingCursor.swift.
+    var floatingCursorPoint: CGPoint = .zero   // the last raw floating point (canvas coords)
+    var floatingScrollLink: CADisplayLink?
+    var floatingScrollVelocity: CGFloat = 0
+
     /// Last non-zero width laid out; used to rebuild boxes during undo (extensions can't add
     /// stored properties, so it lives here).
     var lastLayoutWidth: CGFloat = 0
@@ -194,6 +204,13 @@ final class DocumentCanvasView: UIView {
     var lastTapTime: TimeInterval = 0
     var lastTapLocation: CGPoint = .zero
     var tapCount = 0
+    /// Set on a genuine not-focused→focused transition (`becomeFirstResponder`), consumed by the next
+    /// `performSingleTap`. A FOCUSING tap must only place the caret, never open the menu. We can't detect it
+    /// from `isFirstResponder` at touch-up: the chat composer focuses the editor on touch-DOWN (the panel's
+    /// `ensureFocusedOnTap`), so by the time the tap handler runs `isFirstResponder` is already true. This flag
+    /// captures the transition regardless of who triggered it (touch-down focus or the handler's own
+    /// `ensureFirstResponder`).
+    var didJustBecomeFirstResponder = false
     /// Active magnifier loupe during a long-press caret drag (iOS 17+). Begun on `.began`, moved on
     /// `.changed`, invalidated + niled on `.ended`/`.cancelled`/`.failed`. The storage is untyped because a
     /// stored property can't be `@available`-gated narrower than its enclosing (iOS-16) type, while
@@ -259,6 +276,7 @@ final class DocumentCanvasView: UIView {
         addSubview(selectionHighlight)   // selection wash, above text + emoji, below chrome
         addSubview(blockChromeOverlay)
         addSubview(caretView)   // own caret, above content; reparented into a table's content view when needed
+        addSubview(transientCaretView)   // own floating caret, above content; reparented like caretView
         addSubview(startHandleView)   // own-drawn selection handles, hosted per-endpoint like the caret
         addSubview(endHandleView)
     }
@@ -277,16 +295,18 @@ final class DocumentCanvasView: UIView {
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let became = super.becomeFirstResponder()
         if became { updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
-        if became && !wasFirstResponder { onBecameFirstResponder?() }   // only the real not-focused→focused transition
+        if became && !wasFirstResponder { didJustBecomeFirstResponder = true; onBecameFirstResponder?() }   // only the real not-focused→focused transition
         return became
     }
 
     @discardableResult
     override func resignFirstResponder() -> Bool {
         finalizeMarkedText()
+        cancelFloatingCursor()                                           // tear down any in-flight floating-cursor gesture (display link retains self)
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let resigned = super.resignFirstResponder()
         if resigned { updateCaretView(); updateSelectionHandleViews() }   // hide caret + handles (no longer FR)
+        if resigned { didJustBecomeFirstResponder = false }              // don't carry a stale focusing-tap flag across a defocus
         if resigned && wasFirstResponder { onResignedFirstResponder?() } // only the real focused→not-focused transition
         return resigned
     }
@@ -306,6 +326,7 @@ final class DocumentCanvasView: UIView {
     func applyTheme(_ theme: RichTextEditorTheme) {
         self.mapper.theme = theme
         self.caretView.accentColor = theme.accent
+        self.transientCaretView.accentColor = theme.accent
         self.startHandleView.accentColor = theme.accent
         self.endHandleView.accentColor = theme.accent
         self.blockquoteUnderlay.accentColor = theme.accent
@@ -609,7 +630,10 @@ final class DocumentCanvasView: UIView {
 
     override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
-        if newWindow == nil { stopDragAutoScroll() }   // don't let a CADisplayLink retain a torn-down view
+        if newWindow == nil {
+            stopDragAutoScroll()     // don't let a CADisplayLink retain a torn-down view
+            cancelFloatingCursor()   // same: tear down the floating-cursor display link on window removal
+        }
     }
 
     override var intrinsicContentSize: CGSize {
@@ -897,61 +921,80 @@ final class DocumentCanvasView: UIView {
     /// scrollable table CELL it's hosted in that table's scrolling content view (so it rides the scroll);
     /// otherwise (paragraph / image-gap) it's a subview of the canvas.
     func updateCaretView() {
+        // During a floating-cursor (spacebar-trackpad) gesture the steady caret becomes the DIMMED
+        // "landing" indicator at the SNAPPED position (where the caret lands on release); the bright
+        // gliding shadow (transientCaretView) is positioned separately by the floating handlers.
+        if floatingCursorActive {
+            guard isFirstResponder, let placement = caretHostPlacement(forGlobal: head) else { return hideCaretView() }
+            hostOverlay(caretView, at: placement)
+            caretView.freezeSolid()
+            caretView.alpha = 0.4
+            lastCaretContainer = placement.container
+            lastCaretFrame = placement.frame
+            return
+        }
+        caretView.alpha = 1   // restore full opacity after a gesture
+
         // Should it show?
         guard isFirstResponder, selFrom == selTo, tableSelection == nil, imageSelection == nil else { return hideCaretView() }
 
-        var container: UIView = self
-        var frame: CGRect
-
-        let leaf = leafRegion(containingGlobal: head)
-        if let region = leaf,
-           let table = tableBox(containingGlobal: head),
-           let tv = blockViews[table.id] as? TableBackingView,
-           region.region.globalStart >= table.nodeStart,
-           region.region.globalStart < table.nodeStart + table.nodeSize {
-            // Caret inside a table cell → host it in the table's scrolling content view (content-local =
-            // unscrolled-canvas − table.frame.origin; the content view draws via a -blockViewFrame.origin
-            // translate, and a table's blockViewFrame.origin == frame.origin).
-            let unscrolled = region.region.caretRect(atLocal: region.local)
-                .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
-                          dy: region.region.canvasOrigin.y)
-            frame = caretBar(from: unscrolled)
-                .offsetBy(dx: -table.frame.minX, dy: -table.frame.minY)
-            tv.hostCaret(caretView, at: frame)
-            container = tv
-        } else if let region = leaf {
-            // A non-table leaf region (paragraph / image caption): unscrolled == canvas coords.
-            frame = caretBar(from: region.region.caretRect(atLocal: region.local)
-                .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
-                          dy: region.region.canvasOrigin.y))
-            hostCaretOnCanvas(at: frame)
-        } else if let img = mediaBox(atGap: head) {
-            // An image gap: a vertical bar at the image's leading edge (full height).
-            let rr = img.mediaRect()
-            frame = CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height)
-            hostCaretOnCanvas(at: frame)
-        } else {
-            return hideCaretView()   // not renderable → no caret
-        }
+        guard let placement = caretHostPlacement(forGlobal: head) else { return hideCaretView() }
+        hostOverlay(caretView, at: placement)
 
         caretView.isHidden = false
         // Reset the blink ONLY when the caret actually moved (container or frame changed). A no-op refresh
         // (scroll tick / relayout at the same spot) keeps the existing blink running.
-        let changed = container !== lastCaretContainer || !frame.equalTo(lastCaretFrame)
+        let changed = placement.container !== lastCaretContainer || !placement.frame.equalTo(lastCaretFrame)
         if changed { caretView.resetBlink() } else { caretView.startBlink() }
-        lastCaretContainer = container
-        lastCaretFrame = frame
+        lastCaretContainer = placement.container
+        lastCaretFrame = placement.frame
+    }
+
+    /// The (container, frame) where a caret-like overlay for global `pos` should be hosted, or `nil` if
+    /// `pos` is not a renderable caret slot. For an in-cell position the container is the owning
+    /// `TableBackingView` (frame in its content-local space); otherwise the canvas (frame in canvas
+    /// space). Extracted from `updateCaretView` so the steady caret and the floating transient caret host
+    /// identically — including riding a table's horizontal scroll.
+    func caretHostPlacement(forGlobal pos: Int) -> (container: UIView, frame: CGRect)? {
+        let leaf = leafRegion(containingGlobal: pos)
+        if let region = leaf,
+           let table = tableBox(containingGlobal: pos),
+           let tv = blockViews[table.id] as? TableBackingView,
+           region.region.globalStart >= table.nodeStart,
+           region.region.globalStart < table.nodeStart + table.nodeSize {
+            let unscrolled = region.region.caretRect(atLocal: region.local)
+                .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
+                          dy: region.region.canvasOrigin.y)
+            let frame = caretBar(from: unscrolled)
+                .offsetBy(dx: -table.frame.minX, dy: -table.frame.minY)
+            return (tv, frame)
+        } else if let region = leaf {
+            let frame = caretBar(from: region.region.caretRect(atLocal: region.local)
+                .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
+                          dy: region.region.canvasOrigin.y))
+            return (self, frame)
+        } else if let img = mediaBox(atGap: pos) {
+            let rr = img.mediaRect()
+            return (self, CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height))
+        }
+        return nil
+    }
+
+    /// Hosts an arbitrary overlay view at a placement (reparenting into a table's content view when
+    /// needed), matching how the steady caret is hosted.
+    func hostOverlay(_ v: UIView, at placement: (container: UIView, frame: CGRect)) {
+        if let tv = placement.container as? TableBackingView {
+            tv.hostCaret(v, at: placement.frame)
+        } else {
+            if v.superview !== placement.container { placement.container.addSubview(v) }
+            placement.container.bringSubviewToFront(v)
+            v.frame = placement.frame
+        }
     }
 
     /// A 2pt-wide caret bar from a TextKit caret rect (keeps the OS-caret look used by `caretRect`).
     private func caretBar(from rect: CGRect) -> CGRect {
         CGRect(x: rect.minX, y: rect.minY, width: 2, height: rect.height)
-    }
-
-    private func hostCaretOnCanvas(at frame: CGRect) {
-        if caretView.superview !== self { addSubview(caretView) }
-        bringSubviewToFront(caretView)
-        caretView.frame = frame
     }
 
     private func hideCaretView() {
