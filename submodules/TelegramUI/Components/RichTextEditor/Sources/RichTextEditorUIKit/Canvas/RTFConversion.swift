@@ -147,6 +147,7 @@ enum RTFConversion {
     }
 
     static func fragment(fromRTF data: Data) -> Document? {
+        if let parsed = RTFImport.document(fromRTF: data) { return parsed }   // custom parser first
         guard let attr = try? NSAttributedString(data: data,
             options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil)
         else { return nil }

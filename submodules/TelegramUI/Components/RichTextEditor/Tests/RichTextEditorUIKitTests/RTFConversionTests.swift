@@ -163,12 +163,13 @@ final class RTFConversionTests: XCTestCase {
 
     func test_roundTrip_codeBlock_monoAndInteriorNewlines() throws {
         let back = try roundTrip([.code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "x\ny")]))])
-        // The code block's text survives; interior newline is preserved as a line break within one block.
-        let allText = back.blocks.compactMap { b -> String? in
-            if case .paragraph(let p) = b { return p.text } else { return nil }
-        }.joined(separator: "|")
-        XCTAssertTrue(allText.contains("x"))
-        XCTAssertTrue(allText.contains("y"))
+        // The custom parser reconstructs a .code block (all-mono runs → code block in RTFDocumentParser).
+        // Interior newlines survive as \line in RTF → "\n" back in the code block text.
+        let codeText = back.blocks.compactMap { b -> String? in
+            if case .code(let c) = b { return c.runs.map(\.text).joined() } else { return nil }
+        }.joined()
+        XCTAssertTrue(codeText.contains("x"))
+        XCTAssertTrue(codeText.contains("y"))
     }
 
     func test_roundTrip_nonASCIIText() throws {
@@ -246,13 +247,40 @@ final class RTFConversionTests: XCTestCase {
         XCTAssertTrue(rtf.contains("Intro") && rtf.contains("\\trowd"))
     }
 
-    func test_import_handRolledTable_flattensToCellTexts() throws {
+    func test_import_handRolledTable_reconstructsTable() throws {
+        // The custom parser now reconstructs a real .table block (not a flatten to paragraphs —
+        // that was the NSAttributedString limitation). All cell texts must survive in the table.
         let back = try XCTUnwrap(RTFConversion.fragment(fromRTF:
             try XCTUnwrap(RTFConversion.rtfData(from: Document(blocks: [.table(table2x2())])))))
-        let joined = back.blocks.compactMap { b -> String? in
+        guard case .table(let t) = back.blocks.first else { return XCTFail("expected a .table block") }
+        let allCellText = t.rows.flatMap(\.cells).flatMap(\.blocks).compactMap { b -> String? in
             if case .paragraph(let p) = b { return p.text } else { return nil }
         }.joined(separator: "|")
-        for cell in ["Name", "Age", "Ann", "30"] { XCTAssertTrue(joined.contains(cell)) }
+        for cell in ["Name", "Age", "Ann", "30"] { XCTAssertTrue(allCellText.contains(cell), "missing '\(cell)'") }
+    }
+
+    // MARK: Task 7 — custom parser integration
+
+    func test_import_usesCustomParser_reconstructsHeadingAndTable() throws {
+        // Export a doc with a heading + a table, then import it back: structure must survive (the custom
+        // parser, not the NSAttributedString flatten).
+        let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 100), ColumnSpec(width: 100)],
+            rows: [Row(id: BlockID("r"), cells: [
+                Cell(id: BlockID("c0"), blocks: [.paragraph(ParagraphBlock(id: BlockID("c0p"), runs: [TextRun(text: "A")]))]),
+                Cell(id: BlockID("c1"), blocks: [.paragraph(ParagraphBlock(id: BlockID("c1p"), runs: [TextRun(text: "B")]))]),
+            ])])
+        let doc = Document(blocks: [
+            .paragraph(ParagraphBlock(id: BlockID("h"), style: .heading1, runs: [TextRun(text: "Title")])),
+            .table(table),
+        ])
+        let back = try XCTUnwrap(RTFConversion.fragment(fromRTF: RTFConversion.rtfData(from: doc)!))
+        XCTAssertTrue(back.blocks.contains { if case .paragraph(let p) = $0 { return p.style == .heading1 } else { return false } })
+        XCTAssertTrue(back.blocks.contains { if case .table = $0 { return true } else { return false } })
+    }
+    func test_import_nonRTF_fallsBackToNSAttributedString() {
+        // Garbage that the custom parser rejects (no {\rtf header) must still go through the old path
+        // (which also returns nil for non-RTF) — i.e. no crash.
+        XCTAssertNil(RTFConversion.fragment(fromRTF: Data("not rtf".utf8)))
     }
 
     // MARK: Finding 1 — unescaped URL in HYPERLINK field destination
