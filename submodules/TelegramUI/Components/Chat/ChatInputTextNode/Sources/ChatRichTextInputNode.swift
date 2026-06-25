@@ -245,6 +245,12 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// forwarded to the editor's menu. No-op on the legacy backend (it uses the `chatInputTextNodeMenu` delegate).
     var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])? { get set }
 
+    /// Pasting media (image/gif/video/sticker) is a host concern. The PANEL sets these so the native editor
+    /// can delegate a media paste back to the chat send flow. `canPasteMedia` gates whether the editor offers
+    /// Paste for the current pasteboard; `onPasteMedia` performs the routing (returns whether it consumed it).
+    var canPasteMedia: (() -> Bool)? { get set }
+    var onPasteMedia: (() -> Bool)? { get set }
+
     /// Apply a format command through the backend's native engine. No-op on the legacy backend.
     func performFormatAction(_ action: ChatRichTextFormatAction)
 
@@ -868,6 +874,10 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     // The legacy backend builds its menu via ChatTextInputPanelNode.chatInputTextNodeMenu; this hook is unused.
     var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?
+
+    // The legacy path routes media via `chatInputTextNodeShouldPaste`; these hooks are never read.
+    public var canPasteMedia: (() -> Bool)?
+    public var onPasteMedia: (() -> Bool)?
 
     func performFormatAction(_ action: ChatRichTextFormatAction) {}
     func currentRichTextLinkURL() -> String? { return nil }

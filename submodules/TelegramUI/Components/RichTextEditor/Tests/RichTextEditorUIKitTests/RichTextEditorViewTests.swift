@@ -33,6 +33,14 @@ final class RichTextEditorViewTests: XCTestCase {
         XCTAssertEqual(becameCount, 1, "losing focus does not fire the became callback")
     }
 
+    func test_pasteMediaHooks_forwardToCanvas() {
+        let editor = RichTextEditorView()
+        editor.onPasteMedia = { true }
+        editor.canPasteMedia = { true }
+        XCTAssertTrue(editor.canvas.onPasteMedia?() ?? false)    // forwarded to the canvas
+        XCTAssertTrue(editor.canvas.canPasteMedia?() ?? false)
+    }
+
     // A content-height change after an edit re-flows the host layout (canvas frame), not only on the
     // next external layout pass (e.g. a rotation). Pre-fix the edit never marked the host dirty, so a
     // normal layout pass left the canvas at its old height. (The canvas also fills at least the viewport

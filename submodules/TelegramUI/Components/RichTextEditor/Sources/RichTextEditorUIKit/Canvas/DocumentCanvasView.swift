@@ -106,6 +106,13 @@ final class DocumentCanvasView: UIView {
     /// Fired once when the canvas actually RESIGNS first-responder status. Surfaced as
     /// `RichTextEditorView.onResignedFirstResponder`.
     var onResignedFirstResponder: (() -> Void)?
+    /// Pasting MEDIA (image/gif/video/sticker) is a host concern — the editor never embeds it inline.
+    /// `canPasteMedia` answers whether Paste should be offered for the current pasteboard (so the menu item
+    /// shows for an image-only clipboard); `onPasteMedia` performs the media paste (routing to the host's
+    /// send flow) and returns whether it consumed the paste. Consulted only when there is no TEXT rep — the
+    /// editor pastes text (fragment/RTF/plain) itself.
+    var canPasteMedia: (() -> Bool)?
+    var onPasteMedia: (() -> Bool)?
 
     /// Interior content margins — interactable padding around the document, ADDED to the built-in
     /// `pageMargin`. Unlike the host's scroll insets (covered by chrome/keyboard, content scrolls under),

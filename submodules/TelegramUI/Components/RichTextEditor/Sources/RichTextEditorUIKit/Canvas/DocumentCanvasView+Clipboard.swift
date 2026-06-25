@@ -12,7 +12,7 @@ extension DocumentCanvasView {
         case #selector(copy(_:)), #selector(cut(_:)):
             return selFrom < selTo
         case #selector(paste(_:)):
-            return pasteboard.contains(pasteboardTypes: [Self.richTextFragmentUTI, "public.rtf"]) || pasteboard.hasStrings
+            return pasteboard.contains(pasteboardTypes: [Self.richTextFragmentUTI, "public.rtf"]) || pasteboard.hasStrings || (canPasteMedia?() ?? false)
         default:
             return false
         }
@@ -37,8 +37,8 @@ extension DocumentCanvasView {
     }
 
     @objc override func paste(_ sender: Any?) {
-        guard let fragment = fragment(fromPasteboard: pasteboard) else { return }
-        pasteFragment(fragment)
+        if let fragment = fragment(fromPasteboard: pasteboard) { pasteFragment(fragment); return }
+        _ = onPasteMedia?()   // no text rep → let the host route media (image/gif/video/sticker) to send
     }
 
     /// The richest fragment available on the pasteboard: private UTI → RTF → plain text.

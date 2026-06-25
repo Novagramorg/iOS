@@ -335,6 +335,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         set { self.editorView.contextMenuItemsProvider = newValue }
     }
 
+    public var canPasteMedia: (() -> Bool)? { didSet { self.editorView.canPasteMedia = canPasteMedia } }
+    public var onPasteMedia: (() -> Bool)? { didSet { self.editorView.onPasteMedia = onPasteMedia } }
+
     public func performFormatAction(_ action: ChatRichTextFormatAction) {
         switch action {
         case .bold: self.editorView.toggleBold()

@@ -223,6 +223,46 @@ final class CanvasClipboardTests: XCTestCase {
         XCTAssertFalse(allRunTexts(v.currentBlocks()).contains { $0.contains("\n") })
     }
 
+    // MARK: paste-media-to-send hooks (the editor delegates media; text wins)
+
+    private var pasteSelector: Selector { #selector(UIResponderStandardEditActions.paste(_:)) }
+
+    func test_canPerformAction_paste_trueWhenMediaAvailable_noText() {
+        let (v, pb) = canvas()
+        pb.items = [:]                                  // no text reps on the pasteboard
+        v.canPasteMedia = { true }
+        XCTAssertTrue(v.clipboardCanPerformAction(pasteSelector))
+    }
+
+    func test_canPerformAction_paste_falseWhenNoTextNoMedia() {
+        let (v, pb) = canvas()
+        pb.items = [:]
+        v.canPasteMedia = { false }
+        XCTAssertFalse(v.clipboardCanPerformAction(pasteSelector))
+    }
+
+    func test_paste_noTextRep_delegatesToOnPasteMedia_documentUnchanged() {
+        let (v, pb) = canvas()
+        pb.items = [:]                                  // no fragment / rtf / plain
+        var mediaCalled = false
+        v.onPasteMedia = { mediaCalled = true; return true }
+        let beforeCount = v.currentBlocks().count
+        v.paste(nil)
+        XCTAssertTrue(mediaCalled)                      // media delegated
+        XCTAssertEqual(v.currentBlocks().count, beforeCount)   // document untouched (no inline embed)
+    }
+
+    func test_paste_withTextRep_pastesText_doesNotDelegateMedia() {
+        let (v, pb) = canvas()
+        pb.string = "hello"                             // a plain-text rep present
+        let r = region(v, "h"); v.anchor = r.globalStart + 5; v.head = r.globalStart + 5  // after "Hello"
+        var mediaCalled = false
+        v.onPasteMedia = { mediaCalled = true; return true }
+        v.paste(nil)
+        XCTAssertFalse(mediaCalled)                     // text wins — media NOT consulted
+        XCTAssertTrue(text(v, "h").contains("hello"))   // the text was pasted
+    }
+
     // MARK: RichTextEditorClipboard public façade (host writes a whole Document to the pasteboard)
 
     func test_pasteboardItem_forDocument_hasFragmentRTFAndDerivedPlain() throws {

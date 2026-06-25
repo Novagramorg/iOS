@@ -41,6 +41,13 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// react by dismissing a panel / chrome.
     public var onResignedFirstResponder: (() -> Void)?
 
+    /// Pasting media (image/gif/video/sticker) is a host concern — the editor never embeds it. Set these to
+    /// route a media paste to the host (e.g. the chat send flow): `canPasteMedia` gates whether Paste is
+    /// offered; `onPasteMedia` performs it (returns whether it consumed the paste). Text paste is handled by
+    /// the editor regardless of these.
+    public var canPasteMedia: (() -> Bool)? { didSet { canvas.canPasteMedia = canPasteMedia } }
+    public var onPasteMedia: (() -> Bool)? { didSet { canvas.onPasteMedia = onPasteMedia } }
+
     /// Transform the editor's default edit-menu elements into the final set. `defaultElements` is the system
     /// suggested actions (Cut/Copy/Paste/Select + Writing Tools) followed by the editor's own custom items
     /// (the built-in "Format" submenu + Look Up / Translate / Share). Return the elements to present.
