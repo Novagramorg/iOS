@@ -158,8 +158,16 @@ The façade is now driven by its host rather than self-laying-out:
   inherited run format when collapsed. The 5 format predicates are extracted (`rangeIsBold` etc.) and shared
   by the `toggle*` commands and `currentState`.
 - `deleteTable()` — removes the caret's table (one undo step; caret lands on the successor block, or a fresh
-  empty paragraph if it was the only block). No-op when not in a table. (Caret-based; a structural-selection
-  delete is deferred.)
+  empty paragraph if it was the only block). No-op when not in a table. (This is the handle-menu "Delete Table"
+  / caret-based path, which *joins* the surrounding content.)
+- **Backspace with a table structural (row/column) selection** (`deleteTableStructuralSelection`, hooked at the
+  top of `deleteBackward` since the parked caret would otherwise hit the in-cell delete) deletes the selected
+  rows / columns — routing to the existing `deleteTableRow` / `deleteTableColumn` (which already read
+  `structuralRowRange()` / `structuralColumnRange()`). When the selection covers EVERY row or EVERY column
+  (`lowerBound <= 0 && upperBound >= rowCount/columnCount − 1`) — which would empty the table — it removes the
+  whole table block instead, replacing it **in place** with an empty body paragraph (caret there). Distinct from
+  `deleteTable()` above (which joins): full-selection backspace leaves an empty paragraph where the table was.
+  The structural selection is cleared afterward (mirrors the handle menu's `structuralAction`).
 - `composerSelectedRange: NSRange { get set }` — the selection in the **chat composer's flat UTF-16
   coordinate space** (the document's top-level paragraphs joined by `"\n"`, exactly the
   `ComposerDocumentBridge` flattening; non-paragraph blocks contribute nothing). Maps that flat offset
@@ -216,7 +224,8 @@ custom `UITextInput` presenting `UIEditMenuInteraction` directly. Any editor cha
 edit menu being interactive in the Telegram app depends on this allow-list entry.
 
 **Deferred:** pending caret formatting (inline toggles at a *collapsed* caret are currently inert — they show
-the inherited state but don't affect the next typed char); table structural selection. **Code blocks landed**
+the inherited state but don't affect the next typed char). (Table structural row/column selection + its
+delete-via-Backspace now landed — see `deleteTableStructuralSelection` above.) **Code blocks landed**
 (2026-06-19, `feature/richtext-code-block`) as a first-class multi-line `Block.code` — see the dedicated note
 below; they now losslessly round-trip and Format▸Code creates one. Dates now *round-trip* via the link scheme
 (see the composer-bridge note above), but the Date menu item remains a creation no-op (no native
@@ -348,6 +357,51 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   paragraph instead — non-empty → move the caret to its end (no delete), empty → delete that paragraph
   (`deleteBlock(at:parkingCaretAtGapOf:)`, caret stays at the media gap); first block / non-paragraph previous
   → move to the previous caret slot (no-op at doc start).
+- **Backspace at the start of an image caption deletes the image ONLY when the caption is empty** (`deleteBackward`,
+  the `pos.box is MediaBlockBox, pos.local == 0` branch). An **empty** caption → `deleteImageBox` removes the
+  image; a **non-empty** caption → the caret steps back to the image's gap (`prevTextPosition`, no delete) so a
+  stray Backspace can't destroy the image *and* its caption text. (Previously it deleted the image at caption
+  start regardless of caption content — a footgun.) `deleteImageBox` also now **never leaves a zero-block
+  document**: removing the only block (a lone `[image]`, reachable since insert-on-empty-paragraph replaces it)
+  appends a fresh empty paragraph — this guard covers every `deleteImageBox` caller (caption-delete + the
+  tap-selected-image delete).
+- **A delete whose selection EXACTLY covers one media node deletes the image** (`applySelectionReplace`,
+  runtime-discovered 2026-06-25 via the Demo). The collapsed-caret caption branch above is mostly unreachable
+  from a real tap: **UIKit expands a collapsed caret at an image's empty caption into a selection
+  `[nodeStart, captionEnd]`** (the "object-replacement" atom), pushed through the `selectedTextRange` setter
+  right after the tap. Backspace then takes the `selFrom != selTo` path; both endpoints resolve to the SAME
+  media box, so the same-stack `applyReplace` computes a zero-length edit and **silently no-ops** — the
+  reported "backspace on an empty caption does nothing" bug. `applySelectionReplace` now special-cases a
+  `text.isEmpty` range whose bounds equal a media block's node span (`from == box.nodeStart && to ==
+  box.textStart + box.textLength`) and calls `deleteImageBox`. A selection that also covers adjacent text has
+  different bounds, so it still flows to the normal cross-block drop path. (A *non-empty* caption's atom
+  selection is `[nodeStart, textStart]` ≠ the node span, so it does NOT match — consistent with the
+  "non-empty caption never auto-deletes the image" rule above.) **Lesson: a bare custom `UITextInput` still
+  receives OS-driven `selectedTextRange` writes that turn a caret into an atom selection — unit tests that set
+  the caret directly miss it; reproduce caret placement the way iOS drives it (or in the Demo).**
+- **Backspace at the start of a paragraph AFTER a non-text block deletes the empty paragraph, never the block**
+  (`deleteBackward`, the mirror of the leading-gap rule above). A collapsed caret at the start (`local == 0`) of
+  a paragraph whose previous block is a non-text **atom** — an image (`MediaBlockBox`), a table (`TableBlockBox`),
+  or a code block (`CodeBlockBox`), unified via `isNonParagraphAtom(_:)` — must NOT delete that block (you can't
+  merge text into it): an **empty** paragraph is removed (`removeBlock(at:parkingCaretAt:)`, so *"deleting the
+  last paragraph" is always possible*), a **non-empty** one is kept; either way the caret steps back to the
+  block's nearest text slot via `prevTextPosition` (an image's caption end, a table's last cell end, a code
+  block's end) — never the block's degenerate node-start boundary. Previously the image branch called
+  `deleteImageBox(at: pos.index - 1)` and silently destroyed the image; the table branch moved the caret but
+  *kept* the empty paragraph (undeletable); the code branch left the empty paragraph in place. Text blocks
+  (body/heading/quote/list paragraphs) still take the normal merge path below. (Select All + backspace still
+  removes a covered image — that goes through `applyReplace`, below.)
+- **Inserting a table or image on an EMPTY paragraph replaces it; mid-paragraph it splits** (`insertTable`,
+  `insertMedia`). Both share one branch order: an **empty** caret paragraph (`pos.box as? BlockBox` with
+  `textLength == 0`) is **replaced** by the new block (`replaceSubrange(pos.index...pos.index)`) so no stray
+  empty paragraph is left beside it — even between content (`A | empty | B` → `A | block | B`); a caret strictly
+  **interior** to a non-empty paragraph (`0 < local < textLength`) **splits** it into upper + block + lower;
+  caret at the **start** of a non-empty paragraph inserts the block **before** it, at the **end** inserts
+  **after**. The empty-replace check must run FIRST (an empty paragraph is both `local == 0` and
+  `local == textLength`, so it would otherwise fall into the insert-before branch and survive). Replacing the
+  document's only block is fine — a lone `[table]`/`[image]` is a valid document (the caret lands in the first
+  cell / caption; tap-below re-adds a paragraph). The empty-replace only targets `BlockBox` paragraphs, so it
+  never replaces an image caption / code block the caret happens to sit in.
 - **Select All + backspace removes a covered image, even a leading/trailing one** (`applyReplace` cross-block).
   A media endpoint is now dropped when the selection covers its **whole node** (leading gap + entire caption:
   `lo <= box.nodeStart && hi >= box.textStart + box.textLength`), so the merge path's `replaceSubrange(start...
@@ -361,9 +415,13 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   each top-level only (an in-table quote keeps the cell behaviors): **(A)** Backspace in an **empty** quote
   un-quotes it (`style = .body; restyle`) instead of doing nothing — an empty quote, especially the document's
   FIRST block, otherwise matched no `deleteBackward` branch and was undeletable. Mirrors empty-list-item Return.
-  A non-empty quote's backspace still just deletes a char. **(B)** Tapping in the empty area **below a trailing
-  quote** (`point.y > boxes.last.frame.maxY` && last is a `.quote`) inserts a new empty body paragraph after it
-  (`insertEmptyBodyParagraph(at:)`) — the only way to start a normal paragraph after a quote that ends the doc.
+  A non-empty quote's backspace still just deletes a char. **(B)** Tapping in the empty area **below the
+  document's last block** (`point.y > boxes.last.frame.maxY`) inserts a new empty body paragraph after it
+  (`insertEmptyBodyParagraph(at:)`) — so you can always start a normal paragraph below the final block, whatever
+  its type (image / table / quote / code / non-empty paragraph). **The one exception:** when the last block is
+  ALREADY an empty body paragraph, the tap is let through to the normal caret-placement path (no redundant empty
+  is stacked). This started as a quote/code-only escape hatch and was generalized 2026-06-25 (paired with the
+  *"deleting the last paragraph"* backspace rule above, so a tapped-in trailing paragraph is also removable).
   **(C)** **Shift+Return** inside a quote EXITS it with a new empty body paragraph (caret there): **ABOVE** the
   quote when the caret is on its first visual (wrapped) line (`caretIsOnFirstLine` — compares the caret's `minY`
   to offset 0's), else **BELOW** it. So a single-line / empty quote (caret always on its first line) exits

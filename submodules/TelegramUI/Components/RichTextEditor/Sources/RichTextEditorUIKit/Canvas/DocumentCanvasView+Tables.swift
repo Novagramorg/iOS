@@ -109,6 +109,40 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Backspace with a table structural (row/column) selection active. Deletes the selected rows or
+    /// columns (via the existing `deleteTableRow`/`deleteTableColumn`, which read the structural range).
+    /// When the selection covers EVERY row or EVERY column — which would empty the table — it removes the
+    /// whole table block instead, replacing it IN PLACE with an empty body paragraph (caret there). The
+    /// structural selection is cleared afterward (mirrors the handle menu's `structuralAction`). No-op-safe
+    /// when there is no live structural selection.
+    func deleteTableStructuralSelection() {
+        guard let sel = tableSelection, let a = activeTable(), a.box.id == sel.table else {
+            clearTableSelection(); return
+        }
+        let coversWholeTable: Bool
+        switch sel.kind {
+        case .rows(let range):    coversWholeTable = range.lowerBound <= 0 && range.upperBound >= a.box.rowCount - 1
+        case .columns(let range): coversWholeTable = range.lowerBound <= 0 && range.upperBound >= a.box.columnCount - 1
+        }
+        if coversWholeTable {
+            editing {
+                let para = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                    mapper: mapper, width: effectiveWidth)
+                var nb = boxes
+                nb[a.index] = para
+                boxes = nb
+                recomputeSpans()
+                anchor = para.textStart; head = para.textStart
+            }
+        } else {
+            switch sel.kind {
+            case .rows:    deleteTableRow()      // reads structuralRowRange(); self-wraps in editing { }
+            case .columns: deleteTableColumn()   // reads structuralColumnRange()
+            }
+        }
+        clearTableSelection()
+    }
+
     func deleteTableColumn() {
         guard let a = activeTable() else { return }
         guard case .table(let table) = a.box.currentBlock() else { return }
@@ -154,7 +188,9 @@ extension DocumentCanvasView {
             let tableBox = TableBlockBox(table: TableBlock.empty(rows: rows, columns: columns),
                                          mapper: mapper, width: effectiveWidth)
             var newBoxes = boxes
-            if pos.local > 0, pos.local < p.textLength {
+            if p.textLength == 0 {
+                newBoxes.replaceSubrange(pos.index...pos.index, with: [tableBox])   // empty paragraph → replace it
+            } else if pos.local > 0, pos.local < p.textLength {
                 let (upper, lower) = p.currentParagraph().split(at: pos.local, newID: BlockID.generate())
                 let upperBox = BlockBox(paragraph: upper, mapper: mapper, width: effectiveWidth)
                 let lowerBox = BlockBox(paragraph: lower, mapper: mapper, width: effectiveWidth)

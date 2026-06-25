@@ -117,12 +117,13 @@ extension DocumentCanvasView {
         let justFocused = didJustBecomeFirstResponder
         didJustBecomeFirstResponder = false
         let wasFirstResponder = wasFirstResponderAtEntry && !justFocused
-        // A tap BELOW the document's last block, when that block is a quote OR a code block, starts a new
-        // body paragraph after it — the only way to escape a trailing quote/code block (nothing exists below
-        // it to tap into).
-        if let last = boxes.last, ((last as? BlockBox)?.style == .quote || last is CodeBlockBox),
-           point.y > last.frame.maxY {
-            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing quote/code block
+        // A tap BELOW the document's last block starts a new empty body paragraph after it — so you can
+        // always begin a normal paragraph below the final block, whatever its type (image / table / quote /
+        // code / non-empty paragraph). The ONE exception: when the last block is ALREADY an empty body
+        // paragraph, don't stack a redundant empty — fall through and just place the caret in it.
+        if let last = boxes.last, point.y > last.frame.maxY,
+           !((last as? BlockBox).map { $0.style == .body && $0.textLength == 0 } ?? false) {
+            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing block
             return
         }
         if let hit = tableHandle(at: point), let action = tableHandleTap(at: point) {

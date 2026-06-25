@@ -119,6 +119,32 @@ final class CanvasInsertTableTests: XCTestCase {
         XCTAssertEqual(tables(v).count, 2)
     }
 
+    func test_insertTable_onEmptyParagraph_replacesParagraph() {
+        let v = DocumentCanvasView()
+        v.setBlocks([.paragraph(ParagraphBlock(id: BlockID("e"), runs: []))], width: 320)   // a single empty paragraph
+        v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
+        v.anchor = v.boxes[0].textStart; v.head = v.boxes[0].textStart
+        v.insertTable(rows: 2, columns: 2)
+        XCTAssertEqual(v.currentBlocks().count, 1, "the empty paragraph is replaced by the table, not left beside it")
+        guard case .table = v.currentBlocks().first else { return XCTFail("the only block should be the table") }
+        XCTAssertTrue(v.isInsideTable(v.head), "caret lands inside the new table")
+    }
+
+    func test_insertTable_onEmptyParagraphBetweenContent_replacesIt() {
+        let v = DocumentCanvasView()
+        v.setBlocks([
+            .paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "A")])),
+            .paragraph(ParagraphBlock(id: BlockID("e"), runs: [])),                  // empty middle paragraph
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "B")])),
+        ], width: 320)
+        v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
+        v.anchor = v.boxes[1].textStart; v.head = v.boxes[1].textStart
+        v.insertTable(rows: 2, columns: 2)
+        XCTAssertEqual(v.currentBlocks().count, 3, "A | table | B — the empty paragraph is replaced, not split into two empties")
+        XCTAssertEqual(paraTexts(v), ["A", "B"])
+        XCTAssertEqual(tables(v).count, 1)
+    }
+
     func test_insertTable_noOpInCell_registersNoUndo() {
         let v = canvas()
         let um = UndoManager(); um.groupsByEvent = false; v.undoManagerOverride = um

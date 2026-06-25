@@ -116,11 +116,26 @@ final class CanvasQuoteEditTests: XCTestCase {
         XCTAssertEqual(v.head, v.boxes[2].textStart, "caret moves into the new paragraph")
     }
 
-    func test_tapBelowTrailingBody_placesCaret_noNewParagraph() {
+    func test_tapBelowTrailingNonEmptyBody_addsBodyParagraph() {
+        // Tapping below the document's last block always starts a new empty body paragraph there — even
+        // when that last block is a (non-empty) body paragraph.
         let v = canvas([body("b", "Hello")])
         let lastMaxY = v.boxes[0].frame.maxY
         v.performSingleTap(at: CGPoint(x: 20, y: lastMaxY + 40))
-        XCTAssertEqual(v.boxes.count, 1, "below a trailing BODY block, a tap just places the caret (no new block)")
+        XCTAssertEqual(v.boxes.count, 2, "below a trailing non-empty body block, a tap starts a new empty body paragraph")
+        XCTAssertEqual(style(v, 1), .body)
+        XCTAssertEqual((v.boxes[1] as! BlockBox).textLength, 0)
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret moves into the new paragraph")
+    }
+
+    func test_tapBelowTrailingEmptyBody_placesCaret_noNewParagraph() {
+        // The one exception: when the last block is ALREADY an empty body paragraph, a tap below it must
+        // NOT stack a redundant empty paragraph — it just places the caret in the existing one.
+        let v = canvas([body("b", "Hello"), body("e", "")])
+        let lastMaxY = v.boxes[1].frame.maxY
+        v.performSingleTap(at: CGPoint(x: 20, y: lastMaxY + 40))
+        XCTAssertEqual(v.boxes.count, 2, "below an already-empty body paragraph, a tap just places the caret (no new block)")
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands in the existing empty paragraph")
     }
 
     func test_tapOnQuoteBody_placesCaret_noNewParagraph() {

@@ -139,6 +139,9 @@ extension DocumentCanvasView {
         guard boxes.indices.contains(index) else { return }
         var newBoxes = boxes
         newBoxes.remove(at: index)
+        if newBoxes.isEmpty {   // a document must never be zero blocks — leave an empty paragraph behind
+            newBoxes.append(BlockBox(paragraph: ParagraphBlock(id: BlockID.generate()), mapper: mapper, width: effectiveWidth))
+        }
         boxes = newBoxes
         recomputeSpans()
         let caret = index > 0 ? boxes[index - 1].textStart + boxes[index - 1].textLength
@@ -156,6 +159,27 @@ extension DocumentCanvasView {
         boxes = newBoxes
         recomputeSpans()
         anchor = media.nodeStart; head = media.nodeStart   // media moved up; its gap is its (recomputed) nodeStart
+    }
+
+    /// True for a block that is NOT an editable text paragraph — an image, a table, or a code block. A
+    /// backspace at the start of the paragraph AFTER one of these can't merge text into it, so it removes
+    /// an empty paragraph instead of the block (and never deletes the block). A `BlockBox` (body / heading /
+    /// quote / list paragraph) is text and merges normally.
+    func isNonParagraphAtom(_ box: CanvasBlock) -> Bool {
+        box is MediaBlockBox || box is TableBlockBox || box is CodeBlockBox
+    }
+
+    /// Removes the block at `index`, parking the caret at an explicit global position the caller computed
+    /// BEFORE the removal (positions before the removed block are unaffected by it). Used by backspace at
+    /// the start of an empty trailing paragraph that follows a non-text block (image / table / code), which
+    /// the caller parks at that block's nearest text slot. Caller wraps this in `editing { … }`.
+    func removeBlock(at index: Int, parkingCaretAt caret: Int) {
+        guard boxes.indices.contains(index) else { return }
+        var newBoxes = boxes
+        newBoxes.remove(at: index)
+        boxes = newBoxes
+        recomputeSpans()
+        anchor = caret; head = caret
     }
 
     /// Resolves a global position to its owning `BlockStack` — a cell stack when inside a table,
@@ -201,6 +225,18 @@ extension DocumentCanvasView {
         // Never delete/replace a PARTIAL grapheme (e.g. one half of a surrogate-pair emoji, which the OS can
         // request on backspace as a 1-unit range) — expand to whole clusters so no stray code unit is left.
         let (globalFrom, globalTo) = rangeExpandedToGraphemeBoundaries(globalFrom: globalFrom, globalTo: globalTo)
+        // A delete whose selection EXACTLY covers one media block's node span — UIKit expands a collapsed caret
+        // at an image's empty caption / right after the image into [nodeStart, captionEnd], the "object
+        // replacement" atom — resolves BOTH endpoints to that one media box, so the same-stack `applyReplace`
+        // below would compute a zero-length edit and silently no-op (the "backspace on an empty caption does
+        // nothing" bug). Delete the image directly. A selection that also covers adjacent text doesn't match
+        // (its endpoints differ from the node bounds) and falls through to the normal cross-block drop path.
+        if text.isEmpty, let i = boxes.firstIndex(where: {
+            $0 is MediaBlockBox && globalFrom == $0.nodeStart && globalTo == $0.textStart + $0.textLength
+        }) {
+            deleteImageBox(at: i)
+            return
+        }
         if selectionEndpointsEditableTopLevel(globalFrom, globalTo) || bothInSameCellStack(globalFrom, globalTo) {
             applyReplace(globalFrom: globalFrom, globalTo: globalTo, text: text)
         } else {
@@ -336,7 +372,9 @@ extension DocumentCanvasView {
                                                             height: Double(naturalSize.height)))
             let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth)
             var newBoxes = boxes
-            if let p = pos.box as? BlockBox, pos.local > 0, pos.local < p.textLength {
+            if let p = pos.box as? BlockBox, p.textLength == 0 {
+                newBoxes.replaceSubrange(pos.index...pos.index, with: [mediaBox])   // empty paragraph → replace it
+            } else if let p = pos.box as? BlockBox, pos.local > 0, pos.local < p.textLength {
                 // split the paragraph and insert the media between the halves
                 let (upper, lower) = p.currentParagraph().split(at: pos.local, newID: BlockID.generate())
                 let upperBox = BlockBox(paragraph: upper, mapper: mapper, width: effectiveWidth)
