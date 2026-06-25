@@ -235,9 +235,12 @@ private func communityChatPreviewSignal(context: AccountContext, peerId: EngineP
             namespaces: .not(ignoredNamespaces),
             orderStatistics: []
         ),
-        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Messages.PeerReadCounters(id: peerId))
+        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Messages.PeerReadCounters(id: peerId)),
+        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: peerId)),
+        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.NotificationSettings(id: peerId)),
+        context.engine.data.subscribe(TelegramEngine.EngineData.Item.NotificationSettings.Global())
     )
-    |> map { viewData, readCounters -> (EnginePeer.Id, CommunityChatPreviewData) in
+    |> map { viewData, readCounters, peer, notificationSettings, globalNotificationSettings -> (EnginePeer.Id, CommunityChatPreviewData) in
         let (view, _, _) = viewData
         var messages: [EngineMessage] = []
         for i in (0 ..< view.entries.count).reversed() {
@@ -249,7 +252,26 @@ private func communityChatPreviewSignal(context: AccountContext, peerId: EngineP
         }
         messages = messages.reversed()
 
-        return (peerId, CommunityChatPreviewData(messages: messages, readCounters: readCounters))
+        var isMuted = false
+        if case let .muted(until) = notificationSettings.muteState, until >= Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970) {
+            isMuted = true
+        } else if case .default = notificationSettings.muteState, let peer {
+            if case .user = peer {
+                isMuted = !globalNotificationSettings.privateChats.enabled
+            } else if case .legacyGroup = peer {
+                isMuted = !globalNotificationSettings.groupChats.enabled
+            } else if case let .channel(channel) = peer {
+                switch channel.info {
+                case .group:
+                    isMuted = !globalNotificationSettings.groupChats.enabled
+                case .broadcast:
+                    isMuted = !globalNotificationSettings.channels.enabled
+                }
+            }
+        }
+        let effectiveReadCounters = EnginePeerReadCounters(state: readCounters._asReadCounters(), isMuted: isMuted)
+
+        return (peerId, CommunityChatPreviewData(messages: messages, readCounters: effectiveReadCounters))
     }
 }
 
