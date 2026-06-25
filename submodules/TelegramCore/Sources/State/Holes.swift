@@ -204,7 +204,9 @@ func withResolvedAssociatedMessages<T>(postbox: Postbox, source: FetchMessageHis
             storedIds.insert(id)
             for attribute in message.attributes {
                 if let attribute = attribute as? ReplyMessageAttribute {
-                    referencedReplyIds.add(sourceId: id, targetId: attribute.messageId)
+                    if id.namespace != Namespaces.Message.EphemeralLocal && attribute.messageId.namespace != Namespaces.Message.EphemeralLocal {
+                        referencedReplyIds.add(sourceId: id, targetId: attribute.messageId)
+                    }
                 } else {
                     referencedGeneralIds.formUnion(attribute.associatedMessageIds)
                 }

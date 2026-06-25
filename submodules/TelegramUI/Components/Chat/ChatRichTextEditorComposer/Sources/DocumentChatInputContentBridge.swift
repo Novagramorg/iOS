@@ -99,6 +99,8 @@ private func chatInputList(fromList list: ListMembership) -> ChatInputListMember
         marker = .bullet
     case .ordered:
         marker = .ordered
+    case .checklist:
+        marker = .bullet
     }
     return ChatInputListMembership(marker: marker, level: Int32(list.level))
 }

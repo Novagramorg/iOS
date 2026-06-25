@@ -368,6 +368,16 @@ func canReplyInChat(_ chatPresentationInterfaceState: ChatPresentationInterfaceS
     return canReply
 }
 
+private func canReplyToEphemeralMessage(_ message: EngineRawMessage) -> Bool {
+    if message.id.namespace != Namespaces.Message.EphemeralLocal {
+        return false
+    }
+    if !message.flags.contains(.Incoming) {
+        return false
+    }
+    return true
+}
+
 enum ChatMessageContextMenuActionColor {
     case accent
     case destructive
@@ -741,11 +751,14 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     
+    let hasEphemeralMessages = messages.contains { Namespaces.Message.allEphemeral.contains($0.id.namespace) }
     var canReply = canReplyInChat(chatPresentationInterfaceState, accountPeerId: context.account.peerId)
     var canPin = false
-    let canSelect = !isAction
+    let canSelect = !isAction && !hasEphemeralMessages
     
     let message = messages[0]
+    let isReplyableEphemeralMessage = canReplyToEphemeralMessage(message)
+    let isNonReplyableEphemeralMessage = Namespaces.Message.allEphemeral.contains(message.id.namespace) && !isReplyableEphemeralMessage
     
     if case .peer = chatPresentationInterfaceState.chatLocation, let channel = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isForumOrMonoForum {
         if message.threadId == nil {
@@ -753,7 +766,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
     }
     
-    if Namespaces.Message.allNonRegular.contains(message.id.namespace) || message.id.peerId.isRepliesOrVerificationCodes {
+    if Namespaces.Message.allNonRegular.contains(message.id.namespace) || isNonReplyableEphemeralMessage || message.id.peerId.isRepliesOrVerificationCodes {
         canReply = false
         canPin = false
     } else if messages[0].flags.intersection([.Failed, .Unsent]).isEmpty {
@@ -797,7 +810,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         if !(peer is TelegramSecretChat) && messages[0].id.namespace != Namespaces.Message.Cloud {
             canPin = false
-            canReply = false
+            if !isReplyableEphemeralMessage {
+                canReply = false
+            }
         }
     }
     
@@ -1411,6 +1426,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 
                 var showTranslateIfTopical = false
                 if let peer = chatPresentationInterfaceState.renderedPeer?.chatMainPeer as? TelegramChannel, !(peer.addressName ?? "").isEmpty {
+                    showTranslateIfTopical = true
+                } else if let message = messages.first, let peer = message.forwardInfo?.source as? TelegramChannel, !(peer.addressName ?? "").isEmpty {
                     showTranslateIfTopical = true
                 }
                 
@@ -2066,6 +2083,16 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }
         }
 
+        if hasEphemeralMessages {
+            if !actions.isEmpty {
+                actions.append(.separator)
+            }
+            let noAction: ((ContextMenuActionItem.Action) -> Void)? = nil
+            actions.append(.action(ContextMenuActionItem(text: "Only you see this message. It will disappear after you log in again.", textLayout: .multiline, textFont: .small, icon: { _ in
+                return nil
+            }, action: noAction)))
+        }
+
         if !isPinnedMessages, !isReplyThreadHead, data.canSelect {
             var didAddSeparator = false
             if !selectAll || messages.count == 1 {
@@ -2574,7 +2601,13 @@ func chatAvailableMessageActionsImpl(engine: TelegramEngine, accountPeerId: Engi
                         }
                     }
                 }
-                if id.namespace == Namespaces.Message.ScheduledCloud {
+                if id.namespace == Namespaces.Message.EphemeralLocal {
+                    optionsMap[id]!.insert(.deleteLocally)
+                    if message.flags.contains(.Incoming), message.attributes.contains(where: { $0 is EphemeralMessageAttribute }) {
+                        optionsMap[id]!.insert(.report)
+                    }
+                    continue
+                } else if id.namespace == Namespaces.Message.ScheduledCloud {
                     optionsMap[id]!.insert(.sendScheduledNow)
                     if message.pendingProcessingAttribute == nil {
                         if canEditMessage(accountPeerId: accountPeerId, limitsConfiguration: limitsConfiguration, message: message, reschedule: true) {

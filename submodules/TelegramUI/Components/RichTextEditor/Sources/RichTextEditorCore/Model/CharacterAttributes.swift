@@ -17,6 +17,10 @@ public struct CharacterAttributes: Codable, Equatable {
     /// An inline custom emoji. When non-nil this run's text MUST be exactly one `U+FFFC` (the emoji
     /// occupies one UTF-16 position). Has no Markdown form beyond `altText` (see the markdown-target steer).
     public var emoji: EmojiRef?
+    /// An inline math formula stored as its LaTeX source. When non-nil this run's text MUST be exactly
+    /// one `U+FFFC` (the formula occupies one UTF-16 position, mirroring `emoji`). Rendered as a math
+    /// image; serializes to `$latex$` / `\(latex\)`. macOS editor only today (additive — iOS ignores it).
+    public var formula: String?
     /// Telegram-style spoiler: the run's text is hidden behind an animated "dust" overlay (UIKit) until
     /// revealed. Additive — suppresses no other attribute. No Markdown form yet (deferred to Phase 5c).
     public var spoiler: Bool
@@ -34,6 +38,7 @@ public struct CharacterAttributes: Codable, Equatable {
         link: String? = nil,
         baselineOffset: Double? = nil,
         emoji: EmojiRef? = nil,
+        formula: String? = nil,
         spoiler: Bool = false
     ) {
         self.bold = bold
@@ -48,6 +53,7 @@ public struct CharacterAttributes: Codable, Equatable {
         self.link = link
         self.baselineOffset = baselineOffset
         self.emoji = emoji
+        self.formula = formula
         self.spoiler = spoiler
     }
 
@@ -55,7 +61,7 @@ public struct CharacterAttributes: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case bold, italic, underline, strikethrough, inlineCode
-        case fontFamily, fontSize, foreground, highlight, link, baselineOffset, emoji, spoiler
+        case fontFamily, fontSize, foreground, highlight, link, baselineOffset, emoji, formula, spoiler
     }
 
     // Custom decode so documents written before a field existed still load (synthesized Codable
@@ -75,6 +81,7 @@ public struct CharacterAttributes: Codable, Equatable {
         link = try c.decodeIfPresent(String.self, forKey: .link)
         baselineOffset = try c.decodeIfPresent(Double.self, forKey: .baselineOffset)
         emoji = try c.decodeIfPresent(EmojiRef.self, forKey: .emoji)
+        formula = try c.decodeIfPresent(String.self, forKey: .formula)
         spoiler = try c.decodeIfPresent(Bool.self, forKey: .spoiler) ?? false
     }
 }

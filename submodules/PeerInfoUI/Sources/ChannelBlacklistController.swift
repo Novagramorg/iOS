@@ -242,16 +242,26 @@ private struct ChannelBlacklistControllerState: Equatable {
 private func channelBlacklistControllerEntries(presentationData: PresentationData, peer: EnginePeer?, state: ChannelBlacklistControllerState, participants: [RenderedChannelParticipant]?) -> [ChannelBlacklistEntry] {
     var entries: [ChannelBlacklistEntry] = []
     
-    if case let .channel(channel) = peer, let participants = participants {
-        entries.append(.add(presentationData.theme, presentationData.strings.GroupRemoved_Remove))
-        
-        let isGroup: Bool
+    
+    var isGroup = false
+    if case let .channel(channel) = peer {
         if case .group = channel.info {
             isGroup = true
         } else {
             isGroup = false
         }
-        entries.append(.addInfo(presentationData.theme, isGroup ? presentationData.strings.GroupRemoved_RemoveInfo : presentationData.strings.ChannelRemoved_RemoveInfo))
+    }
+    
+    if let participants = participants {
+        entries.append(.add(presentationData.theme, presentationData.strings.GroupRemoved_Remove))
+        let infoText: String
+        if case .community = peer {
+            //TODO:localize
+            infoText = "Users removed from the community by admins cannot rejoin it via invite links."
+        } else {
+            infoText = isGroup ? presentationData.strings.GroupRemoved_RemoveInfo : presentationData.strings.ChannelRemoved_RemoveInfo
+        }
+        entries.append(.addInfo(presentationData.theme, infoText))
         
         var index: Int32 = 0
         if !participants.isEmpty {

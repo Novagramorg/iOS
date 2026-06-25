@@ -4,7 +4,6 @@ import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
 
-
 public struct PendingMessageStatus: Equatable {
     public struct Progress: Equatable {
         public let progress: Float

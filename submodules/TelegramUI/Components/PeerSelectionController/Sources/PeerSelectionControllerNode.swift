@@ -41,6 +41,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
     private let hasTypeHeaders: Bool
     private let requestPeerType: [ReplyMarkupButtonRequestPeerType]?
     private let suggestedPeers: [EnginePeer]
+    private let excludedPeerIds: Set<EnginePeer.Id>
 
     private var presentationInterfaceState: ChatPresentationInterfaceState
     private let  presentationInterfaceStatePromise = ValuePromise<ChatPresentationInterfaceState>()
@@ -115,7 +116,28 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         return (self.presentationData, self.presentationDataPromise.get())
     }
 
-    init(context: AccountContext, controller: PeerSelectionControllerImpl, presentationData: PresentationData, filter: ChatListNodePeersFilter, forumPeerId: (id: EnginePeer.Id, isMonoforum: Bool)?, hasFilters: Bool, hasChatListSelector: Bool, hasContactSelector: Bool, hasGlobalSearch: Bool, forwardedMessageIds: [EngineMessage.Id], hasTypeHeaders: Bool, requestPeerType: [ReplyMarkupButtonRequestPeerType]?, hasCreation: Bool, createNewGroup: (() -> Void)?, suggestedPeers: [EnginePeer], present: @escaping (ViewController, Any?) -> Void, presentInGlobalOverlay: @escaping (ViewController, Any?) -> Void, dismiss: @escaping () -> Void) {
+    init(
+        context: AccountContext,
+        controller: PeerSelectionControllerImpl,
+        presentationData: PresentationData,
+        filter: ChatListNodePeersFilter,
+        forumPeerId: (id: EnginePeer.Id, isMonoforum: Bool)?,
+        hasFilters: Bool,
+        hasChatListSelector: Bool,
+        hasContactSelector: Bool,
+        hasGlobalSearch: Bool,
+        forwardedMessageIds: [EngineMessage.Id],
+        hasTypeHeaders: Bool,
+        requestPeerType: [ReplyMarkupButtonRequestPeerType]?,
+        showPeerTypeRequirements: Bool = true,
+        hasCreation: Bool,
+        createNewGroup: (() -> Void)?,
+        suggestedPeers: [EnginePeer],
+        excludedPeerIds: Set<EnginePeer.Id>,
+        present: @escaping (ViewController, Any?) -> Void,
+        presentInGlobalOverlay: @escaping (ViewController, Any?) -> Void,
+        dismiss: @escaping () -> Void
+    ) {
         self.context = context
         self.controller = controller
         self.present = present
@@ -128,6 +150,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         self.hasTypeHeaders = hasTypeHeaders
         self.requestPeerType = requestPeerType
         self.suggestedPeers = suggestedPeers
+        self.excludedPeerIds = excludedPeerIds
 
         self.presentationData = presentationData
 
@@ -139,7 +162,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
         self.presentationInterfaceState = self.presentationInterfaceState.updatedInterfaceState { $0.withUpdatedForwardMessageIds(forwardedMessageIds) }
         self.presentationInterfaceStatePromise.set(self.presentationInterfaceState)
 
-        if let _ = self.requestPeerType {
+        if let _ = self.requestPeerType, showPeerTypeRequirements {
             self.requirementsBackgroundNode = NavigationBackgroundNode(color: self.presentationData.theme.rootController.navigationBar.blurredBackgroundColor)
             self.requirementsSeparatorNode = ASDisplayNode()
             self.requirementsSeparatorNode?.backgroundColor = self.presentationData.theme.rootController.navigationBar.separatorColor
@@ -208,7 +231,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
 
         let chatListMode: ChatListNodeMode
         if let requestPeerType = self.requestPeerType {
-            chatListMode = .peerType(type: requestPeerType, hasCreate: hasCreation)
+            chatListMode = .peerType(type: requestPeerType, hasCreate: hasCreation, excludedPeerIds: self.excludedPeerIds)
         } else {
             chatListMode = .peers(filter: filter, isSelecting: false, additionalCategories: chatListCategories, topPeers: self.suggestedPeers, chatListFilters: nil, displayAutoremoveTimeout: false, displayPresence: false)
         }
@@ -1345,6 +1368,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                     updatedPresentationData: self.updatedPresentationData,
                     filter: self.filter,
                     requestPeerType: self.requestPeerType,
+                    excludedPeerIds: self.excludedPeerIds,
                     location: chatListLocation,
                     folder: nil,
                     displaySearchFilters: false,

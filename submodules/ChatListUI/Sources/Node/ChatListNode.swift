@@ -27,7 +27,7 @@ import GlobalControlPanelsContext
 public enum ChatListNodeMode {
     case chatList(appendContacts: Bool)
     case peers(filter: ChatListNodePeersFilter, isSelecting: Bool, additionalCategories: [ChatListNodeAdditionalCategory], topPeers: [EnginePeer], chatListFilters: [ChatListFilter]?, displayAutoremoveTimeout: Bool, displayPresence: Bool)
-    case peerType(type: [ReplyMarkupButtonRequestPeerType], hasCreate: Bool)
+    case peerType(type: [ReplyMarkupButtonRequestPeerType], hasCreate: Bool, excludedPeerIds: Set<EnginePeer.Id>)
 }
 
 struct ChatListNodeListViewTransition {
@@ -110,6 +110,8 @@ public final class ChatListNodeInteraction {
     let openChatFolderUpdates: () -> Void
     let hideChatFolderUpdates: () -> Void
     let openStories: (ChatListNode.OpenStoriesSubject, ASDisplayNode?) -> Void
+    let openCommunity: (EnginePeer.Id) -> Void
+    let ungroupCommunity: (EnginePeer.Id) -> Void
     let openStarsTopup: (Int64?) -> Void
     let editPeer: (ChatListItem) -> Void
     let openWebApp: (TelegramUser) -> Void
@@ -171,6 +173,8 @@ public final class ChatListNodeInteraction {
         openChatFolderUpdates: @escaping () -> Void,
         hideChatFolderUpdates: @escaping () -> Void,
         openStories: @escaping (ChatListNode.OpenStoriesSubject, ASDisplayNode?) -> Void,
+        openCommunity: @escaping (EnginePeer.Id) -> Void = { _ in },
+        ungroupCommunity: @escaping (EnginePeer.Id) -> Void = { _ in },
         openStarsTopup: @escaping (Int64?) -> Void,
         editPeer: @escaping (ChatListItem) -> Void,
         openWebApp: @escaping (TelegramUser) -> Void,
@@ -219,6 +223,8 @@ public final class ChatListNodeInteraction {
         self.openChatFolderUpdates = openChatFolderUpdates
         self.hideChatFolderUpdates = hideChatFolderUpdates
         self.openStories = openStories
+        self.openCommunity = openCommunity
+        self.ungroupCommunity = ungroupCommunity
         self.openStarsTopup = openStarsTopup
         self.editPeer = editPeer
         self.openWebApp = openWebApp
@@ -456,6 +462,7 @@ private func mappedInsertEntries(context: AccountContext, nodeInteraction: ChatL
                         content: .peer(ChatListItemContent.PeerData(
                             messages: peerEntry.messages,
                             peer: peer,
+                            avatarPeer: peerEntry.avatarPeer,
                             threadInfo: threadInfo,
                             combinedReadState: combinedReadState,
                             isRemovedFromTotalUnreadCount: isRemovedFromTotalUnreadCount,
@@ -817,6 +824,7 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
                             content: .peer(ChatListItemContent.PeerData(
                                 messages: peerEntry.messages,
                                 peer: peer,
+                                avatarPeer: peerEntry.avatarPeer,
                                 threadInfo: threadInfo,
                                 combinedReadState: combinedReadState,
                                 isRemovedFromTotalUnreadCount: isRemovedFromTotalUnreadCount,
@@ -1215,6 +1223,8 @@ public final class ChatListNode: ListViewImpl {
     public var hidePsa: ((EnginePeer.Id) -> Void)?
     public var activateChatPreview: ((ChatListItem, Int64?, ASDisplayNode, ContextGesture?, CGPoint?) -> Void)?
     public var openStories: ((ChatListNode.OpenStoriesSubject, ASDisplayNode?) -> Void)?
+    public var openCommunity: ((EnginePeer.Id) -> Void)?
+    public var ungroupCommunity: ((EnginePeer.Id) -> Void)?
     public var openBirthdaySetup: (() -> Void)?
     public var openPremiumManagement: (() -> Void)?
     public var openStarsTopup: ((Int64?) -> Void)?
@@ -1843,6 +1853,16 @@ public final class ChatListNode: ListViewImpl {
                 return
             }
             self.openStories?(subject, itemNode)
+        }, openCommunity: { [weak self] communityId in
+            guard let self else {
+                return
+            }
+            self.openCommunity?(communityId)
+        }, ungroupCommunity: { [weak self] communityId in
+            guard let self else {
+                return
+            }
+            self.ungroupCommunity?(communityId)
         }, openStarsTopup: { [weak self] amount in
             guard let self else {
                 return
@@ -2274,8 +2294,8 @@ public final class ChatListNode: ListViewImpl {
                         
                         isEmpty = false
                         return true
-                    case let .peerType(peerTypes, _):
-                        if let peer = peer.peer, !peer.isDeleted && peer.id != context.account.peerId {
+                    case let .peerType(peerTypes, _, excludedPeerIds):
+                        if let peer = peer.peer, !peer.isDeleted && peer.id != context.account.peerId && !excludedPeerIds.contains(peer.id) {
                             var match = false
                             for peerType in peerTypes {
                                 if match {

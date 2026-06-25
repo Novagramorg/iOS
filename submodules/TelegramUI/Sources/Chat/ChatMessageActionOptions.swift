@@ -413,6 +413,9 @@ private func generateChatReplyOptionItems(selfController: ChatControllerImpl, ch
         }
         
         var canReplyInAnotherChat = true
+        if replySubject.messageId.namespace == Namespaces.Message.EphemeralLocal {
+            canReplyInAnotherChat = false
+        }
         
         if let message = messages.first {
             if selfController.presentationInterfaceState.copyProtectionEnabled {

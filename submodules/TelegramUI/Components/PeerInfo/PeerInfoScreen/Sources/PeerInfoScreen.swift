@@ -484,6 +484,12 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             editingOpenDiscussionGroupSetup: { [weak self] in
                 self?.editingOpenDiscussionGroupSetup()
             },
+            editingOpenAddToCommunity: { [weak self] in
+                self?.editingOpenAddToCommunity()
+            },
+            editingRemoveFromCommunity: { [weak self] communityId in
+                self?.editingRemoveFromCommunity(communityId: communityId)
+            },
             editingOpenPostSuggestionsSetup: { [weak self] in
                 self?.editingOpenPostSuggestionsSetup()
             },
@@ -4067,6 +4073,51 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         self.controller?.push(channelDiscussionGroupSetupController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, peerId: peer.id))
     }
     
+    private func editingOpenAddToCommunity() {
+        guard let data = self.data, let peer = data.peer else {
+            return
+        }
+        self.controller?.push(self.context.sharedContext.makeCommunitiesScreen(context: self.context, peerId: peer.id))
+    }
+
+    private func editingRemoveFromCommunity(communityId: EnginePeer.Id) {
+        guard let data = self.data, case let .channel(channel) = data.peer, case .group = channel.info else {
+            return
+        }
+
+        self.activeActionDisposable.set((self.context.engine.peers.toggleCommunityPeerLink(
+            communityId: communityId,
+            peerId: channel.id,
+            action: .unlink
+        )
+        |> deliverOnMainQueue).startStrict(error: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: nil, text: "Something went wrong.", actions: [
+                TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})
+            ]), in: .window(.root))
+        }, completed: { [weak self] in
+            guard let self else {
+                return
+            }
+            let _ = self.context.account.postbox.transaction { transaction -> Void in
+                updatePeersCustom(transaction: transaction, peers: [channel.withUpdatedLinkedCommunityId(nil)], update: { _, updated in
+                    guard let channel = updated as? TelegramChannel else {
+                        return updated
+                    }
+                    return channel.withUpdatedLinkedCommunityId(nil)
+                })
+                transaction.updatePeerCachedData(peerIds: Set([communityId]), update: { _, current in
+                    guard let current = current as? CachedCommunityData else {
+                        return current
+                    }
+                    return current.withUpdatedLinkedPeers(current.linkedPeers.filter { $0.peerId != channel.id })
+                })
+            }.startStandalone()
+        }))
+    }
+
     private func editingOpenPostSuggestionsSetup() {
         if #available(iOS 13.0, *) {
             guard let data = self.data, let peer = data.peer else {

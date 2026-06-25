@@ -86,6 +86,11 @@ import OldChannelsController
 import InviteLinksUI
 import GiftStoreScreen
 import SendInviteLinkScreen
+import CommunitiesScreen
+import CommunityAddScreen
+import CommunityEditScreen
+import CommunityRequestsScreen
+import CommunityViewScreen
 import PostSuggestionsSettingsScreen
 import ForumSettingsScreen
 import ForumCreateTopicScreen
@@ -2709,10 +2714,32 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         completion: @escaping (UIImage?) -> Void,
         completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
     ) {
+        self.displaySetPhoto(
+            parentController: parentController,
+            context: context,
+            peer: peer,
+            canDelete: !peer.profileImageRepresentations.isEmpty,
+            performDelete: {},
+            completion: completion,
+            completedWithUploadingImage: completedWithUploadingImage
+        )
+    }
+
+    public func displaySetPhoto(
+        parentController: ViewController,
+        context: AccountContext,
+        peer: EnginePeer,
+        canDelete: Bool,
+        performDelete: @escaping () -> Void,
+        completion: @escaping (UIImage?) -> Void,
+        completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
+    ) {
         PeerInfoScreenImpl.displaySetPhoto(
             parentController: parentController,
             context: context,
             peer: peer,
+            canDelete: canDelete,
+            performDelete: performDelete,
             completion: completion,
             completedWithUploadingImage: completedWithUploadingImage
         )
@@ -4311,7 +4338,39 @@ public final class SharedAccountContextImpl: SharedAccountContext {
     public func makeSendInviteLinkScreen(context: AccountContext, subject: SendInviteLinkScreenSubject, peers: [TelegramForbiddenInvitePeer], theme: PresentationTheme?) -> ViewController {
         return SendInviteLinkScreen(context: context, subject: subject, peers: peers, theme: theme)
     }
-    
+
+    public func makeCommunitiesScreen(context: AccountContext, peerId: EnginePeer.Id?) -> ViewController {
+        return CommunitiesScreen(context: context, peerId: peerId)
+    }
+
+    public func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping () -> Void) -> ViewController {
+        return CommunityAddScreen(context: context, communityId: communityId, peerId: peerId, completed: completed)
+    }
+
+    public func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
+        return CommunityEditScreen(context: context, communityId: communityId)
+    }
+
+    public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
+        return self.makeCommunityRequestsScreen(context: context, communityId: communityId, existingContext: nil)
+    }
+
+    public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController {
+        return CommunityRequestsScreen(context: context, communityId: communityId, existingContext: existingContext)
+    }
+
+    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
+        return self.makeCommunityViewScreen(context: context, communityId: communityId, style: .grouped, presentation: .sheet)
+    }
+
+    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) -> ViewController {
+        return self.makeCommunityViewScreen(context: context, communityId: communityId, style: style, presentation: presentation, displayMode: .default)
+    }
+
+    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation, displayMode: CommunityViewScreenDisplayMode) -> ViewController {
+        return CommunityViewScreen(context: context, communityId: communityId, style: style, presentation: presentation, displayMode: displayMode)
+    }
+
     public func makeCocoonInfoScreen(context: AccountContext) -> ViewController {
         return CocoonInfoScreen(context: context)
     }

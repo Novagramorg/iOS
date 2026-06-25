@@ -995,6 +995,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                                 } else {
                                     globalValue = globalSettings.groupChats
                                 }
+                            case .community:
+                                globalValue = globalSettings.channels
                             }
                             if globalValue.enabled {
                                 return (false, peerIds)
@@ -1422,6 +1424,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         peer = forumSourcePeer
                     }
                     
+                    if case .community = peer {
+                        self.openCommunityView(communityId: peer.id)
+                        self.chatListDisplayNode.mainContainerNode.currentItemNode.clearHighlightAnimated(true)
+                        return
+                    }
+                    
                     var scrollToEndIfExists = false
                     if let layout = self.validLayout, case .regular = layout.metrics.widthClass {
                         scrollToEndIfExists = true
@@ -1541,7 +1549,21 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 })
             }
         }
-        
+
+        self.chatListDisplayNode.mainContainerNode.openCommunity = { [weak self] communityId in
+            guard let self else {
+                return
+            }
+            self.push(self.context.sharedContext.makeCommunityViewScreen(context: self.context, communityId: communityId))
+        }
+
+        self.chatListDisplayNode.mainContainerNode.ungroupCommunity = { [weak self] communityId in
+            guard let self else {
+                return
+            }
+            self.ungroupCommunity(communityId: communityId)
+        }
+
         self.chatListDisplayNode.mainContainerNode.groupSelected = { [weak self] groupId in
             guard let self else {
                 return
@@ -1747,6 +1769,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         if dismissSearch {
                             strongSelf.deactivateSearch(animated: true)
                         }
+                        if case .community = peer {
+                            strongSelf.openCommunityView(communityId: peer.id)
+                            strongSelf.chatListDisplayNode.mainContainerNode.currentItemNode.clearHighlightAnimated(true)
+                            return
+                        }
                         var scrollToEndIfExists = false
                         if let layout = strongSelf.validLayout, case .regular = layout.metrics.widthClass {
                             scrollToEndIfExists = true
@@ -1926,7 +1953,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     } else {
                         var dismissPreviewingImpl: ((Bool) -> (() -> Void))?
                         let source: ContextContentSource
-                        if let location = location {
+                        if case .community = peer.peer {
+                            let communityController = strongSelf.makeCommunityViewController(communityId: peer.peerId, displayMode: .preview)
+                            source = .controller(ContextControllerContentSourceImpl(controller: communityController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController))
+                        } else if let location = location {
                             source = .location(ChatListContextLocationContentSource(controller: strongSelf, location: location))
                         } else {
                             let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peer.peerId), subject: nil, botStart: nil, mode: .standard(.previewing), params: nil)
@@ -2008,6 +2038,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 let chatListController = ChatListControllerImpl(context: strongSelf.context, location: .forum(peerId: channel.id), controlsHistoryPreload: false, hideNetworkActivityStatus: true, previewing: true, enableDebugActions: false)
                 chatListController.navigationPresentation = .master
                 let contextController = makeContextController(context: strongSelf.context, presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatListController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController)), items: chatContextMenuItems(context: strongSelf.context, peerId: peer.id, promoInfo: nil, source: .search(source), chatListController: strongSelf, joined: false) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
+                strongSelf.presentInGlobalOverlay(contextController)
+            } else if case .community = peer {
+                let communityController = strongSelf.makeCommunityViewController(communityId: peer.id, displayMode: .preview)
+                let contextController = makeContextController(context: strongSelf.context, presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: communityController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController)), items: chatContextMenuItems(context: strongSelf.context, peerId: peer.id, promoInfo: nil, source: .search(source), chatListController: strongSelf, joined: false) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
                 strongSelf.presentInGlobalOverlay(contextController)
             } else {
                 let contextContentSource: ContextContentSource
@@ -2882,6 +2916,36 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             }
         }
         return nil
+    }
+    
+    private func makeCommunityViewController(communityId: EnginePeer.Id, displayMode: CommunityViewScreenDisplayMode = .default) -> ViewController {
+        let controller = self.context.sharedContext.makeCommunityViewScreen(
+            context: self.context,
+            communityId: communityId,
+            style: .plain,
+            presentation: .fullScreen,
+            displayMode: displayMode
+        )
+        controller.navigationPresentation = .master
+        return controller
+    }
+
+    private func openCommunityView(communityId: EnginePeer.Id) {
+        let controller = self.makeCommunityViewController(communityId: communityId)
+        self.push(controller)
+    }
+
+    func ungroupCommunity(communityId: EnginePeer.Id) {
+        self.present(textAlertController(context: self.context, title: self.presentationData.strings.ChatList_UngroupCommunity_Title, text: self.presentationData.strings.ChatList_UngroupCommunity_Text, actions: [
+            TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}),
+            TextAlertAction(type: .defaultDestructiveAction, title: self.presentationData.strings.ChatList_UngroupCommunity_Action, action: { [weak self] in
+                guard let self else {
+                    return
+                }
+                let _ = (self.context.engine.peers.toggleCommunityCollapsedInDialogs(communityId: communityId, collapsed: false)
+                |> deliverOnMainQueue).startStandalone()
+            })
+        ]), in: .window(.root))
     }
     
     private weak var storyCameraTooltip: TooltipScreen?

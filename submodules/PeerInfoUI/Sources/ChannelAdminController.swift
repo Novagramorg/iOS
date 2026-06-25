@@ -55,6 +55,17 @@ private final class ChannelAdminControllerArguments {
     }
 }
 
+private func updateCachedCommunityAdminsCount(context: AccountContext, peerId: EnginePeer.Id, delta: Int32) {
+    let _ = context.account.postbox.transaction { transaction -> Void in
+        transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, cachedData -> EngineCachedPeerData? in
+            guard let cachedData = cachedData as? CachedCommunityData, let adminsCount = cachedData.adminsCount else {
+                return cachedData
+            }
+            return cachedData.withUpdatedAdminsCount(max(0, adminsCount + delta))
+        })
+    }.startStandalone()
+}
+
 private enum ChannelAdminSection: Int32 {
     case info
     case rank
@@ -630,6 +641,24 @@ private func stringForRight(strings: PresentationStrings, right: TelegramChatAdm
     }
 }
 
+private func stringForCommunityRight(_ right: TelegramChatAdminRightsFlags) -> String {
+    if right.contains(.canChangeInfo) {
+        //TODO:localize
+        return "Edit Community Name"
+    } else if right.contains(.canManageLinkedPeers) {
+        //TODO:localize
+        return "Edit Group List"
+    } else if right.contains(.canBanUsers) {
+        //TODO:localize
+        return "Ban Members"
+    } else if right.contains(.canAddAdmins) {
+        //TODO:localize
+        return "Add Community Admins"
+    } else {
+        return ""
+    }
+}
+
 private func canEditAdminRights(accountPeerId: EnginePeer.Id, channelPeer: EnginePeer, initialParticipant: ChannelParticipant?) -> Bool {
     if case let .channel(channel) = channelPeer {
         if channel.flags.contains(.isCreator) {
@@ -653,6 +682,23 @@ private func canEditAdminRights(accountPeerId: EnginePeer.Id, channelPeer: Engin
             return true
         } else {
             return false
+        }
+    } else if case let .community(community) = channelPeer {
+        if community.flags.contains(.isCreator) {
+            return true
+        } else if let initialParticipant = initialParticipant {
+            switch initialParticipant {
+                case .creator:
+                    return false
+                case let .member(_, _, adminInfo, _, _, _):
+                    if let adminInfo = adminInfo {
+                        return adminInfo.canBeEditedByAccountPeer || adminInfo.promotedBy == accountPeerId
+                    } else {
+                        return community.hasPermission(.addAdmins)
+                    }
+            }
+        } else {
+            return community.hasPermission(.addAdmins)
         }
     } else {
         return false
@@ -1069,6 +1115,62 @@ private func channelAdminControllerEntries(presentationData: PresentationData, s
         
         if canDismiss {
             entries.append(.dismiss(presentationData.theme, presentationData.strings.Channel_Moderator_AccessLevelRevoke))
+        }
+    } else if case let .community(community) = channelPeer, let admin = adminPeer {
+        entries.append(.info(presentationData.theme, presentationData.strings, presentationData.dateTimeFormat, admin, adminPresence))
+
+        var isCreator = false
+        if let initialParticipant = initialParticipant, case .creator = initialParticipant {
+            isCreator = true
+        }
+
+        if !isCreator {
+            entries.append(.rightsTitle(presentationData.theme, presentationData.strings.Channel_EditAdmin_PermissionsHeader))
+
+            let maskRightsFlags: TelegramChatAdminRightsFlags = TelegramChatAdminRightsFlags.peerSpecific(peer: .community(community))
+            let rightsOrder: [TelegramChatAdminRightsFlags] = [
+                .canChangeInfo,
+                .canManageLinkedPeers,
+                .canBanUsers,
+                .canAddAdmins
+            ]
+
+            let accountUserRightsFlags: TelegramChatAdminRightsFlags
+            if community.flags.contains(.isCreator) {
+                accountUserRightsFlags = maskRightsFlags
+            } else if let adminRights = community.adminRights {
+                accountUserRightsFlags = maskRightsFlags.intersection(adminRights.rights)
+            } else {
+                accountUserRightsFlags = []
+            }
+
+            let currentRightsFlags: TelegramChatAdminRightsFlags
+            if let updatedFlags = state.updatedFlags {
+                currentRightsFlags = updatedFlags
+            } else if let initialParticipant = initialParticipant, case let .member(_, _, maybeAdminRights, _, _, _) = initialParticipant, let adminRights = maybeAdminRights {
+                currentRightsFlags = adminRights.rights.rights
+            } else {
+                currentRightsFlags = accountUserRightsFlags.subtracting(.canAddAdmins)
+            }
+
+            if canEdit {
+                var index = 0
+                for right in rightsOrder {
+                    if accountUserRightsFlags.contains(right) {
+                        let enabled = !state.updating && admin.id != accountPeerId
+                        entries.append(.rightItem(presentationData.theme, index, stringForCommunityRight(right), .direct(right), currentRightsFlags, currentRightsFlags.contains(right), enabled, [], false))
+                        index += 1
+                    }
+                }
+            } else if let initialParticipant = initialParticipant, case let .member(_, _, maybeAdminInfo, _, _, _) = initialParticipant, let adminInfo = maybeAdminInfo {
+                var index = 0
+                for right in rightsOrder {
+                    if maskRightsFlags.contains(right) {
+                        entries.append(.rightItem(presentationData.theme, index, stringForCommunityRight(right), .direct(right), adminInfo.rights.rights, adminInfo.rights.rights.contains(right), false, [], false))
+                        index += 1
+                    }
+                }
+            }
         }
     } else if case let .legacyGroup(group) = channelPeer, let admin = adminPeer {
         entries.append(.info(presentationData.theme, presentationData.strings, presentationData.dateTimeFormat, admin, adminPresence))
@@ -1577,6 +1679,67 @@ public func channelAdminController(context: AccountContext, updatedPresentationD
                         dismissImpl?()
                     }))
                 }
+            } else if case let .community(community) = channelPeer {
+                if initialParticipant != nil || canEdit {
+                    var updateFlags: TelegramChatAdminRightsFlags?
+                    updateState { current in
+                        updateFlags = current.updatedFlags
+                        return current
+                    }
+
+                    let maskRightsFlags: TelegramChatAdminRightsFlags = TelegramChatAdminRightsFlags.peerSpecific(peer: .community(community))
+                    let defaultFlags: TelegramChatAdminRightsFlags
+                    if community.flags.contains(.isCreator) {
+                        defaultFlags = maskRightsFlags.subtracting(.canAddAdmins)
+                    } else if let adminRights = community.adminRights {
+                        defaultFlags = maskRightsFlags.intersection(adminRights.rights).subtracting(.canAddAdmins)
+                    } else {
+                        defaultFlags = []
+                    }
+
+                    var currentFlags: TelegramChatAdminRightsFlags?
+                    if let initialParticipant {
+                        switch initialParticipant {
+                        case let .creator(_, adminInfo, _):
+                            currentFlags = adminInfo?.rights.rights ?? defaultFlags
+                        case let .member(_, _, adminInfo, _, _, _):
+                            if updateFlags == nil {
+                                updateFlags = adminInfo?.rights.rights ?? defaultFlags
+                            }
+                            currentFlags = adminInfo?.rights.rights
+                        }
+                    } else if updateFlags == nil {
+                        updateFlags = defaultFlags
+                    }
+
+                    if let updateFlags, updateFlags != currentFlags {
+                        updateState { current in
+                            return current.withUpdatedUpdating(true)
+                        }
+                        updateRightsDisposable.set((context.peerChannelMemberCategoriesContextsManager.updateMemberAdminRights(engine: context.engine, peerId: peerId, memberId: adminId, adminRights: TelegramChatAdminRights(rights: updateFlags), rank: nil) |> deliverOnMainQueue).start(error: { error in
+                            updateState { current in
+                                return current.withUpdatedUpdating(false)
+                            }
+
+                            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                            var text = presentationData.strings.Login_UnknownError
+                            switch error {
+                            case .generic, .addMemberError(_):
+                                break
+                            case .adminsTooMuch:
+                                text = presentationData.strings.Group_ErrorAdminsTooMuch
+                            }
+                            presentControllerImpl?(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
+                        }, completed: {
+                            if initialParticipant == nil {
+                                updateCachedCommunityAdminsCount(context: context, peerId: peerId, delta: 1)
+                            }
+                            finishAfterSaving(TelegramChatAdminRights(rights: updateFlags), true)
+                        }))
+                    } else {
+                        finishAfterSaving(nil, false)
+                    }
+                }
             } else if case let .channel(channel) = channelPeer {
                 if let initialParticipant = initialParticipant {
                     var updateFlags: TelegramChatAdminRightsFlags?
@@ -1897,6 +2060,8 @@ public func channelAdminController(context: AccountContext, updatedPresentationD
             isCreator = true
         } else if case let .legacyGroup(group) = channelPeer, case .creator = group.role {
             isCreator = true
+        } else if case let .community(community) = channelPeer, community.flags.contains(.isCreator) {
+            isCreator = true
         }
         
         let title: String
@@ -1913,7 +2078,12 @@ public func channelAdminController(context: AccountContext, updatedPresentationD
                 peerTitle = peer.title
             }
                 
-            if case let .user(admin) = adminPeer, admin.botInfo != nil && invite {
+            if case .community = channelPeer {
+                //TODO:localize
+                title = "Add Admin"
+                //TODO:localize
+                footerButtonTitle = "Add Admin"
+            } else if case let .user(admin) = adminPeer, admin.botInfo != nil && invite {
                 title = presentationData.strings.Bot_AddToChat_Add_Title
                 footerItem = ChannelParticipantFooterItem(theme: presentationData.theme, title: state.adminRights ? presentationData.strings.Bot_AddToChat_Add_AddAsAdmin : presentationData.strings.Bot_AddToChat_Add_AddAsMember, displayProgress: state.updating, action: {
                     if state.adminRights {

@@ -179,6 +179,21 @@ public struct ChatAvailableMessageActions {
     }
 }
 
+public enum CommunityViewScreenStyle: Equatable {
+    case grouped
+    case plain
+}
+
+public enum CommunityViewScreenPresentation: Equatable {
+    case sheet
+    case fullScreen
+}
+
+public enum CommunityViewScreenDisplayMode: Equatable {
+    case `default`
+    case preview
+}
+
 public enum WallpaperUrlParameter {
     case slug(String, WallpaperPresentationOptions, [UInt32], Int32?, Int32?)
     case color(UIColor)
@@ -189,9 +204,12 @@ public enum PeerType: Equatable {
     case user(isBot: Bool)
     case group
     case channel
+    case community
     
     public static func getType(for peer: EnginePeer) -> PeerType {
-        if case let .user(user) = peer {
+        if case .community = peer {
+            return .community
+        } else if case let .user(user) = peer {
             return .user(isBot: user.botInfo != nil)
         } else if case let .channel(channel) = peer, case .broadcast = channel.info {
             return .channel
@@ -1478,6 +1496,15 @@ public protocol SharedAccountContext: AnyObject {
         completion: @escaping (UIImage?) -> Void,
         completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
     )
+    func displaySetPhoto(
+        parentController: ViewController,
+        context: AccountContext,
+        peer: EnginePeer,
+        canDelete: Bool,
+        performDelete: @escaping () -> Void,
+        completion: @escaping (UIImage?) -> Void,
+        completedWithUploadingImage: @escaping (UIImage, Signal<PeerInfoAvatarUploadStatus, NoError>) -> UIView?
+    )
     func openAddPeerMembers(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, parentController: ViewController, groupPeer: EnginePeer, selectAddMemberDisposable: MetaDisposable, addMemberDisposable: MetaDisposable)
     func makeInstantPageController(context: AccountContext, message: EngineRawMessage, sourcePeerType: MediaAutoDownloadPeerType?) -> ViewController?
     func makeInstantPageController(context: AccountContext, webPage: TelegramMediaWebpage, anchor: String?, sourceLocation: InstantPageSourceLocation) -> ViewController
@@ -1556,6 +1583,14 @@ public protocol SharedAccountContext: AnyObject {
     func makeGalleryController(context: AccountContext, source: GalleryControllerItemSource, streamSingleVideo: Bool, isPreview: Bool) -> ViewController
     func makeAccountFreezeInfoScreen(context: AccountContext) -> ViewController
     func makeSendInviteLinkScreen(context: AccountContext, subject: SendInviteLinkScreenSubject, peers: [TelegramForbiddenInvitePeer], theme: PresentationTheme?) -> ViewController
+    func makeCommunitiesScreen(context: AccountContext, peerId: EnginePeer.Id?) -> ViewController
+    func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping () -> Void) -> ViewController
+    func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
+    func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
+    func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController
+    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
+    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) -> ViewController
+    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation, displayMode: CommunityViewScreenDisplayMode) -> ViewController
     func makeCocoonInfoScreen(context: AccountContext) -> ViewController
     func makeLinkEditController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, text: String, link: String?, apply: @escaping (String?, TelegramMediaWebpage?) -> Void) -> ViewController
 
@@ -1837,6 +1872,26 @@ public struct StickersSearchConfiguration {
     public static func with(appConfiguration: AppConfiguration) -> StickersSearchConfiguration {
         if let data = appConfiguration.data, let suggestOnlyApi = data["stickers_emoji_suggest_only_api"] as? Bool {
             return StickersSearchConfiguration(disableLocalSuggestions: suggestOnlyApi)
+        } else {
+            return .defaultValue
+        }
+    }
+}
+
+public struct CommunitiesConfiguration {
+    static var defaultValue: CommunitiesConfiguration {
+        return CommunitiesConfiguration(peersLimit: 100)
+    }
+    
+    public let peersLimit: Int32
+    
+    fileprivate init(peersLimit: Int32) {
+        self.peersLimit = peersLimit
+    }
+    
+    public static func with(appConfiguration: AppConfiguration) -> CommunitiesConfiguration {
+        if let data = appConfiguration.data, let peersLimit = data["community_peers_limit"] as? Double {
+            return CommunitiesConfiguration(peersLimit: Int32(peersLimit))
         } else {
             return .defaultValue
         }

@@ -75,6 +75,8 @@ func _internal_synchronizeableChatInputState(accountPeerId: PeerId, peerId: Peer
                 break
             case .inputReplyToMonoForum:
                 break
+            case .inputReplyToEphemeralMessage(_):
+                break
             }
         }
         let syncContent: SynchronizeableChatInputState.Content

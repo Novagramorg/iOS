@@ -597,7 +597,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
                             if nameRange.range.lowerBound != 0 {
                                 titleText.append(.text(NSAttributedString(string: rawNsString.substring(with: NSRange(location: 0, length: nameRange.range.lowerBound)), font: Font.medium(14.0), textColor: environment.theme.chat.inputPanel.panelControlAccentColor)))
                             }
-                            titleText.append(.icon(icon))
+                            titleText.append(.icon(icon, .zero))
                             titleText.append(.text(NSAttributedString(string: peer.debugDisplayTitle, font: Font.medium(14.0), textColor: environment.theme.chat.inputPanel.panelControlAccentColor)))
                             
                             if nameRange.range.upperBound != rawNsString.length {
@@ -633,7 +633,12 @@ public final class ChatInputMessageAccessoryPanel: Component {
                         titleText = [.text(NSAttributedString(string: string, font: Font.medium(14.0), textColor: environment.theme.chat.inputPanel.panelControlAccentColor))]
                     }
                     
-                    if reply.id.peerId != component.chatPeerId {
+                    if reply.id.namespace == Namespaces.Message.EphemeralLocal {
+                        let icon = UIImage(bundleImageName: "Chat/Message/Hidden")
+                        if let iconImage = generateTintedImage(image: icon, color: environment.theme.chat.inputPanel.panelControlAccentColor) {
+                            titleText.insert(.icon(iconImage, CGPoint(x: 0.0, y: -4.0 + UIScreenPixel)), at: 0)
+                        }
+                    } else if reply.id.peerId != component.chatPeerId {
                         if let peer = self.messages.first?.peers[reply.id.peerId], (peer is TelegramChannel || peer is TelegramGroup) {
                             let icon: UIImage?
                             if let channel = peer as? TelegramChannel, case .broadcast = channel.info {
@@ -642,7 +647,7 @@ public final class ChatInputMessageAccessoryPanel: Component {
                                 icon = UIImage(bundleImageName: "Chat/Input/Accessory Panels/PanelTextGroupIcon")
                             }
                             if let iconImage = generateTintedImage(image: icon, color: environment.theme.chat.inputPanel.panelControlAccentColor) {
-                                titleText.append(.icon(iconImage))
+                                titleText.append(.icon(iconImage, .zero))
                                 titleText.append(.text(NSAttributedString(string: peer.debugDisplayTitle, font: Font.medium(14.0), textColor: environment.theme.chat.inputPanel.panelControlAccentColor)))
                             }
                         }

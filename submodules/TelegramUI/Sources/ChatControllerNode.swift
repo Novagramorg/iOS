@@ -953,21 +953,26 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 if case .scheduledMessages = self.chatPresentationInterfaceState.subject, self.chatPresentationInterfaceState.editMessageState == nil {
                     self.controllerInteraction.scheduleCurrentMessage(nil)
                 } else {
-                    if let _ = self.chatPresentationInterfaceState.sendPaidMessageStars {
-                        var count: Int32
-                        if let forwardedCount = self.chatPresentationInterfaceState.interfaceState.forwardMessageIds?.count, forwardedCount > 0 {
-                            count = Int32(forwardedCount)
-                            if !self.chatPresentationInterfaceState.interfaceState.effectiveInputState.isEmpty {
-                                count += 1
-                            }
-                        } else {
-                            count = Int32(ceil(CGFloat(self.chatPresentationInterfaceState.interfaceState.effectiveInputState.inputText.length) / 4096.0))
+                    self.maybeSendEphemeralMessage { [weak self] in
+                        guard let self else {
+                            return
                         }
-                        controller.presentPaidMessageAlertIfNeeded(count: count, completion: { [weak self] postpone in
-                            self?.sendCurrentMessage(postpone: postpone)
-                        })
-                    } else {
-                        self.sendCurrentMessage()
+                        if let _ = self.chatPresentationInterfaceState.sendPaidMessageStars {
+                            var count: Int32
+                            if let forwardedCount = self.chatPresentationInterfaceState.interfaceState.forwardMessageIds?.count, forwardedCount > 0 {
+                                count = Int32(forwardedCount)
+                                if !self.chatPresentationInterfaceState.interfaceState.effectiveInputState.isEmpty {
+                                    count += 1
+                                }
+                            } else {
+                                count = Int32(ceil(CGFloat(self.chatPresentationInterfaceState.interfaceState.effectiveInputState.inputText.length) / 4096.0))
+                            }
+                            controller.presentPaidMessageAlertIfNeeded(count: count, completion: { [weak self] postpone in
+                                self?.sendCurrentMessage(postpone: postpone)
+                            })
+                        } else {
+                            self.sendCurrentMessage()
+                        }
                     }
                 }
             }
@@ -4732,6 +4737,51 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
     
+    func maybeSendEphemeralMessage(sendNormally: @escaping () -> Void) {
+        var isScheduledMessages = false
+        if case .scheduledMessages = self.chatPresentationInterfaceState.subject {
+            isScheduledMessages = true
+        }
+
+        let interfaceState = self.chatPresentationInterfaceState.interfaceState
+        let inputText = interfaceState.effectiveInputState.inputText.string
+        if !isScheduledMessages, interfaceState.editMessage == nil, interfaceState.postSuggestionState == nil, interfaceState.forwardMessageIds == nil, let peerId = self.chatLocation.peerId, mayContainTypedEphemeralBotCommand(inputText) {
+            let _ = (self.context.engine.peers.peerCommands(id: peerId)
+            |> take(1)
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] peerCommands in
+                guard let self else {
+                    return
+                }
+
+                if let resolved = resolveEphemeralBotCommand(text: inputText, peerCommands: peerCommands) {
+                    let replyMessageSubject = self.chatPresentationInterfaceState.interfaceState.replyMessageSubject
+                    self.setupSendActionOnViewUpdate({ [weak self] in
+                        guard let strongSelf = self else {
+                            return
+                        }
+                        strongSelf.collapseInput()
+
+                        strongSelf.controller?.updateChatPresentationInterfaceState(animated: true, interactive: false, {
+                            $0.updatedInterfaceState { $0.withUpdatedReplyMessageSubject(nil).withUpdatedSendMessageEffect(nil).withUpdatedPostSuggestionState(nil).withUpdatedComposeInputState(ChatTextInputState(inputText: NSAttributedString(string: ""))).withUpdatedComposeDisableUrlPreviews([]) }
+                        })
+                    }, nil)
+
+                    var attributes: [MessageAttribute] = [
+                        EphemeralOutgoingMessageAttribute(botPeerId: resolved.botPeerId, randomId: 0, state: .sending)
+                    ]
+                    if !resolved.entities.isEmpty {
+                        attributes.append(TextEntitiesMessageAttribute(entities: resolved.entities))
+                    }
+                    self.sendMessages([.message(text: resolved.text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: self.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])], nil, nil, nil, false, false)
+                } else {
+                    sendNormally()
+                }
+            })
+        } else {
+            sendNormally()
+        }
+    }
+
     func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, completion: @escaping () -> Void = {}) {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
             return

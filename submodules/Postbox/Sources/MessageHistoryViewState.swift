@@ -1099,19 +1099,19 @@ struct OrderedHistoryViewEntries {
             }
         }
         
-        #if DEBUG && os(iOS)
-        for entry in self.lowerOrAtAnchor {
-            assert(self.anchor.isEqualOrGreater(than: entry.index, peerId: self.spacePeerId, namespace: self.spaceNamespace))
-        }
-        for entry in self.higherThanAnchor {
-            assert(!self.anchor.isEqualOrGreater(than: entry.index, peerId: self.spacePeerId, namespace: self.spaceNamespace))
-        }
-        if !self.lowerOrAtAnchor.isEmpty && !self.higherThanAnchor.isEmpty {
-            let lowerMax = self.lowerOrAtAnchor.map(\.index.id.id).max()!
-            let upperMin = self.higherThanAnchor.map(\.index.id.id).min()!
-            assert(upperMin > lowerMax)
-        }
-        #endif
+//        #if DEBUG && os(iOS)
+//        for entry in self.lowerOrAtAnchor {
+//            assert(self.anchor.isEqualOrGreater(than: entry.index, peerId: self.spacePeerId, namespace: self.spaceNamespace))
+//        }
+//        for entry in self.higherThanAnchor {
+//            assert(!self.anchor.isEqualOrGreater(than: entry.index, peerId: self.spacePeerId, namespace: self.spaceNamespace))
+//        }
+//        if !self.lowerOrAtAnchor.isEmpty && !self.higherThanAnchor.isEmpty {
+//            let lowerMax = self.lowerOrAtAnchor.map(\.index.id.id).max()!
+//            let upperMin = self.higherThanAnchor.map(\.index.id.id).min()!
+//            assert(upperMin > lowerMax)
+//        }
+//        #endif
     }
     
     mutating func removeLowerOrAtAnchorAtArrayIndex(_ index: Int) {

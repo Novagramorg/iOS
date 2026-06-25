@@ -382,6 +382,16 @@ final class PeerInfoPersonalChannelData: Equatable {
     }
 }
 
+final class PeerInfoLinkedCommunityData {
+    let peer: TelegramCommunity
+    let cachedData: CachedCommunityData?
+
+    init(peer: TelegramCommunity, cachedData: CachedCommunityData?) {
+        self.peer = peer
+        self.cachedData = cachedData
+    }
+}
+
 final class PeerInfoScreenData {
     let peer: EnginePeer?
     let chatPeer: EnginePeer?
@@ -395,6 +405,7 @@ final class PeerInfoScreenData {
     let groupsInCommon: GroupsInCommonContext?
     let linkedDiscussionPeer: EnginePeer?
     let linkedMonoforumPeer: EnginePeer?
+    let linkedCommunityData: PeerInfoLinkedCommunityData?
     let members: PeerInfoMembersData?
     let storyListContext: StoryListContext?
     let storyArchiveListContext: StoryListContext?
@@ -452,6 +463,7 @@ final class PeerInfoScreenData {
         groupsInCommon: GroupsInCommonContext?,
         linkedDiscussionPeer: EnginePeer?,
         linkedMonoforumPeer: EnginePeer?,
+        linkedCommunityData: PeerInfoLinkedCommunityData?,
         members: PeerInfoMembersData?,
         storyListContext: StoryListContext?,
         storyArchiveListContext: StoryListContext?,
@@ -497,6 +509,7 @@ final class PeerInfoScreenData {
         self.groupsInCommon = groupsInCommon
         self.linkedDiscussionPeer = linkedDiscussionPeer
         self.linkedMonoforumPeer = linkedMonoforumPeer
+        self.linkedCommunityData = linkedCommunityData
         self.members = members
         self.storyListContext = storyListContext
         self.storyArchiveListContext = storyArchiveListContext
@@ -1037,6 +1050,7 @@ func peerInfoScreenSettingsData(context: AccountContext, peerId: EnginePeer.Id, 
             groupsInCommon: nil,
             linkedDiscussionPeer: nil,
             linkedMonoforumPeer: nil,
+            linkedCommunityData: nil,
             members: nil,
             storyListContext: hasStories == true ? storyListContext : nil,
             storyArchiveListContext: nil,
@@ -1110,6 +1124,7 @@ func peerInfoScreenData(
                 groupsInCommon: nil,
                 linkedDiscussionPeer: nil,
                 linkedMonoforumPeer: nil,
+                linkedCommunityData: nil,
                 members: nil,
                 storyListContext: nil,
                 storyArchiveListContext: nil,
@@ -1630,6 +1645,7 @@ func peerInfoScreenData(
                     groupsInCommon: groupsInCommon,
                     linkedDiscussionPeer: nil,
                     linkedMonoforumPeer: nil,
+                    linkedCommunityData: nil,
                     members: nil,
                     storyListContext: storyListContext,
                     storyArchiveListContext: storyArchiveListContext,
@@ -1877,6 +1893,7 @@ func peerInfoScreenData(
                     groupsInCommon: nil,
                     linkedDiscussionPeer: discussionPeer,
                     linkedMonoforumPeer: monoforumPeer,
+                    linkedCommunityData: nil,
                     members: nil,
                     storyListContext: storyListContext,
                     storyArchiveListContext: nil,
@@ -2099,6 +2116,7 @@ func peerInfoScreenData(
             }
             
             let isPremiumRequiredForStoryPosting: Signal<Bool, NoError> = isPremiumRequiredForStoryPosting(context: context)
+            let forcedLinkedCommunityId = Atomic<PeerId?>(value: nil)
             
             return combineLatest(queue: .mainQueue(),
                 context.account.viewTracker.peerView(groupId, updateData: true),
@@ -2191,55 +2209,92 @@ func peerInfoScreenData(
                 
                 let peerNotificationSettings = peerView.notificationSettings as? TelegramPeerNotificationSettings
                 let threadNotificationSettings = threadData?.notificationSettings
-                
+
                 let appConfiguration: AppConfiguration = preferencesView?.get(AppConfiguration.self) ?? .defaultValue
-              
-                return .single(PeerInfoScreenData(
-                    peer: peerView.peers[groupId].flatMap(EnginePeer.init),
-                    chatPeer: peerView.peers[groupId].flatMap(EnginePeer.init),
-                    savedMessagesPeer: nil,
-                    cachedData: peerView.cachedData,
-                    status: status,
-                    peerNotificationSettings: peerNotificationSettings,
-                    threadNotificationSettings: threadNotificationSettings,
-                    globalNotificationSettings: globalNotificationSettings,
-                    isContact: peerView.peerIsContact,
-                    availablePanes: availablePanes ?? [],
-                    groupsInCommon: nil,
-                    linkedDiscussionPeer: discussionPeer,
-                    linkedMonoforumPeer: monoforumPeer,
-                    members: membersData,
-                    storyListContext: storyListContext,
-                    storyArchiveListContext: nil,
-                    botPreviewStoryListContext: nil,
-                    encryptionKeyFingerprint: nil,
-                    globalSettings: nil,
-                    invitations: invitations,
-                    requests: requests,
-                    requestsContext: currentRequestsContext,
-                    threadData: threadData,
-                    appConfiguration: appConfiguration,
-                    isPowerSavingEnabled: nil,
-                    accountIsPremium: accountIsPremium,
-                    hasSavedMessageTags: hasSavedMessageTags,
-                    hasBotPreviewItems: false,
-                    isPremiumRequiredForStoryPosting: isPremiumRequiredForStoryPosting,
-                    personalChannel: nil,
-                    starsState: nil,
-                    tonState: nil,
-                    starsRevenueStatsState: starsRevenueContextAndState.1,
-                    starsRevenueStatsContext: starsRevenueContextAndState.0,
-                    revenueStatsState: nil,
-                    revenueStatsContext: nil,
-                    profileGiftsContext: nil,
-                    profileGiftsCollectionsContext: nil,
-                    premiumGiftOptions: [],
-                    webAppPermissions: nil,
-                    savedMusicContext: nil,
-                    savedMusicState: nil,
-                    managedByBot: nil,
-                    businessConnectedBot: nil
-                ))
+
+                let linkedCommunityData: Signal<PeerInfoLinkedCommunityData?, NoError>
+                if let channel = peerViewMainPeer(peerView) as? TelegramChannel, case .group = channel.info, let linkedCommunityId = channel.linkedCommunityId {
+                    let previousLinkedCommunityId = forcedLinkedCommunityId.swap(linkedCommunityId)
+                    if previousLinkedCommunityId != linkedCommunityId {
+                        context.account.viewTracker.forceUpdateCachedPeerData(peerId: linkedCommunityId)
+                    }
+
+                    linkedCommunityData = combineLatest(
+                        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: linkedCommunityId)),
+                        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.CachedData(id: linkedCommunityId))
+                    )
+                    |> map { peer, cachedData -> PeerInfoLinkedCommunityData? in
+                        guard let peer else {
+                            return nil
+                        }
+                        if case let .community(community) = peer {
+                            return PeerInfoLinkedCommunityData(peer: community, cachedData: cachedData as? CachedCommunityData)
+                        } else {
+                            return nil
+                        }
+                    }
+                } else {
+                    let _ = forcedLinkedCommunityId.swap(nil)
+                    linkedCommunityData = .single(nil)
+                }
+
+                return linkedCommunityData
+                |> map { linkedCommunityData -> PeerInfoScreenData in
+                    var effectiveStatus = status
+                    if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == groupId }), linkedPeer.visible == false, var status = effectiveStatus {
+                        status.text = "Hidden • \(status.text)"
+                        status.hasHiddenCommunityPrefix = true
+                        effectiveStatus = status
+                    }
+
+                    return PeerInfoScreenData(
+                        peer: peerView.peers[groupId].flatMap(EnginePeer.init),
+                        chatPeer: peerView.peers[groupId].flatMap(EnginePeer.init),
+                        savedMessagesPeer: nil,
+                        cachedData: peerView.cachedData,
+                        status: effectiveStatus,
+                        peerNotificationSettings: peerNotificationSettings,
+                        threadNotificationSettings: threadNotificationSettings,
+                        globalNotificationSettings: globalNotificationSettings,
+                        isContact: peerView.peerIsContact,
+                        availablePanes: availablePanes ?? [],
+                        groupsInCommon: nil,
+                        linkedDiscussionPeer: discussionPeer,
+                        linkedMonoforumPeer: monoforumPeer,
+                        linkedCommunityData: linkedCommunityData,
+                        members: membersData,
+                        storyListContext: storyListContext,
+                        storyArchiveListContext: nil,
+                        botPreviewStoryListContext: nil,
+                        encryptionKeyFingerprint: nil,
+                        globalSettings: nil,
+                        invitations: invitations,
+                        requests: requests,
+                        requestsContext: currentRequestsContext,
+                        threadData: threadData,
+                        appConfiguration: appConfiguration,
+                        isPowerSavingEnabled: nil,
+                        accountIsPremium: accountIsPremium,
+                        hasSavedMessageTags: hasSavedMessageTags,
+                        hasBotPreviewItems: false,
+                        isPremiumRequiredForStoryPosting: isPremiumRequiredForStoryPosting,
+                        personalChannel: nil,
+                        starsState: nil,
+                        tonState: nil,
+                        starsRevenueStatsState: starsRevenueContextAndState.1,
+                        starsRevenueStatsContext: starsRevenueContextAndState.0,
+                        revenueStatsState: nil,
+                        revenueStatsContext: nil,
+                        profileGiftsContext: nil,
+                        profileGiftsCollectionsContext: nil,
+                        premiumGiftOptions: [],
+                        webAppPermissions: nil,
+                        savedMusicContext: nil,
+                        savedMusicState: nil,
+                        managedByBot: nil,
+                        businessConnectedBot: nil
+                    )
+                }
             }
         }
     }

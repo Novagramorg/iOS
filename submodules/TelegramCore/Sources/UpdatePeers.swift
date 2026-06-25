@@ -2,7 +2,74 @@ import Foundation
 import Postbox
 import TelegramApi
 
-func updatePeerChatInclusionWithMinTimestamp(transaction: Transaction, id: PeerId, minTimestamp: Int32, forceRootGroupIfNotExists: Bool) {
+func _internal_isPeerHiddenByCollapsedCommunity(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
+    if let channel = (peer ?? transaction.getPeer(peerId)) as? TelegramChannel, let linkedCommunityId = channel.linkedCommunityId, linkedCommunityId != peerId {
+        if let community = transaction.getPeer(linkedCommunityId) as? TelegramCommunity, community.collapsedInDialogs == true {
+            return true
+        }
+    }
+    
+    guard let communityIds = _internal_currentCommunitiesState(transaction: transaction).communityIds else {
+        return false
+    }
+    
+    for communityId in communityIds {
+        if communityId == peerId {
+            continue
+        }
+        guard let community = transaction.getPeer(communityId) as? TelegramCommunity, community.collapsedInDialogs == true else {
+            continue
+        }
+        guard let cachedData = transaction.getPeerCachedData(peerId: communityId) as? CachedCommunityData else {
+            continue
+        }
+        if cachedData.linkedPeers.contains(where: { $0.peerId == peerId }) {
+            return true
+        }
+    }
+    
+    return false
+}
+
+func shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
+    return _internal_isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId, peer: peer)
+}
+
+func shouldExcludePeerFromChatList(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
+    guard let peer = peer ?? transaction.getPeer(peerId) else {
+        return false
+    }
+
+    if let group = peer as? TelegramGroup {
+        if group.flags.contains(.deactivated) {
+            return true
+        }
+        switch group.membership {
+        case .Member:
+            return false
+        default:
+            return true
+        }
+    } else if let channel = peer as? TelegramChannel {
+        switch channel.participationStatus {
+        case .member:
+            return shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: peerId, peer: channel)
+        default:
+            return true
+        }
+    } else if let community = peer as? TelegramCommunity {
+        return community.participationStatus != .member || community.collapsedInDialogs != true
+    } else {
+        return false
+    }
+}
+
+func updatePeerChatInclusionWithMinTimestamp(transaction: Transaction, id: PeerId, minTimestamp: Int32, forceRootGroupIfNotExists: Bool, peer: Peer? = nil) {
+    if shouldExcludePeerFromChatList(transaction: transaction, peerId: id, peer: peer) {
+        transaction.updatePeerChatListInclusion(id, inclusion: .notIncluded)
+        return
+    }
+    
     let currentInclusion = transaction.getPeerChatListInclusion(id)
     var updatedInclusion: PeerChatListInclusion?
     switch currentInclusion {
@@ -33,8 +100,34 @@ func minTimestampForPeerInclusion(_ peer: Peer) -> Int32? {
         return group.creationDate
     } else if let channel = peer as? TelegramChannel {
         return channel.creationDate
+    } else if let community = peer as? TelegramCommunity {
+        return community.creationDate
     } else {
         return nil
+    }
+}
+
+func updateCommunityChatListInclusion(transaction: Transaction, community: TelegramCommunity, minTimestamp: Int32?) {
+    if community.participationStatus != .member || community.collapsedInDialogs != true {
+        if transaction.getPeerChatListInclusion(community.id) != .notIncluded {
+            transaction.updatePeerChatListInclusion(community.id, inclusion: .notIncluded)
+        }
+        return
+    }
+
+    let currentInclusion = transaction.getPeerChatListInclusion(community.id)
+    let effectiveMinTimestamp = minTimestamp ?? minTimestampForPeerInclusion(community)
+    switch currentInclusion {
+    case .notIncluded:
+        transaction.updatePeerChatListInclusion(community.id, inclusion: .ifHasMessagesOrOneOf(
+            groupId: .root,
+            pinningIndex: transaction.getPeerChatListIndex(community.id)?.1.pinningIndex,
+            minTimestamp: effectiveMinTimestamp
+        ))
+    case let .ifHasMessagesOrOneOf(groupId, pinningIndex, currentMinTimestamp):
+        if currentMinTimestamp != effectiveMinTimestamp {
+            transaction.updatePeerChatListInclusion(community.id, inclusion: .ifHasMessagesOrOneOf(groupId: groupId, pinningIndex: pinningIndex, minTimestamp: effectiveMinTimestamp))
+        }
     }
 }
 
@@ -236,6 +329,9 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
                 }
             }
         }
+        if let updatedCommunity = updated as? TelegramCommunity {
+            updated = mergeCommunity(lhs: previous as? TelegramCommunity, rhs: updatedCommunity)
+        }
         
         switch peerId.namespace {
             case Namespaces.Peer.CloudUser:
@@ -279,7 +375,7 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
                     } else {
                         switch group.membership {
                             case .Member:
-                                updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: peerId, minTimestamp: group.creationDate, forceRootGroupIfNotExists: false)
+                                updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: peerId, minTimestamp: group.creationDate, forceRootGroupIfNotExists: false, peer: group)
                             default:
                                 transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
                         }
@@ -292,10 +388,23 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
                     if case .personal = channel.accessHash {
                         switch channel.participationStatus {
                         case .member:
-                            updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: peerId, minTimestamp: channel.creationDate, forceRootGroupIfNotExists: true)
+                            updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: peerId, minTimestamp: channel.creationDate, forceRootGroupIfNotExists: true, peer: channel)
                         case .left:
                             transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
                         case .kicked where channel.creationDate == 0:
+                            transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
+                        default:
+                            transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
+                        }
+                    }
+                } else if let community = updated as? TelegramCommunity {
+                    if case .personal = community.accessHash {
+                        switch community.participationStatus {
+                        case .member:
+                            updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: community.creationDate)
+                        case .left:
+                            transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
+                        case .kicked where community.creationDate == 0:
                             transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
                         default:
                             transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
@@ -313,7 +422,7 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
                         case .terminated:
                             isActive = false
                     }
-                    updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: peerId, minTimestamp: secretChat.creationDate, forceRootGroupIfNotExists: isActive)
+                    updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: peerId, minTimestamp: secretChat.creationDate, forceRootGroupIfNotExists: isActive, peer: secretChat)
                 } else {
                     assertionFailure()
                 }

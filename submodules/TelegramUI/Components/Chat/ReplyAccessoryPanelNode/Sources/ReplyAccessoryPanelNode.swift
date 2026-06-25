@@ -257,7 +257,7 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
                             if nameRange.range.lowerBound != 0 {
                                 titleText.append(.text(NSAttributedString(string: rawNsString.substring(with: NSRange(location: 0, length: nameRange.range.lowerBound)), font: Font.medium(15.0), textColor: strongSelf.theme.chat.inputPanel.panelControlAccentColor)))
                             }
-                            titleText.append(.icon(icon))
+                            titleText.append(.icon(icon, .zero))
                             titleText.append(.text(NSAttributedString(string: peer.debugDisplayTitle, font: Font.medium(15.0), textColor: strongSelf.theme.chat.inputPanel.panelControlAccentColor)))
                             
                             if nameRange.range.upperBound != rawNsString.length {
@@ -291,7 +291,7 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
                                 icon = UIImage(bundleImageName: "Chat/Input/Accessory Panels/PanelTextGroupIcon")
                             }
                             if let iconImage = generateTintedImage(image: icon, color: strongSelf.theme.chat.inputPanel.panelControlAccentColor) {
-                                titleText.append(.icon(iconImage))
+                                titleText.append(.icon(iconImage, .zero))
                                 titleText.append(.text(NSAttributedString(string: peer.debugDisplayTitle, font: Font.medium(15.0), textColor: theme.chat.inputPanel.panelControlAccentColor)))
                             }
                         }
@@ -415,11 +415,11 @@ public final class ReplyAccessoryPanelNode: AccessoryPanelNode {
                     let updatedText = NSMutableAttributedString(attributedString: text)
                     updatedText.addAttribute(.foregroundColor, value: theme.chat.inputPanel.panelControlAccentColor, range: NSRange(location: 0, length: updatedText.length))
                     return .text(updatedText)
-                case let .icon(icon):
+                case let .icon(icon, offset):
                     if let iconImage = generateTintedImage(image: icon, color: theme.chat.inputPanel.panelControlAccentColor) {
-                        return .icon(iconImage)
+                        return .icon(iconImage, offset)
                     } else {
-                        return .icon(icon)
+                        return .icon(icon, offset)
                     }
                 }
             }
