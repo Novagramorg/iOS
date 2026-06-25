@@ -222,5 +222,37 @@ final class CanvasClipboardTests: XCTestCase {
         // No paragraph/code run anywhere may contain a literal newline (the doc has no legit code block).
         XCTAssertFalse(allRunTexts(v.currentBlocks()).contains { $0.contains("\n") })
     }
+
+    // MARK: RichTextEditorClipboard public façade (host writes a whole Document to the pasteboard)
+
+    func test_pasteboardItem_forDocument_hasFragmentRTFAndDerivedPlain() throws {
+        let doc = Document(blocks: [
+            .paragraph(ParagraphBlock(id: BlockID("a"), style: .heading1, runs: [TextRun(text: "Title")])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "body", attributes: CharacterAttributes(bold: true))])),
+        ])
+        let item = RichTextEditorClipboard.pasteboardItem(for: doc)
+        let fragData = try XCTUnwrap(item[RichTextEditorClipboard.fragmentUTI] as? Data)
+        XCTAssertEqual(try DocumentCodec.decode(fragData).blocks.count, 2)        // fragment round-trips
+        XCTAssertNotNil(item["public.rtf"] as? Data)                              // RTF present
+        XCTAssertEqual(item["public.utf8-plain-text"] as? String, "Title\nbody")  // plain derived, "\n"-joined
+    }
+
+    func test_pasteboardItem_explicitPlain_overridesDerived() {
+        let doc = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "x")]))])
+        let item = RichTextEditorClipboard.pasteboardItem(for: doc, plain: "custom")
+        XCTAssertEqual(item["public.utf8-plain-text"] as? String, "custom")
+    }
+
+    func test_facadeWrittenFragment_isReadByEditorPaste() throws {
+        // A host-written fragment must be recognized by the editor's own paste reader (same UTI + codec).
+        let doc = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("a"),
+            runs: [TextRun(text: "Hello", attributes: CharacterAttributes(bold: true))]))])
+        let (v, pb) = canvas()
+        pb.items = RichTextEditorClipboard.pasteboardItem(for: doc)
+        let frag = try XCTUnwrap(v.fragment(fromPasteboard: pb))
+        guard case .paragraph(let p) = frag.blocks[0] else { return XCTFail() }
+        XCTAssertEqual(p.text, "Hello")
+        XCTAssertTrue(p.runs.first?.attributes.bold == true)
+    }
 }
 #endif

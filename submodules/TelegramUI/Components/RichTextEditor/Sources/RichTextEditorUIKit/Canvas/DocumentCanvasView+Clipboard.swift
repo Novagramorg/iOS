@@ -4,7 +4,8 @@ import RichTextEditorCore
 
 extension DocumentCanvasView {
     /// Private pasteboard UTI carrying a JSON-encoded `Document` fragment (full within-app fidelity).
-    static let richTextFragmentUTI = "org.telegram.richtexteditor.fragment"
+    /// Aliases the public `RichTextEditorClipboard.fragmentUTI` so the format has one source of truth.
+    static let richTextFragmentUTI = RichTextEditorClipboard.fragmentUTI
 
     func clipboardCanPerformAction(_ action: Selector) -> Bool {
         switch action {
@@ -28,14 +29,11 @@ extension DocumentCanvasView {
         replace(range, withText: "")
     }
 
-    /// Writes the three pasteboard representations for the selection atomically.
+    /// Writes the three pasteboard representations for the selection atomically (via the public façade,
+    /// the single source of truth for the format — see `RichTextEditorClipboard`).
     private func writeSelectionToPasteboard(globalFrom: Int, globalTo: Int, plain: String?) {
         let fragment = Document(blocks: currentBlocks()).extractFragment(globalFrom: globalFrom, globalTo: globalTo)
-        var item: [String: Any] = [:]
-        if let data = try? DocumentCodec.encode(fragment) { item[Self.richTextFragmentUTI] = data }
-        if let rtf = RTFConversion.rtfData(from: fragment) { item["public.rtf"] = rtf }
-        if let plain = plain { item["public.utf8-plain-text"] = plain }
-        pasteboard.setItems([item], options: [:])
+        pasteboard.setItems([RichTextEditorClipboard.pasteboardItem(for: fragment, plain: plain)], options: [:])
     }
 
     @objc override func paste(_ sender: Any?) {

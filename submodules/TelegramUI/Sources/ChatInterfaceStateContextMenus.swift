@@ -29,6 +29,7 @@ import DebugSettingsUI
 import ChatPresentationInterfaceState
 import Pasteboard
 import BrowserUI
+import ChatRichTextEditorComposer
 import SettingsUI
 import TextNodeWithEntities
 import ChatControllerInteraction
@@ -1290,10 +1291,12 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         
         let message = messages[0]
         var richMessageMarkdown: String?
+        var richMessageInstantPage: InstantPage?
         if let richTextAttribute = message.attributes.first(where: { $0 is RichTextMessageAttribute }) as? RichTextMessageAttribute {
             let markdown = markdownStringFromInstantPage(richTextAttribute.instantPage)
             if !markdown.isEmpty {
                 richMessageMarkdown = markdown
+                richMessageInstantPage = richTextAttribute.instantPage
             }
         }
         var isExpired = false
@@ -1319,8 +1322,11 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                                 UIPasteboard.general.string = diceEmoji
                             } else {
                                 let copyTextWithEntities = {
-                                    if let richMessageMarkdown {
-                                        storeMessageTextInPasteboard(richMessageMarkdown, entities: nil)
+                                    if let richMessageInstantPage {
+                                        // Copy a rich message in the new WYSIWYG-editor clipboard formats
+                                        // (fragment + RTF + plain) so it pastes into the composer with full
+                                        // structure and cross-app as RTF — not raw markdown text.
+                                        UIPasteboard.general.items = [richMessagePasteboardItem(fromInstantPage: richMessageInstantPage)]
                                         Queue.mainQueue().after(0.2, {
                                             let content: UndoOverlayContent = .copy(text: chatPresentationInterfaceState.strings.Conversation_MessageCopied)
                                             controllerInteraction.displayUndo(content)
