@@ -23,68 +23,127 @@ enum RTFConversion {
         return id.isEmpty ? nil : id
     }
 
-    private static func fontSize(for style: ParagraphStyleName) -> CGFloat {
+    /// RTF-escapes a string: backslash/brace specials, tab, printable ASCII verbatim, and every other
+    /// UTF-16 code unit as `\u<signed-16>?` (so a >U+FFFF scalar emits its two surrogate \u words).
+    static func escapeRTFText(_ s: String) -> String {
+        var out = ""
+        for unit in s.utf16 {
+            switch unit {
+            case 0x5C: out += "\\\\"
+            case 0x7B: out += "\\{"
+            case 0x7D: out += "\\}"
+            case 0x09: out += "\\tab "
+            case 0x20..<0x7F: out.unicodeScalars.append(Unicode.Scalar(unit)!)
+            default:
+                let signed = unit >= 0x8000 ? Int(unit) - 0x10000 : Int(unit)
+                out += "\\u\(signed)?"
+            }
+        }
+        return out
+    }
+
+    /// Encodes inline runs to RTF. Each run is wrapped in a `{ … }` group so its formatting auto-resets.
+    /// `baseMono` is the block's base monospace (a code block); a run's own `inlineCode` also forces mono.
+    static func inlineRTF(_ runs: [TextRun], mono baseMono: Bool, emojiSeq: inout Int) -> String {
+        var out = ""
+        for run in runs {
+            let ca = run.attributes
+            out += "{"
+            out += (baseMono || ca.inlineCode) ? "\\f1 " : "\\f0 "
+            if ca.bold { out += "\\b " }
+            if ca.italic { out += "\\i " }
+            if ca.underline { out += "\\ul " }
+            if ca.strikethrough { out += "\\strike " }
+            if let emoji = ca.emoji {
+                let alt = emoji.altText ?? ""
+                let text = alt.isEmpty ? " " : alt
+                out += "{\\field{\\*\\fldinst HYPERLINK \"\(escapeRTFText(emojiMarkerURL(id: emoji.id, dedup: emojiSeq)))\"}{\\fldrslt \(escapeRTFText(text))}}"
+                emojiSeq += 1
+            } else if let link = ca.link, !link.isEmpty {
+                out += "{\\field{\\*\\fldinst HYPERLINK \"\(escapeRTFText(link))\"}{\\fldrslt \(escapeRTFText(run.text))}}"
+            } else {
+                out += escapeRTFText(run.text)
+            }
+            out += "}"
+        }
+        return out
+    }
+
+    static func fontSize(for style: ParagraphStyleName) -> CGFloat {
         switch style {
         case .heading1: return 24; case .heading2: return 21; case .heading3: return 19
         case .body, .quote: return 17; case .caption: return 15
         }
     }
 
-    private static func font(size: CGFloat, bold: Bool, italic: Bool, mono: Bool) -> UIFont {
-        if mono { return UIFont.monospacedSystemFont(ofSize: size, weight: .regular) }
-        var traits: UIFontDescriptor.SymbolicTraits = []
-        if bold { traits.insert(.traitBold) }
-        if italic { traits.insert(.traitItalic) }
-        let base = UIFont.systemFont(ofSize: size)
-        if let d = base.fontDescriptor.withSymbolicTraits(traits) { return UIFont(descriptor: d, size: size) }
-        return base
-    }
-
     static func rtfData(from fragment: Document) -> Data? {
-        let out = NSMutableAttributedString()
-        var emojiSeq = 0   // per-export sequence so each emoji marker URL is unique (no run coalescing)
-        for (i, block) in fragment.blocks.enumerated() {
-            if i > 0 { out.append(NSAttributedString(string: "\n")) }
+        var emojiSeq = 0
+        var paragraphs: [String] = []
+        for block in fragment.blocks {
             switch block {
             case .paragraph(let p):
-                appendRuns(p.runs, style: p.style, mono: false, emojiSeq: &emojiSeq, to: out)
+                let pt = fontSize(for: p.style)
+                let inline = inlineRTF(p.runs, mono: false, emojiSeq: &emojiSeq)
+                paragraphs.append("\\pard\(alignmentRTF(p.paragraph.alignment))\\fs\(Int(pt * 2)) \(inline)")
             case .code(let c):
-                appendRuns(c.runs, style: .body, mono: true, emojiSeq: &emojiSeq, to: out)
+                // Interior "\n" → \line so the whole code block stays one paragraph.
+                let runs = c.runs.map { TextRun(text: $0.text.replacingOccurrences(of: "\n", with: "\u{2028}"), attributes: $0.attributes) }
+                let inline = inlineRTF(runs, mono: true, emojiSeq: &emojiSeq).replacingOccurrences(of: "\\u8232?", with: "\\line ")
+                paragraphs.append("\\pard\\fs34 \(inline)")
+            case .table(let t):
+                paragraphs.append(tableRTF(t, emojiSeq: &emojiSeq))
             default:
-                break   // media/table carry no RTF text representation
+                break   // media has no RTF text rep
             }
         }
-        guard out.length > 0 else { return nil }
-        return try? out.data(from: NSRange(location: 0, length: out.length),
-                              documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+        guard !paragraphs.isEmpty else { return nil }
+        // Join with \par (paragraph break) between blocks but NO trailing \par — the import splits on "\n"
+        // in the NSAttributedString result and a trailing \par would produce a spurious empty final paragraph.
+        let body = paragraphs.joined(separator: "\\par\n")
+        let rtf = "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil Helvetica;}{\\f1\\fmodern Courier;}}\n\(body)}"
+        return rtf.data(using: .utf8)
     }
 
-    private static func appendRuns(_ runs: [TextRun], style: ParagraphStyleName, mono: Bool,
-                                   emojiSeq: inout Int, to out: NSMutableAttributedString) {
-        let size = fontSize(for: style)
-        for run in runs {
-            let ca = run.attributes
-            var attrs: [NSAttributedString.Key: Any] = [
-                .font: font(size: size, bold: ca.bold, italic: ca.italic, mono: mono || ca.inlineCode),
-            ]
-            if ca.underline { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-            if ca.strikethrough { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
-            let text: String
-            if let emoji = ca.emoji {
-                // An emoji run's text is U+FFFC; carry its altText hyperlinked to the tg://emoji?id= marker
-                // so the file id survives cross-app and import can reconstruct the emoji. A nil/empty altText
-                // falls back to a single space so the hyperlink rides on ≥1 character. (Mention/date already
-                // arrive as `ca.link` and round-trip through the branch below.)
-                let alt = emoji.altText ?? ""
-                text = alt.isEmpty ? " " : alt
-                if let url = URL(string: emojiMarkerURL(id: emoji.id, dedup: emojiSeq)) { attrs[.link] = url }
-                emojiSeq += 1
-            } else {
-                if let link = ca.link, let url = URL(string: link) { attrs[.link] = url }
-                text = run.text
+    /// RTF paragraph alignment control word.
+    static func alignmentRTF(_ a: TextAlignment) -> String {
+        switch a { case .left: return "\\ql"; case .center: return "\\qc"; case .right: return "\\qr"; case .justified: return "\\qj" }
+    }
+
+    /// Emits real RTF table rows. Column right edges are cumulative twips (ColumnSpec.width pt × 20).
+    /// Header rows are marked \trhdr and their cells bolded. A cell's paragraphs are flattened (joined by
+    /// \line); media in a cell is dropped (no RTF text representation).
+    static func tableRTF(_ table: TableBlock, emojiSeq: inout Int) -> String {
+        var edges: [Int] = []
+        var acc = 0.0
+        for col in table.columns { acc += col.width; edges.append(Int(acc * 20)) }
+        var out = ""
+        for row in table.rows {
+            out += "\\trowd"
+            if row.isHeader { out += "\\trhdr" }
+            for edge in edges { out += "\\cellx\(edge)" }
+            out += " "
+            for (colIndex, cell) in row.cells.enumerated() {
+                let align = colIndex < table.columns.count ? alignmentRTF(table.columns[colIndex].alignment) : "\\ql"
+                // Flatten the cell's paragraph runs (join paragraphs with \line); header cells force bold.
+                var cellRuns: [TextRun] = []
+                var wroteParagraph = false
+                for block in cell.blocks {
+                    guard case .paragraph(let p) = block else { continue }   // media-in-cell dropped
+                    if wroteParagraph { cellRuns.append(TextRun(text: "\u{2028}")) }
+                    for run in p.runs {
+                        var attrs = run.attributes
+                        if row.isHeader { attrs.bold = true }
+                        cellRuns.append(TextRun(text: run.text, attributes: attrs))
+                    }
+                    wroteParagraph = true
+                }
+                out += "\\intbl\(align) "
+                out += inlineRTF(cellRuns, mono: false, emojiSeq: &emojiSeq).replacingOccurrences(of: "\\u8232?", with: "\\line ")
+                out += "\\cell "
             }
-            out.append(NSAttributedString(string: text, attributes: attrs))
+            out += "\\row\n"
         }
+        return out
     }
 
     static func fragment(fromRTF data: Data) -> Document? {
