@@ -6,6 +6,9 @@ import UIKit
 protocol TextPasteboard: AnyObject {
     var string: String? { get set }
     var hasStrings: Bool { get }
+    func data(forPasteboardType type: String) -> Data?
+    func setItems(_ items: [[String: Any]], options: [UIPasteboard.OptionsKey: Any])
+    func contains(pasteboardTypes: [String]) -> Bool
 }
 extension UIPasteboard: TextPasteboard {}
 
@@ -96,10 +99,8 @@ extension DocumentCanvasView {
             let begin = (beginningOfDocument as? DocumentTextPosition)?.offset ?? 0
             let end = (endOfDocument as? DocumentTextPosition)?.offset ?? documentSize
             return hasText && !(selFrom <= begin && selTo >= end)
-        case #selector(copy(_:)), #selector(cut(_:)):
-            return selFrom < selTo
-        case #selector(paste(_:)):
-            return pasteboard.hasStrings
+        case #selector(copy(_:)), #selector(cut(_:)), #selector(paste(_:)):
+            return clipboardCanPerformAction(action)
         case #selector(legacyBold), #selector(legacyItalic), #selector(legacyUnderline),
              #selector(legacyLookUp), #selector(legacyShare):
             // The custom items of the UIMenuController (iOS 13–15) fallback — a non-collapsed selection only.
@@ -117,26 +118,6 @@ extension DocumentCanvasView {
     @objc override func selectAll(_ sender: Any?) {
         selectAllText()
         presentEditMenu()
-    }
-
-    @objc override func copy(_ sender: Any?) {
-        guard selFrom < selTo, let range = selectedTextRange else { return }
-        pasteboard.string = text(in: range)
-    }
-
-    @objc override func cut(_ sender: Any?) {
-        guard selFrom < selTo, let range = selectedTextRange else { return }
-        pasteboard.string = text(in: range)
-        replace(range, withText: "")   // routes through editing { } + applySelectionReplace
-    }
-
-    @objc override func paste(_ sender: Any?) {
-        guard let raw = pasteboard.string, let range = selectedTextRange else { return }
-        // Multi-line paragraph-splitting paste is Phase 5d; flatten newlines so applyReplace's
-        // no-newline precondition holds. Normalize CRLF first so \r\n doesn't flatten to a double space.
-        let flattened = raw.replacingOccurrences(of: "\r\n", with: "\n")
-            .components(separatedBy: .newlines).joined(separator: " ")
-        replace(range, withText: flattened)
     }
 
     // MARK: - Legacy UIMenuController fallback (iOS 13–15)

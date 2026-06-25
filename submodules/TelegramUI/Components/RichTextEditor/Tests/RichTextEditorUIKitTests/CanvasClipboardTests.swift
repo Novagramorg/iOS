@@ -6,8 +6,19 @@ import RichTextEditorCore
 
 final class CanvasClipboardTests: XCTestCase {
     final class FakePasteboard: TextPasteboard {
-        var string: String?
-        var hasStrings: Bool { !(string ?? "").isEmpty }
+        var items: [String: Any] = [:]
+        var string: String? {
+            get { items["public.utf8-plain-text"] as? String }
+            set {
+                if let v = newValue { items = ["public.utf8-plain-text": v] } else { items = [:] }
+            }
+        }
+        var hasStrings: Bool { !((string ?? "").isEmpty) }
+        func data(forPasteboardType type: String) -> Data? { items[type] as? Data }
+        func setItems(_ newItems: [[String: Any]], options: [UIPasteboard.OptionsKey: Any]) {
+            items = newItems.first ?? [:]
+        }
+        func contains(pasteboardTypes: [String]) -> Bool { pasteboardTypes.contains { items[$0] != nil } }
     }
     func cell(_ id: String, _ t: String) -> Cell {
         Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "p"), runs: [TextRun(text: t)]))])
@@ -31,12 +42,16 @@ final class CanvasClipboardTests: XCTestCase {
         return ""
     }
 
-    func test_copy_putsSelectionTextOnPasteboard() {
+    func test_copy_writesFragmentRTFAndPlain() {
         let (v, pb) = canvas()
         let r = region(v, "h"); v.anchor = r.globalStart; v.head = r.globalStart + 5   // "Hello"
-        pb.string = "stale"
         v.copy(nil)
-        XCTAssertEqual(pb.string, "Hello")
+        XCTAssertEqual(pb.string, "Hello")                                  // plain
+        XCTAssertNotNil(pb.data(forPasteboardType: DocumentCanvasView.richTextFragmentUTI))   // fragment
+        XCTAssertNotNil(pb.data(forPasteboardType: "public.rtf"))           // rtf
+        let frag = try! DocumentCodec.decode(pb.data(forPasteboardType: DocumentCanvasView.richTextFragmentUTI)!)
+        guard case .paragraph(let p) = frag.blocks[0] else { return XCTFail() }
+        XCTAssertEqual(p.text, "Hello")
     }
     func test_cut_copiesAndDeletes_andUndoes() {
         let (v, pb) = canvas()
@@ -58,26 +73,63 @@ final class CanvasClipboardTests: XCTestCase {
         um.undo()
         XCTAssertEqual(text(v, "h"), "Hello world")
     }
-    func test_paste_flattensNewlinesToSpaces() {
+    func test_paste_multiline_splitsIntoParagraphs() {
         let (v, pb) = canvas()
         let r = region(v, "h"); v.anchor = r.globalStart + 5; v.head = r.globalStart + 5   // caret after "Hello"
         pb.string = "a\nb"
         v.paste(nil)
-        XCTAssertEqual(text(v, "h"), "Helloa b world")
+        let paraTexts = v.currentBlocks().compactMap { b -> String? in
+            if case .paragraph(let p) = b { return p.text } else { return nil }
+        }
+        XCTAssertEqual(paraTexts, ["Helloa", "b world"])   // newline → paragraph split (was flattened)
     }
+
+    func test_paste_CRLF_splitsIntoParagraphs() {
+        let (v, pb) = canvas()
+        let r = region(v, "h"); v.anchor = r.globalStart + 5; v.head = r.globalStart + 5
+        pb.string = "a\r\nb"
+        v.paste(nil)
+        let paraTexts = v.currentBlocks().compactMap { b -> String? in
+            if case .paragraph(let p) = b { return p.text } else { return nil }
+        }
+        XCTAssertEqual(paraTexts, ["Helloa", "b world"])   // CRLF → ONE split, no blank paragraph
+    }
+
+    func test_paste_prefersFragmentOverPlain() {
+        let (v, pb) = canvas()
+        let r = region(v, "h"); v.anchor = r.globalStart + 5; v.head = r.globalStart + 5
+        let frag = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("f"),
+            runs: [TextRun(text: "Z", attributes: CharacterAttributes(bold: true))]))])
+        pb.items = [DocumentCanvasView.richTextFragmentUTI: try! DocumentCodec.encode(frag),
+                    "public.utf8-plain-text": "PLAIN"]
+        v.paste(nil)
+        XCTAssertEqual(text(v, "h"), "HelloZ world")       // fragment won, not "PLAIN"
+        var bold = false
+        for b in v.currentBlocks() { if case .paragraph(let p) = b, p.id == BlockID("h") {
+            bold = p.runs.contains { $0.text.contains("Z") && $0.attributes.bold } } }
+        XCTAssertTrue(bold)
+    }
+
+    func test_paste_rtfWhenNoFragment_preservesBold() {
+        let (v, pb) = canvas()
+        let r = region(v, "h"); v.anchor = r.globalStart + 5; v.head = r.globalStart + 5
+        let rtf = RTFConversion.rtfData(from: Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("f"),
+            runs: [TextRun(text: "Q", attributes: CharacterAttributes(bold: true))]))]))!
+        pb.items = ["public.rtf": rtf, "public.utf8-plain-text": "Q"]
+        v.paste(nil)
+        XCTAssertEqual(text(v, "h"), "HelloQ world")
+        var bold = false
+        for b in v.currentBlocks() { if case .paragraph(let p) = b, p.id == BlockID("h") {
+            bold = p.runs.contains { $0.text.contains("Q") && $0.attributes.bold } } }
+        XCTAssertTrue(bold)
+    }
+
     func test_copy_acrossCells_concatenatesCellText() {
         let (v, pb) = canvas()
         let a = region(v, "ap"); let b = region(v, "bp")
         v.anchor = a.globalStart; v.head = b.globalStart + b.length   // "Alpha" … "Beta"
         v.copy(nil)
         XCTAssertEqual(pb.string, "AlphaBeta")
-    }
-    func test_paste_normalizesCRLFToSingleSpace() {
-        let (v, pb) = canvas()
-        let r = region(v, "h"); v.anchor = r.globalStart + 5; v.head = r.globalStart + 5   // caret after "Hello"
-        pb.string = "a\r\nb"
-        v.paste(nil)
-        XCTAssertEqual(text(v, "h"), "Helloa b world")   // CRLF → ONE space, not two
     }
     func test_paste_emptyClipboard_isNoOp() {
         let (v, pb) = canvas()
@@ -106,6 +158,69 @@ final class CanvasClipboardTests: XCTestCase {
         XCTAssertFalse(v.canPerformAction(#selector(UIResponderStandardEditActions.copy(_:)), withSender: nil))
         pb.string = "x"
         XCTAssertTrue(v.canPerformAction(#selector(UIResponderStandardEditActions.paste(_:)), withSender: nil))
+    }
+
+    func test_pasteFragment_preservesBoldAcrossInsert() {
+        let (v, _) = canvas()
+        let um = UndoManager(); um.groupsByEvent = false; v.undoManagerOverride = um
+        let r = region(v, "h"); v.anchor = r.globalStart + 5; v.head = r.globalStart + 5   // caret after "Hello"
+        let frag = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("f"),
+            runs: [TextRun(text: "X", attributes: CharacterAttributes(bold: true))]))])
+        um.beginUndoGrouping(); v.pasteFragment(frag); um.endUndoGrouping()
+        // model now "HelloX world"; the inserted "X" run is bold
+        var boldFound = false
+        for b in v.currentBlocks() { if case .paragraph(let p) = b, p.id == BlockID("h") {
+            boldFound = p.runs.contains { $0.text.contains("X") && $0.attributes.bold }
+        } }
+        XCTAssertTrue(boldFound)
+        XCTAssertEqual(text(v, "h"), "HelloX world")
+        um.undo()
+        XCTAssertEqual(text(v, "h"), "Hello world")   // single undo step restores
+    }
+
+    func test_pasteFragment_multiBlock_splitsIntoParagraphs() {
+        let (v, _) = canvas()
+        let r = region(v, "h"); v.anchor = r.globalStart + 5; v.head = r.globalStart + 5
+        let frag = Document(blocks: [
+            .paragraph(ParagraphBlock(id: BlockID("x"), runs: [TextRun(text: "AA")])),
+            .paragraph(ParagraphBlock(id: BlockID("y"), runs: [TextRun(text: "BB")])),
+        ])
+        v.pasteFragment(frag)
+        let paraTexts = v.currentBlocks().compactMap { b -> String? in
+            if case .paragraph(let p) = b { return p.text } else { return nil }
+        }
+        XCTAssertEqual(paraTexts, ["HelloAA", "BB world"])
+    }
+
+    func test_pasteFragment_replacesSelection() {
+        let (v, _) = canvas()
+        let r = region(v, "h"); v.anchor = r.globalStart; v.head = r.globalStart + 5   // select "Hello"
+        v.pasteFragment(Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("f"), runs: [TextRun(text: "Hi")]))]))
+        XCTAssertEqual(text(v, "h"), "Hi world")
+    }
+
+    func allRunTexts(_ blocks: [Block]) -> [String] {
+        var out: [String] = []
+        for b in blocks {
+            switch b {
+            case .paragraph(let p): out += p.runs.map(\.text)
+            case .code(let c): out += c.runs.map(\.text)
+            case .media(let m): out += m.caption.map(\.text)
+            case .table(let t): for row in t.rows { for cell in row.cells { out += allRunTexts(cell.blocks) } }
+            }
+        }
+        return out
+    }
+
+    func test_pasteFragment_codeBlockIntoTableCell_noNewlineLeaksIntoRun() {
+        let (v, _) = canvas()
+        let r = region(v, "ap")                       // paragraph inside table cell "a"
+        v.anchor = r.globalStart + r.length; v.head = v.anchor   // caret at end of "Alpha", in the cell
+        // Fragment containing a code block with interior newlines → forces the cell fallback path.
+        let frag = Document(blocks: [.code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "x\ny")]))])
+        v.pasteFragment(frag)
+        // No paragraph/code run anywhere may contain a literal newline (the doc has no legit code block).
+        XCTAssertFalse(allRunTexts(v.currentBlocks()).contains { $0.contains("\n") })
     }
 }
 #endif

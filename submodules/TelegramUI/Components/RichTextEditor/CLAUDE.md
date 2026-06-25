@@ -540,7 +540,7 @@ UIKit files.
 - **View-frame ownership** (the repo-wide rule applies here too): a reusable component lays out against
   `self.bounds`; it never writes `self.frame` — the parent positions it.
 
-## Known render-only trade-offs (revisit when the markdown layer separates style traits from char emphasis)
+## Known render-only trade-offs
 
 These keep the model markdown-clean at the cost of not separately preserving a user override: **(1)** a
 link run's `foreground`/`underline` styling is render-only (suppressed on read-back); **(2)** table
@@ -568,14 +568,11 @@ loupe, handle-drag) + **system edit menu** (Look Up / Translate / Share / Format
 **block-view architecture** (every block in its own bounded layer; per-table horizontal scroll; off-screen
 **view virtualization**); and the **Telegram-style spoiler effect**.
 
-**Next — Phase 5c, the markdown backbone: a Markdown serializer/parser (model ↔ GFM)** — pipe tables (incl.
-the alignment delimiter row), ATX headings, bullet/ordered lists, emphasis, inline code, links, images,
-blockquote. The editor **targets markdown editing**, so filter every new feature to what GFM can represent:
-prefer bold/italic/strike/inline-code/links/headings/blockquote; **defer or treat as non-persisted** the
-attributes with no markdown form (highlight/foreground color, font family/size, super/subscript baseline).
+**The editor is full-WYSIWYG — markdown abandoned.** There is no markdown serializer, and none is planned. Cross-app interchange uses **RTF** (see Phase 5d below).
 
-**Other open work:** Phase 5d copy/paste (rich within-doc; markdown/plain across apps; multi-line paste);
-Phase 5e images toolbar (Photos/Files picker, alignment toggle, interactive drag-resize); Phase 6b new
+**Phase 5d rich copy/paste — done.** Within-app fidelity via the private pasteboard UTI `org.telegram.richtexteditor.fragment` carrying a JSON-encoded `Document` fragment (inline formatting incl. custom emoji / mention / date, and paragraph/quote/code/list block structure — preserved across any editor instance, including between chat composers). Cross-app via **RTF** read+write (`public.rtf`) plus a plain-text fallback (`public.utf8-plain-text`) always written/accepted. Multi-line plain paste splits into paragraphs (replaced the old newline→space flattening). Fragment scope = paragraph family + inline; tables and media (images) are NOT carried in a fragment (deferred); image-paste-to-attachment in the composer is a host concern, also out of scope. The extract/splice are pure Core (`Document.extractFragment` / `Document.insertingFragment` in `RichTextEditorCore/Model/DocumentFragment.swift`); the `copy`/`cut`/`paste` responders + the three-representation pasteboard write are in `DocumentCanvasView+Clipboard.swift`; RTF conversion is `RTFConversion.swift`.
+
+**Other open work:** Phase 5e images toolbar (Photos/Files picker, alignment toggle, interactive drag-resize); Phase 6b new
 paragraph styles (Subtitle / Code) + a Dash list marker (Caption landed 2026-06-13 as a render-only style); Phase 6c floating pill keyboard toolbar
 with active-state (`currentFormatState()`), replacing the crude demo toolbar; block-view **Step 3**
 (arbitrary non-focusable embeds); perf follow-ups (viewport-size the wash/chrome overlays; incremental
