@@ -307,13 +307,15 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var textContainerInset: UIEdgeInsets {
         get {
             var updated = self.trackedContentMargins
-            updated.top += 2.0
+            updated.top += 1.0
+            updated.bottom += 1.0
             updated.right -= 14.0
             return updated
         }
         set {
             var updated = newValue
-            updated.top -= 2.0
+            updated.top -= 1.0
+            updated.bottom -= 1.0
             updated.right += 14.0
             self.trackedContentMargins = updated
         }
