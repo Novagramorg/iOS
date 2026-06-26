@@ -29,10 +29,11 @@ final class BlockLayoutTK1EmojiTests: XCTestCase {
         }
     }
 
-    /// The hosted emoji box must sit on the SAME baseline TextKit 1 draws the neighbouring text at — not the
-    /// attachment glyph's own `location.y` (offset by the descender → floats down), and not TK2's centred
-    /// baseline. Reference baseline = `lineFragmentRect.minY + location(forGlyphAt: textGlyph).y` (glyph 0 =
-    /// "A"). For a no-boost style the box spans baseline−ascender … baseline−descender (a glyph cell).
+    /// The hosted emoji box must sit on the SAME baseline TextKit 1 DRAWS the neighbouring text at — which is
+    /// the line-centered baseline (raw `location(forGlyphAt:)` − `centeringDelta`), since both engines now
+    /// center the `lineHeightMultiple` line (the text glyphs and the emoji shift up together). Reference =
+    /// `lineFragmentRect.minY + location(forGlyphAt: 0).y − centeringDelta` (glyph 0 = "A"). For a no-boost
+    /// style the box spans baseline−ascender … baseline−descender (a glyph cell).
     func test_tk1_emoji_sitsOnTextBaseline() {
         for style in [ParagraphStyleName.heading1, .quote, .heading2] {   // boost == 0 styles
             let font = mapper.styleSheet.font(for: style, attributes: CharacterAttributes())
@@ -43,8 +44,9 @@ final class BlockLayoutTK1EmojiTests: XCTestCase {
             let l = BlockLayoutTK1(attributedString: mapper.attributedString(for: block), width: 320)
             guard let box = l.attachmentBox(at: 4) else { XCTFail("no box (\(style))"); continue }
             let lm = l.layoutManager
-            let textBaseline = lm.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil).minY
-                + lm.location(forGlyphAt: 0).y
+            let lineRect = lm.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
+            let textBaseline = lineRect.minY + lm.location(forGlyphAt: 0).y
+                - l.centeringDelta(lineHeight: lineRect.height)
             XCTAssertEqual(box.minY, textBaseline - font.ascender, accuracy: 0.5, "box top = baseline−ascender (\(style))")
             XCTAssertEqual(box.maxY, textBaseline - font.descender, accuracy: 0.5, "box bottom = baseline−descender (\(style))")
         }

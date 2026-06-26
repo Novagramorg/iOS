@@ -22,9 +22,26 @@ targets — `//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCor
 `protocol BlockLayoutEngine` (`Layout/BlockLayoutEngine.swift`), so the layout engine is swappable:
 `BlockLayout` (TextKit 2, `@available(iOS 16.0, *)`) on iOS 16+, and **`BlockLayoutTK1`** (TextKit 1, iOS 7+,
 ungated) on iOS 13–15. `makeBlockLayout(...)` picks TK2 on iOS 16+ / TK1 below; the runtime debug toggle
-`BlockLayoutBackend.forceTextKit1` (DEBUG default `true`) forces TK1 on any OS for testing the back-port. The
+`BlockLayoutBackend.forceTextKit1` forces TK1 on any OS for testing the back-port (currently `#if DEBUG &&
+false` → **off** even in debug, so the running app uses TK2 on iOS 16+; flip the `&& false` to opt in). The
 system edit menu likewise falls back from `UIEditMenuInteraction` (iOS 16+) to **`UIMenuController`** (iOS
 13–15) — see `DocumentCanvasView+EditMenu` (shared responder actions; custom items become flat `UIMenuItem`s).
+
+**Line-height centering (2026-06-26).** The per-style render `lineHeightMultiple` (`StyleSheet.metrics`: body/
+caption/quote 1.10, headings 1.05) makes each line-fragment box — the box the selection wash + caret fill —
+taller than the glyphs, and **TextKit (both engines) dumps ALL that extra leading ABOVE the glyphs** (the
+baseline drops; measured ~2pt on top / 0 below for 17pt body), so the text reads as offset too low in its
+rect. Both engines now **center** the glyphs in the box while keeping the box's full (spacing-preserving)
+height: glyphs are raised by half the extra leading. BOTH engines apply the SAME `centeringDelta(lineHeight:)`
+= `lineHeight·(1−1/m)/2` (m = the paragraph `lineHeightMultiple`) at glyph-draw / `attachmentBox` /
+`firstLineBaselineFromTop` time, while caret/selection rects keep the full box. (The TextKit-1
+`NSLayoutManagerDelegate.shouldSetLineFragmentRect…baselineOffset` baseline hook — the "native" way to do this
+on TK1 — is **NOT invoked** under the TextKit-2-backed `NSLayoutManager` on modern iOS, verified at runtime, so
+`BlockLayoutTK1` does the manual draw/geometry shift too rather than relying on it.) **Why not `baselineOffset`**
+(the attribute): it's a real `CharacterAttributes` field (sub/superscript) and would round-trip into the
+model — centering must stay a render-only layout concern. Verified on both engines by `LineHeightCenteringTests`
+(glyph top-gap ≈ bottom-gap). This is editor-wide (document + composer), so a composer line keeps real 1.10
+spacing with centered text — no composer-specific line-height knob.
 
 So **the UIKit target is gated `@available(iOS 13.0, *)`** (`RichTextEditorCore` is pure-Foundation,
 always-available), with only genuine higher-OS APIs kept at their real floor: the TK2 `BlockLayout` type + the
