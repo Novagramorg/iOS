@@ -215,6 +215,11 @@ extension DocumentCanvasView {
                 draggingTableKnob = end                       // table range-knob drag
             } else {
                 draggingEndpoint = nearerSelectionEndpoint(toGlobal: pos)   // text-selection handle drag
+                // Coalesce the per-touch-move input-delegate notifications for the duration of the drag —
+                // one bracket fires on `.ended` (the keyboard's autocorrect/candidate work is meaningless
+                // mid-drag and pegs the CPU on every frame). The table-knob path uses structural selection
+                // (not these setters), so it doesn't coalesce.
+                if draggingEndpoint != nil { beginCoalescedSelectionDrag() }
             }
         case .changed:
             if let end = draggingTableKnob {
@@ -226,6 +231,7 @@ extension DocumentCanvasView {
             }
         case .ended, .cancelled, .failed:
             stopDragAutoScroll()
+            endCoalescedSelectionDrag()   // sync the OS to the final selection before presenting the menu
             if draggingTableKnob != nil || draggingEndpoint != nil { presentEditMenu() }
             draggingTableKnob = nil
             draggingEndpoint = nil

@@ -231,6 +231,14 @@ final class DocumentCanvasView: UIView {
     var draggingEndpoint: SelectionEndpoint?
     var draggingTableKnob: TableRangeEnd?
     var selectionHandlePan: UIPanGestureRecognizer?
+    // True while an interactive selection-handle drag is in flight. While set, the per-touch-move selection
+    // setters (`setSelectionHead`/`setSelectionAnchor`) SKIP the `inputDelegate` selection bracket; one
+    // bracket fires when the drag ends (`endCoalescedSelectionDrag`). Driving the keyboard's autocorrect/
+    // candidate pipeline (`-[_UIKeyboardStateManager updateForChangedSelection]`, which also re-enters our
+    // tokenizer) on every frame pegs the CPU and is meaningless mid-drag — you can't accept a suggestion
+    // while dragging a handle. The `selectedTextRange` getter stays live, so the OS reads the correct value
+    // if it queries during the drag; only the proactive candidate recompute is deferred to the gesture end.
+    var coalescingSelectionNotifications = false
     // Auto-scroll state while dragging a text-selection handle into a table's left/right edge zone.
     private(set) var dragAutoScrollLink: CADisplayLink?
     private(set) var dragAutoScrollTable: TableBlockBox?
@@ -887,27 +895,44 @@ final class DocumentCanvasView: UIView {
                                // Backspace-at-cell-start / Tab cell-nav — that can land the caret off-screen
     }
 
-    /// Moves the selection head, keeping the anchor (drag-to-select).
+    /// Moves the selection head, keeping the anchor (drag-to-select). During an interactive handle drag the
+    /// input-delegate bracket is coalesced to the gesture's end (see `coalescingSelectionNotifications`).
     func setSelectionHead(global pos: Int, scrollIntoView: Bool = true) {
         finalizeMarkedText()
         clearStructuralSelections()
         dismissEditMenuForSelectionOrTextChange()
-        textInputDelegate?.selectionWillChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionWillChange(self) }
         head = pos
-        textInputDelegate?.selectionDidChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionDidChange(self) }
         setNeedsDisplay(); refreshSelectionUI()
         if scrollIntoView { scrollCaretIntoViewIfNeeded() }
     }
 
-    /// Moves the selection anchor (keeps the head), bracketing the input-delegate change like setSelectionHead.
+    /// Moves the selection anchor (keeps the head), bracketing the input-delegate change like setSelectionHead
+    /// (also coalesced during an interactive handle drag).
     func setSelectionAnchor(global pos: Int) {
         finalizeMarkedText()
         clearStructuralSelections()
         dismissEditMenuForSelectionOrTextChange()
-        textInputDelegate?.selectionWillChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionWillChange(self) }
         anchor = pos
-        textInputDelegate?.selectionDidChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionDidChange(self) }
         setNeedsDisplay(); refreshSelectionUI()
+    }
+
+    /// Begins coalescing input-delegate selection notifications for an interactive selection-handle drag.
+    /// While active, `setSelectionHead`/`setSelectionAnchor` update the selection + visuals every frame but
+    /// skip the `inputDelegate` bracket; `endCoalescedSelectionDrag` fires exactly one bracket at the end.
+    func beginCoalescedSelectionDrag() { coalescingSelectionNotifications = true }
+
+    /// Ends a coalesced drag. If notifications were being coalesced, fire ONE input-delegate bracket so the OS
+    /// re-syncs (and recomputes autocorrect/candidates) against the final selection — the `selectedTextRange`
+    /// getter was live throughout, but the keyboard only refreshes on a bracket. No-op when no drag coalesced.
+    func endCoalescedSelectionDrag() {
+        guard coalescingSelectionNotifications else { return }
+        coalescingSelectionNotifications = false
+        textInputDelegate?.selectionWillChange(self)
+        textInputDelegate?.selectionDidChange(self)
     }
 
     func refreshSelectionUI() {
