@@ -59,6 +59,25 @@ final class BlockLayoutTK1: BlockLayoutEngine {
         container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
     }
 
+    /// The paragraph's render line-height multiple (uniform per block); 1 when unset. See `centeringDelta`.
+    /// (The TextKit-1 `NSLayoutManagerDelegate.shouldSetLineFragmentRect` baseline hook is NOT invoked under
+    /// the TextKit-2-backed `NSLayoutManager` on modern iOS, so centering is applied manually here — exactly
+    /// like `BlockLayout` — rather than via the delegate.)
+    private var lineHeightMultiple: CGFloat {
+        guard textStorage.length > 0,
+              let ps = textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle,
+              ps.lineHeightMultiple > 1 else { return 1 }
+        return ps.lineHeightMultiple
+    }
+
+    /// Half the extra leading `lineHeightMultiple` adds to a line of box height `lineHeight` — the amount to
+    /// raise the glyphs by so they center in the (full-height) line box. Mirror of `BlockLayout.centeringDelta`.
+    func centeringDelta(lineHeight: CGFloat) -> CGFloat {
+        let m = lineHeightMultiple
+        guard m > 1, lineHeight > 0 else { return 0 }
+        return lineHeight * (1 - 1 / m) / 2
+    }
+
     var boundingHeight: CGFloat {
         layoutManager.ensureLayout(for: container)
         return layoutManager.usedRect(for: container).height
@@ -89,7 +108,8 @@ final class BlockLayoutTK1: BlockLayoutEngine {
         var lineRange = NSRange()
         let lineRect = layoutManager.lineFragmentRect(forGlyphAt: 0, effectiveRange: &lineRange)
         let loc = layoutManager.location(forGlyphAt: 0)
-        return lineRect.minY + loc.y
+        // Match the centered glyph baseline (drawn `centeringDelta` higher) so a list marker tracks it.
+        return lineRect.minY + loc.y - centeringDelta(lineHeight: lineRect.height)
     }
 
     func caretRect(atOffset offset: Int) -> CGRect {
@@ -163,18 +183,18 @@ final class BlockLayoutTK1: BlockLayoutEngine {
             ?? UIFont.preferredFont(forTextStyle: .body)
         // Baseline of the attachment's line, taken from a TEXT glyph on that line. The emoji view must sit on
         // the SAME baseline TextKit draws the neighbouring text at (`lineFragmentRect.minY +
-        // location(forGlyphAt:).y`). It must NOT be read from the attachment glyph's own `location.y` — for
-        // an attachment that y tracks the box bottom (offset by the descender), which floats the emoji down —
-        // nor reconstructed from the used rect + ascender, which top-aligns it (TK1 places the baseline lower
-        // within a `lineHeightMultiple` line; TK2 centres, hence the two engines differ — we follow OUR text).
+        // location(forGlyphAt:).y`), then raised by `centeringDelta` exactly like the drawn text — so the emoji
+        // tracks the centered glyphs. It must NOT be read from the attachment glyph's own `location.y` (that y
+        // tracks the box bottom, floating the emoji down).
         var lineGlyphRange = NSRange()
         let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &lineGlyphRange)
+        let centerDelta = centeringDelta(lineHeight: lineRect.height)
         var baseline = layoutManager.lineFragmentUsedRect(forGlyphAt: glyphIndex, effectiveRange: nil).minY
-            + runFont.ascender                                  // fallback: a lone-attachment line (no text)
+            + runFont.ascender - centerDelta                    // fallback: a lone-attachment line (no text)
         for g in lineGlyphRange.location ..< (lineGlyphRange.location + lineGlyphRange.length) {
             let ci = layoutManager.characterIndexForGlyph(at: g)
             if textStorage.attribute(.attachment, at: ci, effectiveRange: nil) == nil {
-                baseline = lineRect.minY + layoutManager.location(forGlyphAt: g).y
+                baseline = lineRect.minY + layoutManager.location(forGlyphAt: g).y - centerDelta
                 break
             }
         }
@@ -219,9 +239,16 @@ final class BlockLayoutTK1: BlockLayoutEngine {
     func drawText(in ctx: CGContext, at origin: CGPoint) {
         layoutManager.ensureLayout(for: container)
         let glyphRange = layoutManager.glyphRange(for: container)
+        // Raise the glyphs by the line-centering delta so they sit centered in the (taller) lineHeightMultiple
+        // box — whose height (caret/selection geometry) is untouched. One block is one paragraph (uniform line
+        // height), so a single context translate centers every line.
+        let delta = glyphRange.length > 0
+            ? centeringDelta(lineHeight: layoutManager.lineFragmentRect(forGlyphAt: glyphRange.location,
+                                                                        effectiveRange: nil).height)
+            : 0
         UIGraphicsPushContext(ctx)
         ctx.saveGState()
-        ctx.translateBy(x: origin.x, y: origin.y)
+        ctx.translateBy(x: origin.x, y: origin.y - delta)
         layoutManager.drawBackground(forGlyphRange: glyphRange, at: .zero)
         layoutManager.drawGlyphs(forGlyphRange: glyphRange, at: .zero)
         ctx.restoreGState()
