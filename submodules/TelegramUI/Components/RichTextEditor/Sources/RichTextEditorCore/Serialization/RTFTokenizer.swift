@@ -56,6 +56,14 @@ public enum RTFTokenizer {
             if c == 0x5C || c == 0x7B || c == 0x7D {         // \\ \{ \}
                 tokens.append(.text(String(Unicode.Scalar(c)))); i += 1; continue
             }
+            if c == 0x0D || c == 0x0A {                       // backslash + CR/LF == \par (RTF spec)
+                // Cocoa/AppKit (TextEdit, Notes, Safari, Mail, Pages) serializes paragraph breaks this
+                // way, not as a literal `\par`. Without this, every cross-app paste glues all paragraphs
+                // into one (the "pasting removes newlines" bug).
+                tokens.append(.controlWord("par", nil)); i += 1
+                if c == 0x0D, i < bytes.count, bytes[i] == 0x0A { i += 1 }   // swallow the LF of a CRLF
+                continue
+            }
             if c == UInt8(ascii: "'") {                       // \'XX
                 if i + 2 < bytes.count, let hi = hexVal(bytes[i+1]), let lo = hexVal(bytes[i+2]) {
                     appendScalar(cp1252(UInt8(hi * 16 + lo))); i += 3

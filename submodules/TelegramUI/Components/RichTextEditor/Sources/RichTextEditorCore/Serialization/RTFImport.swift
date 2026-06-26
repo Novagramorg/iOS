@@ -102,11 +102,22 @@ final class RTFDocumentParser {
         curText += s
     }
 
-    func flushParagraph() {
+    /// Emits the pending paragraph. `allowEmpty` is set by an explicit `\par` (a paragraph terminator),
+    /// so a blank line survives as an empty body paragraph; the implicit end-of-document flush leaves it
+    /// false so a document with no trailing `\par` gains no spurious empty final paragraph.
+    func flushParagraph(allowEmpty: Bool = false) {
         flushRun()
         // While inside a table, content belongs to cells — do not emit a top-level block.
         if inTable { runs = []; return }
-        guard !runs.isEmpty else { runs = []; return }
+        guard !runs.isEmpty else {
+            if allowEmpty {
+                blocks.append(.paragraph(ParagraphBlock(id: .generate(), style: .body, runs: [])))
+            }
+            runs = []
+            curListLevel = nil
+            curListMarkerText = ""
+            return
+        }
         // Code: every run mono → merge into a trailing code block.
         if runs.allSatisfy({ $0.attributes.inlineCode }) {
             let stripped = runs.map { TextRun(text: $0.text, attributes: CharacterAttributes()) }
@@ -267,9 +278,9 @@ final class RTFDocumentParser {
                 curListLevel = nil; curListMarkerText = ""
             } else {
                 // Not in a cell paragraph — the table (if any) has ended; flush it first, then
-                // emit this as a top-level paragraph.
+                // emit this as a top-level paragraph. An explicit `\par` preserves a blank line.
                 flushTableIfAny()
-                flushParagraph()   // resets curListLevel/curListMarkerText
+                flushParagraph(allowEmpty: true)   // resets curListLevel/curListMarkerText
             }
         case "pard":
             // \pard resets paragraph formatting. Clear the per-paragraph in-cell flag.

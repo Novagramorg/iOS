@@ -239,4 +239,27 @@ final class RTFImportCorpusTests: XCTestCase {
             XCTAssertFalse(text.contains("listoverride"),   "\\listoverride leaked: \"\(text)\"")
         }
     }
+
+    // MARK: - Test 4: TextEdit/Notes paragraph breaks (backslash + newline, NOT literal \par)
+
+    /// The exact form Cocoa/AppKit (TextEdit, Notes, Safari, Mail) emits for a multi-paragraph string:
+    /// each paragraph break is a backslash immediately followed by a literal newline (`a\<LF>b`), which
+    /// the RTF spec defines as equivalent to `\par`. Every other corpus test above uses a literal `\par`,
+    /// so this is the case real cross-app paste actually exercises. Regression guard for the
+    /// "pasting removes newlines" bug (all paragraphs were collapsing into one).
+    func test_cocoaStyle_backslashNewlineParagraphBreaks() throws {
+        // Note: a regular string literal (NOT `"""`) — a trailing `\` before a newline is a Swift
+        // line-continuation inside a multiline literal, which would eat the newline we need to emit.
+        let rtf = "{\\rtf1\\ansi\\ansicpg1252\\cocoartf2869\n"
+            + "\\cocoatextscaling0\\cocoaplatform0{\\fonttbl\\f0\\fnil\\fcharset0 HelveticaNeue;}\n"
+            + "{\\colortbl;\\red255\\green255\\blue255;}\n"
+            + "{\\*\\expandedcolortbl;;}\n"
+            + "\\pard\\tx560\\tx1120\\pardirnatural\\partightenfactor0\n\n"
+            + "\\f0\\fs34 \\cf0 First line\\\nSecond line\\\nThird line}"
+
+        let document = try XCTUnwrap(doc(rtf), "Parser returned nil for Cocoa-style RTF")
+        let paragraphs = allParagraphTexts(in: document)
+        XCTAssertEqual(paragraphs, ["First line", "Second line", "Third line"])
+        assertNoLeaks(in: paragraphs)
+    }
 }

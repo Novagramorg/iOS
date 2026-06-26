@@ -18,6 +18,41 @@ final class RTFImportTests: XCTestCase {
         XCTAssertEqual(p[1].runs.map(\.text).joined(), "second")
     }
 
+    /// Cocoa/AppKit (TextEdit, Notes, Safari, Mail, Pages) serializes paragraph breaks as a backslash
+    /// immediately followed by a literal newline (`a\<LF>b`), which the RTF spec defines as equivalent to
+    /// `\par`. Real-world cross-app paste hits this form, NOT a literal `\par`. Regression repro for
+    /// "pasting removes newlines" — all paragraphs were gluing into one.
+    func test_backslashNewline_isParagraphBreak() {
+        let d = doc("{\\rtf1\\ansi\\fs34 a\\\nb\\\nc}")
+        XCTAssertEqual(paras(d).map { $0.runs.map(\.text).joined() }, ["a", "b", "c"])
+    }
+
+    func test_backslashCRLF_isParagraphBreak() {
+        let d = doc("{\\rtf1\\ansi\\fs34 a\\\r\nb}")
+        XCTAssertEqual(paras(d).map { $0.runs.map(\.text).joined() }, ["a", "b"])
+    }
+
+    /// A blank line (two paragraph breaks in a row, `a\<LF>\<LF>b` from Cocoa) must survive as an empty
+    /// paragraph — an explicit `\par` terminates a paragraph even when empty. Previously the empty middle
+    /// paragraph was dropped, folding two blank-separated paragraphs into one ("two newlines fold to one").
+    func test_blankLine_preservedAsEmptyParagraph() {
+        let d = doc("{\\rtf1\\ansi\\fs34 a\\\n\\\nb}")
+        XCTAssertEqual(paras(d).map { $0.runs.map(\.text).joined() }, ["a", "", "b"])
+    }
+
+    /// Literal `\par\par` (Word style) must likewise keep the blank middle paragraph.
+    func test_doubleLiteralPar_preservesEmptyParagraph() {
+        let d = doc("{\\rtf1\\ansi\\fs34 a\\par\\par b}")
+        XCTAssertEqual(paras(d).map { $0.runs.map(\.text).joined() }, ["a", "", "b"])
+    }
+
+    /// A trailing `\par` must NOT add a spurious empty final paragraph (matches the editor's own
+    /// no-trailing-`\par` export, and avoids a phantom blank line at the end of every paste).
+    func test_trailingPar_noSpuriousEmptyParagraph() {
+        let d = doc("{\\rtf1\\ansi\\fs34 a\\par b\\par}")
+        XCTAssertEqual(paras(d).map { $0.runs.map(\.text).joined() }, ["a", "b"])
+    }
+
     func test_skipsFontAndColorTables_noStrayText() {
         let d = doc("{\\rtf1\\ansi{\\fonttbl{\\f0 Helvetica;}}{\\colortbl;\\red0\\green0\\blue0;}Hello}")
         XCTAssertEqual(paras(d).map { $0.runs.map(\.text).joined() }, ["Hello"])
