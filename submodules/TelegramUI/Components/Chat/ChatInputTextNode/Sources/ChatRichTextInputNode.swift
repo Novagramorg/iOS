@@ -20,14 +20,23 @@ public struct ChatRichTextThemeColors {
     public var accent: UIColor
     public var tableBorder: UIColor
     public var tableHeaderBackground: UIColor
+    /// Checklist checkbox palette (the standard app checkbox `list.itemCheckColors`): fill = box background,
+    /// foreground = checkmark/stroke, border = box border. The native backend maps these into the `CheckNode`
+    /// it hosts as a checklist marker; the legacy backend ignores them (it has no checklist UI).
+    public var listCheckFillColor: UIColor
+    public var listCheckForegroundColor: UIColor
+    public var listCheckBorderColor: UIColor
 
-    public init(primaryText: UIColor, secondaryText: UIColor, placeholder: UIColor, accent: UIColor, tableBorder: UIColor, tableHeaderBackground: UIColor) {
+    public init(primaryText: UIColor, secondaryText: UIColor, placeholder: UIColor, accent: UIColor, tableBorder: UIColor, tableHeaderBackground: UIColor, listCheckFillColor: UIColor, listCheckForegroundColor: UIColor, listCheckBorderColor: UIColor) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
         self.placeholder = placeholder
         self.accent = accent
         self.tableBorder = tableBorder
         self.tableHeaderBackground = tableHeaderBackground
+        self.listCheckFillColor = listCheckFillColor
+        self.listCheckForegroundColor = listCheckForegroundColor
+        self.listCheckBorderColor = listCheckBorderColor
     }
 }
 

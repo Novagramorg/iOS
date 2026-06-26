@@ -333,7 +333,10 @@ extension DocumentCanvasView {
                 applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "")
             }
             guard let active = activeStack(at: head), let p = active.box as? BlockBox else { return }
-            let (upper, lower) = p.currentParagraph().split(at: active.local, newID: BlockID.generate())
+            let split = p.currentParagraph().split(at: active.local, newID: BlockID.generate())
+            let upper = split.0
+            var lower = split.1
+            if lower.list?.marker == .checklist { lower.list?.checked = false }   // a new checklist item is never pre-checked
             // Both halves inherit `p`'s mapper so an in-cell split keeps the cell's smaller base font
             // (including the new EMPTY half, whose later first-typed character reads its box's mapper).
             let upperBox = BlockBox(paragraph: upper, mapper: p.mapper, width: effectiveWidth)

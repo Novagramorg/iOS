@@ -163,4 +163,119 @@ final class DocumentFragmentTests: XCTestCase {
         XCTAssertEqual(r.document.blocks.count, 1)
         XCTAssertEqual(r.document.blocks[0].id, BlockID("c"))
     }
+
+    // MARK: - Spurious-empty-split-half on fragment paste (trailing/leading empty paragraph bug)
+
+    /// A bullet-list paragraph (NOT inline-mergeable → pastes as its own block).
+    func bullet(_ id: String, _ t: String) -> Block {
+        .paragraph(ParagraphBlock(id: BlockID(id),
+                                  list: ListMembership(marker: .bullet, level: 0),
+                                  runs: t.isEmpty ? [] : [TextRun(text: t)]))
+    }
+
+    /// The global caret at the END of the (single-block) document's only paragraph "abc".
+    /// Axis: open@0, a@1,b@2,c@3, close@3 → end-of-text caret = 3 (= 1 + utf16Count("abc")).
+    func endOfFirstParagraph(_ d: Document) -> Int {
+        guard case .paragraph(let p) = d.blocks[0] else { return 0 }
+        return d.globalTextStart(ofBlockAt: 0) + p.utf16Count
+    }
+
+    /// Helper: the plain texts + list markers of a result document's blocks. `empty` is text-emptiness
+    /// (a blank-line paragraph may carry either no runs or one zero-length run — both read as empty).
+    private func summarize(_ d: Document) -> [(text: String, isBullet: Bool, empty: Bool)] {
+        d.blocks.compactMap { b in
+            if case .paragraph(let p) = b {
+                return (p.text, p.list?.marker == .bullet, p.text.isEmpty)
+            }
+            return nil
+        }
+    }
+
+    // CASE 1 — paste a bullet list at the END of "abc" → ["abc", bullet-a, bullet-b] (3 blocks, no trailing empty).
+    func test_insert_bulletListAtParagraphEnd_noTrailingEmpty() {
+        let host = doc(para("h", "abc"))
+        let frag = doc(bullet("x", "a"), bullet("y", "b"))
+        let r = host.insertingFragment(frag, atGlobal: endOfFirstParagraph(host))!
+        let s = summarize(r.document)
+        XCTAssertEqual(r.document.blocks.count, 3, "expected 3 blocks, got \(s.map { $0.text })")
+        XCTAssertEqual(s.map { $0.text }, ["abc", "a", "b"])
+        XCTAssertTrue(s[1].isBullet && s[2].isBullet)
+        XCTAssertFalse(s.last!.empty, "the host's empty tail must not survive as a trailing empty paragraph")
+    }
+
+    // CASE 2 — paste a SINGLE bullet at the end of "abc" → ["abc", bullet-a] (2 blocks, no trailing empty).
+    func test_insert_singleBulletAtParagraphEnd_noTrailingEmpty() {
+        let host = doc(para("h", "abc"))
+        let r = host.insertingFragment(doc(bullet("x", "a")), atGlobal: endOfFirstParagraph(host))!
+        let s = summarize(r.document)
+        XCTAssertEqual(r.document.blocks.count, 2, "expected 2 blocks, got \(s.map { $0.text })")
+        XCTAssertEqual(s.map { $0.text }, ["abc", "a"])
+        XCTAssertTrue(s[1].isBullet)
+    }
+
+    // CASE 3 — paste a bullet list into an EMPTY doc (one empty body paragraph, caret 0) → [bullet-a, bullet-b]
+    // (no leading and no trailing empty).
+    func test_insert_bulletListIntoEmptyDoc_noLeadingOrTrailingEmpty() {
+        let host = doc(para("h", ""))   // empty body paragraph, caret at global 1 (start of its text)
+        let frag = doc(bullet("x", "a"), bullet("y", "b"))
+        let r = host.insertingFragment(frag, atGlobal: 1)!
+        let s = summarize(r.document)
+        XCTAssertEqual(r.document.blocks.count, 2, "expected 2 blocks, got \(s.map { $0.text })")
+        XCTAssertEqual(s.map { $0.text }, ["a", "b"])
+        XCTAssertTrue(s[0].isBullet && s[1].isBullet)
+    }
+
+    // CASE 4 — plain-text-style fragment ["X", empty body] (a "X\n") at end of "abc" → ["abcX"] (the empty body must not survive).
+    func test_insert_plainTextTrailingEmpty_dropsTheEmptyBody() {
+        let host = doc(para("h", "abc"))
+        let frag = doc(para("x", "X"), para("e", ""))   // "X\n"
+        let r = host.insertingFragment(frag, atGlobal: endOfFirstParagraph(host))!
+        let s = summarize(r.document)
+        XCTAssertEqual(r.document.blocks.count, 1, "expected 1 block, got \(s.map { $0.text })")
+        XCTAssertEqual(s.map { $0.text }, ["abcX"])
+    }
+
+    // CASE 5a — PRESERVE: paste a bullet list in the MIDDLE of "ab|cd" → ["ab", bullet-a, bullet-b, "cd"].
+    func test_insert_bulletListMidParagraph_preservesNonEmptyTail() {
+        // host "abcd" caret after "ab": axis open@0,a@1,b@2,c@3,d@4 → caret global = 3.
+        let host = doc(para("h", "abcd"))
+        let frag = doc(bullet("x", "a"), bullet("y", "b"))
+        let r = host.insertingFragment(frag, atGlobal: 3)!
+        let s = summarize(r.document)
+        XCTAssertEqual(s.map { $0.text }, ["ab", "a", "b", "cd"])
+        XCTAssertTrue(s[1].isBullet && s[2].isBullet)
+        XCTAssertFalse(s[3].isBullet)
+    }
+
+    // CASE 5b — PRESERVE: paste body ["A","B"] at end of "abc" → ["abcA", "B"] (2 blocks).
+    func test_insert_bodyAtParagraphEnd_inlineMergesBothEnds() {
+        let host = doc(para("h", "abc"))
+        let r = host.insertingFragment(doc(para("x", "A"), para("y", "B")), atGlobal: endOfFirstParagraph(host))!
+        let s = summarize(r.document)
+        XCTAssertEqual(s.map { $0.text }, ["abcA", "B"])
+    }
+
+    // CASE 5c — PRESERVE: an INTERIOR empty body paragraph in a fragment ["A", empty, "B"] is preserved.
+    func test_insert_interiorEmptyParagraph_isPreserved() {
+        let host = doc(para("h", "abc"))
+        let frag = doc(para("x", "A"), para("e", ""), para("y", "B"))
+        let r = host.insertingFragment(frag, atGlobal: endOfFirstParagraph(host))!
+        let s = summarize(r.document)
+        // "A" inline-merges into head "abc" → "abcA"; interior empty kept; "B" merges into empty tail → "B".
+        XCTAssertEqual(s.map { $0.text }, ["abcA", "", "B"])
+        XCTAssertTrue(s[1].empty, "the interior empty paragraph must be preserved")
+    }
+
+    // CASE 6 — CARET: after pasting the bullet list at the end of "abc", caret is at the END of bullet-b,
+    // not inside a trailing empty paragraph.
+    func test_insert_bulletListAtParagraphEnd_caretAtEndOfLastPastedBlock() {
+        let host = doc(para("h", "abc"))
+        let frag = doc(bullet("x", "a"), bullet("y", "b"))
+        let r = host.insertingFragment(frag, atGlobal: endOfFirstParagraph(host))!
+        // bullet-b is the last block (index 2). Its end caret = globalTextStart(2) + utf16Count("b").
+        let bulletBIndex = r.document.blocks.count - 1
+        guard case .paragraph(let last) = r.document.blocks[bulletBIndex] else { return XCTFail() }
+        XCTAssertEqual(last.text, "b")
+        XCTAssertEqual(r.caret, r.document.globalTextStart(ofBlockAt: bulletBIndex) + last.utf16Count)
+    }
 }

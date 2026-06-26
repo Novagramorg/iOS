@@ -14,12 +14,13 @@ public enum RichTextEditorClipboard {
     /// The pasteboard item for a whole `Document`: the private fragment UTI (JSON, lossless), `public.rtf`
     /// (cross-app), and `public.utf8-plain-text`. Assign as a single pasteboard item, e.g.
     /// `UIPasteboard.general.items = [RichTextEditorClipboard.pasteboardItem(for: document)]`.
-    /// `plain` defaults to the document's text (top-level blocks joined by "\n").
+    /// `plain` defaults to `externalChecklistPlainText(document.blocks)` — top-level blocks joined by "\n",
+    /// with an emoji checkbox prefix (⬜/✅) on checklist paragraphs for external share.
     public static func pasteboardItem(for document: Document, plain: String? = nil) -> [String: Any] {
         var item: [String: Any] = [:]
         if let data = try? DocumentCodec.encode(document) { item[fragmentUTI] = data }
         if let rtf = RTFConversion.rtfData(from: document) { item["public.rtf"] = rtf }
-        item["public.utf8-plain-text"] = plain ?? document.blocks.map(blockPlainText).joined(separator: "\n")
+        item["public.utf8-plain-text"] = plain ?? externalChecklistPlainText(document.blocks)
         return item
     }
 }

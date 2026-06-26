@@ -84,7 +84,10 @@ enum RTFConversion {
             case .paragraph(let p):
                 let pt = fontSize(for: p.style)
                 let inline = inlineRTF(p.runs, mono: false, emojiSeq: &emojiSeq)
-                paragraphs.append("\\pard\(alignmentRTF(p.paragraph.alignment))\\fs\(Int(pt * 2)) \(inline)")
+                let prefix = p.list?.marker == .checklist
+                    ? escapeRTFText(ChecklistEmojiMarker.prefix(checked: p.list?.checked ?? false))
+                    : ""
+                paragraphs.append("\\pard\(alignmentRTF(p.paragraph.alignment))\\fs\(Int(pt * 2)) \(prefix)\(inline)")
             case .code(let c):
                 // Interior "\n" → \line so the whole code block stays one paragraph.
                 let runs = c.runs.map { TextRun(text: $0.text.replacingOccurrences(of: "\n", with: "\u{2028}"), attributes: $0.attributes) }
@@ -157,8 +160,16 @@ enum RTFConversion {
         for line in full.components(separatedBy: "\n") {
             let lineLength = (line as NSString).length
             let range = NSRange(location: location, length: lineLength)
-            blocks.append(.paragraph(ParagraphBlock(id: .generate(), runs: runs(in: attr, range: range))))
             location += lineLength + 1   // +1 for the "\n" separator
+            var lineRuns = runs(in: attr, range: range)
+            if let first = lineRuns.first, let det = ChecklistEmojiMarker.strippingMarker(first.text) {
+                if det.remainder.isEmpty { lineRuns.removeFirst() }
+                else { lineRuns[0] = TextRun(text: det.remainder, attributes: first.attributes) }
+                blocks.append(.paragraph(ParagraphBlock(id: .generate(),
+                    list: ListMembership(marker: .checklist, level: 0, checked: det.checked), runs: lineRuns)))
+            } else {
+                blocks.append(.paragraph(ParagraphBlock(id: .generate(), runs: lineRuns)))
+            }
         }
         return Document(blocks: blocks)
     }

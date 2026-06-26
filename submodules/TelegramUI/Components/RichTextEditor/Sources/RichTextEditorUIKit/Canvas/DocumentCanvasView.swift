@@ -2,6 +2,12 @@
 import UIKit
 import RichTextEditorCore
 
+/// A host-supplied checklist checkbox view. The editor stays `CheckNode`-free; the host builds a
+/// `CheckNode`-backed view conforming to this and the editor hosts/positions/animates it.
+public protocol RichTextChecklistMarkerView: AnyObject {
+    func setChecked(_ checked: Bool, animated: Bool)
+}
+
 /// The multi-block document surface. ONE view owns every block and the unified global selection.
 /// (Internal — only `RichTextEditorView` is public; keeps `UITextInput` witnesses internal.)
 @available(iOS 13.0, *)
@@ -13,9 +19,15 @@ final class DocumentCanvasView: UIView {
     /// Returns a FRESH, non-interactive view for an emoji `id` sized to the requested square, or nil.
     /// The canvas owns/positions/removes it; a host with only a CALayer wraps it in a plain UIView.
     var emojiViewProvider: (_ id: String, _ size: CGSize) -> UIView? = { _, _ in nil }
+    /// Returns a FRESH checkbox view for a checklist marker (host-side `CheckNode`). `nil` when unset —
+    /// the editor falls back to the Unicode glyph marker. The canvas hosts/positions/animates the view.
+    var checklistMarkerViewProvider: ((_ checked: Bool, _ size: CGSize) -> (UIView & RichTextChecklistMarkerView)?)?
     /// Hosted emoji views, keyed by `EmojiRef.instanceID` so edits/undo reuse (not recreate) them.
     /// Plain `internal` (NOT `private(set)`): the reconciler in `DocumentCanvasView+Emoji.swift` mutates it.
     var emojiViews: [String: HostedEmoji] = [:]
+    /// Hosted checklist checkbox views, keyed by the owning `BlockBox`'s `BlockID`. Pooled so a toggle
+    /// reuses (and animates) the existing view rather than recreating it.
+    var checklistMarkerViews: [BlockID: HostedChecklistMarker] = [:]
     /// Back-most container for blockquote run fills (see `BlockquoteUnderlay`). Behind every block view.
     let blockquoteUnderlay = BlockquoteUnderlay()
     /// Non-interactive container for body/caption emoji views (canvas coords). Kept below the chrome
@@ -538,7 +550,7 @@ final class DocumentCanvasView: UIView {
         syncBlockquoteUnderlay()
         // A freshly re-realized table has a brand-new (empty) content view; re-host emoji so its cell
         // emoji migrate back into it. Otherwise the cheap hide/show cull suffices (frames unchanged).
-        if realizedFreshTable { syncEmojiViews(); syncMediaItemViews() } else { cullEmojiViews(); cullMediaItemViews() }
+        if realizedFreshTable { syncEmojiViews(); syncChecklistMarkerViews(); syncMediaItemViews() } else { cullEmojiViews(); cullMediaItemViews() }
         refreshSelectionUI()
         scrollCaretIntoViewIfNeeded()
     }
@@ -670,6 +682,7 @@ final class DocumentCanvasView: UIView {
         syncBlockquoteUnderlay()
         emojiOverlay.frame = bounds
         syncEmojiViews()
+        syncChecklistMarkerViews()
         mediaOverlay.frame = bounds
         syncMediaItemViews()
         spoilerOverlay.frame = bounds

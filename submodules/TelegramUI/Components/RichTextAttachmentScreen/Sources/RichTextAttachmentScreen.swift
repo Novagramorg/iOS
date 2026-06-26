@@ -16,6 +16,30 @@ import RichTextEditorMediaView
 import ContextUI
 import Postbox
 import TelegramCore
+import CheckNode
+
+/// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
+/// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
+/// view in the marker gutter and calls `setChecked(_:animated:)` when the item toggles. A private copy
+/// lives in each editor host (cross-module; duplication is expected).
+private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerView {
+    private let checkNode: CheckNode
+    init(theme: CheckNodeTheme, checked: Bool) {
+        self.checkNode = CheckNode(theme: theme, content: .check(isRectangle: true))
+        super.init(frame: .zero)
+        self.checkNode.isUserInteractionEnabled = false
+        self.addSubview(self.checkNode.view)
+        self.checkNode.setSelected(checked, animated: false)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        self.checkNode.frame = self.bounds
+    }
+    func setChecked(_ checked: Bool, animated: Bool) {
+        self.checkNode.setSelected(checked, animated: animated)
+    }
+}
 
 public class RichTextAttachmentScreen: ViewControllerComponentContainer, AttachmentContainable {
     public enum RichTextAttachment {
@@ -337,7 +361,18 @@ final class RichTextAttachmentScreenComponent: Component {
                           let media = self.attachedMedia[mediaID] else { return nil }
                     return MediaItemNodeView(context: component.context, media: EngineMedia(media))
                 }
-                
+
+                // Host the checklist checkbox with a `CheckNode` themed from the standard app checkbox palette
+                // (`list.itemCheckColors`), mirroring `instantPageChecklistMarkerTheme`. Reads `appliedTheme`
+                // (the live `PresentationTheme`) lazily; nil before the first theme apply (harmless — the editor
+                // falls back to its glyph marker until a checkbox is provided).
+                editor.registerChecklistMarkerViewProvider { [weak self] checked, _ in
+                    guard let self, let theme = self.appliedTheme else { return nil }
+                    let c = theme.list.itemCheckColors
+                    let nodeTheme = CheckNodeTheme(backgroundColor: c.fillColor, strokeColor: c.foregroundColor, borderColor: c.strokeColor, overlayBorder: false, hasInset: false, hasShadow: false)
+                    return HostChecklistCheckboxView(theme: nodeTheme, checked: checked)
+                }
+
                 editor.onBecameFirstResponder = { [weak self] in
                     guard let self else {
                         return
@@ -505,7 +540,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 action: editorState.isInTable ? nil : { [weak self] sourceView in
                     guard let self else { return }
                     let current = self.editor.currentState().listMarker
-                    let entries: [(String, ListMarker?)] = [("None", nil), ("Bulleted", .bullet), ("Numbered", .ordered)]
+                    let entries: [(String, ListMarker?)] = [("None", nil), ("Bulleted", .bullet), ("Numbered", .ordered), ("Checklist", .checklist)]
                     let items: [ContextMenuItem] = entries.map { (title, marker) in
                         .action(ContextMenuActionItem(text: title, icon: { theme in
                             marker == current

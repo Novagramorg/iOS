@@ -126,6 +126,11 @@ extension DocumentCanvasView {
             insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing block
             return
         }
+        if let checklist = checklistBox(atCanvasPoint: point) {
+            ensureFirstResponder()
+            toggleChecklistItem(box: checklist)
+            return
+        }
         if let hit = tableHandle(at: point), let action = tableHandleTap(at: point) {
             switch action {
             case .select(let kind):                        // 1st tap → select the row/column (no menu yet)

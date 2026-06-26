@@ -332,4 +332,31 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         XCTAssertEqual(chatInputContent(fromInstantPage: instantPage(from: input)), expected,
                        "heading+list canonicalizes to a plain heading (list dropped), no hang")
     }
+
+    // 17. A checklist with mixed checked state round-trips identically (checked=false/true/false).
+    func test_checklist_roundTrips_withMixedCheckedState() {
+        func checkItem(_ checked: Bool, _ text: String) -> ChatInputBlock {
+            .paragraph(ChatInputParagraph(style: .body,
+                list: ChatInputListMembership(marker: .checklist, level: 0, checked: checked),
+                runs: [ChatInputRun(text: text)]))
+        }
+        assertRoundTrips(ChatInputContent(blocks: [
+            checkItem(false, "todo"),
+            checkItem(true, "done"),
+            checkItem(false, "later"),
+        ]), "checklist with mixed checked state")
+    }
+
+    // 16. ChatInputListMarker.checklist (rawValue 2) Codable round-trip, and back-compat: an old payload
+    //     without `checked` decodes correctly (nil checked, marker preserved).
+    func test_checklistMembership_codableRoundTrip_andBackCompat() throws {
+        let m = ChatInputListMembership(marker: .checklist, level: 0, checked: true)
+        let data = try JSONEncoder().encode(m)
+        XCTAssertEqual(try JSONDecoder().decode(ChatInputListMembership.self, from: data), m)
+        // Back-compat: an old payload without `checked` decodes to nil, marker preserved.
+        let old = #"{"marker":{"raw":0},"level":0}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(ChatInputListMembership.self, from: old)
+        XCTAssertEqual(decoded.marker, .bullet)
+        XCTAssertNil(decoded.checked)
+    }
 }

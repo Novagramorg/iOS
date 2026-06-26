@@ -407,6 +407,7 @@ public struct ChatInputCode: Equatable, Codable {
 public enum ChatInputListMarker: Int32, Equatable, Codable {
     case bullet = 0
     case ordered = 1
+    case checklist = 2
 
     private enum CodingKeys: String, CodingKey {
         case raw
@@ -427,13 +428,19 @@ public enum ChatInputListMarker: Int32, Equatable, Codable {
     }
 }
 
-/// List membership for a paragraph: marker style + 0-based indent level. Mirrors the editor `ListMembership`.
+/// List membership for a paragraph: marker style + 0-based indent level + optional checked state (checklist
+/// items only). Mirrors the editor `ListMembership`.
 public struct ChatInputListMembership: Equatable, Codable {
     public var marker: ChatInputListMarker
     public var level: Int32
-    public init(marker: ChatInputListMarker, level: Int32) {
+    /// Whether this checklist item is checked. `nil` for bullet/ordered list items (marker ≠ `.checklist`).
+    /// Synthesized `Codable` uses `encodeIfPresent`/`decodeIfPresent` for optional fields: a `nil` value is
+    /// omitted on encode and an absent key decodes to `nil` — old payloads (no `checked` key) are back-compat.
+    public var checked: Bool?
+    public init(marker: ChatInputListMarker, level: Int32, checked: Bool? = nil) {
         self.marker = marker
         self.level = level
+        self.checked = checked
     }
 }
 

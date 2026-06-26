@@ -137,6 +137,18 @@ final class RTFDocumentParser {
             let marker: ListMarker = m.first.map { "0123456789".contains($0) } == true ? .ordered : .bullet
             list = ListMembership(marker: marker, level: lvl)
         }
+        // Emoji checkbox → checklist. Prefer a checkbox in the \listtext marker; else detect at the start of the
+        // paragraph text (the editor's own export emits the emoji as paragraph text, with no \listtext).
+        if let det = ChecklistEmojiMarker.strippingMarker(curListMarkerText) {
+            list = ListMembership(marker: .checklist, level: curListLevel ?? 0, checked: det.checked)
+        } else if let first = runs.first, let det = ChecklistEmojiMarker.strippingMarker(first.text) {
+            list = ListMembership(marker: .checklist, level: curListLevel ?? 0, checked: det.checked)
+            if det.remainder.isEmpty {
+                runs.removeFirst()
+            } else {
+                runs[0] = TextRun(text: det.remainder, attributes: first.attributes)
+            }
+        }
         blocks.append(.paragraph(ParagraphBlock(id: .generate(), style: style, list: list, runs: runs)))
         runs = []
         curListLevel = nil

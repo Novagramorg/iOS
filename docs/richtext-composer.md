@@ -180,6 +180,16 @@ as a **`RichTextMessageAttribute`** carrying an `InstantPage`, rendered by the V
 `instantpage-richtext.md`). The `ChatInputContent ↔ InstantPage` pair lives in
 `TelegramCore/Sources/ChatInputContent/ChatInputContentInstantPage.swift`.
 
+> **Interactive checklists round-trip (added 2026-06-26).** `ChatInputListMarker` gained `.checklist` and
+> `ChatInputListMembership` a `checked: Bool?` field (optional Codable → old drafts decode unchanged; this is the
+> draft currency, so checked state persists in drafts for free). It threads: editor `Document` ↔ `ChatInputContent`
+> (`DocumentChatInputContentBridge`, both directions) ↔ `InstantPage` (`ChatInputContentInstantPage`: forward emits
+> per-item `checked`; reverse maps an item with `checked != nil` back to `.checklist` — so `checked:false` survives,
+> not collapsing to bullet) → `InstantPageListItem.checked`. A checklist is a list ⇒ already non-entity-expressible
+> ⇒ routes to the rich `.instantPage` send path with no change. Recipient checkboxes are display-only; the sender
+> re-edits via the reverse bridge. The editor side (tappable checkbox, creation, geometry) is in
+> `RichTextEditor/CLAUDE.md`.
+
 - **Send** (`ChatControllerNode.sendCurrentMessage`): reads the structural `composeInputState.content`. When
   `editMessage == nil && !content.isEntityExpressible() && !content.isEmpty`, enqueues **one**
   `.message(text: "", attributes: [RichTextMessageAttribute(instantPage: instantPage(from: content), …)], …)`.

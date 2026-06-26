@@ -672,13 +672,38 @@ serif, Body 17 sans, Caption 15 sans, Quote 17 sans — see the 2026-06-13 sessi
 cells body/quote drop to a 15pt base (2026-06-26)** via a per-cell `StyleSheet.tableCells` mapper variant — see
 the type-scale bullet in that session block.
 
+**Interactive checklist / task list (added 2026-06-26).** A first-class checklist marker
+(`ListMarker.checklist` + `ListMembership.checked: Bool?`, Core). **Creation:** the list picker offers
+"Checklist"; `setList(.checklist)` seeds `checked: false` (re-applying `.checklist` to an already-checked item
+PRESERVES its state). **Interactive checkbox — `CheckNode` via a host hook (the editor package stays
+`CheckNode`/AsyncDisplayKit-free):** `RichTextEditorView.registerChecklistMarkerViewProvider(_ : (checked, size)
+-> (UIView & RichTextChecklistMarkerView)?)` supplies a `CheckNode`-backed checkbox; both hosts wire it — the chat
+composer threads checkbox colors through the `ChatRichTextThemeColors` seam (sourced from
+`theme.list.itemCheckColors` in `ChatTextInputPanelNode.makeRichTextThemeColors`), `RichTextAttachmentScreen`
+reads `appliedTheme.list.itemCheckColors`. The editor hosts/pools/culls the view in the marker gutter (mirrors the
+inline-emoji machinery, `DocumentCanvasView+ChecklistMarkers.swift`), SUPPRESSES the Unicode glyph for `.checklist`
+(`BlockBox.hostsChecklistCheckbox`, stamped in `stampListMarkers` + folded into `renderSignature` so a late
+provider repaints), and a tap on the marker hit-rect toggles `checked` as ONE undo step (`toggleChecklistItem`,
+caret-neutral, animates the hosted view). **Marker geometry** (`BlockBox.checklistMarkerCanvasRect()`): side =
+`StyleSheet.checklistMarkerSize(for:)` (`font.capHeight.rounded()`) × `checklistMarkerScale` (1.4), bottom on the
+text baseline (grows top/bottom/right, left edge anchored at the gutter), `floorToScreenPixels`-snapped; the list
+text inset reserves the scaled width + a gap. **Return** continues the list with a fresh `checked:false` item
+(empty-item Return exits the list; indent/outdent preserve `checked`). **Message round-trip (composer):** sends as
+a rich message — `ChatInputContent` gained `.checklist` + `checked: Bool?` (the draft currency → draft persistence
+free; raw enum value appended, optional Codable back-compat), threaded through `DocumentChatInputContentBridge`
+(both directions) and BOTH `Document→InstantPage` builders (`ChatInputContentInstantPage` for the composer +
+`RichTextEditorMessageConversion/InstantPageBuilder` for the attachment-screen send) into `InstantPageListItem.checked`.
+Recipient checkboxes are display-only/static; the SENDER can re-edit (falls out of the reverse bridge). No
+strikethrough on checked text (matches the InstantPage rendering). Behind `debugRichText`; runtime-verified.
+
 ## Status
 
 **Done** (model + editing + rendering all in place): the Core model, global position model, and JSON/`.rtdoc`
 serialization; continuous **cross-block and partial-cross-cell selection + editing** — the headline
 requirement, incl. editing across stacks via `applyReplace` / `applyMultiRegionClear`; structural editing
 (Enter splits / Backspace merges / cross-block delete) with snapshot undo; **lists** (rendering +
-`setList` / indent / outdent), **images** (caption + gap cursor + selection highlight), **tables**
+`setList` / indent / outdent, incl. an **interactive checklist** — tappable `CheckNode` checkbox + message
+round-trip + emoji external share, see the note above), **images** (caption + gap cursor + selection highlight), **tables**
 (rendering, cross-cell caret & Tab nav, in-cell editing, row/column insert-delete + per-column alignment +
 header row, in-canvas row/column controls + multi-row/column range selection); **formatting**
 (bold/italic/strike/inline-code/underline, paragraph styles H1–H3/Body/Quote, alignment, links);
@@ -691,6 +716,27 @@ loupe, handle-drag) + **system edit menu** (Look Up / Translate / Share / Format
 **The editor is full-WYSIWYG — markdown abandoned.** There is no markdown serializer, and none is planned. Cross-app interchange uses **RTF** (see Phase 5d below).
 
 **Phase 5d rich copy/paste — done.** Within-app fidelity via the private pasteboard UTI `org.telegram.richtexteditor.fragment` carrying a JSON-encoded `Document` fragment (inline formatting incl. custom emoji / mention / date, and paragraph/quote/code/list block structure — preserved across any editor instance, including between chat composers). Cross-app via **RTF** read+write (`public.rtf`) plus a plain-text fallback (`public.utf8-plain-text`) always written/accepted. Multi-line plain paste splits into paragraphs (replaced the old newline→space flattening). Fragment scope = paragraph family + inline; tables and media (images) are NOT carried in a fragment (deferred); image-paste-to-attachment in the composer is a host concern, wired via the paste-media hooks (see below). The extract/splice are pure Core (`Document.extractFragment` / `Document.insertingFragment` in `RichTextEditorCore/Model/DocumentFragment.swift`); the `copy`/`cut`/`paste` responders + the three-representation pasteboard write are in `DocumentCanvasView+Clipboard.swift`; RTF conversion is `RTFConversion.swift`.
+
+**Checklist external share — emoji (added 2026-06-26).** Checklist items serialize to the EXTERNAL RTF +
+plain-text reps as an emoji checkbox prefix (`⬜ ` U+2B1C unchecked / `✅ ` U+2705 checked) and are auto-detected
+(emoji-only, optional VS16, strips exactly one) on import/paste, via the pure-Core `ChecklistEmojiMarker` codec
+(`prefix(checked:)` / `strippingMarker(_:)`) + `externalChecklistPlainText([Block])`. Injected at the export sites
+(`RTFConversion.rtfData` prefix + the `NSAttributedString`-fallback per-line detect; the plain rep via
+`pasteboardItem` → `externalChecklistPlainText`) and the import sites (`RTFImport.flushParagraph` text + `\listtext`
+detect; `plainTextFragment` per-line detect). The in-app private fragment round-trips `checked` losslessly
+(`blockPlainText` / `text(in:)` stay marker-free). Accepted limitation: a paragraph the user literally typed
+starting with `✅ `/`⬜ ` is read as a checklist on external paste.
+
+**Paste never leaves a spurious empty paragraph (load-bearing, `Document.insertingFragment`).** The multi-block
+splice assembles `[headBlock] + middle + [tailPara]`, where head/tail are the host paragraph split at the caret;
+it inline-merges a fragment block into a split half ONLY when that block is body/heading (`isInlineMergeable`).
+Pasting a NON-inline-mergeable LAST block — a **list item (checklists), quote, or code block** — at a paragraph
+END (empty tail) would otherwise leave the empty host tail as a trailing empty paragraph (symmetric leading case at
+a paragraph start). It now drops an empty OUTERMOST split-half (`headBlock`/`tailPara` only — keyed on
+`text.isEmpty`, keeps ≥1 block; INTERIOR fragment empties live in `middle` and are preserved), with the caret →
+end of the last pasted block when the tail is dropped. This is the true fix for the "paste adds a trailing empty
+paragraph" bug (a trailing empty *in the fragment* — handled earlier at higher layers — was a different, narrower
+case; the host-tail empty is the general one and lives here in Core, shared by both editors).
 
 **Paste-media-to-send is host-delegated (2026-06-25).** The editor never embeds pasted media inline — images/GIF/video/stickers go to the chat *send* flow. Two façade hooks (`RichTextEditorView.canPasteMedia` / `onPasteMedia`, both `(() -> Bool)?`, forwarded to `DocumentCanvasView`): `paste(_:)` pastes a TEXT rep if one exists (fragment/RTF/plain — **text wins**), else calls `onPasteMedia?()`; `clipboardCanPerformAction(.paste)` also offers Paste when `canPasteMedia?()` is true (so the menu shows for an image-only clipboard). The editor stays Telegram-UTI-agnostic — the hooks are plain closures the host fills. The chat composer wires them (`ChatTextInputPanelNode.loadTextInputNode`) to a shared `handlePastedMedia(perform:)` (the gif/mp4/heics/png-sticker/jpeg detection extracted from the legacy `chatInputTextNodeShouldPaste`, so both the old and new composers route media identically), restoring the legacy paste-to-send the new composer had lost.
 

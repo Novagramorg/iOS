@@ -19,20 +19,27 @@ extension DocumentCanvasView {
     }
 
     @objc override func copy(_ sender: Any?) {
-        guard selFrom < selTo, let range = selectedTextRange else { return }
-        writeSelectionToPasteboard(globalFrom: selFrom, globalTo: selTo, plain: text(in: range))
+        guard selFrom < selTo else { return }
+        writeSelectionToPasteboard(globalFrom: selFrom, globalTo: selTo)
     }
 
     @objc override func cut(_ sender: Any?) {
         guard selFrom < selTo, let range = selectedTextRange else { return }
-        writeSelectionToPasteboard(globalFrom: selFrom, globalTo: selTo, plain: text(in: range))
+        writeSelectionToPasteboard(globalFrom: selFrom, globalTo: selTo)
         replace(range, withText: "")
     }
 
     /// Writes the three pasteboard representations for the selection atomically (via the public façade,
     /// the single source of truth for the format — see `RichTextEditorClipboard`).
-    private func writeSelectionToPasteboard(globalFrom: Int, globalTo: Int, plain: String?) {
+    /// The plain rep is derived from the fragment via `externalChecklistPlainText` (so checklist items
+    /// carry their emoji prefix); when the fragment is empty (e.g. a cross-cell table selection whose
+    /// blocks `extractFragment` skips) we fall back to `text(in: selectedTextRange)` to preserve the
+    /// pre-existing cross-cell concatenation behavior.
+    private func writeSelectionToPasteboard(globalFrom: Int, globalTo: Int) {
         let fragment = Document(blocks: currentBlocks()).extractFragment(globalFrom: globalFrom, globalTo: globalTo)
+        let plain: String? = fragment.blocks.isEmpty
+            ? selectedTextRange.flatMap { text(in: $0) }
+            : nil   // nil → pasteboardItem derives from fragment via externalChecklistPlainText
         pasteboard.setItems([RichTextEditorClipboard.pasteboardItem(for: fragment, plain: plain)], options: [:])
     }
 
@@ -58,10 +65,17 @@ extension DocumentCanvasView {
     }
 
     /// A multi-paragraph fragment from plain text — one paragraph per line (CRLF normalized first).
+    /// Lines beginning with ⬜ or ✅ (per `ChecklistEmojiMarker.strippingMarker`) are decoded as
+    /// checklist paragraphs; all other lines become plain body paragraphs.
     func plainTextFragment(_ s: String) -> Document {
         let lines = s.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
-        return Document(blocks: lines.map {
-            .paragraph(ParagraphBlock(id: .generate(), runs: $0.isEmpty ? [] : [TextRun(text: $0)]))
+        return Document(blocks: lines.map { line in
+            if let det = ChecklistEmojiMarker.strippingMarker(line) {
+                return .paragraph(ParagraphBlock(id: .generate(),
+                    list: ListMembership(marker: .checklist, level: 0, checked: det.checked),
+                    runs: det.remainder.isEmpty ? [] : [TextRun(text: det.remainder)]))
+            }
+            return .paragraph(ParagraphBlock(id: .generate(), runs: line.isEmpty ? [] : [TextRun(text: line)]))
         })
     }
 

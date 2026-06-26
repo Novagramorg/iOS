@@ -264,6 +264,13 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         canvas.emojiViewProvider = provider
     }
 
+    /// Registers a provider that builds the checklist checkbox view (host-side `CheckNode`). When unset,
+    /// checklist items fall back to the Unicode glyph marker.
+    public func registerChecklistMarkerViewProvider(
+        _ provider: @escaping (_ checked: Bool, _ size: CGSize) -> (UIView & RichTextChecklistMarkerView)?) {
+        canvas.checklistMarkerViewProvider = provider
+    }
+
     /// Hide an emoji view when its frame is more than this far outside the viewport (default 50pt).
     public var emojiCullMargin: CGFloat {
         get { canvas.emojiCullMargin }

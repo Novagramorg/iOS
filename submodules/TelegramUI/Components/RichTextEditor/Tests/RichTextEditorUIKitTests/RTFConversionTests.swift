@@ -283,6 +283,25 @@ final class RTFConversionTests: XCTestCase {
         XCTAssertNil(RTFConversion.fragment(fromRTF: Data("not rtf".utf8)))
     }
 
+    // MARK: Task 3 — checklist emoji checkbox in RTF export + NSAttributedString-fallback detection
+
+    func test_checklist_rtf_roundTrip_preservesCheckedAndStripsMarker() {
+        let doc = Document(blocks: [
+            .paragraph(ParagraphBlock(id: .generate(), list: ListMembership(marker: .checklist, level: 0, checked: false), runs: [TextRun(text: "todo")])),
+            .paragraph(ParagraphBlock(id: .generate(), list: ListMembership(marker: .checklist, level: 0, checked: true), runs: [TextRun(text: "done")])),
+        ])
+        let data = RTFConversion.rtfData(from: doc)!
+        let rtfString = String(data: data, encoding: .utf8)!
+        XCTAssertTrue(rtfString.contains("\\u11036?"), "unchecked ⬜ escaped into the RTF")   // U+2B1C
+        XCTAssertTrue(rtfString.contains("\\u9989?"), "checked ✅ escaped into the RTF")        // U+2705
+
+        let back = RTFConversion.fragment(fromRTF: data)!
+        XCTAssertEqual(back.blocks.count, 2)
+        guard case .paragraph(let p0) = back.blocks[0], case .paragraph(let p1) = back.blocks[1] else { return XCTFail() }
+        XCTAssertEqual(p0.list?.marker, .checklist); XCTAssertEqual(p0.list?.checked, false); XCTAssertEqual(p0.text, "todo")
+        XCTAssertEqual(p1.list?.marker, .checklist); XCTAssertEqual(p1.list?.checked, true); XCTAssertEqual(p1.text, "done")
+    }
+
     // MARK: Finding 1 — unescaped URL in HYPERLINK field destination
 
     func test_roundTrip_linkWithRTFSpecialChars_doesNotDropContent() throws {

@@ -76,11 +76,46 @@ extension Document {
             middle.removeLast()
         }
 
-        let assembled = [headBlock] + middle + [Block.paragraph(tailPara)]
+        var assembled = [headBlock] + middle + [Block.paragraph(tailPara)]
+        // The empty halves of the split host that no pasted block merged into would be spurious blank lines
+        // around the paste (most visible: pasting a list / quote / code — non-inline-mergeable — at a
+        // paragraph end leaves a trailing empty paragraph; at a paragraph start, a leading one). These are
+        // EXACTLY `headBlock`/`tailPara` — the split halves — so dropping is keyed on emptiness of the
+        // OUTERMOST block only, never a pasted fragment block (those sit in `middle`, and even when a single
+        // fragment block inline-merges into a split half it folds INTO `headBlock`/`tailPara`, so the merged
+        // result is what's tested). Drop a trailing and/or leading empty paragraph as long as content remains.
+        // "Empty" is text-emptiness (`text.isEmpty`) — a paragraph may carry either no runs or one zero-length
+        // run; both must be treated as a blank line. A non-empty tail (mid-paragraph paste) and interior empty
+        // paragraphs within the fragment (which live in `middle`, not at an end) are untouched.
+        let tailDropped = { () -> Bool in
+            if case .paragraph(let t) = assembled.last, t.text.isEmpty, assembled.count > 1 {
+                assembled.removeLast(); return true
+            }
+            return false
+        }()
+        if case .paragraph(let h) = assembled.first, h.text.isEmpty, assembled.count > 1 {
+            assembled.removeFirst()
+        }
         newBlocks.replaceSubrange(locus.index...locus.index, with: assembled)
         let newDoc = Document(schemaVersion: schemaVersion, blocks: newBlocks)
-        let tailIndex = locus.index + assembled.count - 1
-        return (newDoc, newDoc.globalTextStart(ofBlockAt: tailIndex) + caretInTail)
+        // `lastIndex` is computed AFTER both removals so a leading drop doesn't skew it.
+        let lastIndex = locus.index + assembled.count - 1
+        let caretPos: Int
+        if tailDropped {
+            // The empty host-tail was dropped → the caret goes to the END of the new last block (the last
+            // pasted block); `caretInTail` (0 here, since the tail wasn't inline-merged) no longer applies.
+            let lastLen: Int
+            switch assembled.last! {
+            case .paragraph(let p): lastLen = p.utf16Count
+            case .code(let c): lastLen = c.utf16Count
+            default: lastLen = 0
+            }
+            caretPos = newDoc.globalTextStart(ofBlockAt: lastIndex) + lastLen
+        } else {
+            // The tail survived (real content after the caret, or an inline-merged tail) → keep the original target.
+            caretPos = newDoc.globalTextStart(ofBlockAt: lastIndex) + caretInTail
+        }
+        return (newDoc, caretPos)
     }
 }
 

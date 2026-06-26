@@ -27,6 +27,16 @@ public struct StyleSheet {
     /// after the marker than a bullet's does. The marker itself stays in its level's column; only the
     /// item text shifts right by this amount.
     public static let orderedListTextInset: CGFloat = 4
+    /// The side length of the checklist checkbox, sized to the font's cap height so it scales per style
+    /// and reads like a capital letter sitting on the baseline. (Tunable: switch capHeight→ascender for a
+    /// larger box.) Returns the UNSCALED base — the vertical-center anchor used by both the geometry and
+    /// the paragraph-indent computation.
+    public static func checklistMarkerSize(for font: UIFont) -> CGFloat { font.capHeight.rounded() }
+    /// Horizontal gap between the checkbox's right edge and the item text.
+    public static let checklistMarkerGap: CGFloat = 6
+    /// The checklist checkbox is drawn this many times its base (cap-height) size — it grows into the top,
+    /// bottom, and right (the left edge stays anchored at the marker gutter). Tunable.
+    public static let checklistMarkerScale: CGFloat = 1.4
 
     private func baseSize(_ style: ParagraphStyleName) -> CGFloat {
         switch style {
@@ -85,6 +95,11 @@ public struct StyleSheet {
             // (numbered) items get extra text inset since a number marker is wider than a bullet.
             var indent = StyleSheet.listIndentStep * CGFloat(list.level) + StyleSheet.listMarkerSpacing
             if list.marker == .ordered { indent += StyleSheet.orderedListTextInset }
+            else if list.marker == .checklist {
+                let markerFont = self.font(for: style, attributes: .plain)
+                let scaledSide = StyleSheet.checklistMarkerSize(for: markerFont) * StyleSheet.checklistMarkerScale
+                indent += max(0, scaledSide + StyleSheet.checklistMarkerGap - StyleSheet.listMarkerSpacing)
+            }
             ps.firstLineHeadIndent += indent
             ps.headIndent += indent
         } else if style == .quote {

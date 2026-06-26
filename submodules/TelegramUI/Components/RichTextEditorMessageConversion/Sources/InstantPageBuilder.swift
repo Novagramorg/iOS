@@ -89,6 +89,7 @@ private func buildListBlocks(from paragraphs: ArraySlice<ParagraphBlock>) -> [In
               (paragraphs[index].list?.level ?? 0) == baseLevel,
               (paragraphs[index].list?.marker ?? .bullet) == baseMarker {
             let text = richText(from: paragraphs[index].runs)
+            let checked = paragraphs[index].list?.checked
             index += 1
             let childStart = index
             while index < paragraphs.endIndex, (paragraphs[index].list?.level ?? 0) > baseLevel {
@@ -96,9 +97,9 @@ private func buildListBlocks(from paragraphs: ArraySlice<ParagraphBlock>) -> [In
             }
             if index > childStart {
                 let nested = buildListBlocks(from: paragraphs[childStart ..< index])
-                items.append(.blocks([.paragraph(text)] + nested, nil, nil))
+                items.append(.blocks([.paragraph(text)] + nested, nil, checked))
             } else {
-                items.append(.text(text, nil, nil))
+                items.append(.text(text, nil, checked))
             }
         }
         result.append(.list(items: items, ordered: baseMarker == .ordered))

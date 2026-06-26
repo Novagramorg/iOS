@@ -185,4 +185,15 @@ final class RTFImportTests: XCTestCase {
         XCTAssertEqual(c00, "A")                                        // cell has ONLY its own content, not "IntroA"
         XCTAssertFalse(c00.contains("Intro"))
     }
+
+    func test_emojiCheckbox_inParagraphText_importsAsChecklist() {
+        let rtf = "{\\rtf1\\ansi \\pard \\u11036? todo\\par \\pard \\u9989? done}"   // ⬜ todo / ✅ done
+        let doc = RTFImport.document(fromRTF: rtf.data(using: .utf8)!)!
+        XCTAssertEqual(doc.blocks.count, 2)
+        guard case .paragraph(let p0) = doc.blocks[0], case .paragraph(let p1) = doc.blocks[1] else { return XCTFail() }
+        XCTAssertEqual(p0.list?.marker, .checklist); XCTAssertEqual(p0.list?.checked, false)
+        XCTAssertEqual(p0.text, "todo")    // marker stripped from content
+        XCTAssertEqual(p1.list?.marker, .checklist); XCTAssertEqual(p1.list?.checked, true)
+        XCTAssertEqual(p1.text, "done")
+    }
 }

@@ -56,7 +56,7 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 let marker = list.marker
                 var items: [InstantPageListItem] = []
                 while i < content.blocks.count, case let .paragraph(q) = content.blocks[i], let qList = q.list, qList.marker == marker, case .body = q.style {
-                    items.append(.text(richText(from: q.runs), nil, nil))
+                    items.append(.text(richText(from: q.runs), nil, qList.checked))
                     i += 1
                 }
                 result.append(.list(items: items, ordered: marker == .ordered))
@@ -182,13 +182,15 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             }
             result.append(.paragraph(ChatInputParagraph(style: style, runs: chatInputRuns(fromRichText: rt))))
         case let .list(items, ordered):
-            // One body paragraph per `.text` item, all sharing the list marker at level 0 (the forward only emits
-            // `.text` items and only ever produced level 0 — see the forward's level canonicalization note). A
-            // `.blocks`/`.unknown` item (never produced by the forward; only from cloud) is skipped defensively.
-            let marker: ChatInputListMarker = ordered ? .ordered : .bullet
+            // One body paragraph per `.text` item. If the item carries a non-nil `checked` value the marker is
+            // `.checklist` (the forward threads `checked` from `ChatInputListMembership`); otherwise use
+            // `.ordered` / `.bullet` per the `ordered` flag. Level 0 throughout (the forward canonicalizes
+            // any indent level to 0 — see the forward's level canonicalization note). A `.blocks`/`.unknown`
+            // item (never produced by the forward; only from cloud) is skipped defensively.
             for item in items {
-                if case let .text(rt, _, _) = item {
-                    result.append(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker, level: 0), runs: chatInputRuns(fromRichText: rt))))
+                if case let .text(rt, _, checked) = item {
+                    let marker: ChatInputListMarker = checked != nil ? .checklist : (ordered ? .ordered : .bullet)
+                    result.append(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker, level: 0, checked: checked), runs: chatInputRuns(fromRichText: rt))))
                 }
             }
         case let .preformatted(rt, language):
