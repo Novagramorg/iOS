@@ -5262,6 +5262,14 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
     public var contentHeight: CGFloat {
         return self.listView.scroller.contentSize.height
     }
+    // The inner view that owns the scroll pan gesture recognizer (see ListView's `self.view.addGestureRecognizer(self.scroller.panGestureRecognizer)`).
+    // Since the composition refactor, `self.view` is the rotated wrapper and the pan lives on this
+    // descendant. ChatControllerNode's previewing-mode hitTest fallback must return THIS view, not
+    // `self.view`: returning the wrapper binds touches to an ancestor of the pan's view, so the pan
+    // never fires and scrolling silently breaks.
+    public var scrollableContentView: UIView {
+        return self.listView.view
+    }
     public var scrollEnabled: Bool {
         get { self.listView.scrollEnabled }
         set { self.listView.scrollEnabled = newValue }

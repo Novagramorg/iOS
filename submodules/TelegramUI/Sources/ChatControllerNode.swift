@@ -4350,7 +4350,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 return result
             }
             if self.bounds.contains(point) {
-                return self.historyNode.view
+                return self.historyNode.scrollableContentView
             }
         default:
             break
@@ -4581,42 +4581,40 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             return
         }
         
-        if #available (iOS 17.0, *) {
-            // The composer's chat input STATE is the single source of truth for this handoff (both
-            // directions flow through `ChatInputContent`, not a direct node poke), so undo / drafts / send /
-            // state-observers all see one consistent value. OUT: convert the live composer content →
-            // `(Document, media, emojiFiles)` to seed the expanded editor. IN: convert the editor's
-            // `(document, media, emojiFiles)` → a `ChatTextInputState` and apply it through the canonical
-            // interface-state mutation (the panel SET path then lands it on the node). Media AND custom-emoji
-            // files ride the `ChatInputContent` converters — the emoji files are required so a custom emoji
-            // round-trips (the editor `Document` carries only fileIds; the file must be re-attached to render).
-            let (seedDocument, seedMedia, seedEmojiFiles) = documentMediaAndEmoji(fromChatInputContent: textInputPanelNode.inputTextState.content)
-            let editorScreen = RichTextAttachmentScreen(
-                context: self.context,
-                initialContents: seedDocument,
-                initialMedia: seedMedia,
-                initialEmojiFiles: seedEmojiFiles,
-                sendMessage: { [weak self] document, media, emojiFiles in
-                    guard let self else {
-                        return
-                    }
-                    let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
-                    self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
-                        return state.updatedInterfaceState { interfaceState in
-                            return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
-                        }
-                    })
-                },
-                presentAttachmentMenu: { [weak self] completion in
-                    guard let self else {
-                        return
-                    }
-                    self.controller?.presentRichTextAttachmentMenu(completion: completion)
+        // The composer's chat input STATE is the single source of truth for this handoff (both
+        // directions flow through `ChatInputContent`, not a direct node poke), so undo / drafts / send /
+        // state-observers all see one consistent value. OUT: convert the live composer content →
+        // `(Document, media, emojiFiles)` to seed the expanded editor. IN: convert the editor's
+        // `(document, media, emojiFiles)` → a `ChatTextInputState` and apply it through the canonical
+        // interface-state mutation (the panel SET path then lands it on the node). Media AND custom-emoji
+        // files ride the `ChatInputContent` converters — the emoji files are required so a custom emoji
+        // round-trips (the editor `Document` carries only fileIds; the file must be re-attached to render).
+        let (seedDocument, seedMedia, seedEmojiFiles) = documentMediaAndEmoji(fromChatInputContent: textInputPanelNode.inputTextState.content)
+        let editorScreen = RichTextAttachmentScreen(
+            context: self.context,
+            initialContents: seedDocument,
+            initialMedia: seedMedia,
+            initialEmojiFiles: seedEmojiFiles,
+            sendMessage: { [weak self] document, media, emojiFiles in
+                guard let self else {
+                    return
                 }
-            )
-            editorScreen.navigationPresentation = .modal
-            self.controller?.push(editorScreen)
-        }
+                let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                    return state.updatedInterfaceState { interfaceState in
+                        return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                    }
+                })
+            },
+            presentAttachmentMenu: { [weak self] completion in
+                guard let self else {
+                    return
+                }
+                self.controller?.presentRichTextAttachmentMenu(completion: completion)
+            }
+        )
+        editorScreen.navigationPresentation = .modal
+        self.controller?.push(editorScreen)
     }
 
     func openAICompose() {

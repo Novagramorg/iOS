@@ -165,7 +165,7 @@ extension DocumentCanvasView {
     func drawMarkedTextUnderline(in ctx: CGContext) {
         let rects = markedTextDecorations()
         guard !rects.isEmpty else { return }
-        UIColor.label.setFill()
+        mapper.theme.markedTextUnderline.setFill()
         for r in rects { ctx.fill(CGRect(x: r.minX, y: r.maxY - 1, width: r.width, height: 1)) }
     }
 }

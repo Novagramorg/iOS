@@ -182,7 +182,7 @@ extension DocumentCanvasView {
     /// a muted grey, which is why the dust reads as soft shimmer rather than heavy ink. `.secondaryLabel` is
     /// the system equivalent.
     private func spoilerDustColor(forGlobal pos: Int) -> UIColor {
-        return .secondaryLabel
+        return mapper.theme.spoilerDust
     }
 
     /// No-arg cull: compute the viewport like `cullEmojiViews`.

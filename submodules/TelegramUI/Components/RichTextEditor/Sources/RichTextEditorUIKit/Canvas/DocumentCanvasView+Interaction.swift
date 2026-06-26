@@ -117,12 +117,13 @@ extension DocumentCanvasView {
         let justFocused = didJustBecomeFirstResponder
         didJustBecomeFirstResponder = false
         let wasFirstResponder = wasFirstResponderAtEntry && !justFocused
-        // A tap BELOW the document's last block, when that block is a quote OR a code block, starts a new
-        // body paragraph after it — the only way to escape a trailing quote/code block (nothing exists below
-        // it to tap into).
-        if let last = boxes.last, ((last as? BlockBox)?.style == .quote || last is CodeBlockBox),
-           point.y > last.frame.maxY {
-            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing quote/code block
+        // A tap BELOW the document's last block starts a new empty body paragraph after it — so you can
+        // always begin a normal paragraph below the final block, whatever its type (image / table / quote /
+        // code / non-empty paragraph). The ONE exception: when the last block is ALREADY an empty body
+        // paragraph, don't stack a redundant empty — fall through and just place the caret in it.
+        if let last = boxes.last, point.y > last.frame.maxY,
+           !((last as? BlockBox).map { $0.style == .body && $0.textLength == 0 } ?? false) {
+            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing block
             return
         }
         if let hit = tableHandle(at: point), let action = tableHandleTap(at: point) {
@@ -214,6 +215,11 @@ extension DocumentCanvasView {
                 draggingTableKnob = end                       // table range-knob drag
             } else {
                 draggingEndpoint = nearerSelectionEndpoint(toGlobal: pos)   // text-selection handle drag
+                // Coalesce the per-touch-move input-delegate notifications for the duration of the drag —
+                // one bracket fires on `.ended` (the keyboard's autocorrect/candidate work is meaningless
+                // mid-drag and pegs the CPU on every frame). The table-knob path uses structural selection
+                // (not these setters), so it doesn't coalesce.
+                if draggingEndpoint != nil { beginCoalescedSelectionDrag() }
             }
         case .changed:
             if let end = draggingTableKnob {
@@ -225,6 +231,7 @@ extension DocumentCanvasView {
             }
         case .ended, .cancelled, .failed:
             stopDragAutoScroll()
+            endCoalescedSelectionDrag()   // sync the OS to the final selection before presenting the menu
             if draggingTableKnob != nil || draggingEndpoint != nil { presentEditMenu() }
             draggingTableKnob = nil
             draggingEndpoint = nil

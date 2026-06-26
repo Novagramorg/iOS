@@ -251,7 +251,7 @@ extension BlockBox: CanvasBlock {
         layout.drawText(in: ctx, at: textOrigin)
         if let d = listMarkerDraw() {
             NSAttributedString(string: d.label,
-                attributes: [.font: d.font, .foregroundColor: UIColor.label]).draw(at: d.origin)
+                attributes: [.font: d.font, .foregroundColor: mapper.theme.listMarker]).draw(at: d.origin)
         }
         if let pd = placeholderDraw() {
             NSAttributedString(string: pd.text,

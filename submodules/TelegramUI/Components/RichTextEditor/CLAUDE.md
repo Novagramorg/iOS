@@ -22,9 +22,26 @@ targets — `//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCor
 `protocol BlockLayoutEngine` (`Layout/BlockLayoutEngine.swift`), so the layout engine is swappable:
 `BlockLayout` (TextKit 2, `@available(iOS 16.0, *)`) on iOS 16+, and **`BlockLayoutTK1`** (TextKit 1, iOS 7+,
 ungated) on iOS 13–15. `makeBlockLayout(...)` picks TK2 on iOS 16+ / TK1 below; the runtime debug toggle
-`BlockLayoutBackend.forceTextKit1` (DEBUG default `true`) forces TK1 on any OS for testing the back-port. The
+`BlockLayoutBackend.forceTextKit1` forces TK1 on any OS for testing the back-port (currently `#if DEBUG &&
+false` → **off** even in debug, so the running app uses TK2 on iOS 16+; flip the `&& false` to opt in). The
 system edit menu likewise falls back from `UIEditMenuInteraction` (iOS 16+) to **`UIMenuController`** (iOS
 13–15) — see `DocumentCanvasView+EditMenu` (shared responder actions; custom items become flat `UIMenuItem`s).
+
+**Line-height centering (2026-06-26).** The per-style render `lineHeightMultiple` (`StyleSheet.metrics`: body/
+caption/quote 1.10, headings 1.05) makes each line-fragment box — the box the selection wash + caret fill —
+taller than the glyphs, and **TextKit (both engines) dumps ALL that extra leading ABOVE the glyphs** (the
+baseline drops; measured ~2pt on top / 0 below for 17pt body), so the text reads as offset too low in its
+rect. Both engines now **center** the glyphs in the box while keeping the box's full (spacing-preserving)
+height: glyphs are raised by half the extra leading. BOTH engines apply the SAME `centeringDelta(lineHeight:)`
+= `lineHeight·(1−1/m)/2` (m = the paragraph `lineHeightMultiple`) at glyph-draw / `attachmentBox` /
+`firstLineBaselineFromTop` time, while caret/selection rects keep the full box. (The TextKit-1
+`NSLayoutManagerDelegate.shouldSetLineFragmentRect…baselineOffset` baseline hook — the "native" way to do this
+on TK1 — is **NOT invoked** under the TextKit-2-backed `NSLayoutManager` on modern iOS, verified at runtime, so
+`BlockLayoutTK1` does the manual draw/geometry shift too rather than relying on it.) **Why not `baselineOffset`**
+(the attribute): it's a real `CharacterAttributes` field (sub/superscript) and would round-trip into the
+model — centering must stay a render-only layout concern. Verified on both engines by `LineHeightCenteringTests`
+(glyph top-gap ≈ bottom-gap). This is editor-wide (document + composer), so a composer line keeps real 1.10
+spacing with centered text — no composer-specific line-height knob.
 
 So **the UIKit target is gated `@available(iOS 13.0, *)`** (`RichTextEditorCore` is pure-Foundation,
 always-available), with only genuine higher-OS APIs kept at their real floor: the TK2 `BlockLayout` type + the
@@ -98,21 +115,46 @@ Two host-side runtime contracts the composer had to honor (apply to any non-atta
 **re-run `update(...)` in response to `onChange`** (the view is parent-driven and does not self-layout on a
 content change — without this, typed text is never laid out).
 
+**Keyboard input language (added 2026-06-26).** `RichTextEditorView` exposes
+`inputPrimaryLanguage` (read the live keyboard language back), `initialInputPrimaryLanguage`
+(seed the language the keyboard opens in next focus), and `resetInputPrimaryLanguage()`,
+forwarding to a one-time `textInputMode` override on `DocumentCanvasView` (the actual first
+responder) — a verbatim port of the legacy `ChatInputTextView` mechanism so the chat composer
+repopulates `interfaceState.inputLanguage` (emoji-keyword search + draft persistence).
+LOAD-BEARING: the override is single-shot (first `textInputMode` query consumes the
+pre-selection); UIKit queries it on `becomeFirstResponder` before any host read-back, so do not
+add a separate non-side-effecting read path.
+
 **Dynamic theme (added 2026-06-17, `Theme/RichTextEditorTheme.swift`).** `RichTextEditorView.theme:
-RichTextEditorTheme` is a host-settable struct of six UIColors; assigning it updates the mapper, pushes the
-accent to the caret/selection-handles/blockquote views, reloads (so boxes rebuild with the themed mapper), and
-redraws. **`.default` reproduces the editor's prior hardcoded colors exactly, so the look is unchanged until a
-host sets a theme.** Host wiring so far (2026-06-17): the **chat composer** wires it — `ChatTextInputPanelNode`
-maps `PresentationTheme` → `ChatRichTextThemeColors` (a `UIColor`-only seam type in `ChatInputTextNode`) and
-pushes it via `ChatRichTextInputNode.applyRichTextTheme`, which `RichTextEditorChatInputNode` maps to this
-`theme`. `RichTextAttachmentScreen` does **not** wire a theme yet (still a follow-up). What each color drives:
+RichTextEditorTheme` is a host-settable struct of eleven UIColors; assigning it updates the mapper, pushes the
+accent to the caret/selection-handles/blockquote views, reloads — **only when the view is sized (`bounds.width >
+0`)** — so boxes rebuild with the themed mapper, and redraws. **`.default` reproduces the editor's prior hardcoded colors exactly, so the look is unchanged until a
+host sets a theme.** Host wiring: the **chat composer** wires it — `ChatTextInputPanelNode` maps
+`PresentationTheme` → `ChatRichTextThemeColors` (a `UIColor`-only seam type in `ChatInputTextNode`) and pushes
+it via `ChatRichTextInputNode.applyRichTextTheme`, which `RichTextEditorChatInputNode` maps to this `theme`.
+`RichTextAttachmentScreen` now also wires a theme. What each color drives:
 - `primaryText` (default `.black`) — default foreground for runs with no explicit color.
 - `secondaryText` (default `.black`) — default foreground for `.caption`-style runs.
 - `placeholder` (default `.placeholderText`) — empty-paragraph, marked-text ghost, and media placeholder text.
-- `accent` (default `.link`) — link text, the blockquote bar + fill, the caret, and the selection visuals
-  (handles via a pushed `accentColor`; the body/cell selection *wash* reads `mapper.theme.accent` live).
+- `accent` (default `.link`) — link text, the blockquote bar + fill, the caret, the selection visuals
+  (handles via a pushed `accentColor`; the body/cell selection *wash* reads `mapper.theme.accent` live),
+  the table-control resize knobs, the selection-outline stroke, and the active-handle pill fill.
 - `tableBorder` (default the prior dynamic grid color) / `tableHeaderBackground` (default `white 0.5/0.1`) — the
   table grid stroke and header-row fill (the former `TableBlockBox.gridColor`/`headerRowBackground` statics).
+- `codeBackground` (default prior dynamic color) — code-block background fill.
+- `listMarker` (default `.label`) — list bullet/number marker color.
+- `inlineCodeBackground` (default `.systemGray5`) — inline-code run background pill.
+- `markedTextUnderline` (default `.label`) — IME marked-text (composing) underline.
+- `spoilerDust` (default `.secondaryLabel`) — spoiler particle ("dust") tint.
+
+**Apply the theme BEFORE seeding the `document` (host-ordering invariant).** The `document` setter builds each
+block's attributed string with the mapper's *current* theme (baking in the foreground color), and — per above —
+the `theme` setter re-maps already-built boxes only when `bounds.width > 0`. So a host that assigns `theme`
+*after* `document` while the view is still unsized (its frame set later in the same layout pass) leaves
+pre-existing text in the `.default` foreground; an empty document is unaffected (later typed text uses the
+by-then-themed mapper). Both hosts therefore theme before seeding — the composer in `didLoad`,
+`RichTextAttachmentScreen` in its `if component == nil` init block (before `editor.document = …`). (Regressed
+once: pre-existing text rendered black in dark mode, fixed 2026-06-26.)
 
 **Round-trip invariant (load-bearing):** theme colors are applied at render time only and **never persist into the
 `Document`**. `AttributedStringMapper` is symmetric — the forward pass injects the per-style default
@@ -121,9 +163,9 @@ style:)` / `runs(from:style:)`) strips a foreground equal to that per-style defa
 reverse-mapper caller MUST pass the run's paragraph style (`BlockBox` → its style, `MediaBlockBox` captions →
 `.caption`, `+Editing` → the start box's style; `+State` reads only format flags, so its `.body` default is fine)
 — a wrong style compares against the wrong default and pollutes the model. An explicit user color exactly equal to
-the style default is also stripped (visually identical, re-themable). Known limitations: list markers stay
-`.label`, spoiler dust + table-control chrome stay system colors, and removing a link inside a `.caption` run
-under a theme where `primaryText != secondaryText` leaves an explicit foreground (latent; see `removeLink`).
+the style default is also stripped (visually identical, re-themable). Known limitation: removing a link inside
+a `.caption` run under a theme where `primaryText != secondaryText` leaves an explicit foreground (latent; see
+`removeLink`).
 
 **Host input hooks (added 2026-06-12 for the emoji keyboard).** The façade exposes three generic, UIKit-only
 input hooks so a consumer can drive a custom input panel: `insertText(_:)` (plain text at the caret, one undo
@@ -158,8 +200,16 @@ The façade is now driven by its host rather than self-laying-out:
   inherited run format when collapsed. The 5 format predicates are extracted (`rangeIsBold` etc.) and shared
   by the `toggle*` commands and `currentState`.
 - `deleteTable()` — removes the caret's table (one undo step; caret lands on the successor block, or a fresh
-  empty paragraph if it was the only block). No-op when not in a table. (Caret-based; a structural-selection
-  delete is deferred.)
+  empty paragraph if it was the only block). No-op when not in a table. (This is the handle-menu "Delete Table"
+  / caret-based path, which *joins* the surrounding content.)
+- **Backspace with a table structural (row/column) selection** (`deleteTableStructuralSelection`, hooked at the
+  top of `deleteBackward` since the parked caret would otherwise hit the in-cell delete) deletes the selected
+  rows / columns — routing to the existing `deleteTableRow` / `deleteTableColumn` (which already read
+  `structuralRowRange()` / `structuralColumnRange()`). When the selection covers EVERY row or EVERY column
+  (`lowerBound <= 0 && upperBound >= rowCount/columnCount − 1`) — which would empty the table — it removes the
+  whole table block instead, replacing it **in place** with an empty body paragraph (caret there). Distinct from
+  `deleteTable()` above (which joins): full-selection backspace leaves an empty paragraph where the table was.
+  The structural selection is cleared afterward (mirrors the handle menu's `structuralAction`).
 - `composerSelectedRange: NSRange { get set }` — the selection in the **chat composer's flat UTF-16
   coordinate space** (the document's top-level paragraphs joined by `"\n"`, exactly the
   `ComposerDocumentBridge` flattening; non-paragraph blocks contribute nothing). Maps that flat offset
@@ -216,7 +266,8 @@ custom `UITextInput` presenting `UIEditMenuInteraction` directly. Any editor cha
 edit menu being interactive in the Telegram app depends on this allow-list entry.
 
 **Deferred:** pending caret formatting (inline toggles at a *collapsed* caret are currently inert — they show
-the inherited state but don't affect the next typed char); table structural selection. **Code blocks landed**
+the inherited state but don't affect the next typed char). (Table structural row/column selection + its
+delete-via-Backspace now landed — see `deleteTableStructuralSelection` above.) **Code blocks landed**
 (2026-06-19, `feature/richtext-code-block`) as a first-class multi-line `Block.code` — see the dedicated note
 below; they now losslessly round-trip and Format▸Code creates one. Dates now *round-trip* via the link scheme
 (see the composer-bridge note above), but the Date menu item remains a creation no-op (no native
@@ -298,6 +349,24 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   is a render-only style** (media-block captions, 15pt) — never offered in the picker, never persists as a
   paragraph style (a caption serializes as the MediaBlock's runs); `MediaBlockBox` lays the caption out as
   `.caption`. Exhaustive `switch ParagraphStyleName` sites (StyleSheet ×2, conversion ×2) all carry `.caption`.
+  **Table cells render body/quote at a smaller base — 15pt, not 17 (2026-06-26).** `StyleSheet` gained a
+  `bodyBaseSize` (default 17) read by `baseSize(.body/.quote)` and a `static let tableCells` variant (15);
+  `AttributedStringMapper.tableCellVariant()` copies a mapper onto it preserving theme/emojiScale. Each
+  `TableBlockBox` derives a cell mapper once and builds every cell box with it. To keep edits consistent, a
+  box created as a split/merge replacement **inherits its source box's mapper** (`CanvasBlock` now exposes
+  `mapper { get }`; the three cell-capable creators — `applyReplace` merge, `insertParagraphBreak` split,
+  `mergeParagraphs` — pass `start.box.mapper`/`p.mapper`/`upper.mapper` instead of the canvas mapper), and the
+  empty-cell typing path (`typingAttributeDict`'s empty-storage branch) resolves the owning box via
+  `activeStack` and uses **its** mapper — so an empty cell's first typed character is 15pt too. Headings keep
+  their fixed sizes in cells. (An explicit run `fontSize` still wins; read-back pins the rendered 15pt.)
+  **Paired cell-padding mechanism fix.** Cell vertical padding is now an explicit cell metric
+  (`TableBlockBox.cellVerticalPadding = 14`) applied at the CELL level (`recompute` content origin +
+  row-height math), parallel to the horizontal `cellPadding` (6) — and the cell `BlockStack` carries NO block
+  inset (`verticalInsetBase = 0`). Previously the cell's 14pt vertical gap came *incorrectly* from
+  `cellPadding` (6) + the document's 8pt inter-block inset (`BlockBox.defaultVerticalInset`) leaking into the
+  cell stack; that coupling tied cell padding to document-body block spacing (font-independent), so the
+  smaller 15pt text looked under-filled / vertically centered. The **visual is unchanged from before the font
+  change** (14pt top/bottom), but it's now decoupled from `defaultVerticalInset` and lives in one cell metric.
 - **`DocumentMetadata` removed entirely** → `Document { schemaVersion, blocks }` (it had become a vestigial
   single-`title` wrapper that nothing read; the doc's title is a `.heading1` block). `DocumentCodec` dropped
   its now-dead ISO-8601 date strategy.
@@ -348,6 +417,51 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   paragraph instead — non-empty → move the caret to its end (no delete), empty → delete that paragraph
   (`deleteBlock(at:parkingCaretAtGapOf:)`, caret stays at the media gap); first block / non-paragraph previous
   → move to the previous caret slot (no-op at doc start).
+- **Backspace at the start of an image caption deletes the image ONLY when the caption is empty** (`deleteBackward`,
+  the `pos.box is MediaBlockBox, pos.local == 0` branch). An **empty** caption → `deleteImageBox` removes the
+  image; a **non-empty** caption → the caret steps back to the image's gap (`prevTextPosition`, no delete) so a
+  stray Backspace can't destroy the image *and* its caption text. (Previously it deleted the image at caption
+  start regardless of caption content — a footgun.) `deleteImageBox` also now **never leaves a zero-block
+  document**: removing the only block (a lone `[image]`, reachable since insert-on-empty-paragraph replaces it)
+  appends a fresh empty paragraph — this guard covers every `deleteImageBox` caller (caption-delete + the
+  tap-selected-image delete).
+- **A delete whose selection EXACTLY covers one media node deletes the image** (`applySelectionReplace`,
+  runtime-discovered 2026-06-25 via the Demo). The collapsed-caret caption branch above is mostly unreachable
+  from a real tap: **UIKit expands a collapsed caret at an image's empty caption into a selection
+  `[nodeStart, captionEnd]`** (the "object-replacement" atom), pushed through the `selectedTextRange` setter
+  right after the tap. Backspace then takes the `selFrom != selTo` path; both endpoints resolve to the SAME
+  media box, so the same-stack `applyReplace` computes a zero-length edit and **silently no-ops** — the
+  reported "backspace on an empty caption does nothing" bug. `applySelectionReplace` now special-cases a
+  `text.isEmpty` range whose bounds equal a media block's node span (`from == box.nodeStart && to ==
+  box.textStart + box.textLength`) and calls `deleteImageBox`. A selection that also covers adjacent text has
+  different bounds, so it still flows to the normal cross-block drop path. (A *non-empty* caption's atom
+  selection is `[nodeStart, textStart]` ≠ the node span, so it does NOT match — consistent with the
+  "non-empty caption never auto-deletes the image" rule above.) **Lesson: a bare custom `UITextInput` still
+  receives OS-driven `selectedTextRange` writes that turn a caret into an atom selection — unit tests that set
+  the caret directly miss it; reproduce caret placement the way iOS drives it (or in the Demo).**
+- **Backspace at the start of a paragraph AFTER a non-text block deletes the empty paragraph, never the block**
+  (`deleteBackward`, the mirror of the leading-gap rule above). A collapsed caret at the start (`local == 0`) of
+  a paragraph whose previous block is a non-text **atom** — an image (`MediaBlockBox`), a table (`TableBlockBox`),
+  or a code block (`CodeBlockBox`), unified via `isNonParagraphAtom(_:)` — must NOT delete that block (you can't
+  merge text into it): an **empty** paragraph is removed (`removeBlock(at:parkingCaretAt:)`, so *"deleting the
+  last paragraph" is always possible*), a **non-empty** one is kept; either way the caret steps back to the
+  block's nearest text slot via `prevTextPosition` (an image's caption end, a table's last cell end, a code
+  block's end) — never the block's degenerate node-start boundary. Previously the image branch called
+  `deleteImageBox(at: pos.index - 1)` and silently destroyed the image; the table branch moved the caret but
+  *kept* the empty paragraph (undeletable); the code branch left the empty paragraph in place. Text blocks
+  (body/heading/quote/list paragraphs) still take the normal merge path below. (Select All + backspace still
+  removes a covered image — that goes through `applyReplace`, below.)
+- **Inserting a table or image on an EMPTY paragraph replaces it; mid-paragraph it splits** (`insertTable`,
+  `insertMedia`). Both share one branch order: an **empty** caret paragraph (`pos.box as? BlockBox` with
+  `textLength == 0`) is **replaced** by the new block (`replaceSubrange(pos.index...pos.index)`) so no stray
+  empty paragraph is left beside it — even between content (`A | empty | B` → `A | block | B`); a caret strictly
+  **interior** to a non-empty paragraph (`0 < local < textLength`) **splits** it into upper + block + lower;
+  caret at the **start** of a non-empty paragraph inserts the block **before** it, at the **end** inserts
+  **after**. The empty-replace check must run FIRST (an empty paragraph is both `local == 0` and
+  `local == textLength`, so it would otherwise fall into the insert-before branch and survive). Replacing the
+  document's only block is fine — a lone `[table]`/`[image]` is a valid document (the caret lands in the first
+  cell / caption; tap-below re-adds a paragraph). The empty-replace only targets `BlockBox` paragraphs, so it
+  never replaces an image caption / code block the caret happens to sit in.
 - **Select All + backspace removes a covered image, even a leading/trailing one** (`applyReplace` cross-block).
   A media endpoint is now dropped when the selection covers its **whole node** (leading gap + entire caption:
   `lo <= box.nodeStart && hi >= box.textStart + box.textLength`), so the merge path's `replaceSubrange(start...
@@ -361,9 +475,13 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   each top-level only (an in-table quote keeps the cell behaviors): **(A)** Backspace in an **empty** quote
   un-quotes it (`style = .body; restyle`) instead of doing nothing — an empty quote, especially the document's
   FIRST block, otherwise matched no `deleteBackward` branch and was undeletable. Mirrors empty-list-item Return.
-  A non-empty quote's backspace still just deletes a char. **(B)** Tapping in the empty area **below a trailing
-  quote** (`point.y > boxes.last.frame.maxY` && last is a `.quote`) inserts a new empty body paragraph after it
-  (`insertEmptyBodyParagraph(at:)`) — the only way to start a normal paragraph after a quote that ends the doc.
+  A non-empty quote's backspace still just deletes a char. **(B)** Tapping in the empty area **below the
+  document's last block** (`point.y > boxes.last.frame.maxY`) inserts a new empty body paragraph after it
+  (`insertEmptyBodyParagraph(at:)`) — so you can always start a normal paragraph below the final block, whatever
+  its type (image / table / quote / code / non-empty paragraph). **The one exception:** when the last block is
+  ALREADY an empty body paragraph, the tap is let through to the normal caret-placement path (no redundant empty
+  is stacked). This started as a quote/code-only escape hatch and was generalized 2026-06-25 (paired with the
+  *"deleting the last paragraph"* backspace rule above, so a tapped-in trailing paragraph is also removable).
   **(C)** **Shift+Return** inside a quote EXITS it with a new empty body paragraph (caret there): **ABOVE** the
   quote when the caret is on its first visual (wrapped) line (`caretIsOnFirstLine` — compares the caret's `minY`
   to offset 0's), else **BELOW** it. So a single-line / empty quote (caret always on its first line) exits
@@ -550,7 +668,9 @@ Headings are **regular weight by default** (`StyleSheet.font` does not force bol
 larger serif); bold is a pure user-emphasis toggle that round-trips uniformly across every style. (This
 replaced the earlier behavior where headings baked bold into their font, which leaked `**bold**` into the
 model and left residual bold on a heading→body down-convert.) Type scale (2026-06-13): H1 24 / H2 21 / H3 19
-serif, Body 17 sans, Caption 15 sans, Quote 17 sans — see the 2026-06-13 session block above.
+serif, Body 17 sans, Caption 15 sans, Quote 17 sans — see the 2026-06-13 session block above. **Inside table
+cells body/quote drop to a 15pt base (2026-06-26)** via a per-cell `StyleSheet.tableCells` mapper variant — see
+the type-scale bullet in that session block.
 
 ## Status
 
@@ -576,7 +696,7 @@ loupe, handle-drag) + **system edit menu** (Look Up / Translate / Share / Format
 
 **RTF export is hand-rolled and emits real tables (2026-06-25, `RTFConversion.swift`).** iOS has **no `NSTextTable` / `NSParagraphStyle.textBlocks`** (AppKit-only) — confirmed by spike — so `NSAttributedString` cannot represent or round-trip a real RTF table; a genuine table can only be produced by emitting the control words by hand. So `rtfData(from:)` now builds the **entire** RTF document by hand for ALL documents (one path; the old `NSAttributedString` export is gone) via one shared inline-run encoder (`inlineRTF`) + `escapeRTFText` (UTF-16 `\u<signed-16>?` escaping). Tables emit `\trowd`/`\trhdr`/`\cellx<cumulative-twips>`/`\intbl`/`\cell`/`\row` (`tableRTF`), so a Telegram table copied into Word/Pages/Notes becomes a **real table**. Parity kept on export (not added): no list markers, no foreground/theme colors, media-in-cell dropped, cell background colors dropped. Custom emoji ride the `tg://emoji?id=<id>&n=<seq>` hyperlink marker (the `&n=` per-export sequence stops adjacent identical emoji from coalescing). Spec/plan: `docs/superpowers/{specs/2026-06-25-richtext-rtf-tables-design.md,plans/2026-06-25-richtext-rtf-tables.md}`.
 
-**RTF import is a custom pure-Foundation parser in Core (2026-06-25, `RichTextEditorCore/Serialization/RTFTokenizer.swift` + `RTFImport.swift`).** Because iOS `NSAttributedString` flattens all block structure (no `NSTextTable`/`textLists`), a custom lexer (`RTFTokenizer`: groups, control words, `\'XX` cp1252, `\uN` signed-16 + surrogate + `\uc` skip, escapes) feeds a group-state document builder (`RTFDocumentParser`) that **reconstructs tables / headings / code / lists** + inline runs/links/emoji from third-party RTF (Word/Pages/web). `fragment(fromRTF:)` (UIKit) tries `RTFImport.document(fromRTF:)` **first** and falls back to the old `NSAttributedString` path only on hard failure (not-RTF / zero blocks) — so exotic RTF is never worse than the flatten, and the editor's own export→import now **round-trips structure losslessly** (the `RTFConversionTests` round-trip suite is the parse-compat gate; pure-Foundation parser is `swift test`-able on macOS via `RTFImportTests`/`RTFImportCorpusTests`). Heuristics (text always survives, only block style may differ): heading by font size (`\fsN/2` ≥23→H1/20–22→H2/18–19→H3), all-mono paragraph→code block, best-effort lists (`\ilvl`/`\listtext` marker→`.bullet`/`.ordered`+level). Non-goals: colors, nested tables, full Word list-table fidelity, images, codepage beyond cp1252. Graceful degradation: unknown control words → no-op; unknown/`{\*\…}` destinations consumed to their `}`; never crashes. Spec/plan: `docs/superpowers/{specs/2026-06-25-richtext-rtf-import-design.md,plans/2026-06-25-richtext-rtf-import.md}`.
+**RTF import is a custom pure-Foundation parser in Core (2026-06-25, `RichTextEditorCore/Serialization/RTFTokenizer.swift` + `RTFImport.swift`).** Because iOS `NSAttributedString` flattens all block structure (no `NSTextTable`/`textLists`), a custom lexer (`RTFTokenizer`: groups, control words, `\'XX` cp1252, `\uN` signed-16 + surrogate + `\uc` skip, escapes) feeds a group-state document builder (`RTFDocumentParser`) that **reconstructs tables / headings / code / lists** + inline runs/links/emoji from third-party RTF (Word/Pages/web). `fragment(fromRTF:)` (UIKit) tries `RTFImport.document(fromRTF:)` **first** and falls back to the old `NSAttributedString` path only on hard failure (not-RTF / zero blocks) — so exotic RTF is never worse than the flatten, and the editor's own export→import now **round-trips structure losslessly** (the `RTFConversionTests` round-trip suite is the parse-compat gate; pure-Foundation parser is `swift test`-able on macOS via `RTFImportTests`/`RTFImportCorpusTests`). Heuristics (text always survives, only block style may differ): heading by font size (`\fsN/2` ≥23→H1/20–22→H2/18–19→H3), all-mono paragraph→code block, best-effort lists (`\ilvl`/`\listtext` marker→`.bullet`/`.ordered`+level). Non-goals: colors, nested tables, full Word list-table fidelity, images, codepage beyond cp1252. Graceful degradation: unknown control words → no-op; unknown/`{\*\…}` destinations consumed to their `}`; never crashes. **Paragraph breaks (load-bearing, fixed 2026-06-26 — the "pasting removes newlines" bug):** Cocoa/AppKit (TextEdit, Notes, Safari, Mail, Pages — i.e. *every* rich-app copy) serializes a paragraph break as a **backslash immediately followed by a literal CR/LF** (`a\⏎b`), which the RTF spec defines as equivalent to `\par` — NOT a literal `\par` (only the editor's own export and hand-written test RTF use literal `\par`, which is why this slipped the original suite). `RTFTokenizer` therefore maps `\`+CR/LF (CRLF collapsed to one) to a `\par` token; without it every cross-app paste glued all paragraphs into one. **Empty paragraphs survive:** an explicit `\par` is a paragraph *terminator*, so `flushParagraph(allowEmpty:)` emits an empty body paragraph for two consecutive `\par` (a blank line); the implicit end-of-document flush passes `allowEmpty:false`, so a doc with no trailing `\par` gains no spurious empty final paragraph. (Raw, un-backslashed CR/LF stays ignored per spec; `\line` is still a soft in-paragraph break.) Regression-guarded by `RTFImportTests.test_backslash*`/`test_*Par*` + `RTFImportCorpusTests.test_cocoaStyle_*`. Spec/plan: `docs/superpowers/{specs/2026-06-25-richtext-rtf-import-design.md,plans/2026-06-25-richtext-rtf-import.md}`.
 
 **Other open work:** Phase 5e images toolbar (Photos/Files picker, alignment toggle, interactive drag-resize); Phase 6b new
 paragraph styles (Subtitle / Code) + a Dash list marker (Caption landed 2026-06-13 as a render-only style); Phase 6c floating pill keyboard toolbar

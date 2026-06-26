@@ -11,7 +11,7 @@ import ChatInputTextNode
 
 /// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`. Selected on iOS 17+
 /// behind the `debugRichText` flag (see `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
-/// display, layout, and editing; selection geometry, spoiler reveal, typing attributes, and the full
+/// display, layout, editing, and selection geometry; spoiler reveal, typing attributes, and the full
 /// delegate suite are safe stubs (Phase 2+).
 @available(iOS 13.0, *)
 public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInputNode {
@@ -307,13 +307,15 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var textContainerInset: UIEdgeInsets {
         get {
             var updated = self.trackedContentMargins
-            updated.top += 2.0
+            updated.top += 1.0
+            updated.bottom += 1.0
             updated.right -= 14.0
             return updated
         }
         set {
             var updated = newValue
-            updated.top -= 2.0
+            updated.top -= 1.0
+            updated.bottom -= 1.0
             updated.right += 14.0
             self.trackedContentMargins = updated
         }
@@ -403,10 +405,25 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         set { self.editorView.composerSelectedRange = newValue }
     }
 
-    // MARK: Stubs — Phase 2+ (selection geometry, spoilers, typing attrs, language, theme fidelity)
-    public var selectionRect: CGRect { .zero }
-    public func firstSelectionRect(forCharacterRange characterRange: NSRange) -> CGRect? { nil }
-    public func currentCaretRect() -> CGRect? { nil }
+    // MARK: Selection geometry
+    /// The current selection's first rect in the editor's CONTENT space (un-scrolled), matching the legacy
+    /// `firstRect(for:)` contract — `_showTextStyleOptions` subtracts `inputContentOffset.y` itself. That
+    /// legacy format-menu path is dead on iOS 16+ (it returns a nil target), so this is contract-honest but
+    /// not on a live path for this engine.
+    public var selectionRect: CGRect { self.editorView.composerSelectionBoundingRect }
+    /// First selection rect for a flat composer range, in this node's `self.view` space (the panel anchors
+    /// the emoji-suggestion popover here, then converts node-view → panel). The editor returns the rect in
+    /// `editorView` space; we finish with the trivial `editorView → self.view` parent conversion.
+    public func firstSelectionRect(forCharacterRange characterRange: NSRange) -> CGRect? {
+        self.editorView.composerFirstSelectionRect(forFlatRange: characterRange).map { self.editorView.convert($0, to: self.view) }
+    }
+    /// The caret rect in this node's `self.view` space (the panel anchors the emoji context panel's cursor
+    /// here via `asNode.view.convert(...)`). nil when there is no caret.
+    public func currentCaretRect() -> CGRect? {
+        self.editorView.composerCaretRect().map { self.editorView.convert($0, to: self.view) }
+    }
+
+    // MARK: Stubs — Phase 2+ (spoilers, typing attrs, theme fidelity)
     public var spoilersRevealed: Bool = false
     public func setSpoilersRevealed(_ revealed: Bool, animated: Bool) { }
     public func prepareForSpoilerReveal() { }
@@ -419,9 +436,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     }
     public var toggleQuoteCollapse: ((NSRange) -> Void)?
     public func isCurrentlyEmoji() -> Bool { false }
-    public var primaryLanguage: String? { nil }
-    public var initialPrimaryLanguage: String?
-    public func resetInitialPrimaryLanguage() { }
+    // Input language: read the live keyboard language back, and pre-select the draft's saved language
+    // on the next focus, via the editor's `textInputMode` override (see RichTextEditorView+ComposerHost).
+    public var primaryLanguage: String? { self.editorView.inputPrimaryLanguage }
+    public var initialPrimaryLanguage: String? {
+        get { self.editorView.initialInputPrimaryLanguage }
+        set { self.editorView.initialInputPrimaryLanguage = newValue }
+    }
+    public func resetInitialPrimaryLanguage() { self.editorView.resetInputPrimaryLanguage() }
     public var keyboardAppearance: UIKeyboardAppearance = .default
     public var autocorrectionType: UITextAutocorrectionType = .default
     public var inputTintColor: UIColor?

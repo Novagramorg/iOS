@@ -125,6 +125,23 @@ send-options preview and the attachment-menu rich-editor send — see §5).
 > **Invariant — the `Display.Window1.hitTest` "EditMenu" match** is load-bearing for the iOS-16 edit menu:
 > without it the menu's taps fall through to content app-wide.
 
+### Keyboard input language (`interfaceState.inputLanguage`)
+
+The composer reports the active keyboard's primary language back into
+`ChatInterfaceState.inputLanguage` (feeding emoji-keyword search at
+`ChatInterfaceInputContexts.swift` and draft persistence), and pre-selects the
+keyboard language when a draft is reopened. This rides the editor's first
+responder, `DocumentCanvasView`, which carries a one-time `textInputMode`
+override (a verbatim port of the legacy `ChatInputTextView` mechanism):
+`RichTextEditorChatInputNode.primaryLanguage` →
+`RichTextEditorView.inputPrimaryLanguage` → `canvas.textInputMode?.primaryLanguage`,
+and `initialPrimaryLanguage` is seeded by `ChatTextInputPanelNode` →
+`RichTextEditorView.initialInputPrimaryLanguage` → `canvas.initialPrimaryLanguage`.
+The override is single-shot (UIKit's `becomeFirstResponder` query consumes the
+pre-selection before any read-back), so the read path must not run before focus —
+the panel already guards on `isInputFirstResponder`, falling back to
+`storedInputLanguage` otherwise.
+
 ---
 
 ## 4. Feature round-trips
