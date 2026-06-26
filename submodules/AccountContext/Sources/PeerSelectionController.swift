@@ -34,6 +34,7 @@ public struct ChatListNodePeersFilter: OptionSet {
     public static let excludeGroups = ChatListNodePeersFilter(rawValue: 1 << 14)
     public static let excludeUsers = ChatListNodePeersFilter(rawValue: 1 << 15)
     public static let excludeBots = ChatListNodePeersFilter(rawValue: 1 << 16)
+    public static let includeCommunities = ChatListNodePeersFilter(rawValue: 1 << 17)
     
     public static let includeSelf = ChatListNodePeersFilter(rawValue: 1 << 7)
 }
@@ -42,6 +43,28 @@ public struct ChatListNodePeersFilter: OptionSet {
 public enum ChatListDisabledPeerReason {
     case generic
     case premiumRequired
+}
+
+public final class CommunityPeerSelectionOptions {
+    public let filter: ChatListNodePeersFilter
+    public let requestPeerType: [ReplyMarkupButtonRequestPeerType]?
+    public let excludedPeerIds: Set<EnginePeer.Id>
+    public let selectPeer: (EnginePeer) -> Void
+    public let selectDisabledPeer: (EnginePeer, ChatListDisabledPeerReason) -> Void
+
+    public init(
+        filter: ChatListNodePeersFilter,
+        requestPeerType: [ReplyMarkupButtonRequestPeerType]?,
+        excludedPeerIds: Set<EnginePeer.Id>,
+        selectPeer: @escaping (EnginePeer) -> Void,
+        selectDisabledPeer: @escaping (EnginePeer, ChatListDisabledPeerReason) -> Void
+    ) {
+        self.filter = filter
+        self.requestPeerType = requestPeerType
+        self.excludedPeerIds = excludedPeerIds
+        self.selectPeer = selectPeer
+        self.selectDisabledPeer = selectDisabledPeer
+    }
 }
 
 public final class PeerSelectionControllerParams {

@@ -428,6 +428,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var forcedTheme: PresentationTheme?
     var forcedNavigationBarTheme: PresentationTheme?
     var forcedWallpaper: TelegramWallpaper?
+    var hideTopPanels: Bool = false
     
     var automaticMediaDownloadSettings: MediaAutoDownloadSettings
     var automaticMediaDownloadSettingsDisposable: Disposable?
@@ -670,6 +671,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.forcedTheme = params?.forcedTheme
         self.forcedNavigationBarTheme = params?.forcedNavigationBarTheme
         self.forcedWallpaper = params?.forcedWallpaper
+        self.hideTopPanels = params?.hideTopPanels ?? false
 
         var useSharedAnimationPhase = false
         switch mode {

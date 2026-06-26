@@ -1391,7 +1391,6 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     private var communityAvatarBadgeBackgroundView: GlassBackgroundView?
     private var communityAvatarBadgeIconView: GlassBackgroundView.ContentImageView?
     public let avatarNode: AvatarNode
-    private var hiddenPeerIconView: UIImageView?
     var avatarIconView: ComponentHostView<Empty>?
     var avatarIconComponent: EmojiStatusComponent?
     var avatarVideoNode: AvatarVideoNode?
@@ -1435,6 +1434,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
     var credibilityIconComponent: EmojiStatusComponent?
     var statusIconView: ComponentHostView<Empty>?
     var statusIconComponent: EmojiStatusComponent?
+    let hiddenPeerIconNode: ASImageNode
     let mutedIconNode: ASImageNode
     var itemTagList: ComponentView<Empty>?
     var actionButtonTitleNode: TextNode?
@@ -1733,6 +1733,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.pinnedIconNode.displaysAsynchronously = false
         self.pinnedIconNode.displayWithoutProcessing = true
         
+        self.hiddenPeerIconNode = ASImageNode()
+        self.hiddenPeerIconNode.isLayerBacked = true
+        self.hiddenPeerIconNode.displaysAsynchronously = false
+        self.hiddenPeerIconNode.displayWithoutProcessing = true
+
         self.mutedIconNode = ASImageNode()
         self.mutedIconNode.isLayerBacked = true
         self.mutedIconNode.displaysAsynchronously = false
@@ -1765,6 +1770,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
         self.mainContentContainerNode.addSubnode(self.pinnedIconNode)
         self.mainContentContainerNode.addSubnode(self.badgeNode)
         self.mainContentContainerNode.addSubnode(self.mentionBadgeNode)
+        self.mainContentContainerNode.addSubnode(self.hiddenPeerIconNode)
         self.mainContentContainerNode.addSubnode(self.mutedIconNode)
         
         self.peerPresenceManager = PeerPresenceStatusManager(update: { [weak self] in
@@ -2041,26 +2047,8 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 avatarClipStyle = .round
             }
 
-            let avatarCutoutRect: CGRect?
-            if item.displayHiddenPeerIcon {
-                let iconSize = CGSize(width: 18.0, height: 18.0)
-                let iconFrame = CGRect(origin: CGPoint(
-                    x: avatarDiameter - iconSize.width - 2.0,
-                    y: avatarDiameter - iconSize.height - 2.0
-                ), size: iconSize)
-                avatarCutoutRect = CGRect(
-                    origin: CGPoint(
-                        x: iconFrame.minX,
-                        y: avatarDiameter - iconFrame.maxY
-                    ),
-                    size: iconFrame.size
-                ).insetBy(dx: -1.0 - UIScreenPixel, dy: -1.0 - UIScreenPixel)
-            } else {
-                avatarCutoutRect = nil
-            }
-            
             if item.useCommunityViewLayout {
-                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter), cutoutRect: avatarCutoutRect)
+                self.avatarNode.setPeer(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter), cutoutRect: nil)
             } else if avatarPeer.smallProfileImage != nil && overrideImage == nil {
                 self.avatarNode.setPeerV2(context: item.context, theme: item.presentationData.theme, peer: avatarPeer, overrideImage: overrideImage, emptyColor: item.presentationData.theme.list.mediaPlaceholderColor, clipStyle: avatarClipStyle, synchronousLoad: synchronousLoads, displayDimensions: CGSize(width: avatarDiameter, height: avatarDiameter))
             } else {
@@ -2520,6 +2508,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             var currentAvatarBadgeBackgroundImage: UIImage?
             var currentMentionBadgeImage: UIImage?
             var currentPinnedIconImage: UIImage?
+            var currentHiddenIconImage: UIImage?
             var currentMutedIconImage: UIImage?
             var currentCredibilityIconContent: EmojiStatusComponent.Content?
             var currentVerifiedIconContent: EmojiStatusComponent.Content?
@@ -3477,6 +3466,9 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             if isMuted {
                 currentMutedIconImage = PresentationResourcesChatList.mutedIcon(item.presentationData.theme)
             }
+            if item.displayHiddenPeerIcon {
+                currentHiddenIconImage = PresentationResourcesChatList.hiddenIcon(item.presentationData.theme)
+            }
             
             var statusWidth: CGFloat
             if case .none = statusState {
@@ -3495,9 +3487,17 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             }
             
             var titleIconsWidth: CGFloat = 0.0
+            if let currentHiddenIconImage = currentHiddenIconImage {
+                if titleIconsWidth.isZero {
+                    titleIconsWidth += 4.0
+                }
+                titleIconsWidth += currentHiddenIconImage.size.width
+            }
             if let currentMutedIconImage = currentMutedIconImage {
                 if titleIconsWidth.isZero {
                     titleIconsWidth += 4.0
+                } else if currentHiddenIconImage != nil {
+                    titleIconsWidth += 1.0
                 }
                 titleIconsWidth += currentMutedIconImage.size.width
             }
@@ -4247,29 +4247,6 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         }
                     } else {
                         strongSelf.communityAvatarBadgeBackgroundView?.isHidden = true
-                    }
-
-                    if item.displayHiddenPeerIcon && item.useCommunityViewLayout {
-                        let hiddenPeerIconView: UIImageView
-                        if let current = strongSelf.hiddenPeerIconView {
-                            hiddenPeerIconView = current
-                        } else {
-                            hiddenPeerIconView = UIImageView()
-                            hiddenPeerIconView.isUserInteractionEnabled = false
-                            hiddenPeerIconView.contentMode = .scaleAspectFit
-                            strongSelf.hiddenPeerIconView = hiddenPeerIconView
-                            strongSelf.avatarContainerNode.view.addSubview(hiddenPeerIconView)
-                        }
-                        hiddenPeerIconView.image = UIImage(bundleImageName: "Chat List/HiddenChatIcon")
-                        let iconSize = CGSize(width: 18.0, height: 18.0)
-                        let iconFrame = CGRect(origin: CGPoint(
-                            x: avatarFrame.width - iconSize.width - 2.0,
-                            y: avatarFrame.height - iconSize.height - 2.0
-                        ), size: iconSize)
-                        transition.updateFrame(view: hiddenPeerIconView, frame: iconFrame)
-                    } else if let hiddenPeerIconView = strongSelf.hiddenPeerIconView {
-                        strongSelf.hiddenPeerIconView = nil
-                        hiddenPeerIconView.removeFromSuperview()
                     }
 
                     transition.updatePosition(node: strongSelf.avatarNode, position: avatarFrame.offsetBy(dx: -avatarFrame.minX, dy: -avatarFrame.minY).center.offsetBy(dx: avatarScaleOffset, dy: 0.0))
@@ -5303,10 +5280,22 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         verifiedIconView.removeFromSuperview()
                     }
                     
+                    if let currentHiddenIconImage = currentHiddenIconImage {
+                        strongSelf.hiddenPeerIconNode.image = currentHiddenIconImage
+                        strongSelf.hiddenPeerIconNode.isHidden = false
+                        let hiddenIconFrame = CGRect(origin: CGPoint(x: nextTitleIconOrigin + 1.0, y: floorToScreenPixels(titleFrame.maxY - lastLineRect.height * 0.5 - currentHiddenIconImage.size.height / 2.0)), size: currentHiddenIconImage.size)
+                        transition.updateFrame(node: strongSelf.hiddenPeerIconNode, frame: hiddenIconFrame)
+                        nextTitleIconOrigin = hiddenIconFrame.maxX + 1.0
+                    } else {
+                        strongSelf.hiddenPeerIconNode.image = nil
+                        strongSelf.hiddenPeerIconNode.isHidden = true
+                    }
+
                     if let currentMutedIconImage = currentMutedIconImage {
                         strongSelf.mutedIconNode.image = currentMutedIconImage
                         strongSelf.mutedIconNode.isHidden = false
-                        transition.updateFrame(node: strongSelf.mutedIconNode, frame: CGRect(origin: CGPoint(x: nextTitleIconOrigin - 5.0, y: floorToScreenPixels(titleFrame.maxY - lastLineRect.height * 0.5 - currentMutedIconImage.size.height / 2.0)), size: currentMutedIconImage.size))
+                        let mutedIconOriginX = currentHiddenIconImage != nil ? nextTitleIconOrigin : nextTitleIconOrigin - 5.0
+                        transition.updateFrame(node: strongSelf.mutedIconNode, frame: CGRect(origin: CGPoint(x: mutedIconOriginX, y: floorToScreenPixels(titleFrame.maxY - lastLineRect.height * 0.5 - currentMutedIconImage.size.height / 2.0)), size: currentMutedIconImage.size))
                         nextTitleIconOrigin += currentMutedIconImage.size.width + 1.0
                     } else {
                         strongSelf.mutedIconNode.image = nil
@@ -5325,7 +5314,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                             strongSelf.mainContentContainerNode.view.addSubview(backgroundView)
                             strongSelf.mainContentContainerNode.addSubnode(titleBadgeNode)
                         }
-                        if currentMutedIconImage != nil {
+                        if currentHiddenIconImage != nil || currentMutedIconImage != nil {
                             nextTitleIconOrigin -= 7.0
                         }
                         nextTitleIconOrigin += 7.0

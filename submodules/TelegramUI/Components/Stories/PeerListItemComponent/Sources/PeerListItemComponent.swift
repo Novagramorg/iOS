@@ -509,7 +509,7 @@ public final class PeerListItemComponent: Component {
                 
                 self.containerButton.clipsToBounds = value
                 self.containerButton.backgroundColor = value ? extractedBackgroundColor : nil
-                self.containerButton.layer.cornerRadius = value ? 10.0 : 0.0
+                self.containerButton.layer.cornerRadius = value ? 26.0 : 0.0
             }
             self.extractedContainerView.willUpdateIsExtractedToContextPreview = { [weak self] value, transition in
                 guard let self else {
