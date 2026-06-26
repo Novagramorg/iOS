@@ -297,6 +297,43 @@ final class DocumentCanvasView: UIView {
     var customInputView: UIView?
     override var inputView: UIView? { return self.customInputView }
 
+    /// Keyboard input-language pre-selection (mirrors the legacy `ChatInputTextView`). The chat composer
+    /// seeds `initialPrimaryLanguage` from the draft's saved keyboard language. On the FIRST `textInputMode`
+    /// query after it is set, return the active input mode whose `primaryLanguage` matches, so the keyboard
+    /// opens in that language; thereafter report `super.textInputMode` (the live keyboard), which is the value
+    /// the host reads back as the current input language.
+    ///
+    /// LOAD-BEARING ORDERING INVARIANT: the override is single-shot (the first query consumes the
+    /// pre-selection and flips `didInitializePrimaryInputLanguage`). The host's read-back also queries
+    /// `textInputMode`, so correctness depends on UIKit querying first — which it does, because
+    /// `becomeFirstResponder` brings up the keyboard (querying `textInputMode`) before any keystroke or host
+    /// read. This matches the legacy node exactly; do NOT add a separate non-side-effecting read path.
+    var initialPrimaryLanguage: String?
+    private var didInitializePrimaryInputLanguage = false
+
+    override var textInputMode: UITextInputMode? {
+        if !self.didInitializePrimaryInputLanguage {
+            self.didInitializePrimaryInputLanguage = true
+            if let initialPrimaryLanguage = self.initialPrimaryLanguage {
+                for inputMode in UITextInputMode.activeInputModes {
+                    if let primaryLanguage = inputMode.primaryLanguage, primaryLanguage == initialPrimaryLanguage {
+                        return inputMode
+                    }
+                }
+            }
+        }
+        return super.textInputMode
+    }
+
+    /// Re-arm the pre-selection so the next `textInputMode` query re-applies `initialPrimaryLanguage`.
+    /// (The legacy `ChatInputTextNode.resetInitialPrimaryLanguage()` body is empty; this implements the
+    /// documented intent. For the rich node this path is currently unreachable — its only caller is gated on
+    /// `isCurrentlyEmoji()`, which the node reports `false`.)
+    func resetInitialPrimaryLanguage() {
+        self.didInitializePrimaryInputLanguage = false
+        self.reloadInputViews()
+    }
+
     @discardableResult
     override func becomeFirstResponder() -> Bool {
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it

@@ -403,7 +403,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         set { self.editorView.composerSelectedRange = newValue }
     }
 
-    // MARK: Stubs — Phase 2+ (selection geometry, spoilers, typing attrs, language, theme fidelity)
+    // MARK: Stubs — Phase 2+ (selection geometry, spoilers, typing attrs, theme fidelity)
     public var selectionRect: CGRect { .zero }
     public func firstSelectionRect(forCharacterRange characterRange: NSRange) -> CGRect? { nil }
     public func currentCaretRect() -> CGRect? { nil }
@@ -419,9 +419,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     }
     public var toggleQuoteCollapse: ((NSRange) -> Void)?
     public func isCurrentlyEmoji() -> Bool { false }
-    public var primaryLanguage: String? { nil }
-    public var initialPrimaryLanguage: String?
-    public func resetInitialPrimaryLanguage() { }
+    // Input language: read the live keyboard language back, and pre-select the draft's saved language
+    // on the next focus, via the editor's `textInputMode` override (see RichTextEditorView+ComposerHost).
+    public var primaryLanguage: String? { self.editorView.inputPrimaryLanguage }
+    public var initialPrimaryLanguage: String? {
+        get { self.editorView.initialInputPrimaryLanguage }
+        set { self.editorView.initialInputPrimaryLanguage = newValue }
+    }
+    public func resetInitialPrimaryLanguage() { self.editorView.resetInputPrimaryLanguage() }
     public var keyboardAppearance: UIKeyboardAppearance = .default
     public var autocorrectionType: UITextAutocorrectionType = .default
     public var inputTintColor: UIColor?

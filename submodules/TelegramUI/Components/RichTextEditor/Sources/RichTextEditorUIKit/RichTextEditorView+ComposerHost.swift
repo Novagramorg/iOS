@@ -67,5 +67,20 @@ public extension RichTextEditorView {
 
     /// Toggle the current selection/paragraph(s) into a code block (or back to body paragraphs).
     func makeCodeBlock() { self.canvas.makeCodeBlock() }
+
+    /// The active keyboard's primary language while the editor is first responder, or nil when unfocused
+    /// (`UIResponder.textInputMode` is nil unless first responder). Reads through the canvas's `textInputMode`
+    /// override — after that override's one-time pre-selection has been consumed, this is the live keyboard.
+    var inputPrimaryLanguage: String? { self.canvas.textInputMode?.primaryLanguage }
+
+    /// The language the keyboard should open in on the next focus (the chat composer seeds it from the
+    /// draft's saved `inputLanguage`). Forwarded to the canvas's one-time `textInputMode` pre-selection.
+    var initialInputPrimaryLanguage: String? {
+        get { self.canvas.initialPrimaryLanguage }
+        set { self.canvas.initialPrimaryLanguage = newValue }
+    }
+
+    /// Re-arm the pre-selection so the next focus re-applies `initialInputPrimaryLanguage`.
+    func resetInputPrimaryLanguage() { self.canvas.resetInitialPrimaryLanguage() }
 }
 #endif

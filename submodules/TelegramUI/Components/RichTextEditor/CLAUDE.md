@@ -98,6 +98,16 @@ Two host-side runtime contracts the composer had to honor (apply to any non-atta
 **re-run `update(...)` in response to `onChange`** (the view is parent-driven and does not self-layout on a
 content change — without this, typed text is never laid out).
 
+**Keyboard input language (added 2026-06-26).** `RichTextEditorView` exposes
+`inputPrimaryLanguage` (read the live keyboard language back), `initialInputPrimaryLanguage`
+(seed the language the keyboard opens in next focus), and `resetInputPrimaryLanguage()`,
+forwarding to a one-time `textInputMode` override on `DocumentCanvasView` (the actual first
+responder) — a verbatim port of the legacy `ChatInputTextView` mechanism so the chat composer
+repopulates `interfaceState.inputLanguage` (emoji-keyword search + draft persistence).
+LOAD-BEARING: the override is single-shot (first `textInputMode` query consumes the
+pre-selection); UIKit queries it on `becomeFirstResponder` before any host read-back, so do not
+add a separate non-side-effecting read path.
+
 **Dynamic theme (added 2026-06-17, `Theme/RichTextEditorTheme.swift`).** `RichTextEditorView.theme:
 RichTextEditorTheme` is a host-settable struct of six UIColors; assigning it updates the mapper, pushes the
 accent to the caret/selection-handles/blockquote views, reloads (so boxes rebuild with the themed mapper), and
