@@ -1410,8 +1410,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         var headerPanels: [HeaderPanelContainerComponent.Panel] = []
         var footerPanels: [HeaderPanelContainerComponent.Panel] = []
+        let hideTopPanels = self.controller?.hideTopPanels ?? false
         
-        if self.chatPresentationInterfaceState.search == nil, let headerTopicsPanel = headerTopicsPanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
+        if !hideTopPanels, self.chatPresentationInterfaceState.search == nil, let headerTopicsPanel = headerTopicsPanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
             let panel = HeaderPanelContainerComponent.Panel(
                 key: "topics",
                 orderIndex: 0,
@@ -1423,7 +1424,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 footerPanels.append(panel)
             }
         }
-        if self.chatPresentationInterfaceState.search == nil, let mediaPlayback = self.controller?.globalControlPanelsContextState?.mediaPlayback {
+        if !hideTopPanels, self.chatPresentationInterfaceState.search == nil, let mediaPlayback = self.controller?.globalControlPanelsContextState?.mediaPlayback {
             if let playlistLocation = mediaPlayback.playlistLocation as? PeerMessagesPlaylistLocation, case let .custom(_, _, _, _, hidePanel) = playlistLocation, hidePanel {
                 
             } else {
@@ -1449,7 +1450,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 )
             }
         }
-        if self.chatPresentationInterfaceState.search == nil, let liveLocation = self.controller?.globalControlPanelsContextState?.liveLocation {
+        if !hideTopPanels, self.chatPresentationInterfaceState.search == nil, let liveLocation = self.controller?.globalControlPanelsContextState?.liveLocation {
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "liveLocation",
                 orderIndex: 2,
@@ -1464,7 +1465,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 )))
             )
         }
-        if self.chatPresentationInterfaceState.search == nil, let groupCall = self.controller?.globalControlPanelsContextState?.groupCall {
+        if !hideTopPanels, self.chatPresentationInterfaceState.search == nil, let groupCall = self.controller?.globalControlPanelsContextState?.groupCall {
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "groupCall",
                 orderIndex: 3,
@@ -1521,7 +1522,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         var hasTranslationPanel = false
-        if let _ = self.chatPresentationInterfaceState.translationState, self.emptyType == nil {
+        if !hideTopPanels, let _ = self.chatPresentationInterfaceState.translationState, self.emptyType == nil {
             if case .overlay = self.chatPresentationInterfaceState.mode {
             } else if self.chatPresentationInterfaceState.renderedPeer?.peer?.restrictionText(platform: "ios", contentSettings: self.context.currentContentSettings.with { $0 }) != nil {
             } else if self.chatPresentationInterfaceState.search != nil {
@@ -1531,7 +1532,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         var displayAdPanel = false
-        if let _ = self.chatPresentationInterfaceState.adMessage {
+        if !hideTopPanels, let _ = self.chatPresentationInterfaceState.adMessage {
             if let chatHistoryState = self.chatPresentationInterfaceState.chatHistoryState, case .loaded(false, _) = chatHistoryState {
                 if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil && !self.chatPresentationInterfaceState.peerIsBlocked && self.chatPresentationInterfaceState.hasAtLeast3Messages {
                     displayAdPanel = true
@@ -1575,7 +1576,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             )
         }
         
-        if let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
+        if !hideTopPanels, let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
             self.currentTitleAccessoryPanelNode = titleAccessoryPanelNode
             let panelKey = "\(type(of: titleAccessoryPanelNode))"
             headerPanels.append(HeaderPanelContainerComponent.Panel(
@@ -1591,7 +1592,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         var displayFeePanel: (value: Int64, peer: EnginePeer)?
-        if let chatHistoryState = self.chatPresentationInterfaceState.chatHistoryState, case .loaded(false, _) = chatHistoryState {
+        if !hideTopPanels, let chatHistoryState = self.chatPresentationInterfaceState.chatHistoryState, case .loaded(false, _) = chatHistoryState {
             if let user = self.chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo == nil {
                 if !self.chatPresentationInterfaceState.peerIsBlocked, let paidMessageStars = self.chatPresentationInterfaceState.contactStatus?.peerStatusSettings?.paidMessageStars, paidMessageStars.value > 0 {
                     displayFeePanel = (paidMessageStars.value, .user(user))
@@ -1622,7 +1623,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             )
         }
         
-        if hasTranslationPanel, let translationState = self.chatPresentationInterfaceState.translationState {
+        if !hideTopPanels, hasTranslationPanel, let translationState = self.chatPresentationInterfaceState.translationState {
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "translate",
                 orderIndex: 5,

@@ -1130,15 +1130,18 @@ public struct ChatControllerParams {
     public let forcedTheme: PresentationTheme?
     public let forcedNavigationBarTheme: PresentationTheme?
     public let forcedWallpaper: TelegramWallpaper?
+    public let hideTopPanels: Bool
     
     public init(
         forcedTheme: PresentationTheme? = nil,
         forcedNavigationBarTheme: PresentationTheme? = nil,
-        forcedWallpaper: TelegramWallpaper? = nil
+        forcedWallpaper: TelegramWallpaper? = nil,
+        hideTopPanels: Bool = false
     ) {
         self.forcedTheme = forcedTheme
         self.forcedNavigationBarTheme = forcedNavigationBarTheme
         self.forcedWallpaper = forcedWallpaper
+        self.hideTopPanels = hideTopPanels
     }
 }
 
@@ -1591,6 +1594,7 @@ public protocol SharedAccountContext: AnyObject {
     func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
     func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) -> ViewController
     func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation, displayMode: CommunityViewScreenDisplayMode) -> ViewController
+    func makeCommunityPeerSelectionScreen(context: AccountContext, communityId: EnginePeer.Id, selectionOptions: CommunityPeerSelectionOptions) -> ViewController
     func makeCocoonInfoScreen(context: AccountContext) -> ViewController
     func makeLinkEditController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, text: String, link: String?, apply: @escaping (String?, TelegramMediaWebpage?) -> Void) -> ViewController
 
