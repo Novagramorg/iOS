@@ -239,10 +239,13 @@ final class DocumentCanvasView: UIView {
     // while dragging a handle. The `selectedTextRange` getter stays live, so the OS reads the correct value
     // if it queries during the drag; only the proactive candidate recompute is deferred to the gesture end.
     var coalescingSelectionNotifications = false
-    // Auto-scroll state while dragging a text-selection handle into a table's left/right edge zone.
+    // Auto-scroll state while dragging a text-selection handle near an edge: vertically against the host
+    // document scroll view, and/or horizontally within a scrollable table the head is in. One display link
+    // drives both axes.
     private(set) var dragAutoScrollLink: CADisplayLink?
     private(set) var dragAutoScrollTable: TableBlockBox?
-    private(set) var dragAutoScrollVelocity: CGFloat = 0   // points/tick, signed
+    private(set) var dragAutoScrollVelocityX: CGFloat = 0   // table horizontal, points/tick, signed
+    private(set) var dragAutoScrollVelocityY: CGFloat = 0   // document vertical, points/tick, signed
     private(set) var dragAutoScrollPoint: CGPoint = .zero   // last touch (canvas coords), for re-extending
     /// Transient table row/column structural selection (separate from the text selection). The `table` id
     /// guards against a stale selection after the active table is rebuilt. nil = none. Mutually exclusive
@@ -838,21 +841,37 @@ final class DocumentCanvasView: UIView {
         tv.scroll.scrollRectToVisible(target, animated: false)
     }
 
-    /// While dragging a selection, if `point` is in a scrollable table's left/right edge zone (and the
-    /// dragged head is in that table), start nudging the table's scroll + re-extending the head each tick.
+    /// While dragging a selection handle, auto-scroll as the touch nears an edge: **vertically** against the
+    /// host document scroll view whenever the touch enters its top/bottom band (the common case — selecting
+    /// past the visible text), and/or **horizontally** within a scrollable table when the dragged head is in
+    /// that table and the touch nears its left/right edge. A single `CADisplayLink` applies both nudges per
+    /// tick and re-extends the head against the updated geometry. (`point` is in canvas / content coords.)
     func updateDragAutoScroll(point: CGPoint, headInTable: Bool) {
-        guard headInTable, let t = tableBox(containingGlobal: head),
-              let tv = blockViews[t.id] as? TableBackingView, t.gridWidth > tv.bounds.width else {
-            stopDragAutoScroll(); return
-        }
         dragAutoScrollPoint = point
-        let edge: CGFloat = 36, step: CGFloat = 12
-        let left = t.frame.minX, right = t.frame.minX + tv.bounds.width
-        var v: CGFloat = 0
-        if point.x < left + edge { v = -step } else if point.x > right - edge { v = step }
-        if v == 0 { stopDragAutoScroll(); return }
-        dragAutoScrollTable = t
-        dragAutoScrollVelocity = v
+
+        // Vertical: scroll the host document when the touch is in the viewport's top/bottom band. Reuses the
+        // floating-cursor curve (60pt band, 14pt max step) so the two gestures auto-scroll identically.
+        var vy: CGFloat = 0
+        if let sv = superview as? UIScrollView {
+            vy = floatingAutoScrollStep(forViewportY: point.y - sv.contentOffset.y,
+                                        viewportHeight: sv.bounds.height, band: 60)
+        }
+        dragAutoScrollVelocityY = vy
+
+        // Horizontal: nudge a scrollable table the head is in when the touch nears its left/right edge.
+        var vx: CGFloat = 0
+        if headInTable, let t = tableBox(containingGlobal: head),
+           let tv = blockViews[t.id] as? TableBackingView, t.gridWidth > tv.bounds.width {
+            let edge: CGFloat = 36, step: CGFloat = 12
+            let left = t.frame.minX, right = t.frame.minX + tv.bounds.width
+            if point.x < left + edge { vx = -step } else if point.x > right - edge { vx = step }
+            dragAutoScrollTable = (vx != 0) ? t : nil
+        } else {
+            dragAutoScrollTable = nil
+        }
+        dragAutoScrollVelocityX = vx
+
+        if vy == 0 && vx == 0 { stopDragAutoScroll(); return }
         if dragAutoScrollLink == nil {
             let link = CADisplayLink(target: self, selector: #selector(dragAutoScrollTick))
             link.add(to: .main, forMode: .common)
@@ -862,18 +881,41 @@ final class DocumentCanvasView: UIView {
 
     func stopDragAutoScroll() {
         dragAutoScrollLink?.invalidate(); dragAutoScrollLink = nil
-        dragAutoScrollTable = nil; dragAutoScrollVelocity = 0
+        dragAutoScrollTable = nil; dragAutoScrollVelocityX = 0; dragAutoScrollVelocityY = 0
         dragAutoScrollPoint = .zero
     }
 
     @objc func dragAutoScrollTick() {
-        guard let t = dragAutoScrollTable, let tv = blockViews[t.id] as? TableBackingView else { stopDragAutoScroll(); return }
-        let maxX = max(tv.scroll.contentSize.width - tv.bounds.width, 0)
-        let newX = min(max(tv.scroll.contentOffset.x + dragAutoScrollVelocity, 0), maxX)
-        guard newX != tv.scroll.contentOffset.x else { return }   // already at the edge
-        tv.scroll.contentOffset.x = newX            // triggers tableDidScroll → syncs contentOffsetX
-        // The tick owns the scroll position; suppress scrollCaretIntoViewIfNeeded so it doesn't fight `newX`.
-        setSelectionHead(global: closestGlobalPosition(to: dragAutoScrollPoint), scrollIntoView: false)
+        var moved = false
+        // Vertical document scroll: advance the host offset and keep the touch point under the finger as the
+        // content scrolls (so the head re-extends to follow), exactly like the floating-cursor auto-scroll.
+        if dragAutoScrollVelocityY != 0, let sv = superview as? UIScrollView {
+            let maxY = max(sv.contentSize.height - sv.bounds.height, 0)
+            let newY = min(max(sv.contentOffset.y + dragAutoScrollVelocityY, 0), maxY)
+            if newY != sv.contentOffset.y {
+                let delta = newY - sv.contentOffset.y
+                sv.contentOffset.y = newY        // fires the façade's scrollViewDidScroll → viewportDidChange
+                dragAutoScrollPoint.y += delta   // track the same screen point as content scrolls under it
+                moved = true
+            }
+        }
+        // Horizontal table scroll: advance the table's internal offset (the canvas-space point is unaffected).
+        if dragAutoScrollVelocityX != 0, let t = dragAutoScrollTable, let tv = blockViews[t.id] as? TableBackingView {
+            let maxX = max(tv.scroll.contentSize.width - tv.bounds.width, 0)
+            let newX = min(max(tv.scroll.contentOffset.x + dragAutoScrollVelocityX, 0), maxX)
+            if newX != tv.scroll.contentOffset.x {
+                tv.scroll.contentOffset.x = newX   // triggers tableDidScroll → syncs contentOffsetX
+                moved = true
+            }
+        }
+        guard moved else { return }   // both axes already clamped at their edge
+        // Re-extend the endpoint being dragged to the content now under the touch: the anchor when the start
+        // handle is dragged, else the head (the default — also the table-only / direct-call path). The tick
+        // owns the scroll position, so suppress `setSelectionHead`'s scrollCaretIntoViewIfNeeded (it would
+        // fight `newX`); `setSelectionAnchor` never scrolls, so it needs no suppression.
+        let target = closestGlobalPosition(to: dragAutoScrollPoint)
+        if draggingEndpoint == .anchor { setSelectionAnchor(global: target) }
+        else { setSelectionHead(global: target, scrollIntoView: false) }
     }
 
     /// Sets a collapsed caret (clears the drag anchor).
