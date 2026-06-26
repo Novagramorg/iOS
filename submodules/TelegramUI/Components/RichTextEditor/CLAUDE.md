@@ -126,20 +126,35 @@ pre-selection); UIKit queries it on `becomeFirstResponder` before any host read-
 add a separate non-side-effecting read path.
 
 **Dynamic theme (added 2026-06-17, `Theme/RichTextEditorTheme.swift`).** `RichTextEditorView.theme:
-RichTextEditorTheme` is a host-settable struct of six UIColors; assigning it updates the mapper, pushes the
-accent to the caret/selection-handles/blockquote views, reloads (so boxes rebuild with the themed mapper), and
-redraws. **`.default` reproduces the editor's prior hardcoded colors exactly, so the look is unchanged until a
-host sets a theme.** Host wiring so far (2026-06-17): the **chat composer** wires it — `ChatTextInputPanelNode`
-maps `PresentationTheme` → `ChatRichTextThemeColors` (a `UIColor`-only seam type in `ChatInputTextNode`) and
-pushes it via `ChatRichTextInputNode.applyRichTextTheme`, which `RichTextEditorChatInputNode` maps to this
-`theme`. `RichTextAttachmentScreen` does **not** wire a theme yet (still a follow-up). What each color drives:
+RichTextEditorTheme` is a host-settable struct of eleven UIColors; assigning it updates the mapper, pushes the
+accent to the caret/selection-handles/blockquote views, reloads — **only when the view is sized (`bounds.width >
+0`)** — so boxes rebuild with the themed mapper, and redraws. **`.default` reproduces the editor's prior hardcoded colors exactly, so the look is unchanged until a
+host sets a theme.** Host wiring: the **chat composer** wires it — `ChatTextInputPanelNode` maps
+`PresentationTheme` → `ChatRichTextThemeColors` (a `UIColor`-only seam type in `ChatInputTextNode`) and pushes
+it via `ChatRichTextInputNode.applyRichTextTheme`, which `RichTextEditorChatInputNode` maps to this `theme`.
+`RichTextAttachmentScreen` now also wires a theme. What each color drives:
 - `primaryText` (default `.black`) — default foreground for runs with no explicit color.
 - `secondaryText` (default `.black`) — default foreground for `.caption`-style runs.
 - `placeholder` (default `.placeholderText`) — empty-paragraph, marked-text ghost, and media placeholder text.
-- `accent` (default `.link`) — link text, the blockquote bar + fill, the caret, and the selection visuals
-  (handles via a pushed `accentColor`; the body/cell selection *wash* reads `mapper.theme.accent` live).
+- `accent` (default `.link`) — link text, the blockquote bar + fill, the caret, the selection visuals
+  (handles via a pushed `accentColor`; the body/cell selection *wash* reads `mapper.theme.accent` live),
+  the table-control resize knobs, the selection-outline stroke, and the active-handle pill fill.
 - `tableBorder` (default the prior dynamic grid color) / `tableHeaderBackground` (default `white 0.5/0.1`) — the
   table grid stroke and header-row fill (the former `TableBlockBox.gridColor`/`headerRowBackground` statics).
+- `codeBackground` (default prior dynamic color) — code-block background fill.
+- `listMarker` (default `.label`) — list bullet/number marker color.
+- `inlineCodeBackground` (default `.systemGray5`) — inline-code run background pill.
+- `markedTextUnderline` (default `.label`) — IME marked-text (composing) underline.
+- `spoilerDust` (default `.secondaryLabel`) — spoiler particle ("dust") tint.
+
+**Apply the theme BEFORE seeding the `document` (host-ordering invariant).** The `document` setter builds each
+block's attributed string with the mapper's *current* theme (baking in the foreground color), and — per above —
+the `theme` setter re-maps already-built boxes only when `bounds.width > 0`. So a host that assigns `theme`
+*after* `document` while the view is still unsized (its frame set later in the same layout pass) leaves
+pre-existing text in the `.default` foreground; an empty document is unaffected (later typed text uses the
+by-then-themed mapper). Both hosts therefore theme before seeding — the composer in `didLoad`,
+`RichTextAttachmentScreen` in its `if component == nil` init block (before `editor.document = …`). (Regressed
+once: pre-existing text rendered black in dark mode, fixed 2026-06-26.)
 
 **Round-trip invariant (load-bearing):** theme colors are applied at render time only and **never persist into the
 `Document`**. `AttributedStringMapper` is symmetric — the forward pass injects the per-style default
@@ -148,9 +163,9 @@ style:)` / `runs(from:style:)`) strips a foreground equal to that per-style defa
 reverse-mapper caller MUST pass the run's paragraph style (`BlockBox` → its style, `MediaBlockBox` captions →
 `.caption`, `+Editing` → the start box's style; `+State` reads only format flags, so its `.body` default is fine)
 — a wrong style compares against the wrong default and pollutes the model. An explicit user color exactly equal to
-the style default is also stripped (visually identical, re-themable). Known limitations: list markers stay
-`.label`, spoiler dust + table-control chrome stay system colors, and removing a link inside a `.caption` run
-under a theme where `primaryText != secondaryText` leaves an explicit foreground (latent; see `removeLink`).
+the style default is also stripped (visually identical, re-themable). Known limitation: removing a link inside
+a `.caption` run under a theme where `primaryText != secondaryText` leaves an explicit foreground (latent; see
+`removeLink`).
 
 **Host input hooks (added 2026-06-12 for the emoji keyboard).** The façade exposes three generic, UIKit-only
 input hooks so a consumer can drive a custom input panel: `insertText(_:)` (plain text at the caret, one undo

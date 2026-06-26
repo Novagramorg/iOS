@@ -76,7 +76,7 @@ public struct AttributedStringMapper {
         if ca.inlineCode {
             let size = styleSheet.font(for: style, attributes: ca).pointSize
             dict[.font] = UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
-            dict[.backgroundColor] = UIColor.systemGray5
+            dict[.backgroundColor] = theme.inlineCodeBackground
             dict[.rtInlineCode] = true
         }
         if ca.spoiler { dict[.rtSpoiler] = true }
