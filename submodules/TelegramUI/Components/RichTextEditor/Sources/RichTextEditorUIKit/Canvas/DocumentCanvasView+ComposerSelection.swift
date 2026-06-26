@@ -89,6 +89,39 @@ extension DocumentCanvasView {
         return 0
     }
 
+    /// Selection rects for a chat-flat range (the composer's UTF-16 axis), in canvas content space.
+    /// Maps both flat endpoints to the global axis via `composerGlobal(forFlat:)` — so custom-emoji
+    /// alt-string expansion lines up — then unions the per-region glyph rects via `selectionRects`.
+    /// The host (`RichTextEditorChatInputNode.firstSelectionRect`) anchors the emoji-suggestion popover
+    /// at the first rect. Empty when the document has no text boxes or the range covers no glyphs.
+    func composerSelectionRects(forFlatRange range: NSRange) -> [CGRect] {
+        let paragraphs = composerParagraphs()
+        guard !paragraphs.isEmpty else { return [] }
+        let a = composerGlobal(forFlat: range.location, in: paragraphs)
+        let b = composerGlobal(forFlat: range.location + range.length, in: paragraphs)
+        return selectionRects(globalFrom: min(a, b), globalTo: max(a, b))
+    }
+
+    /// The caret rect at the selection end (`selectedTextRange.end` = `head`), in canvas content space,
+    /// or nil when there is no caret / the rect is non-finite (e.g. a structural row/column selection
+    /// hides the caret → `caretRect` returns `.zero`/non-finite). Port of the legacy `currentCaretRect`
+    /// body minus the view convert (the facade converts to view space).
+    func composerCaretRectInCanvas() -> CGRect? {
+        guard let end = selectedTextRange?.end else { return nil }
+        let rect = caretRect(for: end)
+        guard rect.origin.x.isFinite, rect.origin.y.isFinite, rect.width.isFinite, rect.height.isFinite else {
+            return nil
+        }
+        return rect
+    }
+
+    /// The first rect of the current selection (legacy `firstRect(for:)` semantics), in canvas content
+    /// space; `bounds` when the selection covers no glyphs. Feeds the host's `selectionRect`, whose only
+    /// consumer (the legacy format menu) is dead on iOS 17+ — implemented for contract-honesty.
+    func composerSelectionBoundingRectInCanvas() -> CGRect {
+        selectionRects(globalFrom: min(selFrom, selTo), globalTo: max(selFrom, selTo)).first ?? bounds
+    }
+
     /// The selection expressed in the chat composer's flat UTF-16 coordinate space (see `composerParagraphs`).
     /// The host (`RichTextEditorChatInputNode.selectedRange`) reads this to track the caret and writes it to
     /// move the caret after a programmatic insert/replace. The flat axis collapses the editor's global axis
