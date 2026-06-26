@@ -27,7 +27,18 @@ final class TableBlockBox: CanvasBlock {
     var columnWidths: [CGFloat] = []
     var rowHeights: [CGFloat] = []
 
+    /// Interior HORIZONTAL cell padding (each side); also drives content width.
     static let cellPadding: CGFloat = 6
+    /// Interior VERTICAL cell padding (top + bottom of a cell's content). Applied at the CELL level
+    /// (`recompute` content origin + row-height), exactly like `cellPadding` is for the horizontal axis.
+    /// It is intentionally larger than `cellPadding`: it reproduces the cell's long-standing vertical
+    /// breathing room, which *used* to come — incorrectly — from the document's 8pt inter-block inset
+    /// (`BlockBox.defaultVerticalInset`) leaking into the cell's `BlockStack` ON TOP of `cellPadding`
+    /// (6 + 8 = 14). That coupling tied cell padding to the document-body block spacing, so it didn't
+    /// scale with the cell and the 15pt cell font looked under-filled / vertically centered. Now it is an
+    /// explicit cell metric and the cell `BlockStack` carries NO block inset (`verticalInsetBase = 0`), so
+    /// this is the cell's sole vertical padding.
+    static let cellVerticalPadding: CGFloat = 14
     static let border: CGFloat = 1
     /// Outer-border corner radius (≈8pt, measured from the reference design).
     static let outerCornerRadius: CGFloat = 8
@@ -48,18 +59,26 @@ final class TableBlockBox: CanvasBlock {
         rowMinHeights = table.rows.map { CGFloat($0.height ?? 0) }
         cellIDs = table.rows.map { $0.cells.map { $0.id } }
         cellBackgrounds = table.rows.map { $0.cells.map { $0.background } }
-        self.mapper = mapper
+        // Cells render at a smaller base font than the document body (15 vs 17). Derive a cell-scoped
+        // mapper once and store it as this table's `mapper`; every cell box built here, in `appendRow`,
+        // and in split/merge replacements (which inherit their source box's `mapper`) shares it.
+        let cellMapper = mapper.tableCellVariant()
+        self.mapper = cellMapper
         layoutWidth = max(width, 1)
         cells = table.rows.map { row in
             row.cells.map { c in
-                BlockStack(boxes: c.blocks.compactMap { block in
+                let stack = BlockStack(boxes: c.blocks.compactMap { block in
                     switch block {
-                    case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: 100)
-                    case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: 100)
+                    case .paragraph(let p): return BlockBox(paragraph: p, mapper: cellMapper, width: 100)
+                    case .media(let img): return MediaBlockBox(media: img, mapper: cellMapper, width: 100)
                     case .table: return nil   // no nested tables in v1
                     case .code: return nil    // no nested code blocks in a table cell in v1
                     }
                 })
+                // The cell owns its vertical padding (`cellVerticalPadding`), so its stack adds no
+                // inter-block inset — otherwise the document's 8pt inset would stack on top.
+                stack.verticalInsetBase = 0
+                return stack
             }
         }
         applyRenderOverrides()
@@ -126,7 +145,7 @@ final class TableBlockBox: CanvasBlock {
             for (c, stack) in row.enumerated() {
                 maxH = max(maxH, stack.measuredHeight(forWidth: cellContentWidth(c, in: cols)))
             }
-            rows += max(maxH + TableBlockBox.cellPadding * 2, rowMinHeights[r]) + TableBlockBox.border
+            rows += max(maxH + TableBlockBox.cellVerticalPadding * 2, rowMinHeights[r]) + TableBlockBox.border
         }
         return TableBlockBox.border + rows + TableBlockBox.bottomSpacing
     }
@@ -153,7 +172,7 @@ final class TableBlockBox: CanvasBlock {
             for (c, stack) in row.enumerated() {
                 maxH = max(maxH, stack.measuredHeight(forWidth: cellContentWidth(c, in: cols)))
             }
-            heights.append(max(maxH + TableBlockBox.cellPadding * 2, rowMinHeights[r]))
+            heights.append(max(maxH + TableBlockBox.cellVerticalPadding * 2, rowMinHeights[r]))
         }
         return heights
     }
@@ -209,7 +228,7 @@ final class TableBlockBox: CanvasBlock {
             for (c, stack) in row.enumerated() {
                 pos += 1                               // cell open token
                 let cw = columnWidths[c]
-                let contentOrigin = CGPoint(x: x + TableBlockBox.cellPadding, y: y + TableBlockBox.cellPadding)
+                let contentOrigin = CGPoint(x: x + TableBlockBox.cellPadding, y: y + TableBlockBox.cellVerticalPadding)
                 _ = stack.recompute(baseOffset: pos - 1)   // cell content begins at (cell open) → baseOffset
                 _ = stack.layout(origin: contentOrigin, width: cellContentWidth(c))
                 pos += stackTokens(stack)
@@ -321,7 +340,9 @@ final class TableBlockBox: CanvasBlock {
         var bgs: [RGBAColor?] = []
         for _ in 0..<n {
             let para = ParagraphBlock(id: BlockID.generate())
-            rowStacks.append(BlockStack(boxes: [BlockBox(paragraph: para, mapper: mapper, width: 100)]))
+            let stack = BlockStack(boxes: [BlockBox(paragraph: para, mapper: mapper, width: 100)])
+            stack.verticalInsetBase = 0   // cell owns its vertical padding (see cellVerticalPadding)
+            rowStacks.append(stack)
             ids.append(BlockID.generate()); bgs.append(nil)
         }
         cells.append(rowStacks); cellIDs.append(ids); cellBackgrounds.append(bgs)

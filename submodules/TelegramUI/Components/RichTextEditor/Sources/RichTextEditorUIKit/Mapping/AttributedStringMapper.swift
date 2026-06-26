@@ -31,6 +31,14 @@ public struct AttributedStringMapper {
         self.theme = theme
     }
 
+    /// A copy of this mapper that renders table-cell content (a smaller body/quote base size, see
+    /// `StyleSheet.tableCells`), preserving the emoji scale and theme. Each `TableBlockBox` derives one
+    /// for its cells so the denser cell font is consistent across edits (split/merge boxes inherit it
+    /// via their source box's `mapper`).
+    public func tableCellVariant() -> AttributedStringMapper {
+        AttributedStringMapper(styleSheet: .tableCells, emojiScale: emojiScale, theme: theme)
+    }
+
     /// Points to enlarge a rendered inline emoji beyond its glyph box, per paragraph style (decoupled from
     /// the layout box, so it never expands the line — see `EmojiTextAttachment.renderBoost`). Body emoji
     /// read small at their bare glyph box, so they get +4pt; other styles use their glyph box as-is.

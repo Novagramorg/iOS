@@ -105,7 +105,9 @@ extension DocumentCanvasView {
             var merged = headPart ?? tailPart ?? ParagraphBlock(id: BlockID.generate(), runs: [])
             merged.runs = headRuns
             if let tailPart { merged = merged.merging(tailPart) }
-            let mergedBox = BlockBox(paragraph: merged, mapper: mapper, width: effectiveWidth)
+            // Inherit the endpoints' mapper (both share the stack) so a table cell keeps its smaller
+            // base font across the merge — `mapper` is the canvas (document-body) mapper.
+            let mergedBox = BlockBox(paragraph: merged, mapper: start.box.mapper, width: effectiveWidth)
             var newBoxes = stack.boxes
             newBoxes.replaceSubrange(start.index...end.index, with: [mergedBox])
             stack.boxes = newBoxes
@@ -332,8 +334,10 @@ extension DocumentCanvasView {
             }
             guard let active = activeStack(at: head), let p = active.box as? BlockBox else { return }
             let (upper, lower) = p.currentParagraph().split(at: active.local, newID: BlockID.generate())
-            let upperBox = BlockBox(paragraph: upper, mapper: mapper, width: effectiveWidth)
-            let lowerBox = BlockBox(paragraph: lower, mapper: mapper, width: effectiveWidth)
+            // Both halves inherit `p`'s mapper so an in-cell split keeps the cell's smaller base font
+            // (including the new EMPTY half, whose later first-typed character reads its box's mapper).
+            let upperBox = BlockBox(paragraph: upper, mapper: p.mapper, width: effectiveWidth)
+            let lowerBox = BlockBox(paragraph: lower, mapper: p.mapper, width: effectiveWidth)
             var newBoxes = active.stack.boxes
             newBoxes.replaceSubrange(active.index...active.index, with: [upperBox, lowerBox])
             active.stack.boxes = newBoxes
@@ -350,7 +354,8 @@ extension DocumentCanvasView {
               let lower = stack.boxes[upperIndex + 1] as? BlockBox else { return }
         let joinLocal = upper.currentParagraph().utf16Count
         let merged = upper.currentParagraph().merging(lower.currentParagraph())
-        let mergedBox = BlockBox(paragraph: merged, mapper: mapper, width: effectiveWidth)
+        // Inherit `upper`'s mapper (same stack as `lower`) so an in-cell merge keeps the cell's base font.
+        let mergedBox = BlockBox(paragraph: merged, mapper: upper.mapper, width: effectiveWidth)
         var newBoxes = stack.boxes
         newBoxes.replaceSubrange(upperIndex...(upperIndex + 1), with: [mergedBox])
         stack.boxes = newBoxes

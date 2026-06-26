@@ -317,6 +317,24 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   is a render-only style** (media-block captions, 15pt) — never offered in the picker, never persists as a
   paragraph style (a caption serializes as the MediaBlock's runs); `MediaBlockBox` lays the caption out as
   `.caption`. Exhaustive `switch ParagraphStyleName` sites (StyleSheet ×2, conversion ×2) all carry `.caption`.
+  **Table cells render body/quote at a smaller base — 15pt, not 17 (2026-06-26).** `StyleSheet` gained a
+  `bodyBaseSize` (default 17) read by `baseSize(.body/.quote)` and a `static let tableCells` variant (15);
+  `AttributedStringMapper.tableCellVariant()` copies a mapper onto it preserving theme/emojiScale. Each
+  `TableBlockBox` derives a cell mapper once and builds every cell box with it. To keep edits consistent, a
+  box created as a split/merge replacement **inherits its source box's mapper** (`CanvasBlock` now exposes
+  `mapper { get }`; the three cell-capable creators — `applyReplace` merge, `insertParagraphBreak` split,
+  `mergeParagraphs` — pass `start.box.mapper`/`p.mapper`/`upper.mapper` instead of the canvas mapper), and the
+  empty-cell typing path (`typingAttributeDict`'s empty-storage branch) resolves the owning box via
+  `activeStack` and uses **its** mapper — so an empty cell's first typed character is 15pt too. Headings keep
+  their fixed sizes in cells. (An explicit run `fontSize` still wins; read-back pins the rendered 15pt.)
+  **Paired cell-padding mechanism fix.** Cell vertical padding is now an explicit cell metric
+  (`TableBlockBox.cellVerticalPadding = 14`) applied at the CELL level (`recompute` content origin +
+  row-height math), parallel to the horizontal `cellPadding` (6) — and the cell `BlockStack` carries NO block
+  inset (`verticalInsetBase = 0`). Previously the cell's 14pt vertical gap came *incorrectly* from
+  `cellPadding` (6) + the document's 8pt inter-block inset (`BlockBox.defaultVerticalInset`) leaking into the
+  cell stack; that coupling tied cell padding to document-body block spacing (font-independent), so the
+  smaller 15pt text looked under-filled / vertically centered. The **visual is unchanged from before the font
+  change** (14pt top/bottom), but it's now decoupled from `defaultVerticalInset` and lives in one cell metric.
 - **`DocumentMetadata` removed entirely** → `Document { schemaVersion, blocks }` (it had become a vestigial
   single-`title` wrapper that nothing read; the doc's title is a `.heading1` block). `DocumentCodec` dropped
   its now-dead ISO-8601 date strategy.
@@ -618,7 +636,9 @@ Headings are **regular weight by default** (`StyleSheet.font` does not force bol
 larger serif); bold is a pure user-emphasis toggle that round-trips uniformly across every style. (This
 replaced the earlier behavior where headings baked bold into their font, which leaked `**bold**` into the
 model and left residual bold on a heading→body down-convert.) Type scale (2026-06-13): H1 24 / H2 21 / H3 19
-serif, Body 17 sans, Caption 15 sans, Quote 17 sans — see the 2026-06-13 session block above.
+serif, Body 17 sans, Caption 15 sans, Quote 17 sans — see the 2026-06-13 session block above. **Inside table
+cells body/quote drop to a 15pt base (2026-06-26)** via a per-cell `StyleSheet.tableCells` mapper variant — see
+the type-scale bullet in that session block.
 
 ## Status
 

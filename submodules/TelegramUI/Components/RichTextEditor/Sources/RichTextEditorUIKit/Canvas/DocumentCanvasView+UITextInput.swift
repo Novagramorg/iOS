@@ -64,14 +64,18 @@ extension DocumentCanvasView: UITextInput {
             if let img = boxes.compactMap({ $0 as? MediaBlockBox }).first(where: { region.ref == .caption($0.id) }) {
                 return img.captionTypingAttributes()
             }
-            // Recover the owning paragraph (if any) so an empty styled/listed paragraph keeps its
-            // paragraph style on the next typed character — identical to the prior box-based logic.
+            // Recover the owning paragraph — top-level OR nested in a table cell (via the active stack)
+            // — so an empty styled/listed/cell paragraph keeps its paragraph style AND its box's mapper
+            // on the next typed character. A table cell's mapper renders body text at a smaller base
+            // size, so reading the box's own mapper (not the canvas one) keeps the first char on size.
             let p = boxes.compactMap { $0 as? BlockBox }.first { region.ref == .paragraph($0.id) }
+                ?? (activeStack(at: region.globalStart + location).flatMap { $0.box as? BlockBox })
+            let m = p?.mapper ?? mapper
             let style = p?.style ?? .body
             let para = p?.paragraphAttributes ?? .default
             let list = p?.listMembership
-            var attrs = mapper.attributes(for: CharacterAttributes(), style: style)
-            attrs[.paragraphStyle] = mapper.styleSheet.paragraphStyle(for: style, attributes: para, list: list)
+            var attrs = m.attributes(for: CharacterAttributes(), style: style)
+            attrs[.paragraphStyle] = m.styleSheet.paragraphStyle(for: style, attributes: para, list: list)
             return attrs
         }
         return storage.attributes(at: min(max(0, location - 1), storage.length - 1), effectiveRange: nil)

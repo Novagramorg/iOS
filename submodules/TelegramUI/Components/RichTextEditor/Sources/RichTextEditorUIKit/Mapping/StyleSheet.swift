@@ -8,6 +8,14 @@ import RichTextEditorCore
 public struct StyleSheet {
     public init() {}
     public static let `default` = StyleSheet()
+    /// A style sheet for content inside table cells: the body/quote base size is reduced from the
+    /// document's 17pt to 15pt (headings and captions keep their fixed sizes), so a table reads denser
+    /// than surrounding body text. Selected per-cell via `AttributedStringMapper.tableCellVariant()`.
+    public static let tableCells: StyleSheet = { var s = StyleSheet(); s.bodyBaseSize = 15; return s }()
+
+    /// Base point size for body and quote paragraphs — 17pt in the document body, 15pt inside table
+    /// cells (see `tableCells`). Headings and captions have fixed sizes independent of this.
+    public var bodyBaseSize: CGFloat = 17
 
     /// Points of indentation per list nesting level (where each level's marker hangs).
     public static let listIndentStep: CGFloat = 24
@@ -25,7 +33,7 @@ public struct StyleSheet {
         case .heading1: return 24
         case .heading2: return 21
         case .heading3: return 19
-        case .body, .quote: return 17
+        case .body, .quote: return bodyBaseSize
         case .caption: return 15
         }
     }
