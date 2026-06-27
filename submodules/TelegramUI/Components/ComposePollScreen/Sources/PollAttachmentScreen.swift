@@ -155,10 +155,11 @@ public func presentPollAttachmentScreen(
             }
             controllerCompletion(controller, controller.mediaPickerContext)
             return true
-        case .file:
+        case .file, .audio:
             let controller = makeAttachmentFileControllerImpl(
                 context: context,
                 updatedPresentationData: updatedPresentationData,
+                mode: type == .audio ? .audio(.story) : .recent,
                 source: filePickerSource,
                 bannedSendMedia: nil,
                 presentGallery: { [weak attachmentController] in
