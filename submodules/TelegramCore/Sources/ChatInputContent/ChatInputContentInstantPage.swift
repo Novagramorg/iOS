@@ -85,17 +85,22 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
         case let .media(m):
             let caption = InstantPageCaption(text: richText(from: m.caption), credit: .empty)
             switch m.kind {
-            case .image, .video:
+            case .image, .video, .audio:
                 // Stash the `Media` in the page's `media` dict, keyed by its own `MediaId`; the block carries only
-                // the id. Image/video are always a concrete `TelegramMediaImage`/`TelegramMediaFile` with an id;
+                // the id. image/video/audio are always a concrete TelegramMediaImage/TelegramMediaFile with an id;
                 // a nil-id medium is dropped (it could not be resolved back from the dict anyway).
                 guard let mediaId = m.media.id else {
                     break
                 }
                 media[mediaId] = m.media
-                if case .image = m.kind {
+                switch m.kind {
+                case .image:
                     result.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
-                } else {
+                case .audio:
+                    // music & voice both serialize as `.audio`; the file's `.Audio(isVoice:)` attribute (carried on
+                    // the stored Media) drives the music-vs-voice render. No size/alignment is representable.
+                    result.append(.audio(id: mediaId, caption: caption))
+                default:
                     result.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
                 }
             case .location:
@@ -244,6 +249,13 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             // Same default restoration as `.image` (see above) for the non-representable size/width/alignment fields.
             if let media = media[id] {
                 result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+            }
+        case let .audio(id, caption):
+            // Resolve the concrete `TelegramMediaFile` from the page `media` dict (the forward always stores it).
+            // naturalSize/displayWidth/alignment restore the editor's media defaults, matching .image/.video.
+            // Music vs voice is intrinsic to the file (`.Audio(isVoice:)`), so a single `.audio` kind suffices.
+            if let media = media[id] {
+                result.append(.media(ChatInputMedia(media: media, kind: .audio, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .map(latitude, longitude, _, _, caption):
             // Reconstruct a `TelegramMediaMap` from the inline coordinates (no media-dict lookup — a `.map` block

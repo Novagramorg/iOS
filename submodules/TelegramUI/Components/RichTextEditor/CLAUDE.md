@@ -451,6 +451,20 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   *kept* the empty paragraph (undeletable); the code branch left the empty paragraph in place. Text blocks
   (body/heading/quote/list paragraphs) still take the normal merge path below. (Select All + backspace still
   removes a covered image — that goes through `applyReplace`, below.)
+- **An audio media block (`MediaKind.audio`) is a CAPTION-LESS atom** (2026-06-27) — unlike image/video/location it
+  has **no caption** (not rendered, editable, or in the position model). `DocumentTree` emits `mediaBlock([mediaAtom])`
+  (nodeSize 3, no caption paragraph), and `MediaBlockBox` is **dual-moded on `kind == .audio`** — `textLayout` →
+  `emptyLayout`, `textLength 0`, `nodeSize 3`, `textStart == nodeStart`, `leafRegions() == []` (the FIRST block with
+  zero leaf text regions — the caret/nav/selection machinery routes media via `mediaBox(atGap:)`/`isGapPosition`, not
+  caption regions, so an empty `leafRegions` is tolerated), `height == verticalInset + audioRowHeight + verticalInset`,
+  `closestPosition → nodeStart`, `currentBlock()` caption `[]` (an incoming caption is dropped), and no caption
+  draw/placeholder. The non-audio (captioned) path is byte-unchanged. `insertMedia(kind: .audio)` lands the caret in a
+  **following body paragraph** (created if the audio is last / followed by a non-paragraph atom) since there's no
+  caption to land in. The Select-All / covered-range delete checks (`endpointFullyCovered`, the exact-node-span
+  backspace) route through `coverableContentEnd(_:)` — audio → `nodeStart + 1` (the atom span), else
+  `textStart + textLength` — because audio's `textStart + textLength` collapses to `nodeStart`. Backspace targeting
+  audio still replaces it with an empty paragraph via the gap path (below); the caption-start branch never fires
+  (no caption position exists).
 - **Inserting a table or image on an EMPTY paragraph replaces it; mid-paragraph it splits** (`insertTable`,
   `insertMedia`). Both share one branch order: an **empty** caret paragraph (`pos.box as? BlockBox` with
   `textLength == 0`) is **replaced** by the new block (`replaceSubrange(pos.index...pos.index)`) so no stray

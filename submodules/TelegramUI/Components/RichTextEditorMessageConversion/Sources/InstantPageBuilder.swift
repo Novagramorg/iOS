@@ -44,13 +44,17 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             if let resolved = media[mediaBlock.mediaID] {
                 let caption = InstantPageCaption(text: richText(from: mediaBlock.caption), credit: .empty)
                 switch mediaBlock.kind {
-                case .image, .video:
-                    // Media.id is optional on the protocol; real TelegramMedia* image/video always return non-nil.
+                case .image, .video, .audio:
+                    // Media.id is optional on the protocol; real TelegramMedia* image/video/audio always return non-nil.
                     if let mediaId = resolved.id {
                         pageMedia[mediaId] = resolved // idempotent if the same mediaID appears in multiple blocks
-                        if case .image = mediaBlock.kind {
+                        switch mediaBlock.kind {
+                        case .image:
                             pageBlocks.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
-                        } else {
+                        case .audio:
+                            // music & voice both → `.audio`; the file's `.Audio(isVoice:)` attribute drives the render.
+                            pageBlocks.append(.audio(id: mediaId, caption: caption))
+                        default:
                             pageBlocks.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
                         }
                     }

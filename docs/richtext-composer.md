@@ -185,6 +185,33 @@ All inline / structural features round-trip losslessly through the native compos
   caption (a raw dropped pin → empty caption). The rendered map shows the theme `list.mediaPlaceholderColor` while
   the async `MKMapSnapshotter` fetch completes (see `instantpage-richtext.md`). **Deferred:** live location /
   heading / proximity, editing a placed location's coordinates, an interactive in-editor map.
+- **Audio:** an attached music/voice file is a `Block.media` with **`MediaKind.audio`** (a **single** kind for both —
+  the file's `.Audio(isVoice:)` attribute drives the music-vs-voice render, so no separate voice kind). It renders
+  inline as a **fixed-height 44pt row** (matching the V2 `audioFrame` height, not aspect-scaled — the first
+  non-aspect media kind, so `MediaBlockBox.imageAreaHeight`/`measuredHeight`/`mediaRect` all branch on `kind ==
+  .audio`), via a new **playable** standalone view `StandaloneInstantPageAudioView` (`InstantPageUI`, sibling to
+  `StandaloneInstantPageImageView`) resolved through the same `MediaItemNodeView` seam — it hosts the module-internal
+  `InstantPageV2AudioContentNode` driven by a self-contained one-item `InstantPageMediaPlaylist` (no enclosing V2
+  tree; `freeMediaFileInteractiveFetched(.standalone)` so an edit-loaded cloud audio plays with no message
+  reference). **In the editor the row is themed to the editor's accent/text scheme** (not the outgoing-bubble
+  palette the V2 audio node uses for sent messages): the node gained an additive, nil-default
+  `InstantPageAudioColorOverride` (play button + progress ring → editor accent, title/duration → editor primary/
+  secondary text) that each host fills from the **same source the table reads** — `chat.inputPanel.*` in the
+  composer, `list.item*` on the attachment screen; nil leaves real message rendering byte-unchanged.
+  **Audio is a caption-less atom** — unlike image/video/location it has **no caption** (not rendered, editable, or
+  present in the position model): `DocumentTree` emits `mediaBlock([mediaAtom])` (nodeSize 3, no caption paragraph)
+  and `MediaBlockBox` is dual-moded on `kind == .audio` (`textLength 0`, `leafRegions []`, no "Add caption" row);
+  inserting audio lands the caret in a following body paragraph, and the select-all/covered-delete checks use an
+  audio-aware `coverableContentEnd` (`nodeStart + 1`). It **sends as an InstantPage `.audio(id, caption)` block**
+  with an **always-empty caption** (file registered in `page.media`), drawn by the existing V2 audio node, and
+  survives expand↔collapse + drafts via `ChatInputContent.media` (concrete `TelegramMediaFile`). BOTH converters
+  emit/parse it — `InstantPageBuilder` (article) and `ChatInputContentInstantPage` (composer, both directions,
+  paralleling `.image`/`.video`). **Authoring is the attachment menu's existing Audio button** (a music-file picker →
+  `RichTextAttachment.file`; the `.file` route now branches `isVideo` → video, `isMusic || isVoice` → audio, else
+  drop). **Voice is round-trip-only** (no picker / no in-editor recording): it enters on **edit** of a rich message
+  that already contains a voice note, and renders through the same node (the V2 audio node is music-styled —
+  **waveform rendering deferred**, voice plays as a music-style row via the `.voice` player type). **Accepted
+  limitation:** an incoming audio caption is dropped when the message is opened for edit (audio is caption-less).
 
 ---
 

@@ -10,6 +10,7 @@ import ChatMessageSelectionInputPanelNode
 import ChatControllerInteraction
 import ChatTextInputPanelNode
 import RichTextEditorMediaView
+import InstantPageUI
 
 func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatInputPanelNode?, currentSecondaryPanel: ChatInputPanelNode?, textInputPanelNode: ChatTextInputPanelNode?, chatControllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> (primary: ChatInputPanelNode?, secondary: ChatInputPanelNode?) {
     if let renderedPeer = chatPresentationInterfaceState.renderedPeer, renderedPeer.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
@@ -466,7 +467,16 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                     interfaceInteraction?.presentController(controller, nil)
                 })
                 panel.mediaItemViewFactory = { media, _ in
-                    return MediaItemNodeView(context: context, media: media)
+                    // Theme an audio row to the composer's accent/text scheme (same `chat.inputPanel.*` sources
+                    // the editor's text/quote/table use); ignored for image/map media.
+                    let theme = context.sharedContext.currentPresentationData.with { $0 }.theme
+                    let audioColors = InstantPageAudioColorOverride(
+                        control: theme.chat.inputPanel.panelControlAccentColor,
+                        controlForeground: theme.chat.inputPanel.actionControlForegroundColor,
+                        title: theme.chat.inputPanel.primaryTextColor,
+                        description: theme.chat.inputPanel.secondaryTextColor
+                    )
+                    return MediaItemNodeView(context: context, media: media, audioColorOverride: audioColors)
                 }
                 if let data = context.currentAppConfiguration.with({ $0 }).data, let value = data["ios_disable_ai_chat"] as? Double, value == 1.0 {
                 } else if let peerId = chatPresentationInterfaceState.chatLocation.peerId, peerId.namespace != Namespaces.Peer.SecretChat {

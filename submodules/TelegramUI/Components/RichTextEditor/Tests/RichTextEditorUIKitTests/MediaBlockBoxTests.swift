@@ -156,5 +156,64 @@ final class MediaBlockBoxTests: XCTestCase {
         let box = v.boxes[0] as! MediaBlockBox
         XCTAssertEqual(box.mediaRect().width, 60, accuracy: 0.5)   // explicit width honored, not stretched full-bleed
     }
+
+    func testAudioBlockIsFixedHeightAcrossWidths() {
+        // Build a .audio MediaBlockBox the same way the existing image tests build theirs.
+        let block = MediaBlock(id: BlockID("aud"), mediaID: "y", kind: .audio,
+                               naturalSize: Size2D(width: 1, height: 1), caption: [])
+        let box = MediaBlockBox(media: block, mapper: AttributedStringMapper(), width: 300)
+        let hNarrow = box.measuredHeight(forWidth: 200)
+        let hWide = box.measuredHeight(forWidth: 600)
+        // The audio ROW area is fixed; only the (empty) caption row is shared. Heights must match across widths.
+        XCTAssertEqual(hNarrow, hWide, accuracy: 0.5)
+        // And the area must equal the fixed row height plus insets+caption (not an aspect-scaled image height).
+        XCTAssertLessThan(hNarrow, 120)
+    }
+
+    func testAudioMediaRectIsFixedHeightRow() {
+        // Build an .audio box exactly as testAudioBlockIsFixedHeightAcrossWidths does, then place a
+        // frame so that mediaRect() has a defined minX/minY (mirrors the image-rect test setup in
+        // test_imageRect_respectsExplicitDisplayWidth).
+        let block = MediaBlock(id: BlockID("aud"), mediaID: "y", kind: .audio,
+                               naturalSize: Size2D(width: 1, height: 1), caption: [])
+        let box = MediaBlockBox(media: block, mapper: AttributedStringMapper(), width: 320)
+        // Assign frame + canvasWidth-matching layoutWidth so mediaRect() has stable geometry.
+        box.frame = CGRect(x: CanvasMetrics.pageMargin, y: 0, width: 320, height: 80)
+        let rect = box.mediaRect()
+        XCTAssertEqual(rect.height, MediaBlockBox.audioRowHeight, accuracy: 0.5)   // 44pt, NOT a giant square
+        XCTAssertEqual(rect.width, 320 + CanvasMetrics.pageMargin * 2, accuracy: 0.5) // full canvas width (avail)
+    }
+
+    func testAudioBoxIsCaptionLess() {
+        let box = MediaBlockBox(media: MediaBlock(id: BlockID("a"), mediaID: "doc:1", kind: .audio,
+                                                  naturalSize: Size2D(width: 1, height: 1), displayWidth: nil,
+                                                  alignment: .center, caption: []),
+                                mapper: AttributedStringMapper(), width: 300)
+        box.nodeStart = 0
+        XCTAssertEqual(box.textLength, 0)
+        XCTAssertEqual(box.nodeSize, 3)
+        XCTAssertEqual(box.textStart, box.nodeStart)
+        XCTAssertTrue(box.leafRegions().isEmpty)
+        XCTAssertEqual(box.height, 60, accuracy: 0.5) // verticalInset(8) + audioRowHeight(44) + verticalInset(8)
+    }
+
+    func testAudioCurrentBlockHasEmptyCaption() {
+        // Even if a caption is seeded (e.g. from an incoming message), audio drops it.
+        let box = MediaBlockBox(media: MediaBlock(id: BlockID("a"), mediaID: "doc:1", kind: .audio,
+                                                  naturalSize: Size2D(width: 1, height: 1), displayWidth: nil,
+                                                  alignment: .center, caption: [TextRun(text: "x")]),
+                                mapper: AttributedStringMapper(), width: 300)
+        guard case .media(let m) = box.currentBlock() else { return XCTFail("expected .media") }
+        XCTAssertTrue(m.caption.isEmpty)
+    }
+
+    func testCaptionedImageBoxStillHasCaptionRegion() { // regression
+        let box = MediaBlockBox(media: MediaBlock(id: BlockID("img"), mediaID: "x", naturalSize: Size2D(width: 100, height: 50),
+                                                   caption: []),
+                                mapper: AttributedStringMapper(), width: 300)
+        box.nodeStart = 0
+        XCTAssertEqual(box.textStart, box.nodeStart + 2)
+        XCTAssertEqual(box.leafRegions().count, 1)
+    }
 }
 #endif

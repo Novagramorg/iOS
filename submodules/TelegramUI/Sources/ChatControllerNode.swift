@@ -72,6 +72,7 @@ import BrowserUI
 import RichTextAttachmentScreen
 import RichTextEditorCore
 import RichTextEditorMediaView
+import InstantPageUI
 import ChatRichTextEditorComposer
 
 final class VideoNavigationControllerDropContentItem: NavigationControllerDropContentItem {
@@ -923,7 +924,16 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             self?.interfaceInteraction?.presentController(controller, nil)
         })
         self.textInputPanelNode?.mediaItemViewFactory = { media, _ in
-            return MediaItemNodeView(context: context, media: media)
+            // Theme an audio row to the composer's accent/text scheme (same `chat.inputPanel.*` sources the
+            // editor's text/quote/table use); ignored for image/map media.
+            let theme = context.sharedContext.currentPresentationData.with { $0 }.theme
+            let audioColors = InstantPageAudioColorOverride(
+                control: theme.chat.inputPanel.panelControlAccentColor,
+                controlForeground: theme.chat.inputPanel.actionControlForegroundColor,
+                title: theme.chat.inputPanel.primaryTextColor,
+                description: theme.chat.inputPanel.secondaryTextColor
+            )
+            return MediaItemNodeView(context: context, media: media, audioColorOverride: audioColors)
         }
         if let data = self.context.currentAppConfiguration.with({ $0 }).data, let value = data["ios_disable_ai_chat"] as? Double, value == 1.0 {
         } else if let peerId = self.chatPresentationInterfaceState.chatLocation.peerId, peerId.namespace != Namespaces.Peer.SecretChat {

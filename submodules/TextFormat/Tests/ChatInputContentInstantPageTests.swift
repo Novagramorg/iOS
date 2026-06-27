@@ -347,6 +347,46 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         ]), "checklist with mixed checked state")
     }
 
+    private func makeAudioFile(id: Int64, isVoice: Bool) -> TelegramMediaFile {
+        let audio: TelegramMediaFileAttribute = .Audio(isVoice: isVoice, duration: 5, title: isVoice ? nil : "Song",
+                                                       performer: isVoice ? nil : "Artist", waveform: nil)
+        return TelegramMediaFile(fileId: MediaId(namespace: Namespaces.Media.CloudFile, id: id), partialReference: nil,
+                                 resource: EmptyMediaResource(), previewRepresentations: [], videoThumbnails: [],
+                                 immediateThumbnailData: nil, mimeType: "audio/mpeg", size: nil,
+                                 attributes: [audio], alternativeRepresentations: [])
+    }
+
+    func testAudioMusicRoundTripContentToInstantPageToContent() {
+        let file = makeAudioFile(id: 100, isVoice: false)
+        let media = ChatInputMedia(media: file, kind: .audio, naturalSize: ChatInputSize(width: 0, height: 0),
+                                   displayWidth: nil, alignment: .center, caption: [ChatInputRun(text: "cap")])
+        let content = ChatInputContent(blocks: [.media(media)])
+
+        let page = instantPage(from: content)
+        // Forward: one .audio block, file stored in the page media dict.
+        guard case .audio(let id, let caption)? = page.blocks.first else { return XCTFail("expected .audio block") }
+        XCTAssertEqual(id, file.fileId)
+        XCTAssertNotNil(page.media[id])
+        XCTAssertEqual(caption.text.plainText, "cap")
+
+        // Reverse: back to a .audio media block, file + caption preserved.
+        let back = chatInputContent(fromInstantPage: page)
+        guard case .media(let m)? = back.blocks.first else { return XCTFail("expected .media block") }
+        XCTAssertEqual(m.kind, .audio)
+        XCTAssertEqual(m.media.id, file.fileId)
+    }
+
+    func testAudioVoiceStaysVoiceOnRoundTrip() {
+        let file = makeAudioFile(id: 101, isVoice: true)
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(media: file, kind: .audio,
+            naturalSize: ChatInputSize(width: 0, height: 0), displayWidth: nil, alignment: .center, caption: []))])
+        let back = chatInputContent(fromInstantPage: instantPage(from: content))
+        guard case .media(let m)? = back.blocks.first, let f = m.media as? TelegramMediaFile else {
+            return XCTFail("expected .media(file)")
+        }
+        XCTAssertTrue(f.isVoice)
+    }
+
     func test_location() {
         // A location media block round-trips through .map, canonicalizing to the editor's media defaults.
         let map = TelegramMediaMap(latitude: 37.7955, longitude: -122.3937, heading: nil, accuracyRadius: nil, venue: nil)

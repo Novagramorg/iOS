@@ -13,6 +13,7 @@ import EdgeEffect
 import RichTextEditorCore
 import RichTextEditorUIKit
 import RichTextEditorMediaView
+import InstantPageUI
 import ContextUI
 import Postbox
 import TelegramCore
@@ -216,10 +217,19 @@ final class RichTextAttachmentScreenComponent: Component {
                     naturalSize = image.representations.last?.dimensions.cgSize ?? CGSize(width: 1, height: 1)
                 case let .file(fileReference):
                     let file = fileReference.media
-                    guard file.isVideo else { return }   // v1: only video files are supported
-                    media = file
-                    kind = .video
-                    naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
+                    if file.isVideo {
+                        media = file
+                        kind = .video
+                        naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
+                    } else if file.isMusic || file.isVoice {
+                        // Audio (music from the Audio picker; voice only via edit round-trips). The block is a
+                        // fixed-height row, so naturalSize is ignored by MediaBlockBox — pass a 1x1 placeholder.
+                        media = file
+                        kind = .audio
+                        naturalSize = CGSize(width: 1.0, height: 1.0)
+                    } else {
+                        return   // unsupported document type
+                    }
                 case let .location(map):
                     // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
                     // seeds the caption (a raw dropped pin has no venue -> empty caption). Self-contained insert,
@@ -369,7 +379,16 @@ final class RichTextAttachmentScreenComponent: Component {
                 editor.registerMediaViewProvider { [weak self] mediaID, _ in
                     guard let self, let component = self.component,
                           let media = self.attachedMedia[mediaID] else { return nil }
-                    return MediaItemNodeView(context: component.context, media: EngineMedia(media))
+                    // Theme an audio row to the editor's accent/text scheme (same `list.item*` sources as
+                    // `mapEditorTheme` / the table); ignored for image/map media.
+                    let theme = component.context.sharedContext.currentPresentationData.with { $0 }.theme
+                    let audioColors = InstantPageAudioColorOverride(
+                        control: theme.list.itemAccentColor,
+                        controlForeground: theme.list.itemCheckColors.foregroundColor,
+                        title: theme.list.itemPrimaryTextColor,
+                        description: theme.list.itemSecondaryTextColor
+                    )
+                    return MediaItemNodeView(context: component.context, media: EngineMedia(media), audioColorOverride: audioColors)
                 }
 
                 // Host the checklist checkbox with a `CheckNode` themed from the standard app checkbox palette
