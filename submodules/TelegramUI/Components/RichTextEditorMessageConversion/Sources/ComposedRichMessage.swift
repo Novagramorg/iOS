@@ -73,7 +73,7 @@ func documentNeedsRichLayout(_ blocks: [Block]) -> Bool {
                 return true
             }
             switch paragraph.style {
-            case .heading1, .heading2, .heading3:
+            case .heading1, .heading2, .heading3, .heading4, .heading5, .heading6:
                 return true
             case .body, .caption, .quote:
                 break

@@ -25,6 +25,9 @@ public struct StyleSheet {
         case .heading1: return 24
         case .heading2: return 21
         case .heading3: return 19
+        case .heading4: return 18
+        case .heading5: return 17
+        case .heading6: return 16
         case .body, .quote: return 17
         case .caption: return 15
         }
@@ -37,6 +40,9 @@ public struct StyleSheet {
         case .heading1: return StyleMetrics(spacingBefore: 18, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading2: return StyleMetrics(spacingBefore: 16, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading3: return StyleMetrics(spacingBefore: 14, spacingAfter: 6, lineHeightMultiple: 1.05)
+        case .heading4: return StyleMetrics(spacingBefore: 12, spacingAfter: 6, lineHeightMultiple: 1.05)
+        case .heading5: return StyleMetrics(spacingBefore: 10, spacingAfter: 6, lineHeightMultiple: 1.05)
+        case .heading6: return StyleMetrics(spacingBefore: 8,  spacingAfter: 6, lineHeightMultiple: 1.05)
         case .body:     return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
         case .caption:  return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
         case .quote:    return StyleMetrics(spacingBefore: 8,  spacingAfter: 8, lineHeightMultiple: 1.10)
@@ -51,6 +57,7 @@ public struct StyleSheet {
         let bold = attributes.bold
         let italic = attributes.italic   // quote is upright; its bar/fill is a drawn canvas decoration (see DocumentCanvasView+Decorations)
         let serif = style == .heading1 || style == .heading2 || style == .heading3
+            || style == .heading4 || style == .heading5 || style == .heading6
         return FontResolver.font(family: attributes.fontFamily, size: size, bold: bold, italic: italic, serif: serif)
     }
 

@@ -82,6 +82,9 @@ private func chatInputStyle(fromParagraphStyle style: ParagraphStyleName) -> Cha
         return .heading2
     case .heading3:
         return .heading3
+    case .heading4, .heading5, .heading6:
+        // ChatInputContent (the composer model) only models H1–H3; fold deeper editor headings to H3.
+        return .heading3
     case .quote:
         // The editor `quote` has no collapse flag — it is always a regular (expanded) quote.
         return .quote(isCollapsed: false)
