@@ -122,6 +122,35 @@ Reason: the three nodes are `private` — only a method inside this class can fl
 
 ---
 
+### `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryControllerNode.swift` + `…PhoneEntryController.swift` — QR login (UPDATED 2026-06-27)
+
+> **2026-06-27 update — supersedes the detailed blocks below.** The QR-login **entry moved from
+> the in-form text button to a nav-bar QR icon (toolbar)**, and the QR overlay now has a reachable
+> exit. Authoritative source = `git diff`; the hook points are:
+>
+> **Node (`…PhoneEntryControllerNode.swift`):**
+> - `import FenixuzLocalization` (unchanged — `showQrOverlay()` reads `FenixuzL10n(strings).auth_qrLoginButton`).
+> - Overlay state vars `qrOverlayNode / qrNode / qrOverlayTitleNode / qrOverlayInstructionNode / qrOverlayCancelNode / qrOverlayBackNode` + `var qrOverlayVisibilityChanged: ((Bool) -> Void)?`.
+> - `func presentQrOverlay()` (public entry the controller's nav-bar icon calls) → `showQrOverlay()`.
+> - `showQrOverlay()` builds the full-bleed overlay (title, 240×240 QR, instruction, bottom **Cancel**, **top-left back chevron** = SF Symbol `chevron.left`), calls **`self.view.endEditing(true)`** (root-cause fix), then fires `qrOverlayVisibilityChanged?(true)`. Both Cancel and back target `dismissQrOverlay`.
+> - `dismissQrOverlay()` fires `qrOverlayVisibilityChanged?(false)`, removes the overlay, re-arms the token listener.
+> - `applyQrOverlayLayout()` centres the block and pins the back button top-left at `(8, statusBarHeight+4, 44, 44)`.
+> - The old in-form `qrLoginButtonNode` text button + `qrLoginButtonTapped()` are **removed**.
+>
+> **Controller (`…PhoneEntryController.swift`):**
+> - `updateNavigationItems()`: on full-size layouts (`width >= 360`, `account != nil`, not in-progress) sets `navigationItem.rightBarButtonItem` to `UIBarButtonItem(image: UIImage(systemName: "qrcode"), …)` → `qrIconPressed()` → `controllerNode.presentQrOverlay()`.
+> - `loadDisplayNode()` wires `controllerNode.qrOverlayVisibilityChanged = { self?.handleQrOverlayVisibility($0) }`.
+> - `handleQrOverlayVisibility(_:)` tracks `isQrOverlayVisible`, `view.endEditing(true)` + hides the QR icon while the overlay is up; on dismiss restores the icon (`updateNavigationItems()`) and re-focuses the phone field (`activateInput()`).
+>
+> Reason: the overlay's only exit was a bottom **Cancel** centred in full-screen height while the
+> keyboard was up → it sat **behind the keyboard**, with no top/nav-bar exit → users were trapped.
+> Fix = resign the keyboard on open + add a guaranteed-visible top-left back button; and per the
+> user's request, move the entry from an in-form text link to a nav-bar QR icon. (A nav-bar back
+> button was tried first but the full-bleed overlay covers the nav bar, so the back button lives
+> *inside* the overlay.)
+
+<details><summary>Historical (2026-06-08) — original in-form text-button hook, now superseded</summary>
+
 ### `submodules/AuthorizationUI/Sources/AuthorizationSequencePhoneEntryControllerNode.swift` — visible QR login button (2026-06-08)
 
 **Top of file — imports block.** Add after `import Markdown`:
@@ -213,6 +242,8 @@ transition.updateFrame(node: self.qrLoginButtonNode, frame: qrButtonFrame)
 ```
 
 Reason: `refreshQrToken()` is `private` — it cannot be called from a Fenixuz module. The entire QR-login session-export machinery (MTProto `auth.exportLoginToken`, `tg://login?token=…` URL, `qrCode(...)` Signal, token-expiry refresh loop, `loginTokenSuccess`/`loginTokenMigrateTo` handling) already exists in this file and works correctly — it was only reachable via a hidden `#if DEBUG && false` gesture on `noticeNode`. This hook surfaces it as a standard visible button with no new logic. The `account == nil` guard mirrors the upstream condition: when `account == nil` (change-number flow), the button stays hidden. Demo flow is completely unaffected — `qrLoginButtonTapped` does not touch `checkPhone`, `prewarmIfDemo`, or any code-entry path.
+
+</details>
 
 ---
 
@@ -703,6 +734,9 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 | `sqlcipher/BUILD` | ~10 lines (header split) | Xcode 26.5 SDK sqlite3ext.h module conflict fix |
 | `ChatListHeaderComponent/Sources/NavigationButtonComponent.swift` | +7 lines in icon-frame branch | clamp oversized PDF artboards (FenixGhostActive 455x491 pt → 25x27 pt); set contentMode = .scaleAspectFit (2026-06-08 size fix) |
 | `ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift` (2026-06-23) | +4 lines in `setupSttButton()`, +~100 lines new method | STT long-press quick-settings: language picker + voice-translate toggle + translate-target-lang nested sheet (Vosk branch — no Whisper, no BUILD change) |
+| `TelegramUI/BUILD` + `AppDelegate.swift` (2026-06-27) | +1 dep, +1 import, +6-line launch hook | start FenixuzAnalytics once shared context ready (device + account counting) |
+| `PeerInfoScreen/{BUILD, PeerInfoScreen.swift, PeerInfoSettingsItems.swift, PeerInfoScreenSettingsActions.swift}` (2026-06-27) | +1 dep, +1 enum case, +2 imports, +1 row, +1 action case | "Analytics" Settings row → FenixuzAnalyticsController |
+| `Telegram/Telegram-iOS/PrivacyInfo.xcprivacy` (2026-06-27) | +1 purpose string | declare anonymous Device ID collection for Analytics (Tracking=false → no ATT) |
 
 **Total Telegram-owned files modified: 22** (6 BUILD + 14 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
 - `submodules/Fenixuz/AppleReview/` — demo-code fetcher + iOS alert
@@ -1699,3 +1733,108 @@ The standalone `tgwatch` SwiftUI watch app was deleted from the fork; restored f
 **Remaining to SHIP the watch (user-side, deferred — not done here):** register App ID `uz.fenixuz.app.watchkitapp` + watchkitapp provisioning profile under team `ZDBP5RSRZF`, drop `WatchApp.mobileprovision` into the codesigning material. Until then keep `publish.sh` **WITHOUT** `--embedWatchApp` (an `--embedWatchApp` distribution build HARD-RAISES without that profile by design). watchOS min target = 26.0. First standalone watch build needs network (QRCodeGenerator SPM resolve).
 
 **Verification:** hook fingerprint identical before/after (371 markers, 0 lost); `./run.sh` green; app launches; 0 watch-related simulator build lines (zero coupling).
+
+---
+
+## 📌 Analytics page — unique devices + cumulative accounts (2026-06-27)
+
+Novagram "Analytics" Settings page mirroring the Android app's two shared counters (same Firebase Realtime Database, so the numbers match across iOS + Android):
+- **"Number of Novagram users"** — distinct physical devices, counted ONCE per device (dedup via a Keychain-stored random UUID that survives reinstall, so a reinstall does not double-count).
+- **"Active accounts"** — cumulative count of account registrations; +1 per newly-seen account, NEVER decremented on logout (marketing metric, matches the previous Android developer's behavior).
+
+All logic lives in the Fenixuz-owned module `submodules/Fenixuz/Analytics/` (`FenixuzAnalytics`): `FenixuzAnalyticsConfig` (Firebase REST config placeholders), `FenixuzFirebaseClient` (RTDB REST — no Firebase SDK, Bazel-friendly), `FenixuzAnalyticsManager` (Keychain dedup + `activeAccountContexts` observation), `FenixuzAnalyticsController` (the UI page). Until `FenixuzAnalyticsConfig.databaseURL` is filled in, every call is a no-op and the page shows "—".
+
+### `submodules/TelegramUI/BUILD`
+
+In the `deps = [...]` list (Fenixuz block), append:
+
+```python
+"//submodules/Fenixuz/Analytics:FenixuzAnalytics",
+```
+
+Reason: `AppDelegate.swift` calls `FenixuzAnalyticsManager.shared.start(...)`.
+
+### `submodules/TelegramUI/Sources/AppDelegate.swift`
+
+**Top imports — add after `import TelegramCore`:**
+
+```swift
+import FenixuzAnalytics
+```
+
+**In `application(_:didFinishLaunchingWithOptions:)`, immediately after the `self.sharedContextPromise.set(...)` block:**
+
+```swift
+// Fenixuz Analytics — once the shared context is ready, count this device (once per
+// physical device) and observe account contexts to count new account registrations.
+let _ = (self.sharedContextPromise.get()
+|> take(1)
+|> deliverOnMainQueue).start(next: { sharedApplicationContext in
+    FenixuzAnalyticsManager.shared.start(sharedContext: sharedApplicationContext.sharedContext)
+})
+```
+
+Reason: needs the live `SharedAccountContext` (created asynchronously) to read `activeAccountContexts`. Cannot live in a Fenixuz module because the shared context is only reachable from AppDelegate.
+
+### `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/BUILD`
+
+In the `deps = [...]` list (Fenixuz block), append:
+
+```python
+"//submodules/Fenixuz/Analytics:FenixuzAnalytics",
+```
+
+### `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreen.swift`
+
+In `enum PeerInfoSettingsSection`, add after `case fenixAccounts`:
+
+```swift
+case analytics
+```
+
+### `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoSettingsItems.swift`
+
+**Top imports — add after `import FenixuzProMessager`:**
+
+```swift
+import FenixuzAnalytics
+```
+
+**Settings rows — add right after the "NovagramPro" row in the `.proMessager` section:**
+
+```swift
+items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Analytics", icon: fenixuzSettingsIcon(systemName: "chart.bar.fill", color: .lightBlue), action: {
+    interaction.openSettings(.analytics)
+}))
+```
+
+### `submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenSettingsActions.swift`
+
+**Top imports — add after `import FenixuzProMessager`:**
+
+```swift
+import FenixuzAnalytics
+```
+
+**In `openSettings(section:)` switch — add after the `.fenixAccounts` case:**
+
+```swift
+case .analytics:
+    push(fenixAnalyticsController(context: self.context))
+```
+
+### `Telegram/Telegram-iOS/PrivacyInfo.xcprivacy`
+
+The existing **Device ID** collected-data-type entry gains a second purpose `NSPrivacyCollectedDataTypePurposeAnalytics` (alongside `…AppFunctionality`). The analytics device id is an app-generated random UUID kept in the Keychain (NOT IDFA/IDFV), `NSPrivacyCollectedDataTypeTracking = false` → no ATT prompt required.
+
+### `submodules/TelegramUI/Images.xcassets/FenixAnalyticsDuck.imageset/` (fork-added asset)
+
+New vector imageset (the colorful duck-with-megaphone-on-a-podium hero illustration), `preserves-vector-representation`. Loaded by the Analytics page via `UIImage(bundleImageName: "FenixAnalyticsDuck")`. `TelegramUI/BUILD` globs `Images.xcassets/**` so no BUILD change is needed. Re-add this imageset on any asset-catalog reset.
+
+### Page design + glass back button (2026-06-27 redesign)
+
+`FenixuzAnalyticsController.swift` was redesigned to an iOS HIG + Telegram-native look (duck hero 140 pt + silhouette shadow, "App usage numbers" subtitle, two side-by-side rounded stat cards with the number + caption + inline `info.circle`, whole-card tap → explanation alert, light/dark correct).
+
+The nav back button is an **iOS 26 "glass" chevron-in-a-circle** matching the native PeerInfo (Novagram settings) back button: `backButtonImage(circleColor:chevronColor:)` bakes an accent chevron inside a neutral translucent circle (`UIColor(rgb: 0x767680)` @ 0.16 light / 0.30 dark) into one `UIImage(.alwaysOriginal)`, set as a standard `self.navigationItem.leftBarButtonItem = UIBarButtonItem(image:…, target: self, action: #selector(backPressed))`. `backPressed` pops via `NavigationController.filterController(self, animated:)`. Why baked-image and not the system glass node: the nav bar's own glass treatment only applies to its internal back node, unreachable from a custom button; and the empty-title `backButtonAppearanceWithTitle: ""` route collapses the hit area and swallows taps. `updateBackButton()` re-renders on every theme change. **No `UIKitRuntimeUtils` dep needed** (the earlier empty-title approach was abandoned).
+
+> NOTE: `submodules/Fenixuz/Analytics/Sources/FenixuzAnalyticsConfig.swift` still has empty `databaseURL` / `authToken` placeholders pending the Android developer's Firebase project details (RTDB URL, counter paths, write auth). Fill these to activate the counters.

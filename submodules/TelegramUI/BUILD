@@ -59,6 +59,7 @@ swift_library(
         "//submodules/Fenixuz/Tips:FenixuzTips",
         "//submodules/Fenixuz/UpdateCheck:FenixuzUpdateCheck",
         "//submodules/Fenixuz/UnreadReminder:FenixuzUnreadReminder",
+        "//submodules/Fenixuz/Analytics:FenixuzAnalytics",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",

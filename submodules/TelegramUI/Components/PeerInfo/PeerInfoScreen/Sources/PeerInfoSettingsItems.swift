@@ -15,6 +15,7 @@ import TelegramStringFormatting
 import PeerNameColorItem
 import FenixuzLocalization
 import FenixuzProMessager
+import FenixuzAnalytics
 
 enum SettingsSection: Int, CaseIterable {
     case proMessager
@@ -241,6 +242,9 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     let fenixuzGold: UIColor = presentationData.theme.overallDarkAppearance ? UIColor(rgb: 0xFFCC33) : UIColor(rgb: 0xC8951A)
     items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "NovagramPro", titleColor: fenixuzGold, icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold), action: {
         interaction.openSettings(.proMessager)
+    }))
+    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Analytics", icon: fenixuzSettingsIcon(systemName: "chart.bar.fill", color: .lightBlue), action: {
+        interaction.openSettings(.analytics)
     }))
 
     let notificationsWarning: Bool

@@ -160,7 +160,10 @@
 			</array>
 		</dict>
 
-		<!-- Device ID — for push notifications via APNS. -->
+		<!-- Device ID — for push notifications via APNS (App Functionality, linked) and for
+		     anonymous unique-device analytics counting (Analytics; an app-generated random
+		     UUID kept in the Keychain, NOT IDFA/IDFV, not linked to identity, not used for
+		     tracking — so no ATT prompt is required). -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeDeviceID</string>
@@ -171,6 +174,7 @@
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
 			</array>
 		</dict>
 
