@@ -1648,12 +1648,16 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         controller?.present(c, in: .window(.root))
     }
 
-    // Part C — 15-second long-press Easter-egg: reveals / hides the Ads section.
-    // Uses didAppear (firstTime = true) so the view is guaranteed loaded.
-    // UILongPressGestureRecognizer retains FenixSecretGestureTarget via its internal target array.
+    // Part C — 10-tap Easter-egg: tapping the page 10 times in quick succession reveals / hides
+    // the Ads section (mirrors Telegram's own debugTapCounter unlock). A long-press was tried
+    // first but never fired — the list's scroll/pan gesture swallowed the hold. A tap does not
+    // conflict with scrolling, and the self-targeting subclass below also acts as its own
+    // delegate (shouldRecognizeSimultaneouslyWith → true, cancelsTouchesInView = false) so it
+    // fires alongside the list and never blocks normal row/toggle taps. The view retains the
+    // recognizer, the recognizer retains the closure — lifetime is guaranteed.
     controller.didAppear = { [weak controller] firstTime in
         guard firstTime, let controller else { return }
-        let target = FenixSecretGestureTarget { [weak controller] in
+        let gr = FenixAdsRevealGestureRecognizer(onReveal: { [weak controller] in
             guard let controller else { return }
             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
             let langCode = presentationData.strings.primaryComponent.languageCode
@@ -1678,9 +1682,7 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
                 actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
             )
             controller.present(alert, in: .window(.root))
-        }
-        let gr = UILongPressGestureRecognizer(target: target, action: #selector(FenixSecretGestureTarget.fire(_:)))
-        gr.minimumPressDuration = 15.0
+        })
         controller.view.addGestureRecognizer(gr)
     }
 
@@ -1995,22 +1997,47 @@ private enum FenixHeartEffectStrings {
     }
 }
 
-// MARK: - Feature #6: Secret gesture target (Part C — 15-second long-press Easter-egg)
-// Holds a closure so UILongPressGestureRecognizer can call it via target-action.
-// UIGestureRecognizer retains its targets in an internal array, so no extra strong
-// reference is needed — the view's gestureRecognizers keeps the whole chain alive.
+// MARK: - Feature #6: Secret reveal recognizer (Part C — 10-tap Easter-egg)
+// A self-targeting UITapGestureRecognizer subclass that OWNS its callback and counts taps,
+// mirroring Telegram's own debugTapCounter unlock (AuthorizationSequencePhoneEntryControllerNode).
+// Tapping the page 10 times in quick succession — each tap within `tapWindow` of the previous —
+// fires onReveal; a pause longer than the window resets the streak. It targets itself and acts as
+// its own delegate so it recognizes SIMULTANEOUSLY with the list's scroll/selection gestures, and
+// cancelsTouchesInView = false so it never blocks normal row/toggle taps. The view retains the
+// recognizer, the recognizer retains the closure — lifetime is guaranteed.
+//
+// A long-press was tried first and never fired: a 15s hold over the list is swallowed by the
+// scroll/pan gesture. A tap does not conflict with scrolling, so this is the reliable mechanism.
+private final class FenixAdsRevealGestureRecognizer: UITapGestureRecognizer, UIGestureRecognizerDelegate {
+    private let onReveal: () -> Void
+    private let requiredTaps = 10
+    private let tapWindow: Double = 0.7
+    private var lastTapTimestamp: Double = 0.0
+    private var tapCount: Int = 0
 
-private final class FenixSecretGestureTarget: NSObject {
-    private let action: () -> Void
-
-    init(_ action: @escaping () -> Void) {
-        self.action = action
-        super.init()
+    init(onReveal: @escaping () -> Void) {
+        self.onReveal = onReveal
+        super.init(target: nil, action: nil)
+        self.cancelsTouchesInView = false
+        self.delegate = self
+        self.addTarget(self, action: #selector(self.handleTap))
     }
 
-    @objc func fire(_ gr: UIGestureRecognizer) {
-        guard gr.state == .began else { return }
-        action()
+    @objc private func handleTap() {
+        let timestamp = CACurrentMediaTime()
+        if timestamp - self.lastTapTimestamp > self.tapWindow {
+            self.tapCount = 0
+        }
+        self.lastTapTimestamp = timestamp
+        self.tapCount += 1
+        if self.tapCount >= self.requiredTaps {
+            self.tapCount = 0
+            self.onReveal()
+        }
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
     }
 }
 
