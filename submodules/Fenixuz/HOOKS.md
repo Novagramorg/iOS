@@ -280,6 +280,39 @@ The `prewarmIfDemo` call is a no-op for any non-demo number, so real users are u
 
 ---
 
+## 📌 TelegramUI module
+
+### `submodules/TelegramUI/BUILD` (2026-06-27)
+
+In the `deps = [...]` list, append:
+
+```python
+"//submodules/Fenixuz/ProMessager:FenixuzProMessager",
+```
+
+Reason: `ApplicationContext.swift` calls `FenixRecommendedFolders.presentFirstLaunchPromptIfNeeded` (first-launch folders prompt, Feature #19/#21). The module was already a transitive dep (via PeerInfoScreen) but is now also a direct dep of TelegramUI.
+
+---
+
+### `submodules/TelegramUI/Sources/ApplicationContext.swift` (2026-06-27)
+
+**Top of file — imports block.** Add after `import FenixuzUnreadReminder`:
+
+```swift
+import FenixuzProMessager
+```
+
+**Inside the `AuthorizedApplicationContext` `init` (or `setupContext`) block — immediately after the `if self.rootController.rootTabController == nil { self.rootController.addRootControllers(showCallsTab: self.showCallsTab) }` block (~line 255):**
+
+```swift
+// Fenixuz: one-time first-launch prompt to add recommended folders (#19/#21)
+FenixRecommendedFolders.presentFirstLaunchPromptIfNeeded(context: self.context, rootController: self.rootController)
+```
+
+Reason: `FenixRecommendedFolders` needs a `NavigationController` reference to call `.present(_:in:)` on it. `self.rootController` is a `TelegramRootController: NavigationController` and is already available at this point. The function guards on the `fenix_features_firstrun_done` UserDefaults key so it fires at most once, and delays the alert 2.5 s to avoid competing with the Tips/UpdateCheck prompt that fires at 1.0 s.
+
+---
+
 ## 🔄 Pull conflict workflow (manual, AI-assisted)
 
 Whenever `git pull upstream master` is run:
@@ -606,6 +639,8 @@ Reason: this is the path the May 2026 reviewer used — tapping `@PremiumBot`'s 
 
 ```swift
 import FenixuzAppStoreIAP
+// Fenixuz: Feature #40 — tg://settings/novagrampro deep link
+import FenixuzProMessager
 ```
 
 **Inside `case let .invoice(slug, invoice):`, in the `else` clause after the `XTR` Stars branch (around line 1425), insert before `let checkoutController = BotCheckoutController(...)`:**
@@ -620,6 +655,18 @@ if FenixuzAppStoreIAP.shouldBlock(currency: invoice.currency, hasSubscriptionPer
 ```
 
 Reason: covers the deep-link path (`https://t.me/$slug` resolved to an invoice). `navigationController` is already unwrapped earlier in the same block. `NavigationController` extends `UINavigationController`, so `.topViewController` is the active visible screen and the right place to present a UIKit alert.
+
+**Inside `case let .settings(section):` → `case let .path(path):`, after the `path.isEmpty` guard and BEFORE `handleSettingsPathUrl(...)` (around line 980), insert:**
+
+```swift
+// Fenixuz Feature #40: tg://settings/novagrampro → NovagramPro settings screen
+if path == "novagrampro" {
+    navigationController.pushViewController(fenixSettingsController(context: context))
+    return
+}
+```
+
+Reason: `tg://settings/<path>` resolves to `ResolvedUrl.settings(.path(path))`. This intercept catches `path == "novagrampro"` before the generic `handleSettingsPathUrl` helper is reached and pushes `fenixSettingsController` instead. `FenixuzProMessager` is already a dep of `TelegramUI/BUILD` (added for ApplicationContext.swift); the import here is a second consumer in the same module, so no BUILD change is needed.
 
 ---
 
@@ -1838,3 +1885,77 @@ New vector imageset (the colorful duck-with-megaphone-on-a-podium hero illustrat
 The nav back button is an **iOS 26 "glass" chevron-in-a-circle** matching the native PeerInfo (Novagram settings) back button: `backButtonImage(circleColor:chevronColor:)` bakes an accent chevron inside a neutral translucent circle (`UIColor(rgb: 0x767680)` @ 0.16 light / 0.30 dark) into one `UIImage(.alwaysOriginal)`, set as a standard `self.navigationItem.leftBarButtonItem = UIBarButtonItem(image:…, target: self, action: #selector(backPressed))`. `backPressed` pops via `NavigationController.filterController(self, animated:)`. Why baked-image and not the system glass node: the nav bar's own glass treatment only applies to its internal back node, unreachable from a custom button; and the empty-title `backButtonAppearanceWithTitle: ""` route collapses the hit area and swallows taps. `updateBackButton()` re-renders on every theme change. **No `UIKitRuntimeUtils` dep needed** (the earlier empty-title approach was abandoned).
 
 > NOTE: `submodules/Fenixuz/Analytics/Sources/FenixuzAnalyticsConfig.swift` still has empty `databaseURL` / `authToken` placeholders pending the Android developer's Firebase project details (RTDB URL, counter paths, write auth). Fill these to activate the counters.
+
+---
+
+## 📌 2026-06-27 — Feature #32: Channel Recent Actions context-menu item
+
+### `submodules/ChatListUI/Sources/ChatContextMenus.swift` — Recent Actions (#32)
+
+**Location:** inside `chatContextMenuItems(...)` → the `if !isSavedMessages {` block that contains the Mute, Secret-read, Pincode, and Copy-Chat-ID items. Inserted after the "Copy Chat ID" block (after the `if !isSavedMessages { ... }` for Copy-Chat-ID, before the closing `}` of the outer `if !isSavedMessages` block).
+
+**Code added:**
+
+```swift
+// MARK: - Channel Recent Actions (Feature #32)
+// Only shown when the NovagramPro toggle is ON and the peer is a
+// channel/supergroup where the current user is an admin or creator.
+if case let .channel(channel) = peer,
+   channel.adminRights != nil || channel.flags.contains(.isCreator),
+   UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_channel_history_button") == true {
+    let histLang = presentationData.strings.primaryComponent.languageCode
+    let recentActionsTitle: String
+    switch histLang {
+    case "uz": recentActionsTitle = "So\u{02BC}nggi amallar"
+    case "ru": recentActionsTitle = "Недавние действия"
+    default:   recentActionsTitle = "Recent actions"
+    }
+    items.append(.action(ContextMenuActionItem(text: recentActionsTitle, icon: { theme in
+        generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/ReadingList"), color: theme.contextMenu.primaryColor)
+    }, action: { _, f in
+        f(.default)
+        let recentActionsController = context.sharedContext.makeChatRecentActionsController(context: context, peer: peer, adminPeerId: nil, starsState: nil)
+        chatListController?.push(recentActionsController)
+    })))
+}
+```
+
+**Gate conditions (all must be true):**
+1. `UserDefaults(suiteName: "pro_messager").bool(forKey: "fenix_channel_history_button") == true` — NovagramPro Features toggle (already wired in `FenixSettingsController.swift` since before this commit).
+2. `peer` is `.channel` (not user, legacyGroup, or secretChat) — prevents the item appearing on DMs.
+3. `channel.adminRights != nil || channel.flags.contains(.isCreator)` — the current user is an admin or creator in that channel, matching the same access rule Telegram uses on its own ChannelAdmins → "Recent Actions" row.
+
+**Action:** calls `context.sharedContext.makeChatRecentActionsController(context:peer:adminPeerId:starsState:)` (existing API, signature in `AccountContext.swift` line 1411; existing call site in `ChannelAdminsController.swift` line 734), then pushes the returned `ViewController` via `chatListController?.push(controller)`.
+
+**Localization:** inline `switch langCode` (same pattern as Copy Chat ID / Secret Read / Pincode) — "Recent actions" / "Soʼnggi amallar" (Uzbek) / "Недавние действия" (Russian). No `FenixuzLocalization` module import needed.
+
+**No new BUILD dependency** — `ChatListUI` already imports `AccountContext` (which declares `makeChatRecentActionsController`). No new Fenixuz module created; logic is a pure 1-liner call into an existing shared-context API.
+
+Reason: `makeChatRecentActionsController` and `chatListController?.push(...)` are only reachable inside this Telegram-owned file (not from a Fenixuz module). The check `channel.adminRights != nil || channel.flags.contains(.isCreator)` reads a property of `TelegramChannel`, which is only accessible after pattern-matching `EnginePeer` — both operations require the file-internal `peer` variable captured in the map closure. The hook is therefore irreducibly a call site here, not in a Fenixuz module.
+
+---
+
+## 📌 TelegramUI module — Feature #45 Auto-accept join requests (2026-06-27)
+
+### `submodules/TelegramUI/Sources/ChatController.swift`
+
+**Imports — append after `import TextProcessingScreen`:**
+
+```swift
+import FenixuzProMessager
+```
+
+**Inside `viewDidAppear(_:)` — add before the closing `}` of the method (after the `powerSavingMonitoringDisposable` block, around line 7922):**
+
+```swift
+// Fenixuz: Feature #45 — auto-approve pending join requests when chat opens
+if let peerId = self.chatLocation.peerId {
+    FenixAutoAcceptManager.autoApproveIfNeeded(context: self.context, peerId: peerId, peer: self.presentationInterfaceState.renderedPeer?.chatMainPeer)
+}
+```
+
+Reason: `chatLocation.peerId`, `context`, and `presentationInterfaceState.renderedPeer?.chatMainPeer` are all internal to `ChatController` — they cannot be accessed from a Fenixuz module. All business logic (flag check, admin-rights check, rate-limit, API call) lives in `FenixAutoAcceptManager` inside `FenixuzProMessager`. The hook is a 3-line delegate call.
+
+**Implementation file:** `submodules/Fenixuz/ProMessager/Sources/FenixAutoAcceptManager.swift` (picked up automatically by the ProMessager BUILD glob — no BUILD change needed).
+
+**No new BUILD dep for TelegramUI** — `FenixuzProMessager` is already a direct dep of `TelegramUI/BUILD` (added for ApplicationContext.swift / OpenResolvedUrl.swift hooks).

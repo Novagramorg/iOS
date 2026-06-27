@@ -36,6 +36,7 @@ import BrowserUI
 import FenixuzTips
 import FenixuzUpdateCheck
 import FenixuzUnreadReminder
+import FenixuzProMessager
 
 final class UnauthorizedApplicationContext {
     let sharedContext: SharedAccountContextImpl
@@ -254,6 +255,8 @@ final class AuthorizedApplicationContext {
         if self.rootController.rootTabController == nil {
             self.rootController.addRootControllers(showCallsTab: self.showCallsTab)
         }
+        // Fenixuz: one-time first-launch prompt to add recommended folders (#19/#21)
+        FenixRecommendedFolders.presentFirstLaunchPromptIfNeeded(context: self.context, rootController: self.rootController)
         if let tabsController = self.rootController.viewControllers.first as? TabBarController, !tabsController.controllers.isEmpty, tabsController.selectedIndex >= 0 {
             let controller = tabsController.controllers[tabsController.selectedIndex]
             let combinedReady = combineLatest(tabsController.ready.get(), controller.ready.get())

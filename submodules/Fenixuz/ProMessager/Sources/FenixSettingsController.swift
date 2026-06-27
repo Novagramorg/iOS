@@ -27,6 +27,7 @@ private enum FenixSection: Int32 {
     case appearance = 6
     case chatLock = 7
     case reminder = 8
+    case features = 9
 }
 
 private func textStyleDisplayName(_ rawValue: String, l10n: FenixuzL10n) -> String {
@@ -106,6 +107,23 @@ private enum FenixEntry: ItemListNodeEntry {
     case reminderSound(PresentationTheme, String, String)
     case reminderFooter(PresentationTheme, String)
 
+    // — Features Section (#19 add folders, #21 folder style, #32 channel history, #40 settings links, #45 auto-accept) —
+    // isNew: true on section header while this section is newly introduced
+    case featuresHeader(String, Bool)
+    // Feature #19: add 4 recommended folders in one tap
+    case addRecommendedFolders(PresentationTheme, String, String, Bool)
+    // Feature #21: folder display style picker (icon/text/auto)
+    case folderStyle(PresentationTheme, String, String, Bool)
+    // Feature #32: channel history button (scaffold — behavior in later phase)
+    case channelHistoryButton(PresentationTheme, String, String, Bool, Bool)
+    // Feature #40: settings links (scaffold — behavior in later phase)
+    case settingsLinks(PresentationTheme, String, String, Bool, Bool)
+    // Feature #45: auto-accept requests (scaffold — behavior in later phase)
+    case autoAcceptRequests(PresentationTheme, String, String, Bool, Bool)
+    // Feature #40 (part b): share NovagramPro settings link action row — visible only when settingsLinksEnabled == true
+    case shareNovagramProLink(PresentationTheme, String)
+    case featuresFooter(PresentationTheme, String)
+
     // — Accounts (Fenixuz multi-account) —
     case accountsHeader(String)
     case accountsManager(PresentationTheme, String)
@@ -130,6 +148,8 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.chatLock.rawValue
         case .reminderHeader, .reminderEnabled, .reminderTime, .reminderSound, .reminderFooter:
             return FenixSection.reminder.rawValue
+        case .featuresHeader, .addRecommendedFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .featuresFooter:
+            return FenixSection.features.rawValue
         case .accountsHeader, .accountsManager, .aboutRow:
             return FenixSection.accounts.rawValue
         }
@@ -189,6 +209,15 @@ private enum FenixEntry: ItemListNodeEntry {
         case .reminderTime:              return 72
         case .reminderSound:             return 73
         case .reminderFooter:            return 74
+        // Features (#19, #21, #32, #40, #45)
+        case .featuresHeader:            return 80
+        case .addRecommendedFolders:     return 81
+        case .folderStyle:               return 82
+        case .channelHistoryButton:      return 83
+        case .settingsLinks:             return 84
+        case .autoAcceptRequests:        return 85
+        case .shareNovagramProLink:      return 86
+        case .featuresFooter:            return 87
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
         case .accountsManager:           return -1
@@ -301,6 +330,23 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .reminderSound(rhsTheme, rhsTitle, rhsLabel) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel { return true } else { return false }
         case let .reminderFooter(lhsTheme, lhsText):
             if case let .reminderFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
+
+        case let .featuresHeader(lhsText, lhsIsNew):
+            if case let .featuresHeader(rhsText, rhsIsNew) = rhs, lhsText == rhsText, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .addRecommendedFolders(lhsTheme, lhsTitle, lhsText, lhsIsNew):
+            if case let .addRecommendedFolders(rhsTheme, rhsTitle, rhsText, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .folderStyle(lhsTheme, lhsTitle, lhsLabel, lhsIsNew):
+            if case let .folderStyle(rhsTheme, rhsTitle, rhsLabel, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsLabel == rhsLabel, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .channelHistoryButton(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .channelHistoryButton(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .settingsLinks(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .settingsLinks(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .autoAcceptRequests(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .autoAcceptRequests(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .shareNovagramProLink(lhsTheme, lhsTitle):
+            if case let .shareNovagramProLink(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
+        case let .featuresFooter(lhsTheme, lhsText):
+            if case let .featuresFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
         case let .accountsHeader(lhsText):
             if case let .accountsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
@@ -583,6 +629,111 @@ private enum FenixEntry: ItemListNodeEntry {
             })
         case let .reminderFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+
+        // ─── FEATURES (#19, #21, #32, #40, #45) ───
+        case let .featuresHeader(text, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
+            let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
+                ? ItemListSectionHeaderItem.BadgeStyle(
+                    background: UIColor(red: 0.18, green: 0.74, blue: 0.44, alpha: 1.0),
+                    foreground: .white
+                )
+                : nil
+            return ItemListSectionHeaderItem(
+                presentationData: presentationData,
+                text: text,
+                badge: badgeText,
+                badgeStyle: badgeStyle,
+                sectionId: self.section
+            )
+        case let .addRecommendedFolders(_, title, _, _):
+            return ItemListDisclosureItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "folder.badge.plus", color: .blue),
+                title: title,
+                label: "",
+                sectionId: self.section,
+                style: .blocks,
+                action: {
+                    arguments.addRecommendedFolders()
+                }
+            )
+        case let .folderStyle(_, title, label, _):
+            return ItemListDisclosureItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "square.grid.2x2.fill", color: .purple),
+                title: title,
+                label: label,
+                sectionId: self.section,
+                style: .blocks,
+                action: {
+                    arguments.openFolderStyle()
+                }
+            )
+        case let .channelHistoryButton(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "clock.arrow.circlepath", color: .orange),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateChannelHistory(val)
+                }
+            )
+        case let .settingsLinks(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "link.circle.fill", color: .teal),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateSettingsLinks(val)
+                }
+            )
+        case let .autoAcceptRequests(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "checkmark.circle.fill", color: .green),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateAutoAccept(val)
+                }
+            )
+        case let .shareNovagramProLink(_, title):
+            // Feature #40 (part b): action row — tapping copies + shares tg://settings/novagrampro
+            return ItemListDisclosureItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "square.and.arrow.up.fill", color: .teal),
+                title: title,
+                label: "",
+                sectionId: self.section,
+                style: .blocks,
+                action: {
+                    arguments.shareNovagramProLink()
+                }
+            )
+        case let .featuresFooter(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
 }
@@ -619,6 +770,11 @@ private struct FenixSettingsState: Equatable {
     var reminderEnabled: Bool
     var reminderMinutes: Int
     var reminderSound: String
+    // Features section (#19 folder style, #32, #40, #45 — scaffold storage)
+    var folderStyle: String
+    var channelHistoryEnabled: Bool
+    var settingsLinksEnabled: Bool
+    var autoAcceptEnabled: Bool
 
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -655,6 +811,11 @@ private struct FenixSettingsState: Equatable {
         self.reminderEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "unread_reminder_enabled") as? Bool ?? false
         self.reminderMinutes = UserDefaults(suiteName: "pro_messager")?.object(forKey: "unread_reminder_minutes") as? Int ?? FenixuzUnreadReminderSettings.defaultMinutes
         self.reminderSound = UserDefaults(suiteName: "pro_messager")?.string(forKey: "unread_reminder_sound") ?? FenixuzUnreadReminderSettings.defaultSound
+        // Features section — folder display style, channel history, settings links, auto-accept (scaffold)
+        self.folderStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "fenix_folder_display_style") ?? "auto"
+        self.channelHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_channel_history_button") ?? false
+        self.settingsLinksEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_settings_links") ?? false
+        self.autoAcceptEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_autoaccept_global") ?? false
     }
 
     static func == (lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
@@ -734,6 +895,18 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.reminderSound != rhs.reminderSound {
+            return false
+        }
+        if lhs.folderStyle != rhs.folderStyle {
+            return false
+        }
+        if lhs.channelHistoryEnabled != rhs.channelHistoryEnabled {
+            return false
+        }
+        if lhs.settingsLinksEnabled != rhs.settingsLinksEnabled {
+            return false
+        }
+        if lhs.autoAcceptEnabled != rhs.autoAcceptEnabled {
             return false
         }
         return true
@@ -897,6 +1070,21 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.reminderSound(presentationData.theme, l10n.settings_reminder_sound_title, l10n.settings_reminder_soundName(state.reminderSound)))
     entries.append(.reminderFooter(presentationData.theme, l10n.settings_reminder_footer))
 
+    // ─── FEATURES (#19, #21, #32, #40, #45) ───
+    // isNew: hardcoded true — set to false here when this section is no longer new.
+    entries.append(.featuresHeader(FenixFeaturesStrings.sectionTitle(langCode: langCode), true))
+    entries.append(.addRecommendedFolders(presentationData.theme, FenixFeaturesStrings.addFoldersTitle(langCode: langCode), FenixFeaturesStrings.addFoldersTip(langCode: langCode), false))
+    let folderStyleLabel = FenixFeaturesStrings.folderStyleLabel(state.folderStyle, langCode: langCode)
+    entries.append(.folderStyle(presentationData.theme, FenixFeaturesStrings.folderStyleTitle(langCode: langCode), folderStyleLabel, false))
+    entries.append(.channelHistoryButton(presentationData.theme, FenixFeaturesStrings.channelHistoryTitle(langCode: langCode), FenixFeaturesStrings.channelHistoryTip(langCode: langCode), state.channelHistoryEnabled, true))
+    entries.append(.settingsLinks(presentationData.theme, FenixFeaturesStrings.settingsLinksTitle(langCode: langCode), FenixFeaturesStrings.settingsLinksTip(langCode: langCode), state.settingsLinksEnabled, true))
+    entries.append(.autoAcceptRequests(presentationData.theme, FenixFeaturesStrings.autoAcceptTitle(langCode: langCode), FenixFeaturesStrings.autoAcceptTip(langCode: langCode), state.autoAcceptEnabled, true))
+    // Feature #40 (part b): share row — only visible when the settings links toggle is enabled
+    if state.settingsLinksEnabled {
+        entries.append(.shareNovagramProLink(presentationData.theme, FenixFeaturesStrings.shareNovagramProLinkTitle(langCode: langCode)))
+    }
+    entries.append(.featuresFooter(presentationData.theme, FenixFeaturesStrings.footer(langCode: langCode)))
+
     // ItemListController entries should arrive in stableId order to avoid an
     // assertion. Section visual order is controlled by stableId numbering.
     return entries.sorted()
@@ -933,8 +1121,15 @@ private final class FenixSettingsArguments {
     let updateReminderEnabled: (Bool) -> Void
     let openReminderTimeSettings: () -> Void
     let openReminderSoundSettings: () -> Void
+    // Features (#19, #21, #32, #40, #45)
+    let addRecommendedFolders: () -> Void
+    let openFolderStyle: () -> Void
+    let updateChannelHistory: (Bool) -> Void
+    let updateSettingsLinks: (Bool) -> Void
+    let shareNovagramProLink: () -> Void
+    let updateAutoAccept: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openCalls = openCalls
@@ -965,6 +1160,12 @@ private final class FenixSettingsArguments {
         self.updateReminderEnabled = updateReminderEnabled
         self.openReminderTimeSettings = openReminderTimeSettings
         self.openReminderSoundSettings = openReminderSoundSettings
+        self.addRecommendedFolders = addRecommendedFolders
+        self.openFolderStyle = openFolderStyle
+        self.updateChannelHistory = updateChannelHistory
+        self.updateSettingsLinks = updateSettingsLinks
+        self.shareNovagramProLink = shareNovagramProLink
+        self.updateAutoAccept = updateAutoAccept
     }
 }
 
@@ -1257,6 +1458,84 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             ])
         ])
         presentControllerImpl?(actionSheet)
+    }, addRecommendedFolders: {
+        // Feature #19: add recommended folders; show a brief confirmation alert on success.
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let langCode = presentationData.strings.primaryComponent.languageCode
+        FenixRecommendedFolders.addIfNeeded(context: context) { added in
+            guard added else { return }
+            let alert = textAlertController(
+                context: context,
+                title: nil,
+                text: FenixFeaturesStrings.addedToastMessage(langCode: langCode),
+                actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+            )
+            presentControllerImpl?(alert)
+        }
+    }, openFolderStyle: {
+        // Feature #21: folder display style picker (icon / text / auto)
+        let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        let langCode = presentationData.strings.primaryComponent.languageCode
+        let actionSheet = ActionSheetController(presentationData: presentationData)
+        let styles: [(String, String)] = [
+            ("icon", FenixFeaturesStrings.folderStyleLabel("icon", langCode: langCode)),
+            ("text", FenixFeaturesStrings.folderStyleLabel("text", langCode: langCode)),
+            ("auto", FenixFeaturesStrings.folderStyleLabel("auto", langCode: langCode))
+        ]
+        var styleItems: [ActionSheetItem] = []
+        for (key, name) in styles {
+            styleItems.append(ActionSheetButtonItem(title: name, action: { [weak actionSheet] in
+                actionSheet?.dismissAnimated()
+                UserDefaults(suiteName: "pro_messager")?.set(key, forKey: "fenix_folder_display_style")
+                updateState { state in
+                    var state = state
+                    state.folderStyle = key
+                    return state
+                }
+            }))
+        }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: styleItems),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
+        presentControllerImpl?(actionSheet)
+    }, updateChannelHistory: { value in
+        // Feature #32: channel history button — scaffold (behavior in later phase)
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "fenix_channel_history_button")
+        updateState { state in
+            var state = state
+            state.channelHistoryEnabled = value
+            return state
+        }
+    }, updateSettingsLinks: { value in
+        // Feature #40: settings links toggle — saves state; also shows/hides the share row
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "fenix_settings_links")
+        updateState { state in
+            var state = state
+            state.settingsLinksEnabled = value
+            return state
+        }
+    }, shareNovagramProLink: {
+        // Feature #40 (part b): copy tg://settings/novagrampro to clipboard and present share sheet
+        let link = "tg://settings/novagrampro"
+        UIPasteboard.general.string = link
+        let shareController = context.sharedContext.makeShareController(
+            context: context,
+            params: ShareControllerParams(subject: .url(link))
+        )
+        presentControllerImpl?(shareController)
+    }, updateAutoAccept: { value in
+        // Feature #45: auto-accept requests — scaffold (behavior in later phase)
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "fenix_autoaccept_global")
+        updateState { state in
+            var state = state
+            state.autoAcceptEnabled = value
+            return state
+        }
     })
 
     let signal = combineLatest(

@@ -143,6 +143,7 @@ import GlobalControlPanelsContext
 import ChatSearchNavigationContentNode
 import ChatAgeRestrictionAlertController
 import TextProcessingScreen
+import FenixuzProMessager
 
 public final class ChatControllerOverlayPresentationData {
     public let expandData: (ASDisplayNode?, () -> Void)
@@ -2298,7 +2299,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 return false
             }
             // FENIX-HOOK #38 — sticker confirm (covers every send branch; runs before branching)
-            if (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false), !(UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_sticker_bypass") ?? false) {
+            if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false, !(UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_sticker_bypass") ?? false) {
                 let fenixSTitle: String; let fenixSText: String; let fenixSSend: String; let fenixSCancel: String
                 switch strongSelf.presentationData.strings.primaryComponent.languageCode {
                 case "uz": fenixSTitle = "Yuborishni tasdiqlang"; fenixSText = "Stikerni yubormoqchimisiz?"; fenixSSend = "Yuborish"; fenixSCancel = "Bekor qilish"
@@ -2309,7 +2310,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     TextAlertAction(type: .defaultAction, title: fenixSSend, action: { [weak strongSelf] in
                         guard let strongSelf else { return }
                         UserDefaults(suiteName: "pro_messager")?.set(true, forKey: "fenix_sticker_bypass")
-                        let _ = strongSelf.controllerInteraction?.sendSticker(fileReference, silentPosting, schedule, query, clearInput, sourceView, sourceRect, sourceLayer, bubbleUpEmojiOrStickersets)
+                        _ = strongSelf.controllerInteraction?.sendSticker(fileReference, silentPosting, schedule, query, clearInput, sourceView, sourceRect, sourceLayer, bubbleUpEmojiOrStickersets)
                         UserDefaults(suiteName: "pro_messager")?.set(false, forKey: "fenix_sticker_bypass")
                     }),
                     TextAlertAction(type: .genericAction, title: fenixSCancel, action: {})
@@ -7918,6 +7919,11 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     }
                 }
             })
+        }
+
+        // Fenixuz: Feature #45 — auto-approve pending join requests when chat opens
+        if let peerId = self.chatLocation.peerId {
+            FenixAutoAcceptManager.autoApproveIfNeeded(context: self.context, peerId: peerId, peer: self.presentationInterfaceState.renderedPeer?.chatMainPeer)
         }
     }
 
