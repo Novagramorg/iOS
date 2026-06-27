@@ -6,4 +6,5 @@ import Foundation
 public enum MediaKind: String, Codable, Equatable, CaseIterable {
     case image
     case video
+    case location
 }

@@ -14,7 +14,7 @@ import TelegramUIPreferences
 public final class StandaloneInstantPageImageView: UIView {
     private let node: InstantPageImageNode
 
-    public init(context: AccountContext, media: EngineMedia) {
+    public init(context: AccountContext, media: EngineMedia, attributes: [InstantPageImageAttribute] = []) {
         // A synthetic, content-free webpage — the node only needs it for media-reference plumbing.
         // Precedent: ChatMessageRichDataBubbleContentNode.swift:371.
         let webpage = TelegramMediaWebpage(webpageId: EngineMedia.Id(namespace: 0, id: 0), content: .Loaded(TelegramMediaWebpageLoadedContent(
@@ -29,7 +29,7 @@ public final class StandaloneInstantPageImageView: UIView {
             theme: StandaloneInstantPageImageView.composeTheme(),
             webPage: webpage,
             media: InstantPageMedia(index: 0, media: media, url: nil, caption: nil, credit: nil),
-            attributes: [],
+            attributes: attributes,
             interactive: false,
             roundCorners: false,
             fit: true,

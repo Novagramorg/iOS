@@ -151,16 +151,20 @@ extension DocumentCanvasView {
         anchor = caret; head = caret
     }
 
-    /// Removes the block at `index` (an empty paragraph just before `media`), parking the caret at
-    /// `media`'s leading gap — which shifts up into the removed block's place. Used by backspace at a
-    /// media block's gap when the previous paragraph is empty. Caller wraps this in `editing { … }`.
-    func deleteBlock(at index: Int, parkingCaretAtGapOf media: CanvasBlock) {
+    /// Replaces the media block at `index` with a fresh EMPTY body paragraph, placing the caret in it.
+    /// Backspace on a (tap-selected, object-replacement-selected, or caption-start) media block turns the
+    /// media into an empty paragraph IN PLACE — distinct from `deleteImageBox`, which removes the block and
+    /// merges the caret up into the previous block. A fresh `BlockID` gives the replacement its own view
+    /// (the repaint gate keys on box instance/id). Caller wraps this in `editing { … }`.
+    func replaceMediaWithEmptyParagraph(at index: Int) {
         guard boxes.indices.contains(index) else { return }
+        let empty = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                             mapper: mapper, width: effectiveWidth)
         var newBoxes = boxes
-        newBoxes.remove(at: index)
+        newBoxes.replaceSubrange(index...index, with: [empty])
         boxes = newBoxes
         recomputeSpans()
-        anchor = media.nodeStart; head = media.nodeStart   // media moved up; its gap is its (recomputed) nodeStart
+        anchor = empty.textStart; head = empty.textStart
     }
 
     /// True for a block that is NOT an editable text paragraph — an image, a table, or a code block. A
@@ -231,12 +235,13 @@ extension DocumentCanvasView {
         // at an image's empty caption / right after the image into [nodeStart, captionEnd], the "object
         // replacement" atom — resolves BOTH endpoints to that one media box, so the same-stack `applyReplace`
         // below would compute a zero-length edit and silently no-op (the "backspace on an empty caption does
-        // nothing" bug). Delete the image directly. A selection that also covers adjacent text doesn't match
-        // (its endpoints differ from the node bounds) and falls through to the normal cross-block drop path.
+        // nothing" bug). Replace the media with an empty body paragraph in place. A selection that also covers
+        // adjacent text doesn't match (its endpoints differ from the node bounds) and falls through to the
+        // normal cross-block drop path.
         if text.isEmpty, let i = boxes.firstIndex(where: {
             $0 is MediaBlockBox && globalFrom == $0.nodeStart && globalTo == $0.textStart + $0.textLength
         }) {
-            deleteImageBox(at: i)
+            replaceMediaWithEmptyParagraph(at: i)
             return
         }
         if selectionEndpointsEditableTopLevel(globalFrom, globalTo) || bothInSameCellStack(globalFrom, globalTo) {
@@ -367,17 +372,18 @@ extension DocumentCanvasView {
         anchor = caret; head = caret
     }
 
-    /// Inserts a media block (`kind`, with an empty caption) at the caret, splitting the caret's paragraph
+    /// Inserts a media block (`kind`, with the given `caption`, empty by default) at the caret, splitting the caret's paragraph
     /// if mid-text. The host resolves `mediaID` to a view via the canvas's `mediaViewProvider` (each
     /// occurrence gets its own view, keyed by the new block's `BlockID`). Caret lands in the new caption.
-    func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind) {
+    func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun] = []) {
         guard !boxes.isEmpty else { return }
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             guard let pos = resolveBox(at: head) else { return }
             let mediaBlock = MediaBlock(id: BlockID.generate(), mediaID: mediaID, kind: kind,
                                         naturalSize: Size2D(width: Double(naturalSize.width),
-                                                            height: Double(naturalSize.height)))
+                                                            height: Double(naturalSize.height)),
+                                        caption: caption)
             let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth)
             var newBoxes = boxes
             if let p = pos.box as? BlockBox, p.textLength == 0 {

@@ -111,6 +111,8 @@ private func chatInputMediaKind(fromKind kind: MediaKind) -> ChatInputMediaKind 
         return .image
     case .video:
         return .video
+    case .location:
+        return .location
     }
 }
 
@@ -338,6 +340,8 @@ private func mediaKind(fromChatInputKind kind: ChatInputMediaKind) -> MediaKind 
         return .image
     case .video:
         return .video
+    case .location:
+        return .location
     }
 }
 

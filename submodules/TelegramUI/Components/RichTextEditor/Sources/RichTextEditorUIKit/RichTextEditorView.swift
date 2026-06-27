@@ -286,8 +286,8 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
 
     /// Inserts a media block (`kind`) at the caret. The host resolves `mediaID` to a view via
     /// `registerMediaViewProvider`. `naturalSize` drives the block's aspect-correct display height.
-    public func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind) {
-        canvas.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind)
+    public func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun] = []) {
+        canvas.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
     }
 
     /// Registers the closure that turns a media `mediaID` (+ the medium's natural size) into a FRESH

@@ -444,10 +444,11 @@ public struct ChatInputListMembership: Equatable, Codable {
     }
 }
 
-/// The medium's kind (image or video). Mirrors the editor `MediaKind`.
+/// The medium's kind (image, video, or location). Mirrors the editor `MediaKind`.
 public enum ChatInputMediaKind: Int32, Equatable, Codable {
     case image = 0
     case video = 1
+    case location = 2
 
     private enum CodingKeys: String, CodingKey {
         case raw

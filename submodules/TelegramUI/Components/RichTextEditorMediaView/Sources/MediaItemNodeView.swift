@@ -12,7 +12,16 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
     private let mediaView: StandaloneInstantPageImageView
 
     public init(context: AccountContext, media: EngineMedia) {
-        self.mediaView = StandaloneInstantPageImageView(context: context, media: media)
+        let attributes: [InstantPageImageAttribute]
+        if case .geo = media {
+            // A location renders through InstantPageImageNode's built-in .geo path (snapshot + pin); it needs an
+            // InstantPageMapAttribute for the zoom + snapshot dimensions. 600x300 matches the authored naturalSize
+            // and the renderer's default-map fallback.
+            attributes = [InstantPageMapAttribute(zoom: 15, dimensions: CGSize(width: 600.0, height: 300.0))]
+        } else {
+            attributes = []
+        }
+        self.mediaView = StandaloneInstantPageImageView(context: context, media: media, attributes: attributes)
         super.init(frame: .zero)
         self.addSubview(self.mediaView)
     }

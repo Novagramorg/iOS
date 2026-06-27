@@ -347,6 +347,36 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         ]), "checklist with mixed checked state")
     }
 
+    func test_location() {
+        // A location media block round-trips through .map, canonicalizing to the editor's media defaults.
+        let map = TelegramMediaMap(latitude: 37.7955, longitude: -122.3937, heading: nil, accuracyRadius: nil, venue: nil)
+        let locationMedia = ChatInputMedia(
+            media: map,
+            kind: .location,
+            naturalSize: ChatInputSize(width: 0.0, height: 0.0),
+            displayWidth: nil,
+            alignment: .center,
+            caption: [ChatInputRun(text: "Ferry Building")]
+        )
+        let content = ChatInputContent(blocks: [.media(locationMedia)])
+
+        // Forward: produces exactly one .map block carrying the coordinates + caption, with NO media-dict entry.
+        let page = instantPage(from: content)
+        XCTAssertEqual(page.blocks.count, 1, "one location block -> one .map block")
+        guard case let .map(latitude, longitude, _, dimensions, caption) = page.blocks[0] else {
+            return XCTFail("expected a .map block, got \(page.blocks[0])")
+        }
+        XCTAssertEqual(latitude, 37.7955, accuracy: 0.0001)
+        XCTAssertEqual(longitude, -122.3937, accuracy: 0.0001)
+        XCTAssertEqual(dimensions.width, 600, "zero naturalSize -> 600x300 fallback")
+        XCTAssertEqual(dimensions.height, 300)
+        XCTAssertEqual(caption.text, .plain("Ferry Building"))
+        XCTAssertTrue(page.media.isEmpty, "a .map block carries coordinates inline; nothing goes in the media dict")
+
+        // Round-trip identity (input built with the canonical defaults).
+        XCTAssertEqual(chatInputContent(fromInstantPage: page), content, "location round-trips through .map")
+    }
+
     // 16. ChatInputListMarker.checklist (rawValue 2) Codable round-trip, and back-compat: an old payload
     //     without `checked` decodes correctly (nil checked, marker preserved).
     func test_checklistMembership_codableRoundTrip_andBackCompat() throws {

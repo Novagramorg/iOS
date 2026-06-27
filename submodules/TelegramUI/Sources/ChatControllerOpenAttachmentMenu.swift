@@ -945,6 +945,8 @@ extension ChatControllerImpl {
                 completion(.image(image))
             } else if let file = result.concrete(TelegramMediaFile.self) {
                 completion(.file(file))
+            } else if let mapReference = result.concrete(TelegramMediaMap.self) {
+                completion(.location(mapReference.media))
             }
         })
     }

@@ -98,6 +98,10 @@ extension DocumentCanvasView: UITextInput {
             // anchored at the gesture's start position through this setter; applying them turns the cursor
             // MOVE into a text SELECTION. Ignore them while the gesture owns the caret.
             if floatingCursorActive { return }
+            // iOS sets the object-replacement RANGE for a tap-selected media right before its Backspace.
+            // `clearStructuralSelections()` below drops `imageSelection`; stash it so `deleteBackward` can
+            // still recognise the structural-delete intent (its object geometry doesn't cover the media node).
+            imageObjectDeletePending = imageSelection
             finalizeMarkedText()     // a deliberate selection move commits a composition / dismisses a prediction
             clearStructuralSelections()
             dismissEditMenuForSelectionOrTextChange()   // system-driven move (keyboard cursor-drag / autocorrect) closes the menu too
@@ -235,6 +239,7 @@ extension DocumentCanvasView: UIKeyInput {
     var hasText: Bool { documentSize > 0 }
 
     func insertText(_ text: String) {
+        imageObjectDeletePending = nil   // a non-delete edit cancels a pending structural-media delete
         // A committing keystroke while composing: replace the WHOLE marked range with `text`, then
         // finalize the composition as one undo step. (The system delivers a confirming char this way.)
         if let m = markedRange {
@@ -327,6 +332,21 @@ extension DocumentCanvasView: UIKeyInput {
     func deleteBackward() {
         if markedRange != nil { commitMarkedText() }   // delete acts on committed text, not the composition
         guard !boxes.isEmpty else { return }
+        // A tap-selected media block's Backspace: iOS represents the deletion by OVERRIDING the selection
+        // (via the `selectedTextRange` setter, which clears `imageSelection`) to a RANGE whose head lands at
+        // the media's leading gap but whose object geometry is offset from our position model (it anchors in
+        // the preceding block), so the normal selection-replace below would delete the preceding text and
+        // KEEP the media. The setter stashes the just-cleared image into `imageObjectDeletePending`; honor it
+        // here by replacing that media with an empty body paragraph in place.
+        if let pendingId = imageObjectDeletePending,
+           let i = boxes.firstIndex(where: { $0.id == pendingId && $0 is MediaBlockBox }),
+           head == boxes[i].nodeStart || selFrom == boxes[i].nodeStart || selTo == boxes[i].nodeStart {
+            imageObjectDeletePending = nil
+            editing { replaceMediaWithEmptyParagraph(at: i) }
+            clearImageSelection()
+            return
+        }
+        imageObjectDeletePending = nil
         if tableSelection != nil {
             // A structural row/column selection is active → Backspace deletes those rows/columns (or the
             // whole table when every row/column is selected). The caret is parked in a cell, so the normal
@@ -355,27 +375,15 @@ extension DocumentCanvasView: UIKeyInput {
             }
             return
         }
-        // Caret at a media block's leading gap.
+        // Caret at a media block's leading gap → replace the media with an empty body paragraph in place.
         if let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
-            if imageSelection != nil {
-                // A tap-SELECTED media atom → delete the whole block (explicit selection delete).
-                editing { deleteImageBox(at: i) }
-                clearImageSelection()
-            } else if i > 0, let prev = boxes[i - 1] as? BlockBox {
-                // A plain caret at the gap must NOT delete the media. Act on the previous paragraph: a
-                // non-empty one → move the caret to its end (no delete); an empty one → delete it (the
-                // caret stays at the media's gap).
-                if prev.textLength == 0 {
-                    editing { deleteBlock(at: i - 1, parkingCaretAtGapOf: img) }
-                } else {
-                    setCaret(global: prev.textStart + prev.textLength)
-                }
-            } else {
-                // Media is the document's first block, or the previous block isn't a paragraph (another
-                // media / a table): move to the previous caret slot without deleting (no-op at doc start).
-                let prev = prevTextPosition(before: head)
-                if prev != head { setCaret(global: prev) }
-            }
+            // The gap caret is where a tap / structural image selection lands. The OS clears `imageSelection`
+            // via the `selectedTextRange` setter (which calls `clearStructuralSelections()`) BEFORE this runs,
+            // so the deletion can't be gated on it — a collapsed gap caret IS the structural-selection signal.
+            // Backspace replaces the media with an empty body paragraph in place (caret there), rather than
+            // acting on the previous paragraph.
+            editing { replaceMediaWithEmptyParagraph(at: i) }
+            clearImageSelection()
             return
         }
         guard let pos = resolveBox(at: head) else { return }
@@ -404,15 +412,10 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         if pos.box is MediaBlockBox, pos.local == 0 {
-            if pos.box.textLength == 0 {
-                editing { deleteImageBox(at: pos.index) }   // EMPTY caption → delete the image
-            } else {
-                // Non-empty caption: Backspace at its very start must NOT destroy the image and its caption
-                // text. Step the caret out to the gap before the image (no delete), like every other
-                // "can't merge across this boundary" branch in this method.
-                let prev = prevTextPosition(before: head)
-                if prev != head { setCaret(global: prev) }
-            }
+            // Backspace at the start of a caption replaces the whole media block with an empty body paragraph
+            // in place (caret there), discarding any caption text — consistent with the tap-selected and
+            // object-replacement-selection paths (the gap branch above / applySelectionReplace).
+            editing { replaceMediaWithEmptyParagraph(at: pos.index) }
         } else if pos.local > 0 {
             let n = graphemeClusterLengthBeforeCaret(global: head)
             editing { applyReplace(globalFrom: head - n, globalTo: head, text: "") }

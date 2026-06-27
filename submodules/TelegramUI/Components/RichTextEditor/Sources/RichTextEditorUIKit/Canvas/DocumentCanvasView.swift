@@ -266,6 +266,10 @@ final class DocumentCanvasView: UIView {
     /// Transient atom-selection of a top-level image (separate from the text selection). The BlockID
     /// guards a stale selection after a relayout/undo. nil = none. Mutually exclusive with `tableSelection`.
     var imageSelection: BlockID?
+    /// The image whose `imageSelection` was just cleared by the `selectedTextRange` setter — iOS overrides a
+    /// tap-selected media's selection (clearing `imageSelection`) right before its Backspace. `deleteBackward`
+    /// consumes this to replace that media; any non-delete edit clears it. nil = none.
+    var imageObjectDeletePending: BlockID?
     /// Marked (composing/provisional) text as global positions over the same axis as `(anchor, head)`.
     /// nil = no active composition. The provisional characters live in the leaf region's storage like
     /// any committed text; this just tracks which range is provisional (for the underline + commit).

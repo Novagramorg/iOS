@@ -45,6 +45,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     public enum RichTextAttachment {
         case image(ImageMediaReference)
         case file(FileMediaReference)
+        case location(TelegramMediaMap)
     }
     
     public var requestAttachmentMenuExpansion: () -> Void = {}
@@ -219,6 +220,15 @@ final class RichTextAttachmentScreenComponent: Component {
                     media = file
                     kind = .video
                     naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
+                case let .location(map):
+                    // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
+                    // seeds the caption (a raw dropped pin has no venue -> empty caption). Self-contained insert,
+                    // since the shared `media.id` path below can't key an id-less medium.
+                    let mediaID = "map:\(map.latitude):\(map.longitude)"
+                    self.attachedMedia[mediaID] = map
+                    let caption: [TextRun] = map.venue?.title.isEmpty == false ? [TextRun(text: map.venue!.title)] : []
+                    self.editor.insertMedia(mediaID: mediaID, naturalSize: CGSize(width: 600.0, height: 300.0), kind: .location, caption: caption)
+                    return
                 }
                 guard let mediaId = media.id else { return }
                 let mediaID = "\(mediaId.namespace):\(mediaId.id)"

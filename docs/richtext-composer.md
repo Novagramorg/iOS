@@ -170,6 +170,21 @@ All inline / structural features round-trip losslessly through the native compos
   + drafts, carried by `ChatInputContent.media`. The concrete view is the shared
   `RichTextEditorMediaView.MediaItemNodeView` (also used by the article editor), resolved via the injected
   factory (§3).
+- **Location maps:** a picked location is a `Block.media` with **`MediaKind.location`** whose `mediaID` resolves to
+  a `TelegramMediaMap`. A map is an **id-less** `Media`, so the host mints a deterministic `"map:lat:long"` key
+  (not the usual `namespace:id`). It renders inline as a map snapshot through the same `MediaItemNodeView` seam —
+  which, for a `.geo` `EngineMedia`, threads an `InstantPageMapAttribute` so `InstantPageImageNode` draws the
+  snapshot + pin — and survives expand↔collapse + drafts via `ChatInputContent.media`. It **sends as an InstantPage
+  `.map(lat, long, zoom:15, dimensions:600×300, caption)` block** (NO `pageMedia` entry — coordinates are inline).
+  BOTH converters emit it — `InstantPageBuilder` (article editor) and `ChatInputContentInstantPage` (composer) —
+  each **restructured so the id-less map isn't dropped by the `media.id` guard**; the reverse rebuilds a
+  `TelegramMediaMap` (venue/zoom/dimensions aren't represented and canonicalize to defaults, like image
+  size/alignment). **Authoring is the existing attachment menu, not a dedicated button:** the editor's single
+  attach action opens `presentRichTextAttachmentMenu` (Gallery / Audio / **Location**); the `.location` result
+  returns as **`RichTextAttachment.location(TelegramMediaMap)`** and is inserted with the venue **title** as its
+  caption (a raw dropped pin → empty caption). The rendered map shows the theme `list.mediaPlaceholderColor` while
+  the async `MKMapSnapshotter` fetch completes (see `instantpage-richtext.md`). **Deferred:** live location /
+  heading / proximity, editing a placed location's coordinates, an interactive in-editor map.
 
 ---
 

@@ -41,15 +41,31 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             pageBlocks.append(.preformatted(text: richText(from: code.runs), language: code.language))
             index += 1
         case let .media(mediaBlock):
-            // Media.id is optional on the protocol; real TelegramMedia* types always return non-nil.
-            if let resolved = media[mediaBlock.mediaID], let mediaId = resolved.id {
-                pageMedia[mediaId] = resolved // idempotent if the same mediaID appears in multiple blocks
+            if let resolved = media[mediaBlock.mediaID] {
                 let caption = InstantPageCaption(text: richText(from: mediaBlock.caption), credit: .empty)
                 switch mediaBlock.kind {
-                case .image:
-                    pageBlocks.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
-                case .video:
-                    pageBlocks.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
+                case .image, .video:
+                    // Media.id is optional on the protocol; real TelegramMedia* image/video always return non-nil.
+                    if let mediaId = resolved.id {
+                        pageMedia[mediaId] = resolved // idempotent if the same mediaID appears in multiple blocks
+                        if case .image = mediaBlock.kind {
+                            pageBlocks.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
+                        } else {
+                            pageBlocks.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
+                        }
+                    }
+                case .location:
+                    // A location resolves to a `TelegramMediaMap` (id-less); emit a `.map` block with the coordinates
+                    // inline. No `pageMedia` entry (the block carries no MediaId). See ChatInputContentInstantPage.
+                    if let map = resolved as? TelegramMediaMap {
+                        let dimensions: PixelDimensions
+                        if mediaBlock.naturalSize.width > 0, mediaBlock.naturalSize.height > 0 {
+                            dimensions = PixelDimensions(width: Int32(mediaBlock.naturalSize.width), height: Int32(mediaBlock.naturalSize.height))
+                        } else {
+                            dimensions = PixelDimensions(width: 600, height: 300)
+                        }
+                        pageBlocks.append(.map(latitude: map.latitude, longitude: map.longitude, zoom: 15, dimensions: dimensions, caption: caption))
+                    }
                 }
             }
             index += 1

@@ -412,33 +412,33 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   UIKit `needsLayout` flag. **Out of scope** (do NOT affect content height, kept as UIKit-internal mechanism):
   `setNeedsDisplay` (repaint), `syncSpoilers`' reveal re-layout, and the parent→child `view.setNeedsLayout()` /
   `tv.layoutIfNeeded()` on block/table backing views.
-- **Backspace at a media block's leading gap no longer deletes the media** (`deleteBackward`): a tap-SELECTED
-  media atom still deletes (gated on `imageSelection != nil`); a plain caret at the gap acts on the previous
-  paragraph instead — non-empty → move the caret to its end (no delete), empty → delete that paragraph
-  (`deleteBlock(at:parkingCaretAtGapOf:)`, caret stays at the media gap); first block / non-paragraph previous
-  → move to the previous caret slot (no-op at doc start).
-- **Backspace at the start of an image caption deletes the image ONLY when the caption is empty** (`deleteBackward`,
-  the `pos.box is MediaBlockBox, pos.local == 0` branch). An **empty** caption → `deleteImageBox` removes the
-  image; a **non-empty** caption → the caret steps back to the image's gap (`prevTextPosition`, no delete) so a
-  stray Backspace can't destroy the image *and* its caption text. (Previously it deleted the image at caption
-  start regardless of caption content — a footgun.) `deleteImageBox` also now **never leaves a zero-block
-  document**: removing the only block (a lone `[image]`, reachable since insert-on-empty-paragraph replaces it)
-  appends a fresh empty paragraph — this guard covers every `deleteImageBox` caller (caption-delete + the
-  tap-selected-image delete).
-- **A delete whose selection EXACTLY covers one media node deletes the image** (`applySelectionReplace`,
-  runtime-discovered 2026-06-25 via the Demo). The collapsed-caret caption branch above is mostly unreachable
-  from a real tap: **UIKit expands a collapsed caret at an image's empty caption into a selection
-  `[nodeStart, captionEnd]`** (the "object-replacement" atom), pushed through the `selectedTextRange` setter
-  right after the tap. Backspace then takes the `selFrom != selTo` path; both endpoints resolve to the SAME
-  media box, so the same-stack `applyReplace` computes a zero-length edit and **silently no-ops** — the
-  reported "backspace on an empty caption does nothing" bug. `applySelectionReplace` now special-cases a
-  `text.isEmpty` range whose bounds equal a media block's node span (`from == box.nodeStart && to ==
-  box.textStart + box.textLength`) and calls `deleteImageBox`. A selection that also covers adjacent text has
-  different bounds, so it still flows to the normal cross-block drop path. (A *non-empty* caption's atom
-  selection is `[nodeStart, textStart]` ≠ the node span, so it does NOT match — consistent with the
-  "non-empty caption never auto-deletes the image" rule above.) **Lesson: a bare custom `UITextInput` still
-  receives OS-driven `selectedTextRange` writes that turn a caret into an atom selection — unit tests that set
-  the caret directly miss it; reproduce caret placement the way iOS drives it (or in the Demo).**
+- **Backspace targeting a media block replaces it with an empty body paragraph IN PLACE** (2026-06-27, supersedes
+  the older per-case media-backspace rules). `replaceMediaWithEmptyParagraph(at:)` removes the media block and
+  drops a fresh empty `.body` paragraph in its slot, caret there — NOT the old delete-and-merge-into-the-block-above
+  (`deleteImageBox`) nor the old "act on the previous paragraph" gap behavior. It unifies every way a Backspace
+  "lands on" a media block, reached on FOUR paths in `deleteBackward` / `applySelectionReplace`:
+  - **collapsed caret at the media's leading gap** (`mediaBox(atGap: head)` branch);
+  - **collapsed caret at the start of the caption** (`pos.box is MediaBlockBox, pos.local == 0`) — empty OR
+    non-empty caption (the caption text is **discarded**);
+  - **a selection whose bounds EXACTLY equal a media node's span** (`from == nodeStart && to == textStart +
+    textLength`) in `applySelectionReplace` (deliberate select-the-image-then-delete);
+  - **the iOS object-replacement RANGE of a tap-selected media — the LOAD-BEARING, compiler-invisible case**
+    (device-log-verified). Tapping a media runs `selectImage` (collapsed caret at the gap, `imageSelection` set),
+    but the `selectedTextRange` setter clears `imageSelection` and, right before Backspace, **iOS OVERRIDES the
+    selection to a RANGE whose head sits at the media's gap yet ANCHORS IN THE PRECEDING BLOCK** — iOS's
+    object-replacement geometry is offset from our position model, so the range does NOT cover the media node. A
+    naive `selFrom != selTo` delete erases the *preceding* text and KEEPS the media ("cursor moves into the
+    paragraph above"). So the setter stashes the just-cleared image into **`imageObjectDeletePending`** (a
+    `BlockID?` on the canvas), and `deleteBackward` consumes it at the top — when the selection touches that
+    media's gap — to replace the media. `insertText` and any non-matching `deleteBackward` clear the flag so it
+    can't go stale. **Lesson (reinforced): a bare custom `UITextInput` receives OS-driven `selectedTextRange`
+    writes that turn a tap into an *offset* object-replacement range — unit tests that set the caret/selection
+    directly miss it; capture the real sequence from the device (`NSLog` + `xcrun simctl spawn <udid> log
+    stream`), don't hypothesise twice.**
+
+  A media delete never leaves a zero-block document (a lone-block replace yields the empty paragraph). The image
+  edit-menu **"Delete"** still fully REMOVES the block (`deleteImageBox`, merges up) — only Backspace was
+  respecified. (`deleteBlock(at:parkingCaretAtGapOf:)` was removed with its sole caller.)
 - **Backspace at the start of a paragraph AFTER a non-text block deletes the empty paragraph, never the block**
   (`deleteBackward`, the mirror of the leading-gap rule above). A collapsed caret at the start (`local == 0`) of
   a paragraph whose previous block is a non-text **atom** — an image (`MediaBlockBox`), a table (`TableBlockBox`),
