@@ -28,6 +28,8 @@ private enum FenixSection: Int32 {
     case chatLock = 7
     case reminder = 8
     case features = 9
+    // Ads section — hidden Easter-egg, revealed by 15-second long-press on the NovagramPro page
+    case ads = 10
 }
 
 private func textStyleDisplayName(_ rawValue: String, l10n: FenixuzL10n) -> String {
@@ -124,6 +126,13 @@ private enum FenixEntry: ItemListNodeEntry {
     case shareNovagramProLink(PresentationTheme, String)
     case featuresFooter(PresentationTheme, String)
 
+    // — Ads Section (hidden Easter-egg, revealed via 15-second long-press) —
+    // isNew: true so the section header carries a green "NEW" badge when it first appears
+    case adsHeader(String, Bool)
+    // showAds Bool = current toggle value; isNew Bool = badge flag
+    case showAds(PresentationTheme, String, String, Bool, Bool)
+    case adsAbout(PresentationTheme, String)
+
     // — Accounts (Fenixuz multi-account) —
     case accountsHeader(String)
     case accountsManager(PresentationTheme, String)
@@ -150,6 +159,8 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.reminder.rawValue
         case .featuresHeader, .addRecommendedFolders, .folderStyle, .channelHistoryButton, .settingsLinks, .autoAcceptRequests, .shareNovagramProLink, .featuresFooter:
             return FenixSection.features.rawValue
+        case .adsHeader, .showAds, .adsAbout:
+            return FenixSection.ads.rawValue
         case .accountsHeader, .accountsManager, .aboutRow:
             return FenixSection.accounts.rawValue
         }
@@ -218,6 +229,10 @@ private enum FenixEntry: ItemListNodeEntry {
         case .autoAcceptRequests:        return 85
         case .shareNovagramProLink:      return 86
         case .featuresFooter:            return 87
+        // Ads section (hidden Easter-egg)
+        case .adsHeader:                 return 90
+        case .showAds:                   return 91
+        case .adsAbout:                  return 92
         // Accounts (rendered at the top of the list)
         case .accountsHeader:            return -2
         case .accountsManager:           return -1
@@ -347,6 +362,14 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .shareNovagramProLink(rhsTheme, rhsTitle) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle { return true } else { return false }
         case let .featuresFooter(lhsTheme, lhsText):
             if case let .featuresFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
+
+        case let .adsHeader(lhsText, lhsIsNew):
+            if case let .adsHeader(rhsText, rhsIsNew) = rhs, lhsText == rhsText, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .showAds(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .showAds(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs,
+               lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .adsAbout(lhsTheme, lhsText):
+            if case let .adsAbout(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
         case let .accountsHeader(lhsText):
             if case let .accountsHeader(rhsText) = rhs, lhsText == rhsText { return true } else { return false }
@@ -734,6 +757,42 @@ private enum FenixEntry: ItemListNodeEntry {
             )
         case let .featuresFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
+
+        // ─── ADS (hidden Easter-egg section) ───
+        case let .adsHeader(text, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badgeText: String? = isNew ? FenixNewBadgeLabel.headerText(langCode: langCode) : nil
+            let badgeStyle: ItemListSectionHeaderItem.BadgeStyle? = isNew
+                ? ItemListSectionHeaderItem.BadgeStyle(
+                    background: UIColor(red: 0.18, green: 0.74, blue: 0.44, alpha: 1.0),
+                    foreground: .white
+                )
+                : nil
+            return ItemListSectionHeaderItem(
+                presentationData: presentationData,
+                text: text,
+                badge: badgeText,
+                badgeStyle: badgeStyle,
+                sectionId: self.section
+            )
+        case let .showAds(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(
+                presentationData: presentationData,
+                icon: fenixuzSettingsIcon(systemName: "megaphone.fill", color: .orange),
+                title: title,
+                text: text,
+                titleBadgeComponent: badge,
+                value: value,
+                sectionId: self.section,
+                style: .blocks,
+                updated: { val in
+                    arguments.updateShowAds(val)
+                }
+            )
+        case let .adsAbout(_, text):
+            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         }
     }
 }
@@ -775,6 +834,11 @@ private struct FenixSettingsState: Equatable {
     var channelHistoryEnabled: Bool
     var settingsLinksEnabled: Bool
     var autoAcceptEnabled: Bool
+    // Ads section (Feature #6 — hidden Easter-egg)
+    // Default true: sponsored messages shown (standard Telegram behavior)
+    var showAds: Bool
+    // Default false: Ads section hidden until 15-second long-press reveals it
+    var adsSectionRevealed: Bool
 
     init() {
         self.showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
@@ -816,6 +880,9 @@ private struct FenixSettingsState: Equatable {
         self.channelHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_channel_history_button") ?? false
         self.settingsLinksEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_settings_links") ?? false
         self.autoAcceptEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "fenix_autoaccept_global") ?? false
+        // Ads section — default true (show ads) and false (section hidden)
+        self.showAds = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_show_ads") as? Bool ?? true
+        self.adsSectionRevealed = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_ads_section_revealed") as? Bool ?? false
     }
 
     static func == (lhs: FenixSettingsState, rhs: FenixSettingsState) -> Bool {
@@ -907,6 +974,12 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.autoAcceptEnabled != rhs.autoAcceptEnabled {
+            return false
+        }
+        if lhs.showAds != rhs.showAds {
+            return false
+        }
+        if lhs.adsSectionRevealed != rhs.adsSectionRevealed {
             return false
         }
         return true
@@ -1085,6 +1158,13 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     }
     entries.append(.featuresFooter(presentationData.theme, FenixFeaturesStrings.footer(langCode: langCode)))
 
+    // ─── ADS (hidden Easter-egg, revealed by 15-second long-press) ───
+    if state.adsSectionRevealed {
+        entries.append(.adsHeader(FenixAdsStrings.sectionTitle(langCode: langCode), true))
+        entries.append(.showAds(presentationData.theme, FenixAdsStrings.toggleTitle(langCode: langCode), FenixAdsStrings.toggleTip(langCode: langCode), state.showAds, true))
+        entries.append(.adsAbout(presentationData.theme, FenixAdsStrings.about(langCode: langCode)))
+    }
+
     // ItemListController entries should arrive in stableId order to avoid an
     // assertion. Section visual order is controlled by stableId numbering.
     return entries.sorted()
@@ -1128,8 +1208,10 @@ private final class FenixSettingsArguments {
     let updateSettingsLinks: (Bool) -> Void
     let shareNovagramProLink: () -> Void
     let updateAutoAccept: (Bool) -> Void
+    // Ads section (Feature #6 — hidden Easter-egg)
+    let updateShowAds: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openCalls = openCalls
@@ -1166,6 +1248,7 @@ private final class FenixSettingsArguments {
         self.updateSettingsLinks = updateSettingsLinks
         self.shareNovagramProLink = shareNovagramProLink
         self.updateAutoAccept = updateAutoAccept
+        self.updateShowAds = updateShowAds
     }
 }
 
@@ -1536,6 +1619,15 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             state.autoAcceptEnabled = value
             return state
         }
+    }, updateShowAds: { value in
+        // Feature #6: Ads toggle — writes the key that ChatHistoryListNode reads on init.
+        // true (default) = sponsored messages shown; false = suppressed.
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "fenix_show_ads")
+        updateState { state in
+            var state = state
+            state.showAds = value
+            return state
+        }
     })
 
     let signal = combineLatest(
@@ -1555,6 +1647,43 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
     presentControllerImpl = { [weak controller] c in
         controller?.present(c, in: .window(.root))
     }
+
+    // Part C — 15-second long-press Easter-egg: reveals / hides the Ads section.
+    // Uses didAppear (firstTime = true) so the view is guaranteed loaded.
+    // UILongPressGestureRecognizer retains FenixSecretGestureTarget via its internal target array.
+    controller.didAppear = { [weak controller] firstTime in
+        guard firstTime, let controller else { return }
+        let target = FenixSecretGestureTarget { [weak controller] in
+            guard let controller else { return }
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let defaults = UserDefaults(suiteName: "pro_messager")
+            let wasRevealed = defaults?.object(forKey: "fenix_ads_section_revealed") as? Bool ?? false
+            let nowRevealed = !wasRevealed
+            defaults?.set(nowRevealed, forKey: "fenix_ads_section_revealed")
+            // Haptic confirmation
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            // Refresh settings list live
+            updateState { state in
+                var state = state
+                state.adsSectionRevealed = nowRevealed
+                return state
+            }
+            // Brief confirmation alert
+            let alertText = FenixAdsStrings.revealedAlert(revealed: nowRevealed, langCode: langCode)
+            let alert = textAlertController(
+                context: context,
+                title: nil,
+                text: alertText,
+                actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]
+            )
+            controller.present(alert, in: .window(.root))
+        }
+        let gr = UILongPressGestureRecognizer(target: target, action: #selector(FenixSecretGestureTarget.fire(_:)))
+        gr.minimumPressDuration = 15.0
+        controller.view.addGestureRecognizer(gr)
+    }
+
     return controller
 }
 
@@ -1862,6 +1991,85 @@ private enum FenixHeartEffectStrings {
         case "uz": return "Yuborilgan xabarlarga ❤️ animatsion effektini avtomatik qo'shadi"
         case "ru": return "Автоматически добавляет анимированный эффект ❤️ к отправленным сообщениям"
         default:   return "Automatically adds the ❤️ animated effect to sent messages"
+        }
+    }
+}
+
+// MARK: - Feature #6: Secret gesture target (Part C — 15-second long-press Easter-egg)
+// Holds a closure so UILongPressGestureRecognizer can call it via target-action.
+// UIGestureRecognizer retains its targets in an internal array, so no extra strong
+// reference is needed — the view's gestureRecognizers keeps the whole chain alive.
+
+private final class FenixSecretGestureTarget: NSObject {
+    private let action: () -> Void
+
+    init(_ action: @escaping () -> Void) {
+        self.action = action
+        super.init()
+    }
+
+    @objc func fire(_ gr: UIGestureRecognizer) {
+        guard gr.state == .began else { return }
+        action()
+    }
+}
+
+// MARK: - Local string namespace (Feature #6 — Ads Easter-egg)
+// Hidden section strings: en / uz / ru. Kept local to avoid parallel-edit hazard on
+// the shared Localization module.
+
+private enum FenixAdsStrings {
+    static func sectionTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Reklama"
+        case "ru": return "Реклама"
+        default:   return "Ads"
+        }
+    }
+
+    static func toggleTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Reklamani ko'rsatish"
+        case "ru": return "Показывать рекламу"
+        default:   return "Show ads"
+        }
+    }
+
+    static func toggleTip(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Yoqilsa — Telegram sponsorlik xabarlari ko'rsatiladi; o'chirilsa — yashiriladi"
+        case "ru": return "Вкл — спонсорские сообщения Telegram показываются; выкл — скрыты"
+        default:   return "On — Telegram sponsored messages shown; Off — suppressed"
+        }
+    }
+
+    static func about(langCode: String) -> String {
+        switch langCode {
+        case "uz":
+            return "Bu sozlama Telegram kanallaridagi sponsorlik xabarlarini boshqaradi. " +
+                   "O'chirib qo'ysangiz, reklamalar umuman ko'rinmaydi."
+        case "ru":
+            return "Этот параметр управляет спонсорскими сообщениями Telegram в каналах. " +
+                   "При выключении реклама не будет показываться."
+        default:
+            return "Controls Telegram sponsored messages in channels. " +
+                   "When turned off, no sponsored messages are shown."
+        }
+    }
+
+    static func revealedAlert(revealed: Bool, langCode: String) -> String {
+        if revealed {
+            switch langCode {
+            case "uz": return "Reklama bo'limi ochildi"
+            case "ru": return "Раздел рекламы открыт"
+            default:   return "Ads section shown"
+            }
+        } else {
+            switch langCode {
+            case "uz": return "Reklama bo'limi yashirildi"
+            case "ru": return "Раздел рекламы скрыт"
+            default:   return "Ads section hidden"
+            }
         }
     }
 }

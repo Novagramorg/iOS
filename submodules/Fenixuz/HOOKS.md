@@ -282,6 +282,28 @@ The `prewarmIfDemo` call is a no-op for any non-demo number, so real users are u
 
 ## 📌 TelegramUI module
 
+### `submodules/TelegramUI/Sources/ChatHistoryListNode.swift` (2026-06-27)
+
+**Inside `init(...)` — at the `var adMessages:` declaration block (around line 828)**. Find:
+
+```swift
+var adMessages: Signal<(interPostInterval: Int32?, messages: [Message], startDelay: Int32?, betweenDelay: Int32?), NoError>
+if case .bubbles = mode, let adMessagesContext {
+```
+
+Replace with:
+
+```swift
+var adMessages: Signal<(interPostInterval: Int32?, messages: [Message], startDelay: Int32?, betweenDelay: Int32?), NoError>
+// Fenixuz: fenix_show_ads — NovagramPro Ads toggle. Default true = sponsored messages shown.
+let fenixShowAds = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_show_ads") as? Bool ?? true
+if fenixShowAds, case .bubbles = mode, let adMessagesContext {
+```
+
+Reason: `ChatHistoryListNode.init` is the single chokepoint that decides whether `adMessagesContext.state` (the sponsored-message stream) is wired into the list or replaced by an empty signal. Adding `fenixShowAds,` as the first condition in the `if` sends execution to the existing `else { adMessages = .single((nil, [], nil, nil)) }` branch whenever the user has turned ads off, suppressing all sponsored messages with zero change to downstream logic. The key is read from UserDefaults at node-init time — the user must re-open a channel chat for the change to take effect (no live reactive update, matching the simplicity of the toggle). Feature #6: NovagramPro Ads Easter-egg section.
+
+---
+
 ### `submodules/TelegramUI/BUILD` (2026-06-27)
 
 In the `deps = [...]` list, append:
