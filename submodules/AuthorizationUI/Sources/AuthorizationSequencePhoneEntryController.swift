@@ -19,9 +19,9 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     private var controllerNode: AuthorizationSequencePhoneEntryControllerNode {
         return self.displayNode as! AuthorizationSequencePhoneEntryControllerNode
     }
-    
+
     private var validLayout: ContainerViewLayout?
-    
+
     private let sharedContext: SharedAccountContext
     private var account: UnauthorizedAccount?
     private let apiId: Int32
@@ -31,23 +31,27 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     private let network: Network
     private let presentationData: PresentationData
     private let openUrl: (String) -> Void
-    
+
     private let back: () -> Void
-    
+
     private var currentData: (Int32, String?, String)?
-        
+
+    // Fenixuz: QR-login state — the nav bar carries the QR-icon entry; the overlay
+    // carries its own back button, so we just hide the icon while the overlay is up.
+    private var isQrOverlayVisible = false
+
     var codeNode: ASDisplayNode {
         return self.controllerNode.codeNode
     }
-    
+
     var numberNode: ASDisplayNode {
         return self.controllerNode.numberNode
     }
-    
+
     var buttonNode: ASDisplayNode {
         return self.controllerNode.buttonNode
     }
-    
+
     public var inProgress: Bool = false {
         didSet {
             self.updateNavigationItems()
@@ -58,13 +62,13 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
     public var loginWithNumber: ((String, Bool) -> Void)?
     public var loginWithPasskey: ((AuthorizationPasskeyData, Bool) -> Void)?
     var accountUpdated: ((UnauthorizedAccount) -> Void)?
-    
+
     weak var confirmationController: PhoneConfirmationController?
-    
+
     private let termsDisposable = MetaDisposable()
-    
+
     private let hapticFeedback = HapticFeedback()
-    
+
     public init(sharedContext: SharedAccountContext, account: UnauthorizedAccount?, countriesConfiguration: CountriesConfiguration? = nil, apiId: Int32, apiHash: String, isTestingEnvironment: Bool, otherAccountPhoneNumbers: ((String, AccountRecordId, Bool)?, [(String, AccountRecordId, Bool)]), network: Network, presentationData: PresentationData, openUrl: @escaping (String) -> Void, back: @escaping () -> Void) {
         self.sharedContext = sharedContext
         self.account = account
@@ -76,13 +80,13 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         self.presentationData = presentationData
         self.openUrl = openUrl
         self.back = back
-                
+
         super.init(navigationBarPresentationData: NavigationBarPresentationData(theme: AuthorizationSequenceController.navigationBarTheme(presentationData.theme), strings: NavigationBarStrings(presentationStrings: presentationData.strings)))
-        
+
         self.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
-        
+
         self.hasActiveInput = true
-        
+
         self.statusBar.statusBarStyle = presentationData.theme.intro.statusBarStyle.style
         self.attemptNavigation = { _ in
             return false
@@ -90,33 +94,69 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         self.navigationBar?.backPressed = {
             back()
         }
-        
+
         if !otherAccountPhoneNumbers.1.isEmpty {
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "___close", style: .plain, target: self, action: #selector(self.cancelPressed))
         }
-        
+
         if let countriesConfiguration {
             AuthorizationSequenceCountrySelectionController.setupCountryCodes(countries: countriesConfiguration.countries, codesByPrefix: countriesConfiguration.countriesByPrefix)
         }
     }
-    
+
     required init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     deinit {
         self.termsDisposable.dispose()
     }
-    
+
     @objc private func cancelPressed() {
         self.back()
     }
-    
+
+    // Fenixuz: nav-bar QR icon → open the QR-login overlay.
+    @objc private func qrIconPressed() {
+        self.controllerNode.presentQrOverlay()
+    }
+
+    // Fenixuz: the overlay carries its own top-left back button (it covers the nav bar),
+    // so here we only track state, dismiss the keyboard, and hide the nav-bar QR icon
+    // while the overlay is up — restoring it (and the keyboard) when it is dismissed.
+    private func handleQrOverlayVisibility(_ visible: Bool) {
+        self.isQrOverlayVisible = visible
+        if visible {
+            self.view.endEditing(true)
+            self.navigationItem.rightBarButtonItem = nil
+        } else {
+            self.updateNavigationItems()
+            self.controllerNode.activateInput()
+        }
+    }
+
     func updateNavigationItems() {
-        guard let layout = self.validLayout, layout.size.width < 360.0 else {
+        guard let layout = self.validLayout else {
             return
         }
-                
+        // Fenixuz: while the QR overlay is up its own back button handles dismissal and
+        // the nav bar is hidden behind it — don't set nav-bar items in that state.
+        if self.isQrOverlayVisible {
+            return
+        }
+        // Fenixuz: on full-size layouts the QR-code login entry lives in the nav bar
+        // (toolbar) as a QR icon. The small-layout "Next" item logic stays below.
+        if layout.size.width >= 360.0 {
+            if !self.inProgress, self.account != nil, let qrImage = UIImage(systemName: "qrcode") {
+                let item = UIBarButtonItem(image: qrImage, style: .plain, target: self, action: #selector(self.qrIconPressed))
+                item.accessibilityLabel = "Log in by QR code"
+                self.navigationItem.rightBarButtonItem = item
+            } else {
+                self.navigationItem.rightBarButtonItem = nil
+            }
+            return
+        }
+
         if self.inProgress {
             let item = UIBarButtonItem(customDisplayNode: ProgressNavigationButtonNode(color: self.presentationData.theme.rootController.navigationBar.accentTextColor))
             self.navigationItem.rightBarButtonItem = item
@@ -124,25 +164,25 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: self.presentationData.strings.Common_Next, style: .done, target: self, action: #selector(self.nextPressed))
         }
     }
-    
+
     public func updateData(countryCode: Int32, countryName: String?, number: String) {
         self.currentData = (countryCode, countryName, number)
         if self.isNodeLoaded {
             self.controllerNode.codeAndNumber = (countryCode, countryName, number)
         }
     }
-    
+
     private var shouldAnimateIn = false
     private var transitionInArguments: (buttonFrame: CGRect, buttonTitle: String, animationSnapshot: UIView, textSnapshot: UIView)?
-    
+
     func animateWithSplashController(_ controller: AuthorizationSequenceSplashController) {
         self.shouldAnimateIn = true
-        
+
         if let animationSnapshot = controller.animationSnapshot, let textSnapshot = controller.textSnaphot {
             self.transitionInArguments = (controller.buttonFrame, controller.buttonTitle, animationSnapshot, textSnapshot)
         }
     }
-    
+
     override public func loadDisplayNode() {
         self.displayNode = AuthorizationSequencePhoneEntryControllerNode(sharedContext: self.sharedContext, account: self.account, strings: self.presentationData.strings, theme: self.presentationData.theme, debugAction: { [weak self] in
             guard let strongSelf = self else {
@@ -158,20 +198,24 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             strongSelf.account = account
             strongSelf.accountUpdated?(account)
         }
+        // Fenixuz: swap the nav bar between the QR icon and a back button as the overlay shows/hides.
+        self.controllerNode.qrOverlayVisibilityChanged = { [weak self] visible in
+            self?.handleQrOverlayVisibility(visible)
+        }
         self.controllerNode.retryPasskey = { [weak self] in
             guard let self else {
                 return
             }
             self.loadAndPresentPasskey(force: true)
         }
-        
+
         if let (code, name, number) = self.currentData {
             self.controllerNode.codeAndNumber = (code, name, number)
         }
         self.displayNodeDidLoad()
-        
+
         self.controllerNode.view.disableAutomaticKeyboardHandling = [.forward, .backward]
-        
+
         self.controllerNode.selectCountryCode = { [weak self] in
             if let strongSelf = self {
                 let controller = AuthorizationSequenceCountrySelectionController(strings: strongSelf.presentationData.strings, theme: strongSelf.presentationData.theme, glass: true)
@@ -181,7 +225,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                         strongSelf.controllerNode.activateInput()
                     }
                 }
-                controller.dismissed = { 
+                controller.dismissed = {
                     self?.controllerNode.activateInput()
                 }
                 strongSelf.push(controller)
@@ -190,7 +234,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         self.controllerNode.checkPhone = { [weak self] in
             self?.nextPressed()
         }
-        
+
         if let account = self.account {
             loadServerCountryCodes(accountManager: sharedContext.accountManager, engine: TelegramEngineUnauthorized(account: account), completion: { [weak self] in
                 if let strongSelf = self {
@@ -200,17 +244,17 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
         } else {
             self.controllerNode.updateCountryCode()
         }
-        
+
         self.loadAndPresentPasskey(force: false)
     }
-    
+
     private func loadAndPresentPasskey(force: Bool) {
         if #available(iOS 16.0, *) {
             Task { @MainActor [weak self] in
                 guard let self, let account = self.account else {
                     return
                 }
-                
+
                 let decodeBase64: (String) -> Data? = { string in
                     var string = string.replacingOccurrences(of: "-", with: "+")
                         .replacingOccurrences(of: "_", with: "/")
@@ -219,7 +263,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                     }
                     return Data(base64Encoded: string)
                 }
-                
+
                 let engine = TelegramEngineUnauthorized(account: account)
                 let passkeyDataString = await engine.auth.requestPasskeyLoginData(apiId: self.apiId, apiHash: self.apiHash).get()
                 guard let passkeyDataString, let passkeyData = passkeyDataString.data(using: .utf8) else {
@@ -240,7 +284,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                 guard let challengeData = decodeBase64(challengeBase64) else {
                     return
                 }
-                
+
                 let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: relyingPartyIdentifier)
                 let platformKeyRequest = platformProvider.createCredentialAssertionRequest(challenge: challengeData)
                 let authController = ASAuthorizationController(authorizationRequests: [platformKeyRequest])
@@ -254,13 +298,13 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             }
         }
     }
-    
+
     public func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         Task { @MainActor [weak self] in
             guard let self, let account = self.account else {
                 return
             }
-            
+
             let encodeBase64URL: (Data) -> String = { data in
                 var string = data.base64EncodedString()
                 string = string
@@ -269,7 +313,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                 string = string.replacingOccurrences(of: "=", with: "")
                 return string
             }
-            
+
             if #available(iOS 17.0, *) {
                 if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
                     guard let clientData = String(data: credential.rawClientDataJSON, encoding: .utf8) else {
@@ -286,7 +330,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                         userHandle: userHandle
                     )
                     self.loginWithPasskey?(passkey, self.controllerNode.syncContacts)
-                    
+
                     /*if let clientData = String(data: credential.rawClientDataJSON, encoding: .utf8), let attestationObject = credential.rawAttestationObject {
                         let passkey = await component.context.engine.auth.requestCreatePasskey(id: encodeBase64URL(credential.credentialID), clientData: clientData, attestationObject: attestationObject).get()
                         if let passkey {
@@ -297,8 +341,8 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                             self.state?.updated(transition: .immediate)
                         }
                     }*/
-                    let _ = account
-                    let _ = credential
+                    _ = account
+                    _ = credential
                 }
             }
         }
@@ -312,22 +356,22 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             }
         }
     }
-    
+
     public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         guard let windowScene = self.view.window?.windowScene else {
             preconditionFailure()
         }
         return ASPresentationAnchor(windowScene: windowScene)
     }
-    
+
     public func updateCountryCode() {
         self.controllerNode.updateCountryCode()
     }
-    
+
     private var animatingIn = false
     override public func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        
+
         if self.shouldAnimateIn {
             self.animatingIn = true
             if let (buttonFrame, buttonTitle, animationSnapshot, textSnapshot) = self.transitionInArguments {
@@ -340,35 +384,35 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             self.controllerNode.activateInput()
         }
     }
-    
+
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
+
         if !self.animatingIn {
             self.controllerNode.activateInput()
         }
     }
-    
+
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        
+
         if let confirmationController = self.confirmationController {
             confirmationController.transitionOut()
         }
     }
-    
+
     override public func containerLayoutUpdated(_ layout: ContainerViewLayout, transition: ContainedViewLayoutTransition) {
         super.containerLayoutUpdated(layout, transition: transition)
-        
+
         let hadLayout = self.validLayout != nil
         self.validLayout = layout
-        
+
         if !hadLayout {
             self.updateNavigationItems()
         }
-    
+
         self.controllerNode.containerLayoutUpdated(layout, navigationBarHeight: self.navigationLayout(layout: layout).navigationFrame.maxY, transition: transition)
-        
+
         if self.shouldAnimateIn, let inputHeight = layout.inputHeight, inputHeight > 0.0 {
             if let (buttonFrame, buttonTitle, animationSnapshot, textSnapshot) = self.transitionInArguments {
                 self.shouldAnimateIn = false
@@ -376,12 +420,12 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             }
         }
     }
-    
+
     public func dismissConfirmation() {
         self.confirmationController?.dismissAnimated()
         self.confirmationController = nil
     }
-    
+
     @objc func nextPressed() {
         guard self.confirmationController == nil else {
             return
@@ -395,7 +439,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
                     existing = (number, id)
                 }
             }
-            
+
             if let (_, id) = existing {
                 var actions: [TextAlertAction] = []
                 if let (current, _, _) = self.otherAccountPhoneNumbers.0, logInNumber != cleanPhoneNumber(current, removePlus: true) {
@@ -439,7 +483,7 @@ public final class AuthorizationSequencePhoneEntryController: ViewController, MF
             self.controllerNode.animateError()
         }
     }
-    
+
     public func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
         controller.dismiss(animated: true, completion: nil)
     }
