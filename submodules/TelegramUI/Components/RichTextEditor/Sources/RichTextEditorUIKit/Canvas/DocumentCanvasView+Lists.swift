@@ -29,6 +29,7 @@ extension DocumentCanvasView {
             p.isLastBlock = (p === last)
             p.resolvedListMarker = labels[p.id]
             p.placeholders = self.placeholders
+            p.hostsChecklistCheckbox = (self.checklistMarkerViewProvider != nil) && (p.listMembership?.marker == .checklist)
         }
     }
 
@@ -51,7 +52,19 @@ extension DocumentCanvasView {
                 let boxLo = p.textStart, boxHi = p.textStart + p.textLength
                 guard selFrom <= boxHi && selTo >= boxLo else { continue }
                 if let marker = marker {
-                    p.listMembership = ListMembership(marker: marker, level: p.listMembership?.level ?? 0)
+                    // Seed `checked` only when the box becomes a checklist FRESH; when it is already a
+                    // `.checklist`, preserve its current checked state so re-applying the checklist marker
+                    // (host re-tap, or a mixed multi-paragraph selection) never silently unticks an item.
+                    let checked: Bool?
+                    if marker == .checklist {
+                        checked = (p.listMembership?.marker == .checklist) ? (p.listMembership?.checked ?? false) : false
+                    } else {
+                        checked = nil
+                    }
+                    p.listMembership = ListMembership(
+                        marker: marker,
+                        level: p.listMembership?.level ?? 0,
+                        checked: checked)
                 } else {
                     p.listMembership = nil
                 }
@@ -59,6 +72,30 @@ extension DocumentCanvasView {
             }
             recomputeSpans()
         }
+    }
+
+    /// The top-level `.checklist` box whose checkbox (marker rect, inflated to a ≥30pt touch target)
+    /// contains `point` (canvas coords), or nil.
+    func checklistBox(atCanvasPoint point: CGPoint) -> BlockBox? {
+        let minTarget: CGFloat = 30
+        for case let p as BlockBox in boxes {
+            guard let rect = p.checklistMarkerCanvasRect() else { continue }
+            let dx = max(0, (minTarget - rect.width) / 2), dy = max(0, (minTarget - rect.height) / 2)
+            if rect.insetBy(dx: -dx, dy: -dy).contains(point) { return p }
+        }
+        return nil
+    }
+
+    /// Flips a checklist item's `checked` state as one undo step. Does not move the caret.
+    func toggleChecklistItem(box: BlockBox) {
+        guard box.listMembership?.marker == .checklist else { return }
+        let newValue = !(box.listMembership?.checked ?? false)
+        editing {
+            box.listMembership?.checked = newValue
+            restyle(box)
+            recomputeSpans()
+        }
+        checklistMarkerViews[box.id]?.view.setChecked(newValue, animated: true)
     }
 
     /// Re-applies the paragraph style (reflecting the box's current style + list membership) across

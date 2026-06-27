@@ -624,8 +624,10 @@ func updateChatPresentationInterfaceStateImpl(
         selfController.displayBirthdayTooltip()
     }
         
-    if case .standard(.embedded) = selfController.presentationInterfaceState.mode, let controllerInteraction = selfController.controllerInteraction, let interfaceInteraction = selfController.interfaceInteraction {
-        if let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(selfController.presentationInterfaceState, context: selfController.context, currentPanel: selfController.customNavigationPanelNode as? ChatTitleAccessoryPanelNode, controllerInteraction: controllerInteraction, interfaceInteraction: interfaceInteraction, force: true) {
+    if case .standard(.embedded) = selfController.presentationInterfaceState.mode {
+        if selfController.hideTopPanels {
+            selfController.customNavigationPanelNode = nil
+        } else if let controllerInteraction = selfController.controllerInteraction, let interfaceInteraction = selfController.interfaceInteraction, let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(selfController.presentationInterfaceState, context: selfController.context, currentPanel: selfController.customNavigationPanelNode as? ChatTitleAccessoryPanelNode, controllerInteraction: controllerInteraction, interfaceInteraction: interfaceInteraction, force: true) {
             selfController.customNavigationPanelNode = titleAccessoryPanelNode as? ChatControllerCustomNavigationPanelNode
         } else {
             selfController.customNavigationPanelNode = nil

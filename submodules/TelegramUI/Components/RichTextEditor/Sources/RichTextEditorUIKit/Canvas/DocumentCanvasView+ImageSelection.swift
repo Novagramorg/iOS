@@ -48,13 +48,13 @@ extension DocumentCanvasView {
 
     /// Two-step tap on an image (mirrors the table-handle two-step): first tap selects it; a tap on the
     /// already-selected image toggles its edit menu (reusing the flicker guard).
-    func handleImageTap(_ img: MediaBlockBox, wasMenuVisible: Bool) {
+    func handleImageTap(_ img: MediaBlockBox, wasMenuVisible: Bool, wasFirstResponder: Bool) {
         if imageSelection != img.id {
             dismissEditMenu()
             selectImage(img)
         } else {
             let justDismissed = Date().timeIntervalSinceReferenceDate - lastMenuDismissTime < Self.menuToggleSuppressWindow
-            switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed) {
+            switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed, wasFirstResponder: wasFirstResponder) {
             case .present: presentEditMenu()
             case .dismiss: dismissEditMenu()
             }

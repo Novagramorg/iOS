@@ -22,7 +22,9 @@ extension DocumentCanvasView {
                 let boxLo = p.textStart, boxHi = p.textStart + p.textLength
                 guard selFrom <= boxHi && selTo >= boxLo else { continue }
                 let newLevel = max(0, min(m.level + delta, maxListLevel))
-                p.listMembership = ListMembership(marker: m.marker, level: newLevel)
+                // preserve `checked` — a `.checklist` membership must always carry a non-nil checked state
+                // (indent/outdent must not silently uncheck or drift to bullet on round-trip)
+                p.listMembership = ListMembership(marker: m.marker, level: newLevel, checked: m.checked)
                 restyle(p)
             }
             recomputeSpans()   // symmetry with setList; a level bump leaves token spans unchanged

@@ -310,6 +310,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var currentTextInputBackgroundWidthOffset: CGFloat = 0.0
     
     private var enableBounceAnimations: Bool = false
+    private var enableRichTextInput: Bool = false
     
     public var displayAttachmentMenu: () -> Void = { }
     public var sendMessage: () -> Void = { }
@@ -823,6 +824,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             self.enableBounceAnimations = false
         }*/
         
+        self.enableRichTextInput = true
+        if let data = self.context?.currentAppConfiguration.with({ $0 }).data, data["ios_killswitch_rich_input"] != nil {
+            self.enableRichTextInput = false
+        }
+        
         self.sendAsAvatarContainerNode.activated = { [weak self] gesture, _ in
             guard let strongSelf = self else {
                 return
@@ -1097,7 +1103,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     private func loadTextInputNode() {
         let richTextInputNode: ChatRichTextInputNode
-        if self.context?.sharedContext.immediateExperimentalUISettings.debugRichText == true {
+        if self.enableRichTextInput {
             richTextInputNode = RichTextEditorChatInputNode()
         } else {
             richTextInputNode = makeChatRichTextInputNode()
@@ -1132,6 +1138,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 return self?.buildRichTextContextMenuElements(defaultElements: defaultElements) ?? defaultElements
             }
         }
+        richTextInputNode.canPasteMedia = { [weak self] in self?.handlePastedMedia(perform: false) ?? false }
+        richTextInputNode.onPasteMedia = { [weak self] in self?.handlePastedMedia(perform: true) ?? false }
         richTextInputNode.inputHitTestSlop = UIEdgeInsets(top: -5.0, left: -5.0, bottom: -5.0, right: -5.0)
         richTextInputNode.keyboardAppearance = keyboardAppearance
         richTextInputNode.inputTintColor = tintColor
@@ -1283,7 +1291,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         // The expand button (debugRichText) shares the inline AI button's slot, so reserve the same accessory width for either.
-        let isExpandInputEnabled = self.context?.sharedContext.immediateExperimentalUISettings.debugRichText == true
+        let isExpandInputEnabled = self.enableRichTextInput
         if (self.isAIEnabled || isExpandInputEnabled) && width >= 500.0 {
             if firstButton {
                 firstButton = false
@@ -3630,7 +3638,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             )
         }
         
-        let isExpandInputEnabled = self.context?.sharedContext.immediateExperimentalUISettings.debugRichText == true
+        let isExpandInputEnabled = self.enableRichTextInput
         // The expand button occupies the same slot as the AI button; when it is shown, hide the AI button.
         if self.isAIEnabled && !isExpandInputEnabled {
             let aiButton: (button: HighlightTrackingButton, icon: UIImageView)
@@ -3888,7 +3896,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             placeholder: theme.chat.inputPanel.inputPlaceholderColor,
             accent: theme.list.itemAccentColor,
             tableBorder: theme.list.itemAccentColor.withMultipliedAlpha(0.25),
-            tableHeaderBackground: theme.list.itemAccentColor.withMultipliedAlpha(0.1)
+            tableHeaderBackground: theme.list.itemAccentColor.withMultipliedAlpha(0.1),
+            listCheckFillColor: theme.list.itemCheckColors.fillColor,
+            listCheckForegroundColor: theme.list.itemCheckColors.foregroundColor,
+            listCheckBorderColor: theme.list.itemCheckColors.strokeColor
         )
     }
 
@@ -5447,57 +5458,64 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return false
         }
         
-        var images: [UIImage] = []
+        if self.handlePastedMedia(perform: true) {
+            return false   // media consumed → suppress the default text paste
+        }
+        return true
+    }
+
+    /// Detects pasteboard media (gif/video/animated-sticker/sticker/images) and, when `perform` is true,
+    /// routes it to the chat send flow via `self.paste(...)`. Returns true when the clipboard holds
+    /// handleable media. Shared by the legacy `chatInputTextNodeShouldPaste` and the native editor's
+    /// `onPasteMedia`/`canPasteMedia` hooks so detection can't drift.
+    public func handlePastedMedia(perform: Bool) -> Bool {
+        let pasteboard = UIPasteboard.general
         if let data = pasteboard.data(forPasteboardType: "com.compuserve.gif") {
-            self.paste(.gif(data))
-            return false
+            if perform { self.paste(.gif(data)) }
+            return true
         } else if let data = pasteboard.data(forPasteboardType: "public.mpeg-4") {
-            self.paste(.video(data))
-            return false
+            if perform { self.paste(.video(data)) }
+            return true
         } else if let data = pasteboard.data(forPasteboardType: "public.heics") {
-            self.paste(.animatedSticker(data))
-            return false
+            if perform { self.paste(.animatedSticker(data)) }
+            return true
         } else {
+            var images: [UIImage] = []
             var isPNG = false
             var isMemoji = false
             for item in pasteboard.items {
                 if let image = item["com.apple.png-sticker"] as? UIImage {
-                    images.append(image)
-                    isPNG = true
-                    isMemoji = true
+                    images.append(image); isPNG = true; isMemoji = true
                 } else if let image = item[kUTTypePNG as String] as? UIImage {
-                    images.append(image)
-                    isPNG = true
+                    images.append(image); isPNG = true
                 } else if let image = item["com.apple.uikit.image"] as? UIImage {
-                    images.append(image)
-                    isPNG = true
+                    images.append(image); isPNG = true
                 } else if let image = item[kUTTypeJPEG as String] as? UIImage {
                     images.append(image)
                 } else if let image = item[kUTTypeGIF as String] as? UIImage {
                     images.append(image)
                 }
             }
-            
             if isPNG && images.count == 1, let image = images.first {
                 let maxSide = max(image.size.width, image.size.height)
-                if maxSide.isZero {
-                    return false
-                }
+                // Degenerate zero-size image: treat as handled (consume the paste, route nothing) so the
+                // host still suppresses the default text paste — matching the legacy behavior where
+                // chatInputTextNodeShouldPaste returned false here.
+                if maxSide.isZero { return true }
                 let aspectRatio = min(image.size.width, image.size.height) / maxSide
                 if isMemoji || (imageHasTransparency(image) && aspectRatio > 0.2) {
-                    self.paste(.sticker(image, isMemoji))
-                    return false
+                    if perform { self.paste(.sticker(image, isMemoji)) }
+                    return true
                 }
             }
-            
             if !images.isEmpty {
-                self.paste(.images(images))
-                return false
+                if perform { self.paste(.images(images)) }
+                return true
             }
         }
-        return true
+        return false
     }
-    
+
     @objc public func editableTextNodeShouldPaste(_ editableTextNode: ASEditableTextNode) -> Bool {
         return self.chatInputTextNodeShouldPaste()
     }

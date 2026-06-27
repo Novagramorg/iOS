@@ -220,20 +220,6 @@ private final class CommunitiesScreenComponent: Component {
             self.environment?.controller()?.dismiss()
         }
 
-        private func presentError() {
-            guard let component = self.component, let environment = self.environment else {
-                return
-            }
-            environment.controller()?.present(AlertScreen(
-                context: component.context,
-                title: nil,
-                text: "Something went wrong.",
-                actions: [
-                    AlertScreen.Action(title: environment.strings.Common_OK, type: .default)
-                ]
-            ), in: .window(.root))
-        }
-
         private func openCreateCommunity(component: CommunitiesScreenComponent) {
             guard let peerId = component.peerId, let environment = self.environment else {
                 return

@@ -10,12 +10,29 @@ extension DocumentCanvasView: UITextInput {
         guard let r = range as? DocumentTextRange else { return nil }
         let lo = clamp(min(r.from.offset, r.to.offset)), hi = clamp(max(r.from.offset, r.to.offset))
         var result = ""
+        // The global position axis carries NO newline character between top-level blocks — only a
+        // structural token gap. A real UITextView returns "\n" there, and the system keyboard depends on
+        // it: the Hangul/CJK IME reads document context through `text(in:)` (it does NOT drive marked text
+        // on this view — it composes via insert + ranged delete/replace), and without the separator it
+        // sees two stacked paragraphs as one continuous line and recomposes a syllable ACROSS the invisible
+        // line break — the reported bug where a trailing consonant from the lower line migrates onto the
+        // line above. So emit "\n" for each top-level paragraph boundary the range crosses, including a
+        // range that lands entirely inside the inter-block gap (the read the keyboard makes immediately
+        // before a lower line's first character). Table-cell boundaries stay glued: a table is one editing
+        // surface, cells don't compose marked text, and cross-cell `text(in:)` is relied on un-separated.
+        var prevTopLevelEnd: Int? = nil
         for region in allLeafRegions() {
-            let a = max(lo, region.globalStart), b = min(hi, region.globalStart + region.length)
+            let rStart = region.globalStart, rEnd = region.globalStart + region.length
+            let topLevel = !isInsideTable(rStart)
+            if topLevel, let prevEnd = prevTopLevelEnd, lo < rStart, hi > prevEnd {
+                result += "\n"   // the requested range covers this paragraph break
+            }
+            defer { prevTopLevelEnd = topLevel ? rEnd : nil }
+            let a = max(lo, rStart), b = min(hi, rEnd)
             guard a < b else { continue }
             let attr = region.layout.attributedString
             let ns = attr.string as NSString
-            let slice = NSRange(location: a - region.globalStart, length: b - a)
+            let slice = NSRange(location: a - rStart, length: b - a)
             // Replace each emoji spacer (U+FFFC + EmojiTextAttachment) with its altText (or nothing);
             // copy every other span verbatim. Keeps non-emoji behaviour identical.
             attr.enumerateAttribute(.attachment, in: slice, options: []) { value, sub, _ in
@@ -47,14 +64,18 @@ extension DocumentCanvasView: UITextInput {
             if let img = boxes.compactMap({ $0 as? MediaBlockBox }).first(where: { region.ref == .caption($0.id) }) {
                 return img.captionTypingAttributes()
             }
-            // Recover the owning paragraph (if any) so an empty styled/listed paragraph keeps its
-            // paragraph style on the next typed character — identical to the prior box-based logic.
+            // Recover the owning paragraph — top-level OR nested in a table cell (via the active stack)
+            // — so an empty styled/listed/cell paragraph keeps its paragraph style AND its box's mapper
+            // on the next typed character. A table cell's mapper renders body text at a smaller base
+            // size, so reading the box's own mapper (not the canvas one) keeps the first char on size.
             let p = boxes.compactMap { $0 as? BlockBox }.first { region.ref == .paragraph($0.id) }
+                ?? (activeStack(at: region.globalStart + location).flatMap { $0.box as? BlockBox })
+            let m = p?.mapper ?? mapper
             let style = p?.style ?? .body
             let para = p?.paragraphAttributes ?? .default
             let list = p?.listMembership
-            var attrs = mapper.attributes(for: CharacterAttributes(), style: style)
-            attrs[.paragraphStyle] = mapper.styleSheet.paragraphStyle(for: style, attributes: para, list: list)
+            var attrs = m.attributes(for: CharacterAttributes(), style: style)
+            attrs[.paragraphStyle] = m.styleSheet.paragraphStyle(for: style, attributes: para, list: list)
             return attrs
         }
         return storage.attributes(at: min(max(0, location - 1), storage.length - 1), effectiveRange: nil)
@@ -72,6 +93,15 @@ extension DocumentCanvasView: UITextInput {
     var selectedTextRange: UITextRange? {
         get { DocumentTextRange(DocumentTextPosition(anchor), DocumentTextPosition(head)) }
         set {
+            // During a floating-cursor (spacebar-trackpad) gesture, the floating handlers
+            // (updateFloatingCursor → moveFloatingCaret) own the caret. iOS ALSO pushes selection RANGES
+            // anchored at the gesture's start position through this setter; applying them turns the cursor
+            // MOVE into a text SELECTION. Ignore them while the gesture owns the caret.
+            if floatingCursorActive { return }
+            // iOS sets the object-replacement RANGE for a tap-selected media right before its Backspace.
+            // `clearStructuralSelections()` below drops `imageSelection`; stash it so `deleteBackward` can
+            // still recognise the structural-delete intent (its object geometry doesn't cover the media node).
+            imageObjectDeletePending = imageSelection
             finalizeMarkedText()     // a deliberate selection move commits a composition / dismisses a prediction
             clearStructuralSelections()
             dismissEditMenuForSelectionOrTextChange()   // system-driven move (keyboard cursor-drag / autocorrect) closes the menu too
@@ -209,6 +239,7 @@ extension DocumentCanvasView: UIKeyInput {
     var hasText: Bool { documentSize > 0 }
 
     func insertText(_ text: String) {
+        imageObjectDeletePending = nil   // a non-delete edit cancels a pending structural-media delete
         // A committing keystroke while composing: replace the WHOLE marked range with `text`, then
         // finalize the composition as one undo step. (The system delivers a confirming char this way.)
         if let m = markedRange {
@@ -301,6 +332,28 @@ extension DocumentCanvasView: UIKeyInput {
     func deleteBackward() {
         if markedRange != nil { commitMarkedText() }   // delete acts on committed text, not the composition
         guard !boxes.isEmpty else { return }
+        // A tap-selected media block's Backspace: iOS represents the deletion by OVERRIDING the selection
+        // (via the `selectedTextRange` setter, which clears `imageSelection`) to a RANGE whose head lands at
+        // the media's leading gap but whose object geometry is offset from our position model (it anchors in
+        // the preceding block), so the normal selection-replace below would delete the preceding text and
+        // KEEP the media. The setter stashes the just-cleared image into `imageObjectDeletePending`; honor it
+        // here by replacing that media with an empty body paragraph in place.
+        if let pendingId = imageObjectDeletePending,
+           let i = boxes.firstIndex(where: { $0.id == pendingId && $0 is MediaBlockBox }),
+           head == boxes[i].nodeStart || selFrom == boxes[i].nodeStart || selTo == boxes[i].nodeStart {
+            imageObjectDeletePending = nil
+            editing { replaceMediaWithEmptyParagraph(at: i) }
+            clearImageSelection()
+            return
+        }
+        imageObjectDeletePending = nil
+        if tableSelection != nil {
+            // A structural row/column selection is active → Backspace deletes those rows/columns (or the
+            // whole table when every row/column is selected). The caret is parked in a cell, so the normal
+            // in-cell branch below would otherwise just delete a character.
+            deleteTableStructuralSelection()
+            return
+        }
         if selFrom != selTo {
             editing { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             return
@@ -322,27 +375,15 @@ extension DocumentCanvasView: UIKeyInput {
             }
             return
         }
-        // Caret at a media block's leading gap.
+        // Caret at a media block's leading gap → replace the media with an empty body paragraph in place.
         if let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
-            if imageSelection != nil {
-                // A tap-SELECTED media atom → delete the whole block (explicit selection delete).
-                editing { deleteImageBox(at: i) }
-                clearImageSelection()
-            } else if i > 0, let prev = boxes[i - 1] as? BlockBox {
-                // A plain caret at the gap must NOT delete the media. Act on the previous paragraph: a
-                // non-empty one → move the caret to its end (no delete); an empty one → delete it (the
-                // caret stays at the media's gap).
-                if prev.textLength == 0 {
-                    editing { deleteBlock(at: i - 1, parkingCaretAtGapOf: img) }
-                } else {
-                    setCaret(global: prev.textStart + prev.textLength)
-                }
-            } else {
-                // Media is the document's first block, or the previous block isn't a paragraph (another
-                // media / a table): move to the previous caret slot without deleting (no-op at doc start).
-                let prev = prevTextPosition(before: head)
-                if prev != head { setCaret(global: prev) }
-            }
+            // The gap caret is where a tap / structural image selection lands. The OS clears `imageSelection`
+            // via the `selectedTextRange` setter (which calls `clearStructuralSelections()`) BEFORE this runs,
+            // so the deletion can't be gated on it — a collapsed gap caret IS the structural-selection signal.
+            // Backspace replaces the media with an empty body paragraph in place (caret there), rather than
+            // acting on the previous paragraph.
+            editing { replaceMediaWithEmptyParagraph(at: i) }
+            clearImageSelection()
             return
         }
         guard let pos = resolveBox(at: head) else { return }
@@ -370,19 +411,26 @@ extension DocumentCanvasView: UIKeyInput {
             }
             return
         }
-        if pos.box is MediaBlockBox, pos.local == 0 {        // caption start → delete the image
-            editing { deleteImageBox(at: pos.index) }
+        if pos.box is MediaBlockBox, pos.local == 0 {
+            // Backspace at the start of a caption replaces the whole media block with an empty body paragraph
+            // in place (caret there), discarding any caption text — consistent with the tap-selected and
+            // object-replacement-selection paths (the gap branch above / applySelectionReplace).
+            editing { replaceMediaWithEmptyParagraph(at: pos.index) }
         } else if pos.local > 0 {
             let n = graphemeClusterLengthBeforeCaret(global: head)
             editing { applyReplace(globalFrom: head - n, globalTo: head, text: "") }
-        } else if pos.index > 0, boxes[pos.index - 1] is MediaBlockBox {
-            editing { deleteImageBox(at: pos.index - 1) }     // start of a block after an image
-        } else if pos.index > 0, boxes[pos.index - 1] is TableBlockBox {
-            // Start of a block after a table → move WITHOUT deleting into the table's last cell (no merge
-            // across the table boundary). Mirrors Backspace at a cell's first-paragraph start, which moves
-            // to the block before. Avoids parking the caret on the table's degenerate node-start boundary.
+        } else if pos.index > 0, isNonParagraphAtom(boxes[pos.index - 1]) {
+            // Start of a paragraph after a NON-TEXT block (image / table / code) that can't absorb a text
+            // merge. Backspace must NOT delete that block. An EMPTY paragraph is removed — so "deleting the
+            // last paragraph" is always possible; a non-empty one is kept. Either way the caret steps back
+            // to that block's nearest text slot (an image's caption end, a table's last cell end, a code
+            // block's end) via prevTextPosition — never the block's degenerate node-start boundary.
             let prev = prevTextPosition(before: head)
-            if prev != head { setCaret(global: prev) }
+            if pos.box.textLength == 0 {
+                editing { removeBlock(at: pos.index, parkingCaretAt: prev) }
+            } else if prev != head {
+                setCaret(global: prev)
+            }
         } else if pos.index > 0 {
             let prev = boxes[pos.index - 1]
             let from = prev.textStart + prev.textLength

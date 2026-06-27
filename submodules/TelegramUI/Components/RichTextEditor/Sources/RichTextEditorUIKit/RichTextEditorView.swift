@@ -41,6 +41,13 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// react by dismissing a panel / chrome.
     public var onResignedFirstResponder: (() -> Void)?
 
+    /// Pasting media (image/gif/video/sticker) is a host concern — the editor never embeds it. Set these to
+    /// route a media paste to the host (e.g. the chat send flow): `canPasteMedia` gates whether Paste is
+    /// offered; `onPasteMedia` performs it (returns whether it consumed the paste). Text paste is handled by
+    /// the editor regardless of these.
+    public var canPasteMedia: (() -> Bool)? { didSet { canvas.canPasteMedia = canPasteMedia } }
+    public var onPasteMedia: (() -> Bool)? { didSet { canvas.onPasteMedia = onPasteMedia } }
+
     /// Transform the editor's default edit-menu elements into the final set. `defaultElements` is the system
     /// suggested actions (Cut/Copy/Paste/Select + Writing Tools) followed by the editor's own custom items
     /// (the built-in "Format" submenu + Look Up / Translate / Share). Return the elements to present.
@@ -257,6 +264,13 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         canvas.emojiViewProvider = provider
     }
 
+    /// Registers a provider that builds the checklist checkbox view (host-side `CheckNode`). When unset,
+    /// checklist items fall back to the Unicode glyph marker.
+    public func registerChecklistMarkerViewProvider(
+        _ provider: @escaping (_ checked: Bool, _ size: CGSize) -> (UIView & RichTextChecklistMarkerView)?) {
+        canvas.checklistMarkerViewProvider = provider
+    }
+
     /// Hide an emoji view when its frame is more than this far outside the viewport (default 50pt).
     public var emojiCullMargin: CGFloat {
         get { canvas.emojiCullMargin }
@@ -272,8 +286,8 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
 
     /// Inserts a media block (`kind`) at the caret. The host resolves `mediaID` to a view via
     /// `registerMediaViewProvider`. `naturalSize` drives the block's aspect-correct display height.
-    public func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind) {
-        canvas.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind)
+    public func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun] = []) {
+        canvas.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
     }
 
     /// Registers the closure that turns a media `mediaID` (+ the medium's natural size) into a FRESH

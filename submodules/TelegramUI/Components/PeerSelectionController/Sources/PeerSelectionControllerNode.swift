@@ -231,7 +231,7 @@ final class PeerSelectionControllerNode: ASDisplayNode {
 
         let chatListMode: ChatListNodeMode
         if let requestPeerType = self.requestPeerType {
-            chatListMode = .peerType(type: requestPeerType, hasCreate: hasCreation, excludedPeerIds: self.excludedPeerIds)
+            chatListMode = .peerType(type: requestPeerType, hasCreate: hasCreation, excludedPeerIds: self.excludedPeerIds, includeCommunities: self.filter.contains(.includeCommunities))
         } else {
             chatListMode = .peers(filter: filter, isSelecting: false, additionalCategories: chatListCategories, topPeers: self.suggestedPeers, chatListFilters: nil, displayAutoremoveTimeout: false, displayPresence: false)
         }
@@ -1387,8 +1387,18 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                             chatListNode = strongSelf.chatListNode
                         }
 
+                        var ignoredSelectionContainer = false
                         chatListNode?.updateState { state in
                             if state.editing {
+                                if threadId == nil {
+                                    if case .community = peer {
+                                        ignoredSelectionContainer = true
+                                        return state
+                                    } else if case let .channel(channel) = peer, channel.isForumOrMonoForum {
+                                        ignoredSelectionContainer = true
+                                        return state
+                                    }
+                                }
                                 updated = true
                                 var state = state
                                 var foundPeers = state.foundPeers
@@ -1419,6 +1429,9 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                             } else {
                                 return state
                             }
+                        }
+                        if ignoredSelectionContainer {
+                            return
                         }
                         if updated {
                             strongSelf.textInputPanelNode?.updateSendButtonEnabled(count > 0, animated: true)

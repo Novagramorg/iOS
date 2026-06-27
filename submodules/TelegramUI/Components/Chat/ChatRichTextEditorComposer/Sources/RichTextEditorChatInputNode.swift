@@ -8,10 +8,34 @@ import TelegramCore
 import RichTextEditorCore
 import RichTextEditorUIKit
 import ChatInputTextNode
+import CheckNode
+
+/// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
+/// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
+/// view in the marker gutter and calls `setChecked(_:animated:)` when the item toggles. A private copy
+/// lives in each editor host (cross-module; duplication is expected).
+private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerView {
+    private let checkNode: CheckNode
+    init(theme: CheckNodeTheme, checked: Bool) {
+        self.checkNode = CheckNode(theme: theme, content: .check(isRectangle: true))
+        super.init(frame: .zero)
+        self.checkNode.isUserInteractionEnabled = false
+        self.addSubview(self.checkNode.view)
+        self.checkNode.setSelected(checked, animated: false)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        self.checkNode.frame = self.bounds
+    }
+    func setChecked(_ checked: Bool, animated: Bool) {
+        self.checkNode.setSelected(checked, animated: animated)
+    }
+}
 
 /// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`. Selected on iOS 17+
 /// behind the `debugRichText` flag (see `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
-/// display, layout, and editing; selection geometry, spoiler reveal, typing attributes, and the full
+/// display, layout, editing, and selection geometry; spoiler reveal, typing attributes, and the full
 /// delegate suite are safe stubs (Phase 2+).
 @available(iOS 13.0, *)
 public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInputNode {
@@ -45,6 +69,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// the chat layer sets round-trips through the structural model. A medium the editor never received via this
     /// path (no entry) resolves to nil and its block is dropped — see `resolveMedia` below.
     private var mediaByID: [String: Media] = [:]
+
+    /// Checklist checkbox palette, threaded across the `ChatRichTextThemeColors` seam (the node holds no
+    /// `PresentationTheme`). Set on each `applyRichTextTheme`; the marker provider reads them lazily so a
+    /// theme change takes effect on the next-built checkbox. Seeded with sane defaults so an early checkbox
+    /// (before the first `applyRichTextTheme`) still renders — overwritten on the first theme apply.
+    private var checkboxFill: UIColor = .systemBlue
+    private var checkboxForeground: UIColor = .white
+    private var checkboxBorder: UIColor = .systemGray
 
     public var asNode: ASDisplayNode { self }
 
@@ -146,6 +178,17 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             guard let self, let media = self.mediaByID[mediaID], let factory = self.mediaItemViewFactory else { return nil }
             return factory(EngineMedia(media), naturalSize)
         }
+
+        // Checklist checkbox rendering. The editor hosts each checklist item's checkbox via this provider,
+        // asking for the current `checked` state. Build a `CheckNode`-backed view themed from the checkbox
+        // colors threaded across the `ChatRichTextThemeColors` seam (the node holds no `PresentationTheme`).
+        // The colors are read LAZILY, so a theme change applied after this registration takes effect on the
+        // next-built checkbox. When this provider is unset the editor falls back to its glyph marker.
+        self.editorView.registerChecklistMarkerViewProvider { [weak self] checked, _ in
+            guard let self else { return nil }
+            let nodeTheme = CheckNodeTheme(backgroundColor: self.checkboxFill, strokeColor: self.checkboxForeground, borderColor: self.checkboxBorder, overlayBorder: false, hasInset: false, hasShadow: false)
+            return HostChecklistCheckboxView(theme: nodeTheme, checked: checked)
+        }
     }
 
     // MARK: Display (Task 3)
@@ -214,6 +257,36 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// `onChange` performs (so the panel re-lays-out and re-reads content), preserving the refresh/`didUpdateText`
     /// ordering, then restores the flat composer selection.
     public func setInputContent(_ content: ChatInputContent, selection: ChatInputSelection) {
+        // CONTENT-EQUALITY GUARD (the load-bearing fix for "selection/scroll reset at random times").
+        //
+        // The chat composer re-applies the whole `effectiveInputState` through this method on EVERY chat
+        // state update: `ChatControllerNode.updateLayout` calls `updateInputTextState` whenever
+        // `effectiveInputState` changes — which covers not just genuine external sets (draft restore,
+        // send-clear) but also the editor's OWN edits/caret-moves echoed back through the interface state,
+        // and any unrelated state update that recomputes the compose/edit input state.
+        //
+        // Rebuilding the document on each of those is destructive: `self.editorView.document =` runs
+        // `canvas.reload` (tears down + rebuilds every block box, resetting the canvas selection) + a full
+        // `performLayout` (resets the scroll offset to the top). So an UNCHANGED round-trip would reset the
+        // scroll position (visible once the field has grown tall enough to scroll) and churn the live
+        // selection through the flat↔structural mapping — surfacing as the caret/selection jumping at
+        // seemingly random times.
+        //
+        // Skip the rebuild when the incoming content already matches what the editor shows, mirroring the
+        // legacy backend (`ChatInputTextNodeImpl.attributedText`'s `if self.attributedText != value`) and
+        // the native `attributedText` setter's `composerContentEqual` short-circuit. When content is equal we
+        // only move the caret if the requested selection actually differs from the live one — so the common
+        // no-op echo (the editor's own edit pushed up and applied back) leaves scroll AND selection
+        // untouched, while a deliberate programmatic caret move still takes effect.
+        let currentContent = self.currentInputContent().content
+        if currentContent == content {
+            let targetRange = selection.nsRange(in: content)
+            if self.editorView.composerSelectedRange != targetRange {
+                self.selectedRange = targetRange
+            }
+            return
+        }
+
         let newDocument = document(
             fromChatInputContent: content,
             registerEmoji: { [weak self] fileId, file in self?.registerEmojiRef(fileId: fileId, file: file) ?? EmojiRef(id: String(fileId), instanceID: BlockID.generate().rawValue, altText: nil) },
@@ -271,6 +344,11 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// Map the host's theme colors 1:1 into the editor's `RichTextEditorTheme`. Assigning `editorView.theme`
     /// re-applies colors and redraws (see `RichTextEditorView.theme`).
     public func applyRichTextTheme(_ colors: ChatRichTextThemeColors) {
+        // Store the checklist checkbox colors for the marker provider (registered in `didLoad`), which reads
+        // them lazily — so this theme change takes effect on the next-built checkbox.
+        self.checkboxFill = colors.listCheckFillColor
+        self.checkboxForeground = colors.listCheckForegroundColor
+        self.checkboxBorder = colors.listCheckBorderColor
         self.editorView.theme = RichTextEditorTheme(
             primaryText: colors.primaryText,
             secondaryText: colors.secondaryText,
@@ -307,13 +385,15 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var textContainerInset: UIEdgeInsets {
         get {
             var updated = self.trackedContentMargins
-            updated.top += 2.0
+            updated.top += 1.0
+            updated.bottom += 1.0
             updated.right -= 14.0
             return updated
         }
         set {
             var updated = newValue
-            updated.top -= 2.0
+            updated.top -= 1.0
+            updated.bottom -= 1.0
             updated.right += 14.0
             self.trackedContentMargins = updated
         }
@@ -334,6 +414,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         get { self.editorView.contextMenuItemsProvider }
         set { self.editorView.contextMenuItemsProvider = newValue }
     }
+
+    public var canPasteMedia: (() -> Bool)? { didSet { self.editorView.canPasteMedia = canPasteMedia } }
+    public var onPasteMedia: (() -> Bool)? { didSet { self.editorView.onPasteMedia = onPasteMedia } }
 
     public func performFormatAction(_ action: ChatRichTextFormatAction) {
         switch action {
@@ -400,10 +483,25 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         set { self.editorView.composerSelectedRange = newValue }
     }
 
-    // MARK: Stubs — Phase 2+ (selection geometry, spoilers, typing attrs, language, theme fidelity)
-    public var selectionRect: CGRect { .zero }
-    public func firstSelectionRect(forCharacterRange characterRange: NSRange) -> CGRect? { nil }
-    public func currentCaretRect() -> CGRect? { nil }
+    // MARK: Selection geometry
+    /// The current selection's first rect in the editor's CONTENT space (un-scrolled), matching the legacy
+    /// `firstRect(for:)` contract — `_showTextStyleOptions` subtracts `inputContentOffset.y` itself. That
+    /// legacy format-menu path is dead on iOS 16+ (it returns a nil target), so this is contract-honest but
+    /// not on a live path for this engine.
+    public var selectionRect: CGRect { self.editorView.composerSelectionBoundingRect }
+    /// First selection rect for a flat composer range, in this node's `self.view` space (the panel anchors
+    /// the emoji-suggestion popover here, then converts node-view → panel). The editor returns the rect in
+    /// `editorView` space; we finish with the trivial `editorView → self.view` parent conversion.
+    public func firstSelectionRect(forCharacterRange characterRange: NSRange) -> CGRect? {
+        self.editorView.composerFirstSelectionRect(forFlatRange: characterRange).map { self.editorView.convert($0, to: self.view) }
+    }
+    /// The caret rect in this node's `self.view` space (the panel anchors the emoji context panel's cursor
+    /// here via `asNode.view.convert(...)`). nil when there is no caret.
+    public func currentCaretRect() -> CGRect? {
+        self.editorView.composerCaretRect().map { self.editorView.convert($0, to: self.view) }
+    }
+
+    // MARK: Stubs — Phase 2+ (spoilers, typing attrs, theme fidelity)
     public var spoilersRevealed: Bool = false
     public func setSpoilersRevealed(_ revealed: Bool, animated: Bool) { }
     public func prepareForSpoilerReveal() { }
@@ -416,9 +514,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     }
     public var toggleQuoteCollapse: ((NSRange) -> Void)?
     public func isCurrentlyEmoji() -> Bool { false }
-    public var primaryLanguage: String? { nil }
-    public var initialPrimaryLanguage: String?
-    public func resetInitialPrimaryLanguage() { }
+    // Input language: read the live keyboard language back, and pre-select the draft's saved language
+    // on the next focus, via the editor's `textInputMode` override (see RichTextEditorView+ComposerHost).
+    public var primaryLanguage: String? { self.editorView.inputPrimaryLanguage }
+    public var initialPrimaryLanguage: String? {
+        get { self.editorView.initialInputPrimaryLanguage }
+        set { self.editorView.initialInputPrimaryLanguage = newValue }
+    }
+    public func resetInitialPrimaryLanguage() { self.editorView.resetInputPrimaryLanguage() }
     public var keyboardAppearance: UIKeyboardAppearance = .default
     public var autocorrectionType: UITextAutocorrectionType = .default
     public var inputTintColor: UIColor?

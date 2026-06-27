@@ -9,6 +9,7 @@ import AvatarNode
 import TelegramPresentationData
 import ButtonComponent
 import ListSectionComponent
+import BundleIconComponent
 
 private let avatarFont = avatarPlaceholderFont(size: 22.0)
 private let requesterAvatarFont = avatarPlaceholderFont(size: 8.0)
@@ -178,6 +179,7 @@ public final class CommunityRequestItemComponent: Component {
                 requesterName = "Someone"
             }
 
+            //TODO:localize
             let text = "\(requesterName) suggests this group:"
             let result = NSMutableAttributedString(
                 string: text,
@@ -245,6 +247,7 @@ public final class CommunityRequestItemComponent: Component {
             var memberSize: CGSize?
             if let memberCount = component.memberCount {
                 let memberCountText: String
+                //TODO:localize
                 if memberCount == 1 {
                     memberCountText = "1 member"
                 } else {
@@ -260,14 +263,23 @@ public final class CommunityRequestItemComponent: Component {
                 }
                 memberSize = memberText.update(
                     transition: .immediate,
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: memberCountText,
-                            font: Font.regular(15.0),
-                            textColor: component.theme.list.itemSecondaryTextColor
-                        )),
-                        maximumNumberOfLines: 1
-                    )),
+                    component: AnyComponent(
+                        HStack([
+                            AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                BundleIconComponent(name: "Chat List/MembersIcon", tintColor: component.theme.list.itemSecondaryTextColor)
+                            )),
+                            AnyComponentWithIdentity(id: "label", component: AnyComponent(
+                                MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        string: memberCountText,
+                                        font: Font.regular(15.0),
+                                        textColor: component.theme.list.itemSecondaryTextColor
+                                    )),
+                                    maximumNumberOfLines: 1
+                                )
+                            ))
+                        ], spacing: 3.0)
+                    ),
                     environment: {},
                     containerSize: CGSize(width: textWidth, height: 100.0)
                 )
@@ -288,14 +300,23 @@ public final class CommunityRequestItemComponent: Component {
                 }
                 privateSize = privateText.update(
                     transition: .immediate,
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: "visible only to its members",
-                            font: Font.regular(14.0),
-                            textColor: component.theme.list.itemSecondaryTextColor
-                        )),
-                        maximumNumberOfLines: 1
-                    )),
+                    component: AnyComponent(
+                        HStack([
+                            AnyComponentWithIdentity(id: "icon", component: AnyComponent(
+                                BundleIconComponent(name: "Chat List/HiddenIcon", tintColor: component.theme.list.itemSecondaryTextColor)
+                            )),
+                            AnyComponentWithIdentity(id: "label", component: AnyComponent(
+                                MultilineTextComponent(
+                                    text: .plain(NSAttributedString(
+                                        string: "visible only to its members",
+                                        font: Font.regular(15.0),
+                                        textColor: component.theme.list.itemSecondaryTextColor
+                                    )),
+                                    maximumNumberOfLines: 1
+                                )
+                            ))
+                        ], spacing: 3.0)
+                    ),
                     environment: {},
                     containerSize: CGSize(width: textWidth, height: 100.0)
                 )
@@ -316,13 +337,13 @@ public final class CommunityRequestItemComponent: Component {
             transition.setFrame(view: self.containerButton, frame: CGRect(origin: CGPoint(), size: CGSize(width: availableSize.width, height: height)))
 
             let avatarFrame = CGRect(
-                origin: CGPoint(x: sideInset, y: topInset),
+                origin: CGPoint(x: sideInset, y: topInset - 1.0),
                 size: CGSize(width: avatarSize, height: avatarSize)
             )
             let requesterAvatarSize: CGFloat = 18.0
             let requesterAvatarFrame = CGRect(
                 origin: CGPoint(
-                    x: avatarFrame.maxX - requesterAvatarSize + 8.0,
+                    x: avatarFrame.maxX - requesterAvatarSize + 7.0,
                     y: avatarFrame.minY + 1.0
                 ),
                 size: CGSize(width: requesterAvatarSize, height: requesterAvatarSize)
@@ -423,7 +444,7 @@ public final class CommunityRequestItemComponent: Component {
                     memberView.isUserInteractionEnabled = false
                     self.containerButton.addSubview(memberView)
                 }
-                nextTextY += 2.0
+                nextTextY += 3.0
                 transition.setFrame(view: memberView, frame: CGRect(origin: CGPoint(x: textLeft, y: nextTextY), size: memberSize))
                 nextTextY += memberSize.height
             }
@@ -432,7 +453,7 @@ public final class CommunityRequestItemComponent: Component {
                     privateView.isUserInteractionEnabled = false
                     self.containerButton.addSubview(privateView)
                 }
-                nextTextY += 2.0
+                nextTextY += 3.0
                 transition.setFrame(view: privateView, frame: CGRect(origin: CGPoint(x: textLeft, y: nextTextY), size: privateSize))
             }
 

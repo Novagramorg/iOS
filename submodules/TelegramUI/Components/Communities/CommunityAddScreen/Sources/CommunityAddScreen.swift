@@ -576,20 +576,6 @@ private final class CommunityAddScreenComponent: Component {
             }
         }
 
-        private func presentError() {
-            guard let component = self.component, let environment = self.environment else {
-                return
-            }
-            environment.controller()?.present(AlertScreen(
-                context: component.context,
-                title: nil,
-                text: "Something went wrong.",
-                actions: [
-                    AlertScreen.Action(title: environment.strings.Common_OK, type: .default)
-                ]
-            ), in: .window(.root))
-        }
-
         private func performAdd() {
             guard let component = self.component else {
                 return
@@ -607,7 +593,7 @@ private final class CommunityAddScreenComponent: Component {
                 action: .link(visible: self.visibility.isVisible)
             )
             |> deliverOnMainQueue).startStrict(error: { [weak self] error in
-                guard let self else {
+                guard let self, let environment = self.environment else {
                     return
                 }
                 self.isSaving = false
@@ -616,9 +602,32 @@ private final class CommunityAddScreenComponent: Component {
                         component.completed()
                     })
                 } else {
-                    self.presentError()
+                    let text: String
+                    switch error {
+                    case .peersTooMuch:
+                        text = environment.strings.Login_UnknownError
+                    default:
+                        text = environment.strings.Login_UnknownError
+                    }
+                    environment.controller()?.present(AlertScreen(
+                        context: component.context,
+                        title: nil,
+                        text: text,
+                        actions: [
+                            AlertScreen.Action(title: environment.strings.Common_OK, type: .default)
+                        ]
+                    ), in: .window(.root))
+                    
                     self.state?.updated(transition: .spring(duration: 0.35))
                 }
+            }, completed: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.isSaving = false
+                self.dismiss(animated: true, completion: {
+                    component.completed()
+                })
             }))
         }
 

@@ -72,6 +72,10 @@ final class BlockBox {
     /// (`stampListMarkers`) from its configurable `placeholders`. Default = the editor's built-in hints.
     var placeholders: RichTextEditorPlaceholders = .default
 
+    /// Set during layout (`stampListMarkers`) iff the canvas has a checklist checkbox provider AND this
+    /// is a checklist item — then `draw` suppresses the Unicode glyph (a hosted CheckNode shows instead).
+    var hostsChecklistCheckbox = false
+
     /// A plain body paragraph (not a list item) — the spacing between two of these is tightened.
     var isBodyParagraph: Bool { style == .body && listMembership == nil }
 
@@ -89,6 +93,11 @@ final class BlockBox {
         // structurally rather than coincidentally.
         h.combine(style)
         h.combine(listMembership?.level)
+        // A provider registered AFTER first layout flips this false→true on the SAME box instance
+        // (no instance swap, so `bindRealizedView`'s `view.box !== box` repaint bypass doesn't fire).
+        // Capture it so the now-suppressed Unicode glyph actually disappears (and reappears if a
+        // provider is later cleared).
+        h.combine(hostsChecklistCheckbox)
         return h.finalize()
     }
 
@@ -157,6 +166,25 @@ final class BlockBox {
         let x = textOrigin.x + StyleSheet.listIndentStep * CGFloat(membership.level)
         let y = textOrigin.y + listMarkerBaselineFromTop(markerFont: font) - font.ascender
         return (label, CGPoint(x: x, y: y), font)
+    }
+
+    /// The checkbox rect in CANVAS coordinates for a `.checklist` item. Sized 1.4× the font's cap height
+    /// (`checklistMarkerScale`), pixel-snapped, with the LEFT edge anchored at the marker gutter and the
+    /// vertical CENTER preserved at the base (bottom-on-baseline) box's center — so the extra height grows
+    /// equally into the top and bottom, and extra width grows to the right.
+    /// `textOrigin` is already canvas-space (frame origin + insets) — do NOT add `frame` again.
+    func checklistMarkerCanvasRect() -> CGRect? {
+        guard listMembership?.marker == .checklist, let membership = listMembership else { return nil }
+        let font = mapper.styleSheet.font(for: style, attributes: .plain)
+        let baseSide = StyleSheet.checklistMarkerSize(for: font)               // cap-height base (unscaled)
+        let side = floorToScreenPixels(baseSide * StyleSheet.checklistMarkerScale)
+        let x = textOrigin.x + StyleSheet.listIndentStep * CGFloat(membership.level)   // LEFT anchored
+        let baselineFromTop = listMarkerBaselineFromTop(markerFont: font)
+        // Preserve the base (bottom-on-baseline) box's vertical center, so the extra height grows equally
+        // into the top & bottom; extra width grows to the right (left edge fixed).
+        let baseCenterY = textOrigin.y + baselineFromTop - baseSide / 2
+        let y = baseCenterY - side / 2
+        return CGRect(x: floorToScreenPixels(x), y: floorToScreenPixels(y), width: side, height: side)
     }
 
     /// Placeholder text for THIS empty paragraph, or nil. A list item's hint reflects what Return does.
@@ -230,6 +258,13 @@ final class BlockBox {
     }
 }
 
+/// Snap a value down to the device pixel grid (editor-local; Display's `floorToScreenPixels` isn't importable here).
+@available(iOS 13.0, *)
+private func floorToScreenPixels(_ value: CGFloat) -> CGFloat {
+    let scale = UIScreen.main.scale
+    return (value * scale).rounded(.down) / scale
+}
+
 @available(iOS 13.0, *)
 extension BlockBox: CanvasBlock {
     var rendersAsBlockView: Bool { true }
@@ -249,9 +284,9 @@ extension BlockBox: CanvasBlock {
     }
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {
         layout.drawText(in: ctx, at: textOrigin)
-        if let d = listMarkerDraw() {
+        if let d = listMarkerDraw(), !(hostsChecklistCheckbox && listMembership?.marker == .checklist) {
             NSAttributedString(string: d.label,
-                attributes: [.font: d.font, .foregroundColor: UIColor.label]).draw(at: d.origin)
+                attributes: [.font: d.font, .foregroundColor: mapper.theme.listMarker]).draw(at: d.origin)
         }
         if let pd = placeholderDraw() {
             NSAttributedString(string: pd.text,

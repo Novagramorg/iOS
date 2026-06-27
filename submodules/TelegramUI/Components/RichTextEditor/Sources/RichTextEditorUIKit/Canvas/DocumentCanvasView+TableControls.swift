@@ -80,14 +80,14 @@ extension DocumentCanvasView {
         tableResizeKnobs().first { $0.rect.contains(point) }?.end
     }
 
-    /// Draws the two resize knobs as plain `systemBlue` filled circles (diameter 8, no inner dot),
+    /// Draws the two resize knobs as plain accent-colored filled circles (diameter 8, no inner dot),
     /// centered on each knob's hit rect. Calibrated against ReferenceDesign/TexEditor_8.
     func drawTableResizeKnobs(in ctx: CGContext) {
         let radius: CGFloat = 4
         for knob in tableResizeKnobs() {
             let c = CGPoint(x: knob.rect.midX, y: knob.rect.midY)
             let circle = CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2)
-            UIColor.systemBlue.setFill(); UIBezierPath(ovalIn: circle).fill()
+            self.mapper.theme.accent.setFill(); UIBezierPath(ovalIn: circle).fill()
         }
     }
 
@@ -224,16 +224,16 @@ extension DocumentCanvasView {
         // edge flush with the table's outer border (the rect that `tableSelectionOutlineRect` aligns to).
         let rect = outer.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
         // Round only the corners meeting the table's rounded outer border (concentric: table radius −
-        // the half-line-width inset); interior corners stay square. systemBlue — from TexEditor_8.
+        // the half-line-width inset); interior corners stay square. accent — from TexEditor_8.
         let corners = tableSelectionOutlineCorners()
         let r = max(TableBlockBox.outerCornerRadius - lineWidth / 2, 0)
         let path = corners.isEmpty
             ? UIBezierPath(rect: rect)
             : UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: r, height: r))
-        UIColor.systemBlue.setStroke(); path.lineWidth = lineWidth; path.stroke()
+        self.mapper.theme.accent.setStroke(); path.lineWidth = lineWidth; path.stroke()
     }
 
-    // tableHandles() returns the handles for the caret's cell; the one matching tableSelection.kind is tinted blue.
+    // tableHandles() returns the handles for the caret's cell; the one matching tableSelection.kind is tinted with the accent color.
     // Row handle = vertical ⋮ (left gutter); column handle = horizontal ••• (below the table).
     func drawTableHandles(in ctx: CGContext) {
         for h in tableHandles() {
@@ -245,12 +245,12 @@ extension DocumentCanvasView {
     }
 
     /// Three dots centered in `rect` — along x when `horizontal` (column ⋯), else along y (row ⋮).
-    /// When `active` (its row/column is selected) the dots sit on a `systemBlue` rounded pill and turn
+    /// When `active` (its row/column is selected) the dots sit on an accent-colored rounded pill and turn
     /// `systemBackground` (white in light) — matching the reference's highlighted handle.
     private func drawHandleDots(in rect: CGRect, active: Bool, horizontal: Bool) {
         if active {
             // accent bar spanning the whole selection (rect = column width / row height), rounded ends
-            UIColor.systemBlue.setFill()
+            self.mapper.theme.accent.setFill()
             if horizontal {
                 UIBezierPath(roundedRect: rect, byRoundingCorners: [.bottomLeft, .bottomRight], cornerRadii: CGSize(width: min(rect.width, rect.height), height: min(rect.width, rect.height))).fill()
             } else {

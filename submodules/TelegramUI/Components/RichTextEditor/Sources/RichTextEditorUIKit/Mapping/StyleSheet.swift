@@ -8,6 +8,14 @@ import RichTextEditorCore
 public struct StyleSheet {
     public init() {}
     public static let `default` = StyleSheet()
+    /// A style sheet for content inside table cells: the body/quote base size is reduced from the
+    /// document's 17pt to 15pt (headings and captions keep their fixed sizes), so a table reads denser
+    /// than surrounding body text. Selected per-cell via `AttributedStringMapper.tableCellVariant()`.
+    public static let tableCells: StyleSheet = { var s = StyleSheet(); s.bodyBaseSize = 15; return s }()
+
+    /// Base point size for body and quote paragraphs — 17pt in the document body, 15pt inside table
+    /// cells (see `tableCells`). Headings and captions have fixed sizes independent of this.
+    public var bodyBaseSize: CGFloat = 17
 
     /// Points of indentation per list nesting level (where each level's marker hangs).
     public static let listIndentStep: CGFloat = 24
@@ -19,16 +27,23 @@ public struct StyleSheet {
     /// after the marker than a bullet's does. The marker itself stays in its level's column; only the
     /// item text shifts right by this amount.
     public static let orderedListTextInset: CGFloat = 4
+    /// The side length of the checklist checkbox, sized to the font's cap height so it scales per style
+    /// and reads like a capital letter sitting on the baseline. (Tunable: switch capHeight→ascender for a
+    /// larger box.) Returns the UNSCALED base — the vertical-center anchor used by both the geometry and
+    /// the paragraph-indent computation.
+    public static func checklistMarkerSize(for font: UIFont) -> CGFloat { font.capHeight.rounded() }
+    /// Horizontal gap between the checkbox's right edge and the item text.
+    public static let checklistMarkerGap: CGFloat = 6
+    /// The checklist checkbox is drawn this many times its base (cap-height) size — it grows into the top,
+    /// bottom, and right (the left edge stays anchored at the marker gutter). Tunable.
+    public static let checklistMarkerScale: CGFloat = 1.4
 
     private func baseSize(_ style: ParagraphStyleName) -> CGFloat {
         switch style {
         case .heading1: return 24
         case .heading2: return 21
         case .heading3: return 19
-        case .heading4: return 18
-        case .heading5: return 17
-        case .heading6: return 16
-        case .body, .quote: return 17
+        case .body, .quote: return bodyBaseSize
         case .caption: return 15
         }
     }
@@ -40,9 +55,6 @@ public struct StyleSheet {
         case .heading1: return StyleMetrics(spacingBefore: 18, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading2: return StyleMetrics(spacingBefore: 16, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading3: return StyleMetrics(spacingBefore: 14, spacingAfter: 6, lineHeightMultiple: 1.05)
-        case .heading4: return StyleMetrics(spacingBefore: 12, spacingAfter: 6, lineHeightMultiple: 1.05)
-        case .heading5: return StyleMetrics(spacingBefore: 10, spacingAfter: 6, lineHeightMultiple: 1.05)
-        case .heading6: return StyleMetrics(spacingBefore: 8,  spacingAfter: 6, lineHeightMultiple: 1.05)
         case .body:     return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
         case .caption:  return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
         case .quote:    return StyleMetrics(spacingBefore: 8,  spacingAfter: 8, lineHeightMultiple: 1.10)
@@ -57,7 +69,6 @@ public struct StyleSheet {
         let bold = attributes.bold
         let italic = attributes.italic   // quote is upright; its bar/fill is a drawn canvas decoration (see DocumentCanvasView+Decorations)
         let serif = style == .heading1 || style == .heading2 || style == .heading3
-            || style == .heading4 || style == .heading5 || style == .heading6
         return FontResolver.font(family: attributes.fontFamily, size: size, bold: bold, italic: italic, serif: serif)
     }
 
@@ -84,6 +95,11 @@ public struct StyleSheet {
             // (numbered) items get extra text inset since a number marker is wider than a bullet.
             var indent = StyleSheet.listIndentStep * CGFloat(list.level) + StyleSheet.listMarkerSpacing
             if list.marker == .ordered { indent += StyleSheet.orderedListTextInset }
+            else if list.marker == .checklist {
+                let markerFont = self.font(for: style, attributes: .plain)
+                let scaledSide = StyleSheet.checklistMarkerSize(for: markerFont) * StyleSheet.checklistMarkerScale
+                indent += max(0, scaledSide + StyleSheet.checklistMarkerGap - StyleSheet.listMarkerSpacing)
+            }
             ps.firstLineHeadIndent += indent
             ps.headIndent += indent
         } else if style == .quote {

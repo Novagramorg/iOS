@@ -53,6 +53,24 @@ final class StyleSheetTests: XCTestCase {
         XCTAssertEqual(StyleSheet.default.font(for: .body, attributes: .plain).pointSize, 17, accuracy: 0.5)
     }
 
+    func test_tableCells_bodyAndQuoteAre15pt_headingsUnchanged() {
+        let sheet = StyleSheet.tableCells
+        XCTAssertEqual(sheet.font(for: .body, attributes: .plain).pointSize, 15, accuracy: 0.5,
+                       "table-cell body base is 15pt")
+        XCTAssertEqual(sheet.font(for: .quote, attributes: .plain).pointSize, 15, accuracy: 0.5,
+                       "table-cell quote tracks the body base")
+        XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 24, accuracy: 0.5,
+                       "headings keep their fixed size in cells")
+        // The document body sheet is untouched.
+        XCTAssertEqual(StyleSheet.default.font(for: .body, attributes: .plain).pointSize, 17, accuracy: 0.5)
+    }
+
+    func test_tableCells_explicitFontSizeStillWins() {
+        var ca = CharacterAttributes(); ca.fontSize = 22
+        XCTAssertEqual(StyleSheet.tableCells.font(for: .body, attributes: ca).pointSize, 22, accuracy: 0.5,
+                       "an explicit run size overrides the cell base")
+    }
+
     func test_headingSizes_matchTypeScale() {
         let sheet = StyleSheet.default
         XCTAssertEqual(sheet.font(for: .heading1, attributes: .plain).pointSize, 24, accuracy: 0.5)

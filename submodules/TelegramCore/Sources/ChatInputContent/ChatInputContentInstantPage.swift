@@ -56,7 +56,7 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 let marker = list.marker
                 var items: [InstantPageListItem] = []
                 while i < content.blocks.count, case let .paragraph(q) = content.blocks[i], let qList = q.list, qList.marker == marker, case .body = q.style {
-                    items.append(.text(richText(from: q.runs), nil, nil))
+                    items.append(.text(richText(from: q.runs), nil, qList.checked))
                     i += 1
                 }
                 result.append(.list(items: items, ordered: marker == .ordered))
@@ -83,20 +83,34 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
             // rare visible-collapse-flagged paragraph. See the reverse for the `collapsed == nil/false` rationale.
             result.append(.blockQuote(blocks: instantPageBlocks(from: inner, collectingMediaInto: &media), caption: .empty, collapsed: true))
         case let .media(m):
-            // Stash the `Media` in the page's `media` dict, keyed by its own `MediaId`; the block carries only the id.
-            // `Media.id` is optional (Postbox protocol), but the composer's inline media is always a concrete
-            // `TelegramMediaImage`/`TelegramMediaFile` which always carries an id — so a nil id never occurs in
-            // practice. Defensively, a nil-id medium is dropped (it could not be resolved back from the dict anyway).
-            guard let mediaId = m.media.id else {
-                break
-            }
-            media[mediaId] = m.media
             let caption = InstantPageCaption(text: richText(from: m.caption), credit: .empty)
             switch m.kind {
-            case .image:
-                result.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
-            case .video:
-                result.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
+            case .image, .video:
+                // Stash the `Media` in the page's `media` dict, keyed by its own `MediaId`; the block carries only
+                // the id. Image/video are always a concrete `TelegramMediaImage`/`TelegramMediaFile` with an id;
+                // a nil-id medium is dropped (it could not be resolved back from the dict anyway).
+                guard let mediaId = m.media.id else {
+                    break
+                }
+                media[mediaId] = m.media
+                if case .image = m.kind {
+                    result.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
+                } else {
+                    result.append(.video(id: mediaId, caption: caption, autoplay: false, loop: false))
+                }
+            case .location:
+                // A location is a `TelegramMediaMap` (id-less): the InstantPage `.map` block carries its coordinates
+                // inline, so nothing goes in the page `media` dict. zoom/dimensions are render hints (15 / 600x300
+                // fallback). venue is not representable here — the caption already carries the venue title.
+                if let map = m.media as? TelegramMediaMap {
+                    let dimensions: PixelDimensions
+                    if m.naturalSize.width > 0, m.naturalSize.height > 0 {
+                        dimensions = PixelDimensions(width: Int32(m.naturalSize.width), height: Int32(m.naturalSize.height))
+                    } else {
+                        dimensions = PixelDimensions(width: 600, height: 300)
+                    }
+                    result.append(.map(latitude: map.latitude, longitude: map.longitude, zoom: 15, dimensions: dimensions, caption: caption))
+                }
             }
         case let .table(t):
             // `naturalSize`/`displayWidth`/`alignment` of media and `width`/`vertical-alignment`/`colspan`/`rowspan`/
@@ -182,13 +196,15 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             }
             result.append(.paragraph(ChatInputParagraph(style: style, runs: chatInputRuns(fromRichText: rt))))
         case let .list(items, ordered):
-            // One body paragraph per `.text` item, all sharing the list marker at level 0 (the forward only emits
-            // `.text` items and only ever produced level 0 — see the forward's level canonicalization note). A
-            // `.blocks`/`.unknown` item (never produced by the forward; only from cloud) is skipped defensively.
-            let marker: ChatInputListMarker = ordered ? .ordered : .bullet
+            // One body paragraph per `.text` item. If the item carries a non-nil `checked` value the marker is
+            // `.checklist` (the forward threads `checked` from `ChatInputListMembership`); otherwise use
+            // `.ordered` / `.bullet` per the `ordered` flag. Level 0 throughout (the forward canonicalizes
+            // any indent level to 0 — see the forward's level canonicalization note). A `.blocks`/`.unknown`
+            // item (never produced by the forward; only from cloud) is skipped defensively.
             for item in items {
-                if case let .text(rt, _, _) = item {
-                    result.append(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker, level: 0), runs: chatInputRuns(fromRichText: rt))))
+                if case let .text(rt, _, checked) = item {
+                    let marker: ChatInputListMarker = checked != nil ? .checklist : (ordered ? .ordered : .bullet)
+                    result.append(.paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: marker, level: 0, checked: checked), runs: chatInputRuns(fromRichText: rt))))
                 }
             }
         case let .preformatted(rt, language):
@@ -229,6 +245,13 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             if let media = media[id] {
                 result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
+        case let .map(latitude, longitude, _, _, caption):
+            // Reconstruct a `TelegramMediaMap` from the inline coordinates (no media-dict lookup — a `.map` block
+            // stores none). zoom/dimensions are render-only and dropped; venue is not in the block (the caption
+            // carried the title forward). naturalSize/displayWidth/alignment restore the editor's media defaults,
+            // matching the .image/.video canonicalization above.
+            let map = TelegramMediaMap(latitude: latitude, longitude: longitude, heading: nil, accuracyRadius: nil, venue: nil)
+            result.append(.media(ChatInputMedia(media: map, kind: .location, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
         case let .table(_, rows, _, _):
             // Rebuild the `ChatInputTable`. Columns are inferred from the first row's cell count, each column's
             // alignment taken from that cell's alignment (the forward stamps every cell in a column with the column's

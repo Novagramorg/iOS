@@ -16,11 +16,36 @@ import RichTextEditorMediaView
 import ContextUI
 import Postbox
 import TelegramCore
+import CheckNode
+
+/// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
+/// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
+/// view in the marker gutter and calls `setChecked(_:animated:)` when the item toggles. A private copy
+/// lives in each editor host (cross-module; duplication is expected).
+private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerView {
+    private let checkNode: CheckNode
+    init(theme: CheckNodeTheme, checked: Bool) {
+        self.checkNode = CheckNode(theme: theme, content: .check(isRectangle: true))
+        super.init(frame: .zero)
+        self.checkNode.isUserInteractionEnabled = false
+        self.addSubview(self.checkNode.view)
+        self.checkNode.setSelected(checked, animated: false)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        self.checkNode.frame = self.bounds
+    }
+    func setChecked(_ checked: Bool, animated: Bool) {
+        self.checkNode.setSelected(checked, animated: animated)
+    }
+}
 
 public class RichTextAttachmentScreen: ViewControllerComponentContainer, AttachmentContainable {
     public enum RichTextAttachment {
         case image(ImageMediaReference)
         case file(FileMediaReference)
+        case location(TelegramMediaMap)
     }
     
     public var requestAttachmentMenuExpansion: () -> Void = {}
@@ -146,6 +171,11 @@ final class RichTextAttachmentScreenComponent: Component {
         private var componentState: EmptyComponentState?
         private var isUpdating = false
         private var lastTabBarVisible: Bool?
+        /// The `PresentationTheme` last mapped into the editor. `PresentationTheme` is a shared `final
+        /// class`, so reference inequality is the cheap change-signal — guarding the editor `theme` setter
+        /// (which does an unconditional reload+redraw) against firing on every keystroke (`onChange` →
+        /// `componentState.updated` → `update`).
+        private var appliedTheme: PresentationTheme?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -190,6 +220,15 @@ final class RichTextAttachmentScreenComponent: Component {
                     media = file
                     kind = .video
                     naturalSize = file.dimensions?.cgSize ?? CGSize(width: 1, height: 1)
+                case let .location(map):
+                    // A map is id-less, so mint a deterministic key from its coordinates; the venue title (if any)
+                    // seeds the caption (a raw dropped pin has no venue -> empty caption). Self-contained insert,
+                    // since the shared `media.id` path below can't key an id-less medium.
+                    let mediaID = "map:\(map.latitude):\(map.longitude)"
+                    self.attachedMedia[mediaID] = map
+                    let caption: [TextRun] = map.venue?.title.isEmpty == false ? [TextRun(text: map.venue!.title)] : []
+                    self.editor.insertMedia(mediaID: mediaID, naturalSize: CGSize(width: 600.0, height: 300.0), kind: .location, caption: caption)
+                    return
                 }
                 guard let mediaId = media.id else { return }
                 let mediaID = "\(mediaId.namespace):\(mediaId.id)"
@@ -239,6 +278,27 @@ final class RichTextAttachmentScreenComponent: Component {
             self.environment?.controller()?.presentInGlobalOverlay(controller)
         }
 
+        /// Maps the app theme to the editor's render colors. Every value is `PresentationTheme`-derived —
+        /// no OS-semantic `UIColor` survives on this path. accent/table derivations mirror the chat
+        /// composer (`ChatTextInputPanelNode.makeRichTextThemeColors`); text uses `list.item*` because the
+        /// screen's surface is `list.plainBackgroundColor`.
+        private static func mapEditorTheme(_ theme: PresentationTheme) -> RichTextEditorTheme {
+            let codeFill = theme.list.itemAccentColor.withMultipliedAlpha(0.1)
+            return RichTextEditorTheme(
+                primaryText: theme.list.itemPrimaryTextColor,
+                secondaryText: theme.list.itemSecondaryTextColor,
+                placeholder: theme.list.itemPlaceholderTextColor,
+                accent: theme.list.itemAccentColor,
+                tableBorder: theme.list.itemAccentColor.withMultipliedAlpha(0.25),
+                tableHeaderBackground: codeFill,
+                codeBackground: codeFill,
+                listMarker: theme.list.itemPrimaryTextColor,
+                inlineCodeBackground: codeFill,
+                markedTextUnderline: theme.list.itemPrimaryTextColor,
+                spoilerDust: theme.list.itemSecondaryTextColor
+            )
+        }
+
         func update(component: RichTextAttachmentScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             let environment = environment[EnvironmentType.self].value
             self.componentState = state
@@ -273,6 +333,18 @@ final class RichTextAttachmentScreenComponent: Component {
                             textCell("w16", ["G"]),
                         ]),
                     ])*/
+                // The screen paints `list.plainBackgroundColor` (below); clear the editor's opaque default
+                // `.systemBackground` so that themed surface shows through.
+                editor.canvasBackgroundColor = .clear
+                // Theme the editor's mapper BEFORE seeding the document: the document setter builds each
+                // block's attributed string with the mapper's current theme (baking in the foreground
+                // color), and the `editor.theme` setter only re-maps existing boxes when `bounds.width > 0`
+                // — which is false here (the editor frame is set later this pass). So seeding pre-existing
+                // text before theming left it the `.default` black foreground. (The guarded re-apply below
+                // is a no-op on this first pass since `appliedTheme` is now set, and handles later theme
+                // changes when the frame — and a working reload width — exists.)
+                editor.theme = Self.mapEditorTheme(environment.theme)
+                self.appliedTheme = environment.theme
                 // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
                 // current document when expanding); an empty document when none is provided.
                 editor.document = component.initialContents ?? Document()
@@ -299,7 +371,18 @@ final class RichTextAttachmentScreenComponent: Component {
                           let media = self.attachedMedia[mediaID] else { return nil }
                     return MediaItemNodeView(context: component.context, media: EngineMedia(media))
                 }
-                
+
+                // Host the checklist checkbox with a `CheckNode` themed from the standard app checkbox palette
+                // (`list.itemCheckColors`), mirroring `instantPageChecklistMarkerTheme`. Reads `appliedTheme`
+                // (the live `PresentationTheme`) lazily; nil before the first theme apply (harmless — the editor
+                // falls back to its glyph marker until a checkbox is provided).
+                editor.registerChecklistMarkerViewProvider { [weak self] checked, _ in
+                    guard let self, let theme = self.appliedTheme else { return nil }
+                    let c = theme.list.itemCheckColors
+                    let nodeTheme = CheckNodeTheme(backgroundColor: c.fillColor, strokeColor: c.foregroundColor, borderColor: c.strokeColor, overlayBorder: false, hasInset: false, hasShadow: false)
+                    return HostChecklistCheckboxView(theme: nodeTheme, checked: checked)
+                }
+
                 editor.onBecameFirstResponder = { [weak self] in
                     guard let self else {
                         return
@@ -323,6 +406,11 @@ final class RichTextAttachmentScreenComponent: Component {
                 self.addSubview(self.topEdgeEffectView)
             }
             self.component = component
+
+            if self.appliedTheme !== environment.theme {
+                self.appliedTheme = environment.theme
+                self.editor.theme = Self.mapEditorTheme(environment.theme)
+            }
 
             let barButtonSize = CGSize(width: 44.0, height: 44.0)
             
@@ -462,7 +550,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 action: editorState.isInTable ? nil : { [weak self] sourceView in
                     guard let self else { return }
                     let current = self.editor.currentState().listMarker
-                    let entries: [(String, ListMarker?)] = [("None", nil), ("Bulleted", .bullet), ("Numbered", .ordered)]
+                    let entries: [(String, ListMarker?)] = [("None", nil), ("Bulleted", .bullet), ("Numbered", .ordered), ("Checklist", .checklist)]
                     let items: [ContextMenuItem] = entries.map { (title, marker) in
                         .action(ContextMenuActionItem(text: title, icon: { theme in
                             marker == current
@@ -607,11 +695,11 @@ final class RichTextAttachmentScreenComponent: Component {
                                    contentMargins: UIEdgeInsets(top: 12.0, left: 0.0, bottom: 12.0, right: 0.0))
 
             // Top edge effect (mirrors ComposePollScreen): a blurred gradient at the screen top that content
-            // fades under. Content color = the screen background (.white, matching self.backgroundColor).
+            // fades under. Content color = the screen background (themed list.plainBackgroundColor).
             let edgeEffectHeight: CGFloat = 88.0
             let topEdgeEffectFrame = CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
-            self.topEdgeEffectView.update(content: .white, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
+            self.topEdgeEffectView.update(content: environment.theme.list.plainBackgroundColor, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
 
             // While the emoji panel is up, hide the AttachmentController's bottom menu/tab bar so the
             // container collapses that panel and re-lays out this screen at full height — otherwise the

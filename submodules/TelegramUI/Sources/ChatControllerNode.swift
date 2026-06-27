@@ -1410,8 +1410,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         
         var headerPanels: [HeaderPanelContainerComponent.Panel] = []
         var footerPanels: [HeaderPanelContainerComponent.Panel] = []
+        let hideTopPanels = self.controller?.hideTopPanels ?? false
         
-        if self.chatPresentationInterfaceState.search == nil, let headerTopicsPanel = headerTopicsPanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
+        if !hideTopPanels, self.chatPresentationInterfaceState.search == nil, let headerTopicsPanel = headerTopicsPanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
             let panel = HeaderPanelContainerComponent.Panel(
                 key: "topics",
                 orderIndex: 0,
@@ -1423,7 +1424,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 footerPanels.append(panel)
             }
         }
-        if self.chatPresentationInterfaceState.search == nil, let mediaPlayback = self.controller?.globalControlPanelsContextState?.mediaPlayback {
+        if !hideTopPanels, self.chatPresentationInterfaceState.search == nil, let mediaPlayback = self.controller?.globalControlPanelsContextState?.mediaPlayback {
             if let playlistLocation = mediaPlayback.playlistLocation as? PeerMessagesPlaylistLocation, case let .custom(_, _, _, _, hidePanel) = playlistLocation, hidePanel {
                 
             } else {
@@ -1449,7 +1450,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 )
             }
         }
-        if self.chatPresentationInterfaceState.search == nil, let liveLocation = self.controller?.globalControlPanelsContextState?.liveLocation {
+        if !hideTopPanels, self.chatPresentationInterfaceState.search == nil, let liveLocation = self.controller?.globalControlPanelsContextState?.liveLocation {
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "liveLocation",
                 orderIndex: 2,
@@ -1464,7 +1465,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 )))
             )
         }
-        if self.chatPresentationInterfaceState.search == nil, let groupCall = self.controller?.globalControlPanelsContextState?.groupCall {
+        if !hideTopPanels, self.chatPresentationInterfaceState.search == nil, let groupCall = self.controller?.globalControlPanelsContextState?.groupCall {
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "groupCall",
                 orderIndex: 3,
@@ -1521,7 +1522,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         var hasTranslationPanel = false
-        if let _ = self.chatPresentationInterfaceState.translationState, self.emptyType == nil {
+        if !hideTopPanels, let _ = self.chatPresentationInterfaceState.translationState, self.emptyType == nil {
             if case .overlay = self.chatPresentationInterfaceState.mode {
             } else if self.chatPresentationInterfaceState.renderedPeer?.peer?.restrictionText(platform: "ios", contentSettings: self.context.currentContentSettings.with { $0 }) != nil {
             } else if self.chatPresentationInterfaceState.search != nil {
@@ -1531,7 +1532,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         var displayAdPanel = false
-        if let _ = self.chatPresentationInterfaceState.adMessage {
+        if !hideTopPanels, let _ = self.chatPresentationInterfaceState.adMessage {
             if let chatHistoryState = self.chatPresentationInterfaceState.chatHistoryState, case .loaded(false, _) = chatHistoryState {
                 if let user = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo != nil && !self.chatPresentationInterfaceState.peerIsBlocked && self.chatPresentationInterfaceState.hasAtLeast3Messages {
                     displayAdPanel = true
@@ -1575,7 +1576,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             )
         }
         
-        if let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
+        if !hideTopPanels, let titleAccessoryPanelNode = titlePanelForChatPresentationInterfaceState(self.chatPresentationInterfaceState, context: self.context, currentPanel: self.currentTitleAccessoryPanelNode, controllerInteraction: self.controllerInteraction, interfaceInteraction: self.interfaceInteraction, force: false) {
             self.currentTitleAccessoryPanelNode = titleAccessoryPanelNode
             let panelKey = "\(type(of: titleAccessoryPanelNode))"
             headerPanels.append(HeaderPanelContainerComponent.Panel(
@@ -1591,7 +1592,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
         
         var displayFeePanel: (value: Int64, peer: EnginePeer)?
-        if let chatHistoryState = self.chatPresentationInterfaceState.chatHistoryState, case .loaded(false, _) = chatHistoryState {
+        if !hideTopPanels, let chatHistoryState = self.chatPresentationInterfaceState.chatHistoryState, case .loaded(false, _) = chatHistoryState {
             if let user = self.chatPresentationInterfaceState.renderedPeer?.peer as? TelegramUser, user.botInfo == nil {
                 if !self.chatPresentationInterfaceState.peerIsBlocked, let paidMessageStars = self.chatPresentationInterfaceState.contactStatus?.peerStatusSettings?.paidMessageStars, paidMessageStars.value > 0 {
                     displayFeePanel = (paidMessageStars.value, .user(user))
@@ -1622,7 +1623,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             )
         }
         
-        if hasTranslationPanel, let translationState = self.chatPresentationInterfaceState.translationState {
+        if !hideTopPanels, hasTranslationPanel, let translationState = self.chatPresentationInterfaceState.translationState {
             headerPanels.append(HeaderPanelContainerComponent.Panel(
                 key: "translate",
                 orderIndex: 5,
@@ -4349,7 +4350,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 return result
             }
             if self.bounds.contains(point) {
-                return self.historyNode.view
+                return self.historyNode.scrollableContentView
             }
         default:
             break
@@ -4580,42 +4581,40 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             return
         }
         
-        if #available (iOS 17.0, *) {
-            // The composer's chat input STATE is the single source of truth for this handoff (both
-            // directions flow through `ChatInputContent`, not a direct node poke), so undo / drafts / send /
-            // state-observers all see one consistent value. OUT: convert the live composer content →
-            // `(Document, media, emojiFiles)` to seed the expanded editor. IN: convert the editor's
-            // `(document, media, emojiFiles)` → a `ChatTextInputState` and apply it through the canonical
-            // interface-state mutation (the panel SET path then lands it on the node). Media AND custom-emoji
-            // files ride the `ChatInputContent` converters — the emoji files are required so a custom emoji
-            // round-trips (the editor `Document` carries only fileIds; the file must be re-attached to render).
-            let (seedDocument, seedMedia, seedEmojiFiles) = documentMediaAndEmoji(fromChatInputContent: textInputPanelNode.inputTextState.content)
-            let editorScreen = RichTextAttachmentScreen(
-                context: self.context,
-                initialContents: seedDocument,
-                initialMedia: seedMedia,
-                initialEmojiFiles: seedEmojiFiles,
-                sendMessage: { [weak self] document, media, emojiFiles in
-                    guard let self else {
-                        return
-                    }
-                    let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
-                    self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
-                        return state.updatedInterfaceState { interfaceState in
-                            return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
-                        }
-                    })
-                },
-                presentAttachmentMenu: { [weak self] completion in
-                    guard let self else {
-                        return
-                    }
-                    self.controller?.presentRichTextAttachmentMenu(completion: completion)
+        // The composer's chat input STATE is the single source of truth for this handoff (both
+        // directions flow through `ChatInputContent`, not a direct node poke), so undo / drafts / send /
+        // state-observers all see one consistent value. OUT: convert the live composer content →
+        // `(Document, media, emojiFiles)` to seed the expanded editor. IN: convert the editor's
+        // `(document, media, emojiFiles)` → a `ChatTextInputState` and apply it through the canonical
+        // interface-state mutation (the panel SET path then lands it on the node). Media AND custom-emoji
+        // files ride the `ChatInputContent` converters — the emoji files are required so a custom emoji
+        // round-trips (the editor `Document` carries only fileIds; the file must be re-attached to render).
+        let (seedDocument, seedMedia, seedEmojiFiles) = documentMediaAndEmoji(fromChatInputContent: textInputPanelNode.inputTextState.content)
+        let editorScreen = RichTextAttachmentScreen(
+            context: self.context,
+            initialContents: seedDocument,
+            initialMedia: seedMedia,
+            initialEmojiFiles: seedEmojiFiles,
+            sendMessage: { [weak self] document, media, emojiFiles in
+                guard let self else {
+                    return
                 }
-            )
-            editorScreen.navigationPresentation = .modal
-            self.controller?.push(editorScreen)
-        }
+                let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                    return state.updatedInterfaceState { interfaceState in
+                        return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                    }
+                })
+            },
+            presentAttachmentMenu: { [weak self] completion in
+                guard let self else {
+                    return
+                }
+                self.controller?.presentRichTextAttachmentMenu(completion: completion)
+            }
+        )
+        editorScreen.navigationPresentation = .modal
+        self.controller?.push(editorScreen)
     }
 
     func openAICompose() {
@@ -4828,7 +4827,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             // set can't express (heading/list/table/media), and non-empty. Entity-expressible content
             // (text/quote/code/collapsed-quote/mention/date/custom-emoji-in-body) keeps the text+entities path.
             let sendAsRichMessage = effectivePresentationInterfaceState.interfaceState.editMessage == nil
-                && !composeContent.isEntityExpressible
+                && !composeContent.isEntityExpressible()
                 && !composeContent.isEmpty
 
             let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack

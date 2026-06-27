@@ -16401,3 +16401,11 @@ Error: %8$@";
 "Message.EditTodayFullDateFormat" = "edited at %1$@";
 
 "WebBrowser.Exceptions.Create.ExternalText" = "Enter a domain that you don't want to be opened in the external browser.";
+
+"Settings.SetPhoto" = "Set Photo";
+"Settings.ChangePhoto" = "Change Photo";
+
+"ChatList.Context.Ungroup" = "Ungroup";
+"ChatList.UngroupCommunity.Title" = "Ungroup Chats?";
+"ChatList.UngroupCommunity.Text" = "Chats from this community will appear separately in your chat list.";
+"ChatList.UngroupCommunity.Action" = "Ungroup";

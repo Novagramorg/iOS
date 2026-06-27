@@ -20,14 +20,23 @@ public struct ChatRichTextThemeColors {
     public var accent: UIColor
     public var tableBorder: UIColor
     public var tableHeaderBackground: UIColor
+    /// Checklist checkbox palette (the standard app checkbox `list.itemCheckColors`): fill = box background,
+    /// foreground = checkmark/stroke, border = box border. The native backend maps these into the `CheckNode`
+    /// it hosts as a checklist marker; the legacy backend ignores them (it has no checklist UI).
+    public var listCheckFillColor: UIColor
+    public var listCheckForegroundColor: UIColor
+    public var listCheckBorderColor: UIColor
 
-    public init(primaryText: UIColor, secondaryText: UIColor, placeholder: UIColor, accent: UIColor, tableBorder: UIColor, tableHeaderBackground: UIColor) {
+    public init(primaryText: UIColor, secondaryText: UIColor, placeholder: UIColor, accent: UIColor, tableBorder: UIColor, tableHeaderBackground: UIColor, listCheckFillColor: UIColor, listCheckForegroundColor: UIColor, listCheckBorderColor: UIColor) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
         self.placeholder = placeholder
         self.accent = accent
         self.tableBorder = tableBorder
         self.tableHeaderBackground = tableHeaderBackground
+        self.listCheckFillColor = listCheckFillColor
+        self.listCheckForegroundColor = listCheckForegroundColor
+        self.listCheckBorderColor = listCheckBorderColor
     }
 }
 
@@ -244,6 +253,12 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// Transform of the editor backend's default edit-menu elements (e.g. swap in the chat "Format" submenu),
     /// forwarded to the editor's menu. No-op on the legacy backend (it uses the `chatInputTextNodeMenu` delegate).
     var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])? { get set }
+
+    /// Pasting media (image/gif/video/sticker) is a host concern. The PANEL sets these so the native editor
+    /// can delegate a media paste back to the chat send flow. `canPasteMedia` gates whether the editor offers
+    /// Paste for the current pasteboard; `onPasteMedia` performs the routing (returns whether it consumed it).
+    var canPasteMedia: (() -> Bool)? { get set }
+    var onPasteMedia: (() -> Bool)? { get set }
 
     /// Apply a format command through the backend's native engine. No-op on the legacy backend.
     func performFormatAction(_ action: ChatRichTextFormatAction)
@@ -868,6 +883,10 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     // The legacy backend builds its menu via ChatTextInputPanelNode.chatInputTextNodeMenu; this hook is unused.
     var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?
+
+    // The legacy path routes media via `chatInputTextNodeShouldPaste`; these hooks are never read.
+    public var canPasteMedia: (() -> Bool)?
+    public var onPasteMedia: (() -> Bool)?
 
     func performFormatAction(_ action: ChatRichTextFormatAction) {}
     func currentRichTextLinkURL() -> String? { return nil }

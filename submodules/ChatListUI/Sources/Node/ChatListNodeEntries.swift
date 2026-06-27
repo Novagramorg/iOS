@@ -973,7 +973,7 @@ func chatListNodeEntriesForView(view: EngineChatList, state: ChatListNodeState, 
                     result.append(.TopPeer(index: index, peer: topPeer))
                     index += 1
                 }
-            } else if case let .peerType(types, hasCreate, _) = mode, !result.isEmpty && hasCreate {
+            } else if case let .peerType(types, hasCreate, _, _) = mode, !result.isEmpty && hasCreate {
                 for type in types {
                     switch type {
                     case .group:

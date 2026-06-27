@@ -2,7 +2,7 @@ import Foundation
 import Postbox
 import TelegramApi
 
-func shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
+func _internal_isPeerHiddenByCollapsedCommunity(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
     if let channel = (peer ?? transaction.getPeer(peerId)) as? TelegramChannel, let linkedCommunityId = channel.linkedCommunityId, linkedCommunityId != peerId {
         if let community = transaction.getPeer(linkedCommunityId) as? TelegramCommunity, community.collapsedInDialogs == true {
             return true
@@ -31,8 +31,41 @@ func shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: Transacti
     return false
 }
 
+func shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
+    return _internal_isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId, peer: peer)
+}
+
+func shouldExcludePeerFromChatList(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
+    guard let peer = peer ?? transaction.getPeer(peerId) else {
+        return false
+    }
+
+    if let group = peer as? TelegramGroup {
+        if group.flags.contains(.deactivated) {
+            return true
+        }
+        switch group.membership {
+        case .Member:
+            return false
+        default:
+            return true
+        }
+    } else if let channel = peer as? TelegramChannel {
+        switch channel.participationStatus {
+        case .member:
+            return shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: peerId, peer: channel)
+        default:
+            return true
+        }
+    } else if let community = peer as? TelegramCommunity {
+        return community.participationStatus != .member || community.collapsedInDialogs != true
+    } else {
+        return false
+    }
+}
+
 func updatePeerChatInclusionWithMinTimestamp(transaction: Transaction, id: PeerId, minTimestamp: Int32, forceRootGroupIfNotExists: Bool, peer: Peer? = nil) {
-    if shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: id, peer: peer) {
+    if shouldExcludePeerFromChatList(transaction: transaction, peerId: id, peer: peer) {
         transaction.updatePeerChatListInclusion(id, inclusion: .notIncluded)
         return
     }

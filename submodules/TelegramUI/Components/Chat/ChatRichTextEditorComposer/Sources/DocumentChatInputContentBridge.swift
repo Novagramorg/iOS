@@ -103,9 +103,9 @@ private func chatInputList(fromList list: ListMembership) -> ChatInputListMember
     case .ordered:
         marker = .ordered
     case .checklist:
-        marker = .bullet
+        marker = .checklist
     }
-    return ChatInputListMembership(marker: marker, level: Int32(list.level))
+    return ChatInputListMembership(marker: marker, level: Int32(list.level), checked: list.checked)
 }
 
 private func chatInputMediaKind(fromKind kind: MediaKind) -> ChatInputMediaKind {
@@ -114,6 +114,8 @@ private func chatInputMediaKind(fromKind kind: MediaKind) -> ChatInputMediaKind 
         return .image
     case .video:
         return .video
+    case .location:
+        return .location
     }
 }
 
@@ -329,8 +331,10 @@ private func list(fromChatInputList list: ChatInputListMembership) -> ListMember
         marker = .bullet
     case .ordered:
         marker = .ordered
+    case .checklist:
+        marker = .checklist
     }
-    return ListMembership(marker: marker, level: Int(list.level))
+    return ListMembership(marker: marker, level: Int(list.level), checked: list.checked)
 }
 
 private func mediaKind(fromChatInputKind kind: ChatInputMediaKind) -> MediaKind {
@@ -339,6 +343,8 @@ private func mediaKind(fromChatInputKind kind: ChatInputMediaKind) -> MediaKind 
         return .image
     case .video:
         return .video
+    case .location:
+        return .location
     }
 }
 

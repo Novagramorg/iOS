@@ -105,7 +105,9 @@ extension DocumentCanvasView {
             var merged = headPart ?? tailPart ?? ParagraphBlock(id: BlockID.generate(), runs: [])
             merged.runs = headRuns
             if let tailPart { merged = merged.merging(tailPart) }
-            let mergedBox = BlockBox(paragraph: merged, mapper: mapper, width: effectiveWidth)
+            // Inherit the endpoints' mapper (both share the stack) so a table cell keeps its smaller
+            // base font across the merge — `mapper` is the canvas (document-body) mapper.
+            let mergedBox = BlockBox(paragraph: merged, mapper: start.box.mapper, width: effectiveWidth)
             var newBoxes = stack.boxes
             newBoxes.replaceSubrange(start.index...end.index, with: [mergedBox])
             stack.boxes = newBoxes
@@ -139,6 +141,9 @@ extension DocumentCanvasView {
         guard boxes.indices.contains(index) else { return }
         var newBoxes = boxes
         newBoxes.remove(at: index)
+        if newBoxes.isEmpty {   // a document must never be zero blocks — leave an empty paragraph behind
+            newBoxes.append(BlockBox(paragraph: ParagraphBlock(id: BlockID.generate()), mapper: mapper, width: effectiveWidth))
+        }
         boxes = newBoxes
         recomputeSpans()
         let caret = index > 0 ? boxes[index - 1].textStart + boxes[index - 1].textLength
@@ -146,16 +151,41 @@ extension DocumentCanvasView {
         anchor = caret; head = caret
     }
 
-    /// Removes the block at `index` (an empty paragraph just before `media`), parking the caret at
-    /// `media`'s leading gap — which shifts up into the removed block's place. Used by backspace at a
-    /// media block's gap when the previous paragraph is empty. Caller wraps this in `editing { … }`.
-    func deleteBlock(at index: Int, parkingCaretAtGapOf media: CanvasBlock) {
+    /// Replaces the media block at `index` with a fresh EMPTY body paragraph, placing the caret in it.
+    /// Backspace on a (tap-selected, object-replacement-selected, or caption-start) media block turns the
+    /// media into an empty paragraph IN PLACE — distinct from `deleteImageBox`, which removes the block and
+    /// merges the caret up into the previous block. A fresh `BlockID` gives the replacement its own view
+    /// (the repaint gate keys on box instance/id). Caller wraps this in `editing { … }`.
+    func replaceMediaWithEmptyParagraph(at index: Int) {
+        guard boxes.indices.contains(index) else { return }
+        let empty = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                             mapper: mapper, width: effectiveWidth)
+        var newBoxes = boxes
+        newBoxes.replaceSubrange(index...index, with: [empty])
+        boxes = newBoxes
+        recomputeSpans()
+        anchor = empty.textStart; head = empty.textStart
+    }
+
+    /// True for a block that is NOT an editable text paragraph — an image, a table, or a code block. A
+    /// backspace at the start of the paragraph AFTER one of these can't merge text into it, so it removes
+    /// an empty paragraph instead of the block (and never deletes the block). A `BlockBox` (body / heading /
+    /// quote / list paragraph) is text and merges normally.
+    func isNonParagraphAtom(_ box: CanvasBlock) -> Bool {
+        box is MediaBlockBox || box is TableBlockBox || box is CodeBlockBox
+    }
+
+    /// Removes the block at `index`, parking the caret at an explicit global position the caller computed
+    /// BEFORE the removal (positions before the removed block are unaffected by it). Used by backspace at
+    /// the start of an empty trailing paragraph that follows a non-text block (image / table / code), which
+    /// the caller parks at that block's nearest text slot. Caller wraps this in `editing { … }`.
+    func removeBlock(at index: Int, parkingCaretAt caret: Int) {
         guard boxes.indices.contains(index) else { return }
         var newBoxes = boxes
         newBoxes.remove(at: index)
         boxes = newBoxes
         recomputeSpans()
-        anchor = media.nodeStart; head = media.nodeStart   // media moved up; its gap is its (recomputed) nodeStart
+        anchor = caret; head = caret
     }
 
     /// Resolves a global position to its owning `BlockStack` — a cell stack when inside a table,
@@ -201,6 +231,19 @@ extension DocumentCanvasView {
         // Never delete/replace a PARTIAL grapheme (e.g. one half of a surrogate-pair emoji, which the OS can
         // request on backspace as a 1-unit range) — expand to whole clusters so no stray code unit is left.
         let (globalFrom, globalTo) = rangeExpandedToGraphemeBoundaries(globalFrom: globalFrom, globalTo: globalTo)
+        // A delete whose selection EXACTLY covers one media block's node span — UIKit expands a collapsed caret
+        // at an image's empty caption / right after the image into [nodeStart, captionEnd], the "object
+        // replacement" atom — resolves BOTH endpoints to that one media box, so the same-stack `applyReplace`
+        // below would compute a zero-length edit and silently no-op (the "backspace on an empty caption does
+        // nothing" bug). Replace the media with an empty body paragraph in place. A selection that also covers
+        // adjacent text doesn't match (its endpoints differ from the node bounds) and falls through to the
+        // normal cross-block drop path.
+        if text.isEmpty, let i = boxes.firstIndex(where: {
+            $0 is MediaBlockBox && globalFrom == $0.nodeStart && globalTo == $0.textStart + $0.textLength
+        }) {
+            replaceMediaWithEmptyParagraph(at: i)
+            return
+        }
         if selectionEndpointsEditableTopLevel(globalFrom, globalTo) || bothInSameCellStack(globalFrom, globalTo) {
             applyReplace(globalFrom: globalFrom, globalTo: globalTo, text: text)
         } else {
@@ -295,9 +338,14 @@ extension DocumentCanvasView {
                 applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "")
             }
             guard let active = activeStack(at: head), let p = active.box as? BlockBox else { return }
-            let (upper, lower) = p.currentParagraph().split(at: active.local, newID: BlockID.generate())
-            let upperBox = BlockBox(paragraph: upper, mapper: mapper, width: effectiveWidth)
-            let lowerBox = BlockBox(paragraph: lower, mapper: mapper, width: effectiveWidth)
+            let split = p.currentParagraph().split(at: active.local, newID: BlockID.generate())
+            let upper = split.0
+            var lower = split.1
+            if lower.list?.marker == .checklist { lower.list?.checked = false }   // a new checklist item is never pre-checked
+            // Both halves inherit `p`'s mapper so an in-cell split keeps the cell's smaller base font
+            // (including the new EMPTY half, whose later first-typed character reads its box's mapper).
+            let upperBox = BlockBox(paragraph: upper, mapper: p.mapper, width: effectiveWidth)
+            let lowerBox = BlockBox(paragraph: lower, mapper: p.mapper, width: effectiveWidth)
             var newBoxes = active.stack.boxes
             newBoxes.replaceSubrange(active.index...active.index, with: [upperBox, lowerBox])
             active.stack.boxes = newBoxes
@@ -314,7 +362,8 @@ extension DocumentCanvasView {
               let lower = stack.boxes[upperIndex + 1] as? BlockBox else { return }
         let joinLocal = upper.currentParagraph().utf16Count
         let merged = upper.currentParagraph().merging(lower.currentParagraph())
-        let mergedBox = BlockBox(paragraph: merged, mapper: mapper, width: effectiveWidth)
+        // Inherit `upper`'s mapper (same stack as `lower`) so an in-cell merge keeps the cell's base font.
+        let mergedBox = BlockBox(paragraph: merged, mapper: upper.mapper, width: effectiveWidth)
         var newBoxes = stack.boxes
         newBoxes.replaceSubrange(upperIndex...(upperIndex + 1), with: [mergedBox])
         stack.boxes = newBoxes
@@ -323,20 +372,23 @@ extension DocumentCanvasView {
         anchor = caret; head = caret
     }
 
-    /// Inserts a media block (`kind`, with an empty caption) at the caret, splitting the caret's paragraph
+    /// Inserts a media block (`kind`, with the given `caption`, empty by default) at the caret, splitting the caret's paragraph
     /// if mid-text. The host resolves `mediaID` to a view via the canvas's `mediaViewProvider` (each
     /// occurrence gets its own view, keyed by the new block's `BlockID`). Caret lands in the new caption.
-    func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind) {
+    func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun] = []) {
         guard !boxes.isEmpty else { return }
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             guard let pos = resolveBox(at: head) else { return }
             let mediaBlock = MediaBlock(id: BlockID.generate(), mediaID: mediaID, kind: kind,
                                         naturalSize: Size2D(width: Double(naturalSize.width),
-                                                            height: Double(naturalSize.height)))
+                                                            height: Double(naturalSize.height)),
+                                        caption: caption)
             let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth)
             var newBoxes = boxes
-            if let p = pos.box as? BlockBox, pos.local > 0, pos.local < p.textLength {
+            if let p = pos.box as? BlockBox, p.textLength == 0 {
+                newBoxes.replaceSubrange(pos.index...pos.index, with: [mediaBox])   // empty paragraph → replace it
+            } else if let p = pos.box as? BlockBox, pos.local > 0, pos.local < p.textLength {
                 // split the paragraph and insert the media between the halves
                 let (upper, lower) = p.currentParagraph().split(at: pos.local, newID: BlockID.generate())
                 let upperBox = BlockBox(paragraph: upper, mapper: mapper, width: effectiveWidth)

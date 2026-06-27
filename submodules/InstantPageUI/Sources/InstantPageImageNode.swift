@@ -390,21 +390,21 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
                 let apply = makeLayout(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: emptyColor))
                 apply()
             } else if case .geo = self.media.media {
+                let presentationTheme = self.context.sharedContext.currentPresentationData.with { $0 }.theme
                 for attribute in self.attributes {
                     if let mapAttribute = attribute as? InstantPageMapAttribute {
                         let imageSize = mapAttribute.dimensions.aspectFilled(size)
                         let boundingSize = size
                         let radius: CGFloat = self.roundCorners ? floor(min(imageSize.width, imageSize.height) / 2.0) : 0.0
                         let makeLayout = self.imageNode.asyncLayout()
-                        let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets()))
+                        let apply = makeLayout(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: boundingSize, intrinsicInsets: UIEdgeInsets(), emptyColor: presentationTheme.list.mediaPlaceholderColor))
                         apply()
                         break
                     }
                 }
-                
+
                 let makePinLayout = self.pinNode.asyncLayout()
-                let theme = self.context.sharedContext.currentPresentationData.with { $0 }.theme
-                let (pinSize, pinApply) = makePinLayout(self.context, theme, .location(nil))
+                let (pinSize, pinApply) = makePinLayout(self.context, presentationTheme, .location(nil))
                 self.pinNode.frame = CGRect(origin: CGPoint(x: floor((size.width - pinSize.width) / 2.0), y: floor(size.height * 0.5 - 10.0 - pinSize.height / 2.0)), size: pinSize)
                 pinApply()
             } else if case let .webpage(webPage) = media.media, case let .Loaded(content) = webPage.content, let image = content.image, let largest = largestImageRepresentation(image.representations) {

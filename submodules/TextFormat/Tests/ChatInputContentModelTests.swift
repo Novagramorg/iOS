@@ -261,17 +261,39 @@ final class ChatInputContentModelTests: XCTestCase {
         let table = single(.table(ChatInputTable(columns: [ChatInputColumnSpec(width: 10.0)], rows: [])))
         let image = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
         let media = single(.media(ChatInputMedia(media: image, kind: .image, naturalSize: ChatInputSize(width: 1.0, height: 1.0))))
-        XCTAssertFalse(heading.isEntityExpressible)
-        XCTAssertFalse(list.isEntityExpressible)
-        XCTAssertFalse(table.isEntityExpressible)
-        XCTAssertFalse(media.isEntityExpressible)
+        XCTAssertFalse(heading.isEntityExpressible())
+        XCTAssertFalse(list.isEntityExpressible())
+        XCTAssertFalse(table.isEntityExpressible())
+        XCTAssertFalse(media.isEntityExpressible())
 
         let plain = single(.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "p")])))
         let quote = single(.paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "q")])))
         let code = single(.code(ChatInputCode(language: "swift", runs: [ChatInputRun(text: "c")])))
-        XCTAssertTrue(plain.isEntityExpressible)
-        XCTAssertTrue(quote.isEntityExpressible)
-        XCTAssertTrue(code.isEntityExpressible)
+        XCTAssertTrue(plain.isEntityExpressible())
+        XCTAssertTrue(quote.isEntityExpressible())
+        XCTAssertTrue(code.isEntityExpressible())
+    }
+
+    /// With `.quotesRequireRichContent`, a blockquote (a `.quote` paragraph or a collapsed quote) is no longer
+    /// entity-expressible — so quote-bearing content routes onto the rich (InstantPage) path — while a plain /
+    /// code-only content stays entity-expressible.
+    func test_isEntityExpressible_quotesRequireRichContent() {
+        func single(_ block: ChatInputBlock) -> ChatInputContent { ChatInputContent(blocks: [block]) }
+
+        let plain = single(.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "p")])))
+        let quote = single(.paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "q")])))
+        let collapsed = single(.collapsedQuote(ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")])),
+        ])))
+
+        // Default options: a blockquote stays entity-expressible.
+        XCTAssertTrue(quote.isEntityExpressible())
+        XCTAssertTrue(collapsed.isEntityExpressible())
+
+        // With the option: a blockquote requires the rich path; non-quote content is unaffected.
+        XCTAssertTrue(plain.isEntityExpressible(options: [.quotesRequireRichContent]))
+        XCTAssertFalse(quote.isEntityExpressible(options: [.quotesRequireRichContent]))
+        XCTAssertFalse(collapsed.isEntityExpressible(options: [.quotesRequireRichContent]))
     }
 
     // MARK: - Entity-expressibility + InstantPage plainText fallback
@@ -286,7 +308,7 @@ final class ChatInputContentModelTests: XCTestCase {
                 .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")])),
             ])),
         ])
-        XCTAssertTrue(content.isEntityExpressible)
+        XCTAssertTrue(content.isEntityExpressible())
     }
 
     /// The old-client text fallback joins paragraph / blockQuote / preformatted text with "\n", skipping empty

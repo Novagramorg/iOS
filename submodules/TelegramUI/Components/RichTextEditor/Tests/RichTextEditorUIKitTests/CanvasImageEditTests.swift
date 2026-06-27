@@ -49,6 +49,25 @@ final class CanvasImageEditTests: XCTestCase {
         XCTAssertEqual(ps?.alignment, .center)           // typed text is centered, like the placeholder
     }
 
+    func test_insertImage_onEmptyParagraph_replacesParagraph() {
+        let v = canvas([""])                             // a single empty paragraph
+        caret(v, v.boxes[0].textStart)
+        v.insertMedia(mediaID: "ke", naturalSize: imgSize(), kind: .image)
+        XCTAssertEqual(v.boxes.count, 1, "the empty paragraph is replaced by the image, not left beside it")
+        XCTAssertTrue(v.boxes[0] is MediaBlockBox)
+        XCTAssertEqual(v.head, v.boxes[0].textStart, "caret lands in the image's caption")
+    }
+
+    func test_insertImage_onEmptyParagraphBetweenContent_replacesIt() {
+        let v = canvas(["A", "", "B"])                   // A, empty middle paragraph, B
+        caret(v, v.boxes[1].textStart)
+        v.insertMedia(mediaID: "km", naturalSize: imgSize(), kind: .image)
+        XCTAssertEqual(v.boxes.count, 3, "A | image | B — the empty paragraph is replaced, not split into two empties")
+        XCTAssertEqual((v.boxes[0] as! BlockBox).currentParagraph().text, "A")
+        XCTAssertTrue(v.boxes[1] is MediaBlockBox)
+        XCTAssertEqual((v.boxes[2] as! BlockBox).currentParagraph().text, "B")
+    }
+
     func test_insertImage_midParagraph_splitsAroundImage() {
         let v = canvas(["Alpha"])
         caret(v, v.boxes[0].textStart + 2)               // after "Al"
@@ -81,50 +100,182 @@ final class CanvasImageEditTests: XCTestCase {
         return v
     }
 
-    func test_backspaceAtGapBeforeImage_nonEmptyPrev_movesToEndOfPrev_keepsImage() {
-        // Backspace at the media's leading gap must NOT delete the media. With a non-empty previous
-        // paragraph, it just moves the caret to the end of that paragraph (no deletion).
+    func test_backspaceAtGapBeforeImage_replacesImageWithEmptyParagraph() {
+        // Backspace with a collapsed caret at the media's leading gap — where a tap / structural image
+        // selection lands (the OS clears `imageSelection` via the selectedTextRange setter BEFORE
+        // deleteBackward runs, so the gap caret is the structural-selection signal) — replaces the media
+        // with an empty body paragraph in place, caret there.
         let v = docWithImage()                          // ["Above", image, "Below"]
-        caret(v, v.boxes[1].nodeStart)                  // gap before the image
+        caret(v, v.boxes[1].nodeStart)                  // gap before the image (clears imageSelection, like the OS)
         v.deleteBackward()
-        XCTAssertEqual(v.boxes.count, 3, "the media block is kept")
-        XCTAssertTrue(v.boxes[1] is MediaBlockBox)
-        XCTAssertEqual(v.head, v.boxes[0].textStart + v.boxes[0].textLength, "caret moved to the end of 'Above'")
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the media is replaced")
+        XCTAssertEqual(v.boxes.count, 3, "replaced in place — block count unchanged")
+        XCTAssertEqual(v.boxes.map { ($0 as? BlockBox)?.currentParagraph().text }, ["Above", "", "Below"])
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands in the new empty paragraph")
         XCTAssertEqual(v.head, v.anchor, "collapsed caret")
     }
 
-    func test_backspaceAtGapBeforeImage_emptyPrev_deletesEmptyParagraph_keepsImage() {
-        // With an EMPTY previous paragraph, backspace at the gap deletes that paragraph (not the media);
-        // the caret stays at the media's gap.
+    func test_backspaceAtGapBeforeImage_emptyPrev_replacesImageWithEmptyParagraph() {
+        // Even with an EMPTY previous paragraph, backspace at the media's gap replaces the MEDIA with an
+        // empty body paragraph in place (the empty previous paragraph is left untouched).
         let v = docWithImage()                          // ["Above", image, "Below"]
         caret(v, v.boxes[1].nodeStart)
         v.insertText("\n")                              // Enter at gap → ["Above", "", image, "Below"]
         XCTAssertEqual((v.boxes[1] as? BlockBox)?.textLength, 0, "precondition: empty paragraph before the image")
         let imageBox = v.boxes.first { $0 is MediaBlockBox }!
-        caret(v, imageBox.nodeStart)                    // back on the gap before the image
+        caret(v, imageBox.nodeStart)                    // gap before the image
         v.deleteBackward()
-        XCTAssertEqual(v.boxes.count, 3, "the empty paragraph is removed (4 → 3); media kept")
-        XCTAssertTrue(v.boxes[1] is MediaBlockBox, "media now sits directly after 'Above'")
-        XCTAssertEqual((v.boxes[0] as! BlockBox).currentParagraph().text, "Above", "previous paragraph intact")
-        XCTAssertEqual(v.head, (v.boxes[1] as! MediaBlockBox).nodeStart, "caret stays at the media gap")
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the media is replaced")
+        XCTAssertEqual(v.boxes.map { ($0 as? BlockBox)?.currentParagraph().text }, ["Above", "", "", "Below"])
+        XCTAssertEqual(v.head, v.boxes[2].textStart, "caret lands in the new empty paragraph where the media was")
     }
 
-    func test_backspaceAtCaptionStart_deletesImage() {
-        let v = docWithImage()
-        caret(v, v.boxes[1].textStart)                  // start of the caption
+    func test_backspaceAtCaptionStart_replacesImageWithEmptyParagraph() {
+        // Backspace at the start of a caption replaces the whole media block with an empty body paragraph
+        // (in place), caret there — it does NOT delete-and-merge the caret into the block above.
+        let v = docWithImage()                          // ["Above", image, "Below"]
+        caret(v, v.boxes[1].textStart)                  // start of the EMPTY caption
         v.deleteBackward()
-        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox })
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the media is replaced")
+        XCTAssertEqual(v.boxes.count, 3, "replaced in place — block count unchanged")
+        XCTAssertEqual(v.boxes.map { ($0 as? BlockBox)?.currentParagraph().text }, ["Above", "", "Below"])
+        XCTAssertEqual((v.boxes[1] as? BlockBox)?.currentParagraph().style, .body)
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands in the new empty paragraph")
+        XCTAssertEqual(v.head, v.anchor, "collapsed caret")
     }
 
-    func test_backspaceAtStartOfParagraphAfterImage_deletesImage() {
-        let v = docWithImage()
+    func test_backspaceOnEmptyCaption_whenImageIsOnlyBlock_leavesEmptyParagraph() {
+        // Deleting the document's only block must never leave a zero-block document — it leaves a single
+        // empty paragraph. (A lone [image] is reachable since inserting on an empty paragraph replaces it.)
+        let v = canvas([""])                            // single empty paragraph
+        caret(v, v.boxes[0].textStart)
+        v.insertMedia(mediaID: "ko", naturalSize: imgSize(), kind: .image)   // replaces the empty para → [image]
+        XCTAssertEqual(v.boxes.count, 1)
+        XCTAssertTrue(v.boxes[0] is MediaBlockBox)
+        caret(v, v.boxes[0].textStart)                  // caret in the empty caption
+        v.deleteBackward()
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the image is deleted")
+        XCTAssertEqual(v.boxes.count, 1, "the document keeps a single empty paragraph — never zero blocks")
+        XCTAssertTrue(v.boxes[0] is BlockBox)
+        XCTAssertEqual(v.boxes[0].textLength, 0)
+    }
+
+    func test_backspaceWithSelectionCoveringImageNode_replacesImageWithEmptyParagraph() {
+        // Tapping an empty image caption places a collapsed caret, but UIKit then EXPANDS it (via the
+        // selectedTextRange setter) into a selection covering the whole image node [nodeStart, captionEnd] —
+        // the "object replacement" atom. Backspace over that selection replaces the media with an empty body
+        // paragraph IN PLACE (caret there), not deleting-and-merging into the block above.
+        let v = docWithImage()                           // ["Above", image, "Below"]
+        let im = v.boxes[1] as! MediaBlockBox
+        // Reproduce the OS expansion exactly: anchor at the image's gap, head at the (empty) caption start.
+        v.selectedTextRange = DocumentTextRange(DocumentTextPosition(im.nodeStart), DocumentTextPosition(im.textStart))
+        XCTAssertNotEqual(v.selFrom, v.selTo, "precondition: a real selection spanning the image node")
+        v.deleteBackward()
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the media is replaced")
+        XCTAssertEqual(v.boxes.map { ($0 as? BlockBox)?.currentParagraph().text }, ["Above", "", "Below"])
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands in the new empty paragraph")
+    }
+
+    func test_backspaceOnTapSelectedImage_replacesWithEmptyParagraph() {
+        // A tap-SELECTED media block (structural selection) + Backspace replaces the media with an empty body
+        // paragraph IN PLACE (caret there) — it does NOT move the caret up into the paragraph above.
+        let v = docWithImage()                          // ["Above", image, "Below"]
+        let im = v.boxes[1] as! MediaBlockBox
+        v.selectImage(im)
+        v.deleteBackward()
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the media is replaced")
+        XCTAssertEqual(v.boxes.map { ($0 as? BlockBox)?.currentParagraph().text }, ["Above", "", "Below"])
+        XCTAssertEqual((v.boxes[1] as? BlockBox)?.currentParagraph().style, .body)
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands in the new empty paragraph, not the block above")
+        XCTAssertNil(v.imageSelection, "the image structural selection is cleared")
+    }
+
+    func test_backspaceOnTapSelectedImage_iosObjectReplacementRange_replacesWithEmptyParagraph() {
+        // Reproduces the REAL iOS runtime sequence (captured from the device log): tap-select the image
+        // (selectImage), then iOS OVERRIDES the selection — via the selectedTextRange setter, which clears
+        // imageSelection — to a RANGE whose head lands at the media's gap but anchors in the PRECEDING block
+        // (iOS's object geometry is offset from our position model). Without the fix, deleteBackward took the
+        // selection-replace path and deleted the preceding text, KEEPING the media. It must replace the media.
+        let v = docWithImage()                           // ["Above", image, "Below"]
+        let im = v.boxes[1] as! MediaBlockBox
+        v.selectImage(im)                                // structural selection (imageSelection set, caret at gap)
+        let gap = im.nodeStart
+        v.selectedTextRange = DocumentTextRange(DocumentTextPosition(gap - 2), DocumentTextPosition(gap))
+        XCTAssertNil(v.imageSelection, "precondition: iOS cleared the structural image selection")
+        XCTAssertNotEqual(v.selFrom, v.selTo, "precondition: a real (object-replacement) range selection")
+        v.deleteBackward()
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the media is replaced (not the preceding text)")
+        XCTAssertEqual(v.boxes.map { ($0 as? BlockBox)?.currentParagraph().text }, ["Above", "", "Below"])
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands in the new empty paragraph")
+    }
+
+    func test_backspaceAtStartOfNonEmptyCaption_replacesImageWithEmptyParagraph() {
+        // Backspace at the START of a caption replaces the media block (and its caption) with an empty body
+        // paragraph in place — the caption text is discarded (consistent with the empty-caption case).
+        let v = docWithImage()                          // ["Above", image, "Below"]
+        let im = v.boxes[1] as! MediaBlockBox
+        caret(v, im.textStart)
+        v.insertText("Cap")                             // caption is now "Cap"
+        caret(v, im.textStart)                          // caret back to the caption START
+        v.deleteBackward()
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the media is replaced (caption discarded)")
+        XCTAssertEqual(v.boxes.map { ($0 as? BlockBox)?.currentParagraph().text }, ["Above", "", "Below"])
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands in the new empty paragraph")
+    }
+
+    private func imageThenEmptyParagraph() -> DocumentCanvasView {
+        let v = DocumentCanvasView()
+        v.imageProvider = { _ in UIGraphicsImageRenderer(size: CGSize(width: 60, height: 40)).image { c in
+            UIColor.systemPink.setFill(); c.fill(CGRect(x: 0, y: 0, width: 60, height: 40)) } }
+        v.setBlocks([
+            .media(MediaBlock(id: BlockID("img"), mediaID: "k", naturalSize: Size2D(width: 60, height: 40))),
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: []))   // empty paragraph after the image
+        ], width: 300)
+        v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
+        return v
+    }
+
+    func test_backspaceAtStartOfEmptyParagraphAfterImage_removesParagraph_keepsImage() {
+        // The reported bug: caret at the start of an EMPTY paragraph directly below an image. Backspace
+        // must remove the empty PARAGRAPH (not the image), parking the caret at the image's caption end.
+        let v = imageThenEmptyParagraph()               // [image, ""]
+        XCTAssertEqual(v.boxes.count, 2)
+        caret(v, v.boxes[1].textStart)                  // start of the empty paragraph
+        v.deleteBackward()
+        XCTAssertEqual(v.boxes.count, 1, "the empty paragraph is removed; the image is NOT deleted")
+        XCTAssertTrue(v.boxes[0] is MediaBlockBox, "the image is kept")
+        XCTAssertEqual(v.head, v.boxes[0].textStart + v.boxes[0].textLength, "caret parks at the image's caption end")
+        XCTAssertEqual(v.head, v.anchor, "collapsed caret")
+    }
+
+    func test_backspaceAtStartOfEmptyParagraphAfterImage_isUndoable() {
+        let v = imageThenEmptyParagraph()               // [image, ""]
+        let um = UndoManager(); um.groupsByEvent = false
+        v.undoManagerOverride = um
+        caret(v, v.boxes[1].textStart)
+        um.beginUndoGrouping(); v.deleteBackward(); um.endUndoGrouping()
+        XCTAssertEqual(v.boxes.count, 1, "empty paragraph removed")
+        XCTAssertTrue(v.boxes.contains { $0 is MediaBlockBox }, "image kept")
+        um.undo()
+        XCTAssertEqual(v.boxes.count, 2, "undo restores the empty paragraph")
+        XCTAssertTrue(v.boxes[0] is MediaBlockBox)
+        XCTAssertEqual((v.boxes[1] as? BlockBox)?.textLength, 0)
+    }
+
+    func test_backspaceAtStartOfNonEmptyParagraphAfterImage_keepsImageAndText_movesCaretIntoCaption() {
+        // Backspace at the start of a NON-EMPTY paragraph below an image must NOT delete the image and
+        // must NOT delete the paragraph's text — it just steps the caret back to the image's caption end.
+        let v = docWithImage()                          // ["Above", image, "Below"]
         caret(v, v.boxes[2].textStart)                  // start of "Below" (box after the image)
         v.deleteBackward()
-        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox })
-        XCTAssertEqual((v.boxes.last as! BlockBox).currentParagraph().text, "Below")
+        XCTAssertEqual(v.boxes.count, 3, "nothing is deleted")
+        XCTAssertTrue(v.boxes[1] is MediaBlockBox, "the image is kept")
+        XCTAssertEqual((v.boxes[2] as! BlockBox).currentParagraph().text, "Below", "the paragraph text is intact")
+        XCTAssertEqual(v.head, v.boxes[1].textStart + v.boxes[1].textLength, "caret moved to the image's caption end")
+        XCTAssertEqual(v.head, v.anchor, "collapsed caret")
     }
 
-    func test_backspaceAtGapDeletingEmptyParagraph_isUndoable() {
+    func test_backspaceAtGapReplacingMedia_isUndoable() {
         let v = docWithImage()                          // ["Above", image, "Below"]
         caret(v, v.boxes[1].nodeStart)
         v.insertText("\n")                              // ["Above", "", image, "Below"]
@@ -133,11 +284,11 @@ final class CanvasImageEditTests: XCTestCase {
         v.undoManagerOverride = um
         caret(v, imageBox.nodeStart)
         um.beginUndoGrouping(); v.deleteBackward(); um.endUndoGrouping()
-        XCTAssertEqual(v.boxes.count, 3, "empty paragraph removed")
-        XCTAssertTrue(v.boxes.contains { $0 is MediaBlockBox }, "the media is kept (the empty paragraph was deleted, not the image)")
+        XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "the media is replaced with an empty paragraph")
+        XCTAssertEqual(v.boxes.count, 4, "replaced in place — the empty previous paragraph is untouched")
         um.undo()
-        XCTAssertEqual(v.boxes.count, 4, "undo restores the empty paragraph")
-        XCTAssertEqual((v.boxes[1] as? BlockBox)?.textLength, 0)
+        XCTAssertTrue(v.boxes.contains { $0 is MediaBlockBox }, "undo restores the media")
+        XCTAssertEqual(v.boxes.count, 4)
     }
 
     func test_typingAtGapBeforeImage_insertsParagraphBeforeImage() {

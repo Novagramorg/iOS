@@ -444,6 +444,19 @@ private func locallyGeneratedMessageTimestampsFromDifference(_ difference: Api.u
     return messageTimestamps
 }
 
+private func shouldUseStoredPeerChatInfoForPeerWithoutValidInclusion(transaction: Transaction, peerId: PeerId, peer: Peer) -> Bool {
+    if let channel = peer as? TelegramChannel, channel.participationStatus != .member {
+        return true
+    }
+    if shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: peerId, peer: peer) {
+        return true
+    }
+    if let community = peer as? TelegramCommunity, community.participationStatus == .member {
+        return shouldExcludePeerFromChatList(transaction: transaction, peerId: peerId, peer: community)
+    }
+    return false
+}
+
 func initialStateWithPeerIds(_ transaction: Transaction, peerIds: Set<PeerId>, activeChannelIds: Set<PeerId>, referencedReplyMessageIds: ReferencedReplyMessageIds, referencedGeneralMessageIds: Set<MessageId>, peerIdsRequiringLocalChatState: Set<PeerId>, locallyGeneratedMessageTimestamps: [PeerId: [(MessageId.Namespace, Int32)]], storedStories: [StoryId: UpdatesStoredStory]) -> AccountMutableState {
     var peers: [PeerId: Peer] = [:]
     var channelStates: [PeerId: AccountStateChannelState] = [:]
@@ -510,10 +523,12 @@ func initialStateWithPeerIds(_ transaction: Transaction, peerIds: Set<PeerId>, a
             }
         } else {
             if let peer = transaction.getPeer(peerId) {
-                if let channel = peer as? TelegramChannel, channel.participationStatus != .member {
+                if shouldUseStoredPeerChatInfoForPeerWithoutValidInclusion(transaction: transaction, peerId: peerId, peer: peer) {
                     if let notificationSettings = transaction.getPeerNotificationSettings(id: peerId) {
                         peerChatInfos[peerId] = PeerChatInfo(notificationSettings: notificationSettings)
                         Logger.shared.log("State", "Peer \(peerId) (\(peer.debugDisplayTitle) has no stored inclusion, using synthesized one")
+                    } else {
+                        Logger.shared.log("State", "Peer \(peerId) has no valid inclusion")
                     }
                 } else {
                     Logger.shared.log("State", "Peer \(peerId) has no valid inclusion")
@@ -4450,19 +4465,23 @@ func replayFinalState(
                     let _ = mediaBox.removeCachedResources(Array(Set(resourceIds)), force: true).start()
                 }
             case let .UpdatePeerChatInclusion(peerId, groupId, changedGroup):
-                let currentInclusion = transaction.getPeerChatListInclusion(peerId)
-                var currentPinningIndex: UInt16?
-                var currentMinTimestamp: Int32?
-                switch currentInclusion {
-                    case let .ifHasMessagesOrOneOf(currentGroupId, pinningIndex, minTimestamp):
-                        if currentGroupId == groupId {
-                            currentPinningIndex = pinningIndex
-                        }
-                        currentMinTimestamp = minTimestamp
-                    default:
-                        break
+                if shouldExcludePeerFromChatList(transaction: transaction, peerId: peerId) {
+                    transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
+                } else {
+                    let currentInclusion = transaction.getPeerChatListInclusion(peerId)
+                    var currentPinningIndex: UInt16?
+                    var currentMinTimestamp: Int32?
+                    switch currentInclusion {
+                        case let .ifHasMessagesOrOneOf(currentGroupId, pinningIndex, minTimestamp):
+                            if currentGroupId == groupId {
+                                currentPinningIndex = pinningIndex
+                            }
+                            currentMinTimestamp = minTimestamp
+                        default:
+                            break
+                    }
+                    transaction.updatePeerChatListInclusion(peerId, inclusion: .ifHasMessagesOrOneOf(groupId: groupId, pinningIndex: currentPinningIndex, minTimestamp: currentMinTimestamp))
                 }
-                transaction.updatePeerChatListInclusion(peerId, inclusion: .ifHasMessagesOrOneOf(groupId: groupId, pinningIndex: currentPinningIndex, minTimestamp: currentMinTimestamp))
                 if changedGroup {
                     invalidateGroupStats.insert(Namespaces.PeerGroup.archive)
                 }

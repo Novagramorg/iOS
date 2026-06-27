@@ -10,6 +10,10 @@ import RichTextEditorCore
 @available(iOS 13.0, *)
 protocol CanvasBlock: AnyObject {
     var id: BlockID { get }
+    /// The mapper this block renders with. A block created as a replacement/sibling of another (a
+    /// paragraph split or merge) inherits its source block's mapper, so context-specific styling — a
+    /// table cell's smaller base font — propagates without the editing engine tracking table membership.
+    var mapper: AttributedStringMapper { get }
     /// When true, the canvas renders this block via a persistent, non-focusable `BlockBackingView`
     /// subview (pooled by `BlockID`) instead of drawing it into the shared canvas `CGContext`.
     /// Default false (see the extension below). Will be overridden to true by `MediaBlockBox` (Task 3) and `TableBlockBox` (Task 6).

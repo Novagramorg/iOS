@@ -40,6 +40,14 @@ import BundleIconComponent
 import AnimatedTextComponent
 import TextFormat
 
+private func isIncludedCommunityContainer(_ peer: EnginePeer?, filter: ChatListNodePeersFilter) -> Bool {
+    if filter.contains(.includeCommunities), case .community = peer {
+        return true
+    } else {
+        return false
+    }
+}
+
 private enum ChatListRecentEntryStableId: Hashable {
     case topPeers
     case peerId(EnginePeer.Id, ChatListRecentEntry.Section)
@@ -164,9 +172,9 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
                 var enabled = true
                 if filter.contains(.onlyWriteable) {
                     if let peer = chatPeer {
-                        enabled = canSendMessagesToPeer(peer)
+                        enabled = isIncludedCommunityContainer(peer, filter: filter) || canSendMessagesToPeer(peer)
                     } else {
-                        enabled = canSendMessagesToPeer(primaryPeer)
+                        enabled = isIncludedCommunityContainer(primaryPeer, filter: filter) || canSendMessagesToPeer(primaryPeer)
                     }
                     if requiresPremiumForMessaging {
                         enabled = false
@@ -188,6 +196,7 @@ private enum ChatListRecentEntry: Comparable, Identifiable {
                     if let peer = chatPeer {
                         if case .legacyGroup = peer {
                         } else if case let .channel(peer) = peer, case .group = peer.info {
+                        } else if isIncludedCommunityContainer(peer, filter: filter) {
                         } else {
                             enabled = false
                         }
@@ -754,7 +763,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                 var enabled = true
                 if filter.contains(.onlyWriteable) {
                     if let peer = chatPeer {
-                        enabled = canSendMessagesToPeer(peer)
+                        enabled = isIncludedCommunityContainer(peer, filter: filter) || canSendMessagesToPeer(peer)
                     } else {
                         enabled = false
                     }
@@ -778,6 +787,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                     if let peer = chatPeer {
                         if case .legacyGroup = peer {
                         } else if case let .channel(peer) = peer, case .group = peer.info {
+                        } else if isIncludedCommunityContainer(peer, filter: filter) {
                         } else {
                             enabled = false
                         }
@@ -893,7 +903,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                 var enabled = true
                 if filter.contains(.onlyWriteable) {
                     if let peer = chatPeer {
-                        enabled = canSendMessagesToPeer(peer)
+                        enabled = isIncludedCommunityContainer(peer, filter: filter) || canSendMessagesToPeer(peer)
                     } else {
                         enabled = false
                     }
@@ -917,6 +927,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                     if let peer = chatPeer {
                         if case .legacyGroup = peer {
                         } else if case let .channel(peer) = peer, case .group = peer.info {
+                        } else if isIncludedCommunityContainer(peer, filter: filter) {
                         } else {
                             enabled = false
                         }
@@ -1016,7 +1027,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
             case let .globalPeer(peer, unreadBadge, _, theme, strings, nameSortOrder, nameDisplayOrder, expandType, storyStats, requiresPremiumForMessaging, query):
                 var enabled = true
                 if filter.contains(.onlyWriteable) {
-                    enabled = canSendMessagesToPeer(peer.peer)
+                    enabled = isIncludedCommunityContainer(peer.peer, filter: filter) || canSendMessagesToPeer(peer.peer)
                     if requiresPremiumForMessaging {
                         enabled = false
                     }
@@ -1032,6 +1043,7 @@ public enum ChatListSearchEntry: Comparable, Identifiable {
                 if filter.contains(.onlyGroups) {
                     if case .legacyGroup = peer.peer {
                     } else if case let .channel(channel) = peer.peer, case .group = channel.info {
+                    } else if isIncludedCommunityContainer(peer.peer, filter: filter) {
                     } else {
                         enabled = false
                     }
@@ -1410,7 +1422,7 @@ private struct ChatListSearchListPaneNodeState: Equatable {
 
 private func doesPeerMatchFilter(peer: EnginePeer, filter: ChatListNodePeersFilter) -> Bool {
     var enabled = true
-    if filter.contains(.onlyWriteable), !canSendMessagesToPeer(peer) {
+    if filter.contains(.onlyWriteable), !isIncludedCommunityContainer(peer, filter: filter) && !canSendMessagesToPeer(peer) {
         enabled = false
     }
     if filter.contains(.onlyPrivateChats) {
@@ -1424,6 +1436,7 @@ private func doesPeerMatchFilter(peer: EnginePeer, filter: ChatListNodePeersFilt
     if filter.contains(.onlyGroups) {
         if case .legacyGroup = peer {
         } else if case let .channel(peer) = peer, case .group = peer.info {
+        } else if isIncludedCommunityContainer(peer, filter: filter) {
         } else {
             enabled = false
         }
@@ -2291,6 +2304,9 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 if !peer.indexName.matchesByTokens(queryTokens) {
                                     continue
                                 }
+                                if peersFilter.contains(.onlyWriteable) && peersFilter.contains(.excludeDisabled) && !canSendMessagesToPeer(peer) {
+                                    continue
+                                }
 
                                 resultPeers.append(EngineRenderedPeer(peer: peer))
 
@@ -3019,6 +3035,16 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                         guard !peer.isDeleted && peer.id != context.account.peerId else {
                             return false
                         }
+                        if peersFilter.contains(.includeCommunities), case .community = peer {
+                            return requestPeerType.contains(where: { peerType in
+                                switch peerType {
+                                case .group, .channel:
+                                    return true
+                                case .user, .createBot:
+                                    return false
+                                }
+                            })
+                        }
 
                         var match = false
                         for peerType in requestPeerType {
@@ -3151,6 +3177,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                             if case let .channel(peer) = peer, case .group = peer.info {
                                 isGroup = true
                             } else if peer.id.namespace == Namespaces.Peer.CloudGroup {
+                                isGroup = true
+                            } else if isIncludedCommunityContainer(peer, filter: peersFilter) {
                                 isGroup = true
                             }
                             if !isGroup {

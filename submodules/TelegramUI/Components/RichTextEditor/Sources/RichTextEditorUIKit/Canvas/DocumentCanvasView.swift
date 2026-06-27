@@ -2,6 +2,12 @@
 import UIKit
 import RichTextEditorCore
 
+/// A host-supplied checklist checkbox view. The editor stays `CheckNode`-free; the host builds a
+/// `CheckNode`-backed view conforming to this and the editor hosts/positions/animates it.
+public protocol RichTextChecklistMarkerView: AnyObject {
+    func setChecked(_ checked: Bool, animated: Bool)
+}
+
 /// The multi-block document surface. ONE view owns every block and the unified global selection.
 /// (Internal — only `RichTextEditorView` is public; keeps `UITextInput` witnesses internal.)
 @available(iOS 13.0, *)
@@ -13,9 +19,15 @@ final class DocumentCanvasView: UIView {
     /// Returns a FRESH, non-interactive view for an emoji `id` sized to the requested square, or nil.
     /// The canvas owns/positions/removes it; a host with only a CALayer wraps it in a plain UIView.
     var emojiViewProvider: (_ id: String, _ size: CGSize) -> UIView? = { _, _ in nil }
+    /// Returns a FRESH checkbox view for a checklist marker (host-side `CheckNode`). `nil` when unset —
+    /// the editor falls back to the Unicode glyph marker. The canvas hosts/positions/animates the view.
+    var checklistMarkerViewProvider: ((_ checked: Bool, _ size: CGSize) -> (UIView & RichTextChecklistMarkerView)?)?
     /// Hosted emoji views, keyed by `EmojiRef.instanceID` so edits/undo reuse (not recreate) them.
     /// Plain `internal` (NOT `private(set)`): the reconciler in `DocumentCanvasView+Emoji.swift` mutates it.
     var emojiViews: [String: HostedEmoji] = [:]
+    /// Hosted checklist checkbox views, keyed by the owning `BlockBox`'s `BlockID`. Pooled so a toggle
+    /// reuses (and animates) the existing view rather than recreating it.
+    var checklistMarkerViews: [BlockID: HostedChecklistMarker] = [:]
     /// Back-most container for blockquote run fills (see `BlockquoteUnderlay`). Behind every block view.
     let blockquoteUnderlay = BlockquoteUnderlay()
     /// Non-interactive container for body/caption emoji views (canvas coords). Kept below the chrome
@@ -76,6 +88,8 @@ final class DocumentCanvasView: UIView {
     /// into that table's scrolling content view so it rides the scroll/overscroll; otherwise it's a direct
     /// subview of the canvas.
     let caretView = CaretView()
+    /// The own-rendered FLOATING caret for the spacebar-trackpad gesture (see DocumentCanvasView+FloatingCursor).
+    let transientCaretView = TransientCaretView()
     /// Own-drawn selection-handle lollipops (one per endpoint), shown for a ranged selection. Like the
     /// caret, each is hosted in the canvas or a table's scrolling content view per its endpoint's region,
     /// ON TOP of the wash. The handle DRAG is a separate proximity-gated pan (`isSelectionDragTouch`).
@@ -104,6 +118,13 @@ final class DocumentCanvasView: UIView {
     /// Fired once when the canvas actually RESIGNS first-responder status. Surfaced as
     /// `RichTextEditorView.onResignedFirstResponder`.
     var onResignedFirstResponder: (() -> Void)?
+    /// Pasting MEDIA (image/gif/video/sticker) is a host concern — the editor never embeds it inline.
+    /// `canPasteMedia` answers whether Paste should be offered for the current pasteboard (so the menu item
+    /// shows for an image-only clipboard); `onPasteMedia` performs the media paste (routing to the host's
+    /// send flow) and returns whether it consumed the paste. Consulted only when there is no TEXT rep — the
+    /// editor pastes text (fragment/RTF/plain) itself.
+    var canPasteMedia: (() -> Bool)?
+    var onPasteMedia: (() -> Bool)?
 
     /// Interior content margins — interactable padding around the document, ADDED to the built-in
     /// `pageMargin`. Unlike the host's scroll insets (covered by chrome/keyboard, content scrolls under),
@@ -135,6 +156,14 @@ final class DocumentCanvasView: UIView {
     // Selection as global UTF-16 positions; `anchor` fixed, `head` moving.
     var anchor = 0
     var head = 0
+
+    /// True while a floating-cursor (spacebar-trackpad) gesture owns the caret; turns the steady caret into
+    /// the dimmed "landing" indicator in `updateCaretView`.
+    var floatingCursorActive = false
+    // Floating cursor (spacebar-trackpad) gesture state — see DocumentCanvasView+FloatingCursor.swift.
+    var floatingCursorPoint: CGPoint = .zero   // the last raw floating point (canvas coords)
+    var floatingScrollLink: CADisplayLink?
+    var floatingScrollVelocity: CGFloat = 0
 
     /// Last non-zero width laid out; used to rebuild boxes during undo (extensions can't add
     /// stored properties, so it lives here).
@@ -194,6 +223,13 @@ final class DocumentCanvasView: UIView {
     var lastTapTime: TimeInterval = 0
     var lastTapLocation: CGPoint = .zero
     var tapCount = 0
+    /// Set on a genuine not-focused→focused transition (`becomeFirstResponder`), consumed by the next
+    /// `performSingleTap`. A FOCUSING tap must only place the caret, never open the menu. We can't detect it
+    /// from `isFirstResponder` at touch-up: the chat composer focuses the editor on touch-DOWN (the panel's
+    /// `ensureFocusedOnTap`), so by the time the tap handler runs `isFirstResponder` is already true. This flag
+    /// captures the transition regardless of who triggered it (touch-down focus or the handler's own
+    /// `ensureFirstResponder`).
+    var didJustBecomeFirstResponder = false
     /// Active magnifier loupe during a long-press caret drag (iOS 17+). Begun on `.began`, moved on
     /// `.changed`, invalidated + niled on `.ended`/`.cancelled`/`.failed`. The storage is untyped because a
     /// stored property can't be `@available`-gated narrower than its enclosing (iOS-16) type, while
@@ -207,10 +243,21 @@ final class DocumentCanvasView: UIView {
     var draggingEndpoint: SelectionEndpoint?
     var draggingTableKnob: TableRangeEnd?
     var selectionHandlePan: UIPanGestureRecognizer?
-    // Auto-scroll state while dragging a text-selection handle into a table's left/right edge zone.
+    // True while an interactive selection-handle drag is in flight. While set, the per-touch-move selection
+    // setters (`setSelectionHead`/`setSelectionAnchor`) SKIP the `inputDelegate` selection bracket; one
+    // bracket fires when the drag ends (`endCoalescedSelectionDrag`). Driving the keyboard's autocorrect/
+    // candidate pipeline (`-[_UIKeyboardStateManager updateForChangedSelection]`, which also re-enters our
+    // tokenizer) on every frame pegs the CPU and is meaningless mid-drag — you can't accept a suggestion
+    // while dragging a handle. The `selectedTextRange` getter stays live, so the OS reads the correct value
+    // if it queries during the drag; only the proactive candidate recompute is deferred to the gesture end.
+    var coalescingSelectionNotifications = false
+    // Auto-scroll state while dragging a text-selection handle near an edge: vertically against the host
+    // document scroll view, and/or horizontally within a scrollable table the head is in. One display link
+    // drives both axes.
     private(set) var dragAutoScrollLink: CADisplayLink?
     private(set) var dragAutoScrollTable: TableBlockBox?
-    private(set) var dragAutoScrollVelocity: CGFloat = 0   // points/tick, signed
+    private(set) var dragAutoScrollVelocityX: CGFloat = 0   // table horizontal, points/tick, signed
+    private(set) var dragAutoScrollVelocityY: CGFloat = 0   // document vertical, points/tick, signed
     private(set) var dragAutoScrollPoint: CGPoint = .zero   // last touch (canvas coords), for re-extending
     /// Transient table row/column structural selection (separate from the text selection). The `table` id
     /// guards against a stale selection after the active table is rebuilt. nil = none. Mutually exclusive
@@ -219,6 +266,10 @@ final class DocumentCanvasView: UIView {
     /// Transient atom-selection of a top-level image (separate from the text selection). The BlockID
     /// guards a stale selection after a relayout/undo. nil = none. Mutually exclusive with `tableSelection`.
     var imageSelection: BlockID?
+    /// The image whose `imageSelection` was just cleared by the `selectedTextRange` setter — iOS overrides a
+    /// tap-selected media's selection (clearing `imageSelection`) right before its Backspace. `deleteBackward`
+    /// consumes this to replace that media; any non-delete edit clears it. nil = none.
+    var imageObjectDeletePending: BlockID?
     /// Marked (composing/provisional) text as global positions over the same axis as `(anchor, head)`.
     /// nil = no active composition. The provisional characters live in the leaf region's storage like
     /// any committed text; this just tracks which range is provisional (for the underline + commit).
@@ -259,6 +310,7 @@ final class DocumentCanvasView: UIView {
         addSubview(selectionHighlight)   // selection wash, above text + emoji, below chrome
         addSubview(blockChromeOverlay)
         addSubview(caretView)   // own caret, above content; reparented into a table's content view when needed
+        addSubview(transientCaretView)   // own floating caret, above content; reparented like caretView
         addSubview(startHandleView)   // own-drawn selection handles, hosted per-endpoint like the caret
         addSubview(endHandleView)
     }
@@ -272,21 +324,60 @@ final class DocumentCanvasView: UIView {
     var customInputView: UIView?
     override var inputView: UIView? { return self.customInputView }
 
+    /// Keyboard input-language pre-selection (mirrors the legacy `ChatInputTextView`). The chat composer
+    /// seeds `initialPrimaryLanguage` from the draft's saved keyboard language. On the FIRST `textInputMode`
+    /// query after it is set, return the active input mode whose `primaryLanguage` matches, so the keyboard
+    /// opens in that language; thereafter report `super.textInputMode` (the live keyboard), which is the value
+    /// the host reads back as the current input language.
+    ///
+    /// LOAD-BEARING ORDERING INVARIANT: the override is single-shot (the first query consumes the
+    /// pre-selection and flips `didInitializePrimaryInputLanguage`). The host's read-back also queries
+    /// `textInputMode`, so correctness depends on UIKit querying first — which it does, because
+    /// `becomeFirstResponder` brings up the keyboard (querying `textInputMode`) before any keystroke or host
+    /// read. This matches the legacy node exactly; do NOT add a separate non-side-effecting read path.
+    var initialPrimaryLanguage: String?
+    private var didInitializePrimaryInputLanguage = false
+
+    override var textInputMode: UITextInputMode? {
+        if !self.didInitializePrimaryInputLanguage {
+            self.didInitializePrimaryInputLanguage = true
+            if let initialPrimaryLanguage = self.initialPrimaryLanguage {
+                for inputMode in UITextInputMode.activeInputModes {
+                    if let primaryLanguage = inputMode.primaryLanguage, primaryLanguage == initialPrimaryLanguage {
+                        return inputMode
+                    }
+                }
+            }
+        }
+        return super.textInputMode
+    }
+
+    /// Re-arm the pre-selection so the next `textInputMode` query re-applies `initialPrimaryLanguage`.
+    /// (The legacy `ChatInputTextNode.resetInitialPrimaryLanguage()` body is empty; this implements the
+    /// documented intent. For the rich node this path is currently unreachable — its only caller is gated on
+    /// `isCurrentlyEmoji()`, which the node reports `false`.)
+    func resetInitialPrimaryLanguage() {
+        self.didInitializePrimaryInputLanguage = false
+        self.reloadInputViews()
+    }
+
     @discardableResult
     override func becomeFirstResponder() -> Bool {
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let became = super.becomeFirstResponder()
         if became { updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
-        if became && !wasFirstResponder { onBecameFirstResponder?() }   // only the real not-focused→focused transition
+        if became && !wasFirstResponder { didJustBecomeFirstResponder = true; onBecameFirstResponder?() }   // only the real not-focused→focused transition
         return became
     }
 
     @discardableResult
     override func resignFirstResponder() -> Bool {
         finalizeMarkedText()
+        cancelFloatingCursor()                                           // tear down any in-flight floating-cursor gesture (display link retains self)
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let resigned = super.resignFirstResponder()
         if resigned { updateCaretView(); updateSelectionHandleViews() }   // hide caret + handles (no longer FR)
+        if resigned { didJustBecomeFirstResponder = false }              // don't carry a stale focusing-tap flag across a defocus
         if resigned && wasFirstResponder { onResignedFirstResponder?() } // only the real focused→not-focused transition
         return resigned
     }
@@ -306,6 +397,7 @@ final class DocumentCanvasView: UIView {
     func applyTheme(_ theme: RichTextEditorTheme) {
         self.mapper.theme = theme
         self.caretView.accentColor = theme.accent
+        self.transientCaretView.accentColor = theme.accent
         self.startHandleView.accentColor = theme.accent
         self.endHandleView.accentColor = theme.accent
         self.blockquoteUnderlay.accentColor = theme.accent
@@ -462,7 +554,7 @@ final class DocumentCanvasView: UIView {
         syncBlockquoteUnderlay()
         // A freshly re-realized table has a brand-new (empty) content view; re-host emoji so its cell
         // emoji migrate back into it. Otherwise the cheap hide/show cull suffices (frames unchanged).
-        if realizedFreshTable { syncEmojiViews(); syncMediaItemViews() } else { cullEmojiViews(); cullMediaItemViews() }
+        if realizedFreshTable { syncEmojiViews(); syncChecklistMarkerViews(); syncMediaItemViews() } else { cullEmojiViews(); cullMediaItemViews() }
         refreshSelectionUI()
         scrollCaretIntoViewIfNeeded()
     }
@@ -594,6 +686,7 @@ final class DocumentCanvasView: UIView {
         syncBlockquoteUnderlay()
         emojiOverlay.frame = bounds
         syncEmojiViews()
+        syncChecklistMarkerViews()
         mediaOverlay.frame = bounds
         syncMediaItemViews()
         spoilerOverlay.frame = bounds
@@ -609,7 +702,10 @@ final class DocumentCanvasView: UIView {
 
     override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
-        if newWindow == nil { stopDragAutoScroll() }   // don't let a CADisplayLink retain a torn-down view
+        if newWindow == nil {
+            stopDragAutoScroll()     // don't let a CADisplayLink retain a torn-down view
+            cancelFloatingCursor()   // same: tear down the floating-cursor display link on window removal
+        }
     }
 
     override var intrinsicContentSize: CGSize {
@@ -762,21 +858,37 @@ final class DocumentCanvasView: UIView {
         tv.scroll.scrollRectToVisible(target, animated: false)
     }
 
-    /// While dragging a selection, if `point` is in a scrollable table's left/right edge zone (and the
-    /// dragged head is in that table), start nudging the table's scroll + re-extending the head each tick.
+    /// While dragging a selection handle, auto-scroll as the touch nears an edge: **vertically** against the
+    /// host document scroll view whenever the touch enters its top/bottom band (the common case — selecting
+    /// past the visible text), and/or **horizontally** within a scrollable table when the dragged head is in
+    /// that table and the touch nears its left/right edge. A single `CADisplayLink` applies both nudges per
+    /// tick and re-extends the head against the updated geometry. (`point` is in canvas / content coords.)
     func updateDragAutoScroll(point: CGPoint, headInTable: Bool) {
-        guard headInTable, let t = tableBox(containingGlobal: head),
-              let tv = blockViews[t.id] as? TableBackingView, t.gridWidth > tv.bounds.width else {
-            stopDragAutoScroll(); return
-        }
         dragAutoScrollPoint = point
-        let edge: CGFloat = 36, step: CGFloat = 12
-        let left = t.frame.minX, right = t.frame.minX + tv.bounds.width
-        var v: CGFloat = 0
-        if point.x < left + edge { v = -step } else if point.x > right - edge { v = step }
-        if v == 0 { stopDragAutoScroll(); return }
-        dragAutoScrollTable = t
-        dragAutoScrollVelocity = v
+
+        // Vertical: scroll the host document when the touch is in the viewport's top/bottom band. Reuses the
+        // floating-cursor curve (60pt band, 14pt max step) so the two gestures auto-scroll identically.
+        var vy: CGFloat = 0
+        if let sv = superview as? UIScrollView {
+            vy = floatingAutoScrollStep(forViewportY: point.y - sv.contentOffset.y,
+                                        viewportHeight: sv.bounds.height, band: 60)
+        }
+        dragAutoScrollVelocityY = vy
+
+        // Horizontal: nudge a scrollable table the head is in when the touch nears its left/right edge.
+        var vx: CGFloat = 0
+        if headInTable, let t = tableBox(containingGlobal: head),
+           let tv = blockViews[t.id] as? TableBackingView, t.gridWidth > tv.bounds.width {
+            let edge: CGFloat = 36, step: CGFloat = 12
+            let left = t.frame.minX, right = t.frame.minX + tv.bounds.width
+            if point.x < left + edge { vx = -step } else if point.x > right - edge { vx = step }
+            dragAutoScrollTable = (vx != 0) ? t : nil
+        } else {
+            dragAutoScrollTable = nil
+        }
+        dragAutoScrollVelocityX = vx
+
+        if vy == 0 && vx == 0 { stopDragAutoScroll(); return }
         if dragAutoScrollLink == nil {
             let link = CADisplayLink(target: self, selector: #selector(dragAutoScrollTick))
             link.add(to: .main, forMode: .common)
@@ -786,18 +898,41 @@ final class DocumentCanvasView: UIView {
 
     func stopDragAutoScroll() {
         dragAutoScrollLink?.invalidate(); dragAutoScrollLink = nil
-        dragAutoScrollTable = nil; dragAutoScrollVelocity = 0
+        dragAutoScrollTable = nil; dragAutoScrollVelocityX = 0; dragAutoScrollVelocityY = 0
         dragAutoScrollPoint = .zero
     }
 
     @objc func dragAutoScrollTick() {
-        guard let t = dragAutoScrollTable, let tv = blockViews[t.id] as? TableBackingView else { stopDragAutoScroll(); return }
-        let maxX = max(tv.scroll.contentSize.width - tv.bounds.width, 0)
-        let newX = min(max(tv.scroll.contentOffset.x + dragAutoScrollVelocity, 0), maxX)
-        guard newX != tv.scroll.contentOffset.x else { return }   // already at the edge
-        tv.scroll.contentOffset.x = newX            // triggers tableDidScroll → syncs contentOffsetX
-        // The tick owns the scroll position; suppress scrollCaretIntoViewIfNeeded so it doesn't fight `newX`.
-        setSelectionHead(global: closestGlobalPosition(to: dragAutoScrollPoint), scrollIntoView: false)
+        var moved = false
+        // Vertical document scroll: advance the host offset and keep the touch point under the finger as the
+        // content scrolls (so the head re-extends to follow), exactly like the floating-cursor auto-scroll.
+        if dragAutoScrollVelocityY != 0, let sv = superview as? UIScrollView {
+            let maxY = max(sv.contentSize.height - sv.bounds.height, 0)
+            let newY = min(max(sv.contentOffset.y + dragAutoScrollVelocityY, 0), maxY)
+            if newY != sv.contentOffset.y {
+                let delta = newY - sv.contentOffset.y
+                sv.contentOffset.y = newY        // fires the façade's scrollViewDidScroll → viewportDidChange
+                dragAutoScrollPoint.y += delta   // track the same screen point as content scrolls under it
+                moved = true
+            }
+        }
+        // Horizontal table scroll: advance the table's internal offset (the canvas-space point is unaffected).
+        if dragAutoScrollVelocityX != 0, let t = dragAutoScrollTable, let tv = blockViews[t.id] as? TableBackingView {
+            let maxX = max(tv.scroll.contentSize.width - tv.bounds.width, 0)
+            let newX = min(max(tv.scroll.contentOffset.x + dragAutoScrollVelocityX, 0), maxX)
+            if newX != tv.scroll.contentOffset.x {
+                tv.scroll.contentOffset.x = newX   // triggers tableDidScroll → syncs contentOffsetX
+                moved = true
+            }
+        }
+        guard moved else { return }   // both axes already clamped at their edge
+        // Re-extend the endpoint being dragged to the content now under the touch: the anchor when the start
+        // handle is dragged, else the head (the default — also the table-only / direct-call path). The tick
+        // owns the scroll position, so suppress `setSelectionHead`'s scrollCaretIntoViewIfNeeded (it would
+        // fight `newX`); `setSelectionAnchor` never scrolls, so it needs no suppression.
+        let target = closestGlobalPosition(to: dragAutoScrollPoint)
+        if draggingEndpoint == .anchor { setSelectionAnchor(global: target) }
+        else { setSelectionHead(global: target, scrollIntoView: false) }
     }
 
     /// Sets a collapsed caret (clears the drag anchor).
@@ -819,27 +954,44 @@ final class DocumentCanvasView: UIView {
                                // Backspace-at-cell-start / Tab cell-nav — that can land the caret off-screen
     }
 
-    /// Moves the selection head, keeping the anchor (drag-to-select).
+    /// Moves the selection head, keeping the anchor (drag-to-select). During an interactive handle drag the
+    /// input-delegate bracket is coalesced to the gesture's end (see `coalescingSelectionNotifications`).
     func setSelectionHead(global pos: Int, scrollIntoView: Bool = true) {
         finalizeMarkedText()
         clearStructuralSelections()
         dismissEditMenuForSelectionOrTextChange()
-        textInputDelegate?.selectionWillChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionWillChange(self) }
         head = pos
-        textInputDelegate?.selectionDidChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionDidChange(self) }
         setNeedsDisplay(); refreshSelectionUI()
         if scrollIntoView { scrollCaretIntoViewIfNeeded() }
     }
 
-    /// Moves the selection anchor (keeps the head), bracketing the input-delegate change like setSelectionHead.
+    /// Moves the selection anchor (keeps the head), bracketing the input-delegate change like setSelectionHead
+    /// (also coalesced during an interactive handle drag).
     func setSelectionAnchor(global pos: Int) {
         finalizeMarkedText()
         clearStructuralSelections()
         dismissEditMenuForSelectionOrTextChange()
-        textInputDelegate?.selectionWillChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionWillChange(self) }
         anchor = pos
-        textInputDelegate?.selectionDidChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionDidChange(self) }
         setNeedsDisplay(); refreshSelectionUI()
+    }
+
+    /// Begins coalescing input-delegate selection notifications for an interactive selection-handle drag.
+    /// While active, `setSelectionHead`/`setSelectionAnchor` update the selection + visuals every frame but
+    /// skip the `inputDelegate` bracket; `endCoalescedSelectionDrag` fires exactly one bracket at the end.
+    func beginCoalescedSelectionDrag() { coalescingSelectionNotifications = true }
+
+    /// Ends a coalesced drag. If notifications were being coalesced, fire ONE input-delegate bracket so the OS
+    /// re-syncs (and recomputes autocorrect/candidates) against the final selection — the `selectedTextRange`
+    /// getter was live throughout, but the keyboard only refreshes on a bracket. No-op when no drag coalesced.
+    func endCoalescedSelectionDrag() {
+        guard coalescingSelectionNotifications else { return }
+        coalescingSelectionNotifications = false
+        textInputDelegate?.selectionWillChange(self)
+        textInputDelegate?.selectionDidChange(self)
     }
 
     func refreshSelectionUI() {
@@ -897,61 +1049,80 @@ final class DocumentCanvasView: UIView {
     /// scrollable table CELL it's hosted in that table's scrolling content view (so it rides the scroll);
     /// otherwise (paragraph / image-gap) it's a subview of the canvas.
     func updateCaretView() {
+        // During a floating-cursor (spacebar-trackpad) gesture the steady caret becomes the DIMMED
+        // "landing" indicator at the SNAPPED position (where the caret lands on release); the bright
+        // gliding shadow (transientCaretView) is positioned separately by the floating handlers.
+        if floatingCursorActive {
+            guard isFirstResponder, let placement = caretHostPlacement(forGlobal: head) else { return hideCaretView() }
+            hostOverlay(caretView, at: placement)
+            caretView.freezeSolid()
+            caretView.alpha = 0.4
+            lastCaretContainer = placement.container
+            lastCaretFrame = placement.frame
+            return
+        }
+        caretView.alpha = 1   // restore full opacity after a gesture
+
         // Should it show?
         guard isFirstResponder, selFrom == selTo, tableSelection == nil, imageSelection == nil else { return hideCaretView() }
 
-        var container: UIView = self
-        var frame: CGRect
-
-        let leaf = leafRegion(containingGlobal: head)
-        if let region = leaf,
-           let table = tableBox(containingGlobal: head),
-           let tv = blockViews[table.id] as? TableBackingView,
-           region.region.globalStart >= table.nodeStart,
-           region.region.globalStart < table.nodeStart + table.nodeSize {
-            // Caret inside a table cell → host it in the table's scrolling content view (content-local =
-            // unscrolled-canvas − table.frame.origin; the content view draws via a -blockViewFrame.origin
-            // translate, and a table's blockViewFrame.origin == frame.origin).
-            let unscrolled = region.region.caretRect(atLocal: region.local)
-                .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
-                          dy: region.region.canvasOrigin.y)
-            frame = caretBar(from: unscrolled)
-                .offsetBy(dx: -table.frame.minX, dy: -table.frame.minY)
-            tv.hostCaret(caretView, at: frame)
-            container = tv
-        } else if let region = leaf {
-            // A non-table leaf region (paragraph / image caption): unscrolled == canvas coords.
-            frame = caretBar(from: region.region.caretRect(atLocal: region.local)
-                .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
-                          dy: region.region.canvasOrigin.y))
-            hostCaretOnCanvas(at: frame)
-        } else if let img = mediaBox(atGap: head) {
-            // An image gap: a vertical bar at the image's leading edge (full height).
-            let rr = img.mediaRect()
-            frame = CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height)
-            hostCaretOnCanvas(at: frame)
-        } else {
-            return hideCaretView()   // not renderable → no caret
-        }
+        guard let placement = caretHostPlacement(forGlobal: head) else { return hideCaretView() }
+        hostOverlay(caretView, at: placement)
 
         caretView.isHidden = false
         // Reset the blink ONLY when the caret actually moved (container or frame changed). A no-op refresh
         // (scroll tick / relayout at the same spot) keeps the existing blink running.
-        let changed = container !== lastCaretContainer || !frame.equalTo(lastCaretFrame)
+        let changed = placement.container !== lastCaretContainer || !placement.frame.equalTo(lastCaretFrame)
         if changed { caretView.resetBlink() } else { caretView.startBlink() }
-        lastCaretContainer = container
-        lastCaretFrame = frame
+        lastCaretContainer = placement.container
+        lastCaretFrame = placement.frame
+    }
+
+    /// The (container, frame) where a caret-like overlay for global `pos` should be hosted, or `nil` if
+    /// `pos` is not a renderable caret slot. For an in-cell position the container is the owning
+    /// `TableBackingView` (frame in its content-local space); otherwise the canvas (frame in canvas
+    /// space). Extracted from `updateCaretView` so the steady caret and the floating transient caret host
+    /// identically — including riding a table's horizontal scroll.
+    func caretHostPlacement(forGlobal pos: Int) -> (container: UIView, frame: CGRect)? {
+        let leaf = leafRegion(containingGlobal: pos)
+        if let region = leaf,
+           let table = tableBox(containingGlobal: pos),
+           let tv = blockViews[table.id] as? TableBackingView,
+           region.region.globalStart >= table.nodeStart,
+           region.region.globalStart < table.nodeStart + table.nodeSize {
+            let unscrolled = region.region.caretRect(atLocal: region.local)
+                .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
+                          dy: region.region.canvasOrigin.y)
+            let frame = caretBar(from: unscrolled)
+                .offsetBy(dx: -table.frame.minX, dy: -table.frame.minY)
+            return (tv, frame)
+        } else if let region = leaf {
+            let frame = caretBar(from: region.region.caretRect(atLocal: region.local)
+                .offsetBy(dx: region.region.canvasOrigin.x + region.region.emptyLineLeadingIndent,
+                          dy: region.region.canvasOrigin.y))
+            return (self, frame)
+        } else if let img = mediaBox(atGap: pos) {
+            let rr = img.mediaRect()
+            return (self, CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height))
+        }
+        return nil
+    }
+
+    /// Hosts an arbitrary overlay view at a placement (reparenting into a table's content view when
+    /// needed), matching how the steady caret is hosted.
+    func hostOverlay(_ v: UIView, at placement: (container: UIView, frame: CGRect)) {
+        if let tv = placement.container as? TableBackingView {
+            tv.hostCaret(v, at: placement.frame)
+        } else {
+            if v.superview !== placement.container { placement.container.addSubview(v) }
+            placement.container.bringSubviewToFront(v)
+            v.frame = placement.frame
+        }
     }
 
     /// A 2pt-wide caret bar from a TextKit caret rect (keeps the OS-caret look used by `caretRect`).
     private func caretBar(from rect: CGRect) -> CGRect {
         CGRect(x: rect.minX, y: rect.minY, width: 2, height: rect.height)
-    }
-
-    private func hostCaretOnCanvas(at frame: CGRect) {
-        if caretView.superview !== self { addSubview(caretView) }
-        bringSubviewToFront(caretView)
-        caretView.frame = frame
     }
 
     private func hideCaretView() {

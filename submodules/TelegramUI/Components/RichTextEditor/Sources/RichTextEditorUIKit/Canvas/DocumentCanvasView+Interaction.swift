@@ -107,13 +107,28 @@ extension DocumentCanvasView {
     /// Testable core of the single-tap handler (`point` in canvas coordinates).
     func performSingleTap(at point: CGPoint) {
         let wasMenuVisible = editMenuVisible               // capture before the system auto-dismisses on touch-down
+        let wasFirstResponderAtEntry = isFirstResponder
         ensureFirstResponder()
-        // A tap BELOW the document's last block, when that block is a quote OR a code block, starts a new
-        // body paragraph after it — the only way to escape a trailing quote/code block (nothing exists below
-        // it to tap into).
-        if let last = boxes.last, ((last as? BlockBox)?.style == .quote || last is CodeBlockBox),
-           point.y > last.frame.maxY {
-            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing quote/code block
+        // A FOCUSING tap must only place the caret, never open the menu. "Focusing" = the field wasn't first
+        // responder before this touch — but the chat composer focuses the editor on touch-DOWN (the panel's
+        // `ensureFocusedOnTap`), so `isFirstResponder` is already true here and can't be trusted. Treat the tap
+        // as focusing if it wasn't focused at entry OR a genuine focus transition just happened (the flag set in
+        // becomeFirstResponder, whoever triggered it). Consume the flag so the NEXT tap toggles the menu normally.
+        let justFocused = didJustBecomeFirstResponder
+        didJustBecomeFirstResponder = false
+        let wasFirstResponder = wasFirstResponderAtEntry && !justFocused
+        // A tap BELOW the document's last block starts a new empty body paragraph after it — so you can
+        // always begin a normal paragraph below the final block, whatever its type (image / table / quote /
+        // code / non-empty paragraph). The ONE exception: when the last block is ALREADY an empty body
+        // paragraph, don't stack a redundant empty — fall through and just place the caret in it.
+        if let last = boxes.last, point.y > last.frame.maxY,
+           !((last as? BlockBox).map { $0.style == .body && $0.textLength == 0 } ?? false) {
+            insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing block
+            return
+        }
+        if let checklist = checklistBox(atCanvasPoint: point) {
+            ensureFirstResponder()
+            toggleChecklistItem(box: checklist)
             return
         }
         if let hit = tableHandle(at: point), let action = tableHandleTap(at: point) {
@@ -128,7 +143,7 @@ extension DocumentCanvasView {
                 // Toggle like the text menu: tapping the already-selected handle while its menu is open
                 // dismisses it instead of re-presenting (the close-then-reopen flicker).
                 let justDismissed = Date().timeIntervalSinceReferenceDate - lastMenuDismissTime < Self.menuToggleSuppressWindow
-                switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed) {
+                switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed, wasFirstResponder: wasFirstResponder) {
                 case .present: presentEditMenu(sourcePoint: hit.center)
                 case .dismiss: dismissEditMenu()
                 }
@@ -140,18 +155,18 @@ extension DocumentCanvasView {
         // menu. MUST precede the clear below (else a 2nd tap on a selected image would clear it before
         // its menu could open).
         if let img = mediaBox(atGap: p), img.mediaRect().contains(point) {
-            handleImageTap(img, wasMenuVisible: wasMenuVisible)
+            handleImageTap(img, wasMenuVisible: wasMenuVisible, wasFirstResponder: wasFirstResponder)
             return
         }
         clearStructuralSelections()                        // a non-handle, non-image tap clears both structural selections
-        switch tapOutcome(forResolvedPosition: p) {
+        switch tapOutcome(forResolvedPosition: p, point: point) {
         case .toggleMenu:
             // Tap on the caret / inside the selection: toggle the menu, keeping the current selection.
             // The system auto-dismisses the menu on this tap's touch-down (firing willDismiss) BEFORE this
             // handler runs on tap-up, so `wasMenuVisible` is already false — `justDismissed` recognizes that
             // case and suppresses a re-present (the close-then-reopen flicker).
             let justDismissed = Date().timeIntervalSinceReferenceDate - lastMenuDismissTime < Self.menuToggleSuppressWindow
-            switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed) {
+            switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed, wasFirstResponder: wasFirstResponder) {
             case .present: presentEditMenu()
             case .dismiss: dismissEditMenu()
             }
@@ -205,6 +220,11 @@ extension DocumentCanvasView {
                 draggingTableKnob = end                       // table range-knob drag
             } else {
                 draggingEndpoint = nearerSelectionEndpoint(toGlobal: pos)   // text-selection handle drag
+                // Coalesce the per-touch-move input-delegate notifications for the duration of the drag —
+                // one bracket fires on `.ended` (the keyboard's autocorrect/candidate work is meaningless
+                // mid-drag and pegs the CPU on every frame). The table-knob path uses structural selection
+                // (not these setters), so it doesn't coalesce.
+                if draggingEndpoint != nil { beginCoalescedSelectionDrag() }
             }
         case .changed:
             if let end = draggingTableKnob {
@@ -216,6 +236,7 @@ extension DocumentCanvasView {
             }
         case .ended, .cancelled, .failed:
             stopDragAutoScroll()
+            endCoalescedSelectionDrag()   // sync the OS to the final selection before presenting the menu
             if draggingTableKnob != nil || draggingEndpoint != nil { presentEditMenu() }
             draggingTableKnob = nil
             draggingEndpoint = nil

@@ -65,7 +65,9 @@ final class TableBlockBoxTests: XCTestCase {
         let filledBox = table.cells[0][1].boxes[0]
         XCTAssertEqual(emptyBox.height, filledBox.height, accuracy: 1.0,
                        "an empty cell reserves a real line, matching a single-line filled cell")
-        XCTAssertGreaterThan(emptyBox.height, 20, "not collapsed to just the insets")
+        // The cell box carries no block inset (vertical padding is a cell metric applied at the row
+        // level, not on the box), so the box is just the 15pt line (~19.7pt) — a real reserved line.
+        XCTAssertGreaterThan(emptyBox.height, 18, "not collapsed — reserves a real line")
     }
 
     // A wholly-empty row keeps a real line's height (≈ a filled row), not just topInset+bottomInset.
@@ -278,6 +280,83 @@ extension TableBlockBoxTests {
         XCTAssertGreaterThan(tv.scroll.contentOffset.x, before, "auto-scroll advances toward the right edge")
         v.stopDragAutoScroll()
         XCTAssertLessThanOrEqual(tv.scroll.contentOffset.x, tv.scroll.contentSize.width - tv.bounds.width + 0.5, "clamped to max")
+    }
+
+    // MARK: - Cell base font (15pt, vs the document body's 17pt)
+
+    /// The font of the first character of the leaf region with `ref`, or nil if empty/absent.
+    private func regionFont(_ v: DocumentCanvasView, _ ref: TextNodeRef) -> UIFont? {
+        guard let r = v.allLeafRegions().first(where: { $0.ref == ref }), r.layout.attributedString.length > 0
+        else { return nil }
+        return r.layout.attributedString.attribute(.font, at: 0, effectiveRange: nil) as? UIFont
+    }
+
+    func test_cellBodyRendersAt15pt_documentBodyStays17() {
+        let v = DocumentCanvasView()
+        v.setBlocks([
+            .paragraph(ParagraphBlock(id: BlockID("top"), runs: [TextRun(text: "Top")])),
+            .table(table2x2()),
+        ], width: 320)
+        v.frame = CGRect(x: 0, y: 0, width: 320, height: 600); v.layoutIfNeeded()
+        XCTAssertEqual(regionFont(v, .paragraph(BlockID("ap")))?.pointSize ?? 0, 15, accuracy: 0.5, "cell body is 15pt")
+        XCTAssertEqual(regionFont(v, .paragraph(BlockID("top")))?.pointSize ?? 0, 17, accuracy: 0.5, "document body stays 17pt")
+        // The pinned model size matches what was rendered.
+        guard case .table(let out) = v.currentBlocks()[1], case .paragraph(let p) = out.rows[0].cells[0].blocks[0]
+        else { return XCTFail("expected a table with a paragraph cell") }
+        XCTAssertEqual(p.runs.first?.attributes.fontSize, 15, "read-back pins the cell's 15pt size")
+    }
+
+    func test_cellText_verticalPaddingIsCellMetric_notDocumentInset() {
+        let v = DocumentCanvasView()
+        v.setBlocks([.table(TableBlock(id: BlockID("t"),
+            columns: [ColumnSpec(width: 140), ColumnSpec(width: 140)],
+            // Row 1 (non-header) avoids the header bold; "Ag" carries ascender + descender.
+            rows: [Row(id: BlockID("r0"), cells: [cell("a", "Ag"), cell("b", "Bg")]),
+                   Row(id: BlockID("r1"), cells: [cell("c", "Ag"), cell("d", "Bg")])]))], width: 320)
+        v.frame = CGRect(x: 0, y: 0, width: 320, height: 400); v.layoutIfNeeded()
+        let t = v.boxes[0] as! TableBlockBox
+        let box = t.cells[1][0].boxes[0] as! BlockBox
+        // The cell stack carries NO document inter-block inset; the vertical padding is a cell metric.
+        XCTAssertEqual(box.topInset, 0, "a cell box carries no document inter-block top inset")
+        XCTAssertEqual(box.bottomInset, 0, "a cell box carries no document inter-block bottom inset")
+        // Text sits exactly `cellVerticalPadding` below the cell top and above the bottom (symmetric).
+        let cr = t.cellRect(row: 1, column: 0)!
+        let topGap = box.textOrigin.y - cr.minY
+        let bottomGap = cr.maxY - (box.textOrigin.y + box.layout.boundingHeight)
+        XCTAssertEqual(topGap, TableBlockBox.cellVerticalPadding, accuracy: 0.5, "top gap == cellVerticalPadding")
+        XCTAssertEqual(bottomGap, TableBlockBox.cellVerticalPadding, accuracy: 0.5, "bottom gap == cellVerticalPadding")
+    }
+
+    func test_typingFirstCharInEmptyCell_is15pt() {
+        let v = DocumentCanvasView()
+        let empty = Cell(id: BlockID("a"), blocks: [.paragraph(ParagraphBlock(id: BlockID("ap"), runs: []))])
+        v.setBlocks([.table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 120), ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), cells: [empty, cell("b", "B")])]))], width: 320)
+        v.frame = CGRect(x: 0, y: 0, width: 320, height: 400); v.layoutIfNeeded()
+        let region = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("ap")) }!
+        v.selectedTextRange = DocumentTextRange(DocumentTextPosition(region.globalStart),
+                                                DocumentTextPosition(region.globalStart))
+        v.insertText("X")
+        XCTAssertEqual(regionFont(v, .paragraph(BlockID("ap")))?.pointSize ?? 0, 15, accuracy: 0.5,
+                       "the first character typed into an empty cell is 15pt, not the document's 17pt")
+    }
+
+    func test_splitInCell_thenTypeInNewLine_stays15pt() {
+        let v = DocumentCanvasView()
+        v.setBlocks([.table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 160), ColumnSpec(width: 160)],
+            rows: [Row(id: BlockID("r0"), cells: [cell("a", "Alpha"), cell("b", "Beta")])]))], width: 360)
+        v.frame = CGRect(x: 0, y: 0, width: 360, height: 400); v.layoutIfNeeded()
+        let cellA = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("ap")) }!
+        // Caret at the end of "Alpha" → Enter splits the cell, leaving a new EMPTY lower paragraph.
+        v.selectedTextRange = DocumentTextRange(DocumentTextPosition(cellA.globalStart + 5),
+                                                DocumentTextPosition(cellA.globalStart + 5))
+        v.insertText("\n")
+        v.insertText("Y")
+        let typed = v.allLeafRegions().first { $0.layout.attributedString.string == "Y" }
+        XCTAssertNotNil(typed, "the new in-cell line holds the typed character")
+        let font = typed?.layout.attributedString.attribute(.font, at: 0, effectiveRange: nil) as? UIFont
+        XCTAssertEqual(font?.pointSize ?? 0, 15, accuracy: 0.5,
+                       "a cell line created by an in-cell split inherits the cell's 15pt base font")
     }
 }
 #endif

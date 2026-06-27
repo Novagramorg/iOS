@@ -67,5 +67,41 @@ public extension RichTextEditorView {
 
     /// Toggle the current selection/paragraph(s) into a code block (or back to body paragraphs).
     func makeCodeBlock() { self.canvas.makeCodeBlock() }
+
+    /// The active keyboard's primary language while the editor is first responder, or nil when unfocused
+    /// (`UIResponder.textInputMode` is nil unless first responder). Reads through the canvas's `textInputMode`
+    /// override — after that override's one-time pre-selection has been consumed, this is the live keyboard.
+    var inputPrimaryLanguage: String? { self.canvas.textInputMode?.primaryLanguage }
+
+    /// The language the keyboard should open in on the next focus (the chat composer seeds it from the
+    /// draft's saved `inputLanguage`). Forwarded to the canvas's one-time `textInputMode` pre-selection.
+    var initialInputPrimaryLanguage: String? {
+        get { self.canvas.initialPrimaryLanguage }
+        set { self.canvas.initialPrimaryLanguage = newValue }
+    }
+
+    /// Re-arm the pre-selection so the next focus re-applies `initialInputPrimaryLanguage`.
+    func resetInputPrimaryLanguage() { self.canvas.resetInitialPrimaryLanguage() }
+
+    /// First selection rect for a chat-flat range, in this view's coordinate space (scroll-adjusted via
+    /// the view tree). The host converts further to its own `self.view` space. nil when the range covers
+    /// no glyphs (the host then shows no emoji-suggestion popover).
+    func composerFirstSelectionRect(forFlatRange range: NSRange) -> CGRect? {
+        guard let r = self.canvas.composerSelectionRects(forFlatRange: range).first else { return nil }
+        return self.convert(r, from: self.canvas)
+    }
+
+    /// The caret rect at the selection end, in this view's coordinate space (scroll-adjusted via the view
+    /// tree), or nil when there is no caret. The host converts further to its own `self.view` space.
+    func composerCaretRect() -> CGRect? {
+        guard let r = self.canvas.composerCaretRectInCanvas() else { return nil }
+        return self.convert(r, from: self.canvas)
+    }
+
+    /// Bounding rect of the current selection in CONTENT space (un-scrolled, NOT view-converted): the sole
+    /// consumer (`ChatTextInputPanelNode._showTextStyleOptions`) subtracts `composerContentOffset.y` itself.
+    /// That path is dead on iOS 17+ (the legacy format menu is nil-targeted), so this is implemented for
+    /// contract-honesty only. Content space == canvas space (the canvas is the scroll view's content at origin 0).
+    var composerSelectionBoundingRect: CGRect { self.canvas.composerSelectionBoundingRectInCanvas() }
 }
 #endif

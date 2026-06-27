@@ -22,6 +22,14 @@ public struct RichTextEditorTheme {
     public var tableHeaderBackground: UIColor
     /// Code-block background fill.
     public var codeBackground: UIColor
+    /// List bullet/number marker color. Conceptually the list's text color. (Was hardcoded `.label`.)
+    public var listMarker: UIColor
+    /// Inline-code run background pill. (Was hardcoded `.systemGray5`.)
+    public var inlineCodeBackground: UIColor
+    /// IME marked-text (composing) underline. (Was hardcoded `.label`.)
+    public var markedTextUnderline: UIColor
+    /// Spoiler particle ("dust") color. (Was hardcoded `.secondaryLabel`.)
+    public var spoilerDust: UIColor
 
     public init(
         primaryText: UIColor,
@@ -30,7 +38,11 @@ public struct RichTextEditorTheme {
         accent: UIColor,
         tableBorder: UIColor,
         tableHeaderBackground: UIColor,
-        codeBackground: UIColor
+        codeBackground: UIColor,
+        listMarker: UIColor = .label,
+        inlineCodeBackground: UIColor = .systemGray5,
+        markedTextUnderline: UIColor = .label,
+        spoilerDust: UIColor = .secondaryLabel
     ) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
@@ -39,6 +51,10 @@ public struct RichTextEditorTheme {
         self.tableBorder = tableBorder
         self.tableHeaderBackground = tableHeaderBackground
         self.codeBackground = codeBackground
+        self.listMarker = listMarker
+        self.inlineCodeBackground = inlineCodeBackground
+        self.markedTextUnderline = markedTextUnderline
+        self.spoilerDust = spoilerDust
     }
 
     /// Reproduces the editor's prior hardcoded colors exactly (see the design doc's site inventory).
@@ -55,7 +71,11 @@ public struct RichTextEditorTheme {
         tableHeaderBackground: UIColor(white: 0.5, alpha: 0.1),
         codeBackground: UIColor { tc in
             tc.userInterfaceStyle == .dark ? UIColor(white: 0.16, alpha: 1) : UIColor(white: 0.95, alpha: 1)
-        }
+        },
+        listMarker: .label,
+        inlineCodeBackground: .systemGray5,
+        markedTextUnderline: .label,
+        spoilerDust: .secondaryLabel
     )
 }
 #endif
