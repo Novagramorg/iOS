@@ -156,6 +156,13 @@ final class DocumentCanvasView: UIView {
     /// the editor's placeholder (it draws its own). Applied on the next layout pass.
     var placeholders: RichTextEditorPlaceholders = .default
 
+    /// Whether a tap in the empty area below the document's last block appends a new empty body paragraph
+    /// after it (`insertEmptyBodyParagraph`). Defaults to `true` (the full-page document editor: lets you
+    /// always start a normal paragraph below the final block, whatever its type). A compact host (the chat
+    /// composer) sets it to `false` — there is no "empty area below the content" to grow into, so a tap there
+    /// just places the caret in the existing trailing paragraph.
+    var tapBelowAddsTrailingParagraph = true
+
     // Selection as global UTF-16 positions; `anchor` fixed, `head` moving.
     var anchor = 0
     var head = 0

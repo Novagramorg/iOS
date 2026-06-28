@@ -109,6 +109,12 @@ behavior, so the attachment screen / Demo / SwiftPM tests are unchanged.** The c
   draws nothing. Composer → all "".
 - `canvasBackgroundColor` (default `.systemBackground`, the document "page") — the canvas background; the
   scroll view + `BlockBackingView`s are already clear. Composer → `nil` (transparent over the input panel).
+- `tapBelowAddsTrailingParagraph` (default `true`) — whether a tap in the empty area below the document's last
+  block appends a new empty body paragraph there (the `point.y > boxes.last.frame.maxY` affordance in
+  `+Interaction.swift`; see the quote-escape note below). The full-page article editor keeps it on; the compact
+  composer has no "empty area below the content" to grow into, so **Composer → `false`** (a tap there just places
+  the caret in the trailing paragraph). Unlike the other knobs the composer sets this in `didLoad` purely for
+  behavior — it doesn't affect layout, so its timing vs. the document seed is immaterial.
 
 Two host-side runtime contracts the composer had to honor (apply to any non-attachment host): **seed an initial
 `document`** (the canvas starts with ZERO blocks; nothing renders/edits until the `document` setter runs), and
@@ -496,6 +502,9 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   ALREADY an empty body paragraph, the tap is let through to the normal caret-placement path (no redundant empty
   is stacked). This started as a quote/code-only escape hatch and was generalized 2026-06-25 (paired with the
   *"deleting the last paragraph"* backspace rule above, so a tapped-in trailing paragraph is also removable).
+  **Gated on `tapBelowAddsTrailingParagraph` (added 2026-06-28, default `true`):** the article editor keeps it;
+  the chat composer sets it `false` (a compact field has no empty area below the content to grow into) — see the
+  compact-host knob list above.
   **(C)** **Shift+Return** inside a quote EXITS it with a new empty body paragraph (caret there): **ABOVE** the
   quote when the caret is on its first visual (wrapped) line (`caretIsOnFirstLine` — compares the caret's `minY`
   to offset 0's), else **BELOW** it. So a single-line / empty quote (caret always on its first line) exits

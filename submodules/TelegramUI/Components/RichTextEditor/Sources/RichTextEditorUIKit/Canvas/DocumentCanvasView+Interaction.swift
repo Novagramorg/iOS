@@ -120,8 +120,10 @@ extension DocumentCanvasView {
         // A tap BELOW the document's last block starts a new empty body paragraph after it — so you can
         // always begin a normal paragraph below the final block, whatever its type (image / table / quote /
         // code / non-empty paragraph). The ONE exception: when the last block is ALREADY an empty body
-        // paragraph, don't stack a redundant empty — fall through and just place the caret in it.
-        if let last = boxes.last, point.y > last.frame.maxY,
+        // paragraph, don't stack a redundant empty — fall through and just place the caret in it. Gated on
+        // `tapBelowAddsTrailingParagraph`: a compact host (the chat composer) turns it off so a tap below the
+        // content just places the caret instead of growing the field.
+        if tapBelowAddsTrailingParagraph, let last = boxes.last, point.y > last.frame.maxY,
            !((last as? BlockBox).map { $0.style == .body && $0.textLength == 0 } ?? false) {
             insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing block
             return

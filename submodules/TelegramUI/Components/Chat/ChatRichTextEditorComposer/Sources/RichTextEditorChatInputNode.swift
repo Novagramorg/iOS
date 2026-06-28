@@ -110,6 +110,10 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // (no background) rather than `.clear`: same transparency, but signals "unset" and avoids an
         // explicit clear-color fill.
         self.editorView.canvasBackgroundColor = nil
+        // Disable the "tap below the content adds a trailing paragraph" affordance: that's a full-page
+        // document-editor behavior (the article editor keeps it). In the compact composer there is no empty
+        // area below the content to grow into, so a tap there just places the caret in the trailing paragraph.
+        self.editorView.tapBelowAddsTrailingParagraph = false
 
         // Seed an editable document. RichTextEditorView starts with ZERO blocks — its canvas is only
         // populated by the `document` setter (which normalizes an empty Document to a single empty body

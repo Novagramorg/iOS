@@ -65,6 +65,15 @@ public extension RichTextEditorView {
         set { self.canvas.backgroundColor = newValue }
     }
 
+    /// Whether tapping in the empty area below the document's last block appends a new empty body paragraph
+    /// (so you can always start a normal paragraph below the final block). Defaults to `true` for the full-page
+    /// article editor; the chat composer sets it to `false`, where a tap below the content just places the
+    /// caret in the existing trailing paragraph rather than growing the field.
+    var tapBelowAddsTrailingParagraph: Bool {
+        get { self.canvas.tapBelowAddsTrailingParagraph }
+        set { self.canvas.tapBelowAddsTrailingParagraph = newValue }
+    }
+
     /// Toggle the current selection/paragraph(s) into a code block (or back to body paragraphs).
     func makeCodeBlock() { self.canvas.makeCodeBlock() }
 
