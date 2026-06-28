@@ -98,6 +98,10 @@ final class BlockLayoutTK1: BlockLayoutEngine {
         return h
     }
 
+    /// When set, `caretRect(atOffset:)` returns the trailing-edge position for EMPTY text, so an empty
+    /// RTL-keyboard paragraph shows its caret on the right before the first keystroke. nil = default (0).
+    var emptyTextCaretDirection: NSWritingDirection?
+
     /// Baseline of the first laid-out line relative to the layout top. `location(forGlyphAt:).y` is the
     /// glyph baseline measured from the line-fragment origin, so `lineRect.minY + loc.y` is the absolute
     /// baseline — the TK1 analog of TK2's `fragment.minY + line.glyphOrigin.y`.
@@ -113,6 +117,10 @@ final class BlockLayoutTK1: BlockLayoutEngine {
     }
 
     func caretRect(atOffset offset: Int) -> CGRect {
+        // Empty text with direction override: position caret at the trailing edge for RTL.
+        if textStorage.length == 0, emptyTextCaretDirection == .rightToLeft {
+            return CGRect(x: container.size.width - 2, y: 0, width: 2, height: 20)
+        }
         let fallback = CGRect(x: 0, y: 0, width: 2, height: 20)
         layoutManager.ensureLayout(for: container)
         let count = textStorage.length
@@ -159,16 +167,25 @@ final class BlockLayoutTK1: BlockLayoutEngine {
 
     /// UITextView-style wash rects: same per-line enumeration as `selectionRects`, then the identical
     /// leading/trailing-edge extension math as the TK2 original.
-    func selectionFillRects(start: Int, end: Int, fillTrailingLine: Bool) -> [CGRect] {
+    func selectionFillRects(start: Int, end: Int, fillTrailingLine: Bool, isRTL: Bool) -> [CGRect] {
         let segs = selectionRects(start: start, end: end)
         guard !segs.isEmpty else { return [] }
         let edge = container.size.width
         let coveredFromStart = (start == 0)
         return segs.enumerated().map { i, seg in
-            let toLeadingEdge = (i > 0) || coveredFromStart
-            let toTrailingEdge = (i < segs.count - 1) || fillTrailingLine
-            let left = toLeadingEdge ? min(seg.minX, 0) : seg.minX
-            let right = toTrailingEdge ? max(seg.maxX, edge) : seg.maxX
+            let toLeadingEdge = (i > 0) || coveredFromStart                  // covered from the line's beginning
+            let toTrailingEdge = (i < segs.count - 1) || fillTrailingLine    // covered to the line's end
+            // The line's "beginning" is the left edge in LTR but the right (container) edge in RTL; the
+            // "end" is the opposite. Extend whichever physical edge corresponds to the covered logical side.
+            let left: CGFloat
+            let right: CGFloat
+            if isRTL {
+                right = toLeadingEdge ? max(seg.maxX, edge) : seg.maxX
+                left = toTrailingEdge ? min(seg.minX, 0) : seg.minX
+            } else {
+                left = toLeadingEdge ? min(seg.minX, 0) : seg.minX
+                right = toTrailingEdge ? max(seg.maxX, edge) : seg.maxX
+            }
             return CGRect(x: left, y: seg.minY, width: right - left, height: seg.height)
         }
     }

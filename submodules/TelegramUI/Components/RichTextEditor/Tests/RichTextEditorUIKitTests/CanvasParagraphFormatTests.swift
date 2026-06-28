@@ -79,7 +79,7 @@ final class CanvasParagraphFormatTests: XCTestCase {
         um.beginUndoGrouping(); v.setAlignment(.right); um.endUndoGrouping()
         XCTAssertEqual(para(v, "a")?.paragraph.alignment, .right)
         um.undo()
-        XCTAssertEqual(para(v, "a")?.paragraph.alignment, .left, "undo restores left")
+        XCTAssertEqual(para(v, "a")?.paragraph.alignment, .natural, "undo restores the default (natural)")
     }
 }
 #endif

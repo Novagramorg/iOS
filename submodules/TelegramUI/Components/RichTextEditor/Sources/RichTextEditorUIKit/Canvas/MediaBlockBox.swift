@@ -104,7 +104,8 @@ final class MediaBlockBox: CanvasBlock {
     private var captionEmptyLineHeight: CGFloat {
         guard caption.length == 0 else { return 0 }
         let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
-        let ps = mapper.styleSheet.paragraphStyle(for: .caption, attributes: MediaBlockBox.captionParagraph, list: nil)
+        let ps = mapper.styleSheet.paragraphStyle(for: .caption, attributes: MediaBlockBox.captionParagraph, list: nil,
+                                                   baseWritingDirection: mapper.baseWritingDirection)
         let mult = ps.lineHeightMultiple > 0 ? ps.lineHeightMultiple : 1
         return font.lineHeight * mult
     }
@@ -188,7 +189,8 @@ final class MediaBlockBox: CanvasBlock {
     func captionTypingAttributes() -> [NSAttributedString.Key: Any] {
         var attrs = mapper.attributes(for: CharacterAttributes(), style: .caption)
         attrs[.paragraphStyle] = mapper.styleSheet.paragraphStyle(for: .caption,
-                                                                  attributes: MediaBlockBox.captionParagraph, list: nil)
+                                                                  attributes: MediaBlockBox.captionParagraph, list: nil,
+                                                                  baseWritingDirection: mapper.baseWritingDirection)
         return attrs
     }
 
@@ -213,7 +215,8 @@ final class MediaBlockBox: CanvasBlock {
             // Use the caption's OWN paragraph style (centered + body line-height metrics) so the
             // placeholder is metrically identical to real caption text — same centering AND same baseline,
             // so nothing shifts vertically the instant the user types.
-            let ps = mapper.styleSheet.paragraphStyle(for: .caption, attributes: MediaBlockBox.captionParagraph, list: nil)
+            let ps = mapper.styleSheet.paragraphStyle(for: .caption, attributes: MediaBlockBox.captionParagraph, list: nil,
+                                                       baseWritingDirection: mapper.baseWritingDirection)
             NSAttributedString(string: ph.text, attributes: [
                 .font: ph.font,
                 .foregroundColor: mapper.theme.placeholder,

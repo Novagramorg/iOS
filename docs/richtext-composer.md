@@ -142,6 +142,20 @@ pre-selection before any read-back), so the read path must not run before focus 
 the panel already guards on `isInputFirstResponder`, falling back to
 `storedInputLanguage` otherwise.
 
+### Writing direction (RTL)
+
+The editor auto-detects each paragraph's direction (RTL for Arabic/Hebrew/…) and lays it out accordingly, so RTL
+typing "just works" in the composer; an empty message's caret follows the keyboard's input language and re-flips
+live on a globe-key switch. The whole-document override (`RichTextEditorView.layoutDirectionOverride`) exists on the
+façade (and has a UI control in `RichTextAttachmentScreen`) but is **not surfaced in the chat composer** this round —
+auto-detect covers it. Editor-side architecture lives in the editor's own `CLAUDE.md` ("RTL / writing direction").
+
+**Empty-input right inset.** `ChatTextInputPanelNode.calculateTextFieldRealInsets` reserves the action-control slot
+on the field's right (`actionControlsWidth - 10`). The effective per-layout call (applied to the rich node) passes
+that width **only when the send button is shown** (`inputHasText || hasMediaDraft || hasForward || isEditingMedia`);
+when empty the send button is hidden (scaled to ~0), so the field insets only for the in-field accessory buttons (a
+further 10pt is trimmed). Without this an empty field over-insets on the right.
+
 ---
 
 ## 4. Feature round-trips
@@ -372,6 +386,9 @@ also called by the incremental `updateDraftMessage` path) + `_internal_applyFetc
 - **Code blocks:** no language picker; no code inside table cells; no inline formatting inside code.
 - The `SynchronizeableChatInputState.Content.instantPage` cloud branch is exercised today only by structural
   blocks; everything entity-expressible takes `.textEntities`.
+- **Writing-direction override in the composer:** auto-detect handles RTL while typing, but a manual whole-document
+  LTR/RTL toggle is not surfaced in the chat composer (it exists on the façade + the attachment screen). Gutter
+  ornaments (list markers / quote bar / indents) and table columns are not yet mirrored for RTL.
 
 ## Key files
 

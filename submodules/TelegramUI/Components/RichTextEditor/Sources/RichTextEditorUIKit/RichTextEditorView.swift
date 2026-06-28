@@ -28,6 +28,20 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Whole-document writing-direction override. `.auto` (default) auto-detects per paragraph; the forced
+    /// cases pin the whole editor. Modeled like `theme`: assigning re-applies to the live mapper and
+    /// reloads (resetting the live selection) when the view is sized, so boxes rebuild with the direction.
+    public var layoutDirectionOverride: DocumentLayoutDirection {
+        get { canvas.layoutDirectionModel }
+        set {
+            canvas.applyWritingDirectionOverride(newValue)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Fires (no payload) whenever anything changes — a content edit, a content-size change, or a
     /// selection/caret move. The host responds by re-running its own layout (which calls
     /// `update(size:insets:)`). May fire more than once per logical change; treat it as idempotent.
@@ -106,8 +120,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
     public var document: Document {
-        get { Document(blocks: canvas.currentBlocks()) }
+        get { Document(blocks: canvas.currentBlocks(), layoutDirection: canvas.layoutDirectionModel) }
         set {
+            canvas.applyWritingDirectionOverride(newValue.layoutDirection)
             var blocks = newValue.blocks
             if blocks.isEmpty { blocks = [.paragraph(ParagraphBlock(id: BlockID.generate()))] }
             canvas.reload(blocks, width: bounds.width)
@@ -163,6 +178,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
                                  // setting applied just above (margins, width) takes effect even when the
                                  // canvas frame didn't change (e.g. a short doc whose height is floored).
         scrollView.contentSize = CGSize(width: size.width, height: canvasHeight)
+        #if DEBUG
+        refreshDebugLayoutOverlay()
+        #endif
         return contentHeight
     }
 
@@ -364,7 +382,15 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         canvas.viewportDidChange()   // realize/recycle block views + emoji + blockquote underlay for the new viewport
+        #if DEBUG
+        refreshDebugLayoutOverlay()   // keep block outlines tracking the scrolled content
+        #endif
     }
+
+    #if DEBUG
+    /// DEBUG-only: exposes the (private) scroll content inset to the debug layout overlay.
+    var debugContentInset: UIEdgeInsets { scrollView.contentInset }
+    #endif
 
     // MARK: - Composer-host scroll accessors (internal — consumed by RichTextEditorView+ComposerHost.swift)
 

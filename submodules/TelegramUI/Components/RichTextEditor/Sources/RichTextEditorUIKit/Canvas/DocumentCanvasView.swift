@@ -15,6 +15,9 @@ final class DocumentCanvasView: UIView {
     let root = BlockStack()
     var boxes: [CanvasBlock] { get { root.boxes } set { root.boxes = newValue } }
     var mapper: AttributedStringMapper
+    /// The whole-document writing-direction override (the model side of `applyWritingDirectionOverride`).
+    /// Mirrored into `Document.layoutDirection` by the façade getter; render-only auto-detection is separate.
+    var layoutDirectionModel: DocumentLayoutDirection = .auto
     var imageProvider: (String) -> UIImage? = { _ in nil }
     /// Returns a FRESH, non-interactive view for an emoji `id` sized to the requested square, or nil.
     /// The canvas owns/positions/removes it; a host with only a CALayer wraps it in a plain UIView.
@@ -291,9 +294,25 @@ final class DocumentCanvasView: UIView {
     var undoManagerOverride: UndoManager?
     var effectiveUndoManager: UndoManager? { undoManagerOverride ?? undoManager }
 
+    /// Token for the input-language-change observer (see init); removed in deinit.
+    private var inputModeObserver: NSObjectProtocol?
+    deinit {
+        if let inputModeObserver { NotificationCenter.default.removeObserver(inputModeObserver) }
+    }
+
     init(mapper: AttributedStringMapper = AttributedStringMapper()) {
         self.mapper = mapper
         super.init(frame: .zero)
+        // Re-flip an empty paragraph's caret when the input language changes (globe key) or the keyboard
+        // first appears — `currentInputModeDidChange` fires for both. So an RTL input language puts the
+        // caret on the right of an empty paragraph live, without a reload/refocus. `queue: nil` delivers
+        // synchronously on the posting (main) thread.
+        self.inputModeObserver = NotificationCenter.default.addObserver(
+            forName: UITextInputMode.currentInputModeDidChangeNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            self?.refreshEmptyBoxWritingDirections()
+            self?.updateCaretView()
+        }
         backgroundColor = .systemBackground
         blockChromeOverlay.canvas = self
         addSubview(blockquoteUnderlay)   // back-most: blockquote fills behind every block view
@@ -323,6 +342,10 @@ final class DocumentCanvasView: UIView {
     /// caret keeps rendering). `nil` ⇒ system keyboard.
     var customInputView: UIView?
     override var inputView: UIView? { return self.customInputView }
+
+    /// Test seam: when set, replaces the live `textInputMode?.primaryLanguage` lookup.
+    /// Avoids subclassing the `final class DocumentCanvasView` just for tests.
+    var keyboardLanguageProviderForTesting: (() -> String?)?
 
     /// Keyboard input-language pre-selection (mirrors the legacy `ChatInputTextView`). The chat composer
     /// seeds `initialPrimaryLanguage` from the draft's saved keyboard language. On the FIRST `textInputMode`
@@ -365,7 +388,7 @@ final class DocumentCanvasView: UIView {
     override func becomeFirstResponder() -> Bool {
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let became = super.becomeFirstResponder()
-        if became { updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
+        if became { refreshEmptyBoxWritingDirections(); updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
         if became && !wasFirstResponder { didJustBecomeFirstResponder = true; onBecameFirstResponder?() }   // only the real not-focused→focused transition
         return became
     }
@@ -439,6 +462,7 @@ final class DocumentCanvasView: UIView {
         setBlocks(blocks, width: width)
         textInputDelegate?.selectionDidChange(self)
         textInputDelegate?.textDidChange(self)
+        refreshEmptyBoxWritingDirections()
     }
 
     func currentBlocks() -> [Block] { boxes.map { $0.currentBlock() } }
@@ -805,7 +829,8 @@ final class DocumentCanvasView: UIView {
                 // next block) is selected → the final covered line fills to the edge, like UITextView.
                 let continuesPast = globalTo > regionEnd
                 for seg in r.layout.selectionFillRects(start: lo - r.globalStart, end: hi - r.globalStart,
-                                                       fillTrailingLine: continuesPast) {
+                                                       fillTrailingLine: continuesPast,
+                                                       isRTL: resolvedDirection(forGlobal: lo) == .rightToLeft) {
                     rects.append(seg.offsetBy(dx: r.canvasOrigin.x - offX, dy: r.canvasOrigin.y))
                 }
             } else if r.length == 0, globalFrom <= r.globalStart, r.globalStart < globalTo {

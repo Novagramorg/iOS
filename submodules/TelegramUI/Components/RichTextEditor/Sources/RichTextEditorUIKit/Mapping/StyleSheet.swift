@@ -73,14 +73,17 @@ public struct StyleSheet {
     }
 
     public func paragraphStyle(for style: ParagraphStyleName, attributes: ParagraphAttributes,
-                               list: ListMembership? = nil) -> NSParagraphStyle {
+                               list: ListMembership? = nil,
+                               baseWritingDirection: NSWritingDirection = .natural) -> NSParagraphStyle {
         let ps = NSMutableParagraphStyle()
         switch attributes.alignment {
+        case .natural: ps.alignment = .natural
         case .left: ps.alignment = .left
         case .center: ps.alignment = .center
         case .right: ps.alignment = .right
         case .justified: ps.alignment = .justified
         }
+        ps.baseWritingDirection = baseWritingDirection
         ps.firstLineHeadIndent = CGFloat(attributes.firstLineIndent)
         ps.headIndent = CGFloat(attributes.headIndent)
         ps.paragraphSpacingBefore = CGFloat(attributes.paragraphSpacingBefore)

@@ -131,7 +131,9 @@ private func chatInputMediaAlignment(fromAlignment alignment: MediaAlignment) ->
 
 private func chatInputTextAlignment(fromAlignment alignment: TextAlignment) -> ChatInputTextAlignment {
     switch alignment {
-    case .left:
+    case .left, .natural:
+        // `.natural` is leading (left in LTR); the chat input content has no natural case, and its
+        // default is `.left`, so natural maps to left. Chat-side text rendering re-detects RTL anyway.
         return .left
     case .center:
         return .center

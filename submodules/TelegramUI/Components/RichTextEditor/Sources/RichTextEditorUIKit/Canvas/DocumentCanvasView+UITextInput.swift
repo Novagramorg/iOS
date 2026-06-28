@@ -75,7 +75,8 @@ extension DocumentCanvasView: UITextInput {
             let para = p?.paragraphAttributes ?? .default
             let list = p?.listMembership
             var attrs = m.attributes(for: CharacterAttributes(), style: style)
-            attrs[.paragraphStyle] = m.styleSheet.paragraphStyle(for: style, attributes: para, list: list)
+            attrs[.paragraphStyle] = m.styleSheet.paragraphStyle(for: style, attributes: para, list: list,
+                                                                   baseWritingDirection: m.baseWritingDirection)
             return attrs
         }
         return storage.attributes(at: min(max(0, location - 1), storage.length - 1), effectiveRange: nil)
@@ -173,7 +174,13 @@ extension DocumentCanvasView: UITextInput {
             : DocumentTextRange(p, DocumentTextPosition(documentSize))
     }
 
-    func baseWritingDirection(for position: UITextPosition, in direction: UITextStorageDirection) -> NSWritingDirection { .leftToRight }
+    func baseWritingDirection(for position: UITextPosition, in direction: UITextStorageDirection) -> NSWritingDirection {
+        guard let p = position as? DocumentTextPosition else { return typingWritingDirection }
+        return resolvedDirection(forGlobal: p.offset)
+    }
+    // No-op by design: the whole-document override (`layoutDirectionModel`) is the single manual control,
+    // so we do not honor per-range UIKit writing-direction writes (which would imply per-paragraph control
+    // we deliberately did not build).
     func setBaseWritingDirection(_ writingDirection: NSWritingDirection, for range: UITextRange) {}
 
     func firstRect(for range: UITextRange) -> CGRect {
