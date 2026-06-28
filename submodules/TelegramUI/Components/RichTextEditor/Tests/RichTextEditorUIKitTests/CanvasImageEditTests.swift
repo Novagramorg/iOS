@@ -49,6 +49,22 @@ final class CanvasImageEditTests: XCTestCase {
         XCTAssertEqual(ps?.alignment, .center)           // typed text is centered, like the placeholder
     }
 
+    func testInsertAudioLandsCaretInFollowingParagraph() {
+        // canvas seeded with a single empty body paragraph; caret in it.
+        let v = canvas([""])
+        caret(v, v.boxes[0].textStart)
+        v.insertMedia(mediaID: "doc:1", naturalSize: CGSize(width: 1, height: 1), kind: .audio)
+        // After: [audio, body paragraph]; caret in the trailing paragraph (NOT in the audio gap).
+        XCTAssertEqual(v.boxes.count, 2)
+        guard let audioBox = v.boxes[0] as? MediaBlockBox, audioBox.kind == .audio else {
+            return XCTFail("block 0 should be audio")
+        }
+        XCTAssertTrue(v.boxes[1] is BlockBox, "block 1 should be a paragraph")
+        // caret is inside block 1's text region, not at the audio gap.
+        XCTAssertGreaterThan(v.head, audioBox.nodeStart)
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands at the start of the trailing paragraph")
+    }
+
     func test_insertImage_onEmptyParagraph_replacesParagraph() {
         let v = canvas([""])                             // a single empty paragraph
         caret(v, v.boxes[0].textStart)
@@ -378,6 +394,32 @@ final class CanvasImageEditTests: XCTestCase {
         XCTAssertFalse(v.boxes.contains { $0 is MediaBlockBox }, "Select All + backspace removes a leading image")
         XCTAssertEqual(v.boxes.count, 1)
         XCTAssertEqual(v.boxes[0].textLength, 0)
+    }
+
+    // MARK: - Select All + backspace removes a covered audio block
+
+    private func docWithAudio() -> DocumentCanvasView {
+        // Seeds a document with [paragraph "ab", audio, paragraph ""] via insertMedia at the end of "ab".
+        // Audio insert always appends a trailing empty paragraph so the caret has a text home.
+        let v = canvas(["ab"])
+        caret(v, v.boxes[0].textStart + 2)               // end of "ab"
+        v.insertMedia(mediaID: "doc:1", naturalSize: CGSize(width: 1, height: 1), kind: .audio)
+        // After insert: ["ab", audio, ""] — 3 blocks (the trailing empty paragraph is mandatory for audio).
+        return v
+    }
+
+    func test_selectAll_thenBackspace_removesAudio() {
+        // seed: [paragraph "ab", audio, paragraph ""]; select-all + delete
+        let v = docWithAudio()
+        // Precondition: doc contains an audio block.
+        XCTAssertTrue(v.boxes.contains { ($0 as? MediaBlockBox)?.kind == .audio }, "precondition: audio block present")
+        v.selectAllText()
+        v.deleteBackward()
+        // Audio is gone; document is a single empty paragraph.
+        XCTAssertFalse(v.boxes.contains { ($0 as? MediaBlockBox)?.kind == .audio },
+                       "Select All + backspace should remove the audio block")
+        XCTAssertEqual(v.boxes.count, 1, "the document collapses to one block")
+        XCTAssertTrue(v.boxes[0] is BlockBox, "the remaining block is a paragraph")
     }
 }
 #endif

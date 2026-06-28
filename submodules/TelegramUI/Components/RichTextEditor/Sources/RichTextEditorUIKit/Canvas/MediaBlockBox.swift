@@ -31,12 +31,20 @@ final class MediaBlockBox: CanvasBlock {
     /// `layoutSubviews`.
     private(set) var layoutWidth: CGFloat
 
+    /// A degenerate empty layout for an audio block, which has NO editable text region (caption-less). The
+    /// `caption` layout is still built in `init` but is unused for audio. Mirrors `TableBlockBox.emptyLayout`.
+    private let emptyLayout = makeBlockLayout(attributedString: NSAttributedString(string: ""), width: 1)
+
     /// The caption renders centered. Render-only — NOT persisted: `currentBlock()` extracts only the
     /// caption runs, so alignment never enters the model (and markdown carries none).
     private static let captionParagraph = ParagraphAttributes(alignment: .center)
 
     /// The placeholder text shown while the caption is empty.
     private static let captionPlaceholderText = "Add caption"
+
+    /// Audio renders as a fixed-height row (matches the V2 renderer's `audioFrame` height in
+    /// `InstantPageV2Layout.swift`, so the editor preview equals the sent bubble) — NOT aspect-scaled.
+    static let audioRowHeight: CGFloat = 44.0
 
     /// The full canvas width this image bleeds across: its content-strip frame width plus both page
     /// margins (the inverse of the inset top-level frame). The image draws edge-to-edge over this.
@@ -60,16 +68,16 @@ final class MediaBlockBox: CanvasBlock {
                                   width: max(width, 1))
     }
 
-    // CanvasBlock — text region is the caption.
+    // CanvasBlock — text region is the caption (absent for audio).
     var rendersAsBlockView: Bool { true }
     // The medium is now an overlay view (not drawn into the backing store), so the backing view only needs
     // to cover the caption (its own inset frame). The full-bleed medium is hosted in the canvas mediaOverlay.
     var blockViewFrame: CGRect { frame }
-    var textLayout: BlockLayoutEngine { caption }
-    var textLength: Int { caption.length }
-    var nodeSize: Int { caption.length + 5 }
-    var textStart: Int { nodeStart + 2 }
-    var textRef: TextNodeRef { .caption(id) }
+    var textLayout: BlockLayoutEngine { kind == .audio ? emptyLayout : caption }
+    var textLength: Int { kind == .audio ? 0 : caption.length }
+    var nodeSize: Int { kind == .audio ? 3 : caption.length + 5 }
+    var textStart: Int { kind == .audio ? nodeStart : nodeStart + 2 }
+    var textRef: TextNodeRef { .caption(id) } // unchanged; unused for audio (leafRegions is empty)
 
     func setWidth(_ width: CGFloat) {
         layoutWidth = max(width, 1)
@@ -86,7 +94,8 @@ final class MediaBlockBox: CanvasBlock {
     }
 
     var imageAreaHeight: CGFloat {
-        imageDisplaySize(maxWidth: max(canvasWidth, 1)).height
+        if kind == .audio { return MediaBlockBox.audioRowHeight }
+        return imageDisplaySize(maxWidth: max(canvasWidth, 1)).height
     }
 
     /// One line of the caption's (body) font height, reserved only when the caption is EMPTY — TextKit 2
@@ -108,13 +117,13 @@ final class MediaBlockBox: CanvasBlock {
     }
 
     var height: CGFloat {
-        verticalInset + imageAreaHeight + captionGap
+        if kind == .audio { return verticalInset + MediaBlockBox.audioRowHeight + verticalInset }
+        return verticalInset + imageAreaHeight + captionGap
             + max(caption.boundingHeight, captionEmptyLineHeight) + verticalInset
     }
 
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        // The image bleeds full-width — its area is sized at canvasWidth (= width + pageMargin*2, mirroring
-        // the live `imageAreaHeight`) — while the caption lays out at the content `width`.
+        if kind == .audio { return verticalInset + MediaBlockBox.audioRowHeight + verticalInset }
         let imageArea = imageDisplaySize(maxWidth: max(width + CanvasMetrics.pageMargin * 2, 1)).height
         return verticalInset + imageArea + captionGap
             + max(caption.boundingHeight(forWidth: max(width, 1)), captionEmptyLineHeight) + verticalInset
@@ -128,6 +137,12 @@ final class MediaBlockBox: CanvasBlock {
     // NOTE: assumes a top-level image (bleeds past the page margin to the canvas edge). No command inserts an image into a table cell today; if that becomes possible, a nested image must skip the bleed.
     func mediaRect() -> CGRect {
         let avail = max(canvasWidth, 1)
+        if kind == .audio {
+            // Audio is a fixed-height full-width row (see imageAreaHeight); NOT aspect-scaled. The hosted
+            // audio view lays out its content within this width. `bleedX` matches the image full-bleed origin.
+            let bleedX = frame.minX - CanvasMetrics.pageMargin
+            return CGRect(x: bleedX, y: frame.minY + verticalInset, width: avail, height: MediaBlockBox.audioRowHeight)
+        }
         let size = imageDisplaySize(maxWidth: avail)
         let bleedX = frame.minX - CanvasMetrics.pageMargin
         let x: CGFloat
@@ -140,6 +155,7 @@ final class MediaBlockBox: CanvasBlock {
     }
 
     func closestPosition(toCanvasPoint point: CGPoint) -> Int {
+        if kind == .audio { return nodeStart }
         if point.y < textOrigin.y { return nodeStart }   // image area → gap before the atom
         let local = CGPoint(x: point.x - textOrigin.x, y: point.y - textOrigin.y)
         return textStart + caption.closestOffset(toPoint: local)
@@ -147,10 +163,12 @@ final class MediaBlockBox: CanvasBlock {
 
     func currentBlock() -> Block {
         .media(MediaBlock(id: id, mediaID: mediaID, kind: kind, naturalSize: naturalSize, displayWidth: displayWidth,
-                          alignment: alignment, caption: mapper.runs(from: caption.attributedString, style: .caption)))
+                          alignment: alignment,
+                          caption: kind == .audio ? [] : mapper.runs(from: caption.attributedString, style: .caption)))
     }
 
     func leafRegions() -> [LeafTextRegion] {
+        if kind == .audio { return [] }
         // When the caption is empty, place its caret at the START (left edge) of the centered "Add caption"
         // placeholder — not the line center — so the caret sits just before the placeholder text rather than
         // bisecting it. The placeholder is centered in a layoutWidth-wide rect, so its left edge is
@@ -179,13 +197,14 @@ final class MediaBlockBox: CanvasBlock {
     /// because an image is view-backed (`rendersAsBlockView`) — its caption and placeholder must share
     /// the same render layer. Mirrors the paragraph placeholder's color/font.
     func captionPlaceholder() -> CaptionPlaceholder? {
-        guard caption.length == 0 else { return nil }
+        guard kind != .audio, caption.length == 0 else { return nil }
         let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
         let rect = CGRect(x: textOrigin.x, y: textOrigin.y, width: layoutWidth, height: captionEmptyLineHeight)
         return CaptionPlaceholder(text: MediaBlockBox.captionPlaceholderText, rect: rect, font: font)
     }
 
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {
+        guard kind != .audio else { return } // caption-less: the media is a host overlay; nothing to draw here
         // The medium itself is now a host-supplied overlay view (positioned at `mediaRect()` by the canvas
         // media reconciler), so the backing store draws only the caption (+ its placeholder). `imageProvider`
         // is retained as the shared `CanvasBlock.draw` parameter but is unused here.

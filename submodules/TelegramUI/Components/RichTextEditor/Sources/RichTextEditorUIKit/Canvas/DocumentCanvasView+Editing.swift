@@ -82,7 +82,7 @@ extension DocumentCanvasView {
         // Select-All over a document whose first/last block is an image/code fully covers it, so it is
         // dropped here exactly as a covered MIDDLE block already is.
         func endpointFullyCovered(_ box: CanvasBlock) -> Bool {
-            (box is MediaBlockBox || box is CodeBlockBox) && lo <= box.nodeStart && hi >= box.textStart + box.textLength
+            (box is MediaBlockBox || box is CodeBlockBox) && lo <= box.nodeStart && hi >= coverableContentEnd(box)
         }
         let keepStartMedia = (start.box is MediaBlockBox || start.box is CodeBlockBox) && !endpointFullyCovered(start.box)
         let keepEndMedia = (end.box is MediaBlockBox || end.box is CodeBlockBox) && !endpointFullyCovered(end.box)
@@ -175,6 +175,15 @@ extension DocumentCanvasView {
         box is MediaBlockBox || box is TableBlockBox || box is CodeBlockBox
     }
 
+    /// The position just past a media/code block's coverable content, for the Select-All / covered-range
+    /// delete checks. Captioned media and code end at their caption/text end; a caption-less AUDIO block has
+    /// no text region, so its coverable content ends just after the media atom (`nodeStart + 1`) — NOT at the
+    /// collapsed `textStart + textLength` (which equals `nodeStart` for audio).
+    func coverableContentEnd(_ box: CanvasBlock) -> Int {
+        if let m = box as? MediaBlockBox, m.kind == .audio { return box.nodeStart + 1 }
+        return box.textStart + box.textLength
+    }
+
     /// Removes the block at `index`, parking the caret at an explicit global position the caller computed
     /// BEFORE the removal (positions before the removed block are unaffected by it). Used by backspace at
     /// the start of an empty trailing paragraph that follows a non-text block (image / table / code), which
@@ -239,7 +248,7 @@ extension DocumentCanvasView {
         // adjacent text doesn't match (its endpoints differ from the node bounds) and falls through to the
         // normal cross-block drop path.
         if text.isEmpty, let i = boxes.firstIndex(where: {
-            $0 is MediaBlockBox && globalFrom == $0.nodeStart && globalTo == $0.textStart + $0.textLength
+            $0 is MediaBlockBox && globalFrom == $0.nodeStart && globalTo == coverableContentEnd($0)
         }) {
             replaceMediaWithEmptyParagraph(at: i)
             return
@@ -402,7 +411,26 @@ extension DocumentCanvasView {
             }
             boxes = newBoxes
             recomputeSpans()
-            anchor = mediaBox.textStart; head = mediaBox.textStart
+            if kind == .audio {
+                // Audio is caption-less: land the caret in the body paragraph AFTER the audio, appending an
+                // empty one when the audio is the last block or is followed by a non-paragraph atom, so typing
+                // continues. (Captioned media lands the caret in its caption.)
+                let mediaIndex = boxes.firstIndex(where: { $0.id == mediaBox.id }) ?? boxes.count - 1
+                let following = mediaIndex + 1 < boxes.count ? boxes[mediaIndex + 1] : nil
+                if let nextParagraph = following as? BlockBox {
+                    anchor = nextParagraph.textStart; head = nextParagraph.textStart
+                } else {
+                    let trailing = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                            mapper: mapper, width: effectiveWidth)
+                    var withTrailing = boxes
+                    withTrailing.insert(trailing, at: mediaIndex + 1)
+                    boxes = withTrailing
+                    recomputeSpans()
+                    anchor = trailing.textStart; head = trailing.textStart
+                }
+            } else {
+                anchor = mediaBox.textStart; head = mediaBox.textStart
+            }
         }
     }
 

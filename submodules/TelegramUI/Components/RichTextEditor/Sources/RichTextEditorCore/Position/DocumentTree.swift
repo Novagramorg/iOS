@@ -12,6 +12,10 @@ public enum DocumentTree {
             return .paragraph(id: p.id,
                               children: [.text(length: p.utf16Count, ref: .paragraph(p.id))])
         case .media(let img):
+            if img.kind == .audio {
+                // Audio is a caption-less atom — no caption paragraph node (nodeSize = 1 atom + 2 wrapper = 3).
+                return .mediaBlock(id: img.id, children: [.mediaAtom(id: img.id)])
+            }
             return .mediaBlock(id: img.id, children: [
                 .mediaAtom(id: img.id),
                 .paragraph(id: img.id,
