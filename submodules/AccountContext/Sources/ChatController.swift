@@ -1186,6 +1186,7 @@ public protocol ChatController: ViewController {
     func updateIsScrollingLockedAtTop(isScrollingLockedAtTop: Bool)
     
     func playShakeAnimation()
+    func playConfettiAnimation()
     
     func removeAd(opaqueId: Data)
     

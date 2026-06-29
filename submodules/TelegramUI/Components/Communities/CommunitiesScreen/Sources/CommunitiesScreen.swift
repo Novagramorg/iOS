@@ -227,7 +227,27 @@ private final class CommunitiesScreenComponent: Component {
         }
 
         private func dismissController() {
-            self.environment?.controller()?.dismiss()
+            guard let navigationController = self.environment?.controller()?.navigationController as? NavigationController else {
+                return
+            }
+            var viewControllers = navigationController.viewControllers
+            viewControllers = viewControllers.filter { c in
+                if c is CommunitiesScreen || c is PeerInfoScreen {
+                    return false
+                } else {
+                    return true
+                }
+            }
+            navigationController.setViewControllers(viewControllers, animated: true)
+            
+            Queue.mainQueue().after(0.1, {
+                for controller in viewControllers.reversed() {
+                    if let chatController = controller as? ChatController {
+                        chatController.playConfettiAnimation()
+                        break
+                    }
+                }
+            })
         }
 
         private func openCreateCommunity(component: CommunitiesScreenComponent) {

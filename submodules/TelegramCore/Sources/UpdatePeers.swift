@@ -84,15 +84,19 @@ func minTimestampForPeerInclusion(_ peer: Peer) -> Int32? {
     }
 }
 
-func updateCommunityChatListInclusion(transaction: Transaction, community: TelegramCommunity, minTimestamp: Int32?) {
-    if community.participationStatus != .member || community.collapsedInDialogs != true {
-        if transaction.getPeerChatListInclusion(community.id) != .notIncluded {
-            transaction.updatePeerChatListInclusion(community.id, inclusion: .notIncluded)
+func updateCommunityChatListInclusion(transaction: Transaction, communityId: EnginePeer.Id, collapsedInDialogs: Bool, minTimestamp: Int32?) {
+    if !collapsedInDialogs {
+        if transaction.getPeerChatListInclusion(communityId) != .notIncluded {
+            transaction.updatePeerChatListInclusion(communityId, inclusion: .notIncluded)
         }
         return
     }
+    
+    guard let community = transaction.getPeer(communityId) else {
+        return
+    }
 
-    let currentInclusion = transaction.getPeerChatListInclusion(community.id)
+    let currentInclusion = transaction.getPeerChatListInclusion(communityId)
     let effectiveMinTimestamp = minTimestamp ?? minTimestampForPeerInclusion(community)
     guard let effectiveMinTimestamp else {
         return
@@ -109,11 +113,11 @@ func updateCommunityChatListInclusion(transaction: Transaction, community: Teleg
         } else {
             updatedMinTimestamp = effectiveMinTimestamp
         }
-        transaction.updatePeerChatListInclusion(community.id, inclusion: .ifHasMessagesOrOneOf(groupId: groupId, pinningIndex: pinningIndex, minTimestamp: updatedMinTimestamp))
+        transaction.updatePeerChatListInclusion(communityId, inclusion: .ifHasMessagesOrOneOf(groupId: groupId, pinningIndex: pinningIndex, minTimestamp: updatedMinTimestamp))
     default:
-        transaction.updatePeerChatListInclusion(community.id, inclusion: .ifHasMessagesOrOneOf(
+        transaction.updatePeerChatListInclusion(communityId, inclusion: .ifHasMessagesOrOneOf(
             groupId: .root,
-            pinningIndex: transaction.getPeerChatListIndex(community.id)?.1.pinningIndex,
+            pinningIndex: transaction.getPeerChatListIndex(communityId)?.1.pinningIndex,
             minTimestamp: effectiveMinTimestamp
         ))
     }
@@ -390,7 +394,6 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
                         switch community.participationStatus {
                         case .member:
                             break
-                            //updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: nil)
                         case .left:
                             transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
                         case .kicked where community.creationDate == 0:

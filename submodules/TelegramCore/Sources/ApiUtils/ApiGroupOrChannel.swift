@@ -390,7 +390,7 @@ func mergeGroupOrChannel(lhs: Peer?, rhs: Api.Chat) -> Peer? {
                     title: parsed.title,
                     photo: parsed.photo,
                     creationDate: lhs.creationDate,
-                    participationStatus: lhs.participationStatus,
+                    participationStatus: parsed.participationStatus,
                     flags: flags,
                     collapsedInDialogs: parsed.collapsedInDialogs ?? lhs.collapsedInDialogs,
                     adminRights: parsed.adminRights ?? lhs.adminRights,

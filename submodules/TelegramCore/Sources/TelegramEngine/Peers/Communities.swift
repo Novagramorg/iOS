@@ -363,8 +363,8 @@ func _internal_toggleAllCommunityPeerLinkRequestApproval(account: Account, commu
     |> switchToLatest
 }
 
-func _internal_toggleCommunityParticipantBanned(account: Account, communityId: PeerId, participantId: PeerId, banned: Bool) -> Signal<Never, CommunityParticipantBannedError> {
-    return account.postbox.transaction { transaction -> Signal<Never, CommunityParticipantBannedError> in
+func _internal_toggleCommunityParticipantBanned(account: Account, communityId: PeerId, participantId: PeerId, banned: Bool) -> Signal<Void, CommunityParticipantBannedError> {
+    return account.postbox.transaction { transaction -> Signal<Void, CommunityParticipantBannedError> in
         guard let inputCommunity = communityInputChannel(transaction: transaction, communityId: communityId), let inputParticipant = inputPeer(transaction: transaction, peerId: participantId) else {
             return .fail(.generic)
         }
@@ -377,7 +377,7 @@ func _internal_toggleCommunityParticipantBanned(account: Account, communityId: P
             }
             return .generic
         }
-        |> ignoreValues
+        |> map { _ in Void() }
     }
     |> castError(CommunityParticipantBannedError.self)
     |> switchToLatest
@@ -402,14 +402,11 @@ func _internal_toggleCommunityCollapsedInDialogs(account: Account, communityId: 
                     transaction.updatePeersInternal([community]) { _, peer in
                         return peer
                     }
-                    //updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: nil)
                 }
                 if let cachedData = transaction.getPeerCachedData(peerId: communityId) as? CachedCommunityData {
                     var linkedPeerIds = Set<PeerId>()
                     for linkedPeer in cachedData.linkedPeers {
-                        if linkedPeer.peerId != communityId {
-                            linkedPeerIds.insert(linkedPeer.peerId)
-                        }
+                        linkedPeerIds.insert(linkedPeer.peerId)
                     }
                     for peerId in linkedPeerIds {
                         if collapsed {

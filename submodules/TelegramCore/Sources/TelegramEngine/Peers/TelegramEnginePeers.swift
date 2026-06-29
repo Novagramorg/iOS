@@ -306,7 +306,7 @@ public extension TelegramEngine {
             return _internal_toggleAllCommunityPeerLinkRequestApproval(account: self.account, communityId: communityId, approve: approve)
         }
 
-        public func toggleCommunityParticipantBanned(communityId: PeerId, participantId: PeerId, banned: Bool) -> Signal<Never, CommunityParticipantBannedError> {
+        public func toggleCommunityParticipantBanned(communityId: PeerId, participantId: PeerId, banned: Bool) -> Signal<Void, CommunityParticipantBannedError> {
             return _internal_toggleCommunityParticipantBanned(account: self.account, communityId: communityId, participantId: participantId, banned: banned)
         }
 

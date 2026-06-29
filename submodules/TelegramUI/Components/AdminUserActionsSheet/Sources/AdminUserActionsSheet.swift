@@ -1474,6 +1474,7 @@ private final class AdminUserActionsSheetComponent: Component {
                 }
 
                 if self.banFromCommunity, let communityBanContext = self.communityBanContext, !communityBanContext.creatorChatIds.isEmpty, let peer = component.peers.first {
+                    //TODO:localize
                     var alertContent: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
                         AnyComponentWithIdentity(
                             id: "title",

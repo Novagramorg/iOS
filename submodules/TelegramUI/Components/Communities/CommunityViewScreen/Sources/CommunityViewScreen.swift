@@ -3316,7 +3316,7 @@ private final class CommunityViewScreenComponent: Component {
     }
 }
 
-public final class CommunityViewScreen: ViewControllerComponentContainer {
+public final class CommunityViewScreenImpl: ViewControllerComponentContainer, CommunityViewScreen {
     public init(context: AccountContext, communityId: EnginePeer.Id, mode: CommunityViewScreenMode, selectionOptions: CommunityPeerSelectionOptions? = nil) {
         super.init(
             context: context,
