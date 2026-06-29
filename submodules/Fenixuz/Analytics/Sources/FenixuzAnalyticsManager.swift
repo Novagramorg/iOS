@@ -1,19 +1,21 @@
 import Foundation
 import Security
 import SwiftSignalKit
-import Postbox
 import TelegramCore
 import AccountContext
 
-// Orchestrates the two analytics counters against the shared Firebase RTDB:
-//   • "Number of Novagram users" — distinct devices, counted ONCE per physical device.
-//   • "Active accounts"          — cumulative account registrations, +1 per new account,
-//                                  never decremented on logout.
+// Orchestrates the two analytics counters against the Novagram Statistics API:
+//   • "Number of Novagram users" — distinct devices, counted ONCE per physical device
+//     (downloads, via POST /v1/install).
+//   • "Active accounts"          — one per device while it holds at least one account
+//     (active, via POST /v1/account/create when it gains its first account and
+//     POST /v1/account/delete when it loses its last).
 //
-// Dedup state (device-id, "device counted" flag, the set of already-counted account ids)
-// lives in the KEYCHAIN on purpose: Keychain survives app deletion + reinstall on the same
-// device, so a reinstall does NOT re-count the device or its accounts. (UserDefaults would
-// be wiped on reinstall and inflate the numbers.)
+// The server dedups by `device_id`, so the calls are idempotent and the client never owns a
+// counter. Local state (the stable device id + two "already sent" flags) lives in the
+// KEYCHAIN on purpose: Keychain survives app deletion + reinstall on the same device, so a
+// reinstall does NOT re-count the device. (UserDefaults would be wiped on reinstall and
+// inflate downloads.)
 public final class FenixuzAnalyticsManager {
     public static let shared = FenixuzAnalyticsManager()
 
@@ -21,8 +23,8 @@ public final class FenixuzAnalyticsManager {
     private let keychainService = "uz.fenixuz.app.Analytics"
 
     private let deviceIdKey = "deviceId"
-    private let deviceCountedKey = "deviceCounted"
-    private let countedAccountsKey = "countedAccounts"
+    private let installRegisteredKey = "installRegistered"
+    private let deviceActiveKey = "deviceActive"
 
     private var accountsDisposable: Disposable?
     private var started = false
@@ -36,7 +38,7 @@ public final class FenixuzAnalyticsManager {
     // Called once from AppDelegate after the shared account context is ready.
     public func start(sharedContext: SharedAccountContext) {
         self.stateQueue.async { [weak self] in
-            self?.trackDeviceLaunchIfNeeded()
+            self?.registerInstallIfNeeded()
         }
         if !self.started {
             self.started = true
@@ -44,28 +46,27 @@ public final class FenixuzAnalyticsManager {
         }
     }
 
-    // MARK: - Device counting (runs on stateQueue)
+    // MARK: - Install (downloads, once per device)
 
-    private func trackDeviceLaunchIfNeeded() {
+    private func registerInstallIfNeeded() {
         guard FenixuzAnalyticsConfig.isConfigured else {
             return
         }
-        if self.readKeychain(key: self.deviceCountedKey) == "1" {
+        if self.readKeychain(key: self.installRegisteredKey) == "1" {
             return
         }
         let deviceId = self.deviceId()
-        FenixuzFirebaseClient.shared.markPresent(path: FenixuzAnalyticsConfig.devicesPath + "/" + deviceId, completion: { _ in })
-        FenixuzFirebaseClient.shared.increment(path: FenixuzAnalyticsConfig.deviceCountPath, by: 1, completion: { [weak self] success in
-            guard let self = self, success else {
+        FenixuzStatisticsClient.shared.registerInstall(deviceId: deviceId, completion: { [weak self] response in
+            guard let self = self, response != nil else {
                 return
             }
             self.stateQueue.async {
-                self.writeKeychain("1", key: self.deviceCountedKey)
+                self.writeKeychain("1", key: self.installRegisteredKey)
             }
         })
     }
 
-    // MARK: - Account counting
+    // MARK: - Active (one per device while it holds at least one account)
 
     private func observeAccounts(sharedContext: SharedAccountContext) {
         self.accountsDisposable = (sharedContext.activeAccountContexts
@@ -73,63 +74,61 @@ public final class FenixuzAnalyticsManager {
             guard let self = self else {
                 return
             }
-            // Pull the stable per-account ids on the main queue, then mutate dedup state
-            // on the serial state queue.
-            let keys = value.1.map { $0.1.account.peerId.toInt64() }
+            let hasAccounts = !value.1.isEmpty
             self.stateQueue.async {
-                guard FenixuzAnalyticsConfig.isConfigured else {
-                    return
-                }
-                for key in keys {
-                    self.trackAccountIfNeeded(key)
-                }
+                self.syncActiveState(hasAccounts: hasAccounts)
             }
         })
     }
 
-    // Runs on stateQueue.
-    private func trackAccountIfNeeded(_ accountKey: Int64) {
-        var counted = self.readCountedAccounts()
-        if counted.contains(accountKey) {
+    // Runs on stateQueue. Drives the device's active presence: +1 the moment it gains its
+    // first account, -1 the moment it loses its last. The local flag is updated optimistically
+    // and rolled back on network failure so the next emission / launch retries.
+    private func syncActiveState(hasAccounts: Bool) {
+        guard FenixuzAnalyticsConfig.isConfigured else {
             return
         }
-        // Mark optimistically so a second emission for the same account (while the request
-        // is in flight) does not double-increment.
-        counted.insert(accountKey)
-        self.writeCountedAccounts(counted)
-        FenixuzFirebaseClient.shared.increment(path: FenixuzAnalyticsConfig.accountCountPath, by: 1, completion: { [weak self] success in
-            guard let self = self, !success else {
-                return
-            }
-            // Roll back on failure so a later emission / next launch retries.
-            self.stateQueue.async {
-                var set = self.readCountedAccounts()
-                set.remove(accountKey)
-                self.writeCountedAccounts(set)
-            }
-        })
-    }
-
-    private func readCountedAccounts() -> Set<Int64> {
-        guard let raw = self.readKeychain(key: self.countedAccountsKey), !raw.isEmpty else {
-            return []
+        let isActive = self.readKeychain(key: self.deviceActiveKey) == "1"
+        if hasAccounts == isActive {
+            return
         }
-        return Set(raw.split(separator: ",").compactMap { Int64($0) })
-    }
-
-    private func writeCountedAccounts(_ set: Set<Int64>) {
-        let raw = set.map { String($0) }.joined(separator: ",")
-        self.writeKeychain(raw, key: self.countedAccountsKey)
+        let deviceId = self.deviceId()
+        if hasAccounts {
+            self.writeKeychain("1", key: self.deviceActiveKey)
+            FenixuzStatisticsClient.shared.registerAccountCreate(deviceId: deviceId, completion: { [weak self] response in
+                guard let self = self, response == nil else {
+                    return
+                }
+                self.stateQueue.async {
+                    self.writeKeychain("0", key: self.deviceActiveKey)
+                }
+            })
+        } else {
+            self.writeKeychain("0", key: self.deviceActiveKey)
+            FenixuzStatisticsClient.shared.registerAccountDelete(deviceId: deviceId, completion: { [weak self] response in
+                guard let self = self, response == nil else {
+                    return
+                }
+                self.stateQueue.async {
+                    self.writeKeychain("1", key: self.deviceActiveKey)
+                }
+            })
+        }
     }
 
     // MARK: - Reading the counts for the UI
 
     public func counts() -> Signal<(devices: Int?, accounts: Int?), NoError> {
-        let devices = FenixuzFirebaseClient.shared.readInt(path: FenixuzAnalyticsConfig.deviceCountPath)
-        let accounts = FenixuzFirebaseClient.shared.readInt(path: FenixuzAnalyticsConfig.accountCountPath)
-        return combineLatest(devices, accounts)
-        |> map { devices, accounts -> (devices: Int?, accounts: Int?) in
-            return (devices, accounts)
+        return Signal { subscriber in
+            FenixuzStatisticsClient.shared.fetchStats(completion: { result in
+                if let result = result {
+                    subscriber.putNext((result.downloads, result.active))
+                } else {
+                    subscriber.putNext((nil, nil))
+                }
+                subscriber.putCompletion()
+            })
+            return EmptyDisposable
         }
     }
 

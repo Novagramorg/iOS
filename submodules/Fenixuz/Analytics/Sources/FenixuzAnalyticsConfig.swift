@@ -1,36 +1,31 @@
 import Foundation
 
-// Fenixuz Analytics — Firebase Realtime Database (REST) configuration.
+// Fenixuz Analytics — Novagram Statistics API (REST) configuration.
 //
-// The iOS app is Bazel-built (no CocoaPods/SPM), so we deliberately DO NOT pull in the
-// Firebase SDK. Instead we read/write the same Realtime Database the Android app uses via
-// its plain REST API (a couple of HTTPS calls). That keeps the numbers identical across
-// both apps.
+// Backend: https://statistics.novagram.org (FastAPI). This replaces the earlier Firebase
+// Realtime Database approach — dedup now happens SERVER-SIDE by `device_id`, so the client
+// just fires simple idempotent calls and never has to manage its own counters. The Android
+// app talks to the same backend, so the numbers stay identical across both platforms.
 //
-// TODO(Firebase): fill these in from the Android developer's Firebase project. Until
-// `databaseURL` is non-empty, every analytics call is a no-op (no network, nothing
-// counted) and the Analytics screen shows "—". Confirm the paths match the Android side
-// exactly, otherwise the counters won't line up.
+// This file is intentionally dependency-free (Foundation only) so it can be copied as-is
+// into the macOS (TelegramSwift) target later, alongside FenixuzStatisticsClient.swift.
 public enum FenixuzAnalyticsConfig {
-    // Realtime Database URL, NO trailing slash.
-    // e.g. "https://novagram-xxxx-default-rtdb.firebaseio.com"
-    public static let databaseURL: String = ""
+    // Base URL, NO trailing slash.
+    public static let baseURL: String = "https://statistics.novagram.org"
 
-    // Optional RTDB auth token / database secret, appended as ?auth=… on every request.
-    // Leave empty if the database rules allow unauthenticated writes.
-    public static let authToken: String = ""
+    // x-api-key header value. The server enforces this on /install, /account/* and /stats —
+    // a request without it gets HTTP 401. This is not a high-value secret (at most it lets
+    // someone inflate public counters), so it lives here the same way the demo-login endpoint
+    // does. Move to a build-time injected value if that ever changes.
+    public static let apiKey: String = "fbebe2c70b4ac933afce001192f3cdf6f88624d65317ddc3c63bf067577e8c3a"
 
-    // Single-integer node holding the distinct-device count ("Number of Novagram users").
-    public static let deviceCountPath: String = "stats/deviceCount"
-
-    // Single-integer node holding the cumulative account-registration count
-    // ("Active accounts"). Only ever incremented — never decremented on logout.
-    public static let accountCountPath: String = "stats/accountCount"
-
-    // Parent path for per-device presence records: devices/<deviceId> = true.
-    public static let devicesPath: String = "devices"
+    // Endpoint paths (relative to baseURL).
+    public static let installPath: String = "/v1/install"          // downloads +1 (per device)
+    public static let accountCreatePath: String = "/v1/account/create"  // active +1
+    public static let accountDeletePath: String = "/v1/account/delete"  // active -1
+    public static let statsPath: String = "/v1/stats"              // { downloads, active }
 
     public static var isConfigured: Bool {
-        return !databaseURL.isEmpty
+        return !baseURL.isEmpty && !apiKey.isEmpty
     }
 }
