@@ -605,9 +605,33 @@ RTL paragraphs (Arabic/Hebrew/…) lay out per-paragraph, **auto-detected by def
 - **Empty-paragraph caret** follows `typingWritingDirection`: `refreshEmptyBoxWritingDirections()` sets
   `BlockBox.writingDirectionOverride` on empty top-level boxes (all modes), whose `didSet` pushes
   `BlockLayoutEngine.emptyTextCaretDirection`; both engines' `caretRect(atOffset:)` return `x ≈ containerWidth-2`
-  for empty + `.rightToLeft` (LTR/non-empty unchanged). Refreshed from `reload`, `becomeFirstResponder`, and
+  for empty + `.rightToLeft` (LTR/non-empty unchanged). Refreshed from `reload`, `becomeFirstResponder`,
   **`UITextInputMode.currentInputModeDidChangeNotification`** (so the caret re-flips live on a keyboard/globe-key
-  change or first keyboard appearance).
+  change or first keyboard appearance), **and after every edit (the `editing {}` wrapper, added 2026-06-29)** —
+  a structural edit can CREATE an empty paragraph (Enter for a new line) or EMPTY one (delete its last char),
+  and without re-deriving the hint the new RTL line kept its caret on the LEFT until the next reload/refocus
+  (the reported "empty line cursor on the left" bug). The in-`editing` call is empty-box-only work (`restyle`
+  no-ops on empty storage) and the `writingDirectionOverride != desired` guard makes it a cheap no-op when no
+  box changed emptiness. Regression-guarded by `RTLEmptyLineCaretTests`.
+- **LOAD-BEARING (TK2) — the non-empty caret uses the `.selection` text segment, NOT `.standard`** (2026-06-29,
+  `BlockLayout.caretRect(atOffset:)`). For an RTL paragraph the `.standard` segment reports the caret x in a
+  non-right-aligned coordinate (text measured from a left origin), so it sits left of the glyphs by the line's
+  right-alignment displacement and — the headline symptom — **FREEZES the end-of-text caret on a wrapped RTL line**
+  (it doesn't track the text growing leftward as you type past the first line). `.selection` is the glyph-accurate
+  geometry the selection wash already trusts (`selectionRects`/`selectionFillRects`); for a zero-width (caret)
+  range it returns a zero-width segment at the true insertion point. **LTR is byte-identical** (the two segment
+  types agree there), so this only moves the RTL caret. Regression-guarded by `RTLCaretTrackingTests` (caret tracks
+  leftward while typing on line 2; caret-at-0 sits at the container right edge = the rendered glyph edge; interior
+  caret sits on the glyph boundary). **`BlockLayoutTK1` (iOS 13–15) got the matching fix (2026-06-29):** its
+  `caretRect` placed the caret at the glyph's LTR pen origin (`location.x`) for every offset and the last glyph's
+  INK right edge at end-of-text — both wrong for RTL (the caret sat a glyph off and the end caret overshot the
+  container / jumped on trailing spaces). It now places the caret on the **direction-correct edge of the glyph's
+  ADVANCE (enclosing) box** — leading edge before a char (`minX` LTR / `maxX` RTL), trailing edge at end
+  (`maxX` LTR / `minX` RTL). Direction comes from `resolvedCaretDirection()` (forced override baked in the
+  paragraph style; `.natural` → `baseDirection` content detection), cached per `renderVersion` since
+  `closestOffset` calls `caretRect` per offset. `TK1RTLCaretTests` pins TK1 to TK2 at every offset (RTL + LTR).
+  Limitation (shared with TK2's first-run heuristic): a paragraph mixing an embedded opposite-direction run is
+  positioned by its base direction. The running app uses TK2 on iOS 16+; TK1 is the iOS 13–15 / `forceTextKit1` path.
 - **Façade + host.** `RichTextEditorView.layoutDirectionOverride` (modeled like `theme`; round-trips through
   `document`). `RichTextAttachmentScreen` has an Auto/LTR/RTL action-bar control; the chat composer relies on
   auto-detect (no manual toggle this round).
@@ -617,6 +641,22 @@ RTL paragraphs (Arabic/Hebrew/…) lay out per-paragraph, **auto-detected by def
   the substituted family round-tripped and the font visibly changed on a backspace **merge** (`mergeParagraphs` →
   `currentParagraph()`). Font **size** IS still pinned on read-back (the 15pt table-cell round-trip needs it);
   bold/italic round-trip via font traits; forward `font(for:)` still honors an explicit import-set `fontFamily`.
+- **LOAD-BEARING — bold is a user-intent MARKER (`.rtBold`), not the rendered trait (2026-06-29).** The iOS
+  **"Bold Text" accessibility setting** stamps `.traitBold` onto the script font TextKit substitutes for Arabic/
+  Hebrew/CJK (verified: under the setting `systemFont` itself stays non-bold, so Latin is fine, but the
+  substituted `.SF Arabic` is `.traitBold` whether or not the user bolded — the rendered font alone can't tell
+  user-bold from ambient-bold). So model bold rides a private render-only `NSAttributedString.Key` **`.rtBold`**
+  (the `rtInlineCode`/`rtSpoiler` precedent): set by the forward mapper (`attributes(for:)`) + `toggleBold`, read
+  by `characterAttributes` + `rangeIsBold` — decoupling model bold from the ambiguous font trait. **Marker-less**
+  storage (e.g. an RTF-imported `NSAttributedString`) falls back to the **ambient-stripped** `.traitBold`
+  (`boldIsAmbient`: re-substitute the non-bold style base for the run's `text` via `CTFontCreateForString` — which
+  matches TextKit's fixing — and if THAT is also bold, drop `ca.bold`; `runs(from:)` passes the run text). Never
+  persisted to the Core model (read back to `CharacterAttributes.bold`). Without this, backspace-merging an Arabic
+  line under Bold Text baked `bold=true` into the model ("the whole previous line becomes bold") AND the toolbar
+  toggle couldn't apply persistent bold to a substituted script (it read the ambient trait, so the first tap
+  *removed* bold). Guarded by `RTLBoldReadbackTests`. **Limitation:** under Bold Text the OS erases the
+  user-vs-ambient distinction in the *rendered* font, so a bold toggle on a substituted script may not visibly
+  change on-screen — the *model* is correct (what a sent message carries).
 - **Deferred:** gutter-ornament mirroring (list markers / quote bar / checklist / indents to the right gutter),
   table-column direction, a composer override UI, and mapping the override → rich-message `InstantPage.rtl`.
 

@@ -50,10 +50,11 @@ extension DocumentCanvasView {
     // MARK: - Format predicates (shared by toggle and state reader)
 
     func rangeIsBold(_ storage: NSTextStorage, _ range: NSRange) -> Bool {
+        // Bold is the user-intent `.rtBold` marker, NOT the rendered `.traitBold` — the latter is forced onto
+        // substituted scripts by the system "Bold Text" setting and would misreport ambient bold as user bold.
         var all = true
-        storage.enumerateAttribute(.font, in: range, options: []) { v, _, stop in
-            let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)
-            if !f.fontDescriptor.symbolicTraits.contains(.traitBold) { all = false; stop.pointee = true }
+        storage.enumerateAttribute(.rtBold, in: range, options: []) { v, _, stop in
+            if ((v as? Bool) ?? false) == false { all = false; stop.pointee = true }
         }
         return all
     }
@@ -101,6 +102,10 @@ extension DocumentCanvasView {
                     storage.addAttribute(.font, value: UIFont(descriptor: d, size: f.pointSize), range: sub)
                 }
             }
+            // Carry the user-intent marker alongside the render trait so model bold round-trips (read by
+            // `characterAttributes`/`rangeIsBold`); absence == not bold.
+            if allOn { storage.removeAttribute(.rtBold, range: range) }
+            else { storage.addAttribute(.rtBold, value: true, range: range) }
         })
     }
 

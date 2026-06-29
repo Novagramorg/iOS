@@ -24,6 +24,12 @@ extension DocumentCanvasView {
         textInputDelegate?.textDidChange(self)
         registerUndo(snapshot: before, anchor: beforeAnchor, head: beforeHead)
         recomputeDocumentHasSpoilers()   // an edit (toggleSpoiler/delete/paste/insert/structural) may add or remove the last spoiler — refresh the syncSpoilers gate before refreshSelectionUI runs it
+        // A structural edit can create a fresh empty paragraph (Enter) or empty an existing one (delete its
+        // last char), and an empty paragraph's caret side is driven by its per-box writing-direction hint
+        // (render-only). Re-derive it from the typing direction now so a new RTL line opens its caret on the
+        // RIGHT — otherwise it would keep the default (left) until the next reload/refocus. Empty-box-only work
+        // (restyle no-ops on empty storage); the guard inside makes it a cheap no-op when nothing changed.
+        refreshEmptyBoxWritingDirections()
         notifyContentSizeChanged(); setNeedsDisplay(); refreshSelectionUI()
         onSelectionChange?()   // an edit moves the caret too — ask the host to scroll it into view (like the arrow-key setter)
     }

@@ -116,6 +116,40 @@ final class BlockLayoutTK1: BlockLayoutEngine {
         return lineRect.minY + loc.y - centeringDelta(lineHeight: lineRect.height)
     }
 
+    /// The resolved writing direction of this (single-paragraph) box, used to place the caret on the correct
+    /// edge of a glyph's advance box. A forced override is baked into the paragraph style
+    /// (`.leftToRight`/`.rightToLeft`); `.natural` falls back to CoreText content detection. Cached per
+    /// `renderVersion` because `closestOffset` calls `caretRect` once per offset and the CTLine build in
+    /// `baseDirection` is not free. (Per-paragraph direction is the editor's model; a paragraph mixing an
+    /// embedded opposite-direction run is positioned by its base direction — the same as TextKit-2's path.)
+    private var cachedDirectionVersion = -1
+    private var cachedDirection: NSWritingDirection = .leftToRight
+    private func resolvedCaretDirection() -> NSWritingDirection {
+        if cachedDirectionVersion == renderVersion { return cachedDirection }
+        var dir: NSWritingDirection = .leftToRight
+        if textStorage.length > 0,
+           let ps = textStorage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle {
+            switch ps.baseWritingDirection {
+            case .leftToRight: dir = .leftToRight
+            case .rightToLeft: dir = .rightToLeft
+            default: dir = baseDirection(atOffset: 0) ?? .leftToRight   // .natural → detect from content
+            }
+        }
+        cachedDirection = dir; cachedDirectionVersion = renderVersion
+        return dir
+    }
+
+    /// The glyph's enclosing (advance) box in container coordinates — the geometry selection uses, so its
+    /// leading/trailing edges are the true caret boundaries (vs. `boundingRect`, which is INK bounds, and
+    /// `location`, which is only the LTR pen origin). nil if no rect is produced.
+    private func enclosingBox(forGlyph glyph: Int) -> CGRect? {
+        var result: CGRect?
+        layoutManager.enumerateEnclosingRects(forGlyphRange: NSRange(location: glyph, length: 1),
+                                              withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+                                              in: container) { r, _ in if result == nil { result = r } }
+        return result
+    }
+
     func caretRect(atOffset offset: Int) -> CGRect {
         // Empty text with direction override: position caret at the trailing edge for RTL.
         if textStorage.length == 0, emptyTextCaretDirection == .rightToLeft {
@@ -129,28 +163,42 @@ final class BlockLayoutTK1: BlockLayoutEngine {
         if count == 0 || offset >= count {
             let extra = layoutManager.extraLineFragmentRect
             if extra.height > 0 {
-                return CGRect(x: extra.minX, y: extra.minY, width: 2, height: max(extra.height, 20))
+                // RTL: trailing (left) end is the line's leading side — put the caret at the right edge.
+                let rtl = count > 0 ? resolvedCaretDirection() == .rightToLeft : (emptyTextCaretDirection == .rightToLeft)
+                let x = rtl ? extra.maxX : extra.minX
+                return CGRect(x: x, y: extra.minY, width: 2, height: max(extra.height, 20))
             }
         }
         if count == 0 { return fallback }
 
+        let isRTL = resolvedCaretDirection() == .rightToLeft
+
         if offset >= count {
-            // Caret at end (no trailing newline): trailing edge of the last glyph on its line.
+            // Caret AFTER the last char: the trailing edge of its advance box — RIGHT (maxX) in LTR, LEFT
+            // (minX) in RTL (where the text grows leftward, so "after" is the left side).
             let lastGlyph = layoutManager.numberOfGlyphs - 1
             guard lastGlyph >= 0 else { return fallback }
             var lineRange = NSRange()
             let lineRect = layoutManager.lineFragmentRect(forGlyphAt: lastGlyph, effectiveRange: &lineRange)
-            let glyphRect = layoutManager.boundingRect(forGlyphRange: NSRange(location: lastGlyph, length: 1),
-                                                       in: container)
-            return CGRect(x: glyphRect.maxX, y: lineRect.minY, width: 2, height: max(lineRect.height, 20))
+            let box = enclosingBox(forGlyph: lastGlyph)
+                ?? layoutManager.boundingRect(forGlyphRange: NSRange(location: lastGlyph, length: 1), in: container)
+            let x = isRTL ? box.minX : box.maxX
+            return CGRect(x: x, y: lineRect.minY, width: 2, height: max(lineRect.height, 20))
         }
 
-        // Caret before the character at `offset`.
+        // Caret BEFORE the char at `offset`: the LEADING edge of its advance box — LEFT (minX) in LTR, RIGHT
+        // (maxX) in RTL (the boundary with the preceding char, which sits to the right).
         let glyphIndex = layoutManager.glyphIndexForCharacter(at: offset)
         var lineRange = NSRange()
         let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: &lineRange)
-        let loc = layoutManager.location(forGlyphAt: glyphIndex)
-        return CGRect(x: lineRect.minX + loc.x, y: lineRect.minY, width: 2, height: max(lineRect.height, 20))
+        let x: CGFloat
+        if let box = enclosingBox(forGlyph: glyphIndex) {
+            x = isRTL ? box.maxX : box.minX
+        } else {
+            let loc = layoutManager.location(forGlyphAt: glyphIndex)   // fallback: LTR pen origin
+            x = lineRect.minX + loc.x
+        }
+        return CGRect(x: x, y: lineRect.minY, width: 2, height: max(lineRect.height, 20))
     }
 
     func selectionRects(start: Int, end: Int) -> [CGRect] {

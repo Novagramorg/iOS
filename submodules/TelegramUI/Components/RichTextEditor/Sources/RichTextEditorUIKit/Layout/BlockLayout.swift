@@ -154,7 +154,13 @@ final class BlockLayout: BlockLayoutEngine {
         }
         guard let range = textRange(offset, offset) else { return CGRect(x: 0, y: 0, width: 2, height: 20) }
         var rect = CGRect(x: 0, y: 0, width: 2, height: 20)
-        layoutManager.enumerateTextSegments(in: range, type: .standard, options: []) { _, frame, _, _ in
+        // Use the `.selection` segment, NOT `.standard`: for an RTL paragraph the `.standard` segment reports
+        // the caret x in a non-right-aligned coordinate (text measured from the left), so it sits left of the
+        // glyphs by the line's right-alignment displacement and — worse — FREEZES the end-of-text caret on a
+        // wrapped RTL line (it doesn't track the text growing leftward as you type). `.selection` is the
+        // glyph-accurate geometry the selection wash already trusts (`selectionRects`/`selectionFillRects`),
+        // so the caret lands exactly where the glyphs and selection highlight are. Byte-identical in LTR.
+        layoutManager.enumerateTextSegments(in: range, type: .selection, options: []) { _, frame, _, _ in
             rect = CGRect(x: frame.minX, y: frame.minY, width: 2, height: max(frame.height, 20))
             return false
         }
