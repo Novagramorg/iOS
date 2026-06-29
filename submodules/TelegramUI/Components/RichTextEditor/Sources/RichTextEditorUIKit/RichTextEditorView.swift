@@ -41,6 +41,22 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host tunable text-layout metrics (body/caption line height + paragraph spacing; a growable set).
+    /// Defaults reproduce the editor's built-in document look (`.default` — 1.10 line height, 8pt paragraph
+    /// gap); the compact chat composer assigns `.compact` (natural 1.0 line height, no spacing) so multi-line
+    /// text reads tight like the legacy input. Set before the first `update(...)`/document seed (the
+    /// compact-host knob convention); assigning it after content rebuilds the boxes so the new metrics take
+    /// effect (like `quoteStyle`).
+    public var textLayoutMetrics: TextLayoutMetrics = .default {
+        didSet {
+            canvas.applyTextLayoutMetrics(textLayoutMetrics)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Whole-document writing-direction override. `.auto` (default) auto-detects per paragraph; the forced
     /// cases pin the whole editor. Modeled like `theme`: assigning re-applies to the live mapper and
     /// reloads (resetting the live selection) when the view is sized, so boxes rebuild with the direction.

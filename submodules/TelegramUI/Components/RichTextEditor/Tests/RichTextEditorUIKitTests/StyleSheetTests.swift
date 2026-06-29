@@ -85,5 +85,46 @@ final class StyleSheetTests: XCTestCase {
         let h1 = sheet.paragraphStyle(for: .heading1, attributes: .default) as! NSParagraphStyle
         XCTAssertGreaterThan(h1.paragraphSpacingBefore, 0)                 // headings get space before
     }
+
+    func test_textLayoutMetrics_defaultMetrics_matchDocumentLook() {
+        let sheet = StyleSheet.default
+        XCTAssertEqual(sheet.bodyLineHeightMultiple, 1.10, accuracy: 0.001, "document editors keep the built-in body metrics")
+        let body = sheet.paragraphStyle(for: .body, attributes: .default) as! NSParagraphStyle
+        XCTAssertEqual(body.lineHeightMultiple, 1.10, accuracy: 0.001)
+        XCTAssertEqual(body.paragraphSpacing, 8, accuracy: 0.001)
+    }
+
+    func test_compactMetrics_zeroBodyLineHeightAndParagraphSpacing() {
+        var sheet = StyleSheet()                                          // the chat-composer configuration
+        let m = TextLayoutMetrics.compact
+        sheet.bodyLineHeightMultiple = m.bodyLineHeightMultiple
+        sheet.bodyParagraphSpacingBefore = m.bodyParagraphSpacingBefore
+        sheet.bodyParagraphSpacingAfter = m.bodyParagraphSpacingAfter
+        let body = sheet.paragraphStyle(for: .body, attributes: .default) as! NSParagraphStyle
+        XCTAssertEqual(body.lineHeightMultiple, 1.0, accuracy: 0.001,
+                       "compact body uses natural (1.0) line height — no extra inter-line gap")
+        XCTAssertEqual(body.paragraphSpacing, 0, accuracy: 0.001,
+                       "compact body has no inter-paragraph spacing")
+        XCTAssertEqual(body.paragraphSpacingBefore, 0, accuracy: 0.001)
+        let caption = sheet.paragraphStyle(for: .caption, attributes: .default) as! NSParagraphStyle
+        XCTAssertEqual(caption.lineHeightMultiple, 1.0, accuracy: 0.001)
+        XCTAssertEqual(caption.paragraphSpacing, 0, accuracy: 0.001)
+    }
+
+    func test_compactMetrics_respectExplicitModelLineHeight() {
+        var sheet = StyleSheet()
+        sheet.bodyLineHeightMultiple = TextLayoutMetrics.compact.bodyLineHeightMultiple
+        var attrs = ParagraphAttributes.default
+        attrs.lineHeightMultiple = 1.5                                    // an explicit model override still wins
+        let body = sheet.paragraphStyle(for: .body, attributes: attrs) as! NSParagraphStyle
+        XCTAssertEqual(body.lineHeightMultiple, 1.5, accuracy: 0.001)
+    }
+
+    func test_textLayoutMetrics_presets() {
+        XCTAssertEqual(TextLayoutMetrics.compact.bodyLineHeightMultiple, 1.0, accuracy: 0.001)
+        XCTAssertEqual(TextLayoutMetrics.compact.bodyParagraphSpacingAfter, 0, accuracy: 0.001)
+        XCTAssertEqual(TextLayoutMetrics.default.bodyLineHeightMultiple, 1.10, accuracy: 0.001)
+        XCTAssertEqual(TextLayoutMetrics.default.bodyParagraphSpacingAfter, 8, accuracy: 0.001)
+    }
 }
 #endif

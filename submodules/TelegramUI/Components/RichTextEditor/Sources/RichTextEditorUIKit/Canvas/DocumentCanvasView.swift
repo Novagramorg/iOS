@@ -479,6 +479,20 @@ final class DocumentCanvasView: UIView {
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
     }
 
+    /// Applies tunable text-layout metrics: rebuilds the mapper's stylesheet with the line-height/spacing
+    /// fields (preserving the other stylesheet fields + theme/emojiScale/writing-direction — the stylesheet
+    /// is immutable). The caller reloads afterward (mirrors `applyQuoteStyle`). A compact host (the chat
+    /// composer) sets a tight variant so body/caption paragraphs use natural line height and no spacing.
+    func applyTextLayoutMetrics(_ m: TextLayoutMetrics) {
+        var s = self.mapper.styleSheet
+        s.bodyLineHeightMultiple = m.bodyLineHeightMultiple
+        s.bodyParagraphSpacingBefore = m.bodyParagraphSpacingBefore
+        s.bodyParagraphSpacingAfter = m.bodyParagraphSpacingAfter
+        self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
+                                             theme: self.mapper.theme,
+                                             baseWritingDirection: self.mapper.baseWritingDirection)
+    }
+
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose
     /// cells the canvas reaches via `leafRegions()`.
     func setBlocks(_ blocks: [Block], width: CGFloat) {

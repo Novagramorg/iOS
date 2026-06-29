@@ -40,8 +40,11 @@ on TK1 — is **NOT invoked** under the TextKit-2-backed `NSLayoutManager` on mo
 `BlockLayoutTK1` does the manual draw/geometry shift too rather than relying on it.) **Why not `baselineOffset`**
 (the attribute): it's a real `CharacterAttributes` field (sub/superscript) and would round-trip into the
 model — centering must stay a render-only layout concern. Verified on both engines by `LineHeightCenteringTests`
-(glyph top-gap ≈ bottom-gap). This is editor-wide (document + composer), so a composer line keeps real 1.10
-spacing with centered text — no composer-specific line-height knob.
+(glyph top-gap ≈ bottom-gap). The body/caption 1.10 multiple is now host-tunable via `TextLayoutMetrics`
+(see the compact-host knob list below): the chat composer sets it to **1.0** (natural line height — and the
+centering shift collapses to 0, since `centeringDelta` = `lineHeight·(1−1/1)/2` = 0) so multi-line composer
+text reads tight like the legacy input, while the document editor keeps 1.10. Headings (1.05) and quote (1.10)
+are not covered by this knob.
 
 So **the UIKit target is gated `@available(iOS 13.0, *)`** (`RichTextEditorCore` is pure-Foundation,
 always-available), with only genuine higher-OS APIs kept at their real floor: the TK2 `BlockLayout` type + the
@@ -115,6 +118,25 @@ behavior, so the attachment screen / Demo / SwiftPM tests are unchanged.** The c
   composer has no "empty area below the content" to grow into, so **Composer → `false`** (a tap there just places
   the caret in the trailing paragraph). Unlike the other knobs the composer sets this in `didLoad` purely for
   behavior — it doesn't affect layout, so its timing vs. the document seed is immaterial.
+- `textLayoutMetrics` (`TextLayoutMetrics`, default `.default` = the document look: body/caption 1.10 line-height
+  multiple + 8pt inter-paragraph gap) — a growable value set of render-only body/caption spacing knobs
+  (`bodyLineHeightMultiple`, `bodyParagraphSpacingBefore`, `bodyParagraphSpacingAfter`), mapped to flat
+  `StyleSheet` fields (parallel to the existing `quoteSpacing*` fields) and applied via `applyTextLayoutMetrics`
+  → mapper rebuild + reload (mirrors `quoteStyle`). Composer → `.compact` (natural 1.0 line height, 0 paragraph
+  spacing) so multi-line text reads tight like the legacy plain-text input. An explicit per-paragraph
+  `lineHeightMultiple` in the model still overrides. Runtime-verified 2026-06-29: body line pitch 22.33pt (1.10)
+  → 20.33pt (natural) in the composer; the quote block is correctly unaffected. (Headings + quote keep their
+  own metrics; quote spacing is `QuoteStyle`.)
+  **Gotcha — `lineHeightMultiple` is a per-line BOX-height scale, not a between-lines gap, so it also shifts a
+  lone/first line.** TextKit puts the multiple's extra leading entirely ABOVE the glyphs (see the line-height
+  centering note above), so a single line at 1.10 sits ~2pt low, which the render `centeringDelta` (`= L·(m−1)/2`)
+  half-corrects back up by ~1pt. So dropping a single line from 1.10 → 1.0 raises its baseline by ~1pt to the
+  font's TRUE natural position (the legacy plain-input baseline) — `20.3·(1.10−1)/2 ≈ 1pt`. That is correct, not
+  a regression: any host vertical padding that was eyeballed against the old 1.10-centered (1pt-low) baseline
+  should be re-tuned to natural metrics, NOT compensated by re-introducing the multiple. If a host ever wants
+  inter-line spacing that leaves the first line's baseline fixed, the right tool is `NSParagraphStyle.lineSpacing`
+  (additive below each fragment; a lone line is unaffected) — add it as a `TextLayoutMetrics` field rather than
+  abusing `lineHeightMultiple`.
 
 Two host-side runtime contracts the composer had to honor (apply to any non-attachment host): **seed an initial
 `document`** (the canvas starts with ZERO blocks; nothing renders/edits until the `document` setter runs), and

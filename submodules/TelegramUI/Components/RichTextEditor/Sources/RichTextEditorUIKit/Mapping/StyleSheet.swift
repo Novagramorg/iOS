@@ -16,6 +16,18 @@ public struct StyleSheet {
     /// Base point size for body and quote paragraphs — 17pt in the document body, 15pt inside table
     /// cells (see `tableCells`). Headings and captions have fixed sizes independent of this.
     public var bodyBaseSize: CGFloat = 17
+    /// Render-only line-height multiple for body & caption paragraphs. Default 1.10 (the reference
+    /// document look); a compact host (the chat composer) sets 1.0 so text reads tight like a plain text
+    /// field. An explicit per-paragraph `lineHeightMultiple` in the model still overrides this. Host-set
+    /// via `RichTextEditorView.textLayoutMetrics`.
+    public var bodyLineHeightMultiple: CGFloat = 1.10
+    /// Paragraph spacing above each body & caption paragraph, in points. Default 0. Host-set via
+    /// `RichTextEditorView.textLayoutMetrics`.
+    public var bodyParagraphSpacingBefore: CGFloat = 0
+    /// Paragraph spacing below each body & caption paragraph, in points. Default 8 (the document
+    /// inter-paragraph gap); a compact host sets 0 so multi-line composer text reads tight. Host-set via
+    /// `RichTextEditorView.textLayoutMetrics`.
+    public var bodyParagraphSpacingAfter: CGFloat = 8
     /// Leading indent (points) of a quote paragraph's text past its fill's left edge — the gap that
     /// holds the quote bar. Default 16 (the reference design). Per-host via `QuoteStyle.leadingInset`.
     public var quoteIndent: CGFloat = 16
@@ -66,8 +78,8 @@ public struct StyleSheet {
         case .heading1: return StyleMetrics(spacingBefore: 18, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading2: return StyleMetrics(spacingBefore: 16, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading3: return StyleMetrics(spacingBefore: 14, spacingAfter: 6, lineHeightMultiple: 1.05)
-        case .body:     return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
-        case .caption:  return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
+        case .body:     return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
+        case .caption:  return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
         case .quote:    return StyleMetrics(spacingBefore: quoteSpacingBefore, spacingAfter: quoteSpacingAfter, lineHeightMultiple: 1.10)
         }
     }

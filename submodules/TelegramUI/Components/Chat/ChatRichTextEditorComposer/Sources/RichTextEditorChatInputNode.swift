@@ -82,6 +82,10 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var asNode: ASDisplayNode { self }
 
     public override init() {
+        #if DEBUG && false
+        RichTextEditorView.debugShowLayoutOverlay = true
+        #endif
+        
         super.init()
     }
 
@@ -103,6 +107,11 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // hug its text height (~one line), not carry the document gap. The panel's own field padding
         // (textInputViewInternalInsets) provides the visual top/bottom breathing room.
         self.editorView.blockVerticalInset = 0.0
+        self.editorView.textLayoutMetrics = TextLayoutMetrics(
+              bodyLineHeightMultiple: 1.0,       // line spacing (1.0 = natural/tight; 1.10 = document)
+              bodyParagraphSpacingBefore: 0,     // gap above each paragraph
+              bodyParagraphSpacingAfter: 0       // inter-paragraph gap (Enter-separated lines)
+        )
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
         self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "")
@@ -402,14 +411,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var textContainerInset: UIEdgeInsets {
         get {
             var updated = self.trackedContentMargins
-            updated.top += 1.0
+            updated.top += 0.0
             updated.bottom += 1.0
             updated.right -= 14.0
             return updated
         }
         set {
             var updated = newValue
-            updated.top -= 1.0
+            updated.top -= 0.0
             updated.bottom -= 1.0
             updated.right += 14.0
             self.trackedContentMargins = updated
