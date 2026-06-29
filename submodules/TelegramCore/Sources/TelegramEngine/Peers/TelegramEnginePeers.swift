@@ -280,9 +280,9 @@ public extension TelegramEngine {
             return _internal_updatedCommunitiesState(postbox: self.account.postbox)
         }
 
-        public func isPeerHiddenByCollapsedCommunity(peerId: PeerId) -> Signal<Bool, NoError> {
+        public func isHiddenByCollapsedCommunity(peerId: PeerId) -> Signal<Bool, NoError> {
             return self.account.postbox.transaction { transaction -> Bool in
-                return _internal_isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId)
+                return isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId)
             }
         }
 

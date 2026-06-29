@@ -228,6 +228,10 @@ public final class TelegramChannel: Peer, Equatable {
         return self.linkedMonoforumId
     }
     
+    public var containerPeerId: PeerId? {
+        return self.linkedCommunityId
+    }
+    
     public var notificationSettingsPeerId: PeerId? {
         return nil
     }

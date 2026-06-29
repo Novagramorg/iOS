@@ -47,7 +47,6 @@ public final class TelegramCommunity: Peer, Equatable {
     }
 
     public let associatedPeerId: PeerId? = nil
-    public let additionalAssociatedPeerId: PeerId? = nil
     public let notificationSettingsPeerId: PeerId? = nil
     public let associatedMediaIds: [MediaId]? = nil
     public let timeoutAttribute: UInt32? = nil

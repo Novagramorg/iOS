@@ -912,7 +912,7 @@ private final class CommunityEditScreenComponent: Component {
             guard let component = self.component else {
                 return
             }
-            let controller = component.context.sharedContext.makeCommunityRequestsScreen(context: component.context, communityId: component.communityId)
+            let controller = component.context.sharedContext.makeCommunityRequestsScreen(context: component.context, communityId: component.communityId, existingContext: nil)
             self.pushController(controller)
         }
 
@@ -1346,6 +1346,7 @@ private final class CommunityEditScreenComponent: Component {
                             initialText: self.currentTitle,
                             resetText: resetTitleText.flatMap { ListTextFieldItemComponent.ResetText(value: $0) },
                             placeholder: "",
+                            characterLimit: nil,
                             autocapitalizationType: .words,
                             autocorrectionType: .yes,
                             updated: { [weak self] value in
@@ -1458,26 +1459,28 @@ private final class CommunityEditScreenComponent: Component {
                 }
             ))
 
-            let managementSectionSize = self.managementSection.update(
-                transition: transition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: theme,
-                    style: .glass,
-                    header: nil,
-                    footer: nil,
-                    items: managementItems
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
-            )
-            if let managementSectionView = self.managementSection.view {
-                if managementSectionView.superview == nil {
-                    self.scrollView.addSubview(managementSectionView)
+            if !managementItems.isEmpty {
+                let managementSectionSize = self.managementSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: theme,
+                        style: .glass,
+                        header: nil,
+                        footer: nil,
+                        items: managementItems
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                )
+                if let managementSectionView = self.managementSection.view {
+                    if managementSectionView.superview == nil {
+                        self.scrollView.addSubview(managementSectionView)
+                    }
+                    transition.setFrame(view: managementSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: managementSectionSize))
                 }
-                transition.setFrame(view: managementSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: managementSectionSize))
+                contentHeight += managementSectionSize.height
+                contentHeight += sectionSpacing
             }
-            contentHeight += managementSectionSize.height
-            contentHeight += sectionSpacing
 
             var chatItems: [AnyComponentWithIdentity<Empty>] = [
                 self.addChatItem(
@@ -1524,32 +1527,41 @@ private final class CommunityEditScreenComponent: Component {
                 transition.setFrame(view: chatsSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: chatsSectionSize))
             }
             contentHeight += chatsSectionSize.height
-            contentHeight += sectionSpacing
-
-            let deleteSectionSize = self.deleteSection.update(
-                transition: transition,
-                component: AnyComponent(ListSectionComponent(
-                    theme: theme,
-                    style: .glass,
-                    header: nil,
-                    footer: nil,
-                    items: [
-                        self.deleteItem(
-                            theme: theme,
-                            presentationData: presentationData
-                        )
-                    ]
-                )),
-                environment: {},
-                containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
-            )
-            if let deleteSectionView = self.deleteSection.view {
-                if deleteSectionView.superview == nil {
-                    self.scrollView.addSubview(deleteSectionView)
+            
+            if let community = self.community, community.flags.contains(.isCreator) {
+                contentHeight += sectionSpacing
+                
+                var transition = transition
+                if self.deleteSection.view == nil {
+                    transition = .immediate
                 }
-                transition.setFrame(view: deleteSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: deleteSectionSize))
+                
+                let deleteSectionSize = self.deleteSection.update(
+                    transition: transition,
+                    component: AnyComponent(ListSectionComponent(
+                        theme: theme,
+                        style: .glass,
+                        header: nil,
+                        footer: nil,
+                        items: [
+                            self.deleteItem(
+                                theme: theme,
+                                presentationData: presentationData
+                            )
+                        ]
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                )
+                if let deleteSectionView = self.deleteSection.view {
+                    if deleteSectionView.superview == nil {
+                        self.scrollView.addSubview(deleteSectionView)
+                    }
+                    transition.setFrame(view: deleteSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: deleteSectionSize))
+                }
+                contentHeight += deleteSectionSize.height
             }
-            contentHeight += deleteSectionSize.height
+            
             contentHeight += 32.0 + environment.safeInsets.bottom
 
             let contentSize = CGSize(width: availableSize.width, height: max(contentHeight, availableSize.height + 1.0))

@@ -279,7 +279,7 @@ public final class ListTextFieldItemComponent: Component {
                 placeholderView.isHidden = !self.currentText.isEmpty
             }
             
-            transition.setFrame(view: self.textField, frame: CGRect(origin: CGPoint(x: component.contentInsets.left, y: 0.0), size: CGSize(width: availableSize.width - component.contentInsets.left - component.contentInsets.right, height: contentHeight)))
+            transition.setFrame(view: self.textField, frame: CGRect(origin: CGPoint(x: component.contentInsets.left, y: 0.0), size: CGSize(width: availableSize.width - component.contentInsets.left - component.contentInsets.right - 24.0, height: contentHeight)))
             
             let clearButtonSize = self.clearButton.update(
                 transition: transition,

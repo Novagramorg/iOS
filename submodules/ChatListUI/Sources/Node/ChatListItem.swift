@@ -497,7 +497,6 @@ public class ChatListItem: ListViewItem {
     let useCommunityViewLayout: Bool
     let hideCommunityAvatarBadge: Bool
     let displayHiddenPeerIcon: Bool
-    let communityViewHasNext: Bool?
     
     public let selectable: Bool = true
     
@@ -520,7 +519,7 @@ public class ChatListItem: ListViewItem {
         }
     }
     
-    public init(presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enabledContextActions: EnabledContextActions?, hiddenOffset: Bool, interaction: ChatListNodeInteraction, useCommunityViewLayout: Bool = false, hideCommunityAvatarBadge: Bool = false, displayHiddenPeerIcon: Bool = false, communityViewHasNext: Bool? = nil) {
+    public init(presentationData: ChatListPresentationData, context: AccountContext, chatListLocation: ChatListControllerLocation, filterData: ChatListItemFilterData?, index: EngineChatList.Item.Index, content: ChatListItemContent, editing: Bool, hasActiveRevealControls: Bool, selected: Bool, header: ListViewItemHeader?, enabledContextActions: EnabledContextActions?, hiddenOffset: Bool, interaction: ChatListNodeInteraction, useCommunityViewLayout: Bool = false, hideCommunityAvatarBadge: Bool = false, displayHiddenPeerIcon: Bool = false) {
         self.presentationData = presentationData
         self.chatListLocation = chatListLocation
         self.filterData = filterData
@@ -537,7 +536,6 @@ public class ChatListItem: ListViewItem {
         self.useCommunityViewLayout = useCommunityViewLayout
         self.hideCommunityAvatarBadge = hideCommunityAvatarBadge
         self.displayHiddenPeerIcon = displayHiddenPeerIcon
-        self.communityViewHasNext = communityViewHasNext
     }
     
     public func nodeConfiguredForParams(async: @escaping (@escaping () -> Void) -> Void, params: ListViewItemLayoutParams, synchronousLoads: Bool, previousItem: ListViewItem?, nextItem: ListViewItem?, completion: @escaping (ListViewItemNode, @escaping () -> (Signal<Void, NoError>?, (ListViewItemApply) -> Void)) -> Void) {
@@ -549,8 +547,8 @@ public class ChatListItem: ListViewItem {
             let firstWithHeader = mergeType.firstWithHeader
             let nextIsPinned = mergeType.nextIsPinned
             let nextHasActiveRevealControls = mergeType.nextHasActiveRevealControls
-            if let communityViewHasNext = self.communityViewHasNext {
-                last = !communityViewHasNext
+            if self.useCommunityViewLayout {
+                last = true
             }
             node.insets = ChatListItemNode.insets(first: first, last: last, firstWithHeader: firstWithHeader)
             
@@ -584,8 +582,8 @@ public class ChatListItem: ListViewItem {
                     let firstWithHeader = mergeType.firstWithHeader
                     let nextIsPinned = mergeType.nextIsPinned
                     let nextHasActiveRevealControls = mergeType.nextHasActiveRevealControls
-                    if let communityViewHasNext = self.communityViewHasNext {
-                        last = !communityViewHasNext
+                    if self.useCommunityViewLayout {
+                        last = true
                     }
                     var animated = true
                     if case .None = animation {
@@ -3756,7 +3754,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 effectiveAuthorTitle = nil
             }
             
-            if let _ = effectiveAuthorTitle, case let .peer(peerData) = item.content, case .community = peerData.peer.peer, let message = messages.last, let sourcePeer = communitySourcePeer(peerData: peerData, message: message) {
+            if case let .peer(peerData) = item.content, case .community = peerData.peer.peer, let message = messages.last, let sourcePeer = communitySourcePeer(peerData: peerData, message: message) {
                 let sourceTitle = sourcePeer.displayTitle(strings: item.presentationData.strings, displayOrder: item.presentationData.nameDisplayOrder)
                 if !sourceTitle.isEmpty {
                     forumThreads.append((id: sourcePeer.id.toInt64(), threadPeer: nil, title: NSAttributedString(string: sourceTitle, font: textFont, textColor: theme.titleColor), iconId: nil, iconColor: nil))
@@ -4601,6 +4599,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         
                         transition.updateFrame(node: strongSelf.badgeNode, frame: badgeFrame)
                         nextBadgeX -= badgeLayout.width + 6.0
+                        
+                        if item.useCommunityViewLayout {
+                            strongSelf.badgeNode.layer.rasterizationScale = UIScreenScale
+                            strongSelf.badgeNode.layer.shouldRasterize = true
+                        }
                     }
                     
                     if currentMentionBadgeImage != nil || currentBadgeBackgroundImage != nil {
@@ -4608,6 +4611,11 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                         
                         transition.updateFrame(node: strongSelf.mentionBadgeNode, frame: badgeFrame)
                         nextBadgeX -= mentionBadgeLayout.width + 6.0
+                        
+                        if item.useCommunityViewLayout {
+                            strongSelf.mentionBadgeNode.layer.rasterizationScale = UIScreenScale
+                            strongSelf.mentionBadgeNode.layer.shouldRasterize = true
+                        }
                     }
                     
                     if let currentPinnedIconImage = currentPinnedIconImage {

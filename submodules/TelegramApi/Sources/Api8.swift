@@ -1199,6 +1199,15 @@ public extension Api {
                 return ("inputAiComposeToneID", [("id", ConstructorParameterDescription(self.id)), ("accessHash", ConstructorParameterDescription(self.accessHash))])
             }
         }
+        public class Cons_inputAiComposeToneSingleUse: TypeConstructorDescription {
+            public var customPrompt: String
+            public init(customPrompt: String) {
+                self.customPrompt = customPrompt
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("inputAiComposeToneSingleUse", [("customPrompt", ConstructorParameterDescription(self.customPrompt))])
+            }
+        }
         public class Cons_inputAiComposeToneSlug: TypeConstructorDescription {
             public var slug: String
             public init(slug: String) {
@@ -1210,6 +1219,7 @@ public extension Api {
         }
         case inputAiComposeToneDefault(Cons_inputAiComposeToneDefault)
         case inputAiComposeToneID(Cons_inputAiComposeToneID)
+        case inputAiComposeToneSingleUse(Cons_inputAiComposeToneSingleUse)
         case inputAiComposeToneSlug(Cons_inputAiComposeToneSlug)
 
         public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
@@ -1227,6 +1237,12 @@ public extension Api {
                 serializeInt64(_data.id, buffer: buffer, boxed: false)
                 serializeInt64(_data.accessHash, buffer: buffer, boxed: false)
                 break
+            case .inputAiComposeToneSingleUse(let _data):
+                if boxed {
+                    buffer.appendInt32(235681199)
+                }
+                serializeString(_data.customPrompt, buffer: buffer, boxed: false)
+                break
             case .inputAiComposeToneSlug(let _data):
                 if boxed {
                     buffer.appendInt32(530584407)
@@ -1242,6 +1258,8 @@ public extension Api {
                 return ("inputAiComposeToneDefault", [("tone", ConstructorParameterDescription(_data.tone))])
             case .inputAiComposeToneID(let _data):
                 return ("inputAiComposeToneID", [("id", ConstructorParameterDescription(_data.id)), ("accessHash", ConstructorParameterDescription(_data.accessHash))])
+            case .inputAiComposeToneSingleUse(let _data):
+                return ("inputAiComposeToneSingleUse", [("customPrompt", ConstructorParameterDescription(_data.customPrompt))])
             case .inputAiComposeToneSlug(let _data):
                 return ("inputAiComposeToneSlug", [("slug", ConstructorParameterDescription(_data.slug))])
             }
@@ -1267,6 +1285,17 @@ public extension Api {
             let _c2 = _2 != nil
             if _c1 && _c2 {
                 return Api.InputAiComposeTone.inputAiComposeToneID(Cons_inputAiComposeToneID(id: _1!, accessHash: _2!))
+            }
+            else {
+                return nil
+            }
+        }
+        public static func parse_inputAiComposeToneSingleUse(_ reader: BufferReader) -> InputAiComposeTone? {
+            var _1: String?
+            _1 = parseString(reader)
+            let _c1 = _1 != nil
+            if _c1 {
+                return Api.InputAiComposeTone.inputAiComposeToneSingleUse(Cons_inputAiComposeToneSingleUse(customPrompt: _1!))
             }
             else {
                 return nil

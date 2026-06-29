@@ -111,7 +111,11 @@ final class PeerSelectionScreenComponent: Component {
                         statusText = listNode.presentationData.strings.Conversation_StatusMembers(Int32(subscriberCount))
                     }
                 } else {
-                    statusText = listNode.presentationData.strings.Channel_Status
+                    if case let .channel(channel) = peer, case .broadcast = channel.info {
+                        statusText = listNode.presentationData.strings.Channel_Status
+                    } else {
+                        statusText = listNode.presentationData.strings.Group_Status
+                    }
                 }
                 
                 return ContactsPeerItem(
@@ -595,12 +599,12 @@ final class PeerSelectionScreenComponent: Component {
                 for channel in channels {
                     if !self.searchQuery.isEmpty {
                         var matches = false
-                    inner: for nameComponent in channel.peer.compactDisplayTitle.lowercased().components(separatedBy: self.searchQueryComponentSeparationCharacterSet) {
-                        if nameComponent.lowercased().hasPrefix(self.searchQuery) {
-                            matches = true
-                            break inner
+                        inner: for nameComponent in channel.peer.compactDisplayTitle.lowercased().components(separatedBy: self.searchQueryComponentSeparationCharacterSet) {
+                            if nameComponent.lowercased().hasPrefix(self.searchQuery) {
+                                matches = true
+                                break inner
+                            }
                         }
-                    }
                         if !matches {
                             continue
                         }

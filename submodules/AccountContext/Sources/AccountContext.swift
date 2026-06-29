@@ -179,18 +179,9 @@ public struct ChatAvailableMessageActions {
     }
 }
 
-public enum CommunityViewScreenStyle: Equatable {
-    case grouped
-    case plain
-}
-
-public enum CommunityViewScreenPresentation: Equatable {
+public enum CommunityViewScreenMode: Equatable {
     case sheet
-    case fullScreen
-}
-
-public enum CommunityViewScreenDisplayMode: Equatable {
-    case `default`
+    case fullscreen
     case preview
 }
 
@@ -1589,11 +1580,8 @@ public protocol SharedAccountContext: AnyObject {
     func makeCommunitiesScreen(context: AccountContext, peerId: EnginePeer.Id?) -> ViewController
     func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping () -> Void) -> ViewController
     func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
-    func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
     func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController
-    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
-    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) -> ViewController
-    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation, displayMode: CommunityViewScreenDisplayMode) -> ViewController
+    func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, mode: CommunityViewScreenMode) -> ViewController
     func makeCommunityPeerSelectionScreen(context: AccountContext, communityId: EnginePeer.Id, selectionOptions: CommunityPeerSelectionOptions) -> ViewController
     func makeCocoonInfoScreen(context: AccountContext) -> ViewController
     func makeLinkEditController(context: AccountContext, updatedPresentationData: (initial: PresentationData, signal: Signal<PresentationData, NoError>)?, text: String, link: String?, apply: @escaping (String?, TelegramMediaWebpage?) -> Void) -> ViewController

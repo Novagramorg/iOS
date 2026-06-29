@@ -402,7 +402,7 @@ func _internal_toggleCommunityCollapsedInDialogs(account: Account, communityId: 
                     transaction.updatePeersInternal([community]) { _, peer in
                         return peer
                     }
-                    updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: minTimestampForPeerInclusion(community))
+                    //updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: nil)
                 }
                 if let cachedData = transaction.getPeerCachedData(peerId: communityId) as? CachedCommunityData {
                     var linkedPeerIds = Set<PeerId>()
@@ -414,7 +414,7 @@ func _internal_toggleCommunityCollapsedInDialogs(account: Account, communityId: 
                     for peerId in linkedPeerIds {
                         if collapsed {
                             transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
-                        } else if shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: peerId) {
+                        } else if isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId) {
                             transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
                         } else if let peer = transaction.getPeer(peerId) {
                             transaction.updatePeerChatListInclusion(peerId, inclusion: .ifHasMessagesOrOneOf(

@@ -48,6 +48,13 @@ private final class CommunitiesScreenComponent: Component {
         let cachedData: CachedCommunityData?
     }
 
+    private static func canAddChats(to peer: EnginePeer) -> Bool {
+        guard case let .community(community) = peer else {
+            return false
+        }
+        return community.hasPermission(.manageLinkedPeers)
+    }
+
     final class View: UIView, UIScrollViewDelegate {
         private let scrollView: ScrollView
 
@@ -185,6 +192,9 @@ private final class CommunitiesScreenComponent: Component {
                         var result: [CommunityListEntry] = []
                         for id in communityIds {
                             if let maybePeer = peersById[id], let peer = maybePeer {
+                                if !CommunitiesScreenComponent.canAddChats(to: peer) {
+                                    continue
+                                }
                                 var cachedCommunityData: CachedCommunityData?
                                 if let maybeCachedData = cachedDataById[id], let cachedData = maybeCachedData {
                                     cachedCommunityData = cachedData as? CachedCommunityData
@@ -255,7 +265,8 @@ private final class CommunitiesScreenComponent: Component {
                     component: AnyComponent(AlertInputFieldComponent(
                         context: component.context,
                         placeholder: "Community Name",
-                        hasClearButton: false,
+                        characterLimit: 128,
+                        hasClearButton: true,
                         isInitiallyFocused: true,
                         externalState: inputState,
                         returnKeyAction: {
@@ -377,7 +388,6 @@ private final class CommunitiesScreenComponent: Component {
             self.scrollView.backgroundColor = theme.list.blocksBackgroundColor
 
             var contentHeight = environment.navigationHeight - 26.0
-            var subtitleText = ""
             if let subjectPeer = self.subjectPeer {
                 let avatarSize = self.peerAvatar.update(
                     transition: transition,
@@ -415,15 +425,6 @@ private final class CommunitiesScreenComponent: Component {
                 }
 
                 contentHeight += avatarSize.height + 18.0
-
-                if case let .channel(channel) = subjectPeer {
-                    switch channel.info {
-                    case .group:
-                        subtitleText = "Make your group a part of community with multiple related chats."
-                    case .broadcast:
-                        subtitleText = "Make your channel a part of community with multiple related chats."
-                    }
-                }
             }
 
             let navigationTitleSize = self.navigationTitle.update(
@@ -485,7 +486,7 @@ private final class CommunitiesScreenComponent: Component {
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: subtitleText,
+                        string: "Make your group a part of community with multiple related chats.",
                         font: Font.regular(15.0),
                         textColor: theme.list.itemPrimaryTextColor
                     )),
