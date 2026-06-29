@@ -10782,6 +10782,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         self.chatDisplayNode.historyNodeContainer.layer.addShakeAnimation(amplitude: -6.0, decay: true)
     }
     
+    public func playConfettiAnimation() {
+        self.chatDisplayNode.playConfettiAnimation()
+    }
+    
     public func updatePushedTransition(_ fraction: CGFloat, transition: ContainedViewLayoutTransition) {
         if !transition.isAnimated {
             self.chatDisplayNode.historyNode.layer.removeAnimation(forKey: "sublayerTransform")

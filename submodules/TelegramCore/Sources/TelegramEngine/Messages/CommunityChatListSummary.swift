@@ -7,17 +7,20 @@ public struct CommunityChatListItemSummary: Equatable {
     public let readCounters: EnginePeerReadCounters?
     public let topTimestamp: Int32?
     public let hasLinkedPeers: Bool
+    public let collapsedInDialogs: Bool
 
-    public init(topMessage: EngineMessage?, readCounters: EnginePeerReadCounters?, topTimestamp: Int32?, hasLinkedPeers: Bool) {
+    public init(topMessage: EngineMessage?, readCounters: EnginePeerReadCounters?, topTimestamp: Int32?, hasLinkedPeers: Bool, collapsedInDialogs: Bool) {
         self.topMessage = topMessage
         self.readCounters = readCounters
         self.topTimestamp = topTimestamp
         self.hasLinkedPeers = hasLinkedPeers
+        self.collapsedInDialogs = collapsedInDialogs
     }
 }
 
 private struct CommunityChatListLinkedPeers: Equatable {
-    let communityIds: [PeerId]
+    let communityIds: Set<PeerId>
+    let collapsedCommunityIds: Set<PeerId>
     let peerIds: [PeerId: [PeerId]]
 }
 
@@ -35,22 +38,23 @@ private func uniquePeerIds(_ peerIds: [PeerId]) -> [PeerId] {
 private func communityChatListLinkedPeers(postbox: Postbox, communityIds: [PeerId]) -> Signal<CommunityChatListLinkedPeers, NoError> {
     let communityIds = uniquePeerIds(communityIds)
     if communityIds.isEmpty {
-        return .single(CommunityChatListLinkedPeers(communityIds: [], peerIds: [:]))
+        return .single(CommunityChatListLinkedPeers(communityIds: Set(), collapsedCommunityIds: Set(), peerIds: [:]))
     }
 
     let keys: [PostboxViewKey] = communityIds.map { communityId in
-        return .cachedPeerData(peerId: communityId)
+        return .peer(peerId: communityId, components: [.cachedData])
     }
 
     return postbox.combinedView(keys: keys)
     |> map { views -> CommunityChatListLinkedPeers in
         var peerIds: [PeerId: [PeerId]] = [:]
+        var collapsedCommunityIds: Set<PeerId> = []
         for communityId in communityIds {
-            guard let view = views.views[.cachedPeerData(peerId: communityId)] as? CachedPeerDataView else {
+            guard let view = views.views[.peer(peerId: communityId, components: [.cachedData])] as? PeerView else {
                 peerIds[communityId] = []
                 continue
             }
-            guard let cachedData = view.cachedPeerData as? CachedCommunityData else {
+            guard let cachedData = view.cachedData as? CachedCommunityData else {
                 peerIds[communityId] = []
                 continue
             }
@@ -60,8 +64,11 @@ private func communityChatListLinkedPeers(postbox: Postbox, communityIds: [PeerI
                 }
                 return linkedPeer.peerId
             })
+            if let community = view.peers[communityId] as? TelegramCommunity, community.collapsedInDialogs == true {
+                collapsedCommunityIds.insert(communityId)
+            }
         }
-        return CommunityChatListLinkedPeers(communityIds: communityIds, peerIds: peerIds)
+        return CommunityChatListLinkedPeers(communityIds: Set(communityIds), collapsedCommunityIds: collapsedCommunityIds, peerIds: peerIds)
     }
     |> distinctUntilChanged
 }
@@ -107,7 +114,7 @@ public func communityChatListItemSummaries(postbox: Postbox, communityIds: [Peer
         if allPeerIds.isEmpty {
             var result: [PeerId: CommunityChatListItemSummary] = [:]
             for communityId in linkedPeers.communityIds {
-                result[communityId] = CommunityChatListItemSummary(topMessage: nil, readCounters: nil, topTimestamp: nil, hasLinkedPeers: false)
+                result[communityId] = CommunityChatListItemSummary(topMessage: nil, readCounters: nil, topTimestamp: nil, hasLinkedPeers: false, collapsedInDialogs: false)
             }
             return .single(result)
         }
@@ -164,7 +171,8 @@ public func communityChatListItemSummaries(postbox: Postbox, communityIds: [Peer
                     },
                     readCounters: readCounters,
                     topTimestamp: topMessage?.index.timestamp,
-                    hasLinkedPeers: !peerIds.isEmpty
+                    hasLinkedPeers: !peerIds.isEmpty,
+                    collapsedInDialogs: linkedPeers.collapsedCommunityIds.contains(communityId)
                 )
             }
 
@@ -188,6 +196,11 @@ private func refreshCommunityCachedData(accountPeerId: PeerId, postbox: Postbox,
 }
 
 func managedCommunityChatListItemSummaries(postbox: Postbox, network: Network, accountPeerId: PeerId) -> Signal<Never, NoError> {
+    struct CommunitySummaryState: Equatable {
+        let collapsedInDialogs: Bool
+        let timestamp: Int32?
+    }
+    
     return _internal_updatedCommunitiesState(postbox: postbox)
     |> map { state -> [PeerId] in
         return state.communityIds ?? []
@@ -205,22 +218,19 @@ func managedCommunityChatListItemSummaries(postbox: Postbox, network: Network, a
             return disposable
         }
     }
-    |> map { summaries -> [PeerId: Int32?] in
+    |> map { summaries -> [PeerId: CommunitySummaryState] in
         return summaries.mapValues { summary in
-            return summary.topTimestamp
+            return CommunitySummaryState(collapsedInDialogs: summary.collapsedInDialogs, timestamp: summary.topTimestamp)
         }
     }
     |> distinctUntilChanged
-    |> mapToSignal { timestamps -> Signal<Never, NoError> in
-        if timestamps.isEmpty {
+    |> mapToSignal { states -> Signal<Never, NoError> in
+        if states.isEmpty {
             return .complete()
         }
         return postbox.transaction { transaction -> Void in
-            for (communityId, timestamp) in timestamps {
-                guard let community = transaction.getPeer(communityId) as? TelegramCommunity else {
-                    continue
-                }
-                updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: timestamp)
+            for (peerId, state) in states {
+                updateCommunityChatListInclusion(transaction: transaction, communityId: peerId, collapsedInDialogs: state.collapsedInDialogs, minTimestamp: state.timestamp)
             }
         }
         |> ignoreValues

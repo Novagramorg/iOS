@@ -869,6 +869,19 @@ private final class CommunityEditScreenComponent: Component {
                     return
                 }
                 self.isDeleting = false
+                
+                if let navigationController = self.environment?.controller()?.navigationController {
+                    var viewControllers = navigationController.viewControllers
+                    viewControllers = viewControllers.filter { c in
+                        if c is CommunityViewScreen {
+                            return false
+                        } else {
+                            return true
+                        }
+                    }
+                    navigationController.setViewControllers(viewControllers, animated: false)
+                }
+                
                 self.dismissController()
             }))
         }
