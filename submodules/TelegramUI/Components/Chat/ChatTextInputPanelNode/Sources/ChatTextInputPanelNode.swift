@@ -2880,7 +2880,16 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
 
         var textInputViewRealInsets = UIEdgeInsets()
         if let presentationInterfaceState = self.presentationInterfaceState {
-            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: effectiveActionButtonsSize.width)
+            // Only reserve the action-control slot on the right when the send button is actually shown
+            // (same condition that scales it in / shifts the accessory buttons below). When the input is
+            // empty the send button is hidden (scaled to ~0), so reserving its width over-insets the field;
+            // the right inset then only needs to clear the in-field accessory buttons.
+            let sendButtonShown = inputHasText || hasMediaDraft || hasForward || isEditingMedia
+            textInputViewRealInsets = calculateTextFieldRealInsets(presentationInterfaceState: presentationInterfaceState, accessoryButtonsWidth: accessoryButtonsWidth, actionControlsWidth: sendButtonShown ? effectiveActionButtonsSize.width : 0.0)
+            if !sendButtonShown {
+                // Empty state: the accessory-button clearance alone still over-insets slightly; trim 10pt more.
+                textInputViewRealInsets.right = max(0.0, textInputViewRealInsets.right - 10.0)
+            }
         }
         
         var contentHeight: CGFloat = 0.0

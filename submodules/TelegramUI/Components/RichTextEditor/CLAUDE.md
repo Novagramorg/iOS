@@ -549,6 +549,53 @@ recursing into cells.
 its `+UITextInput` extension are co-dependent and land together. Remember `import RichTextEditorCore` in
 UIKit files.
 
+## RTL / writing direction (added 2026-06-28)
+
+RTL paragraphs (Arabic/Hebrew/…) lay out per-paragraph, **auto-detected by default**, with a persisted
+**whole-document override**. Auto-detected direction is **render-only**; only the override persists.
+
+- **Model.** `TextAlignment` gained `.natural` (leading) and it is the **default** for new paragraphs (absolute
+  `.left/.center/.right/.justified` stay explicit overrides). `Document.layoutDirection`
+  (`.auto/.leftToRight/.rightToLeft`, default `.auto`) is the override (Core; `DocumentCodec` defaulted decode →
+  `.auto`). Both pure-Foundation; the Core→UIKit `NSWritingDirection` mapping is UIKit-side.
+- **Detection.** `BlockLayoutEngine.baseDirection(atOffset:)` — one protocol-extension default impl over the
+  engine's `attributedString` using `CTRunGetStatus(firstRun).contains(.rightToLeft)` (the same first-run
+  heuristic as `TextNode`/`InstantPageV2Layout`, so the editor agrees with how the sent message renders). Both
+  engines inherit it; nil on empty.
+- **Resolution + reporting** (`DocumentCanvasView+WritingDirection.swift`): `resolvedDirection(forGlobal:)` =
+  forced override → content detection → `typingWritingDirection`; `typingWritingDirection` = forced → keyboard
+  language (`Locale.characterDirection`) → app `effectiveUserInterfaceLayoutDirection`. `applyWritingDirectionOverride`
+  sets `layoutDirectionModel` + `mapper.baseWritingDirection` (`.auto`→`.natural`). `baseWritingDirection(for:in:)`
+  returns the resolved direction; **`setBaseWritingDirection` is a deliberate no-op** — the whole-document override
+  is the single manual control (per-range UIKit writes are ignored).
+- **Layout.** `StyleSheet.paragraphStyle(…baseWritingDirection:)` sets `ps.baseWritingDirection` (threaded via
+  `AttributedStringMapper.baseWritingDirection`; 11 call sites). `selectionFillRects(…isRTL:)` flips the
+  leading/trailing physical edge for RTL lines (both engines; `isRTL:false` is byte-identical to the old LTR math).
+- **Empty-paragraph caret** follows `typingWritingDirection`: `refreshEmptyBoxWritingDirections()` sets
+  `BlockBox.writingDirectionOverride` on empty top-level boxes (all modes), whose `didSet` pushes
+  `BlockLayoutEngine.emptyTextCaretDirection`; both engines' `caretRect(atOffset:)` return `x ≈ containerWidth-2`
+  for empty + `.rightToLeft` (LTR/non-empty unchanged). Refreshed from `reload`, `becomeFirstResponder`, and
+  **`UITextInputMode.currentInputModeDidChangeNotification`** (so the caret re-flips live on a keyboard/globe-key
+  change or first keyboard appearance).
+- **Façade + host.** `RichTextEditorView.layoutDirectionOverride` (modeled like `theme`; round-trips through
+  `document`). `RichTextAttachmentScreen` has an Auto/LTR/RTL action-bar control; the chat composer relies on
+  auto-detect (no manual toggle this round).
+- **LOAD-BEARING — font FAMILY is display-only and must NOT round-trip.** `NSTextStorage` font-fixing substitutes a
+  script font into a run's `.font` **in storage** when the style font can't render the glyphs (Arabic/Hebrew/CJK).
+  `characterAttributes(from:)` must therefore **not** capture `fontFamily` from the rendered font — it once did, so
+  the substituted family round-tripped and the font visibly changed on a backspace **merge** (`mergeParagraphs` →
+  `currentParagraph()`). Font **size** IS still pinned on read-back (the 15pt table-cell round-trip needs it);
+  bold/italic round-trip via font traits; forward `font(for:)` still honors an explicit import-set `fontFamily`.
+- **Deferred:** gutter-ornament mirroring (list markers / quote bar / checklist / indents to the right gutter),
+  table-column direction, a composer override UI, and mapping the override → rich-message `InstantPage.rtl`.
+
+## DEBUG layout overlay (added 2026-06-28, `RichTextEditorView+DebugOverlay.swift`)
+
+`RichTextEditorView.debugShowLayoutOverlay` (`#if DEBUG`, **ON by default in DEBUG**; set `false` to hide) draws a
+non-interactive topmost overlay: the field frame (red outline), scroll insets (blue bands), content margins (green
+ring), and per-block frames (orange, indexed), with inset/margin numeric labels. Refreshed from `performLayout` /
+`scrollViewDidScroll`; reads geometry via `bounds` / `debugContentInset` / `canvas`. Compiled out of release entirely.
+
 ## Load-bearing invariants (compiler-invisible — violating these silently breaks the editor)
 
 - **One flat global `(anchor, head)` range, coordinate-free.** Selection is a single linear range over one

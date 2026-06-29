@@ -40,6 +40,10 @@ final class BlockLayout: BlockLayoutEngine {
     /// and the paragraph doesn't needlessly repaint). Reset alongside `spoilerRanges` on any storage edit.
     private var spoilerLocalRanges: [NSRange] = []
 
+    /// When set, `caretRect(atOffset:)` returns the trailing-edge position for EMPTY text, so an empty
+    /// RTL-keyboard paragraph shows its caret on the right before the first keystroke. nil = default (0).
+    var emptyTextCaretDirection: NSWritingDirection?
+
     init(attributedString: NSAttributedString, width: CGFloat) {
         contentStorage = NSTextContentStorage()
         layoutManager = NSTextLayoutManager()
@@ -143,6 +147,11 @@ final class BlockLayout: BlockLayoutEngine {
     }
 
     func caretRect(atOffset offset: Int) -> CGRect {
+        // Empty text with direction override: position caret at the trailing edge for RTL so the user sees
+        // the correct insertion side before the first keystroke.
+        if length == 0, emptyTextCaretDirection == .rightToLeft {
+            return CGRect(x: container.size.width - 2, y: 0, width: 2, height: 20)
+        }
         guard let range = textRange(offset, offset) else { return CGRect(x: 0, y: 0, width: 2, height: 20) }
         var rect = CGRect(x: 0, y: 0, width: 2, height: 20)
         layoutManager.enumerateTextSegments(in: range, type: .standard, options: []) { _, frame, _, _ in
@@ -173,7 +182,7 @@ final class BlockLayout: BlockLayoutEngine {
     /// from its beginning for every continuation line (i > 0) and, for the first line, when the selection
     /// starts at the layout's very beginning (`start == 0`, i.e. the whole first line is covered). The line
     /// where the selection genuinely begins / ends mid-text keeps hugging the glyphs on that side.
-    func selectionFillRects(start: Int, end: Int, fillTrailingLine: Bool) -> [CGRect] {
+    func selectionFillRects(start: Int, end: Int, fillTrailingLine: Bool, isRTL: Bool) -> [CGRect] {
         guard start < end, let range = textRange(start, end) else { return [] }
         let edge = container.size.width
         var segs: [CGRect] = []
@@ -185,8 +194,17 @@ final class BlockLayout: BlockLayoutEngine {
         return segs.enumerated().map { i, seg in
             let toLeadingEdge = (i > 0) || coveredFromStart                  // covered from the line's beginning
             let toTrailingEdge = (i < segs.count - 1) || fillTrailingLine    // covered to the line's end
-            let left = toLeadingEdge ? min(seg.minX, 0) : seg.minX
-            let right = toTrailingEdge ? max(seg.maxX, edge) : seg.maxX
+            // The line's "beginning" is the left edge in LTR but the right (container) edge in RTL; the
+            // "end" is the opposite. Extend whichever physical edge corresponds to the covered logical side.
+            let left: CGFloat
+            let right: CGFloat
+            if isRTL {
+                right = toLeadingEdge ? max(seg.maxX, edge) : seg.maxX
+                left = toTrailingEdge ? min(seg.minX, 0) : seg.minX
+            } else {
+                left = toLeadingEdge ? min(seg.minX, 0) : seg.minX
+                right = toTrailingEdge ? max(seg.maxX, edge) : seg.maxX
+            }
             return CGRect(x: left, y: seg.minY, width: right - left, height: seg.height)
         }
     }

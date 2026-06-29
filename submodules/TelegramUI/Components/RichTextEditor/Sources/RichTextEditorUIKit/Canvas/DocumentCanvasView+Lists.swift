@@ -102,7 +102,8 @@ extension DocumentCanvasView {
     /// the box's text. No-op for an empty box (typing applies the style via `typingAttributeDict`).
     func restyle(_ box: BlockBox) {
         let ps = mapper.styleSheet.paragraphStyle(for: box.style, attributes: box.paragraphAttributes,
-                                                  list: box.listMembership)
+                                                  list: box.listMembership,
+                                                  baseWritingDirection: box.writingDirectionOverride ?? mapper.baseWritingDirection)
         let storage = box.layout.attributedString
         guard storage.length > 0 else { return }
         let m = NSMutableAttributedString(attributedString: storage)

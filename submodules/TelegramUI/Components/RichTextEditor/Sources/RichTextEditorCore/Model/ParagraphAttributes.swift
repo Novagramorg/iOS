@@ -9,7 +9,7 @@ public struct ParagraphAttributes: Codable, Equatable {
     public var lineHeightMultiple: Double
 
     public init(
-        alignment: TextAlignment = .left,
+        alignment: TextAlignment = .natural,
         firstLineIndent: Double = 0,
         headIndent: Double = 0,
         paragraphSpacingBefore: Double = 0,

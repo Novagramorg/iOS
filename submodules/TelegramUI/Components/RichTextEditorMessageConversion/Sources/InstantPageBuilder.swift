@@ -134,7 +134,7 @@ private func tableBlock(_ table: TableBlock) -> InstantPageBlock {
             let alignment: TableHorizontalAlignment
             if columnIndex < table.columns.count {
                 switch table.columns[columnIndex].alignment {
-                case .left, .justified:
+                case .left, .justified, .natural:
                     alignment = .left
                 case .center:
                     alignment = .center

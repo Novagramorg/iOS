@@ -76,6 +76,13 @@ final class BlockBox {
     /// is a checklist item — then `draw` suppresses the Unicode glyph (a hosted CheckNode shows instead).
     var hostsChecklistCheckbox = false
 
+    /// When set, overrides the mapper's base writing direction for THIS box only — used so an empty
+    /// paragraph adopts the live keyboard direction in auto mode (the caret opens on the correct side).
+    /// A `didSet` pushes the value into the layout engine's `emptyTextCaretDirection` hint.
+    var writingDirectionOverride: NSWritingDirection? {
+        didSet { layout.emptyTextCaretDirection = writingDirectionOverride }
+    }
+
     /// A plain body paragraph (not a list item) — the spacing between two of these is tightened.
     var isBodyParagraph: Bool { style == .body && listMembership == nil }
 
@@ -127,7 +134,8 @@ final class BlockBox {
         guard layout.length == 0 else { return 0 }
         let font = (mapper.attributes(for: CharacterAttributes(), style: style)[.font] as? UIFont)
             ?? UIFont.preferredFont(forTextStyle: .body)
-        let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes, list: listMembership)
+        let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes, list: listMembership,
+                                                   baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection)
         let mult = ps.lineHeightMultiple > 0 ? ps.lineHeightMultiple : 1
         return font.lineHeight * mult
     }
@@ -141,7 +149,8 @@ final class BlockBox {
     var emptyLineLeadingIndent: CGFloat {
         guard layout.length == 0 else { return 0 }
         return mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes,
-                                                list: listMembership).firstLineHeadIndent
+                                                list: listMembership,
+                                                baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection).firstLineHeadIndent
     }
 
     func setWidth(_ width: CGFloat) { layout.setWidth(max(width - textInset.x * 2, 1)) }
@@ -152,7 +161,8 @@ final class BlockBox {
     /// is typed (an empty TextKit 2 layout has no fragment to measure).
     func listMarkerBaselineFromTop(markerFont: UIFont) -> CGFloat {
         if let baseline = layout.firstLineBaselineFromTop { return baseline }
-        let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes, list: listMembership)
+        let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes, list: listMembership,
+                                                   baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection)
         let mult = ps.lineHeightMultiple > 0 ? ps.lineHeightMultiple : 1
         return markerFont.ascender + (mult - 1) * markerFont.lineHeight
     }
@@ -205,7 +215,8 @@ final class BlockBox {
     func placeholderDraw() -> (text: String, origin: CGPoint, font: UIFont)? {
         guard isTopLevelBlock, layout.length == 0, let text = placeholderText else { return nil }
         let font = mapper.styleSheet.font(for: style, attributes: .plain)
-        let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes, list: listMembership)
+        let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes, list: listMembership,
+                                                   baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection)
         let mult = ps.lineHeightMultiple > 0 ? ps.lineHeightMultiple : 1
         let baselineShift = (mult - 1) * font.lineHeight
         let origin = CGPoint(x: textOrigin.x + emptyLineLeadingIndent, y: textOrigin.y + baselineShift)
@@ -227,7 +238,8 @@ final class BlockBox {
         // alignment, preserving list/indent properties.
         var pa = paragraphAttributes
         pa.alignment = alignment
-        let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: pa, list: listMembership)
+        let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: pa, list: listMembership,
+                                                   baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection)
         m.addAttribute(.paragraphStyle, value: ps, range: full)
         // Bold: only ADD the trait (e.g. the first column). Never remove — other cells keep user bold.
         if forceBold {

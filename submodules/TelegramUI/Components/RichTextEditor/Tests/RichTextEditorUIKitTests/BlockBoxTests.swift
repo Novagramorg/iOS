@@ -34,7 +34,7 @@ extension BlockBoxTests {
         let ps = box.layout.attributedString.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
         XCTAssertEqual(ps?.alignment, .center)
         // ...but the model's own paragraph alignment is unchanged (round-trip clean).
-        XCTAssertEqual(box.currentParagraph().paragraph.alignment, .left)
+        XCTAssertEqual(box.currentParagraph().paragraph.alignment, .natural)
     }
 
     func test_applyDisplayOverride_forceBoldAddsBoldTraitOnDisplay() {

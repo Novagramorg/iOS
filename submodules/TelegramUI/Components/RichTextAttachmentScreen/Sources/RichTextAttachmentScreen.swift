@@ -595,6 +595,27 @@ final class RichTextAttachmentScreenComponent: Component {
                 isSelected: editorState.paragraphStyle == .quote
             ))
             barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("writingDirection"), icon: "RichText/ToolParagraphStyle",
+                action: editorState.isInTable ? nil : { [weak self] sourceView in
+                    guard let self else { return }
+                    let current = self.editor.layoutDirectionOverride
+                    let entries: [(String, DocumentLayoutDirection)] = [
+                        ("Automatic", .auto), ("Left-to-Right", .leftToRight), ("Right-to-Left", .rightToLeft)]
+                    let items: [ContextMenuItem] = entries.map { (title, dir) in
+                        .action(ContextMenuActionItem(text: title, icon: { theme in
+                            dir == current
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            self?.editor.layoutDirectionOverride = dir
+                        }))
+                    }
+                    self.presentActionMenu(from: sourceView, items: items)
+                },
+                isSelected: self.editor.layoutDirectionOverride != .auto
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
                 id: AnyHashable("table"), icon: "RichText/ToolTable",
                 action: { [weak self] sourceView in
                     guard let self else { return }

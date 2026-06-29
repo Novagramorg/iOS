@@ -25,10 +25,16 @@ public struct AttributedStringMapper {
     /// Theme colors used for render-time defaults (primary/secondary text, link accent). Mutable so a
     /// host theme change can be applied to the shared mapper before the next reload.
     public var theme: RichTextEditorTheme
-    public init(styleSheet: StyleSheet = .default, emojiScale: CGFloat = 1.0, theme: RichTextEditorTheme = .default) {
+    /// Base writing direction baked into every paragraph style this mapper builds. `.natural` (default)
+    /// lets TextKit auto-detect per paragraph; the whole-document override sets `.leftToRight`/`.rightToLeft`.
+    public var baseWritingDirection: NSWritingDirection
+    public init(styleSheet: StyleSheet = .default, emojiScale: CGFloat = 1.0,
+                theme: RichTextEditorTheme = .default,
+                baseWritingDirection: NSWritingDirection = .natural) {
         self.styleSheet = styleSheet
         self.emojiScale = emojiScale
         self.theme = theme
+        self.baseWritingDirection = baseWritingDirection
     }
 
     /// A copy of this mapper that renders table-cell content (a smaller body/quote base size, see
@@ -36,7 +42,8 @@ public struct AttributedStringMapper {
     /// for its cells so the denser cell font is consistent across edits (split/merge boxes inherit it
     /// via their source box's `mapper`).
     public func tableCellVariant() -> AttributedStringMapper {
-        AttributedStringMapper(styleSheet: .tableCells, emojiScale: emojiScale, theme: theme)
+        AttributedStringMapper(styleSheet: .tableCells, emojiScale: emojiScale, theme: theme,
+                               baseWritingDirection: baseWritingDirection)
     }
 
     /// Points to enlarge a rendered inline emoji beyond its glyph box, per paragraph style (decoupled from
@@ -95,13 +102,14 @@ public struct AttributedStringMapper {
             ca.bold = traits.contains(.traitBold)
             ca.italic = traits.contains(.traitItalic)
             if !isCode {
+                // Font SIZE is pinned on read-back so a run keeps its rendered size when moved across
+                // contexts (e.g. a 15pt table cell — see TableBlockBoxTests). Font FAMILY is NOT captured:
+                // it is purely display. TextKit's automatic font substitution for scripts the style font
+                // can't render (Arabic, Hebrew, CJK, …) rewrites `.font` in storage to a script-specific
+                // family; capturing that would bake a display artifact into the model and visibly change
+                // the font on the next rebuild (e.g. the paragraph merge on backspace). The model's
+                // fontFamily is only ever an explicit, user-/import-set value (forward-applied by `font(for:)`).
                 ca.fontSize = Double(font.pointSize)
-                let sansDefault = UIFont.systemFont(ofSize: font.pointSize).familyName
-                let serifDefault = UIFont.systemFont(ofSize: font.pointSize).fontDescriptor
-                    .withDesign(.serif).map { UIFont(descriptor: $0, size: font.pointSize).familyName }
-                if font.familyName != sansDefault && font.familyName != serifDefault {
-                    ca.fontFamily = font.familyName
-                }
             }
         }
         if isCode { ca.inlineCode = true }
@@ -128,7 +136,8 @@ public struct AttributedStringMapper {
     public func attributedString(for block: ParagraphBlock) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let paragraphStyle = styleSheet.paragraphStyle(for: block.style, attributes: block.paragraph,
-                                                       list: block.list)
+                                                       list: block.list,
+                                                       baseWritingDirection: baseWritingDirection)
         for run in block.runs {
             var attrs = attributes(for: run.attributes, style: block.style)
             attrs[.paragraphStyle] = paragraphStyle

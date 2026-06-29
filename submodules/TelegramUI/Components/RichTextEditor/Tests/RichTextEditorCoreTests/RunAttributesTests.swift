@@ -15,8 +15,8 @@ final class RunAttributesTests: XCTestCase {
         XCTAssertEqual(run.utf16Count, 3)
     }
 
-    func test_paragraphAttributes_defaultIsLeftAligned() {
-        XCTAssertEqual(ParagraphAttributes.default.alignment, .left)
+    func test_paragraphAttributes_defaultIsNaturalAligned() {
+        XCTAssertEqual(ParagraphAttributes.default.alignment, .natural)
         XCTAssertEqual(ParagraphAttributes.default.lineHeightMultiple, 1)
     }
 

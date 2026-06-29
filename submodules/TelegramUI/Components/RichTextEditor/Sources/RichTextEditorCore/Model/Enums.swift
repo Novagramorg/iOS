@@ -1,6 +1,9 @@
 import Foundation
 
 public enum TextAlignment: String, Codable, Equatable, CaseIterable {
+    /// Leading: resolves to left in an LTR paragraph, right in an RTL one. The default for new
+    /// paragraphs; the absolute cases below are explicit user overrides that win over direction.
+    case natural
     case left, center, right, justified
 }
 
@@ -16,4 +19,11 @@ public enum ListMarker: String, Codable, Equatable, CaseIterable {
 
 public enum MediaAlignment: String, Codable, Equatable, CaseIterable {
     case left, center, right
+}
+
+/// Whole-document writing-direction override. `.auto` lets each paragraph auto-detect its direction
+/// from content (first strong character); the forced cases pin every paragraph. Persisted; auto-detected
+/// per-paragraph direction is render-only and never stored.
+public enum DocumentLayoutDirection: String, Codable, Equatable, CaseIterable {
+    case auto, leftToRight, rightToLeft
 }
