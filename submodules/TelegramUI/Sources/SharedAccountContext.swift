@@ -4351,28 +4351,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return CommunityEditScreen(context: context, communityId: communityId)
     }
 
-    public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
-        return self.makeCommunityRequestsScreen(context: context, communityId: communityId, existingContext: nil)
-    }
-
     public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController {
         return CommunityRequestsScreen(context: context, communityId: communityId, existingContext: existingContext)
     }
 
-    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
-        return self.makeCommunityViewScreen(context: context, communityId: communityId, style: .grouped, presentation: .sheet)
-    }
-
-    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation) -> ViewController {
-        return self.makeCommunityViewScreen(context: context, communityId: communityId, style: style, presentation: presentation, displayMode: .default)
-    }
-
-    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, style: CommunityViewScreenStyle, presentation: CommunityViewScreenPresentation, displayMode: CommunityViewScreenDisplayMode) -> ViewController {
-        return CommunityViewScreen(context: context, communityId: communityId, style: style, presentation: presentation, displayMode: displayMode)
+    public func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, mode: CommunityViewScreenMode) -> ViewController {
+        return CommunityViewScreen(context: context, communityId: communityId, mode: mode)
     }
 
     public func makeCommunityPeerSelectionScreen(context: AccountContext, communityId: EnginePeer.Id, selectionOptions: CommunityPeerSelectionOptions) -> ViewController {
-        return CommunityViewScreen(context: context, communityId: communityId, style: .plain, presentation: .fullScreen, displayMode: .default, selectionOptions: selectionOptions)
+        return CommunityViewScreen(context: context, communityId: communityId, mode: .fullscreen, selectionOptions: selectionOptions)
     }
 
     public func makeCocoonInfoScreen(context: AccountContext) -> ViewController {

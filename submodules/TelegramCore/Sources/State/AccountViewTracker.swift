@@ -2040,7 +2040,7 @@ public final class AccountViewTracker {
                     let resetPeerHoleManagement = self.resetPeerHoleManagement
                     let isAutomaticallyTracked = self.account!.postbox.transaction { transaction -> Bool in
                         if transaction.getPeerChatListIndex(peerId) == nil {
-                            if _internal_isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId) {
+                            if isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId) {
                                 return true
                             }
                             transaction.resetIncomingReadStates([peerId: [Namespaces.Message.Cloud : PeerReadState.idBased(

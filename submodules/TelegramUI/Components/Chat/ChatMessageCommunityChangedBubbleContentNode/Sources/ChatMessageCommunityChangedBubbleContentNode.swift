@@ -101,7 +101,7 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
         guard let item = self.item, let (communityId, _) = communityChangedPeer(message: item.message) else {
             return
         }
-        let controller = item.context.sharedContext.makeCommunityViewScreen(context: item.context, communityId: communityId)
+        let controller = item.context.sharedContext.makeCommunityViewScreen(context: item.context, communityId: communityId, mode: .sheet)
         if let navigationController = item.controllerInteraction.navigationController() {
             navigationController.pushViewController(controller)
         } else {

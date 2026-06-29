@@ -704,7 +704,7 @@ func infoItems(
                             guard let controller = interaction.getController() else {
                                 return
                             }
-                            let communityController = context.sharedContext.makeCommunityViewScreen(context: context, communityId: linkedCommunityData.peer.id)
+                            let communityController = context.sharedContext.makeCommunityViewScreen(context: context, communityId: linkedCommunityData.peer.id, mode: .sheet)
                             controller.push(communityController)
                         }
                     ))
@@ -1565,34 +1565,34 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                         }))
                     }
                     
-                    if let linkedCommunityId = channel.linkedCommunityId {
-                        if let linkedCommunityData = data.linkedCommunityData {
-                            items[.community]!.append(PeerInfoScreenCommunityItem(
-                                id: ItemCommunity,
-                                context: context,
-                                community: linkedCommunityData.peer,
-                                chatCount: linkedCommunityData.cachedData?.linkedPeers.count,
-                                action: {
-                                    guard let controller = interaction.getController() else {
-                                        return
-                                    }
-                                    let communityController = context.sharedContext.makeCommunityViewScreen(context: context, communityId: linkedCommunityData.peer.id)
-                                    controller.push(communityController)
-                                }
-                            ))
-                            items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: "Remove Group from Community", color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
-                                interaction.editingRemoveFromCommunity(linkedCommunityId)
-                            }))
-                        }
-                    } else {
-                        //TODO:localize
-                        items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Group to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
-                            interaction.editingOpenAddToCommunity()
-                        }))
-                        items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your group part of a community with multiple related chats"))
-                    }
-
                     if isCreator {
+                        if let linkedCommunityId = channel.linkedCommunityId {
+                            if let linkedCommunityData = data.linkedCommunityData {
+                                items[.community]!.append(PeerInfoScreenCommunityItem(
+                                    id: ItemCommunity,
+                                    context: context,
+                                    community: linkedCommunityData.peer,
+                                    chatCount: linkedCommunityData.cachedData?.linkedPeers.count,
+                                    action: {
+                                        guard let controller = interaction.getController() else {
+                                            return
+                                        }
+                                        let communityController = context.sharedContext.makeCommunityViewScreen(context: context, communityId: linkedCommunityData.peer.id, mode: .sheet)
+                                        controller.push(communityController)
+                                    }
+                                ))
+                                items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: "Remove Group from Community", color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
+                                    interaction.editingRemoveFromCommunity(linkedCommunityId)
+                                }))
+                            }
+                        } else {
+                            //TODO:localize
+                            items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Group to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
+                                interaction.editingOpenAddToCommunity()
+                            }))
+                            items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your group part of a community with multiple related chats"))
+                        }
+                        
                         items[.peerActions]!.append(PeerInfoScreenActionItem(id: ItemDeleteGroup, text: presentationData.strings.Group_DeleteGroup, color: .destructive, icon: nil, alignment: .natural, action: {
                             interaction.openDeletePeer()
                         }))

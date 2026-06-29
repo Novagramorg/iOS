@@ -6024,11 +6024,13 @@ public extension Api.functions.messages {
     }
 }
 public extension Api.functions.messages {
-    static func composeRichMessageWithAI(flags: Int32, text: Api.InputRichMessage, translateToLang: String?, tone: Api.InputAiComposeTone?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.ComposedRichMessageWithAI>) {
+    static func composeRichMessageWithAI(flags: Int32, text: Api.InputRichMessage?, translateToLang: String?, tone: Api.InputAiComposeTone?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.ComposedRichMessageWithAI>) {
         let buffer = Buffer()
-        buffer.appendInt32(-1260065081)
+        buffer.appendInt32(-1921325393)
         serializeInt32(flags, buffer: buffer, boxed: false)
-        text.serialize(buffer, true)
+        if Int(flags) & Int(1 << 4) != 0 {
+            text!.serialize(buffer, true)
+        }
         if Int(flags) & Int(1 << 1) != 0 {
             serializeString(translateToLang!, buffer: buffer, boxed: false)
         }
@@ -9140,6 +9142,26 @@ public extension Api.functions.messages {
         }
         serializeString(platform, buffer: buffer, boxed: false)
         return (FunctionDescription(name: "messages.requestAppWebView", parameters: [("flags", ConstructorParameterDescription(flags)), ("peer", ConstructorParameterDescription(peer)), ("app", ConstructorParameterDescription(app)), ("startParam", ConstructorParameterDescription(startParam)), ("themeParams", ConstructorParameterDescription(themeParams)), ("platform", ConstructorParameterDescription(platform))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.WebViewResult? in
+            let reader = BufferReader(buffer)
+            var result: Api.WebViewResult?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.WebViewResult
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.messages {
+    static func requestChatJoinWebView(flags: Int32, queryId: Int64, themeParams: Api.DataJSON?, platform: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.WebViewResult>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1163991431)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        serializeInt64(queryId, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            themeParams!.serialize(buffer, true)
+        }
+        serializeString(platform, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "messages.requestChatJoinWebView", parameters: [("flags", ConstructorParameterDescription(flags)), ("queryId", ConstructorParameterDescription(queryId)), ("themeParams", ConstructorParameterDescription(themeParams)), ("platform", ConstructorParameterDescription(platform))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.WebViewResult? in
             let reader = BufferReader(buffer)
             var result: Api.WebViewResult?
             if let signature = reader.readInt32() {

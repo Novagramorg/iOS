@@ -4084,38 +4084,55 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
         guard let data = self.data, case let .channel(channel) = data.peer, case .group = channel.info else {
             return
         }
-
-        self.activeActionDisposable.set((self.context.engine.peers.toggleCommunityPeerLink(
-            communityId: communityId,
-            peerId: channel.id,
-            action: .unlink
-        )
-        |> deliverOnMainQueue).startStrict(error: { [weak self] _ in
+        
+        let action = { [weak self] in
             guard let self else {
                 return
             }
-            self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: nil, text: "Something went wrong.", actions: [
-                TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})
-            ]), in: .window(.root))
-        }, completed: { [weak self] in
-            guard let self else {
-                return
-            }
-            let _ = self.context.account.postbox.transaction { transaction -> Void in
-                updatePeersCustom(transaction: transaction, peers: [channel.withUpdatedLinkedCommunityId(nil)], update: { _, updated in
-                    guard let channel = updated as? TelegramChannel else {
-                        return updated
-                    }
-                    return channel.withUpdatedLinkedCommunityId(nil)
+            self.activeActionDisposable.set((self.context.engine.peers.toggleCommunityPeerLink(
+                communityId: communityId,
+                peerId: channel.id,
+                action: .unlink
+            )
+            |> deliverOnMainQueue).startStrict(error: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                self.controller?.present(textAlertController(context: self.context, updatedPresentationData: self.controller?.updatedPresentationData, title: nil, text: self.presentationData.strings.Login_UnknownError, actions: [
+                    TextAlertAction(type: .defaultAction, title: self.presentationData.strings.Common_OK, action: {})
+                ]), in: .window(.root))
+            }, completed: { [weak self] in
+                guard let self else {
+                    return
+                }
+                let _ = self.context.account.postbox.transaction { transaction -> Void in
+                    updatePeersCustom(transaction: transaction, peers: [channel.withUpdatedLinkedCommunityId(nil)], update: { _, updated in
+                        guard let channel = updated as? TelegramChannel else {
+                            return updated
+                        }
+                        return channel.withUpdatedLinkedCommunityId(nil)
+                    })
+                    transaction.updatePeerCachedData(peerIds: Set([communityId]), update: { _, current in
+                        guard let current = current as? CachedCommunityData else {
+                            return current
+                        }
+                        return current.withUpdatedLinkedPeers(current.linkedPeers.filter { $0.peerId != channel.id })
+                    })
+                }.startStandalone()
+            }))
+        }
+        
+        self.controller?.present(textAlertController(
+            context: self.context,
+            title: self.presentationData.strings.Community_RemoveChat_Title,
+            text: self.presentationData.strings.Community_RemoveChat_Text,
+            actions: [
+                TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}),
+                TextAlertAction(type: .defaultDestructiveAction, title: self.presentationData.strings.Community_RemoveChat_Remove, action: {
+                    action()
                 })
-                transaction.updatePeerCachedData(peerIds: Set([communityId]), update: { _, current in
-                    guard let current = current as? CachedCommunityData else {
-                        return current
-                    }
-                    return current.withUpdatedLinkedPeers(current.linkedPeers.filter { $0.peerId != channel.id })
-                })
-            }.startStandalone()
-        }))
+            ]
+        ), in: .window(.root))
     }
 
     private func editingOpenPostSuggestionsSetup() {

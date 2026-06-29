@@ -2242,7 +2242,13 @@ func peerInfoScreenData(
                 |> map { linkedCommunityData -> PeerInfoScreenData in
                     var effectiveStatus = status
                     if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == groupId }), linkedPeer.visible == false, var status = effectiveStatus {
-                        status.text = "Hidden • \(status.text)"
+                        //TODO:localize
+                        let statusComponents = status.text.components(separatedBy: ", ")
+                        var statusText = status.text
+                        if statusComponents.count > 1 {
+                            statusText = statusComponents[0]
+                        }
+                        status.text = "Hidden • \(statusText)"
                         status.hasHiddenCommunityPrefix = true
                         effectiveStatus = status
                     }

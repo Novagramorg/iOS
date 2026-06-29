@@ -1738,7 +1738,7 @@ private final class AdminUserActionsSheetComponent: Component {
                             self.state?.updated(transition: .spring(duration: 0.35))
                         },
                         openCommunity: { communityId in
-                            let controller = component.context.sharedContext.makeCommunityViewScreen(context: component.context, communityId: communityId)
+                            let controller = component.context.sharedContext.makeCommunityViewScreen(context: component.context, communityId: communityId, mode: .sheet)
                             environmentValue.controller()?.present(controller, in: .window(.root))
                         }
                     )),

@@ -173,8 +173,8 @@ private final class CommunityAddPeerItemComponent: Component {
             }
             textY += titleSize.height + 3.0
 
-            if let subtitleView = self.subtitle.view, !subtitleSize.height.isZero {
-                transition.setFrame(view: subtitleView, frame: CGRect(origin: CGPoint(x: textLeft, y: textY), size: subtitleSize))
+            if let subtitleView = self.subtitle.view {
+                subtitleView.frame = CGRect(origin: CGPoint(x: textLeft, y: textY), size: subtitleSize)
             }
 
             return CGSize(width: availableSize.width, height: height)
@@ -296,7 +296,7 @@ private final class CommunityAddContentComponent: Component {
 
         func update(component: CommunityAddContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
             let environment = environment[EnvironmentType.self].value
-            let theme = environment.theme
+            let theme = environment.theme.withModalBlocksBackground()
             let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
 
             self.backgroundColor = .clear

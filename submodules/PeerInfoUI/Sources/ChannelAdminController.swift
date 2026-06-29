@@ -55,17 +55,6 @@ private final class ChannelAdminControllerArguments {
     }
 }
 
-private func updateCachedCommunityAdminsCount(context: AccountContext, peerId: EnginePeer.Id, delta: Int32) {
-    let _ = context.account.postbox.transaction { transaction -> Void in
-        transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, cachedData -> EngineCachedPeerData? in
-            guard let cachedData = cachedData as? CachedCommunityData, let adminsCount = cachedData.adminsCount else {
-                return cachedData
-            }
-            return cachedData.withUpdatedAdminsCount(max(0, adminsCount + delta))
-        })
-    }.startStandalone()
-}
-
 private enum ChannelAdminSection: Int32 {
     case info
     case rank
@@ -644,7 +633,7 @@ private func stringForRight(strings: PresentationStrings, right: TelegramChatAdm
 private func stringForCommunityRight(_ right: TelegramChatAdminRightsFlags) -> String {
     if right.contains(.canChangeInfo) {
         //TODO:localize
-        return "Edit Community Name"
+        return "Edit Community Info"
     } else if right.contains(.canManageLinkedPeers) {
         //TODO:localize
         return "Edit Group List"
@@ -1724,15 +1713,35 @@ public func channelAdminController(context: AccountContext, updatedPresentationD
                             let presentationData = context.sharedContext.currentPresentationData.with { $0 }
                             var text = presentationData.strings.Login_UnknownError
                             switch error {
-                            case .generic, .addMemberError(_):
+                            case .generic:
                                 break
+                            case let .addMemberError(addMemberError):
+                                switch addMemberError {
+                                case .tooMuchJoined:
+                                    text = presentationData.strings.Group_ErrorSupergroupConversionNotPossible
+                                case .restricted:
+                                    if let admin = adminPeer {
+                                        text = presentationData.strings.Privacy_GroupsAndChannels_InviteToCommunityError(admin.compactDisplayTitle, admin.compactDisplayTitle).string
+                                    }
+                                case .notMutualContact:
+                                    text = presentationData.strings.GroupInfo_AddUserLeftError
+                                default:
+                                    break
+                                }
                             case .adminsTooMuch:
                                 text = presentationData.strings.Group_ErrorAdminsTooMuch
                             }
                             presentControllerImpl?(textAlertController(context: context, updatedPresentationData: updatedPresentationData, title: nil, text: text, actions: [TextAlertAction(type: .defaultAction, title: presentationData.strings.Common_OK, action: {})]), nil)
                         }, completed: {
                             if initialParticipant == nil {
-                                updateCachedCommunityAdminsCount(context: context, peerId: peerId, delta: 1)
+                                let _ = context.account.postbox.transaction { transaction -> Void in
+                                    transaction.updatePeerCachedData(peerIds: Set([peerId]), update: { _, cachedData -> EngineCachedPeerData? in
+                                        guard let cachedData = cachedData as? CachedCommunityData, let adminsCount = cachedData.adminsCount else {
+                                            return cachedData
+                                        }
+                                        return cachedData.withUpdatedAdminsCount(max(0, adminsCount + 1))
+                                    })
+                                }.startStandalone()
                             }
                             finishAfterSaving(TelegramChatAdminRights(rights: updateFlags), true)
                         }))

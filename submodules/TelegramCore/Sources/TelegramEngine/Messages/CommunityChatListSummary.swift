@@ -174,14 +174,6 @@ public func communityChatListItemSummaries(postbox: Postbox, communityIds: [Peer
     |> distinctUntilChanged
 }
 
-private func updateCommunityChatListInclusionTimestamp(transaction: Transaction, communityId: PeerId, timestamp: Int32?) {
-    guard let community = transaction.getPeer(communityId) as? TelegramCommunity else {
-        return
-    }
-
-    updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: timestamp)
-}
-
 private func refreshCommunityCachedData(accountPeerId: PeerId, postbox: Postbox, network: Network, communityIds: [PeerId]) -> Signal<Never, NoError> {
     if communityIds.isEmpty {
         return .complete()
@@ -225,7 +217,10 @@ func managedCommunityChatListItemSummaries(postbox: Postbox, network: Network, a
         }
         return postbox.transaction { transaction -> Void in
             for (communityId, timestamp) in timestamps {
-                updateCommunityChatListInclusionTimestamp(transaction: transaction, communityId: communityId, timestamp: timestamp)
+                guard let community = transaction.getPeer(communityId) as? TelegramCommunity else {
+                    continue
+                }
+                updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: timestamp)
             }
         }
         |> ignoreValues
