@@ -16,12 +16,17 @@ extension DocumentCanvasView {
         var run: CGRect?
         func flush() {
             guard let f = run else { return }
-            result.append(BlockquoteDecoration(fill: f, bar: CGRect(x: f.minX, y: f.minY, width: 3, height: f.height)))
+            result.append(BlockquoteDecoration(fill: f, bar: CGRect(x: f.minX, y: f.minY, width: self.quoteStyle.barWidth, height: f.height)))
             run = nil
         }
         for box in boxes {
             if let p = box as? BlockBox, p.style == .quote {
                 run = run.map { $0.union(p.frame) } ?? p.frame
+            } else if let cq = box as? CollapsedQuoteBox {
+                flush()                                   // a collapsed quote is its own run (rounded both ends)
+                result.append(BlockquoteDecoration(fill: cq.frame,
+                                                   bar: CGRect(x: cq.frame.minX, y: cq.frame.minY,
+                                                               width: self.quoteStyle.barWidth, height: cq.frame.height)))
             } else {
                 flush()
             }
@@ -34,6 +39,42 @@ extension DocumentCanvasView {
     /// `BlockquoteUnderlay` image factory (the fills are now drawn by a stretchable-image underlay,
     /// not into the canvas context); `blockquoteDecorations()` above still supplies the run rects.
     static let blockquoteCornerRadius: CGFloat = 2.5
+
+    // MARK: - Collapse button runs
+
+    /// Minimum run height (pts) for a quote run to earn a collapse affordance.
+    static let collapseButtonMinRunHeight: CGFloat = 60
+    /// Side length of the collapse button SF-Symbol square.
+    static let collapseButtonSize: CGFloat = 18
+
+    /// Per EXPANDED quote run that is tall enough to be worth collapsing: the first block's index and the
+    /// top-right button rect (canvas coords). Collapsed quotes and short runs yield nothing. (Legacy parity:
+    /// a quote shorter than the threshold reads fine expanded; only a tall run gets a collapse affordance.)
+    func collapseButtonRuns() -> [(blockIndex: Int, rect: CGRect)] {
+        var result: [(blockIndex: Int, rect: CGRect)] = []
+        var runStart: Int?
+        var runRect: CGRect?
+        func flush() {
+            guard let start = runStart, let f = runRect else { runStart = nil; runRect = nil; return }
+            if f.height >= DocumentCanvasView.collapseButtonMinRunHeight {
+                let s = DocumentCanvasView.collapseButtonSize
+                let rect = CGRect(x: f.maxX - max(quoteStyle.trailingInset, 0) - s - 2,
+                                  y: f.minY + 2, width: s, height: s)
+                result.append((blockIndex: start, rect: rect))
+            }
+            runStart = nil; runRect = nil
+        }
+        for (i, box) in boxes.enumerated() {
+            if let p = box as? BlockBox, p.style == .quote {
+                if runStart == nil { runStart = i }
+                runRect = runRect.map { $0.union(p.frame) } ?? p.frame
+            } else {
+                flush()
+            }
+        }
+        flush()
+        return result
+    }
 }
 
 @available(iOS 13.0, *)

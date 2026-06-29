@@ -207,6 +207,7 @@ final class CanvasClipboardTests: XCTestCase {
             case .code(let c): out += c.runs.map(\.text)
             case .media(let m): out += m.caption.map(\.text)
             case .table(let t): for row in t.rows { for cell in row.cells { out += allRunTexts(cell.blocks) } }
+            case .collapsedQuote: break   // folded — no renderable runs at this level
             }
         }
         return out

@@ -262,9 +262,7 @@ extension ChatControllerImpl {
             if !premiumGiftOptions.isEmpty {
                 buttons.insert(.gift, at: 1)
             }
-            if strongSelf.context.sharedContext.immediateExperimentalUISettings.debugRichText {
-                buttons.insert(.richText, at: 1)
-            }
+            buttons.insert(.richText, at: 1)   // rich text is default-on (legacy is the opt-out)
 
             guard let initialButton = initialButton else {
                 if case let .bot(botId, botPayload, botJustInstalled) = subject {

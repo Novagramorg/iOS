@@ -214,6 +214,11 @@ extension DocumentCanvasView: UITextInput {
             let rr = img.mediaRect()
             return CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height)
         }
+        // A collapsed quote is a media-shaped atom: its leading gap is a real caret slot. Report a vertical
+        // bar at its leading edge (same as a media gap) so the OS caret / loupe / scroll-follow have geometry.
+        if let cq = boxes.first(where: { ($0 as? CollapsedQuoteBox)?.nodeStart == pos }) as? CollapsedQuoteBox {
+            return CGRect(x: cq.frame.minX, y: cq.frame.minY, width: 2, height: cq.frame.height)
+        }
         return .zero
     }
 
@@ -263,7 +268,14 @@ extension DocumentCanvasView: UIKeyInput {
         // (Enter inserts an empty one), rather than letting the text fall into the caption. Symmetric
         // to deleteBackward's gap branch below.
         if selFrom == selTo, let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
-            editing { insertParagraphBeforeImage(at: i, text: text == "\n" ? "" : text) }
+            editing { insertBodyParagraph(beforeBoxAt: i, text: text == "\n" ? "" : text) }
+            return
+        }
+        // Caret on a collapsed quote's gap (reached by arrow-nav) → open a body paragraph before it, rather
+        // than letting the keystroke fall into the atom's display-only preview layout (where it would be
+        // silently dropped). Mirrors the media-gap branch above.
+        if selFrom == selTo, let cq = collapsedQuoteBox(atGap: head), let i = boxIndex(of: cq) {
+            editing { insertBodyParagraph(beforeBoxAt: i, text: text == "\n" ? "" : text) }
             return
         }
         if text == "\n" {
@@ -354,6 +366,31 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         imageObjectDeletePending = nil
+        // Backspace whose HEAD lands on a collapsed quote's LEADING gap (a block boundary, drawn at the quote's
+        // left edge). iOS delivers this two ways: a collapsed caret on the gap (arrow nav), OR — exactly like a
+        // media atom — an object-replacement RANGE anchored at the END of the PRECEDING block (device-log:
+        // `setRange anchor=2 head=4` then `deleteBackward selFrom=2 selTo=4`). That range covers only the
+        // structural slots before the gap (no real content), so `selFrom >= prevTextPosition(before: selTo)`
+        // admits it while excluding a genuine multi-char selection that merely ENDS at the gap. BOTH forms act on
+        // the previous block (delete its last grapheme / merge an empty one) — never deleting or expanding the
+        // quote. A LEADING collapsed quote (nothing before to receive the Backspace) expands instead.
+        if let cq = collapsedQuoteBox(atGap: selTo), selFrom >= prevTextPosition(before: selTo),
+           let idx = boxIndex(of: cq) {
+            if idx > 0, let p = boxes[idx - 1] as? BlockBox, p.textLength == 0 {
+                // Empty previous paragraph → remove it (the quote shifts up into its slot; its new gap equals the
+                // removed paragraph's old node start, so the caret stays on the quote's gap).
+                editing { removeBlock(at: idx - 1, parkingCaretAt: boxes[idx - 1].nodeStart) }
+            } else if idx > 0 {
+                // Previous block has content (or is a non-text atom) → delete backward into it (its last grapheme,
+                // a merge, etc.) via the normal Backspace path from the previous text position.
+                let prev = prevTextPosition(before: cq.nodeStart)
+                if prev != cq.nodeStart { setCaret(global: prev); deleteBackward() }
+            } else {
+                // Leading collapsed quote (nothing before to receive the Backspace) → expand so its content is editable.
+                expandCollapsedQuote(atIndex: idx)
+            }
+            return
+        }
         if tableSelection != nil {
             // A structural row/column selection is active → Backspace deletes those rows/columns (or the
             // whole table when every row/column is selected). The caret is parked in a cell, so the normal

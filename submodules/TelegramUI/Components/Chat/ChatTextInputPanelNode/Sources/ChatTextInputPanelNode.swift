@@ -825,6 +825,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }*/
         
         self.enableRichTextInput = true
+        if context.sharedContext.immediateExperimentalUISettings.forceLegacyTextInput {
+            self.enableRichTextInput = false
+        }
         if let data = self.context?.currentAppConfiguration.with({ $0 }).data, data["ios_killswitch_rich_input"] != nil {
             self.enableRichTextInput = false
         }
@@ -1256,6 +1259,14 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         recognizer.waitForTouchUp = {
             return true
         }
+        // This focus-on-tap recognizer sits on the whole editor inputView. With the default
+        // delaysTouchesEnded/cancelsTouchesInView it swallows the view's touchesEnded for the editor's OWN
+        // interactive sub-controls — notably the rich editor's collapse-quote UIButton, which then gets
+        // touchDown (highlights) but never .touchUpInside, so collapsing a quote did nothing in the composer
+        // (the article editor adds no such recognizer, so it worked there). It still fires its own touch
+        // callbacks for focus, so dropping the delay/cancel is safe.
+        recognizer.delaysTouchesEnded = false
+        recognizer.cancelsTouchesInView = false
         richTextInputNode.inputView.addGestureRecognizer(recognizer)
         self.touchDownGestureRecognizer = recognizer
         
@@ -1290,7 +1301,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 break
             }
         }
-        // The expand button (debugRichText) shares the inline AI button's slot, so reserve the same accessory width for either.
+        // The expand button (rich text input) shares the inline AI button's slot, so reserve the same accessory width for either.
         let isExpandInputEnabled = self.enableRichTextInput
         if (self.isAIEnabled || isExpandInputEnabled) && width >= 500.0 {
             if firstButton {

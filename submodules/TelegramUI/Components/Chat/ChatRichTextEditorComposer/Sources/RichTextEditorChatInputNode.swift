@@ -33,8 +33,9 @@ private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerVi
     }
 }
 
-/// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`. Selected on iOS 17+
-/// behind the `debugRichText` flag (see `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
+/// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`. The default composer on
+/// iOS 17+ (the `forceLegacyTextInput` flag opts back out to the legacy input — see
+/// `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
 /// display, layout, editing, and selection geometry; spoiler reveal, typing attributes, and the full
 /// delegate suite are safe stubs (Phase 2+).
 @available(iOS 13.0, *)
@@ -114,6 +115,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // document-editor behavior (the article editor keeps it). In the compact composer there is no empty
         // area below the content to grow into, so a tap there just places the caret in the trailing paragraph.
         self.editorView.tapBelowAddsTrailingParagraph = false
+        // Quote geometry for the compact composer. Defaults == the editor's built-in look; tune here to
+        // diverge from the article editor (e.g. tighter insets in the narrow input field).
+        self.editorView.quoteStyle = QuoteStyle()
 
         // Seed an editable document. RichTextEditorView starts with ZERO blocks — its canvas is only
         // populated by the `document` setter (which normalizes an empty Document to a single empty body

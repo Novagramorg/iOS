@@ -355,6 +355,9 @@ final class RichTextAttachmentScreenComponent: Component {
                 // changes when the frame — and a working reload width — exists.)
                 editor.theme = Self.mapEditorTheme(environment.theme)
                 self.appliedTheme = environment.theme
+                // Quote geometry for the full-page article editor. Defaults == the editor's built-in look;
+                // tune here to diverge from the chat composer.
+                editor.quoteStyle = QuoteStyle()
                 // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
                 // current document when expanding); an empty document when none is provided.
                 editor.document = component.initialContents ?? Document()

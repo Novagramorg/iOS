@@ -51,8 +51,8 @@ always-available), with only genuine higher-OS APIs kept at their real floor: th
 analog), no loupe, no inline predictions — everything else (editing, tables, lists, links, emoji, selection,
 IME, edit menu) works. Full SwiftPM suite is green on both engines (TK1 via the DEBUG `forceTextKit1`). The
 app-side consumers (`RichTextEditorChatInputNode`, `RichTextAttachmentScreen` + its helpers,
-`StandaloneInstantPageImageView`) are also lowered to iOS 13; the editor still only appears behind the
-`debugRichText` ("Debug Text") experimental flag.
+`StandaloneInstantPageImageView`) are also lowered to iOS 13; the editor is now the **default** chat composer,
+with the `forceLegacyTextInput` ("Force Legacy Text Input") experimental flag opting back out to the legacy input.
 
 **Spoiler-texture resource access is build-system-split (via `#if SWIFT_PACKAGE`).** `SpoilerDustView`
 resolves the particle texture two ways: under **SwiftPM** it uses `UIImage(named: "TextSpeckle", in:
@@ -764,7 +764,42 @@ free; raw enum value appended, optional Codable back-compat), threaded through `
 (both directions) and BOTH `Document→InstantPage` builders (`ChatInputContentInstantPage` for the composer +
 `RichTextEditorMessageConversion/InstantPageBuilder` for the attachment-screen send) into `InstantPageListItem.checked`.
 Recipient checkboxes are display-only/static; the SENDER can re-edit (falls out of the reverse bridge). No
-strikethrough on checked text (matches the InstantPage rendering). Behind `debugRichText`; runtime-verified.
+strikethrough on checked text (matches the InstantPage rendering). Default-on (legacy via `forceLegacyTextInput`); runtime-verified.
+
+## Configurable quote geometry + collapsed quotes (added 2026-06-28)
+
+Two related quote features. **(1) Per-host quote geometry** — a `QuoteStyle` value (leading/trailing inset,
+spacing before/after, bar width, corner radius, fill alpha) set via `RichTextEditorView.quoteStyle` and applied
+through `DocumentCanvasView.applyQuoteStyle` (rebuilds the mapper stylesheet); the full-page article editor and the
+compact chat composer pass different values. **(2) Collapsed quotes** — a first-class
+`Block.collapsedQuote(CollapsedQuote)` atom (legacy chat-input parity) reusing the AUDIO-media DocNode shape
+(`mediaBlock`+`mediaAtom`, nodeSize 3, caption-less; the leading gap is the caret slot). `CollapsedQuoteBox` draws
+the folded preview + a corner expand glyph; `collapseQuoteRun(atIndex:)` folds a run of consecutive quotes into one
+atom, `expandCollapsedQuote(atIndex:)` restores them — caret relocation on collapse/expand is conditional (only a
+caret that was INSIDE the run moves). Composer round-trip: one flat char + `ChatTextInputTextQuoteAttribute(
+isCollapsed: true)` via `ComposerDocumentBridge`, sent through the InstantPage builder. Available in both hosts
+(the composer is the default rich-text input; `forceLegacyTextInput` opts out). Runtime-verified.
+
+**Collapsed-quote atom — caret/nav/delete invariants (compiler-invisible, device-log-verified).** The collapsed
+quote behaves like a caption-less media atom: it owns NO leaf region (`leafRegions() == []`), so it routes through
+the same gap machinery as audio media via `collapsedQuoteBox(atGap:)` (mirroring `mediaBox(atGap:)`).
+- **Caret** at the gap draws at the quote's leading edge (`caretRect` / `caretHostPlacement`); a range covers it
+  (`coverableContentEnd == nodeStart + 1`). **Tap** the body to place the caret at the gap; tap the corner glyph to
+  expand.
+- **Horizontal nav** stops on the gap (`nextTextPosition` / `prevTextPosition` via `atomGap`); `snapToRenderable`
+  treats the gap as renderable.
+- **Vertical nav MUST step THROUGH the gap** — `verticalPosition` has an explicit `collapsedQuoteBox(atGap:)` branch
+  (Down → block after, Up → end of block above), mirroring the media-gap branch. Without it a multi-line move (the
+  OS's `position(from:in:.up/.down, offset: 2)`) STALLS on the gap (offset:2 == offset:1); the OS reads "no
+  progress", abandons `position(from:in:)`, and falls back to its own line geometry that SKIPS the captionless atom
+  (the intermittent "arrow jumps over the quote" bug).
+- **Backspace** at the gap acts on the PREVIOUS block, never the quote: a non-empty previous paragraph loses its
+  last grapheme, an EMPTY one is removed (caret stays on the quote's gap), a LEADING collapsed quote (nothing
+  before) expands. LOAD-BEARING: iOS delivers this Backspace as an object-replacement RANGE anchored at the
+  previous block's end (`selFrom = prevTextPosition(before: gap)`, `selTo = gap`) — exactly like a media atom — so
+  the handler fires on `selTo` being a collapsed gap AND `selFrom >= prevTextPosition(before: selTo)` (admits the
+  range AND the collapsed caret; excludes a genuine selection that merely ends at the gap), NOT on `selFrom ==
+  selTo`. (Same "capture the device log, don't hypothesise twice" lesson as the media object-replacement-range case.)
 
 ## Status
 

@@ -67,6 +67,14 @@ public func chatInputContent(
             )))
         case let .table(table):
             blocks.append(.table(chatInputTable(fromTable: table, resolveEmoji: resolveEmoji)))
+        case let .collapsedQuote(cq):
+            // Editor collapsed-quote atom → currency .collapsedQuote, recursing its folded quote paragraphs.
+            let innerBlocks: [ChatInputBlock] = cq.paragraphs.map {
+                .paragraph(ChatInputParagraph(style: .quote(isCollapsed: false),
+                                              list: nil,
+                                              runs: chatInputRuns(fromRuns: $0.runs, resolveEmoji: resolveEmoji)))
+            }
+            blocks.append(.collapsedQuote(ChatInputContent(blocks: innerBlocks)))
         }
     }
     return ChatInputContent(blocks: blocks)
@@ -187,6 +195,12 @@ private func cellRuns(fromBlocks blocks: [Block]) -> [TextRun] {
         case .table:
             // A nested table has no flat-run form; contribute nothing.
             break
+        case let .collapsedQuote(cq):
+            // A collapsed quote in a table cell: flatten its folded paragraph runs inline
+            // (a table cell is inline-only; the folded structure can't be represented).
+            for paragraph in cq.paragraphs {
+                runs.append(contentsOf: paragraph.runs)
+            }
         }
     }
     return runs
@@ -244,7 +258,7 @@ private func chatInputInlineAttributes(
 
 /// Convert the chat-layer `ChatInputContent` value model back to an editor `Document`. `registerEmoji` and
 /// `registerMedia` hand the chat-layer identity back to the host and return the editor-side ref/key for it.
-/// A `.collapsedQuote` (no editor analogue) is flattened to expanded quote paragraphs.
+/// A `.collapsedQuote` currency block round-trips to a real `Block.collapsedQuote` atom (lossless).
 public func document(
     fromChatInputContent content: ChatInputContent,
     registerEmoji: (Int64, TelegramMediaFile?) -> EmojiRef,
@@ -257,8 +271,7 @@ public func document(
     return Document(blocks: blocks)
 }
 
-/// One chat-input block maps to one or more editor blocks (a `.collapsedQuote` expands to N quote
-/// paragraphs).
+/// One chat-input block maps to one or more editor blocks.
 private func documentBlocks(
     fromChatInputBlock block: ChatInputBlock,
     registerEmoji: (Int64, TelegramMediaFile?) -> EmojiRef,
@@ -279,21 +292,22 @@ private func documentBlocks(
             runs: runs(fromChatInputRuns: code.runs, registerEmoji: registerEmoji)
         ))]
     case let .collapsedQuote(inner):
-        // The editor has no folded-quote block — flatten the inner content's blocks to EXPANDED quote
-        // paragraphs (recursing, so a nested collapsed quote also flattens). A non-paragraph inner block is
-        // re-mapped normally (it keeps its own block type), then any inner paragraph is forced to `.quote`.
-        var result: [Block] = []
+        // Build a real editor collapsed-quote atom (no longer flatten to expanded quotes). The folded
+        // content is the inner blocks mapped to quote paragraphs (recursing; a non-paragraph inner block
+        // is mapped normally then forced to .quote, matching the prior flatten's paragraph handling).
+        var folded: [ParagraphBlock] = []
         for innerBlock in inner.blocks {
             for mapped in documentBlocks(fromChatInputBlock: innerBlock, registerEmoji: registerEmoji, registerMedia: registerMedia) {
                 if case var .paragraph(paragraph) = mapped {
                     paragraph.style = .quote
-                    result.append(.paragraph(paragraph))
-                } else {
-                    result.append(mapped)
+                    folded.append(paragraph)
+                } else if case let .collapsedQuote(nested) = mapped {
+                    folded.append(contentsOf: nested.paragraphs)   // flatten a nested collapsed quote into this one
                 }
+                // non-paragraph, non-collapsed inner blocks (media/table) are dropped — a folded quote holds paragraphs only
             }
         }
-        return result
+        return [.collapsedQuote(CollapsedQuote(id: BlockID.generate(), paragraphs: folded))]
     case let .media(media):
         return [.media(MediaBlock(
             id: BlockID.generate(),

@@ -28,6 +28,19 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host quote geometry (insets, spacing, bar/fill). Defaults reproduce the editor's built-in look.
+    /// Set before the first `update(...)`/document seed (the compact-host knob convention); assigning it
+    /// after content reloads the boxes so the new geometry takes effect (like `theme`).
+    public var quoteStyle: QuoteStyle = .default {
+        didSet {
+            canvas.applyQuoteStyle(quoteStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Whole-document writing-direction override. `.auto` (default) auto-detects per paragraph; the forced
     /// cases pin the whole editor. Modeled like `theme`: assigning re-applies to the live mapper and
     /// reloads (resetting the live selection) when the view is sized, so boxes rebuild with the direction.
@@ -232,6 +245,11 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Inserts an empty `rows`×`cols` table (row 0 a header) at the caret. No-op unless the caret is in
     /// a top-level paragraph.
     public func insertTable(rows: Int, cols: Int) { canvas.insertTable(rows: rows, columns: cols) }
+
+    /// Collapse the quote run containing the block at `blockIndex` into a folded `.collapsedQuote` (one undo step).
+    public func collapseQuoteRun(atBlockIndex blockIndex: Int) { canvas.collapseQuoteRun(atIndex: blockIndex) }
+    /// Expand the `.collapsedQuote` at `blockIndex` back to quote paragraphs (one undo step).
+    public func expandCollapsedQuote(atBlockIndex blockIndex: Int) { canvas.expandCollapsedQuote(atIndex: blockIndex) }
 
     /// Sets `url` as a link over the current selection (no-op if the selection is empty).
     public func setLink(_ url: String) { canvas.setLink(url) }

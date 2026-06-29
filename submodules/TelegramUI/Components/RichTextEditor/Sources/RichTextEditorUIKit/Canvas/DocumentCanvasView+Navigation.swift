@@ -19,11 +19,22 @@ extension DocumentCanvasView {
             }
             guard i + 1 < regions.count else { return pos }
             let nextStart = regions[i + 1].globalStart
-            let gap = nextStart - 2
-            return isGapPosition(gap) ? gap : nextStart
+            // Stop at an atom gap (media OR collapsed quote) sitting between this region and the next.
+            if let gap = atomGap(in: pos..<nextStart) { return gap }
+            return nextStart
         }
-        if let img = mediaBox(atGap: pos) { return img.textStart }   // on a gap → into the caption
+        if let img = mediaBox(atGap: pos) { return img.textStart }   // media gap → into the caption
+        if collapsedQuoteBox(atGap: pos) != nil {
+            // a collapsed quote has no caption — step to the next region after it (or the doc end)
+            return regions.first(where: { $0.globalStart > pos })?.globalStart ?? documentSize
+        }
         return min(pos + 1, documentSize)
+    }
+
+    /// The leading gap (`nodeStart`) of an atom box — media or collapsed quote — within `range`, the caret
+    /// stop between two text regions separated by that atom. At most one atom sits between two regions.
+    private func atomGap(in range: Range<Int>) -> Int? {
+        boxes.compactMap { ($0 is MediaBlockBox || $0 is CollapsedQuoteBox) && range.contains($0.nodeStart) ? $0.nodeStart : nil }.min()
     }
 
     /// Previous text position to the left: within the current region, or to the previous region's
@@ -38,13 +49,18 @@ extension DocumentCanvasView {
                 let r = s.rangeOfComposedCharacterSequence(at: local - 1)
                 return regions[i].globalStart + r.location
             }
-            let gap = regions[i].globalStart - 2
-            if isGapPosition(gap) { return gap }
-            if i > 0 { return regions[i - 1].globalStart + regions[i - 1].length }
+            let prevEnd = i > 0 ? regions[i - 1].globalStart + regions[i - 1].length : 0
+            // Stop at an atom gap (media OR collapsed quote) between the previous region and this one.
+            if let gap = atomGap(in: prevEnd..<regions[i].globalStart) { return gap }
+            if i > 0 { return prevEnd }
             return pos
         }
-        if let img = mediaBox(atGap: pos) {   // on a gap → previous block's text end, or doc start
+        if let img = mediaBox(atGap: pos) {   // media gap → previous block's text end, or doc start
             if let idx = boxIndex(of: img), idx > 0 { return boxes[idx - 1].textStart + boxes[idx - 1].textLength }
+            return 0
+        }
+        if let cq = collapsedQuoteBox(atGap: pos) {   // collapsed-quote gap → previous block's text end
+            if let idx = boxIndex(of: cq), idx > 0 { return boxes[idx - 1].textStart + boxes[idx - 1].textLength }
             return 0
         }
         return max(pos - 1, 0)
@@ -75,7 +91,7 @@ extension DocumentCanvasView {
         // Candidate renderable slots: each leaf region's start and end, plus each image gap.
         var candidates: [Int] = []
         for r in allLeafRegions() { candidates.append(r.globalStart); candidates.append(r.globalStart + r.length) }
-        for box in boxes where box is MediaBlockBox { candidates.append(box.nodeStart) }
+        for box in boxes where box is MediaBlockBox || box is CollapsedQuoteBox { candidates.append(box.nodeStart) }
         guard !candidates.isEmpty else { return p }
         let atOrAfter = candidates.filter { $0 >= p }.min()
         let atOrBefore = candidates.filter { $0 <= p }.max()
@@ -130,6 +146,19 @@ extension DocumentCanvasView {
             // dependency (does not reintroduce the determinism issue the scroll fix solved).
             let col = (above as? TableBlockBox).map { $0.columnIndex(atX: img.mediaRect().minX + $0.contentOffsetX) } ?? 0
             return entryPositionBottom(of: above, preferColumn: col)   // table → LAST row @col; image → gap; paragraph → end
+        }
+        // A collapsed quote's gap is a caption-less atom slot owning NO leaf region, exactly like a media gap.
+        // Without this branch the geometric path below stalls on it (`leafRegion(...) == nil → return pos`), so a
+        // MULTI-line vertical move sticks on the gap (offset:2 returns the same as offset:1); the OS reads that
+        // as "no progress", abandons `position(from:in:)`, and falls back to its own line geometry — which skips
+        // the captionless quote (the intermittent "Up/Down jumps over the collapsed quote" bug, device-log
+        // confirmed). Step to the structural neighbour: Down → the block after the quote, Up → the block above.
+        if let cq = collapsedQuoteBox(atGap: pos), let idx = boxIndex(of: cq) {
+            if down { return nextTextPosition(after: pos) }   // → start of the block after the quote
+            guard idx > 0 else { return pos }                 // leading quote → nothing above to move to
+            let above = boxes[idx - 1]
+            let col = (above as? TableBlockBox).map { $0.columnIndex(atX: cq.frame.minX + $0.contentOffsetX) } ?? 0
+            return entryPositionBottom(of: above, preferColumn: col)
         }
         guard let (region, local) = leafRegion(containingGlobal: pos) else { return pos }
         let caret = region.layout.caretRect(atOffset: local).offsetBy(dx: region.canvasOrigin.x, dy: region.canvasOrigin.y)

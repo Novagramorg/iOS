@@ -9,7 +9,7 @@ extension RichTextEditorView {
     /// to hide the overlay. Changes take effect on the next layout or scroll pass (type a character / scroll,
     /// or the next `update`). Compiled out of release builds entirely (`#if DEBUG`), so there is no flag,
     /// overlay, or hook in release.
-    public static var debugShowLayoutOverlay = true
+    public static var debugShowLayoutOverlay = false
 
     /// Installs/updates (or removes) the layout-debug overlay to match `debugShowLayoutOverlay`. Called from
     /// `performLayout` and `scrollViewDidScroll`. Reads geometry through `bounds` / `debugContentInset` /

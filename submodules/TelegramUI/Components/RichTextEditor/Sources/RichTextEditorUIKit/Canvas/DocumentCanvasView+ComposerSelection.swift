@@ -37,6 +37,21 @@ extension DocumentCanvasView {
         var result: [ComposerParagraph] = []
         var flat = 0
         for box in boxes {
+            if box is CollapsedQuoteBox {
+                // A collapsed quote is an off-the-editable-axis ATOM (`leafRegions() == []`) but contributes
+                // EXACTLY ONE flat placeholder char, matching `ChatInputContent.collapsedQuote` (blockFlatLength
+                // == 1, plainText " "). `length` stays 0: the getter (`composerFlatOffset`) advances flat 1:1
+                // with the global axis (plus emoji expansion), so it can only EXPAND a region — it cannot
+                // compress an atom's 3-token global span down to 1 flat unit. A wider `length` would make a real
+                // caret at the NEXT block's start (global == nodeStart + nodeSize) fall inside this segment and
+                // map past `flatStart` (the caret drifts). With length 0 the segment is a single global point at
+                // `nodeStart` (non-renderable, never a real caret), so it never steals a neighbor's position.
+                if !result.isEmpty { flat += 1 }   // the "\n" joining this block to the previous one
+                result.append(ComposerParagraph(globalStart: box.nodeStart, length: 0,
+                                                flatLength: 1, flatStart: flat, emoji: []))
+                flat += 1
+                continue
+            }
             guard (box is BlockBox || box is CodeBlockBox), let region = box.leafRegions().first else { continue }
             if !result.isEmpty { flat += 1 }   // the "\n" that joins this paragraph to the previous one
             let emoji = composerEmojiOccurrences(in: region)
@@ -142,8 +157,14 @@ extension DocumentCanvasView {
             let a = composerGlobal(forFlat: newValue.location, in: paragraphs)
             let h = composerGlobal(forFlat: newValue.location + newValue.length, in: paragraphs)
             // Programmatic selection move — bracket it so the OS keeps a fresh `selectedTextRange`.
+            // Snap each global to the nearest renderable slot: a flat offset that lands on the "\n"
+            // immediately after a collapsed quote maps via `composerGlobal` to a position INSIDE the
+            // collapsed atom (non-renderable), causing the getter to fall through to end-of-document.
+            // `snapToRenderable(_:forward:true)` is a no-op for already-renderable positions, so
+            // existing round-trip tests are unaffected.
             textInputDelegate?.selectionWillChange(self)
-            anchor = clampGlobal(a); head = clampGlobal(h)
+            anchor = snapToRenderable(clampGlobal(a), forward: true)
+            head   = snapToRenderable(clampGlobal(h), forward: true)
             textInputDelegate?.selectionDidChange(self)
             setNeedsDisplay(); refreshSelectionUI(); onSelectionChange?()
         }

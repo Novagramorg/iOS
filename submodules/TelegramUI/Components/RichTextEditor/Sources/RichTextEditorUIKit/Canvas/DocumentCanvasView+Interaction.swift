@@ -153,6 +153,19 @@ extension DocumentCanvasView {
             return
         }
         let p = closestGlobalPosition(to: point)
+        // Tap on a collapsed quote (an image-like atom): the corner "expand" glyph unfolds it; a tap ELSEWHERE
+        // on it places the caret at its leading gap (drawn at the left edge), like tapping an image — so the
+        // cursor can be positioned at the collapsed quote instead of the whole atom always expanding.
+        if let cq = boxes.first(where: { ($0 as? CollapsedQuoteBox)?.frame.contains(point) == true }) as? CollapsedQuoteBox,
+           let idx = boxes.firstIndex(where: { $0 === cq }) {
+            clearStructuralSelections()   // match the normal caret path; prevents stale table row/column highlight
+            if cq.expandGlyphRect().insetBy(dx: -12, dy: -12).contains(point) {
+                expandCollapsedQuote(atIndex: idx)
+            } else {
+                setCaret(global: cq.nodeStart)
+            }
+            return
+        }
         // Tap on an image body (resolves to its gap AND the point is inside the image) → atom-select /
         // menu. MUST precede the clear below (else a 2nd tap on a selected image would clear it before
         // its menu could open).
@@ -177,6 +190,9 @@ extension DocumentCanvasView {
             setCaret(global: q)
         }
     }
+
+    /// Test seam: calls the same code path as a real single tap without needing a gesture recognizer.
+    func performSingleTapForTesting(at point: CGPoint) { performSingleTap(at: point) }
 
     // Long press places the caret and (on release) presents the menu, with a magnifier loupe
     // (`UITextLoupeSession`, iOS 17+) tracking the caret during the drag.

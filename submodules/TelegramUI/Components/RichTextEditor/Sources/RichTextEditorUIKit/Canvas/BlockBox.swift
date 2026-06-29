@@ -122,7 +122,7 @@ final class BlockBox {
     var textRef: TextNodeRef { .paragraph(id) }
     var height: CGFloat { max(layout.boundingHeight, emptyLineHeight) + topInset + bottomInset }
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        max(layout.boundingHeight(forWidth: max(width - textInset.x * 2, 1)), emptyLineHeight) + topInset + bottomInset
+        max(layout.boundingHeight(forWidth: max(width - textInset.x * 2 - quoteContentWidthInset, 1)), emptyLineHeight) + topInset + bottomInset
     }
     var textOrigin: CGPoint { CGPoint(x: frame.minX + textInset.x, y: frame.minY + topInset) }
 
@@ -153,7 +153,11 @@ final class BlockBox {
                                                 baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection).firstLineHeadIndent
     }
 
-    func setWidth(_ width: CGFloat) { layout.setWidth(max(width - textInset.x * 2, 1)) }
+    /// Extra horizontal content-width reduction beyond `textInset`, applied to quotes so their text wraps
+    /// before the fill's trailing edge. Non-quote blocks reduce by 0 (unchanged).
+    private var quoteContentWidthInset: CGFloat { style == .quote ? mapper.styleSheet.quoteTrailingInset : 0 }
+
+    func setWidth(_ width: CGFloat) { layout.setWidth(max(width - textInset.x * 2 - quoteContentWidthInset, 1)) }
 
     /// Y (relative to `textOrigin.y`) at which a list marker's baseline must sit to align with this
     /// paragraph's first text line. Uses the real laid-out baseline when text exists; for an empty list

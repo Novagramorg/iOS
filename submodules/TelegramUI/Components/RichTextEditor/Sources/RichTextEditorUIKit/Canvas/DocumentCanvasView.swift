@@ -33,6 +33,10 @@ final class DocumentCanvasView: UIView {
     var checklistMarkerViews: [BlockID: HostedChecklistMarker] = [:]
     /// Back-most container for blockquote run fills (see `BlockquoteUnderlay`). Behind every block view.
     let blockquoteUnderlay = BlockquoteUnderlay()
+    /// Interactive overlay hosting the per-run collapse buttons for tall expanded quote runs. Brought to
+    /// the front each layout pass so it sits above text + block views; its `hitTest` passes only button
+    /// touches, letting all other touches fall through to the canvas.
+    let quoteCollapseControls = QuoteCollapseControlsView()
     /// Non-interactive container for body/caption emoji views (canvas coords). Kept below the chrome
     /// overlay (which is brought to front each layout pass). Cell emoji live in the table content view.
     let emojiOverlay = UIView()
@@ -150,6 +154,10 @@ final class DocumentCanvasView: UIView {
     /// single paragraph hugs its text height instead of carrying the inter-paragraph gap. Applied to the
     /// root stack in `layoutContent`; nested (table-cell) stacks keep the document default.
     var blockVerticalInset: CGFloat = BlockBox.defaultVerticalInset
+
+    /// Per-host quote geometry. Applied via `applyQuoteStyle(_:)` (rebuilds the mapper stylesheet + pushes
+    /// render values to the underlay). Read by `blockquoteDecorations()` for the bar width.
+    var quoteStyle: QuoteStyle = .default
 
     /// Placeholder strings drawn in empty paragraphs. Stamped onto each top-level box during layout.
     /// Defaults to the editor's built-in hints; a compact host (chat composer) sets them to "" to suppress
@@ -335,6 +343,10 @@ final class DocumentCanvasView: UIView {
         selectionHighlight.canvas = self
         addSubview(selectionHighlight)   // selection wash, above text + emoji, below chrome
         addSubview(blockChromeOverlay)
+        // Interactive collapse-button overlay: above text/chrome, but hitTest passes only button touches
+        // so caret placement / text selection / table chrome all still work through it.
+        quoteCollapseControls.onCollapse = { [weak self] idx in self?.collapseQuoteRun(atIndex: idx) }
+        addSubview(quoteCollapseControls)
         addSubview(caretView)   // own caret, above content; reparented into a table's content view when needed
         addSubview(transientCaretView)   // own floating caret, above content; reparented like caretView
         addSubview(startHandleView)   // own-drawn selection handles, hosted per-endpoint like the caret
@@ -431,6 +443,25 @@ final class DocumentCanvasView: UIView {
         self.startHandleView.accentColor = theme.accent
         self.endHandleView.accentColor = theme.accent
         self.blockquoteUnderlay.accentColor = theme.accent
+        self.quoteCollapseControls.accentColor = theme.accent
+    }
+
+    /// Applies quote geometry: rebuilds the mapper's stylesheet with the indent/trailing/spacing fields
+    /// (preserving theme/emojiScale/writing-direction — the stylesheet is immutable) and pushes the
+    /// render-only bar/radius/fill values to the underlay. The caller reloads afterward (mirrors applyTheme).
+    func applyQuoteStyle(_ q: QuoteStyle) {
+        self.quoteStyle = q
+        var s = self.mapper.styleSheet
+        s.quoteIndent = q.leadingInset
+        s.quoteTrailingInset = q.trailingInset
+        s.quoteSpacingBefore = q.spacingBefore
+        s.quoteSpacingAfter = q.spacingAfter
+        self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
+                                             theme: self.mapper.theme,
+                                             baseWritingDirection: self.mapper.baseWritingDirection)
+        self.blockquoteUnderlay.barWidth = q.barWidth
+        self.blockquoteUnderlay.cornerRadius = q.cornerRadius
+        self.blockquoteUnderlay.fillAlpha = q.fillAlpha
     }
 
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose
@@ -451,6 +482,7 @@ final class DocumentCanvasView: UIView {
             case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width)
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
             case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
+            case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, width: width)
             }
         }
         recomputeSpans()
@@ -715,6 +747,9 @@ final class DocumentCanvasView: UIView {
         blockquoteUnderlay.frame = bounds
         sendSubviewToBack(blockquoteUnderlay)
         syncBlockquoteUnderlay()
+        quoteCollapseControls.frame = bounds
+        bringSubviewToFront(quoteCollapseControls)       // interactive: above underlay + text block views
+        quoteCollapseControls.sync(runs: collapseButtonRuns())
         emojiOverlay.frame = bounds
         syncEmojiViews()
         syncChecklistMarkerViews()
@@ -791,6 +826,14 @@ final class DocumentCanvasView: UIView {
         for case let img as MediaBlockBox in boxes {
             if let rect = imageSelectionTintRect(for: img) { ctx.fill(rect) }
         }
+        // Collapsed-quote atom wash when a range selection covers it (it has no leaf region, so the
+        // text-region highlight above skips it) — mirrors the image-atom wash so a collapsed quote reads as
+        // selected like an image block.
+        if selFrom != selTo {
+            for case let cq as CollapsedQuoteBox in boxes where selFrom <= cq.nodeStart && selTo >= coverableContentEnd(cq) {
+                ctx.fill(cq.frame)
+            }
+        }
     }
 
     /// True if `region` belongs to a table (its global start falls in a `TableBlockBox`'s node span). Such
@@ -864,14 +907,22 @@ final class DocumentCanvasView: UIView {
     /// unscrolled-canvas rect into a VISIBLE canvas rect.
     func tableContentOffsetX(forGlobal pos: Int) -> CGFloat { tableBox(containingGlobal: pos)?.contentOffsetX ?? 0 }
 
-    /// True if `pos` is the gap before a media atom (a media box's `nodeStart`).
+    /// True if `pos` is the gap before an atom (a media OR collapsed-quote box's `nodeStart`).
+    /// A collapsed quote reuses the media-atom DocNode shape, so its leading gap is a renderable caret slot
+    /// too — `isGapPosition`/`snapToRenderable`/`caretRect` must recognize it alongside `MediaBlockBox`, or the
+    /// post-collapse caret (parked at the atom's `nodeStart`) is non-renderable and the composer offset drifts.
     func isGapPosition(_ pos: Int) -> Bool {
-        boxes.contains { $0 is MediaBlockBox && $0.nodeStart == pos }
+        boxes.contains { ($0 is MediaBlockBox || $0 is CollapsedQuoteBox) && $0.nodeStart == pos }
     }
 
     /// The media box whose gap-before-atom is at `pos`, if any.
     func mediaBox(atGap pos: Int) -> MediaBlockBox? {
         boxes.first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
+    }
+
+    /// The collapsed-quote box whose gap-before-atom is at `pos`, if any.
+    func collapsedQuoteBox(atGap pos: Int) -> CollapsedQuoteBox? {
+        boxes.first { ($0 as? CollapsedQuoteBox)?.nodeStart == pos } as? CollapsedQuoteBox
     }
 
     /// If the caret (`head`) is inside a horizontally-scrollable table, scroll its cell into view.
@@ -1136,6 +1187,10 @@ final class DocumentCanvasView: UIView {
         } else if let img = mediaBox(atGap: pos) {
             let rr = img.mediaRect()
             return (self, CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height))
+        } else if let cq = collapsedQuoteBox(atGap: pos) {
+            // A caret on a collapsed quote's gap draws as a bar at its leading (left) edge — like the media
+            // gap cursor. Without this branch the caret had no placement here and was hidden.
+            return (self, CGRect(x: cq.frame.minX, y: cq.frame.minY, width: 2, height: cq.frame.height))
         }
         return nil
     }

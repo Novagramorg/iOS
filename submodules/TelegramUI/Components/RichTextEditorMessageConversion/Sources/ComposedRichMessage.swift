@@ -40,7 +40,7 @@ func normalizedBlocks(_ blocks: [Block], media: [String: Media]) -> [Block] {
     var out: [Block] = []
     for block in blocks {
         switch block {
-        case .paragraph, .table, .code:
+        case .paragraph, .table, .code, .collapsedQuote:
             out.append(block)
         case let .media(mediaBlock):
             if media[mediaBlock.mediaID] != nil {
@@ -94,6 +94,9 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
             // A code block is entity-expressible (.Pre) and does NOT force the rich path — it round-trips
             // through the normal text+entities builder (buildEntityMessage).
             break
+        case .collapsedQuote:
+            // A collapsed quote can't be represented as plain text + entities → always forces the rich path.
+            return true
         }
     }
     return false

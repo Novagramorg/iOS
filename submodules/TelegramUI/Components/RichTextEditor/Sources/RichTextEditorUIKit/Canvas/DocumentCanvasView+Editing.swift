@@ -172,7 +172,7 @@ extension DocumentCanvasView {
     /// an empty paragraph instead of the block (and never deletes the block). A `BlockBox` (body / heading /
     /// quote / list paragraph) is text and merges normally.
     func isNonParagraphAtom(_ box: CanvasBlock) -> Bool {
-        box is MediaBlockBox || box is TableBlockBox || box is CodeBlockBox
+        box is MediaBlockBox || box is TableBlockBox || box is CodeBlockBox || box is CollapsedQuoteBox
     }
 
     /// The position just past a media/code block's coverable content, for the Select-All / covered-range
@@ -181,6 +181,9 @@ extension DocumentCanvasView {
     /// collapsed `textStart + textLength` (which equals `nodeStart` for audio).
     func coverableContentEnd(_ box: CanvasBlock) -> Int {
         if let m = box as? MediaBlockBox, m.kind == .audio { return box.nodeStart + 1 }
+        // A collapsed quote is also a caption-less atom (textLength == 0, textStart == nodeStart), so its
+        // "coverable content" is a single position past the gap — mirroring the audio shape exactly.
+        if box is CollapsedQuoteBox { return box.nodeStart + 1 }
         return box.textStart + box.textLength
     }
 
@@ -434,10 +437,12 @@ extension DocumentCanvasView {
         }
     }
 
-    /// Inserts a new body paragraph immediately before the (top-level) image box at `index`, containing
-    /// `text` (empty for a bare newline). Caret lands at the end of the inserted text in the new
-    /// paragraph. Mirrors `insertMedia`'s block-insert. Caller wraps this in `editing { … }`.
-    func insertParagraphBeforeImage(at index: Int, text: String) {
+    /// Inserts a new body paragraph immediately before the (top-level) ATOM box at `index` — a media block
+    /// or a collapsed quote — containing `text` (empty for a bare newline). The caret lands at the end of the
+    /// inserted text. Used when a keystroke arrives with the caret on an atom's leading gap, so it opens a
+    /// normal paragraph there instead of falling into the atom's (display-only) layout. Mirrors `insertMedia`'s
+    /// block-insert. Caller wraps this in `editing { … }`.
+    func insertBodyParagraph(beforeBoxAt index: Int, text: String) {
         guard boxes.indices.contains(index) else { return }
         let runs = text.isEmpty ? [] : [TextRun(text: text)]
         let newBox = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), runs: runs),

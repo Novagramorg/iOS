@@ -38,6 +38,7 @@ enum ComposerDocumentBridge {
             for pRange in paragraphRanges {
                 var runs: [TextRun] = []
                 var isQuote = false
+                var isCollapsedQuote = false
                 if pRange.length > 0 {
                     attributedText.enumerateAttributes(in: pRange, options: []) { dict, range, _ in
                         if let emoji = dict[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
@@ -76,15 +77,28 @@ enum ComposerDocumentBridge {
                         // quote. (The forward path only ever emits `.quote`, mirroring EntityMessageBuilder.)
                         if let quote = dict[ChatTextInputAttributes.block] as? ChatTextInputTextQuoteAttribute, case .quote = quote.kind {
                             isQuote = true
+                            if quote.isCollapsed { isCollapsedQuote = true }
                         }
                         runs.append(TextRun(text: runText, attributes: ca))
                     }
                 }
-                blocks.append(.paragraph(ParagraphBlock(
-                    id: BlockID.generate(),
-                    style: isQuote ? .quote : .body,
-                    runs: runs
-                )))
+                if isCollapsedQuote {
+                    // Mirror the forward path's 1-char collapsed-quote placeholder back to a `.collapsedQuote`
+                    // atom so the collapsed STATE round-trips (collapsed stays collapsed). The placeholder
+                    // carries no folded content — full fidelity rides the direct `chatInputContent` bridge — so
+                    // the folded body degrades to the placeholder run here; the native node never relies on this
+                    // path for structural content (it uses `setInputContent`).
+                    blocks.append(.collapsedQuote(CollapsedQuote(
+                        id: BlockID.generate(),
+                        paragraphs: [ParagraphBlock(id: BlockID.generate(), style: .quote, runs: runs)]
+                    )))
+                } else {
+                    blocks.append(.paragraph(ParagraphBlock(
+                        id: BlockID.generate(),
+                        style: isQuote ? .quote : .body,
+                        runs: runs
+                    )))
+                }
             }
         }
 
@@ -143,6 +157,26 @@ enum ComposerDocumentBridge {
                     result.addAttribute(attr.key, value: attr.value, range: NSRange(location: start, length: len))
                 }
                 prevWasQuote = false  // a code block breaks the quote-fusion chain (code and quote never fuse)
+                continue
+            }
+            if case .collapsedQuote = block {
+                // A collapsed quote occupies exactly ONE flat placeholder char — matching the editor's composer
+                // flat axis (`composerSelectedRange`) and `ChatInputContent.collapsedQuote` (both count it as 1).
+                // It carries a COLLAPSED quote attribute on that single char. Emitting 0 chars (the old
+                // `guard case .paragraph else continue`) made `attributedText` SHORTER than `selectedRange`, so
+                // indexing it by the flat caret offset (e.g. the emoji-suggestion substring) crashed out of
+                // bounds. The folded content is intentionally NOT carried in `attributedText`: the native node
+                // round-trips structure via the direct `chatInputContent(fromDocument:)` bridge, not this string.
+                if !isFirstParagraph {
+                    result.append(NSAttributedString(string: "\n", attributes: [.font: baseFont]))
+                }
+                isFirstParagraph = false
+                let piece = NSMutableAttributedString(string: " ", attributes: [.font: baseFont])
+                piece.addAttribute(ChatTextInputAttributes.block,
+                                   value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: true),
+                                   range: NSRange(location: 0, length: piece.length))
+                result.append(piece)
+                prevWasQuote = false   // a collapsed quote is its own atom — never fuse with adjacent quotes
                 continue
             }
             guard case let .paragraph(paragraph) = block else { continue }

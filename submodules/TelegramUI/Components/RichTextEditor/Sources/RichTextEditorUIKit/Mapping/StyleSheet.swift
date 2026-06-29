@@ -16,6 +16,17 @@ public struct StyleSheet {
     /// Base point size for body and quote paragraphs — 17pt in the document body, 15pt inside table
     /// cells (see `tableCells`). Headings and captions have fixed sizes independent of this.
     public var bodyBaseSize: CGFloat = 17
+    /// Leading indent (points) of a quote paragraph's text past its fill's left edge — the gap that
+    /// holds the quote bar. Default 16 (the reference design). Per-host via `QuoteStyle.leadingInset`.
+    public var quoteIndent: CGFloat = 16
+    /// Interior right padding (points) of a quote: the text container is narrowed by this so text wraps
+    /// before the fill's trailing edge (the fill still spans the full content width). Default 0.
+    /// Consumed by `BlockBox` (Task 2). Per-host via `QuoteStyle.trailingInset`.
+    public var quoteTrailingInset: CGFloat = 0
+    /// Paragraph spacing above each quote paragraph (points). Default 8. Per-host via `QuoteStyle.spacingBefore`.
+    public var quoteSpacingBefore: CGFloat = 8
+    /// Paragraph spacing below each quote paragraph (points). Default 8. Per-host via `QuoteStyle.spacingAfter`.
+    public var quoteSpacingAfter: CGFloat = 8
 
     /// Points of indentation per list nesting level (where each level's marker hangs).
     public static let listIndentStep: CGFloat = 24
@@ -57,7 +68,7 @@ public struct StyleSheet {
         case .heading3: return StyleMetrics(spacingBefore: 14, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .body:     return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
         case .caption:  return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
-        case .quote:    return StyleMetrics(spacingBefore: 8,  spacingAfter: 8, lineHeightMultiple: 1.10)
+        case .quote:    return StyleMetrics(spacingBefore: quoteSpacingBefore, spacingAfter: quoteSpacingAfter, lineHeightMultiple: 1.10)
         }
     }
 
@@ -106,7 +117,7 @@ public struct StyleSheet {
             ps.firstLineHeadIndent += indent
             ps.headIndent += indent
         } else if style == .quote {
-            ps.headIndent += 16; ps.firstLineHeadIndent += 16
+            ps.headIndent += quoteIndent; ps.firstLineHeadIndent += quoteIndent
         }
         return ps
     }
