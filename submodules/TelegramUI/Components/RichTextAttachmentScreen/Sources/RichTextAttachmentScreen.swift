@@ -358,6 +358,18 @@ final class RichTextAttachmentScreenComponent: Component {
                 // Quote geometry for the full-page article editor. Defaults == the editor's built-in look;
                 // tune here to diverge from the chat composer.
                 editor.quoteStyle = QuoteStyle()
+                // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-
+                // dismiss gestures. These Display flags can only be set host-side (the editor package can't
+                // import Display) and are applied to the hit-testable handle views, so the effect is scoped to
+                // knob interaction — not the whole editor surface.
+                editor.configureSelectionHandleView = { handle in
+                    handle.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
+                    handle.disablesInteractiveModalDismiss = true
+                    handle.disablesInteractiveKeyboardGestureRecognizer = true
+                }
+                editor.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
+                editor.disablesInteractiveModalDismiss = true
+                editor.disablesInteractiveKeyboardGestureRecognizer = true
                 // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
                 // current document when expanding); an empty document when none is provided.
                 editor.document = component.initialContents ?? Document()
@@ -425,6 +437,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 }
 
                 self.addSubview(editor)
+                self.topEdgeEffectView.isUserInteractionEnabled = false
                 self.addSubview(self.topEdgeEffectView)
             }
             self.component = component

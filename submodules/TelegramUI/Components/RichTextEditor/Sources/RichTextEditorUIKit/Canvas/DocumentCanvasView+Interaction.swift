@@ -238,17 +238,21 @@ extension DocumentCanvasView {
                 draggingTableKnob = end                       // table range-knob drag
             } else {
                 draggingEndpoint = nearerSelectionEndpoint(toGlobal: pos)   // text-selection handle drag
+                // Capture the touch→endpoint offset so the drag keeps its starting offset from the finger
+                // (the knob is drawn offset from the text line; mapping the raw finger snaps the endpoint to
+                // whatever line is under the touch — the "line-centered" drag bug).
                 // Coalesce the per-touch-move input-delegate notifications for the duration of the drag —
                 // one bracket fires on `.ended` (the keyboard's autocorrect/candidate work is meaningless
                 // mid-drag and pegs the CPU on every frame). The table-knob path uses structural selection
                 // (not these setters), so it doesn't coalesce.
-                if draggingEndpoint != nil { beginCoalescedSelectionDrag() }
+                if let end = draggingEndpoint { captureSelectionDragOffset(endpoint: end, touch: point); beginCoalescedSelectionDrag() }
             }
         case .changed:
             if let end = draggingTableKnob {
                 extendTableSelection(end: end, toward: point)
             } else if let end = draggingEndpoint {
-                if end == .anchor { setSelectionAnchor(global: pos) } else { setSelectionHead(global: pos) }
+                let target = selectionDragPosition(forTouch: point)   // touch + captured grab offset
+                if end == .anchor { setSelectionAnchor(global: target) } else { setSelectionHead(global: target) }
                 // If the head endpoint is being dragged into a scrollable table's edge zone, auto-scroll.
                 updateDragAutoScroll(point: point, headInTable: end == .head && tableBox(containingGlobal: head) != nil)
             }

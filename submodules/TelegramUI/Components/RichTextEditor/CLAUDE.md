@@ -685,7 +685,12 @@ ring), and per-block frames (orange, indexed), with inset/margin numeric labels.
 - **Gesture arbitration is gate-only.** Handle/knob pan vs scroll pan is resolved *only* via
   `gestureRecognizerShouldBegin` — never `require(toFail:)` or forced simultaneous recognition. The
   single-tap recognizer fires immediately with manual multi-tap escalation in `handleTap` (no
-  double-tap-failure delay); the host scroll view sets `delaysContentTouches = false`.
+  double-tap-failure delay); the host scroll view sets `delaysContentTouches = false`. **Both scroll views
+  yield near a grip** via `GripYieldingScrollView` (a `UIScrollView` subclass overriding
+  `gestureRecognizerShouldBegin` to return `false` when `canvas.isSelectionDragTouch(point)` — its testable
+  seam is `yieldsToGrip(at:)`): used for the per-table inner scroll AND the **outer** document scroll
+  (`RichTextEditorView.scrollView`, `canvas` wired in init). Before the outer scroll adopted it, a vertical
+  knob pull raced the document scroll and the knob "felt dead" (2026-06-29).
 - **The single-tap "inside the selection/caret" test (`tapOutcome`) is VISUAL, not offset-based.** A tap
   toggles the edit menu only when its *point* lands on the rendered selection (`selectionRects().contains`)
   — NOT merely when `closestGlobalPosition` resolves to an offset within `[selFrom, selTo]`. A tap in the
@@ -800,6 +805,44 @@ the same gap machinery as audio media via `collapsedQuoteBox(atGap:)` (mirroring
   the handler fires on `selTo` being a collapsed gap AND `selFrom >= prevTextPosition(before: selTo)` (admits the
   range AND the collapsed caret; excludes a genuine selection that merely ends at the gap), NOT on `selFrom ==
   selTo`. (Same "capture the device log, don't hypothesise twice" lesson as the media object-replacement-range case.)
+
+## Selection-handle drag — touch offset, outer-scroll yield, host knob config (added 2026-06-29)
+
+Three fixes to the selection-handle ("knob") drag, runtime-verified in the chat composer.
+
+- **The drag keeps its starting touch→knob offset (not line-centered).** The knob is drawn OFFSET from the text
+  line (`SelectionHandleView.boundingFrame`: a knob 2·`knobRadius` past the caret's open end), so mapping the raw
+  finger point snapped the dragged endpoint to whatever line sat under the finger. `handleSelectionHandlePan`
+  `.began` now captures `selectionDragGrabOffset = caretCenter(draggedEndpoint) − touch`
+  (`captureSelectionDragOffset`), and every drag map — the `.changed` branch AND the auto-scroll re-extend tick —
+  goes through `selectionDragPosition(forTouch:)` = `closestGlobalPosition(to: touch + offset)`. Anchoring on the
+  caret CENTER makes the first map (touch ≈ grab point) land exactly on the grabbed endpoint (no jump at grab) and
+  the constant offset is preserved for the rest of the drag — the iOS handle-tracking feel.
+
+- **`GripYieldingScrollView` (generalized from the old `TableScrollView`).** See the gesture-arbitration invariant
+  above: the OUTER document scroll now yields its pan near a grip (it never did before — the root cause of the
+  "knobs feel dead, only the line drags" report; the gate was already covering the knobs, but the un-gated outer
+  scroll won the vertical pull). Same class backs the per-table inner scroll.
+
+- **Handle views are hit-testable + host-configurable, so a knob drag isn't hijacked by interactive
+  dismiss/transition gestures.** `SelectionHandleView` is now `isUserInteractionEnabled = true` with a
+  `point(inside:)` hit area = `caretLocalRect.insetBy(-dragHitTolerance)` (the SAME ±22pt zone as
+  `isSelectionDragTouch`, fed via `setCaretLocalRect` in `positionHandle`) — **it adds NO recognizers; the drag is
+  still the canvas pan, which receives the touch as an ancestor.** Being the window hit-test result for a knob
+  touch lets a host set Display's gesture flags on it (Display walks UP from the hit-test view), scoping the effect
+  to knob interaction — NOT the whole editor surface (setting them there was rejected). The package can't import
+  Display, so the new façade hook `RichTextEditorView.configureSelectionHandleView: ((UIView) -> Void)?` (invoked
+  once per handle view, applied in the canvas `didSet`) lets the host apply them. The three flags:
+  `disablesInteractiveTransitionGestureRecognizer` (the navigation back-swipe a HORIZONTAL knob drag triggers — the
+  load-bearing one, gated at `WindowContent.doesViewTreeDisableInteractiveTransitionGestureRecognizer`, distinct
+  from the keyboard check), `disablesInteractiveModalDismiss` (the attachment sheet), and
+  `disablesInteractiveKeyboardGestureRecognizer`. **Scope differs by host:** the **compact composer**
+  (`RichTextEditorChatInputNode`) uses ONLY the per-knob hook (editor-wide was rejected — it would kill normal
+  scroll/dismiss in the small field); the **full-page attachment editor** (`RichTextAttachmentScreen`) sets the
+  hook AND the same three flags editor-wide on `editor` (a full-page editor shouldn't back-swipe/dismiss from any
+  in-editor interaction while editing). **Compiler-invisible:** the per-knob flag is consulted only when the knob
+  is the window hit-test result, so the handle MUST stay hit-testable and its hit area MUST track the caret —
+  verified on device (the hit test lands on `SelectionHandleView`).
 
 ## Status
 

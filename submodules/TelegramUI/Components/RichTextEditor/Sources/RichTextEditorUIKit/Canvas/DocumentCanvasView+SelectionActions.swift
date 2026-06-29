@@ -55,6 +55,24 @@ extension DocumentCanvasView {
         return abs(pos - anchor) <= abs(pos - head) ? .anchor : .head
     }
 
+    /// Captures the offset between the dragged endpoint's caret and the initial touch, so the drag keeps that
+    /// starting offset (the handle's knob is drawn offset from the text line — without this the endpoint snaps
+    /// to whatever line sits under the finger).
+    func captureSelectionDragOffset(endpoint: SelectionEndpoint, touch: CGPoint) {
+        let pos = (endpoint == .anchor) ? anchor : head
+        let caret = caretRect(for: DocumentTextPosition(pos))
+        // Anchor on the caret's CENTER: at grab time `touch + offset == caret.center`, so the first map lands
+        // exactly on the grabbed endpoint (no jump), and the constant offset is preserved for the rest of the drag.
+        selectionDragGrabOffset = CGSize(width: caret.midX - touch.x, height: caret.midY - touch.y)
+    }
+
+    /// The global position the dragged endpoint should move to for a touch at `point`, applying the offset
+    /// captured at grab time.
+    func selectionDragPosition(forTouch point: CGPoint) -> Int {
+        closestGlobalPosition(to: CGPoint(x: point.x + selectionDragGrabOffset.width,
+                                          y: point.y + selectionDragGrabOffset.height))
+    }
+
     /// Select the word enclosing `pos` (Select menu item / double tap). No-op at a structural gap.
     func selectWord(at pos: Int) {
         guard let t = tokenizer as? DocumentTokenizer, let r = t.wordRange(at: pos) else { return }

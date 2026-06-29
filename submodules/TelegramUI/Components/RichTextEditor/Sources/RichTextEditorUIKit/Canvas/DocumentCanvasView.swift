@@ -102,6 +102,17 @@ final class DocumentCanvasView: UIView {
     /// ON TOP of the wash. The handle DRAG is a separate proximity-gated pan (`isSelectionDragTouch`).
     let startHandleView = SelectionHandleView(isStart: true)
     let endHandleView = SelectionHandleView(isStart: false)
+    /// Host hook to configure each selection-handle ("knob") view — e.g. to set Display's
+    /// `disablesInteractiveModalDismiss` / `disablesInteractiveKeyboardGestureRecognizer` so a knob drag isn't
+    /// hijacked by the interactive modal/keyboard-dismiss gestures. The package can't import Display, so the
+    /// host applies the flags; the handle views are hit-testable so the flags are scoped to knob interaction.
+    /// Applied to BOTH handle views (passed as bare `UIView`s) when set.
+    var configureSelectionHandleView: ((UIView) -> Void)? {
+        didSet {
+            configureSelectionHandleView?(startHandleView)
+            configureSelectionHandleView?(endHandleView)
+        }
+    }
     /// The container + frame the caret view was last placed at, so a repeated `updateCaretView()` (e.g. on a
     /// scroll tick) that lands the caret at the SAME spot does NOT restart the blink.
     private weak var lastCaretContainer: UIView?
@@ -259,6 +270,10 @@ final class DocumentCanvasView: UIView {
         set { loupeSessionStorage = newValue }
     }
     var draggingEndpoint: SelectionEndpoint?
+    // The (caret-center − initial-touch) offset captured when a selection-handle drag begins, so the dragged
+    // endpoint keeps its starting offset from the finger instead of snapping to the line under the touch (the
+    // knob is drawn offset from the text line). Applied at every drag map via `selectionDragPosition(forTouch:)`.
+    var selectionDragGrabOffset: CGSize = .zero
     var draggingTableKnob: TableRangeEnd?
     var selectionHandlePan: UIPanGestureRecognizer?
     // True while an interactive selection-handle drag is in flight. While set, the per-touch-move selection
@@ -1013,7 +1028,7 @@ final class DocumentCanvasView: UIView {
         // handle is dragged, else the head (the default — also the table-only / direct-call path). The tick
         // owns the scroll position, so suppress `setSelectionHead`'s scrollCaretIntoViewIfNeeded (it would
         // fight `newX`); `setSelectionAnchor` never scrolls, so it needs no suppression.
-        let target = closestGlobalPosition(to: dragAutoScrollPoint)
+        let target = selectionDragPosition(forTouch: dragAutoScrollPoint)   // touch + captured grab offset
         if draggingEndpoint == .anchor { setSelectionAnchor(global: target) }
         else { setSelectionHead(global: target, scrollIntoView: false) }
     }
@@ -1110,10 +1125,12 @@ final class DocumentCanvasView: UIView {
             // so it rides the horizontal scroll like the caret.
             let contentCaret = unscrolled.offsetBy(dx: -table.frame.minX, dy: -table.frame.minY)
             tv.hostHandle(handle, at: handle.boundingFrame(forCaret: contentCaret))
+            handle.setCaretLocalRect(handle.caretLocalRect(forCaret: contentCaret))   // interactive hit area
         } else {
             if handle.superview !== self { addSubview(handle) }
             bringSubviewToFront(handle)   // above the wash (and chrome — they're never co-visible with a text range)
             handle.frame = handle.boundingFrame(forCaret: unscrolled)
+            handle.setCaretLocalRect(handle.caretLocalRect(forCaret: unscrolled))   // interactive hit area
         }
         handle.isHidden = false
     }

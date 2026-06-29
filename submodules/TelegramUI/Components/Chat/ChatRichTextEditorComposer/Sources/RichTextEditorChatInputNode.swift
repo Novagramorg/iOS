@@ -118,6 +118,15 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // Quote geometry for the compact composer. Defaults == the editor's built-in look; tune here to
         // diverge from the article editor (e.g. tighter insets in the narrow input field).
         self.editorView.quoteStyle = QuoteStyle()
+        // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-dismiss
+        // gestures. Those Display flags can only be set host-side (the editor package can't import Display) and
+        // are applied to the hit-testable handle views, so the effect is scoped to knob interaction — not the
+        // whole editor surface.
+        self.editorView.configureSelectionHandleView = { handle in
+            handle.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (the one a horizontal knob drag triggers)
+            handle.disablesInteractiveModalDismiss = true
+            handle.disablesInteractiveKeyboardGestureRecognizer = true
+        }
 
         // Seed an editable document. RichTextEditorView starts with ZERO blocks — its canvas is only
         // populated by the `document` setter (which normalizes an empty Document to a single empty body

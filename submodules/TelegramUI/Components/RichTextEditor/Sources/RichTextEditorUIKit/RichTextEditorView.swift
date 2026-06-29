@@ -6,7 +6,7 @@ import RichTextEditorCore
 /// with continuous cross-block selection.
 @available(iOS 13.0, *)
 public final class RichTextEditorView: UIView, UIScrollViewDelegate {
-    private let scrollView = UIScrollView()
+    private let scrollView = GripYieldingScrollView()
     let canvas = DocumentCanvasView()
 
     /// Floor for the content height returned by `update(...)`/`performLayout`. Defaults to 44pt (a document
@@ -75,6 +75,15 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public var canPasteMedia: (() -> Bool)? { didSet { canvas.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { canvas.onPasteMedia = onPasteMedia } }
 
+    /// Configure each selection-handle ("knob") view. The closure is invoked once per handle view (start and
+    /// end), passing it as a bare `UIView`. Use it to set host-framework properties the editor package can't
+    /// reach — e.g. Display's `disablesInteractiveTransitionGestureRecognizer` (the navigation back-swipe a
+    /// horizontal knob drag triggers), `disablesInteractiveModalDismiss`, and `disablesInteractiveKeyboard-
+    /// GestureRecognizer` — so a knob drag isn't hijacked by those gestures. The handle views are hit-testable
+    /// (hit area = the drag tolerance around the endpoint caret), so the effect is scoped to knob interaction
+    /// rather than the whole editor surface.
+    public var configureSelectionHandleView: ((UIView) -> Void)? { didSet { canvas.configureSelectionHandleView = configureSelectionHandleView } }
+
     /// Transform the editor's default edit-menu elements into the final set. `defaultElements` is the system
     /// suggested actions (Cut/Copy/Paste/Select + Writing Tools) followed by the editor's own custom items
     /// (the built-in "Format" submenu + Look Up / Translate / Share). Return the elements to present.
@@ -117,6 +126,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         // of the parent's contentInset.bottom (double-counting it at rest). .never keeps the inset contract exact.
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.delegate = self
+        scrollView.canvas = canvas   // yield the outer scroll's pan to a selection-handle grip (vertical knob drag)
         scrollView.addSubview(canvas)
         canvas.installSelectionInteractions()
         // The canvas is sized frame-based in layoutSubviews, so a content-height change (typing wraps a
