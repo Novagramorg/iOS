@@ -200,10 +200,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// so — like `insets` — margins are applied HERE rather than via a side-effecting property setter (which
     /// would hide a re-layout and could re-enter `onChange`); pass them every `update`, and they persist
     /// across intervening system layout passes until the next `update`.
+    /// `scrollIndicatorInsets` (optional) positions the vertical scroll indicator independently of the
+    /// content `insets`. `nil` (the default) tracks the content insets — the indicator is inset by the same
+    /// bands the content scrolls under. A non-nil value REPLACES that (absolute, not additive) — a compact
+    /// host (the chat composer) sets a constant input-field inset so the scrollbar sits at a fixed visual
+    /// position instead of following the keyboard/panel overlap. It is purely visual (scrollbar geometry):
+    /// it does NOT enter `performLayout` / the content-size math. Supplied every `update`, so there is no
+    /// stored override for a later `update` to clobber.
     @discardableResult
-    public func update(size: CGSize, insets: UIEdgeInsets, contentMargins: UIEdgeInsets = .zero) -> CGFloat {
+    public func update(size: CGSize, insets: UIEdgeInsets, contentMargins: UIEdgeInsets = .zero,
+                       scrollIndicatorInsets: UIEdgeInsets? = nil) -> CGFloat {
         scrollView.contentInset = insets
-        scrollView.verticalScrollIndicatorInsets = insets
+        scrollView.verticalScrollIndicatorInsets = scrollIndicatorInsets ?? insets
         canvas.contentMargins = contentMargins
         return performLayout(size: size)
     }
@@ -251,6 +259,8 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
 
     /// Test accessor: the current bottom content inset.
     var bottomContentInsetForTesting: CGFloat { scrollView.contentInset.bottom }
+    /// Test accessor: the current vertical scroll indicator insets (asserted decoupled from the content inset).
+    var verticalScrollIndicatorInsetsForTesting: UIEdgeInsets { scrollView.verticalScrollIndicatorInsets }
     /// Test accessor: the scroll view's content height (the scrollable extent).
     var scrollContentHeightForTesting: CGFloat { scrollView.contentSize.height }
     /// Test accessor: the scroll view's content offset (read to assert caret-follow scrolling; set to
@@ -457,6 +467,5 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     // MARK: - Composer-host scroll accessors (internal — consumed by RichTextEditorView+ComposerHost.swift)
 
     var scrollViewContentOffset: CGPoint { self.scrollView.contentOffset }
-    func setScrollViewIndicatorInsets(_ insets: UIEdgeInsets) { self.scrollView.verticalScrollIndicatorInsets = insets }
 }
 #endif

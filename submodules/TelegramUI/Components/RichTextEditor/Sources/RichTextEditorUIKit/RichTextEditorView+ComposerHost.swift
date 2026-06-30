@@ -32,9 +32,6 @@ public extension RichTextEditorView {
     /// The editor's content scroll offset (host maps content-space rects to the visible space).
     var composerContentOffset: CGPoint { self.scrollViewContentOffset }
 
-    /// Set the editor's scroll-indicator insets.
-    func setComposerScrollIndicatorInsets(_ insets: UIEdgeInsets) { self.setScrollViewIndicatorInsets(insets) }
-
     /// The built-in horizontal page margin applied to text (in addition to `contentMargins`). Defaults to
     /// 16pt (document layout); a compact composer host sets it to 0 so the host owns all horizontal insets.
     var contentPageMargin: CGFloat {

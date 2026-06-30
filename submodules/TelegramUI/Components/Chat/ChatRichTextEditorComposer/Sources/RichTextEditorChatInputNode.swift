@@ -47,6 +47,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     private var trackedInsets: UIEdgeInsets = .zero
     private var trackedContentMargins: UIEdgeInsets = .zero
     private var trackedRightInset: CGFloat = 0.0
+    // The host's constant scroll-indicator inset (the panel sets it once during loadTextInputNode, before the
+    // first layout). Threaded into every editor.update(...) so it survives — nil means "track the content insets".
+    private var trackedScrollIndicatorInsets: UIEdgeInsets?
     private weak var storedDelegate: ChatInputTextNodeDelegate?
 
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)?
@@ -179,7 +182,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             // (the editor's contract, covered by a regression test), so this cannot recurse. The panel's
             // delegate-driven layout pass still handles field-height growth separately.
             if self.editorView.bounds.width > 0.0 {
-                _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+                _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
             }
             self.storedDelegate?.chatInputTextNodeDidUpdateText()
         }
@@ -336,7 +339,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         )
         self.editorView.document = newDocument
         if self.editorView.bounds.width > 0.0 {
-            _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+            _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
         }
         self.storedDelegate?.chatInputTextNodeDidUpdateText()
         self.selectedRange = selection.nsRange(in: content)
@@ -407,7 +410,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// `size` using the tracked scroll insets + content margins. Trailing scroll inset stays `.zero` in
     /// Phase 1 (the composer field is short and grows; the keyboard inset is the panel's concern).
     public func updateLayout(size: CGSize) {
-        _ = self.editorView.update(size: size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+        _ = self.editorView.update(size: size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
     }
     /// Measures the editor's content height at `width` with a stateless, side-effect-free measure
     /// (`RichTextEditorView.height(forWidth:)`) — it does NOT reflow the live editor or touch its
@@ -423,7 +426,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         return self.editorView.height(forWidth: width, contentMargins: self.trackedContentMargins)
     }
     public func layoutInputField() {
-        _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+        _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
     }
     public var textFieldFrame: CGRect {
         get { self.editorView.frame }
@@ -519,7 +522,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     // hitTest(_:with:) override — deferred to Phase 2 (the editor's canvas owns hit-testing today).
     public var inputHitTestSlop: UIEdgeInsets = .zero
     public var inputContentOffset: CGPoint { self.editorView.composerContentOffset }
-    public func setInputScrollIndicatorInsets(_ insets: UIEdgeInsets) { self.editorView.setComposerScrollIndicatorInsets(insets) }
+    public func setInputScrollIndicatorInsets(_ insets: UIEdgeInsets) { self.trackedScrollIndicatorInsets = insets }
 
     /// The caret/selection in the composer's flat UTF-16 coordinate space (paragraphs joined by "\n",
     /// matching `ComposerDocumentBridge`). The panel reads this to know where to insert/replace and writes

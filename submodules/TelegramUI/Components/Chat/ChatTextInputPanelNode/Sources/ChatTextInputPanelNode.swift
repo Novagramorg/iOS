@@ -1146,7 +1146,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         richTextInputNode.inputHitTestSlop = UIEdgeInsets(top: -5.0, left: -5.0, bottom: -5.0, right: -5.0)
         richTextInputNode.keyboardAppearance = keyboardAppearance
         richTextInputNode.inputTintColor = tintColor
-        richTextInputNode.setInputScrollIndicatorInsets(UIEdgeInsets(top: 9.0, left: 0.0, bottom: 9.0, right: -13.0))
+        richTextInputNode.setInputScrollIndicatorInsets(UIEdgeInsets(top: 9.0, left: 0.0, bottom: 9.0, right: -12.0))
         self.textInputNodeClippingContainer.addSubnode(richTextInputNode.asNode)
         richTextInputNode.inputView.disablesInteractiveTransitionGestureRecognizer = true
         richTextInputNode.inputIsUserInteractionEnabled = !self.sendingTextDisabled
