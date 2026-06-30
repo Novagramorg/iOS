@@ -260,6 +260,14 @@ public protocol ChatRichTextInputNode: AnyObject {
     var canPasteMedia: (() -> Bool)? { get set }
     var onPasteMedia: (() -> Bool)? { get set }
 
+    /// Fired on a genuine user TEXT edit (typing/delete/paste/IME) so the host can report the "typing…" chat
+    /// activity. Set by the PANEL, wired to its `updateActivity`. It must NOT fire on a caret/selection move or
+    /// on a programmatic content set (draft restore / send-clear / state echo) — otherwise the chat partner
+    /// sees "typing…" when the user merely moves the cursor or a draft loads. The LEGACY backend leaves this
+    /// stored-but-unused (it reports activity via the `chatInputTextNode(shouldChangeTextIn:)` delegate, which
+    /// the native editor never calls); the native backend fires it from its content-change path.
+    var onTypingActivity: (() -> Void)? { get set }
+
     /// Apply a format command through the backend's native engine. No-op on the legacy backend.
     func performFormatAction(_ action: ChatRichTextFormatAction)
 
@@ -440,6 +448,11 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
     // Stored-but-unused: the legacy `UITextView` backend has no media blocks to render, so it satisfies the
     // protocol but never reads this. The native (`RichTextEditorChatInputNode`) backend wires it to the editor.
     var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)?
+
+    // Stored-but-unused: the legacy backend reports "typing…" activity via the panel's
+    // `chatInputTextNode(shouldChangeTextIn:)` delegate, so it never fires this. Only the native
+    // (`RichTextEditorChatInputNode`) backend fires it (it doesn't call that delegate). See the protocol doc.
+    var onTypingActivity: (() -> Void)?
 
     // Bridges to ASDisplayNode for callers that hold this only as a ChatRichTextInputNode.
     var asNode: ASDisplayNode {

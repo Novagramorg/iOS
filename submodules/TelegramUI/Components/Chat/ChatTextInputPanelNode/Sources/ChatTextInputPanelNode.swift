@@ -1143,6 +1143,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         richTextInputNode.canPasteMedia = { [weak self] in self?.handlePastedMedia(perform: false) ?? false }
         richTextInputNode.onPasteMedia = { [weak self] in self?.handlePastedMedia(perform: true) ?? false }
+        // Report "typing…" chat activity on a genuine text edit. The legacy backend gets this from
+        // `chatInputTextNode(shouldChangeTextIn:)`; the native editor never calls that delegate, so it fires
+        // this hook instead (and gates out caret moves / programmatic content sets — see the node).
+        richTextInputNode.onTypingActivity = { [weak self] in self?.updateActivity() }
         richTextInputNode.inputHitTestSlop = UIEdgeInsets(top: -5.0, left: -5.0, bottom: -5.0, right: -5.0)
         richTextInputNode.keyboardAppearance = keyboardAppearance
         richTextInputNode.inputTintColor = tintColor
