@@ -283,14 +283,25 @@ extension DocumentCanvasView: UIKeyInput {
         }
         if text == "\n" {
             if let active = activeStack(at: head), active.box is CodeBlockBox {
-                // Enter on an empty trailing line of a code block EXITS it to a body paragraph (the escape
-                // hatch); otherwise it inserts a literal newline (no paragraph split). A selection always
-                // replaces-with-newline — only a collapsed caret can exit.
-                if selFrom == selTo, caretAtCodeBlockTrailingBlankLine(active) {
-                    exitCodeBlockToBodyParagraph(active)
+                // Double-return (Enter on an empty line) EXITS the code block: trailing → after, first →
+                // before, wholly-empty → un-code. A MIDDLE blank line and a non-empty line just insert a
+                // literal newline (no paragraph split). A selection always replaces-with-newline — only a
+                // collapsed caret can exit.
+                if selFrom == selTo, let exit = codeBlockDoubleReturnExit(active) {
+                    switch exit {
+                    case .after:  exitCodeBlockToBodyParagraph(active)
+                    case .before: exitCodeBlockToBodyParagraphBefore(active)
+                    case .uncode: uncodeEmptyCodeBlock(active)
+                    }
                 } else {
                     insertCodeBlockNewline()
                 }
+            } else if selFrom == selTo, let pos = resolveBox(at: head), let p = pos.box as? BlockBox,
+                      p.style == .quote, p.textLength == 0, emptyQuoteIsRunEdge(at: pos.index) {
+                // Double-return on an empty quote line at the run's first/last edge EXITS the quote with a
+                // body paragraph (before/after follows from which edge). A middle empty quote line splits
+                // normally (the else branch).
+                exitQuoteToBodyParagraph(at: pos.index)
             } else {
                 insertParagraphBreak()
             }

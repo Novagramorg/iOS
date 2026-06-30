@@ -327,8 +327,11 @@ leaf, sized `content + 2` exactly like a wrap-heavy paragraph — multi-line int
 position/selection/tokenizer machinery (they're a linear UTF-16 range TextKit wraps). `currentBlock()` reads
 back the **plain** layout string (display-only monospace attrs never enter the model). Editing affordances
 mirror quotes (`+UITextInput`/`+Editing`/`+Interaction`): **Enter** inserts an interior newline via
-`insertCodeBlockNewline()` (replacing any selection), and **exits** to a new body paragraph on an empty
-trailing line (`exitCodeBlockToBodyParagraph`); **Backspace** in a fully-empty code block un-codes it to body;
+`insertCodeBlockNewline()` (replacing any selection); **double-return** (Enter on an empty line —
+`codeBlockDoubleReturnExit`) EXITS — a **trailing** blank line → body paragraph *after*
+(`exitCodeBlockToBodyParagraph`), the **first** blank line → body *before* (`exitCodeBlockToBodyParagraphBefore`),
+a **wholly-empty** block → un-code (`uncodeEmptyCodeBlock`); a MIDDLE blank line just inserts another newline.
+**Backspace** in a fully-empty code block un-codes it to body;
 a **tap below** a trailing code block appends a body paragraph; **cross-block** edits treat a code endpoint
 like media (truncate-and-keep partial coverage, drop full coverage) in `applyReplace`. **Creation:**
 `makeCodeBlock()` (`+ParagraphFormat`, façade-forwarded) toggles the touched top-level paragraphs into one code
@@ -543,13 +546,13 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   **Gated on `tapBelowAddsTrailingParagraph` (added 2026-06-28, default `true`):** the article editor keeps it;
   the chat composer sets it `false` (a compact field has no empty area below the content to grow into) — see the
   compact-host knob list above.
-  **(C)** **Shift+Return** inside a quote EXITS it with a new empty body paragraph (caret there): **ABOVE** the
-  quote when the caret is on its first visual (wrapped) line (`caretIsOnFirstLine` — compares the caret's `minY`
-  to offset 0's), else **BELOW** it. So a single-line / empty quote (caret always on its first line) exits
-  ABOVE; a multi-line quote exits above only from the first wrapped line, else below. Outside a quote it falls
-  back to a normal paragraph break. Wired via a new `UIKeyCommand(input: "\r", modifierFlags: .shift)` —
-  hardware-keyboard only, so the key-command dispatch is runtime-unverified (the `performShiftReturn` logic is
-  unit-tested; if "\r" doesn't match, Shift+Return falls back to `insertText("\n")`).
+  **(C)** **Double-return** (Enter on an empty line inside a quote or code block — added 2026-06-30, replacing
+  the earlier Shift+Return) EXITS the block with a new empty body paragraph (caret there): the run's **last /
+  wholly-empty** line → **after**, its **first** line → **before**, a wholly-empty block → un-quote / un-code;
+  a MIDDLE empty line splits normally (no exit). For a quote *run*, first/last = the first/last consecutive
+  `.quote` paragraph (`emptyQuoteIsRunEdge` → `exitQuoteToBodyParagraph`, which replaces the edge empty quote
+  line with a body so the before/after side follows from which edge it sat on). The old Shift+Return path (its
+  `UIKeyCommand` + `performShiftReturn` + `caretIsOnFirstLine`) was removed.
 - **"Type something…" placeholder shows only on the document's LAST block** (`BlockBox.isLastBlock`, stamped
   in `stampListMarkers` like `isTopLevelBlock`); an empty body paragraph elsewhere shows no placeholder (list
   hints are unaffected). An empty non-last paragraph still reserves its line + caret — only the hint is gone.

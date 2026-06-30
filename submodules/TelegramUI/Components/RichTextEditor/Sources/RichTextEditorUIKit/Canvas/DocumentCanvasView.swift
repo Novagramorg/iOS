@@ -445,12 +445,10 @@ final class DocumentCanvasView: UIView {
 
     override var keyCommands: [UIKeyCommand]? {
         [UIKeyCommand(input: "\t", modifierFlags: [], action: #selector(handleTabKey)),
-         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey)),
-         UIKeyCommand(input: "\r", modifierFlags: .shift, action: #selector(handleShiftReturn))]
+         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey))]
     }
     @objc private func handleTabKey() { moveToCell(forward: true) }
     @objc private func handleShiftTabKey() { moveToCell(forward: false) }
-    @objc private func handleShiftReturn() { performShiftReturn() }
 
     /// Applies a theme: updates the mapper (text/link colors used on the next reload) and pushes the accent
     /// color to the persistent caret/selection/blockquote views. The caller reloads content afterward so the
