@@ -285,8 +285,15 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func setAlignment(_ alignment: TextAlignment) { canvas.setAlignment(alignment) }
     public func setList(_ marker: ListMarker?) { canvas.setList(marker) }
 
-    public func undo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.undo() }
-    public func redo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.redo() }
+    public func undo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.undo(); onChange?() }
+    public func redo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.redo(); onChange?() }
+    // The trailing `onChange?()` is load-bearing for a host toolbar's undo/redo availability. The undo/redo
+    // closure fires its `notifyContentSizeChanged` refresh WHILE STILL INSIDE `UndoManager.undo()/redo()`, so a
+    // host that re-reads `currentState().canUndo/canRedo` synchronously from that notification sees the stack
+    // BEFORE the manager finalizes popping the group — stale for the LAST undo/redo (the control that should
+    // disable stays enabled until an unrelated layout pass re-reads state). One more `onChange` AFTER the call
+    // returns (stack settled) refreshes the host with the final availability. Idempotent: an extra no-op
+    // `undo()`/`redo()` (empty stack) still re-notifies, which is harmless.
 
     // MARK: Table structural commands (operate on the caret's table; no-op otherwise)
     public func insertTableRowAbove() { canvas.insertTableRowAbove() }

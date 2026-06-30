@@ -326,7 +326,14 @@ final class DocumentCanvasView: UIView {
     /// Injectable pasteboard (defaults to the system pasteboard; tests inject a fake — see TextPasteboard).
     var pasteboard: TextPasteboard = UIPasteboard.general
     var undoManagerOverride: UndoManager?
-    var effectiveUndoManager: UndoManager? { undoManagerOverride ?? undoManager }
+    /// The editor's OWN undo manager, used in production. We deliberately do NOT fall back to the
+    /// responder-chain `UIResponder.undoManager`: that manager is shared app-wide, so OTHER responders'
+    /// (and the system text-input subsystem's) selection/typing undo registrations would surface in the
+    /// editor's `canUndo` / `undo()` — the "a selection change is undoable / undo is active on the first
+    /// tap before any content edit" bug. A private per-canvas manager keeps the buffer pristine: only the
+    /// editor's own content edits (every `registerUndo`) count. Tests inject their own via `undoManagerOverride`.
+    private let ownUndoManager = UndoManager()
+    var effectiveUndoManager: UndoManager? { undoManagerOverride ?? ownUndoManager }
 
     /// Token for the input-language-change observer (see init); removed in deinit.
     private var inputModeObserver: NSObjectProtocol?

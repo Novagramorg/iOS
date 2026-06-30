@@ -136,8 +136,8 @@ final class RichTextAttachmentScreenComponent: Component {
 
     final class View: UIView {
         private let title = ComponentView<Empty>()
-        private let cancelButton = ComponentView<Empty>()
         private let doneButton = ComponentView<Empty>()
+        private let navActionsBar = ComponentView<Empty>()
         
         private let editor = RichTextEditorView()
         // Frosted fade at the screen top (mirrors ComposePollScreen) — scrolling content dissolves into the
@@ -455,45 +455,51 @@ final class RichTextAttachmentScreenComponent: Component {
             let barButtonSize = CGSize(width: 44.0, height: 44.0)
             
             let editorState = self.editor.currentState()
-            var cancelButtonFitSize = barButtonSize
-            if !"".isEmpty {
-                if editorState.canUndo {
-                    cancelButtonFitSize.width += barButtonSize.width
-                }
-                if editorState.canRedo {
-                    cancelButtonFitSize.width += barButtonSize.width
-                }
-            }
 
-            let cancelButtonSize = self.cancelButton.update(
-                transition: transition,
-                component: AnyComponent(GlassBarButtonComponent(
-                    size: cancelButtonFitSize,
-                    backgroundColor: nil,
-                    isDark: environment.theme.overallDarkAppearance,
-                    state: .glass,
-                    component: AnyComponentWithIdentity(id: "close", component: AnyComponent(
-                        BundleIconComponent(
-                            name: "Navigation/Close",
-                            tintColor: environment.theme.chat.inputPanel.panelControlColor
-                        )
-                    )),
+            // Close + undo + redo share ONE glass pill (a single glass background), built from the same
+            // RichTextActionBarComponent the bottom toolbar uses — each segment is independently tappable and
+            // dims to 0.4 alpha (inert) when its action is nil. Close dismisses; undo/redo drive the editor's
+            // undo manager (canUndo/canRedo ↔ undo()/redo()) and dim when unavailable. Undo and redo share the
+            // Media Editor undo glyph (redo mirrored via flipHorizontally). After an undo/redo the editor fires
+            // onChange → this update runs again and refreshes the segments + the rest of the toolbar.
+            let navActions: [RichTextActionBarComponent.Action] = [
+                RichTextActionBarComponent.Action(
+                    id: AnyHashable("close"), icon: "Navigation/Close",
                     action: { [weak self] _ in
                         guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
                             return
                         }
                         controller.dismiss()
-                    }
+                    },
+                    isSelected: false
+                ),
+                RichTextActionBarComponent.Action(
+                    id: AnyHashable("undo"), icon: "Media Editor/Undo",
+                    action: editorState.canUndo ? { [weak self] _ in self?.editor.undo() } : nil,
+                    isSelected: false
+                ),
+                RichTextActionBarComponent.Action(
+                    id: AnyHashable("redo"), icon: "Media Editor/Undo",
+                    action: editorState.canRedo ? { [weak self] _ in self?.editor.redo() } : nil,
+                    isSelected: false,
+                    flipHorizontally: true
+                ),
+            ]
+            let navActionsBarSize = self.navActionsBar.update(
+                transition: transition,
+                component: AnyComponent(RichTextActionBarComponent(
+                    theme: environment.theme,
+                    actions: navActions
                 )),
                 environment: {},
-                containerSize: barButtonSize
+                containerSize: CGSize(width: 146.0, height: barButtonSize.height)
             )
-            let cancelButtonFrame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: 16.0), size: cancelButtonSize)
-            if let cancelButtonView = self.cancelButton.view {
-                if cancelButtonView.superview == nil {
-                    component.overNavigationContainer.addSubview(cancelButtonView)
+            let navActionsBarFrame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: 16.0), size: navActionsBarSize)
+            if let navActionsBarView = self.navActionsBar.view {
+                if navActionsBarView.superview == nil {
+                    component.overNavigationContainer.addSubview(navActionsBarView)
                 }
-                transition.setFrame(view: cancelButtonView, frame: cancelButtonFrame)
+                transition.setFrame(view: navActionsBarView, frame: navActionsBarFrame)
             }
 
             let doneButtonSize = self.doneButton.update(
@@ -542,9 +548,14 @@ final class RichTextAttachmentScreenComponent: Component {
                 environment: {},
                 containerSize: CGSize(width: 200.0, height: 40.0)
             )
+            // The title is centered, but must clear both the left button cluster (Close + undo + redo) and the
+            // Done button. When the natural center would overlap either side, re-center it in the gap between
+            // the cluster's trailing edge and Done (needed on narrow screens where the centered title would
+            // otherwise sit under the redo pill).
+            let leftClusterMaxX = navActionsBarFrame.maxX
             var titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - titleSize.width) / 2.0), y: floorToScreenPixels((environment.navigationHeight - titleSize.height) / 2.0) + 3.0), size: titleSize)
-            if titleFrame.maxX > doneButtonFrame.minX - 16.0 {
-                titleFrame.origin.x = cancelButtonFrame.maxX + floorToScreenPixels((doneButtonFrame.minX - cancelButtonFrame.maxX) - titleSize.width) / 2.0
+            if titleFrame.minX < leftClusterMaxX + 16.0 || titleFrame.maxX > doneButtonFrame.minX - 16.0 {
+                titleFrame.origin.x = leftClusterMaxX + floorToScreenPixels((doneButtonFrame.minX - leftClusterMaxX) - titleSize.width) / 2.0
             }
             if let titleView = self.title.view {
                 if titleView.superview == nil {

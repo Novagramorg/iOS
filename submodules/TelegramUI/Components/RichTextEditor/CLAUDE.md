@@ -802,6 +802,24 @@ ring), and per-block frames (orange, indexed), with inset/margin numeric labels.
   **outside** `editing{}` with one undo per composition; a system inline prediction (signalled by
   `setMarkedText` `sel:{0,0}`, ghost trailing) is **dismissed, never committed**, by our finalize
   chokepoints so the keyboard's own accept lands clean.
+- **The undo buffer is a PRIVATE, per-canvas `UndoManager`, NOT the responder-chain `UIResponder.undoManager`**
+  (`DocumentCanvasView.effectiveUndoManager = undoManagerOverride ?? ownUndoManager`, the latter a private
+  `UndoManager()`). The responder-chain manager is shared app-wide, so other responders' (and the system
+  text-input subsystem's) selection/typing undo registrations would surface in the editor's `canUndo` /
+  `undo()` — the device-observed "a selection change is undoable / undo is active on the FIRST tap before any
+  content edit" bug (fixed 2026-06-30). Only the editor's own `registerUndo` (every content `editing{}` + the
+  composition commit) may enter this buffer. Tests inject their own via `undoManagerOverride` (every undo test
+  already did — production simply never wired a private manager until this fix). Regression-guarded by
+  `UndoBufferIsolationTests`. **Known trade-off:** the system shake-to-undo (which calls the responder-chain
+  `undoManager`) no longer reaches editor edits — the editor exposes explicit undo/redo instead (the
+  `RichTextAttachmentScreen` nav-bar pill).
+- **`undo()`/`redo()` fire a trailing `onChange` AFTER the manager settles** (`RichTextEditorView`). The undo/redo
+  closure's own refresh (`notifyContentSizeChanged`) runs WHILE STILL INSIDE `UndoManager.undo()/redo()`, so a
+  host that re-reads `currentState().canUndo/canRedo` synchronously from it sees the stack BEFORE the group is
+  finalized — stale for the LAST undo/redo only (intermediate steps read the same value either way). Symptom:
+  the undo (or redo) control stays enabled after the final undo (redo) until an unrelated `update()` (e.g. a
+  rotation) re-reads state. The explicit trailing `onChange?()` refreshes the host with the settled availability.
+  Regression-guarded by `UndoBufferIsolationTests.test_undoRedo_fireOnChange_soHostRefreshesAvailability`.
 - **`text(in:)` MUST emit a `"\n"` at every top-level paragraph boundary** (`DocumentCanvasView+UITextInput`),
   exactly like a `UITextView` over a `"\n"`-joined string — because the global axis carries NO newline char
   between blocks, only a structural token gap. The system keyboard reads document context through `text(in:)`,

@@ -12,14 +12,16 @@ class RichTextActionBarComponent: Component {
         let icon: String
         let action: ((UIView) -> Void)?
         let isSelected: Bool
-        
-        init(id: AnyHashable, icon: String, action: ((UIView) -> Void)?, isSelected: Bool) {
+        let flipHorizontally: Bool
+
+        init(id: AnyHashable, icon: String, action: ((UIView) -> Void)?, isSelected: Bool, flipHorizontally: Bool = false) {
             self.id = id
             self.icon = icon
             self.action = action
             self.isSelected = isSelected
+            self.flipHorizontally = flipHorizontally
         }
-        
+
         static func ==(lhs: Action, rhs: Action) -> Bool {
             if lhs.id != rhs.id {
                 return false
@@ -31,6 +33,9 @@ class RichTextActionBarComponent: Component {
                 return false
             }
             if lhs.isSelected != rhs.isSelected {
+                return false
+            }
+            if lhs.flipHorizontally != rhs.flipHorizontally {
                 return false
             }
             return true
@@ -132,7 +137,8 @@ class RichTextActionBarComponent: Component {
                         theme: component.theme,
                         icon: item.icon,
                         action: item.action,
-                        isSelected: item.isSelected
+                        isSelected: item.isSelected,
+                        flipHorizontally: item.flipHorizontally
                     )),
                     environment: {},
                     containerSize: itemSize
@@ -187,19 +193,22 @@ class ActionItemComponent: Component {
     let icon: String
     let action: ((UIView) -> Void)?
     let isSelected: Bool
-    
+    let flipHorizontally: Bool
+
     init(
         theme: PresentationTheme,
         icon: String,
         action: ((UIView) -> Void)?,
-        isSelected: Bool
+        isSelected: Bool,
+        flipHorizontally: Bool = false
     ) {
         self.theme = theme
         self.icon = icon
         self.action = action
         self.isSelected = isSelected
+        self.flipHorizontally = flipHorizontally
     }
-    
+
     static func ==(lhs: ActionItemComponent, rhs: ActionItemComponent) -> Bool {
         if lhs.theme !== rhs.theme {
             return false
@@ -211,6 +220,9 @@ class ActionItemComponent: Component {
             return false
         }
         if lhs.isSelected != rhs.isSelected {
+            return false
+        }
+        if lhs.flipHorizontally != rhs.flipHorizontally {
             return false
         }
         return true
@@ -282,7 +294,8 @@ class ActionItemComponent: Component {
                 transition: transition,
                 component: AnyComponent(BundleIconComponent(
                     name: component.icon,
-                    tintColor: foregroundColor
+                    tintColor: foregroundColor,
+                    flipHorizontally: component.flipHorizontally
                 )),
                 environment: {},
                 containerSize: availableSize
