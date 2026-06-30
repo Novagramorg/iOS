@@ -412,9 +412,15 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// Measures the editor's content height at `width` with a stateless, side-effect-free measure
     /// (`RichTextEditorView.height(forWidth:)`) — it does NOT reflow the live editor or touch its
     /// frames/insets. `rightInset` is recorded for the next real `update(...)`.
+    ///
+    /// Passes `trackedContentMargins` (the margins the next `update(...)` will apply) so the measure reserves
+    /// the right inset even when the panel sizes its field BEFORE the editor has been laid out — a draft
+    /// applied before the first layout. Without this the live canvas margins are still zero, the text is
+    /// measured at the full width, and the field is sized one wrap too short, then visibly grows on the next
+    /// pass (the pre-set-text "jump").
     public func textHeightForWidth(_ width: CGFloat, rightInset: CGFloat) -> CGFloat {
         self.trackedRightInset = rightInset
-        return self.editorView.height(forWidth: width)
+        return self.editorView.height(forWidth: width, contentMargins: self.trackedContentMargins)
     }
     public func layoutInputField() {
         _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)

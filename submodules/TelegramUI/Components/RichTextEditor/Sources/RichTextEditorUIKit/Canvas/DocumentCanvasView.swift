@@ -824,8 +824,16 @@ final class DocumentCanvasView: UIView {
     /// Stateless content height the document would have at canvas `width` — the measure analogue of
     /// `intrinsicContentSize.height` (same `contentMargins` + content-width derivation). Never mutates
     /// the live layout (no box `setWidth`, no frame/overlay/caret change).
-    func measuredContentHeight(forWidth width: CGFloat) -> CGFloat {
-        contentMargins.top + root.measuredHeight(forWidth: contentWidth(forWidth: width)) + contentMargins.bottom
+    func measuredContentHeight(forWidth width: CGFloat, contentMargins explicitMargins: UIEdgeInsets? = nil) -> CGFloat {
+        // The measure must be PURE: a host sizing its field by this value (the chat composer) may call it
+        // BEFORE the matching `update(...)` has pushed the real `contentMargins` onto the live canvas (a draft
+        // applied before the editor is sized). Reading live `self.contentMargins` then yields a too-small height
+        // (the right-inset reservation is missing → text measured at the full width → fewer wrapped lines), and
+        // the field visibly grows on the next pass. So callers that know the intended margins pass them in;
+        // others keep the live value.
+        let margins = explicitMargins ?? self.contentMargins
+        let contentW = max(width - (self.pageMargin + margins.left) - (self.pageMargin + margins.right), 1)
+        return margins.top + root.measuredHeight(forWidth: contentW) + margins.bottom
     }
 
     /// Notifies the host that the content height may have changed (e.g. after an edit), so it re-runs

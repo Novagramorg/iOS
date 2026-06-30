@@ -212,12 +212,25 @@ The façade is now driven by its host rather than self-laying-out:
   set `scrollView.contentInsetAdjustmentBehavior = .never` and **removed all `UIResponder` keyboard
   observation**. A private `performLayout(size:)` sizes the scroll view/canvas; only `update` writes insets
   (so a system `layoutSubviews` pass can't clobber the parent inset). Caret-follow scrolling stays internal.
-- `height(forWidth:) -> CGFloat` — a stateless, side-effect-free content-height measure (the Phase-2
+- `height(forWidth:contentMargins:) -> CGFloat` — a side-effect-free content-height measure (the Phase-2
   follow-up to the composer's `textHeightForWidth`). Mirrors what `update(...)` returns at that width
   (same `minimumContentHeight` floor + `contentMargins`) but reflows NOTHING live: the per-block
   `measuredHeight(forWidth:)` chain reads structural insets and measures text via a reused per-engine
   scratch layout (`BlockLayoutEngine.boundingHeight(forWidth:)`). De-stateful-ized `TableBlockBox.height`
   in passing (it no longer resizes cell layouts to measure; `recompute()` owns cell layout).
+  **LOAD-BEARING — the measure must be PURE w.r.t. the live `contentMargins`, not just the live layout
+  (2026-06-30).** `measuredContentHeight` derives the content WIDTH from the margins (`contentWidth` =
+  `width − contentLeftPad − contentRightPad`), so reading the live `canvas.contentMargins` makes the result
+  depend on whether `update(...)` has run yet. A host that sizes its field from this BEFORE the first
+  `update(...)` (the chat composer when a draft is applied before the editor is framed — `bounds.width == 0`,
+  so `setInputContent` skips the corrective `update`) then measures the text at the FULL width (the right-inset
+  reservation is still 0 → fewer wrapped lines → a too-short height), and the field visibly GROWS one pass
+  later when the real margins land — the device-verified "pre-set draft text jumps on open, not every time"
+  bug (the intermittency is the async draft-push racing the first layout). Fix: `height(forWidth:contentMargins:)`
+  + `measuredContentHeight(forWidth:contentMargins:)` take the intended margins explicitly; the composer's
+  `textHeightForWidth` passes its `trackedContentMargins` (the value the next `update` will apply), so the
+  measure is correct on the first pass regardless of the race. `nil` keeps the live-margins behavior for hosts
+  that always `update` before measuring (`RichTextAttachmentScreen`), so they're byte-unchanged.
 - `onChange: (() -> Void)?` — payload-free; fires on any edit, content-size change, or selection move
   (funneled from the canvas's `onContentSizeChange` + `onSelectionChange`, the latter fired unconditionally by
   `editing { }`). The host re-runs its layout (→ `update`) in response. **`update` must NOT synchronously fire

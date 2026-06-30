@@ -240,8 +240,13 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// — no reflow of the displayed boxes, no frame/scroll/overlay/caret change, no `onChange`. Applies
     /// the same `minimumContentHeight` floor and `contentMargins` as `update(...)`, so the measured value
     /// equals what a subsequent `update` at this width returns (measure == commit). Pure read.
-    public func height(forWidth width: CGFloat) -> CGFloat {
-        max(canvas.measuredContentHeight(forWidth: width), minimumContentHeight)
+    ///
+    /// `contentMargins`: pass the margins the host will apply via the next `update(...)` to keep the measure
+    /// correct even when called BEFORE that update has pushed them onto the live canvas (the chat composer
+    /// sizes its field from this while the editor is still unsized after a draft set). Omit (`nil`) to measure
+    /// against the live `contentMargins`, matching the previous behavior for hosts that update before measuring.
+    public func height(forWidth width: CGFloat, contentMargins: UIEdgeInsets? = nil) -> CGFloat {
+        max(canvas.measuredContentHeight(forWidth: width, contentMargins: contentMargins), minimumContentHeight)
     }
 
     /// Test accessor: the current bottom content inset.
