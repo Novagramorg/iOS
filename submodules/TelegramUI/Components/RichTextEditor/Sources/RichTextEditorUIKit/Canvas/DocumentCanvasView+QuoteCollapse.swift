@@ -27,7 +27,7 @@ extension DocumentCanvasView {
             || (beforeAnchor >= runStart && beforeAnchor < runEnd)
         editing {
             let atom = CollapsedQuote(id: .generate(), paragraphs: paragraphs)
-            let newBox = CollapsedQuoteBox(collapsedQuote: atom, mapper: mapper, quoteStyle: quoteStyle, width: effectiveWidth)
+            let newBox = CollapsedQuoteBox(collapsedQuote: atom, mapper: mapper, quoteStyle: quoteStyle, expandImage: quoteCollapseIcons?.expand, width: effectiveWidth)
             var newBoxes = boxes
             newBoxes.replaceSubrange(lo...hi, with: [newBox])
             if caretWasInsideRun {

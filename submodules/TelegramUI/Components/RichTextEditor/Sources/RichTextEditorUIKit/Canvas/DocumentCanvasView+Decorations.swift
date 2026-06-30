@@ -58,7 +58,7 @@ extension DocumentCanvasView {
             guard let start = runStart, let f = runRect else { runStart = nil; runRect = nil; return }
             if f.height >= DocumentCanvasView.collapseButtonMinRunHeight {
                 let s = DocumentCanvasView.collapseButtonSize
-                let rect = CGRect(x: f.maxX - max(quoteStyle.trailingInset, 0) - s - 2,
+                let rect = CGRect(x: f.maxX - 2 - s,
                                   y: f.minY + 2, width: s, height: s)
                 result.append((blockIndex: start, rect: rect))
             }

@@ -37,6 +37,20 @@ final class QuoteCollapseControlsTests: XCTestCase {
         XCTAssertTrue(v.collapseButtonRuns().isEmpty)
     }
 
+    // MARK: - neighbor spacing (a collapsed quote is still a framed block)
+
+    func test_collapsedQuote_preservesNeighborGap_likeExpandedQuote() {
+        // base (8) + framedNeighborMargin (8) = 16 — what a paragraph reserves facing a framed block.
+        let expanded = canvas([body("a", "above"), quote("q", "hi"), body("b", "below")])
+        XCTAssertEqual((expanded.boxes[0] as! BlockBox).bottomInset, 16, accuracy: 0.5)
+        XCTAssertEqual((expanded.boxes[2] as! BlockBox).topInset, 16, accuracy: 0.5)
+
+        let folded = canvas([body("a", "above"), collapsed("q"), body("b", "below")])
+        XCTAssertEqual((folded.boxes[0] as! BlockBox).bottomInset, 16, accuracy: 0.5,
+                       "collapsing a quote must not shrink the neighbor gap")
+        XCTAssertEqual((folded.boxes[2] as! BlockBox).topInset, 16, accuracy: 0.5)
+    }
+
     // MARK: - tap-to-expand
 
     func test_tapExpandGlyph_expandsCollapsedQuote() {

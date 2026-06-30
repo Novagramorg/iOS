@@ -358,6 +358,11 @@ final class RichTextAttachmentScreenComponent: Component {
                 // Quote geometry for the full-page article editor. Defaults == the editor's built-in look;
                 // tune here to diverge from the chat composer.
                 editor.quoteStyle = QuoteStyle()
+                // Quote collapse/expand affordance icons (same assets as the chat composer / legacy input).
+                if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
+                   let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
+                    editor.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(collapse: collapse, expand: expand)
+                }
                 // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-
                 // dismiss gestures. These Display flags can only be set host-side (the editor package can't
                 // import Display) and are applied to the hit-testable handle views, so the effect is scoped to

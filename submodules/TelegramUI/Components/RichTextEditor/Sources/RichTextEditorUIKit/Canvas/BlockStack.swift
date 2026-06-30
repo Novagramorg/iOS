@@ -26,9 +26,9 @@ final class BlockStack {
     }
 
     /// Extra inset a block reserves on the side facing a block that draws its own bounded background or
-    /// border — a quote's fill or a table's grid — so that framed block has visible separation from its
-    /// neighbors. Lives on the neighbor (external to the framed block), since a quote/table fills its
-    /// own frame; the framed block's own inset is its internal padding.
+    /// border — a quote's fill, a collapsed quote's fill, or a table's grid — so that framed block has
+    /// visible separation from its neighbors. Lives on the neighbor (external to the framed block), since a
+    /// quote/table fills its own frame; the framed block's own inset is its internal padding.
     private static let framedNeighborMargin: CGFloat = 8
 
     /// The inset for `box` on the side facing `neighbor` (or the stack edge, when nil). The facing
@@ -42,7 +42,9 @@ final class BlockStack {
 
     private func facingInset(of box: BlockBox, toward neighbor: CanvasBlock?) -> CGFloat {
         let base = self.verticalInsetBase
-        if neighbor is TableBlockBox { return base + BlockStack.framedNeighborMargin }
+        // A table and a collapsed quote both draw their own bounded fill, so a neighbor reserves the extra
+        // framed margin — matching an EXPANDED quote (handled below), so collapsing a quote doesn't shrink the gap.
+        if neighbor is TableBlockBox || neighbor is CollapsedQuoteBox { return base + BlockStack.framedNeighborMargin }
         guard let n = neighbor as? BlockBox else { return base }
         if box.listMembership != nil && n.listMembership != nil { return 0 }
         if box.isBodyParagraph && n.isBodyParagraph { return base / 2 }
@@ -61,6 +63,16 @@ final class BlockStack {
                 let next: CanvasBlock? = i + 1 < boxes.count ? boxes[i + 1] : nil
                 b.topInset = facingInset(of: b, toward: prev)
                 b.bottomInset = facingInset(of: b, toward: next)
+                // A top-level quote run shares one continuous fill; an explicit QuoteStyle vertical inset
+                // overrides the block inset at the run's OUTER edges only (first block's top, last block's
+                // bottom). A neighbor that is not a `.quote` BlockBox — a stack edge (nil) or a
+                // CollapsedQuoteBox — is a run boundary. nil insets leave facingInset untouched. The value
+                // rides the box's own mapper, so a table-cell quote (`.tableCells` mapper) yields nil here.
+                if b.style == .quote {
+                    let s = b.mapper.styleSheet
+                    if (prev as? BlockBox)?.style != .quote, let t = s.quoteTopInset { b.topInset = t }
+                    if (next as? BlockBox)?.style != .quote, let bt = s.quoteBottomInset { b.bottomInset = bt }
+                }
             }
             box.setWidth(width)
             box.frame = CGRect(x: origin.x, y: y, width: width, height: box.height)

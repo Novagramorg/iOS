@@ -12,6 +12,9 @@ final class CollapsedQuoteBox {
     var paragraphs: [ParagraphBlock]
     let mapper: AttributedStringMapper
     let quoteStyle: QuoteStyle
+    /// Host-injected expand glyph image (nil ⇒ no glyph drawn). Set at creation from the canvas's
+    /// `quoteCollapseIcons?.expand`.
+    let expandImage: UIImage?
     /// Display-only preview layout (NOT part of the position/selection axis).
     let layout: BlockLayoutEngine
 
@@ -21,7 +24,7 @@ final class CollapsedQuoteBox {
     static let maxPreviewLines: Int = 3
     static let verticalInset: CGFloat = 8
     /// Square side of the trailing "expand" glyph, plus its gap from the text.
-    static let expandGlyphSize: CGFloat = 16
+    static let expandGlyphSize: CGFloat = 18
     static let expandGlyphGap: CGFloat = 6
 
     var topInset: CGFloat = CollapsedQuoteBox.verticalInset
@@ -50,11 +53,12 @@ final class CollapsedQuoteBox {
         max(width - leadingPad - trailingPad, 1)
     }
 
-    init(collapsedQuote q: CollapsedQuote, mapper: AttributedStringMapper, quoteStyle: QuoteStyle, width: CGFloat) {
+    init(collapsedQuote q: CollapsedQuote, mapper: AttributedStringMapper, quoteStyle: QuoteStyle, expandImage: UIImage?, width: CGFloat) {
         self.id = q.id
         self.paragraphs = q.paragraphs
         self.mapper = mapper
         self.quoteStyle = quoteStyle
+        self.expandImage = expandImage
         let tw = max(width - quoteStyle.leadingInset
                      - (max(quoteStyle.trailingInset, 0) + CollapsedQuoteBox.expandGlyphSize + CollapsedQuoteBox.expandGlyphGap), 1)
         self.layout = makeBlockLayout(attributedString: CollapsedQuoteBox.previewString(for: q, mapper: mapper),
@@ -74,8 +78,8 @@ final class CollapsedQuoteBox {
 
     /// The trailing "expand" glyph rect in canvas coordinates (used by the canvas's tap routing too).
     func expandGlyphRect() -> CGRect {
-        CGRect(x: frame.maxX - max(quoteStyle.trailingInset, 0) - CollapsedQuoteBox.expandGlyphSize,
-               y: frame.minY + topInset,
+        CGRect(x: frame.maxX - 4 - CollapsedQuoteBox.expandGlyphSize,
+               y: frame.minY + 4,
                width: CollapsedQuoteBox.expandGlyphSize, height: CollapsedQuoteBox.expandGlyphSize)
     }
 }
@@ -114,9 +118,8 @@ extension CollapsedQuoteBox: CanvasBlock {
                             width: textWidth(frame.width), height: previewHeight))
         layout.drawText(in: ctx, at: textOrigin)
         ctx.restoreGState()
-        if let glyph = UIImage(systemName: "arrow.up.left.and.arrow.down.right")?
-            .withTintColor(mapper.theme.accent, renderingMode: .alwaysOriginal) {
-            glyph.draw(in: expandGlyphRect())
+        if let image = self.expandImage {
+            image.withTintColor(mapper.theme.accent, renderingMode: .alwaysOriginal).draw(in: expandGlyphRect())
         }
     }
 }

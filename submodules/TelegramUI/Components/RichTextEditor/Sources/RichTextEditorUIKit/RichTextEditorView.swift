@@ -41,6 +41,19 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Host-injected icons for the quote collapse (tall expanded quote) / expand (collapsed quote)
+    /// affordance. `nil` (default) ⇒ no affordance icon is drawn (the package ships no fallback). Assigning
+    /// it updates the live collapse button and reloads so collapsed boxes pick up the new glyph (like `quoteStyle`).
+    public var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons? = nil {
+        didSet {
+            canvas.applyQuoteCollapseIcons(quoteCollapseIcons)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Per-host tunable text-layout metrics (body/caption line height + paragraph spacing; a growable set).
     /// Defaults reproduce the editor's built-in document look (`.default` — 1.10 line height, 8pt paragraph
     /// gap); the compact chat composer assigns `.compact` (natural 1.0 line height, no spacing) so multi-line

@@ -170,6 +170,10 @@ final class DocumentCanvasView: UIView {
     /// render values to the underlay). Read by `blockquoteDecorations()` for the bar width.
     var quoteStyle: QuoteStyle = .default
 
+    /// Host-injected collapse/expand icons (nil ⇒ no affordance drawn). The `collapse` image goes to the
+    /// overlay button; the `expand` image is read when building `CollapsedQuoteBox`es.
+    var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons?
+
     /// Placeholder strings drawn in empty paragraphs. Stamped onto each top-level box during layout.
     /// Defaults to the editor's built-in hints; a compact host (chat composer) sets them to "" to suppress
     /// the editor's placeholder (it draws its own). Applied on the next layout pass.
@@ -471,12 +475,21 @@ final class DocumentCanvasView: UIView {
         s.quoteTrailingInset = q.trailingInset
         s.quoteSpacingBefore = q.spacingBefore
         s.quoteSpacingAfter = q.spacingAfter
+        s.quoteTopInset = q.topInset
+        s.quoteBottomInset = q.bottomInset
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
                                              baseWritingDirection: self.mapper.baseWritingDirection)
         self.blockquoteUnderlay.barWidth = q.barWidth
         self.blockquoteUnderlay.cornerRadius = q.cornerRadius
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
+    }
+
+    /// Applies host-injected collapse/expand icons: stores them (read at `CollapsedQuoteBox` creation for the
+    /// expand glyph) and pushes the collapse image to the overlay controls. The caller reloads afterward.
+    func applyQuoteCollapseIcons(_ icons: RichTextEditorQuoteCollapseIcons?) {
+        self.quoteCollapseIcons = icons
+        self.quoteCollapseControls.collapseImage = icons?.collapse
     }
 
     /// Applies tunable text-layout metrics: rebuilds the mapper's stylesheet with the line-height/spacing
@@ -511,7 +524,7 @@ final class DocumentCanvasView: UIView {
             case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width)
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
             case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
-            case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, width: width)
+            case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, expandImage: quoteCollapseIcons?.expand, width: width)
             }
         }
         recomputeSpans()

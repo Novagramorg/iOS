@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import AsyncDisplayKit
 import Display
+import AppBundle
 import Postbox
 import TextFormat
 import TelegramCore
@@ -126,7 +127,22 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         self.editorView.tapBelowAddsTrailingParagraph = false
         // Quote geometry for the compact composer. Defaults == the editor's built-in look; tune here to
         // diverge from the article editor (e.g. tighter insets in the narrow input field).
-        self.editorView.quoteStyle = QuoteStyle()
+        self.editorView.quoteStyle = QuoteStyle(
+            leadingInset: 9.0,
+            trailingInset: 22.0,
+            spacingBefore: 8.0,
+            spacingAfter: 8.0,
+            barWidth: 3.0,
+            cornerRadius: 2.5,
+            fillAlpha: 0.1,
+            topInset: 3.0,
+            bottomInset: 3.0
+        )
+        // Quote collapse/expand affordance icons — the same bundle assets the legacy ChatInputTextNode uses.
+        if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
+           let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
+            self.editorView.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(collapse: collapse, expand: expand)
+        }
         // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-dismiss
         // gestures. Those Display flags can only be set host-side (the editor package can't import Display) and
         // are applied to the hit-testable handle views, so the effect is scoped to knob interaction — not the

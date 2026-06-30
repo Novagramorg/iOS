@@ -8,6 +8,8 @@ import UIKit
 final class QuoteCollapseControlsView: UIView {
     var onCollapse: ((Int) -> Void)?
     var accentColor: UIColor = .systemBlue { didSet { for b in pool.values { b.tintColor = accentColor } } }
+    /// The collapse-button image (host-injected). `nil` ⇒ no button is shown (no fallback).
+    var collapseImage: UIImage?
     private var pool: [Int: UIButton] = [:]   // keyed by block index
 
     override init(frame: CGRect) {
@@ -27,20 +29,22 @@ final class QuoteCollapseControlsView: UIView {
     /// block-index → button mapping is reused when the run comes back into view.
     func sync(runs: [(blockIndex: Int, rect: CGRect)]) {
         var present = Set<Int>()
-        for run in runs {
-            present.insert(run.blockIndex)
-            let btn = pool[run.blockIndex] ?? {
-                let b = UIButton(type: .system)
-                b.setImage(UIImage(systemName: "arrow.down.right.and.arrow.up.left"), for: .normal)
-                b.tintColor = accentColor
-                b.addTarget(self, action: #selector(tapped(_:)), for: .touchUpInside)
-                pool[run.blockIndex] = b
-                addSubview(b)
-                return b
-            }()
-            btn.tag = run.blockIndex
-            btn.frame = run.rect
-            btn.isHidden = false
+        if let image = collapseImage {
+            for run in runs {
+                present.insert(run.blockIndex)
+                let btn = pool[run.blockIndex] ?? {
+                    let b = UIButton(type: .system)
+                    b.tintColor = accentColor
+                    b.addTarget(self, action: #selector(tapped(_:)), for: .touchUpInside)
+                    pool[run.blockIndex] = b
+                    addSubview(b)
+                    return b
+                }()
+                btn.setImage(image, for: .normal)
+                btn.tag = run.blockIndex
+                btn.frame = run.rect
+                btn.isHidden = false
+            }
         }
         for (idx, btn) in pool where !present.contains(idx) { btn.isHidden = true }
     }

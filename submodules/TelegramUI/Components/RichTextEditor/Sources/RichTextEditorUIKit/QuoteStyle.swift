@@ -21,10 +21,19 @@ public struct QuoteStyle: Equatable {
     public var cornerRadius: CGFloat
     /// Opacity of the accent fill behind the quote (0…1). → `BlockquoteUnderlay`.
     public var fillAlpha: CGFloat
+    /// Interior TOP padding (points): the gap between the quote fill's top edge and the first text
+    /// line. `nil` (default) keeps the block-inset-derived behavior (`BlockStack.facingInset`, driven
+    /// by `blockVerticalInset`); a value overrides it. The vertical parallel to `leadingInset`.
+    /// Applies to top-level quote runs only (table-cell quotes use the static `.tableCells` look).
+    public var topInset: CGFloat?
+    /// Interior BOTTOM padding (points): the gap between the last text line and the quote fill's bottom
+    /// edge. `nil` (default) keeps the current behavior. The vertical parallel to `trailingInset`.
+    public var bottomInset: CGFloat?
 
     public init(leadingInset: CGFloat = 16, trailingInset: CGFloat = 0,
                 spacingBefore: CGFloat = 8, spacingAfter: CGFloat = 8,
-                barWidth: CGFloat = 3, cornerRadius: CGFloat = 2.5, fillAlpha: CGFloat = 0.10) {
+                barWidth: CGFloat = 3, cornerRadius: CGFloat = 2.5, fillAlpha: CGFloat = 0.10,
+                topInset: CGFloat? = nil, bottomInset: CGFloat? = nil) {
         self.leadingInset = leadingInset
         self.trailingInset = trailingInset
         self.spacingBefore = spacingBefore
@@ -32,6 +41,8 @@ public struct QuoteStyle: Equatable {
         self.barWidth = barWidth
         self.cornerRadius = cornerRadius
         self.fillAlpha = fillAlpha
+        self.topInset = topInset
+        self.bottomInset = bottomInset
     }
 
     public static let `default` = QuoteStyle()
