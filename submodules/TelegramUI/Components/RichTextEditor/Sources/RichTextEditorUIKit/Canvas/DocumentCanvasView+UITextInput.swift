@@ -296,12 +296,13 @@ extension DocumentCanvasView: UIKeyInput {
                 } else {
                     insertCodeBlockNewline()
                 }
-            } else if selFrom == selTo, let pos = resolveBox(at: head), let p = pos.box as? BlockBox,
-                      p.style == .quote, p.textLength == 0, emptyQuoteIsRunEdge(at: pos.index) {
-                // Double-return on an empty quote line at the run's first/last edge EXITS the quote with a
-                // body paragraph (before/after follows from which edge). A middle empty quote line splits
+            } else if selFrom == selTo, let pos = resolveBox(at: head),
+                      let exitIndex = quoteDoubleReturnExitIndex(at: pos.index, local: pos.local) {
+                // Double-return EXITS the quote with a body paragraph (before/after follows from the run
+                // edge): either ON an empty quote line, or at the start of quote content with an empty quote
+                // line directly above (two newlines at the beginning). A middle empty quote line splits
                 // normally (the else branch).
-                exitQuoteToBodyParagraph(at: pos.index)
+                exitQuoteToBodyParagraph(at: exitIndex)
             } else {
                 insertParagraphBreak()
             }

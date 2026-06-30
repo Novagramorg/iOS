@@ -64,6 +64,31 @@ final class DoubleReturnExitTests: XCTestCase {
         XCTAssertTrue(canvas.boxes.allSatisfy { style($0) == .quote }, "still all quote paragraphs")
     }
 
+    // Typing two newlines at the BEGINNING of a code block exits before it (the first Enter lands the caret
+    // on the content line past the new "\n"; the second Enter at the start-of-content-after-a-leading-blank
+    // exits). Reachability of the first-line→before case.
+    func test_codeBlock_twoNewlinesAtBeginning_exitsBefore() {
+        let canvas = makeCanvas([.code(CodeBlock(id: BlockID("c1"), runs: [TextRun(text: "abc")]))])
+        canvas.setCaret(global: canvas.boxes[0].textStart)
+        canvas.insertText("\n")
+        canvas.insertText("\n")
+        XCTAssertEqual(canvas.boxes.count, 2, "the second newline at the beginning exits before the code block")
+        XCTAssertEqual(style(canvas.boxes[0]), .body, "an empty body paragraph before the code block")
+        guard case let .code(cb) = canvas.boxes[1].currentBlock() else { return XCTFail("expected .code second") }
+        XCTAssertEqual(cb.text, "abc", "no stray leading blank lines remain in the code block")
+    }
+
+    func test_quote_twoNewlinesAtBeginning_exitsBefore() {
+        let canvas = makeCanvas([quote("q", "abc")])
+        canvas.setCaret(global: canvas.boxes[0].textStart)
+        canvas.insertText("\n")
+        canvas.insertText("\n")
+        XCTAssertEqual(canvas.boxes.count, 2, "the second newline at the beginning exits before the quote")
+        XCTAssertEqual(style(canvas.boxes[0]), .body, "an empty body paragraph before the quote")
+        XCTAssertEqual(style(canvas.boxes[1]), .quote, "the quote content remains")
+        XCTAssertEqual((canvas.boxes[1] as! BlockBox).currentParagraph().text, "abc")
+    }
+
     // MARK: Code-block double-return
 
     func test_codeBlock_doubleReturnOnTrailingEmptyLine_exitsAfter() {

@@ -332,11 +332,13 @@ extension DocumentCanvasView {
         let s = active.box.textLayout.attributedString.string as NSString
         if s.length == 0 { return .uncode }
         let local = active.local, nl = unichar(10)   // "\n"
-        let emptyLine = (local == 0 || s.character(at: local - 1) == nl) && (local == s.length || s.character(at: local) == nl)
-        guard emptyLine else { return nil }
-        if local == s.length { return .after }        // trailing blank line
-        if local == 0 { return .before }              // first blank line (and not trailing)
-        return nil                                    // middle blank line → normal newline
+        // Trailing blank line (caret at the end, last line empty) → after.
+        if local == s.length, s.character(at: s.length - 1) == nl { return .after }
+        // First blank line → before: the caret is ON it (local 0) OR at the start of the content right after
+        // it (local 1) — so Enter at the very beginning, then Enter again, exits (the first Enter lands the
+        // caret past the new "\n" on the content line, so the second is at local 1).
+        if s.character(at: 0) == nl, local <= 1 { return .before }
+        return nil                                    // a non-empty line or a MIDDLE blank line → normal newline
     }
 
     /// Removes a code block's leading "\n" and inserts an empty body paragraph BEFORE it (caret there) —
@@ -392,6 +394,19 @@ extension DocumentCanvasView {
             recomputeSpans()
             anchor = body.textStart; head = body.textStart
         }
+    }
+
+    /// The top-level index of the empty quote line to replace with a body paragraph for a double-return quote
+    /// exit (via `exitQuoteToBodyParagraph`), or nil for a normal split. Two cases: (1) the caret is ON an
+    /// empty quote line at its run's first/last edge; (2) the caret is at the START of quote content with an
+    /// empty quote line directly ABOVE it at the run's edge — e.g. two newlines at the beginning, where the
+    /// first Enter splits off an empty line above and the second exits before it.
+    func quoteDoubleReturnExitIndex(at index: Int, local: Int) -> Int? {
+        guard index >= 0, index < boxes.count, let p = boxes[index] as? BlockBox, p.style == .quote else { return nil }
+        if p.textLength == 0, emptyQuoteIsRunEdge(at: index) { return index }
+        if local == 0, index > 0, let above = boxes[index - 1] as? BlockBox,
+           above.style == .quote, above.textLength == 0, emptyQuoteIsRunEdge(at: index - 1) { return index - 1 }
+        return nil
     }
 
     /// Splits the caret's paragraph at the caret, within whatever `BlockStack` owns the caret (root
