@@ -329,7 +329,8 @@ back the **plain** layout string (display-only monospace attrs never enter the m
 mirror quotes (`+UITextInput`/`+Editing`/`+Interaction`): **Enter** inserts an interior newline via
 `insertCodeBlockNewline()` (replacing any selection); **double-return** (Enter on an empty line —
 `codeBlockDoubleReturnExit`) EXITS — a **trailing** blank line → body paragraph *after*
-(`exitCodeBlockToBodyParagraph`), the **first** blank line → body *before* (`exitCodeBlockToBodyParagraphBefore`),
+(`exitCodeBlockToBodyParagraph`), the **first** blank line → body *before* (`exitCodeBlockToBodyParagraphBefore`; fires at local 0 OR local 1 — the
+start of content right after a leading blank — so **two newlines at the beginning** break out above),
 a **wholly-empty** block → un-code (`uncodeEmptyCodeBlock`); a MIDDLE blank line just inserts another newline.
 **Backspace** in a fully-empty code block un-codes it to body;
 a **tap below** a trailing code block appends a body paragraph; **cross-block** edits treat a code endpoint
@@ -551,8 +552,12 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   wholly-empty** line → **after**, its **first** line → **before**, a wholly-empty block → un-quote / un-code;
   a MIDDLE empty line splits normally (no exit). For a quote *run*, first/last = the first/last consecutive
   `.quote` paragraph (`emptyQuoteIsRunEdge` → `exitQuoteToBodyParagraph`, which replaces the edge empty quote
-  line with a body so the before/after side follows from which edge it sat on). The old Shift+Return path (its
-  `UIKeyCommand` + `performShiftReturn` + `caretIsOnFirstLine`) was removed.
+  line with a body so the before/after side follows from which edge it sat on). **Reachability (2026-06-30):**
+  after the first Enter at the start of a block the caret lands on the content line (past the new break), so the
+  *before*-exit also fires from the start of content with an empty line directly above — code via the local-1
+  branch of `codeBlockDoubleReturnExit`, quotes via `quoteDoubleReturnExitIndex` (caret at content start with an
+  empty quote line above) — so **two newlines at the beginning** break out *above* instead of stacking blank
+  lines. The old Shift+Return path (its `UIKeyCommand` + `performShiftReturn` + `caretIsOnFirstLine`) was removed.
 - **"Type something…" placeholder shows only on the document's LAST block** (`BlockBox.isLastBlock`, stamped
   in `stampListMarkers` like `isTopLevelBlock`); an empty body paragraph elsewhere shows no placeholder (list
   hints are unaffected). An empty non-last paragraph still reserves its line + caret — only the hint is gone.
