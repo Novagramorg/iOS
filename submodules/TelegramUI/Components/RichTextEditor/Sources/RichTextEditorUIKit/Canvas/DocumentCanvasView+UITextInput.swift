@@ -398,6 +398,22 @@ extension DocumentCanvasView: UIKeyInput {
             deleteTableStructuralSelection()
             return
         }
+        // iOS delivers Backspace in an empty paragraph immediately AFTER a code block as an object-replacement
+        // RANGE running from the code block's text end to the empty paragraph's start (device-log: `setRange
+        // [8,10]` overriding the collapsed caret at 10, then `deleteBackward selFrom=8 selTo=10`) — the same
+        // offset-geometry pattern as a media atom. The generic selection-replace below would mangle the
+        // code-block boundary and strand the empty paragraph. Recognise it — selTo at the start of an EMPTY
+        // paragraph whose previous block is a code block, with selFrom only covering the structural slots
+        // before (`selFrom >= prevTextPosition(before: selTo)`, which excludes a genuine multi-char selection)
+        // — and remove the empty paragraph, parking the caret at the code block's end (matching the
+        // collapsed-caret path for an empty paragraph after a non-text atom further below).
+        if selFrom != selTo, let posTo = resolveBox(at: selTo),
+           posTo.local == 0, posTo.box.textLength == 0, posTo.index > 0,
+           boxes[posTo.index - 1] is CodeBlockBox,
+           selFrom >= prevTextPosition(before: selTo) {
+            editing { removeBlock(at: posTo.index, parkingCaretAt: prevTextPosition(before: selTo)) }
+            return
+        }
         if selFrom != selTo {
             editing { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             return

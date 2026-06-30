@@ -95,6 +95,26 @@ final class CodeBlockEditingTests: XCTestCase {
         XCTAssertEqual(cb.text, "x\n")
     }
 
+    // Backspace in an empty paragraph AFTER a code block. iOS does NOT deliver a collapsed caret here — it
+    // overrides the selection with an object-replacement RANGE from the code block's text end to the empty
+    // paragraph's start (device-log verified: setRange [8,10] then deleteBackward selFrom=8 selTo=10). The
+    // empty paragraph must be removed and the caret parked at the code block's end — not a generic
+    // selection-replace that mangles the boundary and strands the empty paragraph.
+    func test_codeBlock_backspaceObjectReplacementRangeAfter_removesEmptyParagraph() {
+        let canvas = makeCanvas([
+            .code(CodeBlock(id: BlockID("c1"), runs: [TextRun(text: "code123")])),
+            .paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [])),
+        ])
+        let code = canvas.boxes[0], p = canvas.boxes[1]
+        canvas.setSelectionAnchor(global: code.textStart + code.textLength)   // the object range's anchor (code end)
+        canvas.setSelectionHead(global: p.textStart)                          // ...to the empty paragraph's start
+        canvas.deleteBackward()
+        XCTAssertEqual(canvas.boxes.count, 1, "the empty paragraph after the code block is removed")
+        XCTAssertTrue(canvas.boxes.first is CodeBlockBox, "the code block remains")
+        XCTAssertEqual(canvas.head, canvas.boxes[0].textStart + canvas.boxes[0].textLength,
+                       "caret lands at the code block's end")
+    }
+
     // MARK: Task 8 — composer flat mapping + cross-block delete
 
     func test_composerFlatRange_countsCodeInterior() {
