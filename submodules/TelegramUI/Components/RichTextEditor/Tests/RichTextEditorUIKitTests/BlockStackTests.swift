@@ -115,6 +115,22 @@ final class BlockStackTests: XCTestCase {
         XCTAssertEqual(a.topInset, BlockBox.defaultVerticalInset, accuracy: 0.5)
     }
 
+    func test_codeBlockNeighbors_reserveExtraExternalMargin() {
+        let mapper = AttributedStringMapper()
+        func body(_ id: String) -> BlockBox {
+            BlockBox(paragraph: ParagraphBlock(id: BlockID(id), runs: [TextRun(text: "x")]), mapper: mapper, width: 300)
+        }
+        let code = CodeBlockBox(code: CodeBlock(id: BlockID("c"), runs: [TextRun(text: "let x = 1")]), mapper: mapper, width: 300)
+        let above = body("above"), below = body("below")
+        BlockStack(boxes: [above, code, below]).layout(origin: .zero, width: 300)
+        // A code block draws its own bounded (quote-style) fill, so neighbors reserve the extra external
+        // margin on the code-facing side — exactly like quote / table / collapsed-quote neighbors, so a
+        // code block sits the SAME distance from its neighbors as a quote does.
+        XCTAssertGreaterThan(above.bottomInset, BlockBox.defaultVerticalInset)   // block above the code block
+        XCTAssertGreaterThan(below.topInset, BlockBox.defaultVerticalInset)      // block below the code block
+        XCTAssertEqual(above.topInset, BlockBox.defaultVerticalInset, accuracy: 0.5)  // far side unaffected
+    }
+
     func test_tableNeighbors_reserveExtraExternalMargin() {
         let mapper = AttributedStringMapper()
         func body(_ id: String) -> BlockBox {

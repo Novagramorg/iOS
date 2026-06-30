@@ -20,6 +20,11 @@ final class CodeBlockBoxTests: XCTestCase {
         XCTAssertEqual(makeBox("x").textRef, .code(BlockID("c1")))
     }
 
+    func test_codeBox_usesFifteenPointFont_matchingQuote() {
+        let font = CodeBlockBox.codeAttributes()[.font] as? UIFont
+        XCTAssertEqual(font?.pointSize ?? 0, 15, accuracy: 0.5, "code block font is 15pt, matching the quote")
+    }
+
     func test_codeBox_currentBlockRoundTripsTextAndLanguage() {
         guard case let .code(cb) = makeBox("a\nb", language: "ruby").currentBlock() else {
             return XCTFail("expected .code")
@@ -35,6 +40,14 @@ final class CodeBlockBoxTests: XCTestCase {
         XCTAssertEqual(regions[0].globalStart, 5)
         XCTAssertEqual(regions[0].length, 3)
         XCTAssertEqual(regions[0].ref, .code(BlockID("c1")))
+    }
+
+    func test_codeBox_textLeftInsetMatchesQuoteIndent() {
+        // Code text must clear the shared accent bar exactly like quote text: its left inset is the
+        // quote's leading indent, not the old 8pt code padding.
+        let box = makeBox("x")
+        box.frame = CGRect(x: 10, y: 0, width: 300, height: 40)
+        XCTAssertEqual(box.textOrigin.x - box.frame.minX, StyleSheet.default.quoteIndent, accuracy: 0.5)
     }
 
     func test_codeBox_factoryProducesCodeBlockBox() {

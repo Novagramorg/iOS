@@ -15,16 +15,22 @@ final class CodeBlockBox {
 
     var frame: CGRect = .zero
     var globalStart: Int = 0
-    static let verticalInset: CGFloat = 8
-    static let horizontalPadding: CGFloat = 8       // interior left/right padding inside the fill
-    let textInset = CGPoint(x: CodeBlockBox.horizontalPadding, y: CodeBlockBox.verticalInset)
-    var topInset: CGFloat = CodeBlockBox.verticalInset
-    var bottomInset: CGFloat = CodeBlockBox.verticalInset
+    /// Fallback interior top/bottom padding (points) when the host hasn't set a quote top/bottom inset.
+    static let defaultVerticalInset: CGFloat = 8
+    /// Monospace point size — matches the quote's 15pt so a code block reads at the same scale as a quote.
+    static let fontSize: CGFloat = 15
+    /// Interior LEFT padding (bar→text gap): the quote's leading indent, so code text clears the shared
+    /// accent bar exactly like quote text. Read live from the quote StyleSheet (host-tunable via QuoteStyle).
+    var leftInset: CGFloat { mapper.styleSheet.quoteIndent }
+    /// Interior RIGHT padding: the quote's trailing inset — the text container narrows; the fill spans full width.
+    var rightInset: CGFloat { mapper.styleSheet.quoteTrailingInset }
+    var topInset: CGFloat = CodeBlockBox.defaultVerticalInset
+    var bottomInset: CGFloat = CodeBlockBox.defaultVerticalInset
 
     static func codeAttributes() -> [NSAttributedString.Key: Any] {
         let ps = NSMutableParagraphStyle()
         ps.lineBreakMode = .byWordWrapping
-        return [.font: UIFont.monospacedSystemFont(ofSize: 16, weight: .regular),
+        return [.font: UIFont.monospacedSystemFont(ofSize: CodeBlockBox.fontSize, weight: .regular),
                 .paragraphStyle: ps]
     }
 
@@ -36,16 +42,18 @@ final class CodeBlockBox {
         self.id = code.id
         self.language = code.language
         self.mapper = mapper
+        self.topInset = mapper.styleSheet.quoteTopInset ?? CodeBlockBox.defaultVerticalInset
+        self.bottomInset = mapper.styleSheet.quoteBottomInset ?? CodeBlockBox.defaultVerticalInset
         self.layout = makeBlockLayout(attributedString: CodeBlockBox.attributedString(for: code),
-                                      width: max(width - CodeBlockBox.horizontalPadding * 2, 1))
+                                      width: max(width - mapper.styleSheet.quoteIndent - mapper.styleSheet.quoteTrailingInset, 1))
     }
 
     var length: Int { layout.length }
-    var textOrigin: CGPoint { CGPoint(x: frame.minX + textInset.x, y: frame.minY + topInset) }
+    var textOrigin: CGPoint { CGPoint(x: frame.minX + leftInset, y: frame.minY + topInset) }
 
     private var emptyLineHeight: CGFloat {
         guard layout.length == 0 else { return 0 }
-        return ((CodeBlockBox.codeAttributes()[.font] as? UIFont) ?? UIFont.monospacedSystemFont(ofSize: 16, weight: .regular)).lineHeight
+        return ((CodeBlockBox.codeAttributes()[.font] as? UIFont) ?? UIFont.monospacedSystemFont(ofSize: CodeBlockBox.fontSize, weight: .regular)).lineHeight
     }
 
     func currentCode() -> CodeBlock {
@@ -64,9 +72,9 @@ extension CodeBlockBox: CanvasBlock {
     var textRef: TextNodeRef { .code(id) }
     var height: CGFloat { max(layout.boundingHeight, emptyLineHeight) + topInset + bottomInset }
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        max(layout.boundingHeight(forWidth: max(width - CodeBlockBox.horizontalPadding * 2, 1)), emptyLineHeight) + topInset + bottomInset
+        max(layout.boundingHeight(forWidth: max(width - leftInset - rightInset, 1)), emptyLineHeight) + topInset + bottomInset
     }
-    func setWidth(_ width: CGFloat) { layout.setWidth(max(width - CodeBlockBox.horizontalPadding * 2, 1)) }
+    func setWidth(_ width: CGFloat) { layout.setWidth(max(width - leftInset - rightInset, 1)) }
     func currentBlock() -> Block { .code(currentCode()) }
     func closestPosition(toCanvasPoint point: CGPoint) -> Int {
         textStart + layout.closestOffset(toPoint: CGPoint(x: point.x - textOrigin.x, y: point.y - textOrigin.y))
@@ -77,9 +85,9 @@ extension CodeBlockBox: CanvasBlock {
                         emptyLineLeadingIndent: 0, emptyLineHeight: emptyLineHeight)]
     }
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {
-        let fill = mapper.theme.codeBackground
-        let bg = UIBezierPath(roundedRect: frame.insetBy(dx: 0, dy: 2), cornerRadius: 6)
-        ctx.saveGState(); ctx.addPath(bg.cgPath); ctx.setFillColor(fill.cgColor); ctx.fillPath(); ctx.restoreGState()
+        // Background (accent bar + tinted fill) is painted by the shared `BlockquoteUnderlay` — the same
+        // way quotes render — via the `CodeBlockBox` case in `blockquoteDecorations()`. The backing view
+        // stays clear; here we draw only the monospace text and the optional language label.
         layout.drawText(in: ctx, at: textOrigin)
         if let lang = language, !lang.isEmpty {
             NSAttributedString(string: lang, attributes: [
