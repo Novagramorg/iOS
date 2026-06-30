@@ -26,9 +26,9 @@ final class BlockStack {
     }
 
     /// Extra inset a block reserves on the side facing a block that draws its own bounded background or
-    /// border — a quote's fill, a collapsed quote's fill, or a table's grid — so that framed block has
-    /// visible separation from its neighbors. Lives on the neighbor (external to the framed block), since a
-    /// quote/table fills its own frame; the framed block's own inset is its internal padding.
+    /// border — a quote's fill, a collapsed quote's fill, a code block's fill, or a table's grid — so that
+    /// framed block has visible separation from its neighbors. Lives on the neighbor (external to the framed
+    /// block), since a quote/code/table fills its own frame; the framed block's own inset is its internal padding.
     private static let framedNeighborMargin: CGFloat = 8
 
     /// The inset for `box` on the side facing `neighbor` (or the stack edge, when nil). The facing
@@ -42,9 +42,11 @@ final class BlockStack {
 
     private func facingInset(of box: BlockBox, toward neighbor: CanvasBlock?) -> CGFloat {
         let base = self.verticalInsetBase
-        // A table and a collapsed quote both draw their own bounded fill, so a neighbor reserves the extra
-        // framed margin — matching an EXPANDED quote (handled below), so collapsing a quote doesn't shrink the gap.
-        if neighbor is TableBlockBox || neighbor is CollapsedQuoteBox { return base + BlockStack.framedNeighborMargin }
+        // A table, a collapsed quote, and a code block all draw their own bounded fill, so a neighbor reserves
+        // the extra framed margin — matching an EXPANDED quote (handled below), so collapsing a quote (or
+        // un-coding a code block) doesn't shrink the gap, and a code block sits the same distance from its
+        // neighbors as a quote.
+        if neighbor is TableBlockBox || neighbor is CollapsedQuoteBox || neighbor is CodeBlockBox { return base + BlockStack.framedNeighborMargin }
         guard let n = neighbor as? BlockBox else { return base }
         if box.listMembership != nil && n.listMembership != nil { return 0 }
         if box.isBodyParagraph && n.isBodyParagraph { return base / 2 }

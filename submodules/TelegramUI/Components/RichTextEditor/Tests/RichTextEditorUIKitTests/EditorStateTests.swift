@@ -53,6 +53,22 @@ final class EditorStateTests: XCTestCase {
         XCTAssertNil(s.paragraphStyle, "in a cell there is no top-level paragraph style")
     }
 
+    func test_currentState_caretInCodeBlock_isCodeBlockTrue_styleNil() {
+        let e = editor([.code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "let x = 1")]))])
+        let pos = DocumentTextPosition(e.canvas.boxes[0].textStart + 1)
+        e.canvas.selectedTextRange = DocumentTextRange(pos, pos)
+        let s = e.currentState()
+        XCTAssertTrue(s.isCodeBlock, "caret inside a code block reports isCodeBlock")
+        XCTAssertNil(s.paragraphStyle, "a code block is not a top-level paragraph style")
+    }
+
+    func test_currentState_bodyParagraph_isCodeBlockFalse() {
+        let e = editor([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hi")]))])
+        let pos = DocumentTextPosition(e.canvas.boxes[0].textStart + 1)
+        e.canvas.selectedTextRange = DocumentTextRange(pos, pos)
+        XCTAssertFalse(e.currentState().isCodeBlock, "a body paragraph is not a code block")
+    }
+
     func test_currentState_boldOverSelection() {
         let e = editor([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
         let lo = e.canvas.boxes[0].textStart, hi = lo + 5

@@ -27,6 +27,11 @@ extension DocumentCanvasView {
                 result.append(BlockquoteDecoration(fill: cq.frame,
                                                    bar: CGRect(x: cq.frame.minX, y: cq.frame.minY,
                                                                width: self.quoteStyle.barWidth, height: cq.frame.height)))
+            } else if let code = box as? CodeBlockBox {
+                flush()                                   // a code block is its own run (rounded both ends)
+                result.append(BlockquoteDecoration(fill: code.frame,
+                                                   bar: CGRect(x: code.frame.minX, y: code.frame.minY,
+                                                               width: self.quoteStyle.barWidth, height: code.frame.height)))
             } else {
                 flush()
             }

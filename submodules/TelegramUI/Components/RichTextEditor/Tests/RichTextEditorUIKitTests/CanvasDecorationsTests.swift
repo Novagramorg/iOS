@@ -50,6 +50,31 @@ final class CanvasDecorationsTests: XCTestCase {
         XCTAssertEqual(v.blockquoteDecorations().count, 2)                     // two distinct quotes → two backgrounds
     }
 
+    func test_codeBlock_contributesItsOwnBackgroundRun() {
+        let v = canvas([
+            .paragraph(ParagraphBlock(id: BlockID("q"), style: .quote, runs: [TextRun(text: "Quote")])),
+            .code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "let x = 1")])),
+        ])
+        let decs = v.blockquoteDecorations()
+        XCTAssertEqual(decs.count, 2, "quote run and code run are distinct backgrounds, not merged")
+        let codeBox = v.boxes.first(where: { $0 is CodeBlockBox })!
+        let codeDec = decs.first(where: { $0.fill == codeBox.frame })!
+        XCTAssertEqual(codeDec.fill.minY, codeBox.frame.minY, accuracy: 0.5)   // fill spans the code block
+        XCTAssertEqual(codeDec.fill.maxY, codeBox.frame.maxY, accuracy: 0.5)
+        XCTAssertEqual(codeDec.bar.minX, codeBox.frame.minX, accuracy: 0.5)     // bar at the block's left edge
+        XCTAssertEqual(codeDec.bar.width, v.quoteStyle.barWidth, accuracy: 0.5) // bar width tracks the quote bar
+    }
+
+    func test_codeBlockBetweenQuotes_splitsIntoThreeRuns() {
+        let v = canvas([
+            .paragraph(ParagraphBlock(id: BlockID("q1"), style: .quote, runs: [TextRun(text: "A")])),
+            .code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "code")])),
+            .paragraph(ParagraphBlock(id: BlockID("q2"), style: .quote, runs: [TextRun(text: "B")])),
+        ])
+        XCTAssertEqual(v.blockquoteDecorations().count, 3,
+                       "the code block flushes the quote run before and after it")
+    }
+
     func test_typeSomethingPlaceholder_onlyOnLastBlock() {
         // Two empty body paragraphs: the "Type something…" placeholder shows ONLY on the last block.
         let v = canvas([

@@ -317,8 +317,11 @@ timestamp-creation UI yet).
 **Composer code blocks — first-class `Block.code` (added 2026-06-19, `feature/richtext-code-block`).** A
 multi-line code block is now a first-class `Block.code(CodeBlock)` (`Core/Model/CodeBlock.swift`: `id` +
 `language: String?` + plain `runs` whose text may contain interior `"\n"`), rendered by a new
-`CodeBlockBox: CanvasBlock` (`Canvas/CodeBlockBox.swift`) — a monospace `BlockLayoutEngine` drawn in a filled
-rounded-rect (themeable `RichTextEditorTheme.codeBackground`) with an optional language label. **It reuses the
+`CodeBlockBox: CanvasBlock` (`Canvas/CodeBlockBox.swift`) — a monospace `BlockLayoutEngine` over the **same
+quote background**: the shared `BlockquoteUnderlay` (accent bar + accent-tinted fill + corner radius) via a
+`CodeBlockBox` case in `blockquoteDecorations()`, with quote-matched text insets (`quoteIndent` /
+`quoteTrailingInset` / `quoteTopInset` / `quoteBottomInset`) and an optional language label (2026-06-30). The
+box draws no fill itself; `RichTextEditorTheme.codeBackground` is retained but unused (a dormant seam). **It reuses the
 existing position model unchanged:** `Block.code` maps to a `.paragraph` `DocNode` carrying a `TextNodeRef.code`
 leaf, sized `content + 2` exactly like a wrap-heavy paragraph — multi-line interior `"\n"`s need **no** new
 position/selection/tokenizer machinery (they're a linear UTF-16 range TextKit wraps). `currentBlock()` reads

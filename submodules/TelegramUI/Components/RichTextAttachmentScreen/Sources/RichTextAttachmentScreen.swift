@@ -607,13 +607,57 @@ final class RichTextAttachmentScreenComponent: Component {
             ))
             barActions.append(RichTextActionBarComponent.Action(
                 id: AnyHashable("quote"), icon: "RichText/ToolQuote",
-                action: editorState.isInTable ? nil : { [weak self] _ in
+                action: editorState.isInTable ? nil : { [weak self] sourceView in
                     guard let self else { return }
                     // Re-read live state at tap time rather than the build-time snapshot.
-                    let isQuote = self.editor.currentState().paragraphStyle == .quote
-                    self.editor.setParagraphStyle(isQuote ? .body : .quote)
+                    let state = self.editor.currentState()
+                    let isQuote = state.paragraphStyle == .quote
+                    let isCode = state.isCodeBlock
+                    let items: [ContextMenuItem] = [
+                        .action(ContextMenuActionItem(text: "None", icon: { theme in
+                            (!isQuote && !isCode)
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            guard let self else { return }
+                            // Return to a plain body paragraph (un-code first if needed; setParagraphStyle
+                            // doesn't touch a CodeBlockBox).
+                            if self.editor.currentState().isCodeBlock {
+                                self.editor.makeCodeBlock()
+                            } else {
+                                self.editor.setParagraphStyle(.body)
+                            }
+                        })),
+                        .action(ContextMenuActionItem(text: "Quote", icon: { theme in
+                            isQuote
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            guard let self else { return }
+                            // Exit a code block first (its text becomes body paragraphs), then apply the quote style.
+                            if self.editor.currentState().isCodeBlock {
+                                self.editor.makeCodeBlock()
+                            }
+                            self.editor.setParagraphStyle(.quote)
+                        })),
+                        .action(ContextMenuActionItem(text: "Code Block", icon: { theme in
+                            isCode
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            guard let self else { return }
+                            // makeCodeBlock() toggles; only turn it ON so re-selecting Code Block is idempotent.
+                            if !self.editor.currentState().isCodeBlock {
+                                self.editor.makeCodeBlock()
+                            }
+                        })),
+                    ]
+                    self.presentActionMenu(from: sourceView, items: items)
                 },
-                isSelected: editorState.paragraphStyle == .quote
+                isSelected: editorState.paragraphStyle == .quote || editorState.isCodeBlock
             ))
             barActions.append(RichTextActionBarComponent.Action(
                 id: AnyHashable("writingDirection"), icon: "RichText/ToolParagraphStyle",
