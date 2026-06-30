@@ -64,6 +64,9 @@ extension DocumentCanvasView: UITextInput {
             if let img = boxes.compactMap({ $0 as? MediaBlockBox }).first(where: { region.ref == .caption($0.id) }) {
                 return img.captionTypingAttributes()
             }
+            // An empty code block types the monospace code attributes, not the body default — without this the
+            // first character typed into a just-created (empty) code block lands non-monospace at body size.
+            if case .code = region.ref { return CodeBlockBox.codeAttributes() }
             // Recover the owning paragraph — top-level OR nested in a table cell (via the active stack)
             // — so an empty styled/listed/cell paragraph keeps its paragraph style AND its box's mapper
             // on the next typed character. A table cell's mapper renders body text at a smaller base

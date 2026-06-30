@@ -115,6 +115,19 @@ final class CodeBlockEditingTests: XCTestCase {
                        "caret lands at the code block's end")
     }
 
+    // Typing into a just-created (EMPTY) code block must use the monospace code font, not the body default.
+    // The empty-storage typing path recovers a BlockBox paragraph's style/mapper; a CodeBlockBox isn't a
+    // BlockBox, so without a code-specific case the first typed character lands non-monospace at body size.
+    func test_codeBlock_emptyTypingAttributesAreMonospace() {
+        let canvas = makeCanvas([.code(CodeBlock(id: BlockID("c1"), runs: []))])
+        canvas.setCaret(global: 1)   // inside the empty code block (textStart = 1)
+        let font = canvas.typingAttributesAtGlobal(1)[.font] as? UIFont
+        XCTAssertEqual(font?.pointSize ?? 0, CodeBlockBox.fontSize, accuracy: 0.5,
+                       "typing into an empty code block uses the 15pt code font, not the 17pt body default")
+        XCTAssertTrue(font?.fontDescriptor.symbolicTraits.contains(.traitMonoSpace) ?? false,
+                      "typing into an empty code block uses a monospaced font")
+    }
+
     // MARK: Task 8 — composer flat mapping + cross-block delete
 
     func test_composerFlatRange_countsCodeInterior() {
