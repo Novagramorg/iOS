@@ -71,8 +71,9 @@ final class TableBlockBox: CanvasBlock {
                     switch block {
                     case .paragraph(let p): return BlockBox(paragraph: p, mapper: cellMapper, width: 100)
                     case .media(let img): return MediaBlockBox(media: img, mapper: cellMapper, width: 100)
-                    case .table: return nil   // no nested tables in v1
-                    case .code: return nil    // no nested code blocks in a table cell in v1
+                    case .table: return nil              // no nested tables in v1
+                    case .code: return nil               // no nested code blocks in a table cell in v1
+                    case .collapsedQuote: return nil     // not rendered inside a table cell
                     }
                 })
                 // The cell owns its vertical padding (`cellVerticalPadding`), so its stack adds no

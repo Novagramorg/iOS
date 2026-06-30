@@ -31,6 +31,8 @@ final class RTFImportCorpusTests: XCTestCase {
                 result.append(c.runs.map(\.text).joined())
             case .media:
                 break
+            case .collapsedQuote:
+                break
             }
         }
         return result

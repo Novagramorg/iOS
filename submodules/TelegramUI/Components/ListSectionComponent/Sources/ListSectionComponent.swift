@@ -159,7 +159,11 @@ public final class ListSectionContentView: UIView {
         if self.highlightedItemId != nil && configuration.extendsItemHighlightToSection {
             backgroundColor = configuration.theme.list.itemHighlightedBackgroundColor
         } else {
-            backgroundColor = configuration.isModal ? configuration.theme.list.itemModalBlocksBackgroundColor : configuration.theme.list.itemBlocksBackgroundColor
+            if case .plain = configuration.style {
+                backgroundColor = configuration.theme.list.plainBackgroundColor
+            } else {
+                backgroundColor = configuration.isModal ? configuration.theme.list.itemModalBlocksBackgroundColor : configuration.theme.list.itemBlocksBackgroundColor
+            }
         }
         self.externalContentBackgroundView.updateColor(color: backgroundColor, transition: transition)
         

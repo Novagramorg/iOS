@@ -5,6 +5,7 @@ public enum Block: Equatable {
     case media(MediaBlock)
     case table(TableBlock)
     case code(CodeBlock)
+    case collapsedQuote(CollapsedQuote)
 
     public var id: BlockID {
         switch self {
@@ -12,12 +13,13 @@ public enum Block: Equatable {
         case .media(let m): return m.id
         case .table(let t): return t.id
         case .code(let c): return c.id
+        case .collapsedQuote(let q): return q.id
         }
     }
 }
 
 extension Block: Codable {
-    private enum Kind: String, Codable { case paragraph, media, table, code }
+    private enum Kind: String, Codable { case paragraph, media, table, code, collapsedQuote }
     private enum CodingKeys: String, CodingKey { case type, value }
 
     public init(from decoder: Decoder) throws {
@@ -26,7 +28,8 @@ extension Block: Codable {
         case .paragraph: self = .paragraph(try c.decode(ParagraphBlock.self, forKey: .value))
         case .media:     self = .media(try c.decode(MediaBlock.self, forKey: .value))
         case .table:     self = .table(try c.decode(TableBlock.self, forKey: .value))
-        case .code:      self = .code(try c.decode(CodeBlock.self, forKey: .value))
+        case .code:          self = .code(try c.decode(CodeBlock.self, forKey: .value))
+        case .collapsedQuote: self = .collapsedQuote(try c.decode(CollapsedQuote.self, forKey: .value))
         }
     }
 
@@ -45,6 +48,9 @@ extension Block: Codable {
         case .code(let code):
             try c.encode(Kind.code, forKey: .type)
             try c.encode(code, forKey: .value)
+        case .collapsedQuote(let q):
+            try c.encode(Kind.collapsedQuote, forKey: .type)
+            try c.encode(q, forKey: .value)
         }
     }
 }

@@ -355,6 +355,26 @@ final class RichTextAttachmentScreenComponent: Component {
                 // changes when the frame — and a working reload width — exists.)
                 editor.theme = Self.mapEditorTheme(environment.theme)
                 self.appliedTheme = environment.theme
+                // Quote geometry for the full-page article editor. Defaults == the editor's built-in look;
+                // tune here to diverge from the chat composer.
+                editor.quoteStyle = QuoteStyle()
+                // Quote collapse/expand affordance icons (same assets as the chat composer / legacy input).
+                if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
+                   let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
+                    editor.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(collapse: collapse, expand: expand)
+                }
+                // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-
+                // dismiss gestures. These Display flags can only be set host-side (the editor package can't
+                // import Display) and are applied to the hit-testable handle views, so the effect is scoped to
+                // knob interaction — not the whole editor surface.
+                editor.configureSelectionHandleView = { handle in
+                    handle.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
+                    handle.disablesInteractiveModalDismiss = true
+                    handle.disablesInteractiveKeyboardGestureRecognizer = true
+                }
+                editor.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
+                editor.disablesInteractiveModalDismiss = true
+                editor.disablesInteractiveKeyboardGestureRecognizer = true
                 // Seed the editor with the caller-supplied initial content (e.g. the chat composer's
                 // current document when expanding); an empty document when none is provided.
                 editor.document = component.initialContents ?? Document()
@@ -422,6 +442,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 }
 
                 self.addSubview(editor)
+                self.topEdgeEffectView.isUserInteractionEnabled = false
                 self.addSubview(self.topEdgeEffectView)
             }
             self.component = component
@@ -593,6 +614,27 @@ final class RichTextAttachmentScreenComponent: Component {
                     self.editor.setParagraphStyle(isQuote ? .body : .quote)
                 },
                 isSelected: editorState.paragraphStyle == .quote
+            ))
+            barActions.append(RichTextActionBarComponent.Action(
+                id: AnyHashable("writingDirection"), icon: "RichText/ToolParagraphStyle",
+                action: editorState.isInTable ? nil : { [weak self] sourceView in
+                    guard let self else { return }
+                    let current = self.editor.layoutDirectionOverride
+                    let entries: [(String, DocumentLayoutDirection)] = [
+                        ("Automatic", .auto), ("Left-to-Right", .leftToRight), ("Right-to-Left", .rightToLeft)]
+                    let items: [ContextMenuItem] = entries.map { (title, dir) in
+                        .action(ContextMenuActionItem(text: title, icon: { theme in
+                            dir == current
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            self?.editor.layoutDirectionOverride = dir
+                        }))
+                    }
+                    self.presentActionMenu(from: sourceView, items: items)
+                },
+                isSelected: self.editor.layoutDirectionOverride != .auto
             ))
             barActions.append(RichTextActionBarComponent.Action(
                 id: AnyHashable("table"), icon: "RichText/ToolTable",

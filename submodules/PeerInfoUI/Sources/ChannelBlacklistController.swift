@@ -425,7 +425,7 @@ public func channelBlacklistController(context: AccountContext, updatedPresentat
                     return $0.withUpdatedRemovingPeerId(memberId)
                 }
                 
-                removePeerDisposable.set((context.peerChannelMemberCategoriesContextsManager.updateMemberBannedRights(engine: context.engine, peerId: peerId, memberId: memberId, bannedRights: nil)  |> deliverOnMainQueue).start(error: { _ in
+                removePeerDisposable.set((context.peerChannelMemberCategoriesContextsManager.updateMemberBannedRights(engine: context.engine, peerId: peerId, memberId: memberId, bannedRights: nil) |> deliverOnMainQueue).start(error: { _ in
                 }, completed: {
                     updateState {
                         return $0.withUpdatedRemovingPeerId(nil)

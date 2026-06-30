@@ -93,6 +93,19 @@ final class MapperTests: XCTestCase {
         XCTAssertNil(ca.fontFamily, "serif heading font is style-derived and must not leak into the model as a user fontFamily")
     }
 
+    func test_substitutedFontFamily_doesNotLeakIntoModel() throws {
+        // TextKit's automatic font substitution (e.g. for Arabic/Hebrew/CJK glyphs the style font can't
+        // render) rewrites `.font` in the storage to a script-specific family. That is a display artifact,
+        // not user intent, and must NOT round-trip into the model — otherwise a rebuild (e.g. the paragraph
+        // merge on backspace) re-applies the substituted family and the font visibly changes.
+        let substituted = try XCTUnwrap(UIFont(name: "Helvetica Neue", size: 17),
+                                        "test needs a font with a non-default family")
+        XCTAssertNotEqual(substituted.familyName, UIFont.systemFont(ofSize: 17).familyName,
+                          "precondition: the test font has a non-default family")
+        let ca = AttributedStringMapper().characterAttributes(from: [.font: substituted], style: .body)
+        XCTAssertNil(ca.fontFamily, "a display-substituted font family must not round-trip into the model")
+    }
+
     func test_inlineCode_rendersMonospace_andRoundTripsClean() {
         let ca = CharacterAttributes(inlineCode: true)
         let dict = mapper.attributes(for: ca, style: .body)

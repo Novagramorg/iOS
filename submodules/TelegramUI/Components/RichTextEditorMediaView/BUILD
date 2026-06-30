@@ -14,6 +14,12 @@ swift_library(
         "//submodules/TelegramCore",
         "//submodules/InstantPageUI",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
+        "//submodules/ComponentFlow:ComponentFlow",
+        "//submodules/Display:Display",
+        "//submodules/PhotoResources:PhotoResources",
+        "//submodules/MediaResources:MediaResources",
+        "//submodules/RadialStatusNode:RadialStatusNode",
+        "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
     ],
     visibility = [
         "//visibility:public",

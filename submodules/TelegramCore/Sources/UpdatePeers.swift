@@ -2,37 +2,14 @@ import Foundation
 import Postbox
 import TelegramApi
 
-func _internal_isPeerHiddenByCollapsedCommunity(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
-    if let channel = (peer ?? transaction.getPeer(peerId)) as? TelegramChannel, let linkedCommunityId = channel.linkedCommunityId, linkedCommunityId != peerId {
+func isPeerHiddenByCollapsedCommunity(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
+    if let channel = (peer ?? transaction.getPeer(peerId)) as? TelegramChannel, let linkedCommunityId = channel.linkedCommunityId {
         if let community = transaction.getPeer(linkedCommunityId) as? TelegramCommunity, community.collapsedInDialogs == true {
             return true
         }
     }
-    
-    guard let communityIds = _internal_currentCommunitiesState(transaction: transaction).communityIds else {
-        return false
-    }
-    
-    for communityId in communityIds {
-        if communityId == peerId {
-            continue
-        }
-        guard let community = transaction.getPeer(communityId) as? TelegramCommunity, community.collapsedInDialogs == true else {
-            continue
-        }
-        guard let cachedData = transaction.getPeerCachedData(peerId: communityId) as? CachedCommunityData else {
-            continue
-        }
-        if cachedData.linkedPeers.contains(where: { $0.peerId == peerId }) {
-            return true
-        }
-    }
-    
-    return false
-}
 
-func shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
-    return _internal_isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId, peer: peer)
+    return false
 }
 
 func shouldExcludePeerFromChatList(transaction: Transaction, peerId: PeerId, peer: Peer? = nil) -> Bool {
@@ -53,7 +30,7 @@ func shouldExcludePeerFromChatList(transaction: Transaction, peerId: PeerId, pee
     } else if let channel = peer as? TelegramChannel {
         switch channel.participationStatus {
         case .member:
-            return shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: peerId, peer: channel)
+            return isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId, peer: channel)
         default:
             return true
         }
@@ -107,27 +84,42 @@ func minTimestampForPeerInclusion(_ peer: Peer) -> Int32? {
     }
 }
 
-func updateCommunityChatListInclusion(transaction: Transaction, community: TelegramCommunity, minTimestamp: Int32?) {
-    if community.participationStatus != .member || community.collapsedInDialogs != true {
-        if transaction.getPeerChatListInclusion(community.id) != .notIncluded {
-            transaction.updatePeerChatListInclusion(community.id, inclusion: .notIncluded)
+func updateCommunityChatListInclusion(transaction: Transaction, communityId: EnginePeer.Id, collapsedInDialogs: Bool, minTimestamp: Int32?) {
+    if !collapsedInDialogs {
+        if transaction.getPeerChatListInclusion(communityId) != .notIncluded {
+            transaction.updatePeerChatListInclusion(communityId, inclusion: .notIncluded)
         }
         return
     }
+    
+    guard let community = transaction.getPeer(communityId) else {
+        return
+    }
 
-    let currentInclusion = transaction.getPeerChatListInclusion(community.id)
+    let currentInclusion = transaction.getPeerChatListInclusion(communityId)
     let effectiveMinTimestamp = minTimestamp ?? minTimestampForPeerInclusion(community)
+    guard let effectiveMinTimestamp else {
+        return
+    }
     switch currentInclusion {
-    case .notIncluded:
-        transaction.updatePeerChatListInclusion(community.id, inclusion: .ifHasMessagesOrOneOf(
+    case let .ifHasMessagesOrOneOf(groupId, pinningIndex, currentMinTimestamp):
+        let updatedMinTimestamp: Int32
+        if let currentMinTimestamp = currentMinTimestamp {
+            if effectiveMinTimestamp > currentMinTimestamp {
+                updatedMinTimestamp = effectiveMinTimestamp
+            } else {
+                updatedMinTimestamp = currentMinTimestamp
+            }
+        } else {
+            updatedMinTimestamp = effectiveMinTimestamp
+        }
+        transaction.updatePeerChatListInclusion(communityId, inclusion: .ifHasMessagesOrOneOf(groupId: groupId, pinningIndex: pinningIndex, minTimestamp: updatedMinTimestamp))
+    default:
+        transaction.updatePeerChatListInclusion(communityId, inclusion: .ifHasMessagesOrOneOf(
             groupId: .root,
-            pinningIndex: transaction.getPeerChatListIndex(community.id)?.1.pinningIndex,
+            pinningIndex: transaction.getPeerChatListIndex(communityId)?.1.pinningIndex,
             minTimestamp: effectiveMinTimestamp
         ))
-    case let .ifHasMessagesOrOneOf(groupId, pinningIndex, currentMinTimestamp):
-        if currentMinTimestamp != effectiveMinTimestamp {
-            transaction.updatePeerChatListInclusion(community.id, inclusion: .ifHasMessagesOrOneOf(groupId: groupId, pinningIndex: pinningIndex, minTimestamp: effectiveMinTimestamp))
-        }
     }
 }
 
@@ -401,7 +393,7 @@ public func updatePeersCustom(transaction: Transaction, peers: [Peer], update: (
                     if case .personal = community.accessHash {
                         switch community.participationStatus {
                         case .member:
-                            updateCommunityChatListInclusion(transaction: transaction, community: community, minTimestamp: community.creationDate)
+                            break
                         case .left:
                             transaction.updatePeerChatListInclusion(peerId, inclusion: .notIncluded)
                         case .kicked where community.creationDate == 0:

@@ -57,6 +57,124 @@ final class SelectionInteractionTests: XCTestCase {
         return (v, box)
     }
 
+    /// Two stacked body paragraphs, so the END handle's knob (drawn BELOW paragraph 1's line) sits over
+    /// paragraph 2's territory — the geometry that exposes the line-centering drag bug.
+    private func canvasWithTwoParagraphs() -> DocumentCanvasView {
+        let v = DocumentCanvasView()
+        v.setBlocks([
+            .paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "First line")])),
+            .paragraph(ParagraphBlock(id: BlockID("p2"), runs: [TextRun(text: "Second line")])),
+        ], width: 320)
+        v.frame = CGRect(x: 0, y: 0, width: 320, height: 200)
+        v.installSelectionInteractions()
+        hostInWindow(v)
+        return v
+    }
+
+    // MARK: - Handle drag preserves the initial touch→knob offset (iOS-style, not line-centered)
+
+    func test_selectionHandleDrag_preservesGrabOffset_doesNotSnapToAdjacentLine() {
+        // Grabbing a selection knob should keep the endpoint at its starting offset from the touch — the knob
+        // is drawn OFFSET from the text line, so mapping the raw finger point snaps the endpoint to whatever
+        // line is under the finger (here: paragraph 2). The drag must instead track the grabbed endpoint.
+        let v = canvasWithTwoParagraphs()
+        _ = v.becomeFirstResponder()
+        let head = v.boxes[0].textStart + 5            // select "First" in paragraph 1
+        v.anchor = v.boxes[0].textStart
+        v.setSelectionHead(global: head)
+
+        let r = SelectionHandleView.knobRadius
+        let caret = v.caretRect(for: DocumentTextPosition(head))
+        let endKnob = CGPoint(x: caret.midX, y: caret.maxY + r)   // END knob, drawn BELOW paragraph 1's line
+
+        // Precondition: a RAW knob touch projects onto the adjacent line (the bug we're fixing).
+        XCTAssertNotEqual(v.closestGlobalPosition(to: endKnob), head,
+                          "precondition: a raw knob touch lands on the adjacent line, not the grabbed endpoint")
+
+        // Begin the drag at the knob (captures the touch→endpoint offset), then map at the SAME touch point.
+        v.captureSelectionDragOffset(endpoint: .head, touch: endKnob)
+        XCTAssertEqual(v.selectionDragPosition(forTouch: endKnob), head,
+                       "the drag preserves the grab offset — maps to the grabbed endpoint, not the finger's line")
+    }
+
+    func test_selectionDragPosition_tracksTheCaretAnchoredPoint_whenTouchMoves() {
+        // After a grab, moving the touch by Δ must map as if the finger were Δ from the captured anchor
+        // (touch + storedOffset), i.e. the offset is preserved across the whole drag — not re-derived per move.
+        let v = canvasWithTwoParagraphs()
+        _ = v.becomeFirstResponder()
+        let head = v.boxes[0].textStart + 5
+        v.anchor = v.boxes[0].textStart
+        v.setSelectionHead(global: head)
+
+        let r = SelectionHandleView.knobRadius
+        let caret = v.caretRect(for: DocumentTextPosition(head))
+        let endKnob = CGPoint(x: caret.midX, y: caret.maxY + r)
+        v.captureSelectionDragOffset(endpoint: .head, touch: endKnob)
+
+        let delta = CGPoint(x: 40, y: 0)
+        let moved = CGPoint(x: endKnob.x + delta.x, y: endKnob.y + delta.y)
+        // storedOffset == caretCenter − endKnob, so selectionDragPosition(moved) == closest(caretCenter + delta).
+        let expected = v.closestGlobalPosition(to: CGPoint(x: caret.midX + delta.x, y: caret.midY + delta.y))
+        XCTAssertEqual(v.selectionDragPosition(forTouch: moved), expected,
+                       "drag maps touch+storedOffset, preserving the initial grab offset as the touch moves")
+    }
+
+    // MARK: - Handle views are host-configurable (carry Display dismiss-gesture flags)
+
+    func test_selectionHandleViews_areInteractive_soTheyCanCarryHostFlags() {
+        // The handle views must be hit-testable for a knob touch to resolve to THEM (not the whole editor),
+        // so a host-set `disablesInteractiveModalDismiss`/`…Keyboard…` flag is scoped to knob interaction.
+        let v = canvasWithInteraction()
+        XCTAssertTrue(v.startHandleView.isUserInteractionEnabled)
+        XCTAssertTrue(v.endHandleView.isUserInteractionEnabled)
+    }
+
+    func test_configureSelectionHandleView_isAppliedToBothHandles() {
+        let v = canvasWithInteraction()
+        var configuredIsStart: [Bool] = []
+        v.configureSelectionHandleView = { handle in
+            if let h = handle as? SelectionHandleView { configuredIsStart.append(h.isStart) }
+        }
+        XCTAssertEqual(Set(configuredIsStart), Set([true, false]),
+                       "the host hook is applied to both the start and end handle views")
+    }
+
+    func test_selectionHandleView_hitArea_matchesTheDragTolerance_aroundTheCaret() {
+        // The interactive hit area must match the canvas drag gate (±dragHitTolerance around the endpoint
+        // caret) so the dismiss-gesture flag covers exactly where a handle drag can start.
+        let handle = SelectionHandleView(isStart: false)
+        let caret = CGRect(x: 50, y: 100, width: 2, height: 20)
+        handle.frame = handle.boundingFrame(forCaret: caret)
+        handle.setCaretLocalRect(handle.caretLocalRect(forCaret: caret))
+        let tol = SelectionHandleView.dragHitTolerance
+        let local = handle.caretLocalRect(forCaret: caret)
+        XCTAssertTrue(handle.point(inside: CGPoint(x: local.midX, y: local.midY), with: nil), "on the caret")
+        XCTAssertTrue(handle.point(inside: CGPoint(x: local.midX, y: local.maxY + tol - 1), with: nil), "within tolerance below")
+        XCTAssertFalse(handle.point(inside: CGPoint(x: local.midX, y: local.maxY + tol + 5), with: nil), "beyond tolerance")
+    }
+
+    // MARK: - Outer scroll yields to a selection-handle grip
+
+    func test_gripYieldingScrollView_yieldsOnlyNearASelectionGrip() {
+        // The outer document scroll (and the inner table scroll) must yield their pan to the canvas's
+        // handle-drag when the touch is on a selection grip — otherwise a vertical knob drag races the scroll.
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        let scroll = GripYieldingScrollView()
+        scroll.canvas = v
+
+        // No ranged selection → there is no grip, so the scroll never yields.
+        XCTAssertFalse(scroll.yieldsToGrip(at: CGPoint(x: 20, y: 20)), "no selection ⇒ no grip ⇒ scroll, don't yield")
+
+        v.anchor = v.boxes[0].textStart
+        v.setSelectionHead(global: v.boxes[0].textStart + 5)
+        let caret = v.caretRect(for: DocumentTextPosition(v.selFrom))
+        XCTAssertTrue(scroll.yieldsToGrip(at: CGPoint(x: caret.midX, y: caret.midY)),
+                      "yields on a selection grip so the canvas handle-drag wins")
+        XCTAssertFalse(scroll.yieldsToGrip(at: CGPoint(x: caret.midX, y: caret.midY + 200)),
+                       "does not yield far from any grip — normal scrolling")
+    }
+
     // MARK: - No OS selection-display interaction (app draws everything itself)
 
     func test_noSelectionDisplayInteraction_isInstalled() {

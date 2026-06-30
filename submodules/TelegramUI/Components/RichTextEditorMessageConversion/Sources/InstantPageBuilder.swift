@@ -73,6 +73,12 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                 }
             }
             index += 1
+        case let .collapsedQuote(cq):
+            // A collapsed quote sends as a collapsed blockQuote (collapsed: true). The folded paragraphs
+            // become the quote's child blocks; the recipient renders it collapsed via the InstantPage path.
+            pageBlocks.append(.blockQuote(blocks: cq.paragraphs.map { .paragraph(richText(from: $0.runs)) },
+                                          caption: .empty, collapsed: true))
+            index += 1
         }
     }
     return InstantPage(blocks: pageBlocks, media: pageMedia, isComplete: true, rtl: false, url: "", views: nil)
@@ -140,7 +146,7 @@ private func tableBlock(_ table: TableBlock) -> InstantPageBlock {
             let alignment: TableHorizontalAlignment
             if columnIndex < table.columns.count {
                 switch table.columns[columnIndex].alignment {
-                case .left, .justified:
+                case .left, .justified, .natural:
                     alignment = .left
                 case .center:
                     alignment = .center

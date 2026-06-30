@@ -32,6 +32,11 @@ public enum DocumentTree {
             // distinguishes it so position mapping can identify it as code.
             return .paragraph(id: cb.id,
                               children: [.text(length: cb.utf16Count, ref: .code(cb.id))])
+        case .collapsedQuote(let q):
+            // A collapsed quote is a caption-less ATOM — structurally identical to an audio media block
+            // (atom size 1 + wrapper = nodeSize 3). Its folded preview text is display-only and is NOT part
+            // of the position/selection axis. Distinguished from real media by box TYPE in the canvas layer.
+            return .mediaBlock(id: q.id, children: [.mediaAtom(id: q.id)])
         }
     }
 

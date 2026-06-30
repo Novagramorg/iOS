@@ -109,7 +109,7 @@ enum RTFConversion {
 
     /// RTF paragraph alignment control word.
     static func alignmentRTF(_ a: TextAlignment) -> String {
-        switch a { case .left: return "\\ql"; case .center: return "\\qc"; case .right: return "\\qr"; case .justified: return "\\qj" }
+        switch a { case .natural: return ""; case .left: return "\\ql"; case .center: return "\\qc"; case .right: return "\\qr"; case .justified: return "\\qj" }
     }
 
     /// Emits real RTF table rows. Column right edges are cumulative twips (ColumnSpec.width pt × 20).

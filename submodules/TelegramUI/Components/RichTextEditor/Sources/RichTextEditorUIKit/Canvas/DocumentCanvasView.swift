@@ -15,6 +15,9 @@ final class DocumentCanvasView: UIView {
     let root = BlockStack()
     var boxes: [CanvasBlock] { get { root.boxes } set { root.boxes = newValue } }
     var mapper: AttributedStringMapper
+    /// The whole-document writing-direction override (the model side of `applyWritingDirectionOverride`).
+    /// Mirrored into `Document.layoutDirection` by the façade getter; render-only auto-detection is separate.
+    var layoutDirectionModel: DocumentLayoutDirection = .auto
     var imageProvider: (String) -> UIImage? = { _ in nil }
     /// Returns a FRESH, non-interactive view for an emoji `id` sized to the requested square, or nil.
     /// The canvas owns/positions/removes it; a host with only a CALayer wraps it in a plain UIView.
@@ -30,6 +33,10 @@ final class DocumentCanvasView: UIView {
     var checklistMarkerViews: [BlockID: HostedChecklistMarker] = [:]
     /// Back-most container for blockquote run fills (see `BlockquoteUnderlay`). Behind every block view.
     let blockquoteUnderlay = BlockquoteUnderlay()
+    /// Interactive overlay hosting the per-run collapse buttons for tall expanded quote runs. Brought to
+    /// the front each layout pass so it sits above text + block views; its `hitTest` passes only button
+    /// touches, letting all other touches fall through to the canvas.
+    let quoteCollapseControls = QuoteCollapseControlsView()
     /// Non-interactive container for body/caption emoji views (canvas coords). Kept below the chrome
     /// overlay (which is brought to front each layout pass). Cell emoji live in the table content view.
     let emojiOverlay = UIView()
@@ -95,6 +102,17 @@ final class DocumentCanvasView: UIView {
     /// ON TOP of the wash. The handle DRAG is a separate proximity-gated pan (`isSelectionDragTouch`).
     let startHandleView = SelectionHandleView(isStart: true)
     let endHandleView = SelectionHandleView(isStart: false)
+    /// Host hook to configure each selection-handle ("knob") view — e.g. to set Display's
+    /// `disablesInteractiveModalDismiss` / `disablesInteractiveKeyboardGestureRecognizer` so a knob drag isn't
+    /// hijacked by the interactive modal/keyboard-dismiss gestures. The package can't import Display, so the
+    /// host applies the flags; the handle views are hit-testable so the flags are scoped to knob interaction.
+    /// Applied to BOTH handle views (passed as bare `UIView`s) when set.
+    var configureSelectionHandleView: ((UIView) -> Void)? {
+        didSet {
+            configureSelectionHandleView?(startHandleView)
+            configureSelectionHandleView?(endHandleView)
+        }
+    }
     /// The container + frame the caret view was last placed at, so a repeated `updateCaretView()` (e.g. on a
     /// scroll tick) that lands the caret at the SAME spot does NOT restart the blink.
     private weak var lastCaretContainer: UIView?
@@ -148,10 +166,25 @@ final class DocumentCanvasView: UIView {
     /// root stack in `layoutContent`; nested (table-cell) stacks keep the document default.
     var blockVerticalInset: CGFloat = BlockBox.defaultVerticalInset
 
+    /// Per-host quote geometry. Applied via `applyQuoteStyle(_:)` (rebuilds the mapper stylesheet + pushes
+    /// render values to the underlay). Read by `blockquoteDecorations()` for the bar width.
+    var quoteStyle: QuoteStyle = .default
+
+    /// Host-injected collapse/expand icons (nil ⇒ no affordance drawn). The `collapse` image goes to the
+    /// overlay button; the `expand` image is read when building `CollapsedQuoteBox`es.
+    var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons?
+
     /// Placeholder strings drawn in empty paragraphs. Stamped onto each top-level box during layout.
     /// Defaults to the editor's built-in hints; a compact host (chat composer) sets them to "" to suppress
     /// the editor's placeholder (it draws its own). Applied on the next layout pass.
     var placeholders: RichTextEditorPlaceholders = .default
+
+    /// Whether a tap in the empty area below the document's last block appends a new empty body paragraph
+    /// after it (`insertEmptyBodyParagraph`). Defaults to `true` (the full-page document editor: lets you
+    /// always start a normal paragraph below the final block, whatever its type). A compact host (the chat
+    /// composer) sets it to `false` — there is no "empty area below the content" to grow into, so a tap there
+    /// just places the caret in the existing trailing paragraph.
+    var tapBelowAddsTrailingParagraph = true
 
     // Selection as global UTF-16 positions; `anchor` fixed, `head` moving.
     var anchor = 0
@@ -241,6 +274,10 @@ final class DocumentCanvasView: UIView {
         set { loupeSessionStorage = newValue }
     }
     var draggingEndpoint: SelectionEndpoint?
+    // The (caret-center − initial-touch) offset captured when a selection-handle drag begins, so the dragged
+    // endpoint keeps its starting offset from the finger instead of snapping to the line under the touch (the
+    // knob is drawn offset from the text line). Applied at every drag map via `selectionDragPosition(forTouch:)`.
+    var selectionDragGrabOffset: CGSize = .zero
     var draggingTableKnob: TableRangeEnd?
     var selectionHandlePan: UIPanGestureRecognizer?
     // True while an interactive selection-handle drag is in flight. While set, the per-touch-move selection
@@ -291,9 +328,25 @@ final class DocumentCanvasView: UIView {
     var undoManagerOverride: UndoManager?
     var effectiveUndoManager: UndoManager? { undoManagerOverride ?? undoManager }
 
+    /// Token for the input-language-change observer (see init); removed in deinit.
+    private var inputModeObserver: NSObjectProtocol?
+    deinit {
+        if let inputModeObserver { NotificationCenter.default.removeObserver(inputModeObserver) }
+    }
+
     init(mapper: AttributedStringMapper = AttributedStringMapper()) {
         self.mapper = mapper
         super.init(frame: .zero)
+        // Re-flip an empty paragraph's caret when the input language changes (globe key) or the keyboard
+        // first appears — `currentInputModeDidChange` fires for both. So an RTL input language puts the
+        // caret on the right of an empty paragraph live, without a reload/refocus. `queue: nil` delivers
+        // synchronously on the posting (main) thread.
+        self.inputModeObserver = NotificationCenter.default.addObserver(
+            forName: UITextInputMode.currentInputModeDidChangeNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            self?.refreshEmptyBoxWritingDirections()
+            self?.updateCaretView()
+        }
         backgroundColor = .systemBackground
         blockChromeOverlay.canvas = self
         addSubview(blockquoteUnderlay)   // back-most: blockquote fills behind every block view
@@ -309,6 +362,10 @@ final class DocumentCanvasView: UIView {
         selectionHighlight.canvas = self
         addSubview(selectionHighlight)   // selection wash, above text + emoji, below chrome
         addSubview(blockChromeOverlay)
+        // Interactive collapse-button overlay: above text/chrome, but hitTest passes only button touches
+        // so caret placement / text selection / table chrome all still work through it.
+        quoteCollapseControls.onCollapse = { [weak self] idx in self?.collapseQuoteRun(atIndex: idx) }
+        addSubview(quoteCollapseControls)
         addSubview(caretView)   // own caret, above content; reparented into a table's content view when needed
         addSubview(transientCaretView)   // own floating caret, above content; reparented like caretView
         addSubview(startHandleView)   // own-drawn selection handles, hosted per-endpoint like the caret
@@ -323,6 +380,10 @@ final class DocumentCanvasView: UIView {
     /// caret keeps rendering). `nil` ⇒ system keyboard.
     var customInputView: UIView?
     override var inputView: UIView? { return self.customInputView }
+
+    /// Test seam: when set, replaces the live `textInputMode?.primaryLanguage` lookup.
+    /// Avoids subclassing the `final class DocumentCanvasView` just for tests.
+    var keyboardLanguageProviderForTesting: (() -> String?)?
 
     /// Keyboard input-language pre-selection (mirrors the legacy `ChatInputTextView`). The chat composer
     /// seeds `initialPrimaryLanguage` from the draft's saved keyboard language. On the FIRST `textInputMode`
@@ -365,7 +426,7 @@ final class DocumentCanvasView: UIView {
     override func becomeFirstResponder() -> Bool {
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let became = super.becomeFirstResponder()
-        if became { updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
+        if became { refreshEmptyBoxWritingDirections(); updateCaretView(); updateSelectionHandleViews() }   // show own-drawn caret/handles once focused
         if became && !wasFirstResponder { didJustBecomeFirstResponder = true; onBecameFirstResponder?() }   // only the real not-focused→focused transition
         return became
     }
@@ -401,6 +462,48 @@ final class DocumentCanvasView: UIView {
         self.startHandleView.accentColor = theme.accent
         self.endHandleView.accentColor = theme.accent
         self.blockquoteUnderlay.accentColor = theme.accent
+        self.quoteCollapseControls.accentColor = theme.accent
+    }
+
+    /// Applies quote geometry: rebuilds the mapper's stylesheet with the indent/trailing/spacing fields
+    /// (preserving theme/emojiScale/writing-direction — the stylesheet is immutable) and pushes the
+    /// render-only bar/radius/fill values to the underlay. The caller reloads afterward (mirrors applyTheme).
+    func applyQuoteStyle(_ q: QuoteStyle) {
+        self.quoteStyle = q
+        var s = self.mapper.styleSheet
+        s.quoteIndent = q.leadingInset
+        s.quoteTrailingInset = q.trailingInset
+        s.quoteSpacingBefore = q.spacingBefore
+        s.quoteSpacingAfter = q.spacingAfter
+        s.quoteTopInset = q.topInset
+        s.quoteBottomInset = q.bottomInset
+        self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
+                                             theme: self.mapper.theme,
+                                             baseWritingDirection: self.mapper.baseWritingDirection)
+        self.blockquoteUnderlay.barWidth = q.barWidth
+        self.blockquoteUnderlay.cornerRadius = q.cornerRadius
+        self.blockquoteUnderlay.fillAlpha = q.fillAlpha
+    }
+
+    /// Applies host-injected collapse/expand icons: stores them (read at `CollapsedQuoteBox` creation for the
+    /// expand glyph) and pushes the collapse image to the overlay controls. The caller reloads afterward.
+    func applyQuoteCollapseIcons(_ icons: RichTextEditorQuoteCollapseIcons?) {
+        self.quoteCollapseIcons = icons
+        self.quoteCollapseControls.collapseImage = icons?.collapse
+    }
+
+    /// Applies tunable text-layout metrics: rebuilds the mapper's stylesheet with the line-height/spacing
+    /// fields (preserving the other stylesheet fields + theme/emojiScale/writing-direction — the stylesheet
+    /// is immutable). The caller reloads afterward (mirrors `applyQuoteStyle`). A compact host (the chat
+    /// composer) sets a tight variant so body/caption paragraphs use natural line height and no spacing.
+    func applyTextLayoutMetrics(_ m: TextLayoutMetrics) {
+        var s = self.mapper.styleSheet
+        s.bodyLineHeightMultiple = m.bodyLineHeightMultiple
+        s.bodyParagraphSpacingBefore = m.bodyParagraphSpacingBefore
+        s.bodyParagraphSpacingAfter = m.bodyParagraphSpacingAfter
+        self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
+                                             theme: self.mapper.theme,
+                                             baseWritingDirection: self.mapper.baseWritingDirection)
     }
 
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose
@@ -421,6 +524,7 @@ final class DocumentCanvasView: UIView {
             case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width)
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
             case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
+            case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, expandImage: quoteCollapseIcons?.expand, width: width)
             }
         }
         recomputeSpans()
@@ -439,6 +543,7 @@ final class DocumentCanvasView: UIView {
         setBlocks(blocks, width: width)
         textInputDelegate?.selectionDidChange(self)
         textInputDelegate?.textDidChange(self)
+        refreshEmptyBoxWritingDirections()
     }
 
     func currentBlocks() -> [Block] { boxes.map { $0.currentBlock() } }
@@ -684,6 +789,9 @@ final class DocumentCanvasView: UIView {
         blockquoteUnderlay.frame = bounds
         sendSubviewToBack(blockquoteUnderlay)
         syncBlockquoteUnderlay()
+        quoteCollapseControls.frame = bounds
+        bringSubviewToFront(quoteCollapseControls)       // interactive: above underlay + text block views
+        quoteCollapseControls.sync(runs: collapseButtonRuns())
         emojiOverlay.frame = bounds
         syncEmojiViews()
         syncChecklistMarkerViews()
@@ -716,8 +824,16 @@ final class DocumentCanvasView: UIView {
     /// Stateless content height the document would have at canvas `width` — the measure analogue of
     /// `intrinsicContentSize.height` (same `contentMargins` + content-width derivation). Never mutates
     /// the live layout (no box `setWidth`, no frame/overlay/caret change).
-    func measuredContentHeight(forWidth width: CGFloat) -> CGFloat {
-        contentMargins.top + root.measuredHeight(forWidth: contentWidth(forWidth: width)) + contentMargins.bottom
+    func measuredContentHeight(forWidth width: CGFloat, contentMargins explicitMargins: UIEdgeInsets? = nil) -> CGFloat {
+        // The measure must be PURE: a host sizing its field by this value (the chat composer) may call it
+        // BEFORE the matching `update(...)` has pushed the real `contentMargins` onto the live canvas (a draft
+        // applied before the editor is sized). Reading live `self.contentMargins` then yields a too-small height
+        // (the right-inset reservation is missing → text measured at the full width → fewer wrapped lines), and
+        // the field visibly grows on the next pass. So callers that know the intended margins pass them in;
+        // others keep the live value.
+        let margins = explicitMargins ?? self.contentMargins
+        let contentW = max(width - (self.pageMargin + margins.left) - (self.pageMargin + margins.right), 1)
+        return margins.top + root.measuredHeight(forWidth: contentW) + margins.bottom
     }
 
     /// Notifies the host that the content height may have changed (e.g. after an edit), so it re-runs
@@ -759,6 +875,14 @@ final class DocumentCanvasView: UIView {
         // image's BlockBackingView so it sits above any caption emoji and reads consistently.
         for case let img as MediaBlockBox in boxes {
             if let rect = imageSelectionTintRect(for: img) { ctx.fill(rect) }
+        }
+        // Collapsed-quote atom wash when a range selection covers it (it has no leaf region, so the
+        // text-region highlight above skips it) — mirrors the image-atom wash so a collapsed quote reads as
+        // selected like an image block.
+        if selFrom != selTo {
+            for case let cq as CollapsedQuoteBox in boxes where selFrom <= cq.nodeStart && selTo >= coverableContentEnd(cq) {
+                ctx.fill(cq.frame)
+            }
         }
     }
 
@@ -805,7 +929,8 @@ final class DocumentCanvasView: UIView {
                 // next block) is selected → the final covered line fills to the edge, like UITextView.
                 let continuesPast = globalTo > regionEnd
                 for seg in r.layout.selectionFillRects(start: lo - r.globalStart, end: hi - r.globalStart,
-                                                       fillTrailingLine: continuesPast) {
+                                                       fillTrailingLine: continuesPast,
+                                                       isRTL: resolvedDirection(forGlobal: lo) == .rightToLeft) {
                     rects.append(seg.offsetBy(dx: r.canvasOrigin.x - offX, dy: r.canvasOrigin.y))
                 }
             } else if r.length == 0, globalFrom <= r.globalStart, r.globalStart < globalTo {
@@ -832,14 +957,22 @@ final class DocumentCanvasView: UIView {
     /// unscrolled-canvas rect into a VISIBLE canvas rect.
     func tableContentOffsetX(forGlobal pos: Int) -> CGFloat { tableBox(containingGlobal: pos)?.contentOffsetX ?? 0 }
 
-    /// True if `pos` is the gap before a media atom (a media box's `nodeStart`).
+    /// True if `pos` is the gap before an atom (a media OR collapsed-quote box's `nodeStart`).
+    /// A collapsed quote reuses the media-atom DocNode shape, so its leading gap is a renderable caret slot
+    /// too — `isGapPosition`/`snapToRenderable`/`caretRect` must recognize it alongside `MediaBlockBox`, or the
+    /// post-collapse caret (parked at the atom's `nodeStart`) is non-renderable and the composer offset drifts.
     func isGapPosition(_ pos: Int) -> Bool {
-        boxes.contains { $0 is MediaBlockBox && $0.nodeStart == pos }
+        boxes.contains { ($0 is MediaBlockBox || $0 is CollapsedQuoteBox) && $0.nodeStart == pos }
     }
 
     /// The media box whose gap-before-atom is at `pos`, if any.
     func mediaBox(atGap pos: Int) -> MediaBlockBox? {
         boxes.first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
+    }
+
+    /// The collapsed-quote box whose gap-before-atom is at `pos`, if any.
+    func collapsedQuoteBox(atGap pos: Int) -> CollapsedQuoteBox? {
+        boxes.first { ($0 as? CollapsedQuoteBox)?.nodeStart == pos } as? CollapsedQuoteBox
     }
 
     /// If the caret (`head`) is inside a horizontally-scrollable table, scroll its cell into view.
@@ -930,7 +1063,7 @@ final class DocumentCanvasView: UIView {
         // handle is dragged, else the head (the default — also the table-only / direct-call path). The tick
         // owns the scroll position, so suppress `setSelectionHead`'s scrollCaretIntoViewIfNeeded (it would
         // fight `newX`); `setSelectionAnchor` never scrolls, so it needs no suppression.
-        let target = closestGlobalPosition(to: dragAutoScrollPoint)
+        let target = selectionDragPosition(forTouch: dragAutoScrollPoint)   // touch + captured grab offset
         if draggingEndpoint == .anchor { setSelectionAnchor(global: target) }
         else { setSelectionHead(global: target, scrollIntoView: false) }
     }
@@ -1027,10 +1160,12 @@ final class DocumentCanvasView: UIView {
             // so it rides the horizontal scroll like the caret.
             let contentCaret = unscrolled.offsetBy(dx: -table.frame.minX, dy: -table.frame.minY)
             tv.hostHandle(handle, at: handle.boundingFrame(forCaret: contentCaret))
+            handle.setCaretLocalRect(handle.caretLocalRect(forCaret: contentCaret))   // interactive hit area
         } else {
             if handle.superview !== self { addSubview(handle) }
             bringSubviewToFront(handle)   // above the wash (and chrome — they're never co-visible with a text range)
             handle.frame = handle.boundingFrame(forCaret: unscrolled)
+            handle.setCaretLocalRect(handle.caretLocalRect(forCaret: unscrolled))   // interactive hit area
         }
         handle.isHidden = false
     }
@@ -1104,6 +1239,10 @@ final class DocumentCanvasView: UIView {
         } else if let img = mediaBox(atGap: pos) {
             let rr = img.mediaRect()
             return (self, CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height))
+        } else if let cq = collapsedQuoteBox(atGap: pos) {
+            // A caret on a collapsed quote's gap draws as a bar at its leading (left) edge — like the media
+            // gap cursor. Without this branch the caret had no placement here and was hidden.
+            return (self, CGRect(x: cq.frame.minX, y: cq.frame.minY, width: 2, height: cq.frame.height))
         }
         return nil
     }

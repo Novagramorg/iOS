@@ -10,7 +10,9 @@ import RichTextEditorCore
 ///      so "deleting the last paragraph" is always possible. A non-empty paragraph is kept (the caret
 ///      just steps back into the preceding block).
 ///   2. Tapping anywhere below the last block starts a new empty body paragraph there — for any trailing
-///      block type (image / table / paragraph / quote / code), except an already-empty body paragraph.
+///      block type (image / table / paragraph / quote / code), except an already-empty body paragraph. This
+///      affordance is gated on `tapBelowAddsTrailingParagraph` (default `true`, the article editor); the chat
+///      composer sets it `false`, so a tap below the content just places the caret instead.
 final class CanvasTrailingParagraphTests: XCTestCase {
     private func cell(_ id: String, _ t: String) -> Cell {
         Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "p"), runs: [TextRun(text: t)]))])
@@ -109,6 +111,27 @@ final class CanvasTrailingParagraphTests: XCTestCase {
         v.deleteBackward()
         XCTAssertEqual(v.boxes.count, 1, "backspace removes the just-created trailing paragraph")
         XCTAssertTrue(v.boxes[0] is MediaBlockBox, "the image survives the round-trip")
+    }
+
+    // MARK: 3 — `tapBelowAddsTrailingParagraph = false` (the chat-composer configuration)
+
+    func test_tapBelowTrailingImage_withTapBelowDisabled_addsNoParagraph() {
+        let v = canvas([.media(MediaBlock(id: BlockID("img"), mediaID: "k", naturalSize: Size2D(width: 60, height: 40)))])
+        v.tapBelowAddsTrailingParagraph = false      // the chat composer turns the affordance off
+        tapBelowLast(v)
+        XCTAssertEqual(v.boxes.count, 1, "with the affordance off, a tap below the content appends no paragraph")
+        XCTAssertTrue(v.boxes[0] is MediaBlockBox, "the image is kept, unchanged")
+    }
+
+    func test_tapBelowTrailingParagraph_withTapBelowDisabled_placesCaretNotNewParagraph() {
+        // With the flag ON, tapping below a NON-empty trailing paragraph appends an empty one (only an
+        // already-empty body paragraph is exempt). With it OFF, the tap just places the caret in the existing
+        // paragraph — no new block.
+        let v = canvas([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
+        v.tapBelowAddsTrailingParagraph = false
+        tapBelowLast(v)
+        XCTAssertEqual(v.boxes.count, 1, "no new paragraph is appended")
+        XCTAssertEqual((v.boxes[0] as! BlockBox).currentParagraph().text, "Hello", "the trailing paragraph is unchanged")
     }
 }
 #endif

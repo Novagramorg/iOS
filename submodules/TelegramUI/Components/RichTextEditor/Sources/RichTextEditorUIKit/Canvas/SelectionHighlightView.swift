@@ -53,13 +53,25 @@ final class CellSelectionView: UIView {
 final class SelectionHandleView: UIView {
     static let knobRadius: CGFloat = 5.5
     static let stemWidth: CGFloat = 2
+    /// The interactive hit area extends this far past the endpoint caret — matched to the canvas selection-
+    /// drag gate (`isSelectionDragTouch`) so a touch that hits this view is exactly a touch that would start a
+    /// handle drag. Lets a host scope dismiss-gesture flags (`disablesInteractiveModalDismiss` /
+    /// `…KeyboardGestureRecognizer`, set via the canvas `configureSelectionHandleView` hook) to knob interaction.
+    static let dragHitTolerance: CGFloat = 22
     let isStart: Bool
+
+    /// The endpoint caret rect in THIS view's own coordinates (set by the canvas when positioning). Drives the
+    /// extended interactive hit area in `point(inside:with:)`.
+    private var caretLocalRect: CGRect = .zero
 
     init(isStart: Bool) {
         self.isStart = isStart
         super.init(frame: .zero)
         backgroundColor = .clear
-        isUserInteractionEnabled = false
+        // Hit-testable (no recognizers of its own — the drag is still the canvas pan, which receives the touch
+        // as an ancestor). Being the hit-test target for a knob touch lets a host-set dismiss-gesture flag on
+        // this view be consulted (Display walks UP from the hit-test view), scoped to knob interaction.
+        isUserInteractionEnabled = true
         isOpaque = false
         contentMode = .redraw   // re-render the lollipop whenever the frame/bounds change
         isHidden = true
@@ -72,6 +84,24 @@ final class SelectionHandleView: UIView {
         let r = Self.knobRadius
         return CGRect(x: caret.midX - r, y: caret.minY - (isStart ? 2 * r : 0),
                       width: 2 * r, height: caret.height + 2 * r)
+    }
+
+    /// The endpoint `caret` expressed in this view's own coordinate space (i.e. relative to `boundingFrame`).
+    func caretLocalRect(forCaret caret: CGRect) -> CGRect {
+        let bf = boundingFrame(forCaret: caret)
+        return caret.offsetBy(dx: -bf.minX, dy: -bf.minY)
+    }
+
+    /// Records the endpoint caret rect (in this view's coords) so the interactive hit area can match the
+    /// canvas drag gate. Set by the canvas alongside the frame.
+    func setCaretLocalRect(_ rect: CGRect) { caretLocalRect = rect }
+
+    /// Extends the hit area past the drawn lollipop to `dragHitTolerance` around the endpoint caret — matching
+    /// `isSelectionDragTouch` — so a knob/grip touch resolves to this view (and its host dismiss-gesture flags)
+    /// while a touch elsewhere falls through to the canvas. The hit area can exceed `bounds`; UIKit still
+    /// consults `point(inside:)` for the point the parent forwards.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        caretLocalRect.insetBy(dx: -Self.dragHitTolerance, dy: -Self.dragHitTolerance).contains(point)
     }
 
     /// The handle fill color. Defaults to `.systemBlue` (the editor theme's accent overrides it; `.tintColor`

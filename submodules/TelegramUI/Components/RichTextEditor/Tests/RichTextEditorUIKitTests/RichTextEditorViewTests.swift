@@ -122,6 +122,37 @@ final class RichTextEditorViewTests: XCTestCase {
         XCTAssertEqual(editor.bottomContentInsetForTesting, 0, "zero insets clear the bottom inset")
     }
 
+    // The host (the chat composer) sets the scroll indicator insets to a constant input-field inset,
+    // independent of the content insets (which carry the keyboard/panel overlap). The optional
+    // `scrollIndicatorInsets` parameter overrides the indicator; omitting it (nil) tracks the content
+    // insets, exactly the prior behavior. Because the value is passed every update, a later update with
+    // no override returns the indicator to the content insets — no stale state (the clobber the old
+    // one-shot setter suffered).
+    func test_update_scrollIndicatorInsets_overrideFallbackAndNoStale() {
+        let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        editor.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hi")]))])
+        let content = UIEdgeInsets(top: 0, left: 0, bottom: 250, right: 0)
+
+        // No override → the indicator tracks the content insets.
+        _ = editor.update(size: CGSize(width: 320, height: 400), insets: content)
+        XCTAssertEqual(editor.verticalScrollIndicatorInsetsForTesting, content,
+                       "with no override the indicator tracks the content insets")
+
+        // Override → applied to the indicator, content inset unchanged (decoupled).
+        let indicator = UIEdgeInsets(top: 9, left: 0, bottom: 9, right: -13)
+        _ = editor.update(size: CGSize(width: 320, height: 400), insets: content,
+                          scrollIndicatorInsets: indicator)
+        XCTAssertEqual(editor.verticalScrollIndicatorInsetsForTesting, indicator,
+                       "an explicit override is applied to the indicator")
+        XCTAssertEqual(editor.bottomContentInsetForTesting, 250,
+                       "the override does not change the content inset")
+
+        // Drop the override → back to the content insets, no stale value.
+        _ = editor.update(size: CGSize(width: 320, height: 400), insets: content)
+        XCTAssertEqual(editor.verticalScrollIndicatorInsetsForTesting, content,
+                       "dropping the override returns the indicator to the content insets")
+    }
+
     func test_onChange_firesOnEdit() {
         let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         editor.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hi")]))])

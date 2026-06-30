@@ -6,7 +6,7 @@ import RichTextEditorCore
 /// with continuous cross-block selection.
 @available(iOS 13.0, *)
 public final class RichTextEditorView: UIView, UIScrollViewDelegate {
-    private let scrollView = UIScrollView()
+    private let scrollView = GripYieldingScrollView()
     let canvas = DocumentCanvasView()
 
     /// Floor for the content height returned by `update(...)`/`performLayout`. Defaults to 44pt (a document
@@ -21,6 +21,62 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public var theme: RichTextEditorTheme = .default {
         didSet {
             canvas.applyTheme(theme)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
+    /// Per-host quote geometry (insets, spacing, bar/fill). Defaults reproduce the editor's built-in look.
+    /// Set before the first `update(...)`/document seed (the compact-host knob convention); assigning it
+    /// after content reloads the boxes so the new geometry takes effect (like `theme`).
+    public var quoteStyle: QuoteStyle = .default {
+        didSet {
+            canvas.applyQuoteStyle(quoteStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
+    /// Host-injected icons for the quote collapse (tall expanded quote) / expand (collapsed quote)
+    /// affordance. `nil` (default) ⇒ no affordance icon is drawn (the package ships no fallback). Assigning
+    /// it updates the live collapse button and reloads so collapsed boxes pick up the new glyph (like `quoteStyle`).
+    public var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons? = nil {
+        didSet {
+            canvas.applyQuoteCollapseIcons(quoteCollapseIcons)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
+    /// Per-host tunable text-layout metrics (body/caption line height + paragraph spacing; a growable set).
+    /// Defaults reproduce the editor's built-in document look (`.default` — 1.10 line height, 8pt paragraph
+    /// gap); the compact chat composer assigns `.compact` (natural 1.0 line height, no spacing) so multi-line
+    /// text reads tight like the legacy input. Set before the first `update(...)`/document seed (the
+    /// compact-host knob convention); assigning it after content rebuilds the boxes so the new metrics take
+    /// effect (like `quoteStyle`).
+    public var textLayoutMetrics: TextLayoutMetrics = .default {
+        didSet {
+            canvas.applyTextLayoutMetrics(textLayoutMetrics)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
+    /// Whole-document writing-direction override. `.auto` (default) auto-detects per paragraph; the forced
+    /// cases pin the whole editor. Modeled like `theme`: assigning re-applies to the live mapper and
+    /// reloads (resetting the live selection) when the view is sized, so boxes rebuild with the direction.
+    public var layoutDirectionOverride: DocumentLayoutDirection {
+        get { canvas.layoutDirectionModel }
+        set {
+            canvas.applyWritingDirectionOverride(newValue)
             if bounds.width > 0.0 {
                 canvas.reload(self.document.blocks, width: bounds.width)
             }
@@ -47,6 +103,15 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// the editor regardless of these.
     public var canPasteMedia: (() -> Bool)? { didSet { canvas.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { canvas.onPasteMedia = onPasteMedia } }
+
+    /// Configure each selection-handle ("knob") view. The closure is invoked once per handle view (start and
+    /// end), passing it as a bare `UIView`. Use it to set host-framework properties the editor package can't
+    /// reach — e.g. Display's `disablesInteractiveTransitionGestureRecognizer` (the navigation back-swipe a
+    /// horizontal knob drag triggers), `disablesInteractiveModalDismiss`, and `disablesInteractiveKeyboard-
+    /// GestureRecognizer` — so a knob drag isn't hijacked by those gestures. The handle views are hit-testable
+    /// (hit area = the drag tolerance around the endpoint caret), so the effect is scoped to knob interaction
+    /// rather than the whole editor surface.
+    public var configureSelectionHandleView: ((UIView) -> Void)? { didSet { canvas.configureSelectionHandleView = configureSelectionHandleView } }
 
     /// Transform the editor's default edit-menu elements into the final set. `defaultElements` is the system
     /// suggested actions (Cut/Copy/Paste/Select + Writing Tools) followed by the editor's own custom items
@@ -90,6 +155,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         // of the parent's contentInset.bottom (double-counting it at rest). .never keeps the inset contract exact.
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.delegate = self
+        scrollView.canvas = canvas   // yield the outer scroll's pan to a selection-handle grip (vertical knob drag)
         scrollView.addSubview(canvas)
         canvas.installSelectionInteractions()
         // The canvas is sized frame-based in layoutSubviews, so a content-height change (typing wraps a
@@ -106,8 +172,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
     public var document: Document {
-        get { Document(blocks: canvas.currentBlocks()) }
+        get { Document(blocks: canvas.currentBlocks(), layoutDirection: canvas.layoutDirectionModel) }
         set {
+            canvas.applyWritingDirectionOverride(newValue.layoutDirection)
             var blocks = newValue.blocks
             if blocks.isEmpty { blocks = [.paragraph(ParagraphBlock(id: BlockID.generate()))] }
             canvas.reload(blocks, width: bounds.width)
@@ -133,10 +200,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// so — like `insets` — margins are applied HERE rather than via a side-effecting property setter (which
     /// would hide a re-layout and could re-enter `onChange`); pass them every `update`, and they persist
     /// across intervening system layout passes until the next `update`.
+    /// `scrollIndicatorInsets` (optional) positions the vertical scroll indicator independently of the
+    /// content `insets`. `nil` (the default) tracks the content insets — the indicator is inset by the same
+    /// bands the content scrolls under. A non-nil value REPLACES that (absolute, not additive) — a compact
+    /// host (the chat composer) sets a constant input-field inset so the scrollbar sits at a fixed visual
+    /// position instead of following the keyboard/panel overlap. It is purely visual (scrollbar geometry):
+    /// it does NOT enter `performLayout` / the content-size math. Supplied every `update`, so there is no
+    /// stored override for a later `update` to clobber.
     @discardableResult
-    public func update(size: CGSize, insets: UIEdgeInsets, contentMargins: UIEdgeInsets = .zero) -> CGFloat {
+    public func update(size: CGSize, insets: UIEdgeInsets, contentMargins: UIEdgeInsets = .zero,
+                       scrollIndicatorInsets: UIEdgeInsets? = nil) -> CGFloat {
         scrollView.contentInset = insets
-        scrollView.verticalScrollIndicatorInsets = insets
+        scrollView.verticalScrollIndicatorInsets = scrollIndicatorInsets ?? insets
         canvas.contentMargins = contentMargins
         return performLayout(size: size)
     }
@@ -163,6 +238,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
                                  // setting applied just above (margins, width) takes effect even when the
                                  // canvas frame didn't change (e.g. a short doc whose height is floored).
         scrollView.contentSize = CGSize(width: size.width, height: canvasHeight)
+        #if DEBUG
+        refreshDebugLayoutOverlay()
+        #endif
         return contentHeight
     }
 
@@ -170,12 +248,19 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// — no reflow of the displayed boxes, no frame/scroll/overlay/caret change, no `onChange`. Applies
     /// the same `minimumContentHeight` floor and `contentMargins` as `update(...)`, so the measured value
     /// equals what a subsequent `update` at this width returns (measure == commit). Pure read.
-    public func height(forWidth width: CGFloat) -> CGFloat {
-        max(canvas.measuredContentHeight(forWidth: width), minimumContentHeight)
+    ///
+    /// `contentMargins`: pass the margins the host will apply via the next `update(...)` to keep the measure
+    /// correct even when called BEFORE that update has pushed them onto the live canvas (the chat composer
+    /// sizes its field from this while the editor is still unsized after a draft set). Omit (`nil`) to measure
+    /// against the live `contentMargins`, matching the previous behavior for hosts that update before measuring.
+    public func height(forWidth width: CGFloat, contentMargins: UIEdgeInsets? = nil) -> CGFloat {
+        max(canvas.measuredContentHeight(forWidth: width, contentMargins: contentMargins), minimumContentHeight)
     }
 
     /// Test accessor: the current bottom content inset.
     var bottomContentInsetForTesting: CGFloat { scrollView.contentInset.bottom }
+    /// Test accessor: the current vertical scroll indicator insets (asserted decoupled from the content inset).
+    var verticalScrollIndicatorInsetsForTesting: UIEdgeInsets { scrollView.verticalScrollIndicatorInsets }
     /// Test accessor: the scroll view's content height (the scrollable extent).
     var scrollContentHeightForTesting: CGFloat { scrollView.contentSize.height }
     /// Test accessor: the scroll view's content offset (read to assert caret-follow scrolling; set to
@@ -214,6 +299,11 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Inserts an empty `rows`×`cols` table (row 0 a header) at the caret. No-op unless the caret is in
     /// a top-level paragraph.
     public func insertTable(rows: Int, cols: Int) { canvas.insertTable(rows: rows, columns: cols) }
+
+    /// Collapse the quote run containing the block at `blockIndex` into a folded `.collapsedQuote` (one undo step).
+    public func collapseQuoteRun(atBlockIndex blockIndex: Int) { canvas.collapseQuoteRun(atIndex: blockIndex) }
+    /// Expand the `.collapsedQuote` at `blockIndex` back to quote paragraphs (one undo step).
+    public func expandCollapsedQuote(atBlockIndex blockIndex: Int) { canvas.expandCollapsedQuote(atIndex: blockIndex) }
 
     /// Sets `url` as a link over the current selection (no-op if the selection is empty).
     public func setLink(_ url: String) { canvas.setLink(url) }
@@ -364,11 +454,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {
         canvas.viewportDidChange()   // realize/recycle block views + emoji + blockquote underlay for the new viewport
+        #if DEBUG
+        refreshDebugLayoutOverlay()   // keep block outlines tracking the scrolled content
+        #endif
     }
+
+    #if DEBUG
+    /// DEBUG-only: exposes the (private) scroll content inset to the debug layout overlay.
+    var debugContentInset: UIEdgeInsets { scrollView.contentInset }
+    #endif
 
     // MARK: - Composer-host scroll accessors (internal — consumed by RichTextEditorView+ComposerHost.swift)
 
     var scrollViewContentOffset: CGPoint { self.scrollView.contentOffset }
-    func setScrollViewIndicatorInsets(_ insets: UIEdgeInsets) { self.scrollView.verticalScrollIndicatorInsets = insets }
 }
 #endif

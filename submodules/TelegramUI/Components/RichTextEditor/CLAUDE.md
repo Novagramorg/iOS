@@ -40,8 +40,11 @@ on TK1 — is **NOT invoked** under the TextKit-2-backed `NSLayoutManager` on mo
 `BlockLayoutTK1` does the manual draw/geometry shift too rather than relying on it.) **Why not `baselineOffset`**
 (the attribute): it's a real `CharacterAttributes` field (sub/superscript) and would round-trip into the
 model — centering must stay a render-only layout concern. Verified on both engines by `LineHeightCenteringTests`
-(glyph top-gap ≈ bottom-gap). This is editor-wide (document + composer), so a composer line keeps real 1.10
-spacing with centered text — no composer-specific line-height knob.
+(glyph top-gap ≈ bottom-gap). The body/caption 1.10 multiple is now host-tunable via `TextLayoutMetrics`
+(see the compact-host knob list below): the chat composer sets it to **1.0** (natural line height — and the
+centering shift collapses to 0, since `centeringDelta` = `lineHeight·(1−1/1)/2` = 0) so multi-line composer
+text reads tight like the legacy input, while the document editor keeps 1.10. Headings (1.05) and quote (1.10)
+are not covered by this knob.
 
 So **the UIKit target is gated `@available(iOS 13.0, *)`** (`RichTextEditorCore` is pure-Foundation,
 always-available), with only genuine higher-OS APIs kept at their real floor: the TK2 `BlockLayout` type + the
@@ -51,8 +54,8 @@ always-available), with only genuine higher-OS APIs kept at their real floor: th
 analog), no loupe, no inline predictions — everything else (editing, tables, lists, links, emoji, selection,
 IME, edit menu) works. Full SwiftPM suite is green on both engines (TK1 via the DEBUG `forceTextKit1`). The
 app-side consumers (`RichTextEditorChatInputNode`, `RichTextAttachmentScreen` + its helpers,
-`StandaloneInstantPageImageView`) are also lowered to iOS 13; the editor still only appears behind the
-`debugRichText` ("Debug Text") experimental flag.
+`StandaloneInstantPageImageView`) are also lowered to iOS 13; the editor is now the **default** chat composer,
+with the `forceLegacyTextInput` ("Force Legacy Text Input") experimental flag opting back out to the legacy input.
 
 **Spoiler-texture resource access is build-system-split (via `#if SWIFT_PACKAGE`).** `SpoilerDustView`
 resolves the particle texture two ways: under **SwiftPM** it uses `UIImage(named: "TextSpeckle", in:
@@ -109,6 +112,31 @@ behavior, so the attachment screen / Demo / SwiftPM tests are unchanged.** The c
   draws nothing. Composer → all "".
 - `canvasBackgroundColor` (default `.systemBackground`, the document "page") — the canvas background; the
   scroll view + `BlockBackingView`s are already clear. Composer → `nil` (transparent over the input panel).
+- `tapBelowAddsTrailingParagraph` (default `true`) — whether a tap in the empty area below the document's last
+  block appends a new empty body paragraph there (the `point.y > boxes.last.frame.maxY` affordance in
+  `+Interaction.swift`; see the quote-escape note below). The full-page article editor keeps it on; the compact
+  composer has no "empty area below the content" to grow into, so **Composer → `false`** (a tap there just places
+  the caret in the trailing paragraph). Unlike the other knobs the composer sets this in `didLoad` purely for
+  behavior — it doesn't affect layout, so its timing vs. the document seed is immaterial.
+- `textLayoutMetrics` (`TextLayoutMetrics`, default `.default` = the document look: body/caption 1.10 line-height
+  multiple + 8pt inter-paragraph gap) — a growable value set of render-only body/caption spacing knobs
+  (`bodyLineHeightMultiple`, `bodyParagraphSpacingBefore`, `bodyParagraphSpacingAfter`), mapped to flat
+  `StyleSheet` fields (parallel to the existing `quoteSpacing*` fields) and applied via `applyTextLayoutMetrics`
+  → mapper rebuild + reload (mirrors `quoteStyle`). Composer → `.compact` (natural 1.0 line height, 0 paragraph
+  spacing) so multi-line text reads tight like the legacy plain-text input. An explicit per-paragraph
+  `lineHeightMultiple` in the model still overrides. Runtime-verified 2026-06-29: body line pitch 22.33pt (1.10)
+  → 20.33pt (natural) in the composer; the quote block is correctly unaffected. (Headings + quote keep their
+  own metrics; quote spacing is `QuoteStyle`.)
+  **Gotcha — `lineHeightMultiple` is a per-line BOX-height scale, not a between-lines gap, so it also shifts a
+  lone/first line.** TextKit puts the multiple's extra leading entirely ABOVE the glyphs (see the line-height
+  centering note above), so a single line at 1.10 sits ~2pt low, which the render `centeringDelta` (`= L·(m−1)/2`)
+  half-corrects back up by ~1pt. So dropping a single line from 1.10 → 1.0 raises its baseline by ~1pt to the
+  font's TRUE natural position (the legacy plain-input baseline) — `20.3·(1.10−1)/2 ≈ 1pt`. That is correct, not
+  a regression: any host vertical padding that was eyeballed against the old 1.10-centered (1pt-low) baseline
+  should be re-tuned to natural metrics, NOT compensated by re-introducing the multiple. If a host ever wants
+  inter-line spacing that leaves the first line's baseline fixed, the right tool is `NSParagraphStyle.lineSpacing`
+  (additive below each fragment; a lone line is unaffected) — add it as a `TextLayoutMetrics` field rather than
+  abusing `lineHeightMultiple`.
 
 Two host-side runtime contracts the composer had to honor (apply to any non-attachment host): **seed an initial
 `document`** (the canvas starts with ZERO blocks; nothing renders/edits until the `document` setter runs), and
@@ -184,12 +212,25 @@ The façade is now driven by its host rather than self-laying-out:
   set `scrollView.contentInsetAdjustmentBehavior = .never` and **removed all `UIResponder` keyboard
   observation**. A private `performLayout(size:)` sizes the scroll view/canvas; only `update` writes insets
   (so a system `layoutSubviews` pass can't clobber the parent inset). Caret-follow scrolling stays internal.
-- `height(forWidth:) -> CGFloat` — a stateless, side-effect-free content-height measure (the Phase-2
+- `height(forWidth:contentMargins:) -> CGFloat` — a side-effect-free content-height measure (the Phase-2
   follow-up to the composer's `textHeightForWidth`). Mirrors what `update(...)` returns at that width
   (same `minimumContentHeight` floor + `contentMargins`) but reflows NOTHING live: the per-block
   `measuredHeight(forWidth:)` chain reads structural insets and measures text via a reused per-engine
   scratch layout (`BlockLayoutEngine.boundingHeight(forWidth:)`). De-stateful-ized `TableBlockBox.height`
   in passing (it no longer resizes cell layouts to measure; `recompute()` owns cell layout).
+  **LOAD-BEARING — the measure must be PURE w.r.t. the live `contentMargins`, not just the live layout
+  (2026-06-30).** `measuredContentHeight` derives the content WIDTH from the margins (`contentWidth` =
+  `width − contentLeftPad − contentRightPad`), so reading the live `canvas.contentMargins` makes the result
+  depend on whether `update(...)` has run yet. A host that sizes its field from this BEFORE the first
+  `update(...)` (the chat composer when a draft is applied before the editor is framed — `bounds.width == 0`,
+  so `setInputContent` skips the corrective `update`) then measures the text at the FULL width (the right-inset
+  reservation is still 0 → fewer wrapped lines → a too-short height), and the field visibly GROWS one pass
+  later when the real margins land — the device-verified "pre-set draft text jumps on open, not every time"
+  bug (the intermittency is the async draft-push racing the first layout). Fix: `height(forWidth:contentMargins:)`
+  + `measuredContentHeight(forWidth:contentMargins:)` take the intended margins explicitly; the composer's
+  `textHeightForWidth` passes its `trackedContentMargins` (the value the next `update` will apply), so the
+  measure is correct on the first pass regardless of the race. `nil` keeps the live-margins behavior for hosts
+  that always `update` before measuring (`RichTextAttachmentScreen`), so they're byte-unchanged.
 - `onChange: (() -> Void)?` — payload-free; fires on any edit, content-size change, or selection move
   (funneled from the canvas's `onContentSizeChange` + `onSelectionChange`, the latter fired unconditionally by
   `editing { }`). The host re-runs its layout (→ `update`) in response. **`update` must NOT synchronously fire
@@ -496,6 +537,9 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   ALREADY an empty body paragraph, the tap is let through to the normal caret-placement path (no redundant empty
   is stacked). This started as a quote/code-only escape hatch and was generalized 2026-06-25 (paired with the
   *"deleting the last paragraph"* backspace rule above, so a tapped-in trailing paragraph is also removable).
+  **Gated on `tapBelowAddsTrailingParagraph` (added 2026-06-28, default `true`):** the article editor keeps it;
+  the chat composer sets it `false` (a compact field has no empty area below the content to grow into) — see the
+  compact-host knob list above.
   **(C)** **Shift+Return** inside a quote EXITS it with a new empty body paragraph (caret there): **ABOVE** the
   quote when the caret is on its first visual (wrapped) line (`caretIsOnFirstLine` — compares the caret's `minY`
   to offset 0's), else **BELOW** it. So a single-line / empty quote (caret always on its first line) exits
@@ -548,6 +592,93 @@ recursing into cells.
 `inputDelegate?.…change(self)` needs the `UITextInput` conformance to type-check, so the view class and
 its `+UITextInput` extension are co-dependent and land together. Remember `import RichTextEditorCore` in
 UIKit files.
+
+## RTL / writing direction (added 2026-06-28)
+
+RTL paragraphs (Arabic/Hebrew/…) lay out per-paragraph, **auto-detected by default**, with a persisted
+**whole-document override**. Auto-detected direction is **render-only**; only the override persists.
+
+- **Model.** `TextAlignment` gained `.natural` (leading) and it is the **default** for new paragraphs (absolute
+  `.left/.center/.right/.justified` stay explicit overrides). `Document.layoutDirection`
+  (`.auto/.leftToRight/.rightToLeft`, default `.auto`) is the override (Core; `DocumentCodec` defaulted decode →
+  `.auto`). Both pure-Foundation; the Core→UIKit `NSWritingDirection` mapping is UIKit-side.
+- **Detection.** `BlockLayoutEngine.baseDirection(atOffset:)` — one protocol-extension default impl over the
+  engine's `attributedString` using `CTRunGetStatus(firstRun).contains(.rightToLeft)` (the same first-run
+  heuristic as `TextNode`/`InstantPageV2Layout`, so the editor agrees with how the sent message renders). Both
+  engines inherit it; nil on empty.
+- **Resolution + reporting** (`DocumentCanvasView+WritingDirection.swift`): `resolvedDirection(forGlobal:)` =
+  forced override → content detection → `typingWritingDirection`; `typingWritingDirection` = forced → keyboard
+  language (`Locale.characterDirection`) → app `effectiveUserInterfaceLayoutDirection`. `applyWritingDirectionOverride`
+  sets `layoutDirectionModel` + `mapper.baseWritingDirection` (`.auto`→`.natural`). `baseWritingDirection(for:in:)`
+  returns the resolved direction; **`setBaseWritingDirection` is a deliberate no-op** — the whole-document override
+  is the single manual control (per-range UIKit writes are ignored).
+- **Layout.** `StyleSheet.paragraphStyle(…baseWritingDirection:)` sets `ps.baseWritingDirection` (threaded via
+  `AttributedStringMapper.baseWritingDirection`; 11 call sites). `selectionFillRects(…isRTL:)` flips the
+  leading/trailing physical edge for RTL lines (both engines; `isRTL:false` is byte-identical to the old LTR math).
+- **Empty-paragraph caret** follows `typingWritingDirection`: `refreshEmptyBoxWritingDirections()` sets
+  `BlockBox.writingDirectionOverride` on empty top-level boxes (all modes), whose `didSet` pushes
+  `BlockLayoutEngine.emptyTextCaretDirection`; both engines' `caretRect(atOffset:)` return `x ≈ containerWidth-2`
+  for empty + `.rightToLeft` (LTR/non-empty unchanged). Refreshed from `reload`, `becomeFirstResponder`,
+  **`UITextInputMode.currentInputModeDidChangeNotification`** (so the caret re-flips live on a keyboard/globe-key
+  change or first keyboard appearance), **and after every edit (the `editing {}` wrapper, added 2026-06-29)** —
+  a structural edit can CREATE an empty paragraph (Enter for a new line) or EMPTY one (delete its last char),
+  and without re-deriving the hint the new RTL line kept its caret on the LEFT until the next reload/refocus
+  (the reported "empty line cursor on the left" bug). The in-`editing` call is empty-box-only work (`restyle`
+  no-ops on empty storage) and the `writingDirectionOverride != desired` guard makes it a cheap no-op when no
+  box changed emptiness. Regression-guarded by `RTLEmptyLineCaretTests`.
+- **LOAD-BEARING (TK2) — the non-empty caret uses the `.selection` text segment, NOT `.standard`** (2026-06-29,
+  `BlockLayout.caretRect(atOffset:)`). For an RTL paragraph the `.standard` segment reports the caret x in a
+  non-right-aligned coordinate (text measured from a left origin), so it sits left of the glyphs by the line's
+  right-alignment displacement and — the headline symptom — **FREEZES the end-of-text caret on a wrapped RTL line**
+  (it doesn't track the text growing leftward as you type past the first line). `.selection` is the glyph-accurate
+  geometry the selection wash already trusts (`selectionRects`/`selectionFillRects`); for a zero-width (caret)
+  range it returns a zero-width segment at the true insertion point. **LTR is byte-identical** (the two segment
+  types agree there), so this only moves the RTL caret. Regression-guarded by `RTLCaretTrackingTests` (caret tracks
+  leftward while typing on line 2; caret-at-0 sits at the container right edge = the rendered glyph edge; interior
+  caret sits on the glyph boundary). **`BlockLayoutTK1` (iOS 13–15) got the matching fix (2026-06-29):** its
+  `caretRect` placed the caret at the glyph's LTR pen origin (`location.x`) for every offset and the last glyph's
+  INK right edge at end-of-text — both wrong for RTL (the caret sat a glyph off and the end caret overshot the
+  container / jumped on trailing spaces). It now places the caret on the **direction-correct edge of the glyph's
+  ADVANCE (enclosing) box** — leading edge before a char (`minX` LTR / `maxX` RTL), trailing edge at end
+  (`maxX` LTR / `minX` RTL). Direction comes from `resolvedCaretDirection()` (forced override baked in the
+  paragraph style; `.natural` → `baseDirection` content detection), cached per `renderVersion` since
+  `closestOffset` calls `caretRect` per offset. `TK1RTLCaretTests` pins TK1 to TK2 at every offset (RTL + LTR).
+  Limitation (shared with TK2's first-run heuristic): a paragraph mixing an embedded opposite-direction run is
+  positioned by its base direction. The running app uses TK2 on iOS 16+; TK1 is the iOS 13–15 / `forceTextKit1` path.
+- **Façade + host.** `RichTextEditorView.layoutDirectionOverride` (modeled like `theme`; round-trips through
+  `document`). `RichTextAttachmentScreen` has an Auto/LTR/RTL action-bar control; the chat composer relies on
+  auto-detect (no manual toggle this round).
+- **LOAD-BEARING — font FAMILY is display-only and must NOT round-trip.** `NSTextStorage` font-fixing substitutes a
+  script font into a run's `.font` **in storage** when the style font can't render the glyphs (Arabic/Hebrew/CJK).
+  `characterAttributes(from:)` must therefore **not** capture `fontFamily` from the rendered font — it once did, so
+  the substituted family round-tripped and the font visibly changed on a backspace **merge** (`mergeParagraphs` →
+  `currentParagraph()`). Font **size** IS still pinned on read-back (the 15pt table-cell round-trip needs it);
+  bold/italic round-trip via font traits; forward `font(for:)` still honors an explicit import-set `fontFamily`.
+- **LOAD-BEARING — bold is a user-intent MARKER (`.rtBold`), not the rendered trait (2026-06-29).** The iOS
+  **"Bold Text" accessibility setting** stamps `.traitBold` onto the script font TextKit substitutes for Arabic/
+  Hebrew/CJK (verified: under the setting `systemFont` itself stays non-bold, so Latin is fine, but the
+  substituted `.SF Arabic` is `.traitBold` whether or not the user bolded — the rendered font alone can't tell
+  user-bold from ambient-bold). So model bold rides a private render-only `NSAttributedString.Key` **`.rtBold`**
+  (the `rtInlineCode`/`rtSpoiler` precedent): set by the forward mapper (`attributes(for:)`) + `toggleBold`, read
+  by `characterAttributes` + `rangeIsBold` — decoupling model bold from the ambiguous font trait. **Marker-less**
+  storage (e.g. an RTF-imported `NSAttributedString`) falls back to the **ambient-stripped** `.traitBold`
+  (`boldIsAmbient`: re-substitute the non-bold style base for the run's `text` via `CTFontCreateForString` — which
+  matches TextKit's fixing — and if THAT is also bold, drop `ca.bold`; `runs(from:)` passes the run text). Never
+  persisted to the Core model (read back to `CharacterAttributes.bold`). Without this, backspace-merging an Arabic
+  line under Bold Text baked `bold=true` into the model ("the whole previous line becomes bold") AND the toolbar
+  toggle couldn't apply persistent bold to a substituted script (it read the ambient trait, so the first tap
+  *removed* bold). Guarded by `RTLBoldReadbackTests`. **Limitation:** under Bold Text the OS erases the
+  user-vs-ambient distinction in the *rendered* font, so a bold toggle on a substituted script may not visibly
+  change on-screen — the *model* is correct (what a sent message carries).
+- **Deferred:** gutter-ornament mirroring (list markers / quote bar / checklist / indents to the right gutter),
+  table-column direction, a composer override UI, and mapping the override → rich-message `InstantPage.rtl`.
+
+## DEBUG layout overlay (added 2026-06-28, `RichTextEditorView+DebugOverlay.swift`)
+
+`RichTextEditorView.debugShowLayoutOverlay` (`#if DEBUG`, **ON by default in DEBUG**; set `false` to hide) draws a
+non-interactive topmost overlay: the field frame (red outline), scroll insets (blue bands), content margins (green
+ring), and per-block frames (orange, indexed), with inset/margin numeric labels. Refreshed from `performLayout` /
+`scrollViewDidScroll`; reads geometry via `bounds` / `debugContentInset` / `canvas`. Compiled out of release entirely.
 
 ## Load-bearing invariants (compiler-invisible — violating these silently breaks the editor)
 
@@ -629,7 +760,12 @@ UIKit files.
 - **Gesture arbitration is gate-only.** Handle/knob pan vs scroll pan is resolved *only* via
   `gestureRecognizerShouldBegin` — never `require(toFail:)` or forced simultaneous recognition. The
   single-tap recognizer fires immediately with manual multi-tap escalation in `handleTap` (no
-  double-tap-failure delay); the host scroll view sets `delaysContentTouches = false`.
+  double-tap-failure delay); the host scroll view sets `delaysContentTouches = false`. **Both scroll views
+  yield near a grip** via `GripYieldingScrollView` (a `UIScrollView` subclass overriding
+  `gestureRecognizerShouldBegin` to return `false` when `canvas.isSelectionDragTouch(point)` — its testable
+  seam is `yieldsToGrip(at:)`): used for the per-table inner scroll AND the **outer** document scroll
+  (`RichTextEditorView.scrollView`, `canvas` wired in init). Before the outer scroll adopted it, a vertical
+  knob pull raced the document scroll and the knob "felt dead" (2026-06-29).
 - **The single-tap "inside the selection/caret" test (`tapOutcome`) is VISUAL, not offset-based.** A tap
   toggles the edit menu only when its *point* lands on the rendered selection (`selectionRects().contains`)
   — NOT merely when `closestGlobalPosition` resolves to an offset within `[selFrom, selTo]`. A tap in the
@@ -708,7 +844,80 @@ free; raw enum value appended, optional Codable back-compat), threaded through `
 (both directions) and BOTH `Document→InstantPage` builders (`ChatInputContentInstantPage` for the composer +
 `RichTextEditorMessageConversion/InstantPageBuilder` for the attachment-screen send) into `InstantPageListItem.checked`.
 Recipient checkboxes are display-only/static; the SENDER can re-edit (falls out of the reverse bridge). No
-strikethrough on checked text (matches the InstantPage rendering). Behind `debugRichText`; runtime-verified.
+strikethrough on checked text (matches the InstantPage rendering). Default-on (legacy via `forceLegacyTextInput`); runtime-verified.
+
+## Configurable quote geometry + collapsed quotes (added 2026-06-28)
+
+Two related quote features. **(1) Per-host quote geometry** — a `QuoteStyle` value (leading/trailing inset,
+spacing before/after, bar width, corner radius, fill alpha) set via `RichTextEditorView.quoteStyle` and applied
+through `DocumentCanvasView.applyQuoteStyle` (rebuilds the mapper stylesheet); the full-page article editor and the
+compact chat composer pass different values. **(2) Collapsed quotes** — a first-class
+`Block.collapsedQuote(CollapsedQuote)` atom (legacy chat-input parity) reusing the AUDIO-media DocNode shape
+(`mediaBlock`+`mediaAtom`, nodeSize 3, caption-less; the leading gap is the caret slot). `CollapsedQuoteBox` draws
+the folded preview + a corner expand glyph; `collapseQuoteRun(atIndex:)` folds a run of consecutive quotes into one
+atom, `expandCollapsedQuote(atIndex:)` restores them — caret relocation on collapse/expand is conditional (only a
+caret that was INSIDE the run moves). Composer round-trip: one flat char + `ChatTextInputTextQuoteAttribute(
+isCollapsed: true)` via `ComposerDocumentBridge`, sent through the InstantPage builder. Available in both hosts
+(the composer is the default rich-text input; `forceLegacyTextInput` opts out). Runtime-verified.
+
+**Collapsed-quote atom — caret/nav/delete invariants (compiler-invisible, device-log-verified).** The collapsed
+quote behaves like a caption-less media atom: it owns NO leaf region (`leafRegions() == []`), so it routes through
+the same gap machinery as audio media via `collapsedQuoteBox(atGap:)` (mirroring `mediaBox(atGap:)`).
+- **Caret** at the gap draws at the quote's leading edge (`caretRect` / `caretHostPlacement`); a range covers it
+  (`coverableContentEnd == nodeStart + 1`). **Tap** the body to place the caret at the gap; tap the corner glyph to
+  expand.
+- **Horizontal nav** stops on the gap (`nextTextPosition` / `prevTextPosition` via `atomGap`); `snapToRenderable`
+  treats the gap as renderable.
+- **Vertical nav MUST step THROUGH the gap** — `verticalPosition` has an explicit `collapsedQuoteBox(atGap:)` branch
+  (Down → block after, Up → end of block above), mirroring the media-gap branch. Without it a multi-line move (the
+  OS's `position(from:in:.up/.down, offset: 2)`) STALLS on the gap (offset:2 == offset:1); the OS reads "no
+  progress", abandons `position(from:in:)`, and falls back to its own line geometry that SKIPS the captionless atom
+  (the intermittent "arrow jumps over the quote" bug).
+- **Backspace** at the gap acts on the PREVIOUS block, never the quote: a non-empty previous paragraph loses its
+  last grapheme, an EMPTY one is removed (caret stays on the quote's gap), a LEADING collapsed quote (nothing
+  before) expands. LOAD-BEARING: iOS delivers this Backspace as an object-replacement RANGE anchored at the
+  previous block's end (`selFrom = prevTextPosition(before: gap)`, `selTo = gap`) — exactly like a media atom — so
+  the handler fires on `selTo` being a collapsed gap AND `selFrom >= prevTextPosition(before: selTo)` (admits the
+  range AND the collapsed caret; excludes a genuine selection that merely ends at the gap), NOT on `selFrom ==
+  selTo`. (Same "capture the device log, don't hypothesise twice" lesson as the media object-replacement-range case.)
+
+## Selection-handle drag — touch offset, outer-scroll yield, host knob config (added 2026-06-29)
+
+Three fixes to the selection-handle ("knob") drag, runtime-verified in the chat composer.
+
+- **The drag keeps its starting touch→knob offset (not line-centered).** The knob is drawn OFFSET from the text
+  line (`SelectionHandleView.boundingFrame`: a knob 2·`knobRadius` past the caret's open end), so mapping the raw
+  finger point snapped the dragged endpoint to whatever line sat under the finger. `handleSelectionHandlePan`
+  `.began` now captures `selectionDragGrabOffset = caretCenter(draggedEndpoint) − touch`
+  (`captureSelectionDragOffset`), and every drag map — the `.changed` branch AND the auto-scroll re-extend tick —
+  goes through `selectionDragPosition(forTouch:)` = `closestGlobalPosition(to: touch + offset)`. Anchoring on the
+  caret CENTER makes the first map (touch ≈ grab point) land exactly on the grabbed endpoint (no jump at grab) and
+  the constant offset is preserved for the rest of the drag — the iOS handle-tracking feel.
+
+- **`GripYieldingScrollView` (generalized from the old `TableScrollView`).** See the gesture-arbitration invariant
+  above: the OUTER document scroll now yields its pan near a grip (it never did before — the root cause of the
+  "knobs feel dead, only the line drags" report; the gate was already covering the knobs, but the un-gated outer
+  scroll won the vertical pull). Same class backs the per-table inner scroll.
+
+- **Handle views are hit-testable + host-configurable, so a knob drag isn't hijacked by interactive
+  dismiss/transition gestures.** `SelectionHandleView` is now `isUserInteractionEnabled = true` with a
+  `point(inside:)` hit area = `caretLocalRect.insetBy(-dragHitTolerance)` (the SAME ±22pt zone as
+  `isSelectionDragTouch`, fed via `setCaretLocalRect` in `positionHandle`) — **it adds NO recognizers; the drag is
+  still the canvas pan, which receives the touch as an ancestor.** Being the window hit-test result for a knob
+  touch lets a host set Display's gesture flags on it (Display walks UP from the hit-test view), scoping the effect
+  to knob interaction — NOT the whole editor surface (setting them there was rejected). The package can't import
+  Display, so the new façade hook `RichTextEditorView.configureSelectionHandleView: ((UIView) -> Void)?` (invoked
+  once per handle view, applied in the canvas `didSet`) lets the host apply them. The three flags:
+  `disablesInteractiveTransitionGestureRecognizer` (the navigation back-swipe a HORIZONTAL knob drag triggers — the
+  load-bearing one, gated at `WindowContent.doesViewTreeDisableInteractiveTransitionGestureRecognizer`, distinct
+  from the keyboard check), `disablesInteractiveModalDismiss` (the attachment sheet), and
+  `disablesInteractiveKeyboardGestureRecognizer`. **Scope differs by host:** the **compact composer**
+  (`RichTextEditorChatInputNode`) uses ONLY the per-knob hook (editor-wide was rejected — it would kill normal
+  scroll/dismiss in the small field); the **full-page attachment editor** (`RichTextAttachmentScreen`) sets the
+  hook AND the same three flags editor-wide on `editor` (a full-page editor shouldn't back-swipe/dismiss from any
+  in-editor interaction while editing). **Compiler-invisible:** the per-knob flag is consulted only when the knob
+  is the window hit-test result, so the handle MUST stay hit-testable and its hit area MUST track the caret —
+  verified on device (the hit test lands on `SelectionHandleView`).
 
 ## Status
 

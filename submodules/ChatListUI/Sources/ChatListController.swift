@@ -1554,7 +1554,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             guard let self else {
                 return
             }
-            self.push(self.context.sharedContext.makeCommunityViewScreen(context: self.context, communityId: communityId))
+            self.push(self.context.sharedContext.makeCommunityViewScreen(context: self.context, communityId: communityId, mode: .sheet))
         }
 
         self.chatListDisplayNode.mainContainerNode.ungroupCommunity = { [weak self] communityId in
@@ -1954,7 +1954,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         var dismissPreviewingImpl: ((Bool) -> (() -> Void))?
                         let source: ContextContentSource
                         if case .community = peer.peer {
-                            let communityController = strongSelf.makeCommunityViewController(communityId: peer.peerId, displayMode: .preview)
+                            let communityController = strongSelf.makeCommunityViewController(communityId: peer.peerId, mode: .preview)
                             source = .controller(ContextControllerContentSourceImpl(controller: communityController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController))
                         } else if let location = location {
                             source = .location(ChatListContextLocationContentSource(controller: strongSelf, location: location))
@@ -2040,7 +2040,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 let contextController = makeContextController(context: strongSelf.context, presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: chatListController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController)), items: chatContextMenuItems(context: strongSelf.context, peerId: peer.id, promoInfo: nil, source: .search(source), chatListController: strongSelf, joined: false) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
                 strongSelf.presentInGlobalOverlay(contextController)
             } else if case .community = peer {
-                let communityController = strongSelf.makeCommunityViewController(communityId: peer.id, displayMode: .preview)
+                let communityController = strongSelf.makeCommunityViewController(communityId: peer.id, mode: .preview)
                 let contextController = makeContextController(context: strongSelf.context, presentationData: strongSelf.presentationData, source: .controller(ContextControllerContentSourceImpl(controller: communityController, sourceNode: node, navigationController: strongSelf.navigationController as? NavigationController)), items: chatContextMenuItems(context: strongSelf.context, peerId: peer.id, promoInfo: nil, source: .search(source), chatListController: strongSelf, joined: false) |> map { ContextController.Items(content: .list($0)) }, gesture: gesture)
                 strongSelf.presentInGlobalOverlay(contextController)
             } else {
@@ -2918,13 +2918,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         return nil
     }
     
-    private func makeCommunityViewController(communityId: EnginePeer.Id, displayMode: CommunityViewScreenDisplayMode = .default) -> ViewController {
+    private func makeCommunityViewController(communityId: EnginePeer.Id, mode: CommunityViewScreenMode = .fullscreen) -> ViewController {
         let controller = self.context.sharedContext.makeCommunityViewScreen(
             context: self.context,
             communityId: communityId,
-            style: .plain,
-            presentation: .fullScreen,
-            displayMode: displayMode
+            mode: mode
         )
         controller.navigationPresentation = .master
         return controller

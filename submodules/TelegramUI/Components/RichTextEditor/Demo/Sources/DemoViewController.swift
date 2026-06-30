@@ -47,6 +47,12 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
                     textCell("w16", ["G"]),
                 ]),
             ])
+        if let collapse = UIImage(systemName: "arrow.down.right.and.arrow.up.left"),
+           let expand = UIImage(systemName: "arrow.up.left.and.arrow.down.right") {
+            editor.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(
+                collapse: collapse.withRenderingMode(.alwaysTemplate),
+                expand: expand.withRenderingMode(.alwaysTemplate))
+        }
         editor.document = Document(
             blocks: [
                 .paragraph(ParagraphBlock(id: BlockID("title"), style: .heading1, runs: [TextRun(text: "Into the Dark")])),

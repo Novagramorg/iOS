@@ -1474,6 +1474,7 @@ private final class AdminUserActionsSheetComponent: Component {
                 }
 
                 if self.banFromCommunity, let communityBanContext = self.communityBanContext, !communityBanContext.creatorChatIds.isEmpty, let peer = component.peers.first {
+                    //TODO:localize
                     var alertContent: [AnyComponentWithIdentity<AlertComponentEnvironment>] = [
                         AnyComponentWithIdentity(
                             id: "title",
@@ -1738,7 +1739,7 @@ private final class AdminUserActionsSheetComponent: Component {
                             self.state?.updated(transition: .spring(duration: 0.35))
                         },
                         openCommunity: { communityId in
-                            let controller = component.context.sharedContext.makeCommunityViewScreen(context: component.context, communityId: communityId)
+                            let controller = component.context.sharedContext.makeCommunityViewScreen(context: component.context, communityId: communityId, mode: .sheet)
                             environmentValue.controller()?.present(controller, in: .window(.root))
                         }
                     )),

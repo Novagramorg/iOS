@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import AsyncDisplayKit
 import Display
+import AppBundle
 import Postbox
 import TextFormat
 import TelegramCore
@@ -33,8 +34,9 @@ private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerVi
     }
 }
 
-/// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`. Selected on iOS 17+
-/// behind the `debugRichText` flag (see `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
+/// `ChatRichTextInputNode` backend composing the TextKit-2 `RichTextEditorView`. The default composer on
+/// iOS 17+ (the `forceLegacyTextInput` flag opts back out to the legacy input — see
+/// `ChatTextInputPanelNode.loadTextInputNode`). Phase 1 implements
 /// display, layout, editing, and selection geometry; spoiler reveal, typing attributes, and the full
 /// delegate suite are safe stubs (Phase 2+).
 @available(iOS 13.0, *)
@@ -45,6 +47,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     private var trackedInsets: UIEdgeInsets = .zero
     private var trackedContentMargins: UIEdgeInsets = .zero
     private var trackedRightInset: CGFloat = 0.0
+    // The host's constant scroll-indicator inset (the panel sets it once during loadTextInputNode, before the
+    // first layout). Threaded into every editor.update(...) so it survives — nil means "track the content insets".
+    private var trackedScrollIndicatorInsets: UIEdgeInsets?
     private weak var storedDelegate: ChatInputTextNodeDelegate?
 
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView?)?
@@ -81,6 +86,10 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var asNode: ASDisplayNode { self }
 
     public override init() {
+        #if DEBUG && false
+        RichTextEditorView.debugShowLayoutOverlay = true
+        #endif
+        
         super.init()
     }
 
@@ -102,6 +111,11 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // hug its text height (~one line), not carry the document gap. The panel's own field padding
         // (textInputViewInternalInsets) provides the visual top/bottom breathing room.
         self.editorView.blockVerticalInset = 0.0
+        self.editorView.textLayoutMetrics = TextLayoutMetrics(
+              bodyLineHeightMultiple: 1.0,       // line spacing (1.0 = natural/tight; 1.10 = document)
+              bodyParagraphSpacingBefore: 0,     // gap above each paragraph
+              bodyParagraphSpacingAfter: 0       // inter-paragraph gap (Enter-separated lines)
+        )
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
         self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "")
@@ -110,6 +124,37 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // (no background) rather than `.clear`: same transparency, but signals "unset" and avoids an
         // explicit clear-color fill.
         self.editorView.canvasBackgroundColor = nil
+        // Disable the "tap below the content adds a trailing paragraph" affordance: that's a full-page
+        // document-editor behavior (the article editor keeps it). In the compact composer there is no empty
+        // area below the content to grow into, so a tap there just places the caret in the trailing paragraph.
+        self.editorView.tapBelowAddsTrailingParagraph = false
+        // Quote geometry for the compact composer. Defaults == the editor's built-in look; tune here to
+        // diverge from the article editor (e.g. tighter insets in the narrow input field).
+        self.editorView.quoteStyle = QuoteStyle(
+            leadingInset: 9.0,
+            trailingInset: 22.0,
+            spacingBefore: 8.0,
+            spacingAfter: 8.0,
+            barWidth: 3.0,
+            cornerRadius: 2.5,
+            fillAlpha: 0.1,
+            topInset: 3.0,
+            bottomInset: 3.0
+        )
+        // Quote collapse/expand affordance icons — the same bundle assets the legacy ChatInputTextNode uses.
+        if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
+           let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
+            self.editorView.quoteCollapseIcons = RichTextEditorQuoteCollapseIcons(collapse: collapse, expand: expand)
+        }
+        // A selection-handle ("knob") drag must NOT be hijacked by the interactive keyboard-/modal-dismiss
+        // gestures. Those Display flags can only be set host-side (the editor package can't import Display) and
+        // are applied to the hit-testable handle views, so the effect is scoped to knob interaction — not the
+        // whole editor surface.
+        self.editorView.configureSelectionHandleView = { handle in
+            handle.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (the one a horizontal knob drag triggers)
+            handle.disablesInteractiveModalDismiss = true
+            handle.disablesInteractiveKeyboardGestureRecognizer = true
+        }
 
         // Seed an editable document. RichTextEditorView starts with ZERO blocks — its canvas is only
         // populated by the `document` setter (which normalizes an empty Document to a single empty body
@@ -137,7 +182,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             // (the editor's contract, covered by a regression test), so this cannot recurse. The panel's
             // delegate-driven layout pass still handles field-height growth separately.
             if self.editorView.bounds.width > 0.0 {
-                _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+                _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
             }
             self.storedDelegate?.chatInputTextNodeDidUpdateText()
         }
@@ -294,7 +339,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         )
         self.editorView.document = newDocument
         if self.editorView.bounds.width > 0.0 {
-            _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+            _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
         }
         self.storedDelegate?.chatInputTextNodeDidUpdateText()
         self.selectedRange = selection.nsRange(in: content)
@@ -365,17 +410,23 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// `size` using the tracked scroll insets + content margins. Trailing scroll inset stays `.zero` in
     /// Phase 1 (the composer field is short and grows; the keyboard inset is the panel's concern).
     public func updateLayout(size: CGSize) {
-        _ = self.editorView.update(size: size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+        _ = self.editorView.update(size: size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
     }
     /// Measures the editor's content height at `width` with a stateless, side-effect-free measure
     /// (`RichTextEditorView.height(forWidth:)`) — it does NOT reflow the live editor or touch its
     /// frames/insets. `rightInset` is recorded for the next real `update(...)`.
+    ///
+    /// Passes `trackedContentMargins` (the margins the next `update(...)` will apply) so the measure reserves
+    /// the right inset even when the panel sizes its field BEFORE the editor has been laid out — a draft
+    /// applied before the first layout. Without this the live canvas margins are still zero, the text is
+    /// measured at the full width, and the field is sized one wrap too short, then visibly grows on the next
+    /// pass (the pre-set-text "jump").
     public func textHeightForWidth(_ width: CGFloat, rightInset: CGFloat) -> CGFloat {
         self.trackedRightInset = rightInset
-        return self.editorView.height(forWidth: width)
+        return self.editorView.height(forWidth: width, contentMargins: self.trackedContentMargins)
     }
     public func layoutInputField() {
-        _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins)
+        _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
     }
     public var textFieldFrame: CGRect {
         get { self.editorView.frame }
@@ -385,14 +436,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var textContainerInset: UIEdgeInsets {
         get {
             var updated = self.trackedContentMargins
-            updated.top += 1.0
+            updated.top += 0.0
             updated.bottom += 1.0
             updated.right -= 14.0
             return updated
         }
         set {
             var updated = newValue
-            updated.top -= 1.0
+            updated.top -= 0.0
             updated.bottom -= 1.0
             updated.right += 14.0
             self.trackedContentMargins = updated
@@ -471,7 +522,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     // hitTest(_:with:) override — deferred to Phase 2 (the editor's canvas owns hit-testing today).
     public var inputHitTestSlop: UIEdgeInsets = .zero
     public var inputContentOffset: CGPoint { self.editorView.composerContentOffset }
-    public func setInputScrollIndicatorInsets(_ insets: UIEdgeInsets) { self.editorView.setComposerScrollIndicatorInsets(insets) }
+    public func setInputScrollIndicatorInsets(_ insets: UIEdgeInsets) { self.trackedScrollIndicatorInsets = insets }
 
     /// The caret/selection in the composer's flat UTF-16 coordinate space (paragraphs joined by "\n",
     /// matching `ComposerDocumentBridge`). The panel reads this to know where to insert/replace and writes

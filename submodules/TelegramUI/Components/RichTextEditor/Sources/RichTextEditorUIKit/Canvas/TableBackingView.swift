@@ -2,25 +2,6 @@
 import UIKit
 import RichTextEditorCore
 
-/// A `UIScrollView` subclass whose pan gesture yields to the canvas's selection-handle / table-knob drag.
-/// UIKit requires that `UIScrollView.panGestureRecognizer.delegate` stays the scroll view itself, so
-/// we override `gestureRecognizerShouldBegin` here (on the owning view) rather than replacing the delegate.
-/// Gate-only: no `require(toFail:)` / simultaneous recognition — consistent with the project policy.
-@available(iOS 13.0, *)
-final class TableScrollView: UIScrollView {
-    weak var canvas: DocumentCanvasView?
-
-    // Called by UIKit before the pan recognizer starts. We yield only when the touch is near a
-    // selection-handle / table-knob grip so the canvas's handle-pan wins; otherwise return super's
-    // answer so normal horizontal-scroll / inner-vs-outer vertical-scroll arbitration is unchanged.
-    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
-        guard g === panGestureRecognizer, let canvas = canvas else { return super.gestureRecognizerShouldBegin(g) }
-        let point = g.location(in: canvas)   // canvas-space touch (equivalent to convert(_:from: self); UIKit keeps locations consistent across views)
-        if canvas.isSelectionDragTouch(point) { return false }
-        return super.gestureRecognizerShouldBegin(g)
-    }
-}
-
 /// A `BlockBackingView` specialization for TABLES that can scroll horizontally. It hosts a real
 /// `UIScrollView` whose single content view draws the grid at full `gridWidth`; the scroll view supplies
 /// native horizontal scrolling and its `contentOffset.x` is the single source of truth for the table's
@@ -28,7 +9,7 @@ final class TableScrollView: UIScrollView {
 /// `UITextInput`; this view never becomes first responder.
 @available(iOS 13.0, *)
 final class TableBackingView: BlockBackingView, UIScrollViewDelegate {
-    let scroll = TableScrollView()
+    let scroll = GripYieldingScrollView()
     private let content = TableContentView()
     /// Selection wash for this table's cells, hosted in `content` above the cell text + emoji so it reads
     /// on top and rides the horizontal scroll/overscroll. Kept frontmost (below the caret) in `hostEmoji`/

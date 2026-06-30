@@ -16409,3 +16409,9 @@ Error: %8$@";
 "ChatList.UngroupCommunity.Title" = "Ungroup Chats?";
 "ChatList.UngroupCommunity.Text" = "Chats from this community will appear separately in your chat list.";
 "ChatList.UngroupCommunity.Action" = "Ungroup";
+
+"Community.RemoveChat.Title" = "Remove chat from community?";
+"Community.RemoveChat.Text" = "This chat will be removed from the community.";
+"Community.RemoveChat.Remove" = "Remove";
+
+"Privacy.GroupsAndChannels.InviteToCommunityError" = "Sorry, you cannot add %@ to the community because of %@'s privacy settings.";

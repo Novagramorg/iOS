@@ -159,7 +159,7 @@ extension TableBlockBoxTests {
         guard case .table(let out) = v.currentBlocks()[0] else { return XCTFail("expected table") }
         XCTAssertEqual(out.columns[1].alignment, .center, "alignment lives in ColumnSpec")
         guard case .paragraph(let p) = out.rows[1].cells[1].blocks[0] else { return XCTFail() }
-        XCTAssertEqual(p.paragraph.alignment, .left, "the cell's own alignment is untouched")
+        XCTAssertEqual(p.paragraph.alignment, .natural, "the cell's own alignment is untouched (default natural)")
     }
 
     // A table whose columns all scale to >= minColumnWidth fits: scale-to-fit, no overflow (today's behavior).

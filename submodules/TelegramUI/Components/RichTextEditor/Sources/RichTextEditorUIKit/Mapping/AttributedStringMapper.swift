@@ -13,6 +13,11 @@ extension NSAttributedString.Key {
     /// hide is a SEPARATE display-only `.foregroundColor` rendering attribute (see `BlockLayout`), so this
     /// marker carries no styling and round-trips cleanly to `CharacterAttributes.spoiler`.
     static let rtSpoiler = NSAttributedString.Key("RTSpoiler")
+    /// Marks a run as USER-bold (the toolbar/model `CharacterAttributes.bold`), decoupling model bold from the
+    /// rendered font's `.traitBold` — which the iOS "Bold Text" accessibility setting forces onto the script
+    /// font TextKit substitutes for Arabic/Hebrew/CJK regardless of user intent. Render-only (the `rtInlineCode`
+    /// precedent); read back to `CharacterAttributes.bold`, never persisted to the Core model.
+    static let rtBold = NSAttributedString.Key("RTBold")
 }
 
 /// Converts between the Core model and `NSAttributedString` for one paragraph block.
@@ -25,10 +30,16 @@ public struct AttributedStringMapper {
     /// Theme colors used for render-time defaults (primary/secondary text, link accent). Mutable so a
     /// host theme change can be applied to the shared mapper before the next reload.
     public var theme: RichTextEditorTheme
-    public init(styleSheet: StyleSheet = .default, emojiScale: CGFloat = 1.0, theme: RichTextEditorTheme = .default) {
+    /// Base writing direction baked into every paragraph style this mapper builds. `.natural` (default)
+    /// lets TextKit auto-detect per paragraph; the whole-document override sets `.leftToRight`/`.rightToLeft`.
+    public var baseWritingDirection: NSWritingDirection
+    public init(styleSheet: StyleSheet = .default, emojiScale: CGFloat = 1.0,
+                theme: RichTextEditorTheme = .default,
+                baseWritingDirection: NSWritingDirection = .natural) {
         self.styleSheet = styleSheet
         self.emojiScale = emojiScale
         self.theme = theme
+        self.baseWritingDirection = baseWritingDirection
     }
 
     /// A copy of this mapper that renders table-cell content (a smaller body/quote base size, see
@@ -36,7 +47,8 @@ public struct AttributedStringMapper {
     /// for its cells so the denser cell font is consistent across edits (split/merge boxes inherit it
     /// via their source box's `mapper`).
     public func tableCellVariant() -> AttributedStringMapper {
-        AttributedStringMapper(styleSheet: .tableCells, emojiScale: emojiScale, theme: theme)
+        AttributedStringMapper(styleSheet: .tableCells, emojiScale: emojiScale, theme: theme,
+                               baseWritingDirection: baseWritingDirection)
     }
 
     /// Points to enlarge a rendered inline emoji beyond its glyph box, per paragraph style (decoupled from
@@ -56,6 +68,7 @@ public struct AttributedStringMapper {
         }
         var dict: [NSAttributedString.Key: Any] = [:]
         dict[.font] = styleSheet.font(for: style, attributes: ca)
+        if ca.bold { dict[.rtBold] = true }   // user-intent marker (read back as CharacterAttributes.bold)
         // Un-colored runs render in the theme's per-style default (secondary for captions, else primary).
         // This default is stripped back to nil on read-back (characterAttributes(from:style:)), so it never
         // persists into the model and re-themes cleanly.
@@ -83,7 +96,27 @@ public struct AttributedStringMapper {
         return dict
     }
 
-    public func characterAttributes(from dict: [NSAttributedString.Key: Any], style: ParagraphStyleName = .body) -> CharacterAttributes {
+    /// True when a run's `.traitBold` is an AMBIENT display artifact rather than user emphasis — specifically
+    /// the bold the iOS "Bold Text" accessibility setting forces onto the SCRIPT FONT TextKit substitutes for
+    /// glyphs the base font can't render (Arabic/Hebrew/CJK). Under that setting a substituted font carries
+    /// `.traitBold` whether or not the user toggled bold, so the rendered font alone can't tell them apart; we
+    /// re-substitute the NON-bold style base for the run's text and, if THAT ambient font is also bold, treat
+    /// the run's bold as ambient (so it must not round-trip into the model — the `fontFamily` precedent). A run
+    /// whose font family matches the non-substituted base (e.g. Latin) can only be bold via a user toggle, so
+    /// it is always trusted. Cost is incurred only for already-bold, substituted runs (rare).
+    private func boldIsAmbient(renderedFont: UIFont, text: String, style: ParagraphStyleName, ca: CharacterAttributes) -> Bool {
+        guard !text.isEmpty else { return false }
+        var ambientCA = ca; ambientCA.bold = false
+        let base = styleSheet.font(for: style, attributes: ambientCA)   // the non-user-bold base for this run
+        // Same family ⇒ no substitution happened ⇒ bold can only be a user toggle (never ambient).
+        guard renderedFont.familyName != base.familyName else { return false }
+        let ns = text as NSString
+        let substituted = CTFontCreateForString(base as CTFont, ns, CFRange(location: 0, length: ns.length)) as UIFont
+        return substituted.fontDescriptor.symbolicTraits.contains(.traitBold)
+    }
+
+    public func characterAttributes(from dict: [NSAttributedString.Key: Any], style: ParagraphStyleName = .body,
+                                    text: String? = nil) -> CharacterAttributes {
         var ca = CharacterAttributes()
         if let att = dict[.attachment] as? EmojiTextAttachment {
             ca.emoji = att.ref   // emoji-only; never leak the spacer font/etc. into the model
@@ -92,16 +125,29 @@ public struct AttributedStringMapper {
         let isCode = (dict[.rtInlineCode] as? Bool) == true
         if let font = dict[.font] as? UIFont {
             let traits = font.fontDescriptor.symbolicTraits
-            ca.bold = traits.contains(.traitBold)
             ca.italic = traits.contains(.traitItalic)
-            if !isCode {
-                ca.fontSize = Double(font.pointSize)
-                let sansDefault = UIFont.systemFont(ofSize: font.pointSize).familyName
-                let serifDefault = UIFont.systemFont(ofSize: font.pointSize).fontDescriptor
-                    .withDesign(.serif).map { UIFont(descriptor: $0, size: font.pointSize).familyName }
-                if font.familyName != sansDefault && font.familyName != serifDefault {
-                    ca.fontFamily = font.familyName
+            // Bold comes from the user-intent marker when present (decoupled from the rendered `.traitBold`,
+            // which system "Bold Text" forces onto substituted scripts). Storage built/edited by this editor
+            // always carries the marker (forward path + toggle; TextKit font-fixing rewrites only `.font`).
+            // For marker-less storage (e.g. an RTF-imported NSAttributedString) fall back to the ambient-
+            // stripped trait so external bold still reads while system/substitution bold does not leak.
+            if let userBold = dict[.rtBold] as? Bool {
+                ca.bold = userBold
+            } else {
+                ca.bold = traits.contains(.traitBold)
+                if ca.bold, !isCode, let text, boldIsAmbient(renderedFont: font, text: text, style: style, ca: ca) {
+                    ca.bold = false
                 }
+            }
+            if !isCode {
+                // Font SIZE is pinned on read-back so a run keeps its rendered size when moved across
+                // contexts (e.g. a 15pt table cell — see TableBlockBoxTests). Font FAMILY is NOT captured:
+                // it is purely display. TextKit's automatic font substitution for scripts the style font
+                // can't render (Arabic, Hebrew, CJK, …) rewrites `.font` in storage to a script-specific
+                // family; capturing that would bake a display artifact into the model and visibly change
+                // the font on the next rebuild (e.g. the paragraph merge on backspace). The model's
+                // fontFamily is only ever an explicit, user-/import-set value (forward-applied by `font(for:)`).
+                ca.fontSize = Double(font.pointSize)
             }
         }
         if isCode { ca.inlineCode = true }
@@ -128,7 +174,8 @@ public struct AttributedStringMapper {
     public func attributedString(for block: ParagraphBlock) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let paragraphStyle = styleSheet.paragraphStyle(for: block.style, attributes: block.paragraph,
-                                                       list: block.list)
+                                                       list: block.list,
+                                                       baseWritingDirection: baseWritingDirection)
         for run in block.runs {
             var attrs = attributes(for: run.attributes, style: block.style)
             attrs[.paragraphStyle] = paragraphStyle
@@ -142,7 +189,7 @@ public struct AttributedStringMapper {
         let full = NSRange(location: 0, length: attr.length)
         attr.enumerateAttributes(in: full, options: []) { dict, range, _ in
             let text = (attr.string as NSString).substring(with: range)
-            runs.append(TextRun(text: text, attributes: characterAttributes(from: dict, style: style)))
+            runs.append(TextRun(text: text, attributes: characterAttributes(from: dict, style: style, text: text)))
         }
         return runs
     }

@@ -51,6 +51,12 @@ final class BlockquoteUnderlay: UIView {
             rebuildFillForAppearanceChange()
         }
     }
+    /// Leading-bar width (points). Set from `QuoteStyle.barWidth`; invalidates the cached fill image.
+    var barWidth: CGFloat = 3 { didSet { guard barWidth != oldValue else { return }; cachedImage = nil; rebuildFillForAppearanceChange() } }
+    /// Fill/bar corner radius (points). Set from `QuoteStyle.cornerRadius`.
+    var cornerRadius: CGFloat = DocumentCanvasView.blockquoteCornerRadius { didSet { guard cornerRadius != oldValue else { return }; cachedImage = nil; rebuildFillForAppearanceChange() } }
+    /// Fill opacity (0…1). Set from `QuoteStyle.fillAlpha`.
+    var fillAlpha: CGFloat = 0.10 { didSet { guard fillAlpha != oldValue else { return }; cachedImage = nil; rebuildFillForAppearanceChange() } }
 
     /// The cached resizable fill+bar image, rebuilt on a trait change (light/dark, tint).
     private var cachedImage: UIImage?
@@ -58,8 +64,8 @@ final class BlockquoteUnderlay: UIView {
 
     private func fillImage() -> UIImage {
         if let img = cachedImage, cachedTraits == traitCollection { return img }
-        let radius = DocumentCanvasView.blockquoteCornerRadius
-        let bar: CGFloat = 3
+        let radius = self.cornerRadius
+        let bar: CGFloat = self.barWidth
         let cap = max(radius, bar) + 1
         let side = cap * 2 + 2
         let size = CGSize(width: side, height: side)
@@ -67,7 +73,7 @@ final class BlockquoteUnderlay: UIView {
             let ctx = c.cgContext
             let rect = CGRect(origin: .zero, size: size)
             let path = UIBezierPath(roundedRect: rect, cornerRadius: radius)
-            accentColor.withAlphaComponent(0.10).setFill(); path.fill()
+            accentColor.withAlphaComponent(self.fillAlpha).setFill(); path.fill()
             ctx.saveGState(); path.addClip()
             accentColor.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: bar, height: size.height))
             ctx.restoreGState()

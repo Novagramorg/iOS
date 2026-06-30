@@ -448,7 +448,7 @@ private func shouldUseStoredPeerChatInfoForPeerWithoutValidInclusion(transaction
     if let channel = peer as? TelegramChannel, channel.participationStatus != .member {
         return true
     }
-    if shouldExcludePeerFromChatListDueToCollapsedCommunity(transaction: transaction, peerId: peerId, peer: peer) {
+    if isPeerHiddenByCollapsedCommunity(transaction: transaction, peerId: peerId, peer: peer) {
         return true
     }
     if let community = peer as? TelegramCommunity, community.participationStatus == .member {

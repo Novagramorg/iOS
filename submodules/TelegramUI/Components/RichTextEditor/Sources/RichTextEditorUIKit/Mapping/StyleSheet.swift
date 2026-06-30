@@ -8,14 +8,46 @@ import RichTextEditorCore
 public struct StyleSheet {
     public init() {}
     public static let `default` = StyleSheet()
-    /// A style sheet for content inside table cells: the body/quote base size is reduced from the
-    /// document's 17pt to 15pt (headings and captions keep their fixed sizes), so a table reads denser
-    /// than surrounding body text. Selected per-cell via `AttributedStringMapper.tableCellVariant()`.
+    /// A style sheet for content inside table cells: the body base size is reduced from the
+    /// document's 17pt to 15pt (quotes are already a fixed 15pt; headings and captions keep their
+    /// fixed sizes), so a table reads denser than surrounding body text. Selected per-cell via
+    /// `AttributedStringMapper.tableCellVariant()`.
     public static let tableCells: StyleSheet = { var s = StyleSheet(); s.bodyBaseSize = 15; return s }()
 
-    /// Base point size for body and quote paragraphs — 17pt in the document body, 15pt inside table
-    /// cells (see `tableCells`). Headings and captions have fixed sizes independent of this.
+    /// Base point size for body paragraphs — 17pt in the document body, 15pt inside table
+    /// cells (see `tableCells`). Quotes (fixed 15pt), headings, and captions are independent of this.
     public var bodyBaseSize: CGFloat = 17
+    /// Render-only line-height multiple for body & caption paragraphs. Default 1.10 (the reference
+    /// document look); a compact host (the chat composer) sets 1.0 so text reads tight like a plain text
+    /// field. An explicit per-paragraph `lineHeightMultiple` in the model still overrides this. Host-set
+    /// via `RichTextEditorView.textLayoutMetrics`.
+    public var bodyLineHeightMultiple: CGFloat = 1.10
+    /// Paragraph spacing above each body & caption paragraph, in points. Default 0. Host-set via
+    /// `RichTextEditorView.textLayoutMetrics`.
+    public var bodyParagraphSpacingBefore: CGFloat = 0
+    /// Paragraph spacing below each body & caption paragraph, in points. Default 8 (the document
+    /// inter-paragraph gap); a compact host sets 0 so multi-line composer text reads tight. Host-set via
+    /// `RichTextEditorView.textLayoutMetrics`.
+    public var bodyParagraphSpacingAfter: CGFloat = 8
+    /// Leading indent (points) of a quote paragraph's text past its fill's left edge — the gap that
+    /// holds the quote bar. Default 16 (the reference design). Per-host via `QuoteStyle.leadingInset`.
+    public var quoteIndent: CGFloat = 16
+    /// Interior right padding (points) of a quote: the text container is narrowed by this so text wraps
+    /// before the fill's trailing edge (the fill still spans the full content width). Default 0.
+    /// Consumed by `BlockBox` (Task 2). Per-host via `QuoteStyle.trailingInset`.
+    public var quoteTrailingInset: CGFloat = 0
+    /// Paragraph spacing above each quote paragraph (points). Default 8. Per-host via `QuoteStyle.spacingBefore`.
+    public var quoteSpacingBefore: CGFloat = 8
+    /// Paragraph spacing below each quote paragraph (points). Default 8. Per-host via `QuoteStyle.spacingAfter`.
+    public var quoteSpacingAfter: CGFloat = 8
+    /// Interior TOP padding (points) of a top-level quote run — the gap between the fill's top edge and
+    /// the first text line. `nil` (default) keeps the block-inset-derived value; a value overrides the
+    /// quote block's `topInset` at the run's top edge (applied in `BlockStack.layout`). Per-host via
+    /// `QuoteStyle.topInset`.
+    public var quoteTopInset: CGFloat?
+    /// Interior BOTTOM padding (points) of a top-level quote run — the gap between the last text line and
+    /// the fill's bottom edge. `nil` (default) keeps the current behavior. Per-host via `QuoteStyle.bottomInset`.
+    public var quoteBottomInset: CGFloat?
 
     /// Points of indentation per list nesting level (where each level's marker hangs).
     public static let listIndentStep: CGFloat = 24
@@ -43,7 +75,10 @@ public struct StyleSheet {
         case .heading1: return 24
         case .heading2: return 21
         case .heading3: return 19
-        case .body, .quote: return bodyBaseSize
+        case .body: return bodyBaseSize
+        // Quotes always read denser than body — a fixed 15pt, like captions, in every context
+        // (document and table cell). Not a field: nothing overrides it per-context.
+        case .quote: return 15
         case .caption: return 15
         }
     }
@@ -55,9 +90,9 @@ public struct StyleSheet {
         case .heading1: return StyleMetrics(spacingBefore: 18, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading2: return StyleMetrics(spacingBefore: 16, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading3: return StyleMetrics(spacingBefore: 14, spacingAfter: 6, lineHeightMultiple: 1.05)
-        case .body:     return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
-        case .caption:  return StyleMetrics(spacingBefore: 0,  spacingAfter: 8, lineHeightMultiple: 1.10)
-        case .quote:    return StyleMetrics(spacingBefore: 8,  spacingAfter: 8, lineHeightMultiple: 1.10)
+        case .body:     return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
+        case .caption:  return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
+        case .quote:    return StyleMetrics(spacingBefore: quoteSpacingBefore, spacingAfter: quoteSpacingAfter, lineHeightMultiple: 1.10)
         }
     }
 
@@ -73,14 +108,17 @@ public struct StyleSheet {
     }
 
     public func paragraphStyle(for style: ParagraphStyleName, attributes: ParagraphAttributes,
-                               list: ListMembership? = nil) -> NSParagraphStyle {
+                               list: ListMembership? = nil,
+                               baseWritingDirection: NSWritingDirection = .natural) -> NSParagraphStyle {
         let ps = NSMutableParagraphStyle()
         switch attributes.alignment {
+        case .natural: ps.alignment = .natural
         case .left: ps.alignment = .left
         case .center: ps.alignment = .center
         case .right: ps.alignment = .right
         case .justified: ps.alignment = .justified
         }
+        ps.baseWritingDirection = baseWritingDirection
         ps.firstLineHeadIndent = CGFloat(attributes.firstLineIndent)
         ps.headIndent = CGFloat(attributes.headIndent)
         ps.paragraphSpacingBefore = CGFloat(attributes.paragraphSpacingBefore)
@@ -103,7 +141,7 @@ public struct StyleSheet {
             ps.firstLineHeadIndent += indent
             ps.headIndent += indent
         } else if style == .quote {
-            ps.headIndent += 16; ps.firstLineHeadIndent += 16
+            ps.headIndent += quoteIndent; ps.firstLineHeadIndent += quoteIndent
         }
         return ps
     }

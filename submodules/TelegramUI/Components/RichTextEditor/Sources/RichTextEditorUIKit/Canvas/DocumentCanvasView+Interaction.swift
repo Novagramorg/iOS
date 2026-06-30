@@ -120,8 +120,10 @@ extension DocumentCanvasView {
         // A tap BELOW the document's last block starts a new empty body paragraph after it — so you can
         // always begin a normal paragraph below the final block, whatever its type (image / table / quote /
         // code / non-empty paragraph). The ONE exception: when the last block is ALREADY an empty body
-        // paragraph, don't stack a redundant empty — fall through and just place the caret in it.
-        if let last = boxes.last, point.y > last.frame.maxY,
+        // paragraph, don't stack a redundant empty — fall through and just place the caret in it. Gated on
+        // `tapBelowAddsTrailingParagraph`: a compact host (the chat composer) turns it off so a tap below the
+        // content just places the caret instead of growing the field.
+        if tapBelowAddsTrailingParagraph, let last = boxes.last, point.y > last.frame.maxY,
            !((last as? BlockBox).map { $0.style == .body && $0.textLength == 0 } ?? false) {
             insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing block
             return
@@ -151,6 +153,19 @@ extension DocumentCanvasView {
             return
         }
         let p = closestGlobalPosition(to: point)
+        // Tap on a collapsed quote (an image-like atom): the corner "expand" glyph unfolds it; a tap ELSEWHERE
+        // on it places the caret at its leading gap (drawn at the left edge), like tapping an image — so the
+        // cursor can be positioned at the collapsed quote instead of the whole atom always expanding.
+        if let cq = boxes.first(where: { ($0 as? CollapsedQuoteBox)?.frame.contains(point) == true }) as? CollapsedQuoteBox,
+           let idx = boxes.firstIndex(where: { $0 === cq }) {
+            clearStructuralSelections()   // match the normal caret path; prevents stale table row/column highlight
+            if cq.expandGlyphRect().insetBy(dx: -12, dy: -12).contains(point) {
+                expandCollapsedQuote(atIndex: idx)
+            } else {
+                setCaret(global: cq.nodeStart)
+            }
+            return
+        }
         // Tap on an image body (resolves to its gap AND the point is inside the image) → atom-select /
         // menu. MUST precede the clear below (else a 2nd tap on a selected image would clear it before
         // its menu could open).
@@ -175,6 +190,9 @@ extension DocumentCanvasView {
             setCaret(global: q)
         }
     }
+
+    /// Test seam: calls the same code path as a real single tap without needing a gesture recognizer.
+    func performSingleTapForTesting(at point: CGPoint) { performSingleTap(at: point) }
 
     // Long press places the caret and (on release) presents the menu, with a magnifier loupe
     // (`UITextLoupeSession`, iOS 17+) tracking the caret during the drag.
@@ -220,17 +238,21 @@ extension DocumentCanvasView {
                 draggingTableKnob = end                       // table range-knob drag
             } else {
                 draggingEndpoint = nearerSelectionEndpoint(toGlobal: pos)   // text-selection handle drag
+                // Capture the touch→endpoint offset so the drag keeps its starting offset from the finger
+                // (the knob is drawn offset from the text line; mapping the raw finger snaps the endpoint to
+                // whatever line is under the touch — the "line-centered" drag bug).
                 // Coalesce the per-touch-move input-delegate notifications for the duration of the drag —
                 // one bracket fires on `.ended` (the keyboard's autocorrect/candidate work is meaningless
                 // mid-drag and pegs the CPU on every frame). The table-knob path uses structural selection
                 // (not these setters), so it doesn't coalesce.
-                if draggingEndpoint != nil { beginCoalescedSelectionDrag() }
+                if let end = draggingEndpoint { captureSelectionDragOffset(endpoint: end, touch: point); beginCoalescedSelectionDrag() }
             }
         case .changed:
             if let end = draggingTableKnob {
                 extendTableSelection(end: end, toward: point)
             } else if let end = draggingEndpoint {
-                if end == .anchor { setSelectionAnchor(global: pos) } else { setSelectionHead(global: pos) }
+                let target = selectionDragPosition(forTouch: point)   // touch + captured grab offset
+                if end == .anchor { setSelectionAnchor(global: target) } else { setSelectionHead(global: target) }
                 // If the head endpoint is being dragged into a scrollable table's edge zone, auto-scroll.
                 updateDragAutoScroll(point: point, headInTable: end == .head && tableBox(containingGlobal: head) != nil)
             }
