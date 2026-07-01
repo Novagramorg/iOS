@@ -157,7 +157,7 @@ final class DocumentCanvasView: UIView {
     /// The built-in horizontal page margin applied to paragraph/table text (in addition to `contentMargins`).
     /// Defaults to the document metric (`CanvasMetrics.pageMargin`, 16pt); a compact host (e.g. the chat
     /// composer) can set it to 0 so the host controls all horizontal insets via the frame + `contentMargins`.
-    /// Image bleed (`MediaBlockBox`) keeps the static document metric.
+    /// Media bleed is governed separately by `mediaBlockStyle` / `applyMediaBlockStyle`.
     var pageMargin: CGFloat = CanvasMetrics.pageMargin
 
     /// The base inter-block vertical inset for the document root (each side). Defaults to the document
@@ -165,6 +165,10 @@ final class DocumentCanvasView: UIView {
     /// single paragraph hugs its text height instead of carrying the inter-paragraph gap. Applied to the
     /// root stack in `layoutContent`; nested (table-cell) stacks keep the document default.
     var blockVerticalInset: CGFloat = BlockBox.defaultVerticalInset
+
+    /// Per-host media geometry. Applied via `applyMediaBlockStyle(_:)`; read at `MediaBlockBox` creation
+    /// in `setBlocks` / `insertMedia`. Defaults to the document edge-to-edge look.
+    var mediaBlockStyle: MediaBlockStyle = .default
 
     /// Per-host quote geometry. Applied via `applyQuoteStyle(_:)` (rebuilds the mapper stylesheet + pushes
     /// render values to the underlay). Read by `blockquoteDecorations()` for the bar width.
@@ -490,6 +494,12 @@ final class DocumentCanvasView: UIView {
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
     }
 
+    /// Applies host media geometry: stores it so the next box build (`setBlocks` / `insertMedia`) uses the
+    /// new bleed. Pure geometry — no mapper rebuild (unlike `applyQuoteStyle`). The caller reloads afterward.
+    func applyMediaBlockStyle(_ m: MediaBlockStyle) {
+        self.mediaBlockStyle = m
+    }
+
     /// Applies host-injected collapse/expand icons: stores them (read at `CollapsedQuoteBox` creation for the
     /// expand glyph) and pushes the collapse image to the overlay controls. The caller reloads afterward.
     func applyQuoteCollapseIcons(_ icons: RichTextEditorQuoteCollapseIcons?) {
@@ -526,7 +536,8 @@ final class DocumentCanvasView: UIView {
         boxes = blocks.compactMap { block -> CanvasBlock? in
             switch block {
             case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: width)
-            case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width)
+            case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width,
+                                                       horizontalBleed: mediaBlockStyle.horizontalBleed)
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
             case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
             case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, expandImage: quoteCollapseIcons?.expand, width: width)

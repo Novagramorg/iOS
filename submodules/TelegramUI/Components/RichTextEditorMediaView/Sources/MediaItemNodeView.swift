@@ -18,7 +18,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
     private let contentHost: ComponentHostView<Empty>?
     private let contentComponent: RichTextMediaContentComponent?
 
-    public init(context: AccountContext, media: EngineMedia, audioColorOverride: InstantPageAudioColorOverride? = nil) {
+    public init(context: AccountContext, media: EngineMedia, audioColorOverride: InstantPageAudioColorOverride? = nil, cornerRadius: CGFloat = 0) {
         if case let .file(file) = media, file.isMusic || file.isVoice {
             // `audioColorOverride` (host-supplied) themes the row to the editor's accent/text scheme; nil falls
             // back to the outgoing-bubble palette.
@@ -48,6 +48,14 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
             self.audioView = nil
             super.init(frame: .zero)
             self.addSubview(host)
+        }
+
+        // Round VISUAL media (photo/video/location) corners when the host requests it (chat composer → 10pt).
+        // Audio rows (audioView) stay square; the article editor passes 0 (no rounding). Applied on this
+        // container's layer — its single child fills `bounds`, so masksToBounds clips it to the rounded rect.
+        if cornerRadius > 0, self.audioView == nil {
+            self.layer.cornerRadius = cornerRadius
+            self.layer.masksToBounds = true
         }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }

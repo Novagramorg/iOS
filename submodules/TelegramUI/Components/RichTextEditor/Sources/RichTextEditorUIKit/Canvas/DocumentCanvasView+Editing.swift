@@ -430,6 +430,32 @@ extension DocumentCanvasView {
             }
             return
         }
+        // Enter in a media caption (image / video / location) splits it: the head stays as the caption,
+        // the tail becomes a new body paragraph immediately after the media (caret there). A caret at the
+        // end produces an empty new paragraph; a caret at the start moves the whole caption down. Audio is
+        // caption-less and excluded — its Enter fires the gap-caret branch in insertText before we reach here.
+        if selFrom == selTo, let active = activeStack(at: head),
+           let mediaBox = active.box as? MediaBlockBox, mediaBox.kind != .audio {
+            editing {
+                guard case .media(let mediaBlock) = mediaBox.currentBlock() else { return }
+                let tmpCaption = ParagraphBlock(id: BlockID.generate(), style: .caption, runs: mediaBlock.caption)
+                let parts = tmpCaption.split(at: active.local, newID: BlockID.generate())
+                let newMedia = MediaBlock(id: mediaBlock.id, mediaID: mediaBlock.mediaID, kind: mediaBlock.kind,
+                                          naturalSize: mediaBlock.naturalSize, displayWidth: mediaBlock.displayWidth,
+                                          alignment: mediaBlock.alignment, caption: parts.0.runs)
+                let newMediaBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
+                                                horizontalBleed: mediaBox.horizontalBleed)
+                let bodyBox = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: parts.1.runs),
+                                       mapper: mediaBox.mapper, width: effectiveWidth)
+                var newBoxes = active.stack.boxes
+                let replacement: [any CanvasBlock] = [newMediaBox, bodyBox]
+                newBoxes.replaceSubrange(active.index...active.index, with: replacement)
+                active.stack.boxes = newBoxes
+                recomputeSpans()
+                anchor = bodyBox.textStart; head = bodyBox.textStart
+            }
+            return
+        }
         editing {
             if selFrom != selTo {
                 applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "")
@@ -481,7 +507,8 @@ extension DocumentCanvasView {
                                         naturalSize: Size2D(width: Double(naturalSize.width),
                                                             height: Double(naturalSize.height)),
                                         caption: caption)
-            let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth)
+            let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth,
+                                         horizontalBleed: mediaBlockStyle.horizontalBleed)
             var newBoxes = boxes
             if let p = pos.box as? BlockBox, p.textLength == 0 {
                 newBoxes.replaceSubrange(pos.index...pos.index, with: [mediaBox])   // empty paragraph → replace it

@@ -596,10 +596,12 @@ extension ChatInputMedia: Codable {
     // Concrete-`Media`-type discriminator. We reconstruct via the concrete `init(decoder:)` (NOT the global
     // registered-type store / `decodeRootObjectWithHash`): that store is populated by `declareEncodable` at app
     // startup, which does NOT run in unit tests (and is fragile to depend on for a persisted format). The composer's
-    // inline media is always an image (`TelegramMediaImage`) or a video/file (`TelegramMediaFile`).
+    // inline media is an image (`TelegramMediaImage`), a video/file (`TelegramMediaFile`), or a location
+    // (`TelegramMediaMap`).
     private enum MediaType: Int32 {
         case image = 0
         case file = 1
+        case map = 2
     }
 
     public init(from decoder: Decoder) throws {
@@ -618,6 +620,8 @@ extension ChatInputMedia: Codable {
             self.media = TelegramMediaImage(decoder: mediaDecoder)
         case .file:
             self.media = TelegramMediaFile(decoder: mediaDecoder)
+        case .map:
+            self.media = TelegramMediaMap(decoder: mediaDecoder)
         }
         self.kind = try container.decode(ChatInputMediaKind.self, forKey: .kind)
         self.naturalSize = try container.decode(ChatInputSize.self, forKey: .naturalSize)
@@ -633,11 +637,13 @@ extension ChatInputMedia: Codable {
         let mediaType: MediaType
         if self.media is TelegramMediaImage {
             mediaType = .image
+        } else if self.media is TelegramMediaMap {
+            mediaType = .map
         } else if self.media is TelegramMediaFile {
             mediaType = .file
         } else {
-            // The composer only ever produces image/file inline media; default to file for any other concrete type
-            // (it still decodes via `TelegramMediaFile(decoder:)`, which is the broadest Postbox media type).
+            // Composer inline media is image / video|audio file / location map; any other concrete type
+            // falls back to file (decoded via the broad TelegramMediaFile(decoder:)).
             mediaType = .file
         }
         try container.encode(mediaType.rawValue, forKey: .mediaType)

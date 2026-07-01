@@ -41,6 +41,20 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host media geometry (horizontal bleed). Defaults reproduce the editor's built-in edge-to-edge
+    /// look; the compact chat composer assigns `MediaBlockStyle(horizontalBleed: 0)` so media insets like
+    /// the text paragraphs. Set before the first `update(...)`/document seed (the compact-host knob
+    /// convention); assigning it after content reloads the boxes so the new geometry takes effect (like `quoteStyle`).
+    public var mediaBlockStyle: MediaBlockStyle = .default {
+        didSet {
+            canvas.applyMediaBlockStyle(mediaBlockStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Host-injected icons for the quote collapse (tall expanded quote) / expand (collapsed quote)
     /// affordance. `nil` (default) ⇒ no affordance icon is drawn (the package ships no fallback). Assigning
     /// it updates the live collapse button and reloads so collapsed boxes pick up the new glyph (like `quoteStyle`).

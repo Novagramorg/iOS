@@ -155,6 +155,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             topInset: 3.0,
             bottomInset: 3.0
         )
+        // Media (image/video/location/audio) insets like the text paragraphs in the compact composer
+        // (the document/article editor keeps the default edge-to-edge bleed).
+        self.editorView.mediaBlockStyle = MediaBlockStyle(horizontalBleed: 0.0)
         // Quote collapse/expand affordance icons — the same bundle assets the legacy ChatInputTextNode uses.
         if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
            let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {

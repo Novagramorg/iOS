@@ -21,6 +21,10 @@ final class MediaBlockBox: CanvasBlock {
     var alignment: MediaAlignment
     let caption: BlockLayoutEngine
     let mapper: AttributedStringMapper
+    /// How far the media bleeds beyond its text-strip `frame` on each side (points). Default
+    /// `CanvasMetrics.pageMargin` reproduces the document edge-to-edge look; a compact host (composer)
+    /// passes 0 so media insets like text. A nested (table-cell) media passes 0 too.
+    let horizontalBleed: CGFloat
 
     var frame: CGRect = .zero
     var nodeStart: Int = 0
@@ -47,10 +51,12 @@ final class MediaBlockBox: CanvasBlock {
     static let audioRowHeight: CGFloat = 44.0
 
     /// The full canvas width this image bleeds across: its content-strip frame width plus both page
-    /// margins (the inverse of the inset top-level frame). The image draws edge-to-edge over this.
-    private var canvasWidth: CGFloat { layoutWidth + CanvasMetrics.pageMargin * 2 }
+    /// margins (the inverse of the inset top-level frame). The image draws edge-to-edge over this by
+    /// default; a host can inset media via `horizontalBleed` (0 = flush with text, e.g. composer or table cell).
+    private var canvasWidth: CGFloat { layoutWidth + horizontalBleed * 2 }
 
-    init(media block: MediaBlock, mapper: AttributedStringMapper, width: CGFloat) {
+    init(media block: MediaBlock, mapper: AttributedStringMapper, width: CGFloat,
+         horizontalBleed: CGFloat = CanvasMetrics.pageMargin) {
         id = block.id
         mediaID = block.mediaID
         kind = block.kind
@@ -58,6 +64,7 @@ final class MediaBlockBox: CanvasBlock {
         displayWidth = block.displayWidth
         alignment = block.alignment
         self.mapper = mapper
+        self.horizontalBleed = horizontalBleed
         layoutWidth = max(width, 1)
         // The caption's paragraph id matches the media block's id — it only keys the paragraph style
         // here; `currentBlock()` extracts the caption runs, not this temporary paragraph's id.
@@ -125,7 +132,7 @@ final class MediaBlockBox: CanvasBlock {
 
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
         if kind == .audio { return verticalInset + MediaBlockBox.audioRowHeight + verticalInset }
-        let imageArea = imageDisplaySize(maxWidth: max(width + CanvasMetrics.pageMargin * 2, 1)).height
+        let imageArea = imageDisplaySize(maxWidth: max(width + horizontalBleed * 2, 1)).height
         return verticalInset + imageArea + captionGap
             + max(caption.boundingHeight(forWidth: max(width, 1)), captionEmptyLineHeight) + verticalInset
     }
@@ -135,17 +142,19 @@ final class MediaBlockBox: CanvasBlock {
                 y: frame.minY + verticalInset + imageAreaHeight + captionGap)
     }
 
-    // NOTE: assumes a top-level image (bleeds past the page margin to the canvas edge). No command inserts an image into a table cell today; if that becomes possible, a nested image must skip the bleed.
+    // NOTE: bleed is per-box via `horizontalBleed`. Top-level media uses the host's `mediaBlockStyle`
+    // (default `CanvasMetrics.pageMargin`); nested (table-cell) media already passes `horizontalBleed: 0`
+    // to skip the bleed.
     func mediaRect() -> CGRect {
         let avail = max(canvasWidth, 1)
         if kind == .audio {
             // Audio is a fixed-height full-width row (see imageAreaHeight); NOT aspect-scaled. The hosted
             // audio view lays out its content within this width. `bleedX` matches the image full-bleed origin.
-            let bleedX = frame.minX - CanvasMetrics.pageMargin
+            let bleedX = frame.minX - horizontalBleed
             return CGRect(x: bleedX, y: frame.minY + verticalInset, width: avail, height: MediaBlockBox.audioRowHeight)
         }
         let size = imageDisplaySize(maxWidth: avail)
-        let bleedX = frame.minX - CanvasMetrics.pageMargin
+        let bleedX = frame.minX - horizontalBleed
         let x: CGFloat
         switch alignment {
         case .left: x = bleedX

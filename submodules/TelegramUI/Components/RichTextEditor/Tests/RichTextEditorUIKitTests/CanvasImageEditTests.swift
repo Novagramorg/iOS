@@ -396,6 +396,39 @@ final class CanvasImageEditTests: XCTestCase {
         XCTAssertEqual(v.boxes[0].textLength, 0)
     }
 
+    // MARK: - Backspace as object-replacement range after image (iOS range-form delivery)
+
+    // iOS delivers Backspace in an empty paragraph immediately AFTER a non-paragraph atom (image / table /
+    // code / collapsed quote) as an object-replacement RANGE running from the atom's text end to the empty
+    // paragraph's start — the same offset-geometry pattern as the code-block case. The range-form branch in
+    // deleteBackward() must handle all atoms via isNonParagraphAtom, not just CodeBlockBox. Before the fix
+    // the branch was code-only, so an empty paragraph after an IMAGE fell through to applySelectionReplace
+    // and was stranded (block count stayed 3; the empty paragraph was not removed).
+    func test_backspaceObjectReplacementRangeAfterImage_removesEmptyParagraph() {
+        let v = DocumentCanvasView()
+        v.imageProvider = { _ in UIGraphicsImageRenderer(size: CGSize(width: 60, height: 40)).image { c in
+            UIColor.systemPink.setFill(); c.fill(CGRect(x: 0, y: 0, width: 60, height: 40)) } }
+        v.setBlocks([
+            .paragraph(ParagraphBlock(id: BlockID("p0"), runs: [TextRun(text: "Above")])),
+            .media(MediaBlock(id: BlockID("img"), mediaID: "k", naturalSize: Size2D(width: 60, height: 40))),
+            .paragraph(ParagraphBlock(id: BlockID("p2"), runs: [])),   // empty paragraph after the image
+        ], width: 300)
+        v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
+
+        let image = v.boxes[1], emptyPara = v.boxes[2]
+        // Simulate iOS's object-replacement range: anchor at the image's caption end, head at the empty paragraph's start.
+        v.setSelectionAnchor(global: v.prevTextPosition(before: emptyPara.textStart))
+        v.setSelectionHead(global: emptyPara.textStart)
+        XCTAssertNotEqual(v.selFrom, v.selTo, "precondition: a real (object-replacement) range selection")
+
+        v.deleteBackward()
+
+        XCTAssertEqual(v.boxes.count, 2, "the empty trailing paragraph is removed")
+        XCTAssertTrue(v.boxes[1] is MediaBlockBox, "the image is kept")
+        XCTAssertEqual(v.head, image.textStart + image.textLength, "caret parks at the image's caption end")
+        XCTAssertEqual(v.head, v.anchor, "collapsed caret")
+    }
+
     // MARK: - Select All + backspace removes a covered audio block
 
     private func docWithAudio() -> DocumentCanvasView {
@@ -420,6 +453,117 @@ final class CanvasImageEditTests: XCTestCase {
                        "Select All + backspace should remove the audio block")
         XCTAssertEqual(v.boxes.count, 1, "the document collapses to one block")
         XCTAssertTrue(v.boxes[0] is BlockBox, "the remaining block is a paragraph")
+    }
+
+    // MARK: - Enter in a media caption
+
+    func test_enterAtEndOfCaption_addsEmptyParagraphAfterImage() {
+        // Caret at the END of a caption → a new EMPTY body paragraph appears immediately after the
+        // image; the caption is unchanged; the caret lands in the new paragraph.
+        let v = DocumentCanvasView()
+        v.imageProvider = { _ in UIGraphicsImageRenderer(size: CGSize(width: 60, height: 40)).image { c in
+            UIColor.systemPink.setFill(); c.fill(CGRect(x: 0, y: 0, width: 60, height: 40)) } }
+        v.setBlocks([
+            .media(MediaBlock(id: BlockID("img"), mediaID: "k",
+                              naturalSize: Size2D(width: 60, height: 40),
+                              caption: [TextRun(text: "Caption")])),
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Below")]))
+        ], width: 300)
+        v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
+
+        let imgBox = v.boxes[0] as! MediaBlockBox
+        caret(v, imgBox.textStart + imgBox.textLength)      // caret at end of "Caption"
+        v.insertText("\n")
+
+        XCTAssertEqual(v.boxes.count, 3, "a new body paragraph is inserted after the image")
+        XCTAssertTrue(v.boxes[0] is MediaBlockBox, "image stays at index 0")
+        guard case .media(let m) = v.boxes[0].currentBlock() else { return XCTFail("box 0 must be media") }
+        XCTAssertEqual(m.caption.map(\.text).joined(), "Caption", "caption is unchanged")
+        guard let newPara = v.boxes[1] as? BlockBox else { return XCTFail("box 1 must be a BlockBox") }
+        XCTAssertEqual(newPara.currentParagraph().style, .body, "new paragraph has body style")
+        XCTAssertEqual(newPara.textLength, 0, "new paragraph is empty")
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands at the start of the new paragraph")
+        XCTAssertEqual(v.head, v.anchor, "caret is collapsed")
+    }
+
+    func test_enterMidCaption_movesTailToNewParagraph() {
+        // Caret in the MIDDLE of a caption → head stays as caption, tail moves to a new body paragraph.
+        let v = DocumentCanvasView()
+        v.imageProvider = { _ in UIGraphicsImageRenderer(size: CGSize(width: 60, height: 40)).image { c in
+            UIColor.systemPink.setFill(); c.fill(CGRect(x: 0, y: 0, width: 60, height: 40)) } }
+        v.setBlocks([
+            .media(MediaBlock(id: BlockID("img"), mediaID: "k",
+                              naturalSize: Size2D(width: 60, height: 40),
+                              caption: [TextRun(text: "HelloWorld")])),
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Below")]))
+        ], width: 300)
+        v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
+
+        let imgBox = v.boxes[0] as! MediaBlockBox
+        caret(v, imgBox.textStart + 5)                      // after "Hello"
+        v.insertText("\n")
+
+        XCTAssertEqual(v.boxes.count, 3, "a new paragraph is inserted after the image")
+        guard case .media(let m) = v.boxes[0].currentBlock() else { return XCTFail("box 0 must be media") }
+        XCTAssertEqual(m.caption.map(\.text).joined(), "Hello", "head stays as the caption")
+        guard let newPara = v.boxes[1] as? BlockBox else { return XCTFail("box 1 must be a BlockBox") }
+        XCTAssertEqual(newPara.currentParagraph().runs.map(\.text).joined(), "World",
+                       "tail moves to the new paragraph")
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands at the start of the new paragraph")
+        XCTAssertEqual(v.head, v.anchor, "caret is collapsed")
+    }
+
+    func test_enterAtStartOfCaption_movesWholeCaptionDown() {
+        // Caret at the START of a caption → caption becomes empty, whole text moves to a new body paragraph.
+        let v = DocumentCanvasView()
+        v.imageProvider = { _ in UIGraphicsImageRenderer(size: CGSize(width: 60, height: 40)).image { c in
+            UIColor.systemPink.setFill(); c.fill(CGRect(x: 0, y: 0, width: 60, height: 40)) } }
+        v.setBlocks([
+            .media(MediaBlock(id: BlockID("img"), mediaID: "k",
+                              naturalSize: Size2D(width: 60, height: 40),
+                              caption: [TextRun(text: "Caption")])),
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Below")]))
+        ], width: 300)
+        v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
+
+        let imgBox = v.boxes[0] as! MediaBlockBox
+        caret(v, imgBox.textStart)                          // caret at caption start
+        v.insertText("\n")
+
+        XCTAssertEqual(v.boxes.count, 3, "a new paragraph is inserted after the image")
+        guard case .media(let m) = v.boxes[0].currentBlock() else { return XCTFail("box 0 must be media") }
+        XCTAssertEqual(m.caption.map(\.text).joined(), "", "caption is now empty")
+        guard let newPara = v.boxes[1] as? BlockBox else { return XCTFail("box 1 must be a BlockBox") }
+        XCTAssertEqual(newPara.currentParagraph().runs.map(\.text).joined(), "Caption",
+                       "whole caption text moves to the new paragraph")
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret lands at the start of the new paragraph")
+        XCTAssertEqual(v.head, v.anchor, "caret is collapsed")
+    }
+
+    func test_enterMidCaption_preservesTailRunFormatting() {
+        // Caption has a plain "Hello" then a bold "World"; split at 5 → tail paragraph retains bold.
+        let v = DocumentCanvasView()
+        v.imageProvider = { _ in UIGraphicsImageRenderer(size: CGSize(width: 60, height: 40)).image { c in
+            UIColor.systemPink.setFill(); c.fill(CGRect(x: 0, y: 0, width: 60, height: 40)) } }
+        v.setBlocks([
+            .media(MediaBlock(id: BlockID("img"), mediaID: "k",
+                              naturalSize: Size2D(width: 60, height: 40),
+                              caption: [TextRun(text: "Hello"),
+                                        TextRun(text: "World", attributes: CharacterAttributes(bold: true))])),
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Below")]))
+        ], width: 300)
+        v.frame = CGRect(x: 0, y: 0, width: 300, height: 400); v.layoutIfNeeded()
+
+        let imgBox = v.boxes[0] as! MediaBlockBox
+        caret(v, imgBox.textStart + 5)                      // between "Hello" and "World"
+        v.insertText("\n")
+
+        XCTAssertEqual(v.boxes.count, 3, "a new paragraph is inserted after the image")
+        guard let newPara = v.boxes[1] as? BlockBox else { return XCTFail("box 1 must be a BlockBox") }
+        XCTAssertEqual(newPara.currentParagraph().runs.map(\.text).joined(), "World",
+                       "tail text is correct")
+        XCTAssertTrue(newPara.currentParagraph().runs.contains(where: { $0.attributes.bold }),
+                      "bold formatting is preserved in the tail")
     }
 }
 #endif

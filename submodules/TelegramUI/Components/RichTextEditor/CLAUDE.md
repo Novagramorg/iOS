@@ -100,8 +100,8 @@ The editor's defaults assume a full-page document; a compact host (the chat comp
 behavior, so the attachment screen / Demo / SwiftPM tests are unchanged.** The composer sets each in `didLoad`
 *before* seeding the document so the first layout picks them up:
 - `contentPageMargin` (default `CanvasMetrics.pageMargin` = 16) — the built-in horizontal page margin on each
-  side (`DocumentCanvasView.pageMargin`, used by `contentLeftPad`/`contentRightPad`; `MediaBlockBox` image
-  bleed keeps the static metric). Composer → 0.
+  side (`DocumentCanvasView.pageMargin`, used by `contentLeftPad`/`contentRightPad`; media bleed is governed
+  separately by the `mediaBlockStyle` knob). Composer → 0.
 - `minimumContentHeight` (default 44) — the floor `performLayout` applies to the returned content height.
   Composer → 0 (the height hugs the text; the host owns the min field height).
 - `blockVerticalInset` (default `BlockBox.defaultVerticalInset` = 8) — the root stack's base inter-block
@@ -137,6 +137,11 @@ behavior, so the attachment screen / Demo / SwiftPM tests are unchanged.** The c
   inter-line spacing that leaves the first line's baseline fixed, the right tool is `NSParagraphStyle.lineSpacing`
   (additive below each fragment; a lone line is unaffected) — add it as a `TextLayoutMetrics` field rather than
   abusing `lineHeightMultiple`.
+- `mediaBlockStyle` (`MediaBlockStyle`, default `.default` = `horizontalBleed` 16 == `CanvasMetrics.pageMargin`,
+  the document edge-to-edge look) — how far a top-level media block bleeds beyond the text content strip on each
+  side; applied via `applyMediaBlockStyle` (pure geometry, no mapper rebuild) and read at `MediaBlockBox` creation
+  (`setBlocks`/`insertMedia`); table-cell media always passes `horizontalBleed: 0`. Composer →
+  `MediaBlockStyle(horizontalBleed: 0)` so media insets like the text paragraphs.
 
 Two host-side runtime contracts the composer had to honor (apply to any non-attachment host): **seed an initial
 `document`** (the canvas starts with ZERO blocks; nothing renders/edits until the `document` setter runs), and
