@@ -32,6 +32,11 @@ private enum CommunityAddVisibility: Equatable {
     }
 }
 
+private enum CommunityAddScreenSubject: Equatable {
+    case existing(communityId: EnginePeer.Id)
+    case draft(initialVisibility: Bool)
+}
+
 private func communityAddMemberCountText(_ memberCount: Int32?) -> String? {
     guard let memberCount, memberCount > 0 else {
         return nil
@@ -198,6 +203,7 @@ private final class CommunityAddContentComponent: Component {
     let memberCount: Int32?
     let visibility: CommunityAddVisibility
     let isSaving: Bool
+    let buttonTitle: String
     let dismiss: () -> Void
     let selectVisibility: (CommunityAddVisibility) -> Void
     let add: () -> Void
@@ -208,6 +214,7 @@ private final class CommunityAddContentComponent: Component {
         memberCount: Int32?,
         visibility: CommunityAddVisibility,
         isSaving: Bool,
+        buttonTitle: String,
         dismiss: @escaping () -> Void,
         selectVisibility: @escaping (CommunityAddVisibility) -> Void,
         add: @escaping () -> Void
@@ -217,6 +224,7 @@ private final class CommunityAddContentComponent: Component {
         self.memberCount = memberCount
         self.visibility = visibility
         self.isSaving = isSaving
+        self.buttonTitle = buttonTitle
         self.dismiss = dismiss
         self.selectVisibility = selectVisibility
         self.add = add
@@ -236,6 +244,9 @@ private final class CommunityAddContentComponent: Component {
             return false
         }
         if lhs.isSaving != rhs.isSaving {
+            return false
+        }
+        if lhs.buttonTitle != rhs.buttonTitle {
             return false
         }
         return true
@@ -454,7 +465,7 @@ private final class CommunityAddContentComponent: Component {
                         cornerRadius: buttonHeight * 0.5
                     ),
                     content: AnyComponentWithIdentity(id: "title", component: AnyComponent(ButtonTextContentComponent(
-                        text: "Add to Community",
+                        text: component.buttonTitle,
                         badge: 0,
                         textColor: theme.list.itemCheckColors.foregroundColor,
                         badgeBackground: theme.list.itemCheckColors.foregroundColor,
@@ -494,22 +505,30 @@ private final class CommunityAddScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
-    let communityId: EnginePeer.Id
+    let subject: CommunityAddScreenSubject
     let peerId: EnginePeer.Id
     let completed: () -> Void
+    let draftCompleted: (Bool) -> Void
 
-    init(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping () -> Void) {
+    init(
+        context: AccountContext,
+        subject: CommunityAddScreenSubject,
+        peerId: EnginePeer.Id,
+        completed: @escaping () -> Void,
+        draftCompleted: @escaping (Bool) -> Void
+    ) {
         self.context = context
-        self.communityId = communityId
+        self.subject = subject
         self.peerId = peerId
         self.completed = completed
+        self.draftCompleted = draftCompleted
     }
 
     static func ==(lhs: CommunityAddScreenComponent, rhs: CommunityAddScreenComponent) -> Bool {
         if lhs.context !== rhs.context {
             return false
         }
-        if lhs.communityId != rhs.communityId {
+        if lhs.subject != rhs.subject {
             return false
         }
         if lhs.peerId != rhs.peerId {
@@ -529,6 +548,7 @@ private final class CommunityAddScreenComponent: Component {
         private var peer: EnginePeer?
         private var cachedData: EngineCachedPeerData?
         private var visibility: CommunityAddVisibility = .visible
+        private var didInitializeVisibility = false
         private var isSaving = false
         private var didRequestCachedData = false
         private var dataDisposable: Disposable?
@@ -584,11 +604,22 @@ private final class CommunityAddScreenComponent: Component {
                 return
             }
 
+            if case .draft = component.subject {
+                let isVisible = self.visibility.isVisible
+                self.dismiss(animated: true, completion: {
+                    component.draftCompleted(isVisible)
+                })
+                return
+            }
+
             self.isSaving = true
             self.state?.updated(transition: .immediate)
 
+            guard case let .existing(communityId) = component.subject else {
+                return
+            }
             self.actionDisposable.set((component.context.engine.peers.toggleCommunityPeerLink(
-                communityId: component.communityId,
+                communityId: communityId,
                 peerId: component.peerId,
                 action: .link(visible: self.visibility.isVisible)
             )
@@ -637,9 +668,22 @@ private final class CommunityAddScreenComponent: Component {
             let environment = environment[EnvironmentType.self].value
             self.environment = environment
 
+            if !self.didInitializeVisibility {
+                self.didInitializeVisibility = true
+                if case let .draft(initialVisibility) = component.subject {
+                    self.visibility = initialVisibility ? .visible : .hidden
+                }
+            }
+
             self.ensureDataSignal(component: component)
 
             let theme = environment.theme
+            let isDraft: Bool
+            if case .draft = component.subject {
+                isDraft = true
+            } else {
+                isDraft = false
+            }
             let sheetSize = self.sheet.update(
                 transition: transition,
                 component: AnyComponent(SheetComponent<EnvironmentType>(
@@ -649,6 +693,7 @@ private final class CommunityAddScreenComponent: Component {
                         memberCount: communityAddMemberCount(cachedData: self.cachedData),
                         visibility: self.visibility,
                         isSaving: self.isSaving,
+                        buttonTitle: isDraft ? "Done" : "Add to Community",
                         dismiss: { [weak self] in
                             self?.dismiss(animated: true)
                         },
@@ -718,9 +763,34 @@ public final class CommunityAddScreen: ViewControllerComponentContainer {
             context: context,
             component: CommunityAddScreenComponent(
                 context: context,
-                communityId: communityId,
+                subject: .existing(communityId: communityId),
                 peerId: peerId,
-                completed: completed
+                completed: completed,
+                draftCompleted: { _ in }
+            ),
+            navigationBarAppearance: .none,
+            statusBarStyle: .ignore,
+            theme: .default
+        )
+
+        self.navigationPresentation = .flatModal
+        self.blocksBackgroundWhenInOverlay = true
+    }
+
+    public init(
+        context: AccountContext,
+        peerId: EnginePeer.Id,
+        initialVisibility: Bool,
+        completed: @escaping (Bool) -> Void
+    ) {
+        super.init(
+            context: context,
+            component: CommunityAddScreenComponent(
+                context: context,
+                subject: .draft(initialVisibility: initialVisibility),
+                peerId: peerId,
+                completed: {},
+                draftCompleted: completed
             ),
             navigationBarAppearance: .none,
             statusBarStyle: .ignore,

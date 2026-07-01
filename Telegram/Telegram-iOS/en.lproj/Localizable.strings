@@ -16415,3 +16415,13 @@ Error: %8$@";
 "Community.RemoveChat.Remove" = "Remove";
 
 "Privacy.GroupsAndChannels.InviteToCommunityError" = "Sorry, you cannot add %@ to the community because of %@'s privacy settings.";
+
+"Notification.CommunityAddedGroup" = "%1$@ added this group to \"%2$@\" community";
+"Notification.CommunityAddedGroupYou" = "You added this group to \"%1$@\" community";
+"Notification.CommunityRemovedGroup" = "%1$@ removed this group from a community";
+"Notification.CommunityRemovedGroupYou" = "You removed this group from a community";
+
+"Notification.CommunityAddedChannel" = "The channel was added to \"%1$@\" community";
+"Notification.CommunityRemovedChannel" = "The channel was removed from a community";
+
+"AvatarEditor.SetCommunityPhoto" = "Set as Community Photo";

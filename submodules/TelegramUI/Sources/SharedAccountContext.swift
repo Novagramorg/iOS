@@ -4347,8 +4347,16 @@ public final class SharedAccountContextImpl: SharedAccountContext {
         return CommunityAddScreen(context: context, communityId: communityId, peerId: peerId, completed: completed)
     }
 
+    public func makeCommunityAddScreen(context: AccountContext, peerId: EnginePeer.Id, initialVisibility: Bool, completed: @escaping (Bool) -> Void) -> ViewController {
+        return CommunityAddScreen(context: context, peerId: peerId, initialVisibility: initialVisibility, completed: completed)
+    }
+
     public func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController {
         return CommunityEditScreen(context: context, communityId: communityId)
+    }
+
+    public func makeCommunityEditScreen(context: AccountContext, mode: CommunityEditScreenMode, completed: @escaping () -> Void) -> ViewController {
+        return CommunityEditScreen(context: context, mode: mode, completed: completed)
     }
 
     public func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController {

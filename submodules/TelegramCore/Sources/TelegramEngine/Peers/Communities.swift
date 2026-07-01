@@ -173,7 +173,7 @@ func managedCommunitiesState(postbox: Postbox, network: Network, accountPeerId: 
     |> ignoreValues
 }
 
-func _internal_createCommunity(account: Account, title: String, about: String?, peerId: PeerId) -> Signal<PeerId, CreateCommunityError> {
+func _internal_createCommunity(account: Account, title: String, about: String?, peerId: PeerId, visible: Bool) -> Signal<PeerId, CreateCommunityError> {
     return account.postbox.transaction { transaction -> Signal<PeerId, CreateCommunityError> in
         guard let inputPeer = inputPeer(transaction: transaction, peerId: peerId) else {
             return .fail(.generic)
@@ -182,6 +182,9 @@ func _internal_createCommunity(account: Account, title: String, about: String?, 
         var flags: Int32 = 0
         if about != nil {
             flags |= 1 << 0
+        }
+        if !visible {
+            flags |= 1 << 1
         }
 
         return account.network.request(Api.functions.communities.create(flags: flags, title: title, about: about, peer: inputPeer))
