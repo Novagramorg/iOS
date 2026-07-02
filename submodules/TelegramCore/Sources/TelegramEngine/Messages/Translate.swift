@@ -113,6 +113,55 @@ func _internal_composeMessageWithAI(account: Account, text: String, entities: [M
     }
 }
 
+func _internal_composeRichMessageWithAI(account: Account, instantPage: InstantPage?, proofread: Bool = false, translateToLang: String? = nil, changeStyle: TelegramComposeAIMessageMode.CloudStyle.Reference? = nil, customPrompt: String? = nil, emojify: Bool = false) -> Signal<InstantPage, TranslationError> {
+    var flags: Int32 = 0
+    if proofread {
+        flags |= (1 << 0)
+    }
+    if translateToLang != nil {
+        flags |= (1 << 1)
+    }
+
+    var changeTone: Api.InputAiComposeTone?
+    if let customPrompt {
+        flags |= (1 << 2)
+        changeTone = .inputAiComposeToneSingleUse(Api.InputAiComposeTone.Cons_inputAiComposeToneSingleUse(customPrompt: customPrompt))
+    } else if let changeStyle {
+        flags |= (1 << 2)
+        changeTone = changeStyle.apiInputStyle
+    }
+    if emojify {
+        flags |= (1 << 3)
+    }
+
+    var inputRichMessage: Api.InputRichMessage?
+    if let instantPage {
+        flags |= (1 << 4)
+        inputRichMessage = RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil).apiInputRichMessage()
+    }
+
+    return account.network.request(Api.functions.messages.composeRichMessageWithAI(flags: flags, text: inputRichMessage, translateToLang: translateToLang, tone: changeTone))
+    |> mapError { error -> TranslationError in
+        if error.errorDescription.hasPrefix("FLOOD_WAIT") {
+            return .limitExceeded
+        } else if error.errorDescription == "INPUT_TEXT_EMPTY" {
+            return .textIsEmpty
+        } else if error.errorDescription == "INPUT_TEXT_TOO_LONG" {
+            return .textTooLong
+        } else if error.errorDescription.hasPrefix("AICOMPOSE_FLOOD_PREMIUM ") {
+            return .limitExceeded
+        } else {
+            return .generic
+        }
+    }
+    |> map { result -> InstantPage in
+        switch result {
+        case let .composedRichMessageWithAI(data):
+            return RichTextMessageAttribute(apiRichMessage: data.result).instantPage
+        }
+    }
+}
+
 func _internal_translateTexts(network: Network, texts: [(String, [MessageTextEntity])], toLang: String, tone: TranslationTone = .neutral) -> Signal<[(String, [MessageTextEntity])], TranslationError> {
     var flags: Int32 = 0
     flags |= (1 << 1)

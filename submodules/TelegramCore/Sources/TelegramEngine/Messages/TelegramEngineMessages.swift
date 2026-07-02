@@ -680,6 +680,10 @@ public extension TelegramEngine {
         public func composeMessageWithAI(text: String, entities: [MessageTextEntity], proofread: Bool = false, translateToLang: String? = nil, changeStyle: TelegramComposeAIMessageMode.CloudStyle.Reference? = nil, emojify: Bool = false) -> Signal<(String, [MessageTextEntity]), TranslationError> {
             return _internal_composeMessageWithAI(account: self.account, text: text, entities: entities, proofread: proofread, translateToLang: translateToLang, changeStyle: changeStyle, emojify: emojify)
         }
+
+        public func composeRichMessageWithAI(instantPage: InstantPage?, proofread: Bool = false, translateToLang: String? = nil, changeStyle: TelegramComposeAIMessageMode.CloudStyle.Reference? = nil, customPrompt: String? = nil, emojify: Bool = false) -> Signal<InstantPage, TranslationError> {
+            return _internal_composeRichMessageWithAI(account: self.account, instantPage: instantPage, proofread: proofread, translateToLang: translateToLang, changeStyle: changeStyle, customPrompt: customPrompt, emojify: emojify)
+        }
         
         public func createAITextStyle(displayAuthor: Bool, emojiFileId: Int64, title: String, prompt: String) -> Signal<TelegramComposeAIMessageMode.CloudStyle, CreateAITextStyleError> {
             return _internal_createAITextStyle(account: self.account, displayAuthor: displayAuthor, emojiFileId: emojiFileId, title: title, prompt: prompt)
