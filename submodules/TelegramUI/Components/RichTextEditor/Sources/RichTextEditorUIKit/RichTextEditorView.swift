@@ -311,6 +311,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func setParagraphStyle(_ name: ParagraphStyleName) { canvas.setParagraphStyle(name) }
     public func setAlignment(_ alignment: TextAlignment) { canvas.setAlignment(alignment) }
     public func setList(_ marker: ListMarker?) { canvas.setList(marker) }
+    public func makePullQuote() { canvas.makePullQuote() }
 
     public func undo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.undo(); onChange?() }
     public func redo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.redo(); onChange?() }
