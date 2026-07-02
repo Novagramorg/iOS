@@ -185,6 +185,11 @@ public enum CommunityViewScreenMode: Equatable {
     case preview
 }
 
+public enum CommunityEditScreenMode: Equatable {
+    case edit(communityId: EnginePeer.Id)
+    case create(peerId: EnginePeer.Id)
+}
+
 public enum WallpaperUrlParameter {
     case slug(String, WallpaperPresentationOptions, [UInt32], Int32?, Int32?)
     case color(UIColor)
@@ -1579,7 +1584,9 @@ public protocol SharedAccountContext: AnyObject {
     func makeSendInviteLinkScreen(context: AccountContext, subject: SendInviteLinkScreenSubject, peers: [TelegramForbiddenInvitePeer], theme: PresentationTheme?) -> ViewController
     func makeCommunitiesScreen(context: AccountContext, peerId: EnginePeer.Id?) -> ViewController
     func makeCommunityAddScreen(context: AccountContext, communityId: EnginePeer.Id, peerId: EnginePeer.Id, completed: @escaping () -> Void) -> ViewController
+    func makeCommunityAddScreen(context: AccountContext, peerId: EnginePeer.Id, initialVisibility: Bool, completed: @escaping (Bool) -> Void) -> ViewController
     func makeCommunityEditScreen(context: AccountContext, communityId: EnginePeer.Id) -> ViewController
+    func makeCommunityEditScreen(context: AccountContext, mode: CommunityEditScreenMode, completed: @escaping () -> Void) -> ViewController
     func makeCommunityRequestsScreen(context: AccountContext, communityId: EnginePeer.Id, existingContext: CommunityPeerLinkRequestsContext?) -> ViewController
     func makeCommunityViewScreen(context: AccountContext, communityId: EnginePeer.Id, mode: CommunityViewScreenMode) -> ViewController
     func makeCommunityPeerSelectionScreen(context: AccountContext, communityId: EnginePeer.Id, selectionOptions: CommunityPeerSelectionOptions) -> ViewController

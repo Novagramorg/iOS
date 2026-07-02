@@ -288,7 +288,7 @@ final class PeerSelectionScreenComponent: Component {
                 subtitle = strings.Settings_PersonalChannelSelectSubtitle
             case .community:
                 title = "Add a Chat"
-                subtitle = "Select a group to add to this community"
+                subtitle = "Select a chat to add to this community"
             }
             
             let headerContent: ChatListHeaderComponent.Content? = ChatListHeaderComponent.Content(

@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import AVFoundation
 import Display
 import Postbox
 import AccountContext
@@ -22,6 +23,11 @@ import PlainButtonComponent
 import RadialStatusNode
 import PeerListItemComponent
 import PeerSelectionScreen
+import AvatarEditorScreen
+import CameraScreen
+import MediaEditor
+import MediaEditorScreen
+import Photos
 
 private enum CommunityAddChatsMode: Equatable {
     case allMembers
@@ -38,6 +44,206 @@ private enum CommunityAddChatsMode: Equatable {
 
 private enum CommunityEditSaveError {
     case generic
+}
+
+private struct CommunityPendingPeerAvatar {
+    let previewRepresentation: TelegramMediaImageRepresentation
+    let isLoadingPreview: Bool
+    let uploadedPhoto: Signal<UploadedPeerPhotoData, NoError>
+    let uploadedVideo: Signal<UploadedPeerPhotoData?, NoError>?
+    let videoStartTimestamp: Double?
+    let markup: UploadPeerPhotoMarkup?
+}
+
+private enum CommunityCreateAvatarSetup {
+    private static func makePhotoRepresentation(context: AccountContext, image: UIImage) -> (LocalFileMediaResource, TelegramMediaImageRepresentation)? {
+        guard let data = image.jpegData(compressionQuality: 0.6) else {
+            return nil
+        }
+        
+        let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
+        context.engine.resources.storeResourceData(id: EngineMediaResource.Id(resource.id), data: data)
+        let representation = TelegramMediaImageRepresentation(
+            dimensions: PixelDimensions(width: 640, height: 640),
+            resource: resource,
+            progressiveSizes: [],
+            immediateThumbnailData: nil,
+            hasVideo: false,
+            isPersonal: false
+        )
+        return (resource, representation)
+    }
+    
+    static func photo(context: AccountContext, image: UIImage) -> CommunityPendingPeerAvatar? {
+        guard let (resource, representation) = self.makePhotoRepresentation(context: context, image: image) else {
+            return nil
+        }
+        
+        return CommunityPendingPeerAvatar(
+            previewRepresentation: representation,
+            isLoadingPreview: false,
+            uploadedPhoto: context.engine.peers.uploadedPeerPhoto(resource: EngineMediaResource(resource)),
+            uploadedVideo: nil,
+            videoStartTimestamp: nil,
+            markup: nil
+        )
+    }
+    
+    static func video(
+        context: AccountContext,
+        image: UIImage,
+        video: MediaEditorScreenImpl.MediaResult.VideoResult?,
+        values: MediaEditorValues?,
+        markup: UploadPeerPhotoMarkup?,
+        didCompleteLoadingPreview: @escaping (CommunityPendingPeerAvatar) -> Void
+    ) -> CommunityPendingPeerAvatar? {
+        var shouldUploadVideo = true
+        if markup != nil {
+            if let data = context.currentAppConfiguration.with({ $0 }).data, let uploadVideoValue = data["upload_markup_video"] as? Bool, uploadVideoValue {
+                shouldUploadVideo = true
+            } else {
+                shouldUploadVideo = false
+            }
+        }
+        
+        guard let (photoResource, representation) = self.makePhotoRepresentation(context: context, image: image) else {
+            return nil
+        }
+        
+        let uploadedPhoto = context.engine.peers.uploadedPeerPhoto(resource: EngineMediaResource(photoResource))
+        
+        var videoStartTimestamp: Double?
+        if let values, let coverImageTimestamp = values.coverImageTimestamp, coverImageTimestamp > 0.0 {
+            videoStartTimestamp = coverImageTimestamp - (values.videoTrimRange?.lowerBound ?? 0.0)
+        }
+        
+        let hasVideoUpload = shouldUploadVideo && video != nil && values != nil
+        guard hasVideoUpload, let video, let values else {
+            return CommunityPendingPeerAvatar(
+                previewRepresentation: representation,
+                isLoadingPreview: false,
+                uploadedPhoto: uploadedPhoto,
+                uploadedVideo: nil,
+                videoStartTimestamp: videoStartTimestamp,
+                markup: markup
+            )
+        }
+        
+        let account = context.account
+        var exportSubject: Signal<(MediaEditorVideoExport.Subject, Double), NoError>?
+        switch video {
+        case let .imageFile(path):
+            if let image = UIImage(contentsOfFile: path) {
+                exportSubject = .single((.image(image: image), 3.0))
+            }
+        case let .videoFile(path):
+            let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+            exportSubject = .single((.video(asset: asset, isStory: false), asset.duration.seconds))
+        case let .asset(localIdentifier):
+            exportSubject = Signal { subscriber in
+                let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
+                if fetchResult.count != 0 {
+                    let asset = fetchResult.object(at: 0)
+                    if asset.mediaType == .video {
+                        PHImageManager.default().requestAVAsset(forVideo: asset, options: nil) { avAsset, _, _ in
+                            if let avAsset {
+                                subscriber.putNext((.video(asset: avAsset, isStory: true), avAsset.duration.seconds))
+                                subscriber.putCompletion()
+                            }
+                        }
+                    } else {
+                        let options = PHImageRequestOptions()
+                        options.deliveryMode = .highQualityFormat
+                        PHImageManager.default().requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .default, options: options) { image, _ in
+                            if let image {
+                                subscriber.putNext((.image(image: image), 3.0))
+                                subscriber.putCompletion()
+                            }
+                        }
+                    }
+                }
+                return EmptyDisposable
+            }
+        }
+        
+        guard let exportSubject else {
+            return CommunityPendingPeerAvatar(
+                previewRepresentation: representation,
+                isLoadingPreview: false,
+                uploadedPhoto: uploadedPhoto,
+                uploadedVideo: nil,
+                videoStartTimestamp: videoStartTimestamp,
+                markup: markup
+            )
+        }
+        
+        let videoResource = exportSubject
+        |> castError(UploadPeerPhotoError.self)
+        |> mapToSignal { exportSubject, duration -> Signal<TelegramMediaResource?, UploadPeerPhotoError> in
+            return Signal { subscriber in
+                let configuration = recommendedVideoExportConfiguration(values: values, duration: duration, forceFullHd: true, frameRate: 60.0, isAvatar: true)
+                let tempFile = EngineTempBox.shared.tempFile(fileName: "video.mp4")
+                let videoExport = MediaEditorVideoExport(postbox: context.account.postbox, subject: exportSubject, configuration: configuration, outputPath: tempFile.path, textScale: 2.0)
+                let disposable = (videoExport.status
+                |> deliverOnMainQueue).startStrict(next: { status in
+                    switch status {
+                    case .completed:
+                        if let data = try? Data(contentsOf: URL(fileURLWithPath: tempFile.path), options: .mappedIfSafe) {
+                            let resource = LocalFileMediaResource(fileId: Int64.random(in: Int64.min ... Int64.max))
+                            account.postbox.mediaBox.storeResourceData(resource.id, data: data, synchronous: true)
+                            subscriber.putNext(resource)
+                            subscriber.putCompletion()
+                        }
+                        EngineTempBox.shared.dispose(tempFile)
+                    case .progress:
+                        break
+                    default:
+                        break
+                    }
+                })
+                return ActionDisposable {
+                    disposable.dispose()
+                }
+            }
+        }
+        
+        var completedAvatar: CommunityPendingPeerAvatar?
+        let uploadedVideo = (videoResource
+        |> `catch` { _ -> Signal<TelegramMediaResource?, NoError> in
+            return .single(nil)
+        }
+        |> mapToSignal { resource -> Signal<UploadedPeerPhotoData?, NoError> in
+            if let resource {
+                return context.engine.peers.uploadedPeerVideo(resource: EngineMediaResource(resource))
+                |> map(Optional.init)
+            } else {
+                return .single(nil)
+            }
+        }
+        |> afterNext { next in
+            if let next, next.isCompleted, let completedAvatar {
+                didCompleteLoadingPreview(completedAvatar)
+            }
+        })
+        
+        let pendingAvatar = CommunityPendingPeerAvatar(
+            previewRepresentation: representation,
+            isLoadingPreview: true,
+            uploadedPhoto: uploadedPhoto,
+            uploadedVideo: uploadedVideo,
+            videoStartTimestamp: videoStartTimestamp,
+            markup: markup
+        )
+        completedAvatar = CommunityPendingPeerAvatar(
+            previewRepresentation: representation,
+            isLoadingPreview: false,
+            uploadedPhoto: uploadedPhoto,
+            uploadedVideo: uploadedVideo,
+            videoStartTimestamp: videoStartTimestamp,
+            markup: markup
+        )
+        return pendingAvatar
+    }
 }
 
 private let navigationCheckImage: UIImage = {
@@ -422,18 +628,20 @@ private final class CommunityEditScreenComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
 
     let context: AccountContext
-    let communityId: EnginePeer.Id
+    let mode: CommunityEditScreenMode
+    let completed: () -> Void
 
-    init(context: AccountContext, communityId: EnginePeer.Id) {
+    init(context: AccountContext, mode: CommunityEditScreenMode, completed: @escaping () -> Void) {
         self.context = context
-        self.communityId = communityId
+        self.mode = mode
+        self.completed = completed
     }
 
     static func ==(lhs: CommunityEditScreenComponent, rhs: CommunityEditScreenComponent) -> Bool {
         if lhs.context !== rhs.context {
             return false
         }
-        if lhs.communityId != rhs.communityId {
+        if lhs.mode != rhs.mode {
             return false
         }
         return true
@@ -443,6 +651,11 @@ private final class CommunityEditScreenComponent: Component {
         override func touchesShouldCancel(in view: UIView) -> Bool {
             return true
         }
+    }
+    
+    private struct DraftLinkedPeer: Equatable {
+        let peerId: EnginePeer.Id
+        var visible: Bool
     }
 
     final class View: UIView, UIScrollViewDelegate {
@@ -464,12 +677,16 @@ private final class CommunityEditScreenComponent: Component {
 
         private let titleFieldTag = NSObject()
         private var resetTitleText: String?
+        private var didFocusTitleField = false
 
         private var community: TelegramCommunity?
         private var cachedData: CachedCommunityData?
         private var linkedPeers: [EnginePeer.Id: EnginePeer] = [:]
         private var linkedPeerCachedData: [EnginePeer.Id: CachedPeerData] = [:]
         private var currentLinkedPeerIds: [EnginePeer.Id] = []
+        private var draftLinkedPeers: [DraftLinkedPeer] = []
+        private var createdCommunityId: EnginePeer.Id?
+        private var createdCommunityTitle: String?
         private var currentTitle = ""
         private var initialTitle = ""
         private var selectedMode: CommunityAddChatsMode = .allMembers
@@ -481,6 +698,8 @@ private final class CommunityEditScreenComponent: Component {
         private var isUpdatingAvatar = false
         private var uploadingAvatarImage: UIImage?
         private var avatarUploadProgress: CGFloat?
+        private var pendingAvatar: CommunityPendingPeerAvatar?
+        private var avatarPickerHolder: Any?
 
         private var dataDisposable: Disposable?
         private let linkedPeersDisposable = MetaDisposable()
@@ -538,6 +757,10 @@ private final class CommunityEditScreenComponent: Component {
                 self.updateScrolling(transition: .immediate)
             }
         }
+        
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            self.endEditing(true)
+        }
 
         private func updateScrolling(transition: ComponentTransition) {
             guard let environment = self.environment, let controller = environment.controller(), let navigationBar = controller.navigationBar, let edgeEffectView = navigationBar.edgeEffectView else {
@@ -546,6 +769,32 @@ private final class CommunityEditScreenComponent: Component {
             let alphaDistance: CGFloat = 16.0
             let edgeEffectAlpha = max(0.0, min(1.0, self.scrollView.contentOffset.y / alphaDistance))
             transition.setAlpha(view: edgeEffectView, alpha: edgeEffectAlpha)
+        }
+        
+        private var editCommunityId: EnginePeer.Id? {
+            guard let component = self.component else {
+                return nil
+            }
+            if case let .edit(communityId) = component.mode {
+                return communityId
+            } else {
+                return nil
+            }
+        }
+        
+        private var createSourcePeerId: EnginePeer.Id? {
+            guard let component = self.component else {
+                return nil
+            }
+            if case let .create(peerId) = component.mode {
+                return peerId
+            } else {
+                return nil
+            }
+        }
+        
+        private var isCreateMode: Bool {
+            return self.createSourcePeerId != nil
         }
 
         private var trimmedTitle: String {
@@ -563,13 +812,29 @@ private final class CommunityEditScreenComponent: Component {
         }
 
         private func ensureDataSignal(component: CommunityEditScreenComponent) {
+            if case let .create(peerId) = component.mode {
+                if !self.didInitializeState {
+                    self.didInitializeState = true
+                    self.currentTitle = ""
+                    self.initialTitle = ""
+                    self.selectedMode = .allMembers
+                    self.initialMode = .allMembers
+                    self.draftLinkedPeers = [DraftLinkedPeer(peerId: peerId, visible: true)]
+                    self.updateLinkedPeerSignals(component: component, ids: [peerId])
+                }
+                return
+            }
+            
             if self.dataDisposable != nil {
                 return
             }
-            component.context.account.viewTracker.forceUpdateCachedPeerData(peerId: component.communityId)
+            guard case let .edit(communityId) = component.mode else {
+                return
+            }
+            component.context.account.viewTracker.forceUpdateCachedPeerData(peerId: communityId)
             self.dataDisposable = (combineLatest(
-                component.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: component.communityId)),
-                component.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.CachedData(id: component.communityId))
+                component.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: communityId)),
+                component.context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.CachedData(id: communityId))
             )
             |> deliverOnMainQueue).startStrict(next: { [weak self] peer, cachedData in
                 guard let self else {
@@ -677,10 +942,19 @@ private final class CommunityEditScreenComponent: Component {
         }
 
         private func openAvatarSetup() {
-            guard let component = self.component, let environment = self.environment, let controller = environment.controller(), let community = self.community else {
+            guard let component = self.component, let environment = self.environment, let controller = environment.controller() else {
                 return
             }
             if self.isSaving || self.isDeleting || self.isUpdatingAvatar {
+                return
+            }
+            
+            if self.isCreateMode {
+                self.openCreateAvatarSetup(component: component)
+                return
+            }
+            
+            guard let community = self.community else {
                 return
             }
 
@@ -733,6 +1007,165 @@ private final class CommunityEditScreenComponent: Component {
                 }
             )
         }
+        
+        private func applyPendingAvatar(_ avatar: CommunityPendingPeerAvatar) {
+            self.pendingAvatar = avatar
+            self.state?.updated(transition: .easeInOut(duration: 0.2))
+        }
+        
+        private func updatePendingAvatarIfCurrent(_ avatar: CommunityPendingPeerAvatar) {
+            if self.pendingAvatar?.previewRepresentation.resource.id == avatar.previewRepresentation.resource.id {
+                self.applyPendingAvatar(avatar)
+            }
+        }
+        
+        private func clearPendingAvatar() {
+            self.pendingAvatar = nil
+            self.state?.updated(transition: .easeInOut(duration: 0.2))
+        }
+        
+        private func openCreateAvatarSetup(component: CommunityEditScreenComponent) {
+            self.endEditing(true)
+            
+            let keyboardInputData = Promise<AvatarKeyboardInputData>()
+            keyboardInputData.set(AvatarEditorScreen.inputData(context: component.context, isGroup: true))
+            
+            var dismissPickerImpl: (() -> Void)?
+            let (mainController, pickerHolder) = component.context.sharedContext.makeAvatarMediaPickerScreen(
+                context: component.context,
+                peerType: .community,
+                getSourceRect: { return nil },
+                canDelete: self.pendingAvatar != nil,
+                performDelete: { [weak self] in
+                    self?.clearPendingAvatar()
+                },
+                completion: { [weak self] result, transitionView, transitionRect, transitionImage, fromCamera, _, cancelled in
+                    guard let self, let component = self.component else {
+                        return
+                    }
+                    self.avatarPickerHolder = nil
+                    
+                    let applyPhoto: (UIImage) -> Void = { [weak self] image in
+                        guard let self else {
+                            return
+                        }
+                        if let avatar = CommunityCreateAvatarSetup.photo(context: component.context, image: image) {
+                            self.applyPendingAvatar(avatar)
+                        }
+                    }
+                    let applyVideo: (UIImage, MediaEditorScreenImpl.MediaResult.VideoResult?, MediaEditorValues?, UploadPeerPhotoMarkup?) -> Void = { [weak self] image, video, values, markup in
+                        guard let self else {
+                            return
+                        }
+                        if let avatar = CommunityCreateAvatarSetup.video(context: component.context, image: image, video: video, values: values, markup: markup, didCompleteLoadingPreview: { [weak self] avatar in
+                            self?.updatePendingAvatarIfCurrent(avatar)
+                        }) {
+                            self.applyPendingAvatar(avatar)
+                        }
+                    }
+                    
+                    let subject: Signal<MediaEditorScreenImpl.Subject?, NoError>
+                    if let asset = result as? PHAsset {
+                        subject = .single(.asset(asset))
+                    } else if let image = result as? UIImage {
+                        subject = .single(.image(image: image, dimensions: PixelDimensions(image.size), additionalImage: nil, additionalImagePosition: .bottomRight, fromCamera: false))
+                    } else if let result = result as? Signal<CameraScreenImpl.Result, NoError> {
+                        subject = result
+                        |> map { value -> MediaEditorScreenImpl.Subject? in
+                            switch value {
+                            case .pendingImage:
+                                return nil
+                            case let .image(image):
+                                return .image(image: image.image, dimensions: PixelDimensions(image.image.size), additionalImage: nil, additionalImagePosition: .topLeft, fromCamera: false)
+                            case let .video(video):
+                                return .video(videoPath: video.videoPath, thumbnail: video.coverImage, mirror: video.mirror, additionalVideoPath: nil, additionalThumbnail: nil, dimensions: video.dimensions, duration: video.duration, videoPositionChanges: [], additionalVideoPosition: .topLeft, fromCamera: false)
+                            default:
+                                return nil
+                            }
+                        }
+                    } else {
+                        let controller = AvatarEditorScreen(context: component.context, inputData: keyboardInputData.get(), peerType: .community, markup: nil)
+                        controller.imageCompletion = { image, commit in
+                            applyPhoto(image)
+                            commit()
+                        }
+                        controller.videoCompletion = { image, _, _, markup, commit in
+                            applyVideo(image, nil, nil, markup)
+                            commit()
+                        }
+                        self.pushController(controller)
+                        return
+                    }
+                    
+                    let editorController = MediaEditorScreenImpl(
+                        context: component.context,
+                        mode: .avatarEditor(clipStyle: .roundedRect),
+                        subject: subject,
+                        transitionIn: fromCamera ? .camera : transitionView.flatMap({ .gallery(
+                            MediaEditorScreenImpl.TransitionIn.GalleryTransitionIn(
+                                sourceView: $0,
+                                sourceRect: transitionRect,
+                                sourceImage: transitionImage
+                            )
+                        ) }),
+                        transitionOut: { finished, _ in
+                            if !finished, let transitionView {
+                                return MediaEditorScreenImpl.TransitionOut(
+                                    destinationView: transitionView,
+                                    destinationRect: transitionView.bounds,
+                                    destinationCornerRadius: 0.0
+                                )
+                            }
+                            return nil
+                        },
+                        completion: { results, commit in
+                            guard let result = results.first else {
+                                return
+                            }
+                            switch result.media {
+                            case let .image(image, _):
+                                applyPhoto(image)
+                                commit({})
+                            case let .video(video, coverImage, values, _, _):
+                                if let coverImage {
+                                    applyVideo(coverImage, video, values, nil)
+                                }
+                                commit({})
+                            default:
+                                break
+                            }
+                            dismissPickerImpl?()
+                        } as ([MediaEditorScreenImpl.Result], @escaping (@escaping () -> Void) -> Void) -> Void
+                    )
+                    editorController.cancelled = { _ in
+                        cancelled()
+                    }
+                    self.pushController(editorController)
+                },
+                dismissed: { [weak self] in
+                    self?.avatarPickerHolder = nil
+                }
+            )
+            self.avatarPickerHolder = pickerHolder
+            if let mainController {
+                dismissPickerImpl = { [weak mainController] in
+                    if let mainController, let navigationController = mainController.navigationController {
+                        var viewControllers = navigationController.viewControllers
+                        viewControllers = viewControllers.filter { controller in
+                            return !(controller is CameraScreen) && controller !== mainController
+                        }
+                        navigationController.setViewControllers(viewControllers, animated: false)
+                    }
+                }
+                if mainController is ActionSheetController {
+                    self.environment?.controller()?.present(mainController, in: .window(.root))
+                } else {
+                    mainController.navigationPresentation = .flatModal
+                    mainController.supportedOrientations = ViewControllerSupportedOrientations(regularSize: .all, compactSize: .portrait)
+                    self.pushController(mainController)
+                }
+            }
+        }
 
         private func confirmRemoveAvatar() {
             guard let component = self.component, let environment = self.environment else {
@@ -761,7 +1194,7 @@ private final class CommunityEditScreenComponent: Component {
         }
 
         private func removeAvatar() {
-            guard let component = self.component else {
+            guard let component = self.component, let communityId = self.editCommunityId else {
                 return
             }
             if self.isSaving || self.isDeleting || self.isUpdatingAvatar {
@@ -773,7 +1206,7 @@ private final class CommunityEditScreenComponent: Component {
             self.avatarUploadProgress = nil
             self.state?.updated(transition: .easeInOut(duration: 0.2))
 
-            let signal = component.context.engine.peers.updatePeerPhoto(peerId: component.communityId, photo: nil, mapResourceToAvatarSizes: { resource, representations in
+            let signal = component.context.engine.peers.updatePeerPhoto(peerId: communityId, photo: nil, mapResourceToAvatarSizes: { resource, representations in
                 return mapResourceToAvatarSizes(engine: component.context.engine, resource: resource, representations: representations)
             })
             |> mapError { _ -> CommunityEditSaveError in
@@ -835,7 +1268,7 @@ private final class CommunityEditScreenComponent: Component {
         }
 
         private func deleteCommunity() {
-            guard let component = self.component else {
+            guard let component = self.component, let communityId = self.editCommunityId else {
                 return
             }
             if self.isSaving || self.isDeleting {
@@ -845,7 +1278,7 @@ private final class CommunityEditScreenComponent: Component {
             self.isDeleting = true
             self.state?.updated(transition: .easeInOut(duration: 0.2))
 
-            let signal = component.context.engine.peers.deleteChannel(peerId: component.communityId)
+            let signal = component.context.engine.peers.deleteChannel(peerId: communityId)
             |> mapError { _ -> CommunityEditSaveError in
                 return .generic
             }
@@ -898,34 +1331,34 @@ private final class CommunityEditScreenComponent: Component {
         }
 
         private func openAdministrators() {
-            guard let component = self.component else {
+            guard let component = self.component, let communityId = self.editCommunityId else {
                 return
             }
             let controller = channelAdminsController(
                 context: component.context,
                 updatedPresentationData: nil,
-                peerId: component.communityId
+                peerId: communityId
             )
             self.pushController(controller)
         }
 
         private func openRemovedUsers() {
-            guard let component = self.component else {
+            guard let component = self.component, let communityId = self.editCommunityId else {
                 return
             }
             let controller = channelBlacklistController(
                 context: component.context,
                 updatedPresentationData: nil,
-                peerId: component.communityId
+                peerId: communityId
             )
             self.pushController(controller)
         }
 
         private func openPendingRequests() {
-            guard let component = self.component else {
+            guard let component = self.component, let communityId = self.editCommunityId else {
                 return
             }
-            let controller = component.context.sharedContext.makeCommunityRequestsScreen(context: component.context, communityId: component.communityId, existingContext: nil)
+            let controller = component.context.sharedContext.makeCommunityRequestsScreen(context: component.context, communityId: communityId, existingContext: nil)
             self.pushController(controller)
         }
 
@@ -941,6 +1374,31 @@ private final class CommunityEditScreenComponent: Component {
                 forceOpenChat: true
             ))
         }
+        
+        private func openDraftPeerVisibility(peer: EnginePeer) {
+            guard let component = self.component, self.isCreateMode else {
+                return
+            }
+            if self.isSaving || self.isDeleting {
+                return
+            }
+            let initialVisibility = self.draftLinkedPeers.first(where: { $0.peerId == peer.id })?.visible ?? true
+            let controller = component.context.sharedContext.makeCommunityAddScreen(
+                context: component.context,
+                peerId: peer.id,
+                initialVisibility: initialVisibility,
+                completed: { [weak self] isVisible in
+                    guard let self else {
+                        return
+                    }
+                    if let index = self.draftLinkedPeers.firstIndex(where: { $0.peerId == peer.id }) {
+                        self.draftLinkedPeers[index].visible = isVisible
+                    }
+                    self.state?.updated(transition: .spring(duration: 0.35))
+                }
+            )
+            self.environment?.controller()?.present(controller, in: .window(.root))
+        }
 
         private func openAddChat() {
             guard let component = self.component, let environment = self.environment else {
@@ -951,7 +1409,15 @@ private final class CommunityEditScreenComponent: Component {
             }
 
             let communitiesConfiguration = CommunitiesConfiguration.with(appConfiguration: component.context.currentAppConfiguration.with { $0 })
-            let linkedPeersCount = Int32(self.cachedData?.linkedPeers.count ?? 0)
+            let linkedPeersCount: Int32
+            let excludedPeerIds: Set<EnginePeer.Id>
+            if self.isCreateMode {
+                linkedPeersCount = Int32(self.draftLinkedPeers.count)
+                excludedPeerIds = Set(self.draftLinkedPeers.map(\.peerId))
+            } else {
+                linkedPeersCount = Int32(self.cachedData?.linkedPeers.count ?? 0)
+                excludedPeerIds = Set((self.cachedData?.linkedPeers ?? []).map(\.peerId))
+            }
             if linkedPeersCount >= communitiesConfiguration.peersLimit {
                 environment.controller()?.present(AlertScreen(
                     context: component.context,
@@ -967,7 +1433,6 @@ private final class CommunityEditScreenComponent: Component {
             self.isAddActionInProgress = true
             self.state?.updated(transition: .spring(duration: 0.35))
 
-            let excludedPeerIds = Set((self.cachedData?.linkedPeers ?? []).map(\.peerId))
             self.addChatDisposable.set((component.context.engine.peers.adminedPublicChannels(scope: .forCommunity)
             |> take(1)
             |> deliverOnMainQueue).startStrict(next: { [weak self] channels in
@@ -993,18 +1458,42 @@ private final class CommunityEditScreenComponent: Component {
                         guard let self, let component = self.component, let channel else {
                             return
                         }
-                        let controller = component.context.sharedContext.makeCommunityAddScreen(
-                            context: component.context,
-                            communityId: component.communityId,
-                            peerId: channel.peer.id,
-                            completed: { [weak self] in
-                                guard let self, let component = self.component else {
-                                    return
+                        let controller: ViewController
+                        if self.isCreateMode {
+                            controller = component.context.sharedContext.makeCommunityAddScreen(
+                                context: component.context,
+                                peerId: channel.peer.id,
+                                initialVisibility: true,
+                                completed: { [weak self] isVisible in
+                                    guard let self, let component = self.component else {
+                                        return
+                                    }
+                                    if let index = self.draftLinkedPeers.firstIndex(where: { $0.peerId == channel.peer.id }) {
+                                        self.draftLinkedPeers[index].visible = isVisible
+                                    } else {
+                                        self.draftLinkedPeers.append(DraftLinkedPeer(peerId: channel.peer.id, visible: isVisible))
+                                    }
+                                    self.updateLinkedPeerSignals(component: component, ids: self.draftLinkedPeers.map(\.peerId))
+                                    self.state?.updated(transition: .spring(duration: 0.35))
                                 }
-                                component.context.account.viewTracker.forceUpdateCachedPeerData(peerId: component.communityId)
-                                self.state?.updated(transition: .spring(duration: 0.35))
+                            )
+                        } else {
+                            guard let communityId = self.editCommunityId else {
+                                return
                             }
-                        )
+                            controller = component.context.sharedContext.makeCommunityAddScreen(
+                                context: component.context,
+                                communityId: communityId,
+                                peerId: channel.peer.id,
+                                completed: { [weak self] in
+                                    guard let self, let component = self.component, let communityId = self.editCommunityId else {
+                                        return
+                                    }
+                                    component.context.account.viewTracker.forceUpdateCachedPeerData(peerId: communityId)
+                                    self.state?.updated(transition: .spring(duration: 0.35))
+                                }
+                            )
+                        }
                         self.environment?.controller()?.present(controller, in: .window(.root))
                     }
                 )
@@ -1023,8 +1512,133 @@ private final class CommunityEditScreenComponent: Component {
             }
             return TelegramChatBannedRights(flags: flags, untilDate: current?.untilDate ?? Int32.max)
         }
+        
+        private func animateTitleError() {
+            if let view = self.titleSection.findTaggedView(tag: self.titleFieldTag) as? ListTextFieldItemComponent.View {
+                view.animateError()
+                view.activateInput()
+            }
+        }
+        
+        private func saveCreateCommunity(component: CommunityEditScreenComponent, sourcePeerId: EnginePeer.Id) {
+            if self.isSaving || self.isDeleting {
+                return
+            }
+            
+            let title = self.trimmedTitle
+            if title.isEmpty {
+                self.animateTitleError()
+                return
+            }
+            
+            guard let sourcePeer = self.draftLinkedPeers.first(where: { $0.peerId == sourcePeerId }) else {
+                return
+            }
+            
+            self.endEditing(true)
+            self.isSaving = true
+            self.state?.updated(transition: .easeInOut(duration: 0.2))
+            
+            let createSignal: Signal<EnginePeer.Id, CommunityEditSaveError>
+            let shouldApplySourcePeerLink = self.createdCommunityId != nil
+            if let createdCommunityId = self.createdCommunityId {
+                createSignal = .single(createdCommunityId)
+            } else {
+                createSignal = component.context.engine.peers.createCommunity(
+                    title: title,
+                    about: nil,
+                    peerId: sourcePeerId,
+                    visible: sourcePeer.visible
+                )
+                |> mapError { _ -> CommunityEditSaveError in
+                    return .generic
+                }
+                |> afterNext { [weak self] communityId in
+                    self?.createdCommunityId = communityId
+                    self?.createdCommunityTitle = title
+                }
+            }
+            
+            let pendingAvatar = self.pendingAvatar
+            let shouldUpdateMode = self.selectedMode != .allMembers || self.createdCommunityId != nil
+            let peersToLink = shouldApplySourcePeerLink ? self.draftLinkedPeers : self.draftLinkedPeers.filter { $0.peerId != sourcePeerId }
+            
+            let signal = createSignal
+            |> mapToSignal { communityId -> Signal<Never, CommunityEditSaveError> in
+                var signal: Signal<Never, CommunityEditSaveError> = .complete()
+                |> delay(0.5, queue: Queue.mainQueue())
+                if let pendingAvatar {
+                    signal = signal
+                    |> then(component.context.engine.peers.updatePeerPhoto(
+                        peerId: communityId,
+                        photo: pendingAvatar.uploadedPhoto,
+                        video: pendingAvatar.uploadedVideo,
+                        videoStartTimestamp: pendingAvatar.videoStartTimestamp,
+                        markup: pendingAvatar.markup,
+                        mapResourceToAvatarSizes: { resource, representations in
+                            return mapResourceToAvatarSizes(engine: component.context.engine, resource: resource, representations: representations)
+                        }
+                    )
+                    |> mapError { _ -> CommunityEditSaveError in
+                        return .generic
+                    }
+                    |> ignoreValues)
+                }
+                if shouldUpdateMode {
+                    let rights = self.rightsWithUpdatedMode(self.selectedMode, current: nil)
+                    signal = signal
+                    |> then(component.context.engine.peers.updateDefaultChannelMemberBannedRights(peerId: communityId, rights: rights)
+                    |> castError(CommunityEditSaveError.self))
+                }
+                for peer in peersToLink {
+                    signal = signal
+                    |> then(component.context.engine.peers.toggleCommunityPeerLink(
+                        communityId: communityId,
+                        peerId: peer.peerId,
+                        action: .link(visible: peer.visible)
+                    )
+                    |> `catch` { error -> Signal<Never, CommunityEditSaveError> in
+                        if case .requestCreated = error {
+                            return .complete()
+                        } else {
+                            return .fail(.generic)
+                        }
+                    })
+                }
+                return signal
+            }
+            |> then(
+                component.context.engine.peers.joinedCommunities()
+                |> castError(CommunityEditSaveError.self)
+                |> ignoreValues
+            )
+            
+            self.saveDisposable.set((signal
+            |> deliverOnMainQueue).startStrict(error: { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                self.isSaving = false
+                self.state?.updated(transition: .easeInOut(duration: 0.2))
+                self.presentError()
+            }, completed: { [weak self] in
+                guard let self else {
+                    return
+                }
+                self.isSaving = false
+                component.completed()
+            }))
+        }
 
         func save() {
+            guard let component = self.component else {
+                return
+            }
+            if case let .create(peerId) = component.mode {
+                self.saveCreateCommunity(component: component, sourcePeerId: peerId)
+                return
+            }
+            
             guard let component = self.component, let community = self.community else {
                 return
             }
@@ -1034,6 +1648,7 @@ private final class CommunityEditScreenComponent: Component {
 
             let title = self.trimmedTitle
             if title.isEmpty {
+                self.animateTitleError()
                 return
             }
 
@@ -1050,7 +1665,7 @@ private final class CommunityEditScreenComponent: Component {
             var signal: Signal<Never, CommunityEditSaveError> = .complete()
             if titleChanged {
                 signal = signal
-                |> then(component.context.engine.peers.updatePeerTitle(peerId: component.communityId, title: title)
+                |> then(component.context.engine.peers.updatePeerTitle(peerId: community.id, title: title)
                 |> mapError { _ -> CommunityEditSaveError in
                     return .generic
                 }
@@ -1059,7 +1674,7 @@ private final class CommunityEditScreenComponent: Component {
             if modeChanged {
                 let rights = self.rightsWithUpdatedMode(self.selectedMode, current: community.defaultBannedRights)
                 signal = signal
-                |> then(component.context.engine.peers.updateDefaultChannelMemberBannedRights(peerId: component.communityId, rights: rights)
+                |> then(component.context.engine.peers.updateDefaultChannelMemberBannedRights(peerId: community.id, rights: rights)
                 |> castError(CommunityEditSaveError.self))
             }
 
@@ -1177,7 +1792,12 @@ private final class CommunityEditScreenComponent: Component {
         }
 
         private func chatsHeaderTitle(presentationData: PresentationData) -> String {
-            let count = self.cachedData?.linkedPeers.count ?? 0
+            let count: Int
+            if self.isCreateMode {
+                count = self.draftLinkedPeers.count
+            } else {
+                count = self.cachedData?.linkedPeers.count ?? 0
+            }
             let formattedCount = presentationStringsFormattedNumber(Int32(clamping: count), presentationData.dateTimeFormat.groupingSeparator)
             return count == 1 ? "\(formattedCount) CHAT" : "\(formattedCount) CHATS"
         }
@@ -1230,7 +1850,8 @@ private final class CommunityEditScreenComponent: Component {
             context: AccountContext,
             peer: EnginePeer,
             theme: PresentationTheme,
-            presentationData: PresentationData
+            presentationData: PresentationData,
+            isHidden: Bool = false
         ) -> AnyComponentWithIdentity<Empty> {
             let subtitle = self.memberCountString(peerId: peer.id, presentationData: presentationData).flatMap {
                 PeerListItemComponent.Subtitle(text: $0, color: .neutral)
@@ -1242,6 +1863,7 @@ private final class CommunityEditScreenComponent: Component {
                 style: .generic,
                 sideInset: 0.0,
                 title: peer.compactDisplayTitle,
+                titleAccessory: isHidden ? .hidden : .none,
                 peer: peer,
                 subtitle: subtitle,
                 subtitleAccessory: .none,
@@ -1257,6 +1879,43 @@ private final class CommunityEditScreenComponent: Component {
                 insets: UIEdgeInsets(top: -1.0, left: 0.0, bottom: -1.0, right: 0.0),
                 action: { [weak self] peer, _, _ in
                     self?.openPeer(peer)
+                }
+            )))
+        }
+        
+        private func draftChatItem(
+            context: AccountContext,
+            peer: EnginePeer,
+            visible: Bool,
+            theme: PresentationTheme,
+            presentationData: PresentationData
+        ) -> AnyComponentWithIdentity<Empty> {
+            let subtitle = self.memberCountString(peerId: peer.id, presentationData: presentationData).flatMap {
+                PeerListItemComponent.Subtitle(text: $0, color: .neutral)
+            }
+            return AnyComponentWithIdentity(id: peer.id, component: AnyComponent(PeerListItemComponent(
+                context: context,
+                theme: theme,
+                strings: presentationData.strings,
+                style: .generic,
+                sideInset: 0.0,
+                title: peer.compactDisplayTitle,
+                titleAccessory: visible ? .none : .hidden,
+                peer: peer,
+                subtitle: subtitle,
+                subtitleAccessory: .none,
+                presence: nil,
+                rightAccessory: .none,
+                selectionState: .none,
+                isEnabled: !(self.isSaving || self.isDeleting),
+                hasNext: false,
+                extractedTheme: PeerListItemComponent.ExtractedTheme(
+                    inset: 2.0,
+                    background: theme.list.itemBlocksBackgroundColor
+                ),
+                insets: UIEdgeInsets(top: -1.0, left: 0.0, bottom: -1.0, right: 0.0),
+                action: { [weak self] peer, _, _ in
+                    self?.openDraftPeerVisibility(peer: peer)
                 }
             )))
         }
@@ -1314,18 +1973,37 @@ private final class CommunityEditScreenComponent: Component {
             let resetTitleText = self.resetTitleText
             self.resetTitleText = nil
 
+            let avatarPeer: EnginePeer?
             if let community = self.community {
+                avatarPeer = EnginePeer(community)
+            } else if self.isCreateMode {
+                avatarPeer = EnginePeer(TelegramCommunity(
+                    id: PeerId(namespace: .max, id: PeerId.Id._internalFromInt64Value(0)),
+                    accessHash: nil,
+                    title: self.trimmedTitle,
+                    photo: self.pendingAvatar.flatMap { [$0.previewRepresentation] } ?? [],
+                    creationDate: 0,
+                    participationStatus: .member,
+                    flags: [.isCreator],
+                    collapsedInDialogs: nil,
+                    adminRights: nil,
+                    defaultBannedRights: nil
+                ))
+            } else {
+                avatarPeer = nil
+            }
+            
+            if let avatarPeer {
                 var transition = transition
                 if self.avatarHeader.view == nil {
                     transition = .immediate
                 }
-                let peer = EnginePeer(community)
                 let avatarHeaderSize = self.avatarHeader.update(
                     transition: transition,
                     component: AnyComponent(CommunityAvatarComponent(
                         context: component.context,
                         theme: theme,
-                        peer: peer,
+                        peer: avatarPeer,
                         isEnabled: !(self.isSaving || self.isDeleting || self.isUpdatingAvatar),
                         uploadingImage: self.uploadingAvatarImage,
                         uploadProgress: self.avatarUploadProgress,
@@ -1358,8 +2036,8 @@ private final class CommunityEditScreenComponent: Component {
                             theme: theme,
                             initialText: self.currentTitle,
                             resetText: resetTitleText.flatMap { ListTextFieldItemComponent.ResetText(value: $0) },
-                            placeholder: "",
-                            characterLimit: nil,
+                            placeholder: self.isCreateMode ? "Community Name" : "",
+                            characterLimit: 128,
                             autocapitalizationType: .words,
                             autocorrectionType: .yes,
                             updated: { [weak self] value in
@@ -1380,6 +2058,15 @@ private final class CommunityEditScreenComponent: Component {
                     self.scrollView.addSubview(titleSectionView)
                 }
                 transition.setFrame(view: titleSectionView, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: titleSectionSize))
+            }
+            if self.isCreateMode && !self.didFocusTitleField {
+                self.didFocusTitleField = true
+                Queue.mainQueue().after(0.1, { [weak self] in
+                    guard let self, let view = self.titleSection.findTaggedView(tag: self.titleFieldTag) as? ListTextFieldItemComponent.View else {
+                        return
+                    }
+                    view.activateInput()
+                })
             }
             contentHeight += titleSectionSize.height + sectionSpacing
 
@@ -1472,7 +2159,7 @@ private final class CommunityEditScreenComponent: Component {
                 }
             ))
 
-            if !managementItems.isEmpty {
+            if !self.isCreateMode && !managementItems.isEmpty {
                 let managementSectionSize = self.managementSection.update(
                     transition: transition,
                     component: AnyComponent(ListSectionComponent(
@@ -1495,23 +2182,42 @@ private final class CommunityEditScreenComponent: Component {
                 contentHeight += sectionSpacing
             }
 
-            var chatItems: [AnyComponentWithIdentity<Empty>] = [
-                self.addChatItem(
-                    theme: theme,
-                    presentationData: presentationData
-                )
-            ]
-            let linkedPeerIds = self.cachedData?.linkedPeers.map(\.peerId) ?? []
-            for peerId in linkedPeerIds {
-                guard let peer = self.linkedPeers[peerId] else {
-                    continue
-                }
-                chatItems.append(self.chatItem(
-                    context: component.context,
-                    peer: peer,
+            var chatItems: [AnyComponentWithIdentity<Empty>] = []
+            if self.isCreateMode {
+                chatItems.append(self.addChatItem(
                     theme: theme,
                     presentationData: presentationData
                 ))
+                for draftPeer in self.draftLinkedPeers {
+                    guard let peer = self.linkedPeers[draftPeer.peerId] else {
+                        continue
+                    }
+                    chatItems.append(self.draftChatItem(
+                        context: component.context,
+                        peer: peer,
+                        visible: draftPeer.visible,
+                        theme: theme,
+                        presentationData: presentationData
+                    ))
+                }
+            } else {
+                chatItems.append(self.addChatItem(
+                    theme: theme,
+                    presentationData: presentationData
+                ))
+                let linkedPeers = self.cachedData?.linkedPeers ?? []
+                for linkedPeer in linkedPeers {
+                    guard let peer = self.linkedPeers[linkedPeer.peerId] else {
+                        continue
+                    }
+                    chatItems.append(self.chatItem(
+                        context: component.context,
+                        peer: peer,
+                        theme: theme,
+                        presentationData: presentationData,
+                        isHidden: linkedPeer.visible == false
+                    ))
+                }
             }
 
             let chatsSectionSize = self.chatsSection.update(
@@ -1607,17 +2313,27 @@ private final class CommunityEditScreenComponent: Component {
 }
 
 public final class CommunityEditScreen: ViewControllerComponentContainer {
-    public init(context: AccountContext, communityId: EnginePeer.Id) {
+    public convenience init(context: AccountContext, communityId: EnginePeer.Id) {
+        self.init(context: context, mode: .edit(communityId: communityId), completed: {})
+    }
+    
+    public init(context: AccountContext, mode: CommunityEditScreenMode, completed: @escaping () -> Void) {
         super.init(
             context: context,
-            component: CommunityEditScreenComponent(context: context, communityId: communityId),
+            component: CommunityEditScreenComponent(context: context, mode: mode, completed: completed),
             navigationBarAppearance: .transparent,
             theme: .default,
             updatedPresentationData: nil
         )
 
         self.title = ""
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
+        switch mode {
+        case .create:
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: "___close", style: .plain, target: self, action: #selector(self.closePressed))
+        case .edit:
+            self.navigationItem.leftBarButtonItem = UIBarButtonItem(customView: UIView())
+        }
+        
         self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "___done", style: .plain, target: self, action: #selector(self.savePressed))
 
         self.scrollToTop = { [weak self] in
@@ -1632,6 +2348,10 @@ public final class CommunityEditScreen: ViewControllerComponentContainer {
         fatalError("init(coder:) has not been implemented")
     }
 
+    @objc private func closePressed() {
+        self.dismiss()
+    }
+    
     @objc private func savePressed() {
         guard let componentView = self.node.hostView.componentView as? CommunityEditScreenComponent.View else {
             return

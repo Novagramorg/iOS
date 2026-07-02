@@ -694,7 +694,7 @@ func infoItems(
                     }))
                 }
                 
-                if case .group = channel.info, let linkedCommunityData = data.linkedCommunityData {
+                if let linkedCommunityData = data.linkedCommunityData {
                     items[.community]!.append(PeerInfoScreenCommunityItem(
                         id: ItemCommunity,
                         context: context,
@@ -1083,6 +1083,10 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 let ItemAffiliatePrograms = 13
                 let ItemPostSuggestionsSettings = 14
                 let ItemPeerAutoTranslate = 15
+                let ItemAddToCommunity = 16
+                let ItemAddToCommunityInfo = 17
+                let ItemCommunity = 18
+                let ItemRemoveFromCommunity = 19
                 
                 let isCreator = channel.flags.contains(.isCreator)
                 
@@ -1315,7 +1319,34 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                     }
                 }
                 
-                if isCreator { //if let cachedData = data.cachedData as? CachedChannelData, cachedData.flags.contains(.canDeleteHistory) {
+                if isCreator {
+                    if let linkedCommunityId = channel.linkedCommunityId {
+                        if let linkedCommunityData = data.linkedCommunityData {
+                            items[.community]!.append(PeerInfoScreenCommunityItem(
+                                id: ItemCommunity,
+                                context: context,
+                                community: linkedCommunityData.peer,
+                                chatCount: linkedCommunityData.cachedData?.linkedPeers.count,
+                                action: {
+                                    guard let controller = interaction.getController() else {
+                                        return
+                                    }
+                                    let communityController = context.sharedContext.makeCommunityViewScreen(context: context, communityId: linkedCommunityData.peer.id, mode: .sheet)
+                                    controller.push(communityController)
+                                }
+                            ))
+                            items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: "Remove Channel from Community", color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
+                                interaction.editingRemoveFromCommunity(linkedCommunityId)
+                            }))
+                        }
+                    } else {
+                        //TODO:localize
+                        items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Channel to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
+                            interaction.editingOpenAddToCommunity()
+                        }))
+                        items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your channel part of a community with multiple related chats"))
+                    }
+
                     items[.peerActions]!.append(PeerInfoScreenActionItem(id: ItemDeleteChannel, text: presentationData.strings.ChannelInfo_DeleteChannel, color: .destructive, icon: nil, alignment: .natural, action: {
                         interaction.openDeletePeer()
                     }))

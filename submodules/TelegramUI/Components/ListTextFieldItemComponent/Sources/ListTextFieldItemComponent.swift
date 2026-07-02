@@ -204,10 +204,12 @@ public final class ListTextFieldItemComponent: Component {
         
         public func textFieldDidBeginEditing(_ textField: UITextField) {
             self.clearButton.view?.isHidden = false
+            self.state?.updated(transition: .immediate)
         }
         
         public func textFieldDidEndEditing(_ textField: UITextField) {
             self.clearButton.view?.isHidden = true
+            self.state?.updated(transition: .immediate)
         }
         
         func update(component: ListTextFieldItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
@@ -279,7 +281,12 @@ public final class ListTextFieldItemComponent: Component {
                 placeholderView.isHidden = !self.currentText.isEmpty
             }
             
-            transition.setFrame(view: self.textField, frame: CGRect(origin: CGPoint(x: component.contentInsets.left, y: 0.0), size: CGSize(width: availableSize.width - component.contentInsets.left - component.contentInsets.right - 24.0, height: contentHeight)))
+            var textFieldRightInset: CGFloat = 24.0
+            if let _ = component.characterLimit {
+                textFieldRightInset += 16.0
+            }
+
+            transition.setFrame(view: self.textField, frame: CGRect(origin: CGPoint(x: component.contentInsets.left, y: 0.0), size: CGSize(width: availableSize.width - component.contentInsets.left - component.contentInsets.right - textFieldRightInset, height: contentHeight)))
             
             let clearButtonSize = self.clearButton.update(
                 transition: transition,
@@ -311,25 +318,32 @@ public final class ListTextFieldItemComponent: Component {
             }
             
             let text = self.textField.text ?? ""
-            if let characterLimit = component.characterLimit, text.count > 0  {
-                let counterSize = self.counter.update(
-                    transition: .immediate,
-                    component: AnyComponent(MultilineTextComponent(
-                        text: .plain(NSAttributedString(string: "\(characterLimit - text.count)", font: Font.with(size: 15.0, traits: .monospacedNumbers), textColor: text.count > characterLimit ? component.theme.list.itemDestructiveColor : component.theme.list.itemSecondaryTextColor)),
-                        horizontalAlignment: .right
-                    )),
-                    environment: {},
-                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0 - 30.0 - component.contentInsets.left - component.contentInsets.right, height: 100.0)
-                )
-                let counterFrame = CGRect(origin: CGPoint(x: availableSize.width - sideInset - component.contentInsets.right - clearButtonSize.width - counterSize.width + 17.0, y: floor((contentHeight - counterSize.height) * 0.5)), size: counterSize)
-                if let counterView = self.counter.view {
-                    if counterView.superview == nil {
-                        counterView.layer.anchorPoint = CGPoint()
-                        counterView.isUserInteractionEnabled = false
-                        self.addSubview(counterView)
+            if let characterLimit = component.characterLimit, text.count > 0 {
+                let remainingCount = characterLimit - text.count
+                let displayCounter = remainingCount <= 20 && (self.textField.isFirstResponder || remainingCount < 0)
+
+                if displayCounter {
+                    let counterSize = self.counter.update(
+                        transition: .immediate,
+                        component: AnyComponent(MultilineTextComponent(
+                            text: .plain(NSAttributedString(string: "\(remainingCount)", font: Font.with(size: 15.0, traits: .monospacedNumbers), textColor: remainingCount < 0 ? component.theme.list.itemDestructiveColor : component.theme.list.itemSecondaryTextColor)),
+                            horizontalAlignment: .right
+                        )),
+                        environment: {},
+                        containerSize: CGSize(width: availableSize.width - sideInset * 2.0 - 30.0 - component.contentInsets.left - component.contentInsets.right, height: 100.0)
+                    )
+                    let counterFrame = CGRect(origin: CGPoint(x: availableSize.width - sideInset - component.contentInsets.right - clearButtonSize.width - counterSize.width + 17.0, y: floor((contentHeight - counterSize.height) * 0.5)), size: counterSize)
+                    if let counterView = self.counter.view {
+                        if counterView.superview == nil {
+                            counterView.layer.anchorPoint = CGPoint()
+                            counterView.isUserInteractionEnabled = false
+                            self.addSubview(counterView)
+                        }
+                        transition.setPosition(view: counterView, position: counterFrame.origin)
+                        counterView.bounds = CGRect(origin: CGPoint(), size: counterFrame.size)
                     }
-                    transition.setPosition(view: counterView, position: counterFrame.origin)
-                    counterView.bounds = CGRect(origin: CGPoint(), size: counterFrame.size)
+                } else {
+                    self.counter.view?.removeFromSuperview()
                 }
             } else {
                 self.counter.view?.removeFromSuperview()

@@ -1903,17 +1903,35 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 if let communityId, let community = message.peers[communityId] as? TelegramCommunity {
                     communityName = community.title
                 }
-                if !communityName.isEmpty {
-                    if message.author?.id == accountPeerId {
-                        attributedString = NSAttributedString(string: "You added this group to \"\(communityName)\" community", font: titleFont, textColor: primaryTextColor)
+                var isGroup = false
+                let messagePeer = message.peers[message.id.peerId]
+                if let channel = messagePeer as? TelegramChannel, case .group = channel.info {
+                    isGroup = true
+                }
+                if message.author?.id == accountPeerId || !isGroup {
+                    let rawText: String
+                    if communityName.isEmpty {
+                        if isGroup {
+                            rawText = strings.Notification_CommunityRemovedGroupYou
+                        } else {
+                            rawText = strings.Notification_CommunityRemovedChannel
+                        }
                     } else {
-                        attributedString = NSAttributedString(string: "\(peerName) added this group to \"\(communityName)\" community", font: titleFont, textColor: primaryTextColor)
+                        if isGroup {
+                            rawText = strings.Notification_CommunityAddedGroupYou(communityName).string
+                        } else {
+                            rawText = strings.Notification_CommunityAddedChannel(communityName).string
+                        }
                     }
+                    attributedString = NSAttributedString(string: rawText, font: titleFont, textColor: primaryTextColor)
                 } else {
-                    if message.author?.id == accountPeerId {
-                        attributedString = NSAttributedString(string: "You removed this group from a community", font: titleFont, textColor: primaryTextColor)
+                    if communityName.isEmpty {
+                        let attributes = peerMentionsAttributes(primaryTextColor: primaryTextColor, peerIds: [(0, message.author?.id)])
+                        let stringWithRanges = strings.Notification_CommunityRemovedGroup(peerName)._tuple
+                        attributedString = NSAttributedString(attributedString: addAttributesToStringWithRanges(stringWithRanges, body: bodyAttributes, argumentAttributes: attributes))
                     } else {
-                        attributedString = NSAttributedString(string: "\(peerName) removed this group from a community", font: titleFont, textColor: primaryTextColor)
+                        let rawText = strings.Notification_CommunityAddedGroup(peerName, communityName).string
+                        attributedString = NSAttributedString(string: rawText, font: titleFont, textColor: primaryTextColor)
                     }
                 }
             case .unknown:
