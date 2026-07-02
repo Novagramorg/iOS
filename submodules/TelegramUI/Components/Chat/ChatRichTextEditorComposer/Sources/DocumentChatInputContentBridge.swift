@@ -100,6 +100,10 @@ private func chatInputStyle(fromParagraphStyle style: ParagraphStyleName) -> Cha
         // `caption` is a render-only style (only ever appears in a media block's caption runs, handled
         // there). A `caption`-styled top-level paragraph should not exist, but map it to `.body` defensively.
         return .body
+    case .pullQuote:
+        // `pullQuote` is a render-only style (only ever appears as a Block.pullQuote; never persists as
+        // a top-level paragraph style). Map defensively to `.body`.
+        return .body
     }
 }
 

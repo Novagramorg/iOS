@@ -40,7 +40,7 @@ func normalizedBlocks(_ blocks: [Block], media: [String: Media]) -> [Block] {
     var out: [Block] = []
     for block in blocks {
         switch block {
-        case .paragraph, .table, .code, .collapsedQuote:
+        case .paragraph, .table, .code, .collapsedQuote, .pullQuote:
             out.append(block)
         case let .media(mediaBlock):
             if media[mediaBlock.mediaID] != nil {
@@ -86,6 +86,10 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
                 }
             case .body, .caption:
                 break
+            case .pullQuote:
+                // `pullQuote` is a render-only paragraph style; a `.paragraph` block with this style
+                // should not exist, but treat it as non-rich defensively (it is unreachable in practice).
+                break
             }
         case .media:
             // normalizedBlocks already dropped unresolvable media, so any surviving .media block forces rich layout.
@@ -96,6 +100,9 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
             break
         case .collapsedQuote:
             // A collapsed quote can't be represented as plain text + entities → always forces the rich path.
+            return true
+        case .pullQuote:
+            // A pull quote has no entity equivalent → always forces the rich path.
             return true
         }
     }

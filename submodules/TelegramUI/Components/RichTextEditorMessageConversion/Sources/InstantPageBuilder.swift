@@ -102,6 +102,11 @@ private func headingOrParagraphBlock(_ paragraph: ParagraphBlock) -> InstantPage
     case .quote:
         // Quotes are merged by the caller; this is an unreached fallback for exhaustiveness.
         return .blockQuote(blocks: [.paragraph(text)], caption: .empty, collapsed: nil)
+    case .pullQuote:
+        // A `Block.paragraph` with `.pullQuote` style is render-only and unreachable here
+        // (pull quotes arrive as `Block.pullQuote`, handled by the `buildInstantPage` switch).
+        // Map defensively to an InstantPage pull-quote block.
+        return .pullQuote(text: text, caption: .empty)
     }
 }
 
