@@ -8,4 +8,6 @@ public enum TextNodeRef: Equatable {
     case caption(BlockID)
     /// The runs of a code block.
     case code(BlockID)
+    /// The runs of a pull quote block.
+    case pullQuote(BlockID)
 }

@@ -37,6 +37,10 @@ public enum DocumentTree {
             // (atom size 1 + wrapper = nodeSize 3). Its folded preview text is display-only and is NOT part
             // of the position/selection axis. Distinguished from real media by box TYPE in the canvas layer.
             return .mediaBlock(id: q.id, children: [.mediaAtom(id: q.id)])
+        case .pullQuote(let pq):
+            // A pull quote reuses the paragraph node shape (content + 2 tokens), analogous to a code block.
+            return .paragraph(id: pq.id,
+                              children: [.text(length: pq.utf16Count, ref: .pullQuote(pq.id))])
         }
     }
 

@@ -33,6 +33,8 @@ final class RTFImportCorpusTests: XCTestCase {
                 break
             case .collapsedQuote:
                 break
+            case .pullQuote(let pq):
+                result.append(pq.text)
             }
         }
         return result
