@@ -544,9 +544,6 @@ final class DocumentCanvasView: UIView {
         self.blockquoteUnderlay.barWidth = q.barWidth
         self.blockquoteUnderlay.cornerRadius = q.cornerRadius
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
-        // Mirror corner radius + fill alpha to the barless pill underlay (barWidth stays 0).
-        self.pullQuoteUnderlay.cornerRadius = q.cornerRadius
-        self.pullQuoteUnderlay.fillAlpha = q.fillAlpha
     }
 
     /// Applies pull-quote geometry: stores the style, pushes corner radius + fill alpha to the barless pill

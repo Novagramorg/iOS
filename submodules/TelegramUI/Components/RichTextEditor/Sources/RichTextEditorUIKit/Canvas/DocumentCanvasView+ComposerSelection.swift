@@ -52,7 +52,7 @@ extension DocumentCanvasView {
                 flat += 1
                 continue
             }
-            guard (box is BlockBox || box is CodeBlockBox), let region = box.leafRegions().first else { continue }
+            guard (box is BlockBox || box is CodeBlockBox || box is PullQuoteBox), let region = box.leafRegions().first else { continue }
             if !result.isEmpty { flat += 1 }   // the "\n" that joins this paragraph to the previous one
             let emoji = composerEmojiOccurrences(in: region)
             let flatLength = region.length + emoji.reduce(0) { $0 + ($1.altLen - 1) }

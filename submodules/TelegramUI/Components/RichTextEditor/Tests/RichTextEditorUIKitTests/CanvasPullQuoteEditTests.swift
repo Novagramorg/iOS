@@ -281,6 +281,57 @@ final class CanvasPullQuoteEditTests: XCTestCase {
                        "far side (away from the pull quote) must be unaffected")
     }
 
+    // MARK: - composerSelectedRange flat-axis coverage
+
+    /// A document with [body "ab"] + [pullQuote "cd\nef"] must contribute "ab\ncd\nef" (length 8)
+    /// to the composer flat axis — mirroring the code-block test in `CodeBlockEditingTests`.
+    func test_composerFlatRange_countsPullQuoteInterior() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([
+            .paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "ab")])),
+            .pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "cd\nef")])),
+        ], width: 320)
+        canvas.setCaret(global: canvas.documentSize)        // caret at very end of doc
+        let flatLen = ("ab\ncd\nef" as NSString).length    // 8
+        XCTAssertEqual(canvas.composerSelectedRange.location, flatLen,
+                       "pull quote interior must contribute to the flat composer offset")
+    }
+
+    /// A document with ONLY a pull quote must NOT return {0,0} for composerSelectedRange:
+    /// a caret at the pull quote's text end should map to the pull quote's text length.
+    func test_composerFlatRange_lonePullQuote_notStuckAtZero() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([
+            .pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "hello")])),
+        ], width: 320)
+        let box = canvas.boxes[0]
+        canvas.setCaret(global: box.textStart + box.textLength)   // end of "hello"
+        let range = canvas.composerSelectedRange
+        XCTAssertEqual(range.location, 5,
+                       "a lone pull quote's end-caret must map to flat offset 5, not 0")
+        XCTAssertEqual(range.length, 0)
+    }
+
+    /// A caret placed INSIDE a pull quote (at some mid-text offset) round-trips through
+    /// composerSelectedRange get → set → get without losing its position.
+    func test_composerSelectedRange_caretInsidePullQuote_roundTrips() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([
+            .paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "AB")])),
+            .pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "CD")])),
+        ], width: 320)
+        // "AB\nCD" — caret after 'C' in the pull quote: flat offset 4 (A,B,\n,C)
+        let pqBox = canvas.boxes[1]
+        canvas.setCaret(global: pqBox.textStart + 1)   // after 'C' in "CD"
+        let got = canvas.composerSelectedRange
+        XCTAssertEqual(got, NSRange(location: 4, length: 0),
+                       "caret after first char of pull quote is flat offset 4")
+        // Set back and verify the global position agrees.
+        canvas.composerSelectedRange = got
+        XCTAssertEqual(canvas.head, pqBox.textStart + 1,
+                       "setting flat offset 4 back must land at the same global position")
+    }
+
     // MARK: Tap-below affordance
 
     /// A tap below a trailing pull quote appends a new empty body paragraph.
