@@ -64,16 +64,23 @@ Mirror `Block.code` / `CodeBlock` throughout.
 
 - **`Model/PullQuote.swift`** (new) — `public struct PullQuote: Equatable { public var id: BlockID; public var runs: [TextRun] }`, whose runs' `text` may contain interior `"\n"`. (No `language` field — unlike `CodeBlock`.) `Codable`.
 - **`Model/Block.swift`** — add `case pullQuote(PullQuote)` to `Block`; extend the `id` accessor and the `Codable` `Kind` enum (`case pullQuote`) + `init(from:)` + `encode(to:)` arms.
-- **`Position/DocumentTree.swift`** — `node(for:)` maps `.pullQuote` to a `.paragraph` DocNode carrying a text leaf, sized `content + 2` — identical to the `.code` arm. Interior `"\n"` is a linear UTF-16 range TextKit wraps; **no** new position/selection/tokenizer machinery.
+- **`Position/TextNodeRef.swift`** — add `case pullQuote(BlockID)` (mirror `.code`), so the canvas identifies a pull-quote text leaf.
+- **`Position/DocumentTree.swift`** — `node(for:)` maps `.pullQuote` to a `.paragraph` DocNode carrying `.text(length: pq.utf16Count, ref: .pullQuote(pq.id))`, sized `content + 2` — identical to the `.code` arm. Interior `"\n"` is a linear UTF-16 range TextKit wraps; **no** new position/selection/tokenizer machinery.
+- **`Model/Enums.swift`** — add `pullQuote` to `ParagraphStyleName` as a **render-only style, exactly mirroring `.caption`**: it is NEVER offered in a paragraph-style picker and NEVER persisted on a `ParagraphBlock` (the pull quote is a `Block.pullQuote`, whose runs serialize inside `PullQuote`). It exists only so `PullQuoteBox` can drive the shared `AttributedStringMapper` to render/read-back its runs. Every exhaustive `switch ParagraphStyleName` site that carries `.caption` gets a `.pullQuote` arm.
 - **`Model/DocumentFragment.swift`** — `regeneratingTopLevelIDs` gets a `.pullQuote` arm (fresh id); `isInlineMergeable` → `.pullQuote` returns `false` (paste never fuses it inline).
 - **Serialization** — `DocumentCodec` / `DocumentPackage` follow the `Block.code` precedent (the new `Kind` case handles it).
 
 ### 2. Editor rendering (`RichTextEditorUIKit`)
 
 **New `Canvas/PullQuoteBox.swift`** — a `CanvasBlock`-conforming framed box, modeled on `CodeBlockBox`, but:
-- A **body-font** `BlockLayoutEngine` (not monospace), with **forced italic** and **forced center** alignment applied render-only in the box's `StyleSheet`/mapper (never written back to runs). `currentBlock()` returns the **rich runs** (full inline formatting preserved — the key divergence from code, whose read-back is plain).
-- `nodeSize`/`textStart`/`textLength`/`closestPosition`/`leafRegions`/`draw` mirror `CodeBlockBox` (sized `content + 2`).
+- Builds its attributed string from `PullQuote.runs` via the shared `AttributedStringMapper` using the **render-only `.pullQuote` style** — `mapper.attributedString(for: pq.runs, style: .pullQuote)` — so it gets **body-size font + forced italic + centered alignment + full inline formatting** (bold/underline/strike/link/color/emoji), exactly the way `MediaBlockBox` renders a caption via `.caption`. This is the key divergence from `CodeBlockBox`, which builds a plain monospace string and bypasses the mapper.
+- `currentBlock()` reverse-maps via `mapper.runs(from: layout.attributedString, style: .pullQuote)` → `Block.pullQuote(PullQuote(id:, runs:))` — **rich runs preserved**.
+- `textRef` = `.pullQuote(id)`; `nodeSize`/`textStart`/`textLength`/`closestPosition`/`leafRegions`/`draw` mirror `CodeBlockBox` (sized `content + 2`).
 - Reuses the theme accent for the pill tint + mark tint.
+
+**Forced-italic is ambient (render-only, never persisted) — `Mapping/StyleSheet.swift` + `Mapping/AttributedStringMapper.swift`:**
+- `StyleSheet.font(.pullQuote)` returns an **italic** body font (`italic = true`, ignoring the run's italic bit); `bold = attributes.bold` composes on top. `baseSize(.pullQuote)` = body size (17pt; a pull quote reads at body scale, unlike quote/caption's 15pt — confirm during impl). `paragraphStyle(.pullQuote)` forces `.center` alignment, symmetric insets, no bar indent. `metrics(.pullQuote)` mirror `.quote` spacing.
+- The reverse mapper (`characterAttributes(from:style:)` / `runs(from:style:)`) treats **italic as ambient for `.pullQuote`**: it does NOT store a run's italic (always strips it), so the forced italic never round-trips into `PullQuote.runs`. This mirrors the existing per-style default-color strip and the `boldIsAmbient` precedent. Assert with a test that read-back runs have `italic == false` even after the box laid out italic glyphs.
 
 **Content-hugging pill fill (`Canvas/BlockquoteUnderlay.swift` + `Canvas/DocumentCanvasView+Decorations.swift`):**
 - Give `BlockquoteUnderlay` a **barless** cached image (`bar = 0`) selectable per-run (or add a sibling `PullQuoteUnderlay`).
