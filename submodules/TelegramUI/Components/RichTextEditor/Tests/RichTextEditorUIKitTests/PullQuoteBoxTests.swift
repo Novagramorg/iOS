@@ -39,5 +39,13 @@ final class PullQuoteBoxTests: XCTestCase {
         box.placeholders = .default
         XCTAssertNil(box.placeholderText)
     }
+
+    func test_pullQuote_emptyPlaceholderStringSuppresses() {
+        let box = PullQuoteBox(pullQuote: PullQuote(id: BlockID("pq"), runs: []),
+                               mapper: AttributedStringMapper(), pullQuoteStyle: .default, width: 320)
+        box.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: "")
+        XCTAssertNil(box.placeholderText)
+        XCTAssertEqual(box.contentWidth, 0)
+    }
 }
 #endif
