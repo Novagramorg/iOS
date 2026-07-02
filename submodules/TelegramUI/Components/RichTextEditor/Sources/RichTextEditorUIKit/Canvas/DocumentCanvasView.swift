@@ -33,6 +33,10 @@ final class DocumentCanvasView: UIView {
     var checklistMarkerViews: [BlockID: HostedChecklistMarker] = [:]
     /// Back-most container for blockquote run fills (see `BlockquoteUnderlay`). Behind every block view.
     let blockquoteUnderlay = BlockquoteUnderlay()
+    /// Back-most container for pull-quote pill fills — a second `BlockquoteUnderlay` instance with
+    /// `barWidth = 0` (no leading bar, symmetric rounded pill). Behind every block view, alongside the
+    /// blockquote underlay.
+    let pullQuoteUnderlay = BlockquoteUnderlay()
     /// Interactive overlay hosting the per-run collapse buttons for tall expanded quote runs. Brought to
     /// the front each layout pass so it sits above text + block views; its `hitTest` passes only button
     /// touches, letting all other touches fall through to the canvas.
@@ -391,6 +395,11 @@ final class DocumentCanvasView: UIView {
         backgroundColor = .systemBackground
         blockChromeOverlay.canvas = self
         addSubview(blockquoteUnderlay)   // back-most: blockquote fills behind every block view
+        pullQuoteUnderlay.barWidth = 0                             // no leading bar — a symmetric pill
+        pullQuoteUnderlay.accentColor = blockquoteUnderlay.accentColor
+        pullQuoteUnderlay.cornerRadius = blockquoteUnderlay.cornerRadius
+        pullQuoteUnderlay.fillAlpha = blockquoteUnderlay.fillAlpha
+        addSubview(pullQuoteUnderlay)    // back-most: pull-quote pill fills behind every block view
         emojiOverlay.isUserInteractionEnabled = false
         emojiOverlay.backgroundColor = .clear
         addSubview(emojiOverlay)
@@ -502,6 +511,7 @@ final class DocumentCanvasView: UIView {
         self.startHandleView.accentColor = theme.accent
         self.endHandleView.accentColor = theme.accent
         self.blockquoteUnderlay.accentColor = theme.accent
+        self.pullQuoteUnderlay.accentColor = theme.accent
         self.quoteCollapseControls.accentColor = theme.accent
     }
 
@@ -523,6 +533,9 @@ final class DocumentCanvasView: UIView {
         self.blockquoteUnderlay.barWidth = q.barWidth
         self.blockquoteUnderlay.cornerRadius = q.cornerRadius
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
+        // Mirror corner radius + fill alpha to the barless pill underlay (barWidth stays 0).
+        self.pullQuoteUnderlay.cornerRadius = q.cornerRadius
+        self.pullQuoteUnderlay.fillAlpha = q.fillAlpha
     }
 
     /// Applies host media geometry: stores it so the next box build (`setBlocks` / `insertMedia`) uses the
@@ -616,9 +629,11 @@ final class DocumentCanvasView: UIView {
         blockquoteDecorations().map { $0.fill }.filter { $0.intersects(band) }
     }
 
-    /// Reconciles the back-most blockquote underlay to only the on-screen quote runs.
+    /// Reconciles the back-most blockquote underlay to only the on-screen quote runs, and the barless
+    /// pull-quote underlay to the content-hugging pill rects for all pull-quote boxes.
     func syncBlockquoteUnderlay() {
         blockquoteUnderlay.sync(runFills: visibleBlockquoteFills(band: viewportBand()))
+        pullQuoteUnderlay.sync(runFills: pullQuotePillRects())
     }
 
     private func overscanRect(for visible: CGRect) -> CGRect {
@@ -837,6 +852,8 @@ final class DocumentCanvasView: UIView {
         syncBlockViews()
         blockquoteUnderlay.frame = bounds
         sendSubviewToBack(blockquoteUnderlay)
+        pullQuoteUnderlay.frame = bounds
+        sendSubviewToBack(pullQuoteUnderlay)   // goes below blockquoteUnderlay; block views (inserted aboveSubview: blockquoteUnderlay) are above both
         syncBlockquoteUnderlay()
         quoteCollapseControls.frame = bounds
         bringSubviewToFront(quoteCollapseControls)       // interactive: above underlay + text block views

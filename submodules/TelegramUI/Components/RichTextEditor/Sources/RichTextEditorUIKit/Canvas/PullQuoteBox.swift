@@ -37,6 +37,13 @@ final class PullQuoteBox {
     var length: Int { layout.length }
     var textOrigin: CGPoint { CGPoint(x: frame.minX + leftInset, y: frame.minY + topInset) }
 
+    /// Widest laid-out line width (glyph-hugging), for the content-hugging pill. 0 when empty (the empty-state
+    /// pill is sized to the placeholder in a later task).
+    var contentWidth: CGFloat {
+        guard length > 0 else { return 0 }
+        return layout.selectionRects(start: 0, end: length).map(\.width).max() ?? 0
+    }
+
     private var emptyLineHeight: CGFloat {
         guard layout.length == 0 else { return 0 }
         return mapper.styleSheet.font(for: .pullQuote, attributes: CharacterAttributes()).lineHeight

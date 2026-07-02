@@ -45,6 +45,18 @@ extension DocumentCanvasView {
     /// not into the canvas context); `blockquoteDecorations()` above still supplies the run rects.
     static let blockquoteCornerRadius: CGFloat = 2.5
 
+    /// One centered, content-hugging pill rect per PullQuoteBox (canvas coords). Width = the box's widest laid-out
+    /// line + symmetric horizontal padding, clamped to the box's content width, centered on the box's mid-x. Height
+    /// spans the box (its topInset/bottomInset already pad above/below the text). Fed to the barless pull-quote underlay.
+    func pullQuotePillRects() -> [CGRect] {
+        boxes.compactMap { box in
+            guard let pq = box as? PullQuoteBox else { return nil }
+            let hPad: CGFloat = 12   // Task 10 will source this from a PullQuoteStyle knob; match PullQuoteBox.horizontalPadding
+            let w = min(pq.contentWidth + hPad * 2, box.frame.width)
+            return CGRect(x: box.frame.midX - w / 2, y: box.frame.minY, width: w, height: box.frame.height)
+        }
+    }
+
     // MARK: - Collapse button runs
 
     /// Minimum run height (pts) for a quote run to earn a collapse affordance.
