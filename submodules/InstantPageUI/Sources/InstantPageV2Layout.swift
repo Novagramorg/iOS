@@ -84,6 +84,7 @@ public enum InstantPageV2LaidOutItem {
     case listMarker(InstantPageV2ListMarkerItem)
     case blockQuoteBar(InstantPageV2BarItem)
     case shape(InstantPageV2ShapeItem)
+    case imageOrnament(InstantPageV2ImageOrnamentItem)
     case mediaPlaceholder(InstantPageV2MediaPlaceholderItem)
     case details(InstantPageV2DetailsItem)
     case table(InstantPageV2TableItem)
@@ -105,6 +106,7 @@ public enum InstantPageV2LaidOutItem {
         case let .listMarker(item):        return item.frame
         case let .blockQuoteBar(item):     return item.frame
         case let .shape(item):             return item.frame
+        case let .imageOrnament(item):     return item.frame
         case let .mediaPlaceholder(item):  return item.frame
         case let .details(item):           return item.frame
         case let .table(item):             return item.frame
@@ -131,6 +133,7 @@ public enum InstantPageV2LaidOutItem {
         case var .listMarker(item):       item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .listMarker(item)
         case var .blockQuoteBar(item):    item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .blockQuoteBar(item)
         case var .shape(item):            item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .shape(item)
+        case var .imageOrnament(item):    item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .imageOrnament(item)
         case var .mediaPlaceholder(item): item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .mediaPlaceholder(item)
         case var .details(item):          item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .details(item)
         case var .table(item):            item.frame = item.frame.offsetBy(dx: delta.x, dy: delta.y); return .table(item)
@@ -211,6 +214,13 @@ public struct InstantPageV2ShapeItem {
     public var frame: CGRect
     public let kind: InstantPageV2ShapeKind
     public let color: UIColor
+}
+
+public struct InstantPageV2ImageOrnamentItem {
+    public var frame: CGRect
+    public let imageName: String   // e.g. "Chat/Message/ReplyQuoteIcon"
+    public let color: UIColor      // tint
+    public let rotated: Bool       // true → 180° (closing mark)
 }
 
 public struct InstantPageV2FormulaItem {
@@ -2413,21 +2423,6 @@ private func layoutQuoteText(
     setupStyleStack(styleStack, theme: context.theme, category: .paragraph, link: false)
     styleStack.push(.italic)
 
-    if isPull {
-        // pullQuote: top horizontal rule (plan-specified; matches V1 divider geometry for caption color).
-        // V1 doesn't emit shape ornaments for pullQuote, but the plan calls for them.
-        // Geometry mirrors V1 divider (InstantPageLayout.swift line 362):
-        //   lineWidth = boundingWidth - horizontalInset * 2.0, x = horizontalInset, h = 1.0.
-        let lineWidth = boundingWidth - horizontalInset * 2.0
-        let topLine = InstantPageV2ShapeItem(
-            frame: CGRect(x: horizontalInset, y: contentHeight, width: lineWidth, height: 1.0),
-            kind: .line(thickness: UIScreenPixel),
-            color: context.theme.separatorColor
-        )
-        result.append(.shape(topLine))
-        contentHeight += 1.0 + verticalInset   // rule + small gap before body text
-    }
-
     // Body text (V1 line 528 / 562).
     let textBoundingWidth = boundingWidth - horizontalInset * 2.0 - lineInset
     let textX: CGFloat = instantPageV2ContentColumnX(horizontalInset: horizontalInset, gutter: lineInset, rtl: context.rtl)
@@ -2470,15 +2465,25 @@ private func layoutQuoteText(
     contentHeight += verticalInset   // V1 lines 545/585
 
     if isPull {
-        // pullQuote: bottom horizontal rule (plan-specified; mirrors top rule).
-        let lineWidth = boundingWidth - horizontalInset * 2.0
-        let bottomLine = InstantPageV2ShapeItem(
-            frame: CGRect(x: horizontalInset, y: contentHeight - 1.0, width: lineWidth, height: 1.0),
-            kind: .line(thickness: 1.0),
-            color: context.theme.textCategories.caption.color
-        )
-        // Insert bottom rule before caption trailing space is consumed — append after final verticalInset.
-        result.append(.shape(bottomLine))
+        // pullQuote: centered tinted pill (behind text) + two ReplyQuoteIcon corner marks.
+        let pad: CGFloat = 12.0
+        let markSize: CGFloat = 16.0
+        let markInset: CGFloat = 6.0
+        let pillWidth = min(bodySize.width + pad * 2.0, boundingWidth)
+        let pillX = (boundingWidth - pillWidth) / 2.0
+        let pill = InstantPageV2ShapeItem(
+            frame: CGRect(x: pillX, y: 0.0, width: pillWidth, height: contentHeight),
+            kind: .roundedRect(cornerRadius: 2.5),
+            color: context.theme.textCategories.paragraph.color.withAlphaComponent(0.10))
+        result.insert(.shape(pill), at: 0)   // behind the text
+        let markColor = context.theme.textCategories.paragraph.color
+        result.append(.imageOrnament(InstantPageV2ImageOrnamentItem(
+            frame: CGRect(x: pillX + markInset, y: markInset, width: markSize, height: markSize),
+            imageName: "Chat/Message/ReplyQuoteIcon", color: markColor, rotated: false)))
+        result.append(.imageOrnament(InstantPageV2ImageOrnamentItem(
+            frame: CGRect(x: pillX + pillWidth - markInset - markSize, y: contentHeight - markInset - markSize,
+                          width: markSize, height: markSize),
+            imageName: "Chat/Message/ReplyQuoteIcon", color: markColor, rotated: true)))
     } else {
         // blockQuote: vertical bar on the leading edge (V1 lines 547–549).
         // V1: frame = CGRect(x: horizontalInset, y: 0.0, width: 3.0, height: contentSize.height)
