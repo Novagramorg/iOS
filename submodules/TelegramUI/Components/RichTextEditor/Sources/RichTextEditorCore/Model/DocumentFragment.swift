@@ -23,6 +23,8 @@ extension Document {
                                                  paragraph: p.paragraph, list: p.list, runs: p.runs))
             case .code(let c):
                 return .code(CodeBlock(id: .generate(), language: c.language, runs: c.runs))
+            case .pullQuote(let pq):
+                return .pullQuote(PullQuote(id: .generate(), runs: pq.runs))
             default:
                 return block
             }
@@ -108,6 +110,7 @@ extension Document {
             switch assembled.last! {
             case .paragraph(let p): lastLen = p.utf16Count
             case .code(let c): lastLen = c.utf16Count
+            case .pullQuote(let pq): lastLen = pq.utf16Count
             default: lastLen = 0
             }
             caretPos = newDoc.globalTextStart(ofBlockAt: lastIndex) + lastLen
@@ -124,6 +127,7 @@ public func blockPlainText(_ block: Block) -> String {
     switch block {
     case .paragraph(let p): return p.text
     case .code(let c): return c.text
+    case .pullQuote(let pq): return pq.text
     default: return ""
     }
 }
@@ -180,6 +184,12 @@ extension Document {
                 // Note: empty code blocks (utf16Count == 0) are intentionally not captured — they
                 // carry no content and are meaningless to paste (asymmetric with empty paragraphs,
                 // which preserve the blank line's structure on intra-document paste).
+            case .pullQuote(let pq):
+                let a = max(lo, textStart), b = min(hi, textStart + pq.utf16Count)
+                if a < b {
+                    let r = sliceRuns(pq.runs, fromUTF16: a - textStart, toUTF16: b - textStart)
+                    out.append(.pullQuote(PullQuote(id: .generate(), runs: r)))
+                }
             default:
                 break   // media/table not carried in a fragment
             }
