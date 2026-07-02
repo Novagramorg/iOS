@@ -37,7 +37,7 @@ final class BlockStack {
     /// (An EXPANDED quote is a `BlockBox`; consecutive quotes merge into one fill, and a quote's
     /// separation from a non-quote neighbor is reserved by that neighbor via `facingInset`.)
     private static func isFramedAtom(_ box: CanvasBlock) -> Bool {
-        box is CodeBlockBox || box is TableBlockBox || box is CollapsedQuoteBox
+        box is CodeBlockBox || box is TableBlockBox || box is CollapsedQuoteBox || box is PullQuoteBox
     }
 
     /// The inset for `box` on the side facing `neighbor` (or the stack edge, when nil). The facing
@@ -55,7 +55,7 @@ final class BlockStack {
         // the extra framed margin — matching an EXPANDED quote (handled below), so collapsing a quote (or
         // un-coding a code block) doesn't shrink the gap, and a code block sits the same distance from its
         // neighbors as a quote.
-        if neighbor is TableBlockBox || neighbor is CollapsedQuoteBox || neighbor is CodeBlockBox { return base + BlockStack.framedNeighborMargin }
+        if neighbor is TableBlockBox || neighbor is CollapsedQuoteBox || neighbor is CodeBlockBox || neighbor is PullQuoteBox { return base + BlockStack.framedNeighborMargin }
         guard let n = neighbor as? BlockBox else { return base }
         // Two list items stack tight (0) only when they share a container — both plain, or both in the
         // same quote run. A plain list item next to a QUOTED list item are in different containers, so

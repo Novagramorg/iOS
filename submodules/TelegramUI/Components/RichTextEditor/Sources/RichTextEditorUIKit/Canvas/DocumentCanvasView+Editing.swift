@@ -109,10 +109,10 @@ extension DocumentCanvasView {
         // Select-All over a document whose first/last block is an image/code fully covers it, so it is
         // dropped here exactly as a covered MIDDLE block already is.
         func endpointFullyCovered(_ box: CanvasBlock) -> Bool {
-            (box is MediaBlockBox || box is CodeBlockBox) && lo <= box.nodeStart && hi >= coverableContentEnd(box)
+            (box is MediaBlockBox || box is CodeBlockBox || box is PullQuoteBox) && lo <= box.nodeStart && hi >= coverableContentEnd(box)
         }
-        let keepStartMedia = (start.box is MediaBlockBox || start.box is CodeBlockBox) && !endpointFullyCovered(start.box)
-        let keepEndMedia = (end.box is MediaBlockBox || end.box is CodeBlockBox) && !endpointFullyCovered(end.box)
+        let keepStartMedia = (start.box is MediaBlockBox || start.box is CodeBlockBox || start.box is PullQuoteBox) && !endpointFullyCovered(start.box)
+        let keepEndMedia = (end.box is MediaBlockBox || end.box is CodeBlockBox || end.box is PullQuoteBox) && !endpointFullyCovered(end.box)
 
         // Merge path: each endpoint is a paragraph OR a fully-covered media/code block (which contributes
         // nothing and is dropped). The surviving paragraph is startPrefix + text + endSuffix; replaceSubrange
@@ -199,7 +199,7 @@ extension DocumentCanvasView {
     /// an empty paragraph instead of the block (and never deletes the block). A `BlockBox` (body / heading /
     /// quote / list paragraph) is text and merges normally.
     func isNonParagraphAtom(_ box: CanvasBlock) -> Bool {
-        box is MediaBlockBox || box is TableBlockBox || box is CodeBlockBox || box is CollapsedQuoteBox
+        box is MediaBlockBox || box is TableBlockBox || box is CodeBlockBox || box is CollapsedQuoteBox || box is PullQuoteBox
     }
 
     /// The position just past a media/code block's coverable content, for the Select-All / covered-range

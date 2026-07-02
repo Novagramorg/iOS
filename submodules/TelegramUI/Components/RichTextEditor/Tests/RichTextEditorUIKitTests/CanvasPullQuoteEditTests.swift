@@ -199,5 +199,105 @@ final class CanvasPullQuoteEditTests: XCTestCase {
         XCTAssertTrue(font.fontDescriptor.symbolicTraits.contains(.traitItalic),
                       "typing into an empty pull quote via the canvas must return an italic font")
     }
+
+    // MARK: - Task 14: editing AROUND a pull quote (framed-atom integration)
+
+    // A canvas laid out with real frames (needed for tap-below to get a meaningful frame.maxY).
+    private func laidOutCanvas(_ blocks: [Block]) -> DocumentCanvasView {
+        let c = DocumentCanvasView()
+        c.setBlocks(blocks, width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
+        c.layoutIfNeeded()
+        return c
+    }
+
+    // MARK: Backspace after a pull quote
+
+    /// Backspace at the start of an EMPTY body paragraph that follows a pull quote must remove the empty
+    /// paragraph and park the caret at the pull quote's text end — not delete the pull quote itself.
+    /// (Mirrors `test_backspaceAtStartOfEmptyParagraphAfterCode_removesParagraph_keepsCode` in
+    /// `CanvasTrailingParagraphTests`.)
+    func test_backspaceAtStartOfEmptyParagraphAfterPullQuote_removesParagraph_keepsPullQuote() {
+        let pq = Block.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote text")]))
+        let v = laidOutCanvas([pq, .paragraph(ParagraphBlock(id: BlockID("p"), runs: []))])
+        v.setCaret(global: v.boxes[1].textStart)
+        v.deleteBackward()
+        XCTAssertEqual(v.boxes.count, 1, "the empty paragraph is removed; the pull quote is kept")
+        XCTAssertTrue(v.boxes[0] is PullQuoteBox)
+        XCTAssertEqual(v.head, v.boxes[0].textStart + v.boxes[0].textLength,
+                       "caret parks at the pull quote's text end")
+    }
+
+    /// Backspace at the start of a NON-EMPTY body paragraph after a pull quote must keep both blocks
+    /// and step the caret back into the pull quote's text end (not merge or drop either block).
+    func test_backspaceAtStartOfNonEmptyParagraphAfterPullQuote_keepsBoth_movesIntoQuote() {
+        let pq = Block.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote text")]))
+        let v = laidOutCanvas([pq, .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "body")]))])
+        v.setCaret(global: v.boxes[1].textStart)
+        v.deleteBackward()
+        XCTAssertEqual(v.boxes.count, 2, "nothing deleted — the paragraph is non-empty")
+        XCTAssertEqual((v.boxes[1] as! BlockBox).currentParagraph().text, "body")
+        XCTAssertEqual(v.head, v.boxes[0].textStart + v.boxes[0].textLength,
+                       "caret moved to the pull quote's text end")
+    }
+
+    // MARK: Select-all delete (cross-block endpoint)
+
+    /// Select-All + Backspace on [pullQuote, paragraph]: the pull quote is a fully-covered cross-block
+    /// endpoint and is dropped, leaving one empty body paragraph.
+    /// (Mirrors `test_crossBlockDelete_fullyCoveredCodeBlockIsDropped` in `CodeBlockEditingTests`.)
+    func test_selectAll_delete_pullQuoteAndParagraph_leavesEmptyDocument() {
+        let pq = Block.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote text")]))
+        let v = laidOutCanvas([pq, .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "body")]))])
+        v.selectAll(nil)
+        v.deleteBackward()
+        XCTAssertFalse(v.boxes.contains { $0 is PullQuoteBox },
+                       "the fully-covered pull quote is dropped by the cross-block delete")
+        XCTAssertEqual(v.boxes.count, 1, "exactly one block remains (an empty body paragraph)")
+    }
+
+    // MARK: Framed spacing (isFramedAtom / facingInset)
+
+    /// Body paragraphs adjacent to a pull quote must reserve the extra external margin on the
+    /// pull-quote-facing side — matching the code-block / table / collapsed-quote neighbor behavior.
+    /// (Mirrors `test_codeBlockNeighbors_reserveExtraExternalMargin` in `BlockStackTests`.)
+    func test_pullQuoteNeighbors_reserveExtraExternalMargin() {
+        let mapper = AttributedStringMapper()
+        func body(_ id: String) -> BlockBox {
+            BlockBox(paragraph: ParagraphBlock(id: BlockID(id), runs: [TextRun(text: "x")]),
+                     mapper: mapper, width: 300)
+        }
+        let pq = PullQuoteBox(pullQuote: PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")]),
+                              mapper: mapper, width: 300)
+        let above = body("above"), below = body("below")
+        BlockStack(boxes: [above, pq, below]).layout(origin: .zero, width: 300)
+        // A pull quote draws its own bounded fill, so neighbors reserve the extra external margin —
+        // exactly like a code block sitting the SAME distance from its neighbors as a quote.
+        XCTAssertGreaterThan(above.bottomInset, BlockBox.defaultVerticalInset,
+                             "block above the pull quote must reserve the extra framed-neighbor margin")
+        XCTAssertGreaterThan(below.topInset, BlockBox.defaultVerticalInset,
+                             "block below the pull quote must reserve the extra framed-neighbor margin")
+        XCTAssertEqual(above.topInset, BlockBox.defaultVerticalInset, accuracy: 0.5,
+                       "far side (away from the pull quote) must be unaffected")
+    }
+
+    // MARK: Tap-below affordance
+
+    /// A tap below a trailing pull quote appends a new empty body paragraph.
+    /// (Mirrors `test_tapBelowTrailingCodeBlock_addsBodyParagraph` in `CodeBlockEditingTests`.)
+    func test_tapBelowTrailingPullQuote_addsBodyParagraph() {
+        let pq = Block.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")]))
+        let v = laidOutCanvas([pq])
+        let lastMaxY = v.boxes[0].frame.maxY
+        XCTAssertGreaterThan(lastMaxY, 0, "precondition: the pull quote box is laid out")
+        v.performSingleTap(at: CGPoint(x: 20, y: lastMaxY + 40))
+        XCTAssertEqual(v.boxes.count, 2)
+        guard case let .paragraph(p) = v.boxes[1].currentBlock() else {
+            return XCTFail("expected a .paragraph block after the pull quote")
+        }
+        XCTAssertEqual(p.style, .body,
+                       "tapping below the trailing pull quote starts a body paragraph after it")
+        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret moves into the new paragraph")
+    }
 }
 #endif
