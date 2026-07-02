@@ -182,6 +182,10 @@ final class DocumentCanvasView: UIView {
     /// render values to the underlay). Read by `blockquoteDecorations()` for the bar width.
     var quoteStyle: QuoteStyle = .default
 
+    /// Per-host pull-quote geometry. Applied via `applyPullQuoteStyle(_:)` (pushes corner radius + fill alpha
+    /// to the underlay). Read by `pullQuotePillRects()` / `pullQuoteMarkRects()` for the pill + mark geometry.
+    var pullQuoteStyle: PullQuoteStyle = .default
+
     /// Host-injected collapse/expand icons (nil ⇒ no affordance drawn). The `collapse` image goes to the
     /// overlay button; the `expand` image is read when building `CollapsedQuoteBox`es.
     var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons?
@@ -545,6 +549,15 @@ final class DocumentCanvasView: UIView {
         self.pullQuoteUnderlay.fillAlpha = q.fillAlpha
     }
 
+    /// Applies pull-quote geometry: stores the style, pushes corner radius + fill alpha to the barless pill
+    /// underlay, and stores the value so the next box build picks up the new padding. The caller reloads
+    /// afterward (mirrors applyQuoteStyle — no mapper rebuild needed; geometry is read at box-build time).
+    func applyPullQuoteStyle(_ s: PullQuoteStyle) {
+        self.pullQuoteStyle = s
+        self.pullQuoteUnderlay.cornerRadius = s.cornerRadius
+        self.pullQuoteUnderlay.fillAlpha = s.fillAlpha
+    }
+
     /// Applies host media geometry: stores it so the next box build (`setBlocks` / `insertMedia`) uses the
     /// new bleed. Pure geometry — no mapper rebuild (unlike `applyQuoteStyle`). The caller reloads afterward.
     func applyMediaBlockStyle(_ m: MediaBlockStyle) {
@@ -593,7 +606,7 @@ final class DocumentCanvasView: UIView {
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
             case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
             case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, expandImage: quoteCollapseIcons?.expand, width: width)
-            case .pullQuote(let pq): return PullQuoteBox(pullQuote: pq, mapper: mapper, width: width)
+            case .pullQuote(let pq): return PullQuoteBox(pullQuote: pq, mapper: mapper, pullQuoteStyle: pullQuoteStyle, width: width)
             }
         }
         recomputeSpans()

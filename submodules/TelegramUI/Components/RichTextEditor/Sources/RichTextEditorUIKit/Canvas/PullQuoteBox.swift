@@ -12,26 +12,25 @@ final class PullQuoteBox {
     let id: BlockID
     let layout: BlockLayoutEngine
     let mapper: AttributedStringMapper
+    let pullQuoteStyle: PullQuoteStyle
 
     var frame: CGRect = .zero
     var globalStart: Int = 0
 
-    /// Interior horizontal padding (each side). The fill spans full width; text is inset by this.
-    static let horizontalPadding: CGFloat = 12
-    /// Interior vertical padding (top and bottom). The fill spans full height; text is inset by this.
-    static let verticalPadding: CGFloat = 8
+    var leftInset: CGFloat { pullQuoteStyle.horizontalPadding }
+    var rightInset: CGFloat { pullQuoteStyle.horizontalPadding }
+    var topInset: CGFloat
+    var bottomInset: CGFloat
 
-    var leftInset: CGFloat { PullQuoteBox.horizontalPadding }
-    var rightInset: CGFloat { PullQuoteBox.horizontalPadding }
-    var topInset: CGFloat = PullQuoteBox.verticalPadding
-    var bottomInset: CGFloat = PullQuoteBox.verticalPadding
-
-    init(pullQuote: PullQuote, mapper: AttributedStringMapper, width: CGFloat) {
+    init(pullQuote: PullQuote, mapper: AttributedStringMapper, pullQuoteStyle: PullQuoteStyle = .default, width: CGFloat) {
         self.id = pullQuote.id
         self.mapper = mapper
+        self.pullQuoteStyle = pullQuoteStyle
+        self.topInset = pullQuoteStyle.verticalPadding
+        self.bottomInset = pullQuoteStyle.verticalPadding
         self.layout = makeBlockLayout(
             attributedString: mapper.attributedString(for: ParagraphBlock(id: pullQuote.id, style: .pullQuote, runs: pullQuote.runs)),
-            width: max(width - PullQuoteBox.horizontalPadding - PullQuoteBox.horizontalPadding, 1))
+            width: max(width - pullQuoteStyle.horizontalPadding - pullQuoteStyle.horizontalPadding, 1))
     }
 
     var length: Int { layout.length }

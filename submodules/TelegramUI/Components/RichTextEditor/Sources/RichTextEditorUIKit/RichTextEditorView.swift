@@ -41,6 +41,19 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host pull-quote geometry (padding, pill, marks, minWidth). Defaults reproduce the editor's built-in look.
+    /// Set before the first `update(...)`/document seed (the compact-host knob convention); assigning it
+    /// after content reloads the boxes so the new geometry takes effect (like `quoteStyle`).
+    public var pullQuoteStyle: PullQuoteStyle = .default {
+        didSet {
+            canvas.applyPullQuoteStyle(pullQuoteStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Per-host media geometry (horizontal bleed). Defaults reproduce the editor's built-in edge-to-edge
     /// look; the compact chat composer assigns `MediaBlockStyle(horizontalBleed: 0)` so media insets like
     /// the text paragraphs. Set before the first `update(...)`/document seed (the compact-host knob
