@@ -8,7 +8,7 @@ public func isInlineMergeable(_ block: Block) -> Bool {
     guard case .paragraph(let p) = block else { return false }
     switch p.style {
     case .body, .heading1, .heading2, .heading3: return p.list == nil
-    case .quote, .caption: return false
+    case .quote, .caption, .pullQuote: return false
     }
 }
 

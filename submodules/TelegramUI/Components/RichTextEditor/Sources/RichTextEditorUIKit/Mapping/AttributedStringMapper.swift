@@ -125,7 +125,9 @@ public struct AttributedStringMapper {
         let isCode = (dict[.rtInlineCode] as? Bool) == true
         if let font = dict[.font] as? UIFont {
             let traits = font.fontDescriptor.symbolicTraits
-            ca.italic = traits.contains(.traitItalic)
+            // Pull quotes force italic at render time (ambient); strip it on read-back so it never
+            // persists into the model. Other styles round-trip italic normally.
+            ca.italic = (style == .pullQuote) ? false : traits.contains(.traitItalic)
             // Bold comes from the user-intent marker when present (decoupled from the rendered `.traitBold`,
             // which system "Bold Text" forces onto substituted scripts). Storage built/edited by this editor
             // always carries the marker (forward path + toggle; TextKit font-fixing rewrites only `.font`).

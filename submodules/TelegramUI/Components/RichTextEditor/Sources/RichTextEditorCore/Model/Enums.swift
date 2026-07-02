@@ -10,7 +10,9 @@ public enum TextAlignment: String, Codable, Equatable, CaseIterable {
 public enum ParagraphStyleName: String, Codable, Equatable, CaseIterable {
     // `caption` is a render-only style (media-block captions, 15pt) — it is never offered in the style
     // picker and never persists as a paragraph style (a caption serializes as the MediaBlock's runs).
-    case heading1, heading2, heading3, body, caption, quote
+    // `pullQuote` is a render-only style (pull quote blocks, body-scale italic+center) — it never
+    // persists as a paragraph style and is never offered in the style picker.
+    case heading1, heading2, heading3, body, caption, quote, pullQuote
 }
 
 public enum ListMarker: String, Codable, Equatable, CaseIterable {

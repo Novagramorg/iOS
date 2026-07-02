@@ -75,6 +75,7 @@ final class TableBlockBox: CanvasBlock {
                     case .table: return nil              // no nested tables in v1
                     case .code: return nil               // no nested code blocks in a table cell in v1
                     case .collapsedQuote: return nil     // not rendered inside a table cell
+                    case .pullQuote: return nil          // pull quotes not supported inside a table cell in v1
                     }
                 })
                 // The cell owns its vertical padding (`cellVerticalPadding`), so its stack adds no

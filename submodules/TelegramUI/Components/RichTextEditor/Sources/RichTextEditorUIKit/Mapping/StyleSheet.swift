@@ -80,6 +80,7 @@ public struct StyleSheet {
         // (document and table cell). Not a field: nothing overrides it per-context.
         case .quote: return 15
         case .caption: return 15
+        case .pullQuote: return bodyBaseSize
         }
     }
 
@@ -93,6 +94,8 @@ public struct StyleSheet {
         case .body:     return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
         case .caption:  return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
         case .quote:    return StyleMetrics(spacingBefore: quoteSpacingBefore, spacingAfter: quoteSpacingAfter, lineHeightMultiple: 1.10)
+        // Pull quote: tight, no inter-paragraph spacing (box insets provide padding); runs read close together.
+        case .pullQuote: return StyleMetrics(spacingBefore: 0, spacingAfter: 0, lineHeightMultiple: 1.10)
         }
     }
 
@@ -102,7 +105,8 @@ public struct StyleSheet {
         // Bold is purely user emphasis (`CharacterAttributes.bold`), so it stays an independent toggle
         // that round-trips uniformly in every style (no style-injected weight to leak into the model).
         let bold = attributes.bold
-        let italic = attributes.italic   // quote is upright; its bar/fill is a drawn canvas decoration (see DocumentCanvasView+Decorations)
+        // Pull quotes force italic render — the italic is ambient (render-only), stripped on read-back.
+        let italic = attributes.italic || style == .pullQuote
         let serif = style == .heading1 || style == .heading2 || style == .heading3
         return FontResolver.font(family: attributes.fontFamily, size: size, bold: bold, italic: italic, serif: serif)
     }
@@ -118,6 +122,8 @@ public struct StyleSheet {
         case .right: ps.alignment = .right
         case .justified: ps.alignment = .justified
         }
+        // Pull quotes always render centered regardless of the user's alignment setting.
+        if style == .pullQuote { ps.alignment = .center }
         ps.baseWritingDirection = baseWritingDirection
         ps.firstLineHeadIndent = CGFloat(attributes.firstLineIndent)
         ps.headIndent = CGFloat(attributes.headIndent)

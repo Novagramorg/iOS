@@ -573,6 +573,7 @@ final class DocumentCanvasView: UIView {
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
             case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
             case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, expandImage: quoteCollapseIcons?.expand, width: width)
+            case .pullQuote(let pq): return PullQuoteBox(pullQuote: pq, mapper: mapper, width: width)
             }
         }
         recomputeSpans()
