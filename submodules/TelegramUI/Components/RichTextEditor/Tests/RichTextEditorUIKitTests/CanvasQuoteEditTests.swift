@@ -28,8 +28,39 @@ final class CanvasQuoteEditTests: XCTestCase {
         .paragraph(ParagraphBlock(id: BlockID(id), style: .body, runs: text.isEmpty ? [] : [TextRun(text: text)]))
     }
     private func style(_ v: DocumentCanvasView, _ i: Int) -> ParagraphStyleName { (v.boxes[i] as! BlockBox).style }
+    private func quoteListItem(_ id: String, _ text: String = "") -> Block {
+        .paragraph(ParagraphBlock(id: BlockID(id), style: .quote, list: ListMembership(marker: .bullet),
+                                  runs: text.isEmpty ? [] : [TextRun(text: text)]))
+    }
+    private func listOf(_ v: DocumentCanvasView, _ i: Int) -> ListMembership? { (v.boxes[i] as! BlockBox).listMembership }
 
     // MARK: A — Backspace in an empty quote un-quotes it
+
+    func test_backspaceAtStartOfNonEmptyQuotedListItem_breaksToBodyParagraph() {
+        // Backspace at the START of a level-0 quoted list item breaks out to a body paragraph (keeping the
+        // contents) — consistent with the empty-item case and with un-quoting via backspace being one-step.
+        let v = canvas([quoteListItem("q1", "A"), quoteListItem("q2", "B")])
+        caret(v, v.boxes[0].textStart)          // start of the first quoted list item "A"
+        v.deleteBackward()
+        let a = v.boxes[0] as! BlockBox
+        XCTAssertEqual(a.style, .body, "breaks out to a body paragraph (un-quotes)")
+        XCTAssertNil(a.listMembership, "and drops the list marker")
+        XCTAssertEqual(a.currentParagraph().text, "A", "contents preserved")
+        XCTAssertEqual(style(v, 1), .quote, "the rest of the quoted list is unchanged")
+        XCTAssertEqual(listOf(v, 1)?.marker, .bullet)
+    }
+
+    func test_backspaceInEmptyQuotedListItem_replacesWithEmptyParagraph() {
+        // Backspace on the empty (first) line of a list inside a quote must become a plain empty PARAGRAPH
+        // — clearing BOTH the quote AND the list marker — not a body list item with a stray marker.
+        let v = canvas([quoteListItem("q1"), quoteListItem("q2", "B")])
+        caret(v, v.boxes[0].textStart)
+        v.deleteBackward()
+        XCTAssertEqual(style(v, 0), .body, "the empty quoted list item un-quotes to a body paragraph")
+        XCTAssertNil(listOf(v, 0), "and the list marker is cleared too — it's a plain paragraph")
+        XCTAssertEqual(style(v, 1), .quote, "the rest of the quoted list is unchanged")
+        XCTAssertEqual(listOf(v, 1)?.marker, .bullet)
+    }
 
     func test_backspaceInEmptyQuote_firstBlock_convertsToBody() {
         let v = canvas([quote("q")])

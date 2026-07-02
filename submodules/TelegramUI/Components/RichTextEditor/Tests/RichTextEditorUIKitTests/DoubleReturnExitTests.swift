@@ -17,6 +17,46 @@ final class DoubleReturnExitTests: XCTestCase {
         .paragraph(ParagraphBlock(id: BlockID(id), style: .quote, runs: text.isEmpty ? [] : [TextRun(text: text)]))
     }
     private func style(_ box: CanvasBlock) -> ParagraphStyleName? { (box as? BlockBox)?.style }
+    private func quoteListItem(_ id: String, _ text: String) -> Block {
+        .paragraph(ParagraphBlock(id: BlockID(id), style: .quote, list: ListMembership(marker: .bullet),
+                                  runs: text.isEmpty ? [] : [TextRun(text: text)]))
+    }
+    private func bodyListItem(_ id: String, _ text: String) -> Block {
+        .paragraph(ParagraphBlock(id: BlockID(id), style: .body, list: ListMembership(marker: .bullet),
+                                  runs: text.isEmpty ? [] : [TextRun(text: text)]))
+    }
+    private func list(_ box: CanvasBlock) -> ListMembership? { (box as? BlockBox)?.listMembership }
+
+    // MARK: List inside a quote — Return ends the list before it exits the quote
+
+    func test_quotedList_firstReturnEndsListInsideQuote_secondReturnExitsQuote() {
+        // A list inside a quote: Return on an empty quoted list item ENDS THE LIST but stays in the quote
+        // (an empty quote line); only a SECOND Return then leaves the quote.
+        let canvas = makeCanvas([quoteListItem("q1", "A"), quoteListItem("q2", "")])
+        canvas.setCaret(global: canvas.boxes[1].textStart)
+
+        canvas.insertText("\n")   // first return: end the list, stay in the quote
+        XCTAssertEqual(canvas.boxes.count, 2, "no new block and no quote exit yet")
+        XCTAssertEqual(style(canvas.boxes[1]), .quote, "still inside the quote")
+        XCTAssertNil(list(canvas.boxes[1]), "the list has ended")
+        XCTAssertEqual(list(canvas.boxes[0])?.marker, .bullet, "the earlier list item is unchanged")
+
+        canvas.insertText("\n")   // second return: now leave the quote
+        XCTAssertEqual(canvas.boxes.count, 2, "the empty quote line becomes the escape body paragraph")
+        XCTAssertEqual(style(canvas.boxes[0]), .quote, "the quoted content remains")
+        XCTAssertEqual(style(canvas.boxes[1]), .body, "an empty body paragraph after the quote")
+        XCTAssertNil(list(canvas.boxes[1]))
+    }
+
+    func test_plainList_emptyItemReturn_endsIntoBodyParagraph_unchanged() {
+        // Guard: a plain (non-quote) list is unaffected — an empty item + Return still ends into body.
+        let canvas = makeCanvas([bodyListItem("l1", "A"), bodyListItem("l2", "")])
+        canvas.setCaret(global: canvas.boxes[1].textStart)
+        canvas.insertText("\n")
+        XCTAssertEqual(canvas.boxes.count, 2)
+        XCTAssertEqual(style(canvas.boxes[1]), .body, "a plain empty list item ends into a body paragraph")
+        XCTAssertNil(list(canvas.boxes[1]))
+    }
 
     // MARK: Shift+Return removed
 

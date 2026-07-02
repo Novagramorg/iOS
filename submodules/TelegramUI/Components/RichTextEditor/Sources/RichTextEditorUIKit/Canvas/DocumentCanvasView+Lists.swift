@@ -8,9 +8,12 @@ extension DocumentCanvasView {
     /// (runs are irrelevant to numbering, so we pass lightweight paragraphs). Keyed by `BlockID`.
     func listMarkerLabels() -> [BlockID: String] {
         // Image blocks have no list membership → a nil-list ParagraphBlock, which ListNumbering treats
-        // as a non-list paragraph (resets numbering). That is the intended behavior.
+        // as a non-list paragraph (resets numbering). That is the intended behavior. The paragraph
+        // `style` is forwarded so ListNumbering can treat a quote as its own numbering scope (a quoted
+        // list and the surrounding list number independently); non-BlockBox blocks default to `.body`.
         ListNumbering.labels(for: boxes.map { box in
-            ParagraphBlock(id: box.id, list: (box as? BlockBox)?.listMembership)
+            let p = box as? BlockBox
+            return ParagraphBlock(id: box.id, style: p?.style ?? .body, list: p?.listMembership)
         })
     }
 

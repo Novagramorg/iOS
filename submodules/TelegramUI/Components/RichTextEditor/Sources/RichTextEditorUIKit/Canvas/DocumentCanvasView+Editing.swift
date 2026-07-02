@@ -424,9 +424,12 @@ extension DocumentCanvasView {
     /// first Enter splits off an empty line above and the second exits before it.
     func quoteDoubleReturnExitIndex(at index: Int, local: Int) -> Int? {
         guard index >= 0, index < boxes.count, let p = boxes[index] as? BlockBox, p.style == .quote else { return nil }
-        if p.textLength == 0, emptyQuoteIsRunEdge(at: index) { return index }
+        // An empty quote line that is still a LIST item must first END THE LIST (staying in the quote,
+        // via `insertParagraphBreak`); the quote exit only applies once it's a bare empty quote line.
+        if p.textLength == 0, p.listMembership == nil, emptyQuoteIsRunEdge(at: index) { return index }
         if local == 0, index > 0, let above = boxes[index - 1] as? BlockBox,
-           above.style == .quote, above.textLength == 0, emptyQuoteIsRunEdge(at: index - 1) { return index - 1 }
+           above.style == .quote, above.textLength == 0, above.listMembership == nil,
+           emptyQuoteIsRunEdge(at: index - 1) { return index - 1 }
         return nil
     }
 
@@ -435,8 +438,9 @@ extension DocumentCanvasView {
     func insertParagraphBreak() {
         guard !boxes.isEmpty else { return }
         // Return on an EMPTY list item does NOT continue the list: a nested item outdents one level, a
-        // top-level (level 0) one ends the list (becomes a body paragraph). The caret stays put. Matches
-        // the placeholder hint; a non-empty list item or plain paragraph falls through to a normal split.
+        // top-level (level 0) one ends the list (becomes a body paragraph — or, inside a quote, an empty
+        // quote line). The caret stays put. Matches the placeholder hint; a non-empty list item or plain
+        // paragraph falls through to a normal split.
         if selFrom == selTo, let active = activeStack(at: head), let p = active.box as? BlockBox,
            let list = p.listMembership, p.textLength == 0 {
             if list.level > 0 {
@@ -444,7 +448,10 @@ extension DocumentCanvasView {
             } else {
                 editing {
                     p.listMembership = nil
-                    p.style = .body
+                    // Ending a list keeps the paragraph's container: a quoted list item stays an (empty)
+                    // quote line — a further Return then exits the quote (`quoteDoubleReturnExitIndex`) —
+                    // while a plain list item becomes a body paragraph.
+                    if p.style != .quote { p.style = .body }
                     restyle(p)
                     recomputeSpans()
                 }

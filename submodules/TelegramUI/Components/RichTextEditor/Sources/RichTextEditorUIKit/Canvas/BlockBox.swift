@@ -157,6 +157,11 @@ final class BlockBox {
     /// before the fill's trailing edge. Non-quote blocks reduce by 0 (unchanged).
     private var quoteContentWidthInset: CGFloat { style == .quote ? mapper.styleSheet.quoteTrailingInset : 0 }
 
+    /// Leading inset (points) contributed by a quote container — the bar→content gap. A list marker sits
+    /// past this so it clears the quote bar, matching the paragraph-style `headIndent` (which also stacks
+    /// this on top of the list inset). 0 for non-quote blocks, so plain lists are unchanged.
+    private var quoteLeadingInset: CGFloat { style == .quote ? mapper.styleSheet.quoteIndent : 0 }
+
     func setWidth(_ width: CGFloat) { layout.setWidth(max(width - textInset.x * 2 - quoteContentWidthInset, 1)) }
 
     /// Y (relative to `textOrigin.y`) at which a list marker's baseline must sit to align with this
@@ -168,7 +173,11 @@ final class BlockBox {
         let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes, list: listMembership,
                                                    baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection)
         let mult = ps.lineHeightMultiple > 0 ? ps.lineHeightMultiple : 1
-        return markerFont.ascender + (mult - 1) * markerFont.lineHeight
+        // Mirror the render centering (`BlockLayout.centeringDelta`): TextKit dumps the multiple's extra
+        // leading ABOVE the glyphs, then centering raises them by HALF of it. Using the full extra leading
+        // here would put the empty item's marker ~1pt BELOW a non-empty item's (whose baseline comes from
+        // the already-centered `firstLineBaselineFromTop`).
+        return markerFont.ascender + (mult - 1) * markerFont.lineHeight / 2
     }
 
     /// This box's list-marker draw (label + canvas-coordinate origin + font), or nil when it has no
@@ -177,7 +186,7 @@ final class BlockBox {
     func listMarkerDraw() -> (label: String, origin: CGPoint, font: UIFont)? {
         guard let label = resolvedListMarker, let membership = listMembership else { return nil }
         let font = mapper.styleSheet.font(for: style, attributes: .plain)
-        let x = textOrigin.x + StyleSheet.listIndentStep * CGFloat(membership.level)
+        let x = textOrigin.x + quoteLeadingInset + StyleSheet.listIndentStep * CGFloat(membership.level)
         let y = textOrigin.y + listMarkerBaselineFromTop(markerFont: font) - font.ascender
         return (label, CGPoint(x: x, y: y), font)
     }
@@ -192,7 +201,7 @@ final class BlockBox {
         let font = mapper.styleSheet.font(for: style, attributes: .plain)
         let baseSide = StyleSheet.checklistMarkerSize(for: font)               // cap-height base (unscaled)
         let side = floorToScreenPixels(baseSide * StyleSheet.checklistMarkerScale)
-        let x = textOrigin.x + StyleSheet.listIndentStep * CGFloat(membership.level)   // LEFT anchored
+        let x = textOrigin.x + quoteLeadingInset + StyleSheet.listIndentStep * CGFloat(membership.level)   // LEFT anchored
         let baselineFromTop = listMarkerBaselineFromTop(markerFont: font)
         // Preserve the base (bottom-on-baseline) box's vertical center, so the extra height grows equally
         // into the top & bottom; extra width grows to the right (left edge fixed).
@@ -222,7 +231,10 @@ final class BlockBox {
         let ps = mapper.styleSheet.paragraphStyle(for: style, attributes: paragraphAttributes, list: listMembership,
                                                    baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection)
         let mult = ps.lineHeightMultiple > 0 ? ps.lineHeightMultiple : 1
-        let baselineShift = (mult - 1) * font.lineHeight
+        // Half the extra leading — the render-centering shift (see `listMarkerBaselineFromTop` /
+        // `BlockLayout.centeringDelta`) — so the hint sits where centered typed text will appear and stays
+        // aligned with the marker, rather than ~1pt low.
+        let baselineShift = (mult - 1) * font.lineHeight / 2
         let origin = CGPoint(x: textOrigin.x + emptyLineLeadingIndent, y: textOrigin.y + baselineShift)
         return (text, origin, font)
     }

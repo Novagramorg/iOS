@@ -40,7 +40,13 @@ on TK1 — is **NOT invoked** under the TextKit-2-backed `NSLayoutManager` on mo
 `BlockLayoutTK1` does the manual draw/geometry shift too rather than relying on it.) **Why not `baselineOffset`**
 (the attribute): it's a real `CharacterAttributes` field (sub/superscript) and would round-trip into the
 model — centering must stay a render-only layout concern. Verified on both engines by `LineHeightCenteringTests`
-(glyph top-gap ≈ bottom-gap). The body/caption 1.10 multiple is now host-tunable via `TextLayoutMetrics`
+(glyph top-gap ≈ bottom-gap). **The empty-line fallbacks must mirror this too (2026-07-02):** an empty paragraph
+lays out no fragment, so `BlockBox.listMarkerBaselineFromTop` (the list marker) and `placeholderDraw` (the ghost
+hint) compute the baseline analytically — they must subtract the same `centeringDelta` (use HALF the extra leading,
+`(m−1)·lineHeight/2`, not the full leading), else an empty item's number / its placeholder sit ~1pt BELOW where the
+first typed glyph (positioned by the already-centered `firstLineBaselineFromTop`) will land. Guarded by
+`ListRenderingTests` (empty-vs-non-empty marker + marker-vs-placeholder) and `CanvasDecorationsTests`.
+The body/caption 1.10 multiple is now host-tunable via `TextLayoutMetrics`
 (see the compact-host knob list below): the chat composer sets it to **1.0** (natural line height — and the
 centering shift collapses to 0, since `centeringDelta` = `lineHeight·(1−1/1)/2` = 0) so multi-line composer
 text reads tight like the legacy input, while the document editor keeps 1.10. Headings (1.05) and quote (1.10)
@@ -908,6 +914,60 @@ free; raw enum value appended, optional Codable back-compat), threaded through `
 `RichTextEditorMessageConversion/InstantPageBuilder` for the attachment-screen send) into `InstantPageListItem.checked`.
 Recipient checkboxes are display-only/static; the SENDER can re-edit (falls out of the reverse bridge). No
 strikethrough on checked text (matches the InstantPage rendering). Default-on (legacy via `forceLegacyTextInput`); runtime-verified.
+
+**Quote + list combine as a container (added 2026-07-02).** A paragraph can be BOTH `style == .quote` AND a
+list item (`setParagraphStyle`/`setList` never clear each other), i.e. a list *inside* a quote. Two subsystems
+that used to ignore the quote in that case now treat it as a proper container: **(1) inset** — the quote's
+leading inset (`quoteIndent`, the bar→text gap) now **STACKS on top of** the list marker inset rather than being
+skipped (`StyleSheet.paragraphStyle` — the old mutually-exclusive `else if style == .quote` became an additive
+`indent`), and the marker/checkbox columns add the same `quoteLeadingInset` (`BlockBox.listMarkerDraw` /
+`checklistMarkerCanvasRect`) so a quoted list clears the bar instead of drawing over it; **(2) numbering** —
+`ListNumbering.labels` now resets its counters at a quote boundary (a quote is its own numbering scope, exactly
+like a non-list paragraph resets), so a quoted run numbers `1,2,…` independently and the surrounding list
+restarts after the quote. This required forwarding each box's `style` into `ListNumbering` via `listMarkerLabels`
+(previously only `list` was passed). Guarded by `ListRenderingTests` (inset/marker/caret) + `ListNumberingTests`
+(quote-scope). This deliberately reverses the earlier "quote's flat +16 must NOT stack" decision — do not re-revert.
+
+**Inter-block vertical spacing — two follow-on fixes (`BlockStack`, added 2026-07-02).** The gap between two
+adjacent blocks is `boxes[i].bottomInset + boxes[i+1].topInset`, computed by `facingInset` — but only for
+`BlockBox`es. Two cases had no gap: **(a)** a plain list item next to a *quoted* list item — the "two list items
+stack tight (`return 0`)" rule fired even though they sit in different containers, so `facingInset` now guards
+that rule on same-quote-ness (`(box.style == .quote) == (n.style == .quote)`); a body↔quote list pair falls
+through to the framed-neighbor margin. **(b)** two adjacent **framed atoms** that are NOT `BlockBox`es
+(code / table / collapsed-quote — `isFramedAtom`): each fills its whole frame and its own insets are INTERNAL
+padding, and `facingInset` never runs for them, so their fills sat flush. `layout` (and, in lockstep,
+`measuredHeight`) now inserts an external `verticalInsetBase + framedNeighborMargin` gap between two such atoms —
+a bare gap belonging to no block's frame (tolerated by `closestPosition`, which maps a tap there to the block
+below). An expanded quote is a `BlockBox` (consecutive quotes still merge into one fill; a quote↔non-quote gap is
+reserved by the non-quote neighbor via `facingInset`), so it is deliberately excluded from `isFramedAtom`.
+Guarded by `QuoteVerticalInsetTests`.
+
+**Double-return on a list inside a quote — end the list first, THEN exit (`insertParagraphBreak` /
+`quoteDoubleReturnExitIndex`, added 2026-07-02).** Ending a list is a two-step exit when the list is inside a
+quote: Return on an empty quoted list item ENDS THE LIST but stays in the quote (an empty quote line), and only a
+FURTHER Return leaves the quote. Two coordinated changes: `insertParagraphBreak`'s empty-list-item branch keeps
+the paragraph's style (`if p.style != .quote { p.style = .body }`) instead of always forcing `.body`, so a quoted
+list item becomes an empty **quote** line; and `quoteDoubleReturnExitIndex` returns nil while the empty quote line
+still has a `listMembership` (both the on-line and the line-above cases), so the quote-exit dispatch doesn't fire
+until the list has ended. Guarded by `DoubleReturnExitTests`.
+
+**Backspace on an empty quoted list item → a plain empty paragraph (`deleteBackward`, added 2026-07-02).** The
+empty-quote Backspace branch (un-quote → body) now also clears `listMembership`, so an empty **quoted list item**
+(e.g. the first, empty line of a list inside a quote) collapses ALL the way to a plain empty paragraph rather than
+leaving a body list item with a stray marker. `listMembership = nil` is a no-op for a plain (non-list) quote, so
+that case is unchanged. Guarded by `CanvasQuoteEditTests`. (Backspace is a one-step full exit here, unlike Return's
+two-step end-list-then-exit — Backspace is a delete gesture and matches the pre-existing empty-quote/empty-code
+Backspace-to-body behavior.)
+
+**Backspace at the START of a list item → outdent, or break the list (`deleteBackward`, added 2026-07-02).** A
+collapsed caret at `local == 0` of ANY list item (empty or not) now: **nested (`level > 0`)** → `outdent()` (cancel
+one indent level, stays a list item); **top-level (`level == 0`)** → break the list here — the item becomes a body
+paragraph keeping its contents (`listMembership = nil; style = .body`), so items before it stay a list and items
+after start a fresh one (numbering resets across the non-list gap). This branch sits right after `resolveBox` and
+takes priority over the merge-into-previous and empty-quote branches, so it replaces the old "backspace at a list
+item start merges into the previous block" behavior. Non-list paragraphs still merge (the branch is gated on
+`listMembership != nil`). A quoted list item breaks straight to a **body** paragraph (un-quotes), consistent with
+the one-step empty-quote Backspace above. Guarded by `CanvasStructuralTests` + `CanvasQuoteEditTests`.
 
 ## Configurable quote geometry + collapsed quotes (added 2026-06-28)
 

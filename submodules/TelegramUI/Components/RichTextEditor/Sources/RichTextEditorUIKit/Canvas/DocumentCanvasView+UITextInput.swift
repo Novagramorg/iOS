@@ -466,11 +466,27 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         guard let pos = resolveBox(at: head) else { return }
+        // Backspace at the START of a list item: cancel one indent level, or (at the top level) break the
+        // list here — the item becomes a body paragraph keeping its contents, so items before it stay a
+        // list and items after start a fresh one. Applies to ANY list item (empty or not) and takes
+        // priority over the merge-into-previous / empty-quote branches below. Mirrors empty-list-item Return
+        // (`insertParagraphBreak`), but fires for a non-empty item too and always exits to a body paragraph
+        // (a quoted list item un-quotes, matching the one-step empty-quote Backspace).
+        if pos.local == 0, let p = pos.box as? BlockBox, let list = p.listMembership {
+            if list.level > 0 {
+                outdent()
+            } else {
+                editing { p.listMembership = nil; p.style = .body; restyle(p); recomputeSpans() }
+            }
+            return
+        }
         if let p = pos.box as? BlockBox, p.style == .quote, p.textLength == 0 {
-            // Backspace in an EMPTY quote un-quotes it (→ body paragraph). Otherwise an empty quote —
-            // especially the document's FIRST block, which matches no merge branch below — can't be
+            // Backspace in an EMPTY quote un-quotes it → a plain empty body PARAGRAPH. Otherwise an empty
+            // quote — especially the document's FIRST block, which matches no merge branch below — can't be
             // removed at all. Mirrors empty-list-item Return (DocumentCanvasView+Editing.insertParagraphBreak).
-            editing { p.style = .body; restyle(p); recomputeSpans() }
+            // The list membership is cleared too, so an empty quoted LIST item collapses all the way to a
+            // plain paragraph (not a body list item with a stray marker) — `nil` is a no-op for a plain quote.
+            editing { p.style = .body; p.listMembership = nil; restyle(p); recomputeSpans() }
             return
         }
         if let codeBox = pos.box as? CodeBlockBox, codeBox.textLength == 0,

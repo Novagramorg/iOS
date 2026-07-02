@@ -28,6 +28,53 @@ final class CanvasStructuralTests: XCTestCase {
         XCTAssertEqual(v.head, v.boxes[0].textStart + 5)   // caret at the join (after "Alpha")
     }
 
+    func test_backspaceAtStartOfNestedListItem_outdents_doesNotMerge() {
+        // Backspace at the START of an INDENTED list item cancels one indent level (stays a list item);
+        // it does NOT merge into the previous item.
+        let v = makeCanvas([
+            ParagraphBlock(id: BlockID("a"), list: ListMembership(marker: .bullet, level: 0), runs: [TextRun(text: "A")]),
+            ParagraphBlock(id: BlockID("b"), list: ListMembership(marker: .bullet, level: 2), runs: [TextRun(text: "B")]),
+        ])
+        caret(v, v.boxes[1].textStart)
+        v.deleteBackward()
+        XCTAssertEqual(v.boxes.count, 2, "no merge — the nested item stays put and just outdents")
+        let b = v.boxes[1] as! BlockBox
+        XCTAssertEqual(b.listMembership?.level, 1, "one indent level cancelled")
+        XCTAssertEqual(b.listMembership?.marker, .bullet, "still a list item")
+        XCTAssertEqual(b.currentParagraph().text, "B", "contents preserved")
+    }
+
+    func test_backspaceAtStartOfTopLevelListItem_breaksListIntoBodyParagraph() {
+        // Backspace at the START of a LEVEL-0 list item breaks the list here: the item becomes a body
+        // paragraph keeping its contents, items before stay a list, items after start a fresh list.
+        let v = makeCanvas([
+            ParagraphBlock(id: BlockID("a"), list: ListMembership(marker: .ordered), runs: [TextRun(text: "A")]),
+            ParagraphBlock(id: BlockID("b"), list: ListMembership(marker: .ordered), runs: [TextRun(text: "B")]),
+            ParagraphBlock(id: BlockID("c"), list: ListMembership(marker: .ordered), runs: [TextRun(text: "C")]),
+        ])
+        caret(v, v.boxes[1].textStart)          // start of "B"
+        v.deleteBackward()
+        XCTAssertEqual(v.boxes.count, 3, "no merge — B stays as its own block")
+        let b = v.boxes[1] as! BlockBox
+        XCTAssertNil(b.listMembership, "B is no longer a list item")
+        XCTAssertEqual(b.style, .body, "B is a body paragraph")
+        XCTAssertEqual(b.currentParagraph().text, "B", "contents preserved")
+        XCTAssertEqual((v.boxes[0] as! BlockBox).listMembership?.marker, .ordered, "A stays a list item")
+        XCTAssertEqual((v.boxes[2] as! BlockBox).listMembership?.marker, .ordered, "C stays a list item")
+    }
+
+    func test_backspaceAtStartOfListItem_undoRestoresList() {
+        let v = makeCanvas([ParagraphBlock(id: BlockID("a"), list: ListMembership(marker: .bullet),
+                                           runs: [TextRun(text: "A")])])
+        let um = UndoManager(); um.groupsByEvent = false
+        v.undoManagerOverride = um
+        caret(v, v.boxes[0].textStart)
+        um.beginUndoGrouping(); v.deleteBackward(); um.endUndoGrouping()
+        XCTAssertNil((v.boxes[0] as! BlockBox).listMembership)
+        um.undo()
+        XCTAssertEqual((v.boxes[0] as! BlockBox).listMembership?.marker, .bullet, "undo restores the list item")
+    }
+
     func test_backspaceAtVeryStart_isNoOp() {
         let v = makeCanvas([ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "Alpha")])])
         caret(v, v.boxes[0].textStart)                 // start of the first block
