@@ -179,6 +179,15 @@ enum ComposerDocumentBridge {
                 prevWasQuote = false   // a collapsed quote is its own atom — never fuse with adjacent quotes
                 continue
             }
+            if case let .pullQuote(pq) = block {
+                if !isFirstParagraph {
+                    result.append(NSAttributedString(string: "\n", attributes: [.font: baseFont]))
+                }
+                isFirstParagraph = false
+                result.append(NSAttributedString(string: pq.text, attributes: [.font: baseFont]))
+                prevWasQuote = false
+                continue
+            }
             guard case let .paragraph(paragraph) = block else { continue }
             if !isFirstParagraph {
                 result.append(NSAttributedString(string: "\n", attributes: [.font: baseFont]))

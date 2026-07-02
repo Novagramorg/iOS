@@ -40,6 +40,9 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             // preformatted block. Reached only when OTHER content (heading/list/table/media) forced rich layout.
             pageBlocks.append(.preformatted(text: richText(from: code.runs), language: code.language))
             index += 1
+        case let .pullQuote(pq):
+            pageBlocks.append(.pullQuote(text: richText(from: pq.runs), caption: .empty))
+            index += 1
         case let .media(mediaBlock):
             if let resolved = media[mediaBlock.mediaID] {
                 let caption = InstantPageCaption(text: richText(from: mediaBlock.caption), credit: .empty)

@@ -52,6 +52,9 @@ public func chatInputContent(
                 language: code.language,
                 runs: chatInputRuns(fromRuns: code.runs, resolveEmoji: resolveEmoji)
             )))
+        case let .pullQuote(pq):
+            blocks.append(.pullQuote(ChatInputPullQuote(
+                runs: chatInputRuns(fromRuns: pq.runs, resolveEmoji: resolveEmoji))))
         case let .media(media):
             // An unresolved medium has no `ChatInputMedia` representation (`media:` is non-optional) — drop it.
             guard let resolved = resolveMedia(media.mediaID) else {
@@ -189,6 +192,7 @@ private func cellRuns(fromBlocks blocks: [Block]) -> [TextRun] {
             runs.append(contentsOf: paragraph.runs)
         case let .code(code):
             runs.append(contentsOf: code.runs)
+        case let .pullQuote(pq): runs.append(contentsOf: pq.runs)
         case let .media(media):
             // No inline text for the medium itself; keep only its caption text.
             runs.append(contentsOf: media.caption)
@@ -291,6 +295,10 @@ private func documentBlocks(
             language: code.language,
             runs: runs(fromChatInputRuns: code.runs, registerEmoji: registerEmoji)
         ))]
+    case let .pullQuote(pq):
+        return [.pullQuote(PullQuote(
+            id: BlockID.generate(),
+            runs: runs(fromChatInputRuns: pq.runs, registerEmoji: registerEmoji)))]
     case let .collapsedQuote(inner):
         // Build a real editor collapsed-quote atom (no longer flatten to expanded quotes). The folded
         // content is the inner blocks mapped to quote paragraphs (recursing; a non-paragraph inner block
