@@ -5166,6 +5166,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             children.append(UIAction(title: self.strings?.TextFormat_Quote ?? "Quote", image: nil) { [weak richTextInputNode] _ in
                 richTextInputNode?.performFormatAction(.quote)
             })
+            children.append(UIAction(title: "Pull Quote", image: nil) { [weak richTextInputNode] _ in
+                richTextInputNode?.performFormatAction(.pullQuote)
+            })
             children.append(UIAction(title: self.strings?.TextFormat_Spoiler ?? "Spoiler", image: nil) { [weak richTextInputNode] _ in
                 richTextInputNode?.performFormatAction(.spoiler)
             })

@@ -514,6 +514,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         case .monospace: self.editorView.toggleInlineCode()
         case .spoiler: self.editorView.toggleSpoiler()
         case .quote: self.editorView.setParagraphStyle(.quote)
+        case .pullQuote: self.editorView.makePullQuote()
         case .code: self.editorView.makeCodeBlock()
         case .date:
             // TODO: no timestamp-entity model in the editor (deferred). No-op for now.

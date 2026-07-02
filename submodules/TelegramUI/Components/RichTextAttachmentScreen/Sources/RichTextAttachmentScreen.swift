@@ -624,18 +624,22 @@ final class RichTextAttachmentScreenComponent: Component {
                     let state = self.editor.currentState()
                     let isQuote = state.paragraphStyle == .quote
                     let isCode = state.isCodeBlock
+                    let isPullQuote = state.isPullQuote
                     let items: [ContextMenuItem] = [
                         .action(ContextMenuActionItem(text: "None", icon: { theme in
-                            (!isQuote && !isCode)
+                            (!isQuote && !isCode && !isPullQuote)
                                 ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                                 : UIImage()
                         }, action: { [weak self] _, f in
                             f(.default)
                             guard let self else { return }
                             // Return to a plain body paragraph (un-code first if needed; setParagraphStyle
-                            // doesn't touch a CodeBlockBox).
-                            if self.editor.currentState().isCodeBlock {
+                            // doesn't touch a CodeBlockBox; makePullQuote() toggles a pull quote back to body).
+                            let live = self.editor.currentState()
+                            if live.isCodeBlock {
                                 self.editor.makeCodeBlock()
+                            } else if live.isPullQuote {
+                                self.editor.makePullQuote()
                             } else {
                                 self.editor.setParagraphStyle(.body)
                             }
@@ -653,6 +657,18 @@ final class RichTextAttachmentScreenComponent: Component {
                             }
                             self.editor.setParagraphStyle(.quote)
                         })),
+                        .action(ContextMenuActionItem(text: "Pull Quote", icon: { theme in
+                            isPullQuote
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            guard let self else { return }
+                            // makePullQuote() toggles; only turn it ON so re-selecting Pull Quote is idempotent.
+                            if !self.editor.currentState().isPullQuote {
+                                self.editor.makePullQuote()
+                            }
+                        })),
                         .action(ContextMenuActionItem(text: "Code Block", icon: { theme in
                             isCode
                                 ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
@@ -668,7 +684,7 @@ final class RichTextAttachmentScreenComponent: Component {
                     ]
                     self.presentActionMenu(from: sourceView, items: items)
                 },
-                isSelected: editorState.paragraphStyle == .quote || editorState.isCodeBlock
+                isSelected: editorState.paragraphStyle == .quote || editorState.isCodeBlock || editorState.isPullQuote
             ))
             barActions.append(RichTextActionBarComponent.Action(
                 id: AnyHashable("writingDirection"), icon: "RichText/ToolParagraphStyle",

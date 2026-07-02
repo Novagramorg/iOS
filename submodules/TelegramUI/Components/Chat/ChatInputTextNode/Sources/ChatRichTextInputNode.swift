@@ -44,7 +44,7 @@ public struct ChatRichTextThemeColors {
 /// it is handled host-side via `openLinkEditing` (it needs a URL-entry UI). `code`/`date` have no native
 /// editor representation yet and are no-ops on the new backend.
 public enum ChatRichTextFormatAction {
-    case bold, italic, monospace, strikethrough, underline, spoiler, quote, code, date
+    case bold, italic, monospace, strikethrough, underline, spoiler, quote, pullQuote, code, date
 }
 
 /// Protocol seam for the chat composer's text editor. Implemented today by

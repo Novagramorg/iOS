@@ -162,6 +162,8 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         /// True when the caret/selection is inside a first-class code block (`Block.code` / `CodeBlockBox`).
         /// Distinct from `code` (the inline-monospace character format). `paragraphStyle` is nil in a code block.
         public let isCodeBlock: Bool
+        /// True when the caret/selection is inside a pull-quote block (`Block.pullQuote` / `PullQuoteBox`).
+        public let isPullQuote: Bool
         public let listMarker: ListMarker?
         public let link: String?
         public let hasSelection: Bool
