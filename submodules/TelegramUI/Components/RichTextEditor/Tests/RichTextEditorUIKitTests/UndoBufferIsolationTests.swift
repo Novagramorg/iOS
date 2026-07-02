@@ -73,5 +73,25 @@ final class UndoBufferIsolationTests: XCTestCase {
         view.redo()   // empty redo stack → likewise
         XCTAssertGreaterThan(changes, afterUndo, "redo() must fire onChange too")
     }
+
+    /// The editor's OWN manager is exposed to the responder chain (as `UIResponder.undoManager`), so the
+    /// SYSTEM undo affordances — hardware ⌘Z / ⌘⇧Z, shake-to-undo, and the Edit-menu Undo/Redo — act on our
+    /// edits. Without this override, `UIResponder.undoManager` returns the app-wide shared manager, which our
+    /// edits never touch, so ⌘Z does nothing. (Regression guard for the "⌘Z stopped working after going
+    /// private" report.)
+    func test_undoManager_isTheEditorsOwnManager() {
+        let v = DocumentCanvasView()
+        XCTAssertTrue(v.undoManager === v.effectiveUndoManager,
+                      "UIResponder.undoManager must be the editor's own manager so ⌘Z acts on our edits")
+    }
+
+    /// The exposed `undoManager` tracks `undoManagerOverride`, so the responder-chain wiring can never
+    /// silently diverge from `effectiveUndoManager` (what every other undo path uses).
+    func test_undoManager_followsInjectedOverride() {
+        let v = DocumentCanvasView()
+        let um = UndoManager()
+        v.undoManagerOverride = um
+        XCTAssertTrue(v.undoManager === um, "the exposed undoManager must track undoManagerOverride")
+    }
 }
 #endif

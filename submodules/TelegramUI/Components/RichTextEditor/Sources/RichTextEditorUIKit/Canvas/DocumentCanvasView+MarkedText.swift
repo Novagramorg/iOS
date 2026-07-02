@@ -95,6 +95,7 @@ extension DocumentCanvasView {
     /// prediction rather than committing it.
     func commitMarkedText() {
         guard markedRange != nil else { return }
+        breakUndoCoalescing()   // a composition is its own undo step; end any surrounding Latin typing run
         let snap = compositionUndoSnapshot
         let (a, h) = compositionAnchorHead ?? (anchor, head)
         markedRange = nil

@@ -74,8 +74,10 @@ final class CanvasEditingTests: XCTestCase {
         XCTAssertEqual(v.boxes.count, 2)
         XCTAssertEqual(v.boxes.map { ($0 as! BlockBox).currentParagraph().text }, ["Alpha", "Beta"])
         XCTAssertEqual(v.boxes.map { $0.id }, [BlockID("p0"), BlockID("p1")])
-        XCTAssertEqual(v.anchor, v.boxes[0].textStart + 2)   // selection anchor restored
-        XCTAssertEqual(v.head, v.boxes[1].textStart + 2)     // selection head restored
+        // Undo of a deletion now restores a COLLAPSED caret at the END of the restored span (iOS-style),
+        // not the pre-edit selection. max(before-anchor, before-head) = the head end = boxes[1].textStart + 2.
+        XCTAssertEqual(v.anchor, v.boxes[1].textStart + 2)
+        XCTAssertEqual(v.head, v.boxes[1].textStart + 2)
     }
 
     func test_deleteSelectionToEndOfDocument_viaSnapping() {

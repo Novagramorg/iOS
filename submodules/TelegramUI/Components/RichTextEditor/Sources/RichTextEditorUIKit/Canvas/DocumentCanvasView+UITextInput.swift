@@ -53,6 +53,9 @@ extension DocumentCanvasView: UITextInput {
         // Route through the 3-way selection logic, not applyReplace directly: a system-initiated
         // replacement (autocorrect/dictation/marked-text) can span a table boundary, which the
         // same-stack-guarded applyReplace would silently drop.
+        // System-initiated replacement (autocorrect / dictation / marked-text spanning). Kept .none
+        // (its own undo step) — coalescing is scoped to insertText/deleteBackward typing/deleting, so a
+        // dictation utterance is one undo step. Intentional, not an oversight.
         editing { applySelectionReplace(globalFrom: lo, globalTo: hi, text: text) }
     }
 
@@ -309,7 +312,7 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         if selFrom != selTo {
-            editing { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
+            editing(coalescing: .typing) { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
             return
         }
         // A collapsed caret that resolves to a table box (e.g. before a leading table / after a
@@ -322,10 +325,10 @@ extension DocumentCanvasView: UIKeyInput {
         }
         if isInsideTable(head) {
             // collapsed caret in a cell: text is in-place.
-            editing { applyLeafReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
+            editing(coalescing: .typing) { applyLeafReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
             return
         }
-        editing { applyReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
+        editing(coalescing: .typing) { applyReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
     }
 
     /// The number of UTF-16 units the composed character sequence (grapheme cluster) immediately
@@ -431,14 +434,14 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         if selFrom != selTo {
-            editing { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
+            editing(coalescing: .deleting) { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             return
         }
         if isInsideTable(head) {
             guard let active = activeStack(at: head) else { return }
             if active.local > 0 {
                 let n = graphemeClusterLengthBeforeCaret(global: head)
-                editing { applyLeafReplace(globalFrom: head - n, globalTo: head, text: "") }
+                editing(coalescing: .deleting) { applyLeafReplace(globalFrom: head - n, globalTo: head, text: "") }
             } else if active.index > 0 {
                 editing { mergeParagraphs(in: active.stack, upperIndex: active.index - 1) }
             } else {
@@ -494,7 +497,7 @@ extension DocumentCanvasView: UIKeyInput {
             editing { replaceMediaWithEmptyParagraph(at: pos.index) }
         } else if pos.local > 0 {
             let n = graphemeClusterLengthBeforeCaret(global: head)
-            editing { applyReplace(globalFrom: head - n, globalTo: head, text: "") }
+            editing(coalescing: .deleting) { applyReplace(globalFrom: head - n, globalTo: head, text: "") }
         } else if pos.index > 0, isNonParagraphAtom(boxes[pos.index - 1]) {
             // Start of a paragraph after a NON-TEXT block (image / table / code) that can't absorb a text
             // merge. Backspace must NOT delete that block. An EMPTY paragraph is removed — so "deleting the

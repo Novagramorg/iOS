@@ -339,6 +339,36 @@ final class DocumentCanvasView: UIView {
     private let ownUndoManager = UndoManager()
     var effectiveUndoManager: UndoManager? { undoManagerOverride ?? ownUndoManager }
 
+    /// Expose the editor's OWN (dedicated, private) undo manager to the responder chain so the SYSTEM undo
+    /// affordances act on our edits: hardware ⌘Z / ⌘⇧Z, shake-to-undo, and the Edit-menu Undo/Redo items.
+    /// Without this override, `UIResponder.undoManager` returns the app-wide SHARED manager (the window's),
+    /// which our edits never touch — so ⌘Z did nothing after we went private for buffer isolation.
+    ///
+    /// **Safe by construction:** overriding `undoManager` changes only WHO can call `undo()` on our manager,
+    /// not WHAT is registered into it. This manager only ever receives our `editing()` content-edit
+    /// registrations (we register nothing on selection changes), and it is a private instance no other
+    /// responder holds — so the foreign-entry pollution that motivated going private (which lived in the
+    /// shared instance we no longer use) cannot appear here. UIKit does not auto-register typing/selection
+    /// undos into a bare custom `UITextInput` (it owns no text here) and — like `UITextView` — never records
+    /// cursor movements as undo steps.
+    override var undoManager: UndoManager? { effectiveUndoManager }
+
+    /// Coalescing kind for an edit: consecutive `.typing` (or consecutive `.deleting`) edits that
+    /// are contiguous collapse into ONE undo step; `.none` always starts/breaks a step (structural,
+    /// format, paste, media, list, table edits).
+    enum UndoCoalescing { case typing, deleting, none }
+    /// The currently-open coalescing run. `caret` is where the NEXT contiguous keystroke must land
+    /// for it to join this run. `nil` = no open run (the next edit registers a fresh undo step).
+    var openUndoRun: (kind: UndoCoalescing, caret: Int)?
+    /// Number of NEW undo steps `editing` has started (a coalesced keystroke registers nothing, so it
+    /// does not increment). A test seam that measures coalescing directly, independent of NSUndoManager
+    /// grouping — mirrors the module's other internal test hooks.
+    var undoRegistrationCount = 0
+    /// Closes any open coalescing run so the next edit registers a fresh undo step. Called on every
+    /// run-breaking boundary that isn't already caught by the contiguity check (undo/redo restore,
+    /// IME commit, document swap, resign-first-responder).
+    func breakUndoCoalescing() { openUndoRun = nil }
+
     /// Token for the input-language-change observer (see init); removed in deinit.
     private var inputModeObserver: NSObjectProtocol?
     deinit {
@@ -445,6 +475,7 @@ final class DocumentCanvasView: UIView {
     @discardableResult
     override func resignFirstResponder() -> Bool {
         finalizeMarkedText()
+        breakUndoCoalescing()   // losing focus ends any open typing/deleting run (matches native)
         cancelFloatingCursor()                                           // tear down any in-flight floating-cursor gesture (display link retains self)
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let resigned = super.resignFirstResponder()
@@ -525,6 +556,7 @@ final class DocumentCanvasView: UIView {
     /// cells the canvas reaches via `leafRegions()`.
     func setBlocks(_ blocks: [Block], width: CGFloat) {
         if width > 0 { lastLayoutWidth = width }
+        breakUndoCoalescing()   // a full document swap — programmatic set OR an undo/redo restore (the registerUndo closure calls setBlocks) — ends any open typing/deleting run
         tableSelection = nil
         imageSelection = nil   // a full document swap drops any transient structural selection
         spoilerDustViews.values.forEach { $0.view.removeFromSuperview() }

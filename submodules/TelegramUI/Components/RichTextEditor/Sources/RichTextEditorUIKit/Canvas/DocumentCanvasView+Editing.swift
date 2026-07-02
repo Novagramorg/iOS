@@ -7,11 +7,18 @@ extension DocumentCanvasView {
     /// Wraps a mutation: snapshots the document + selection, brackets the input-delegate change,
     /// runs `body`, registers a self-re-registering undo, and refreshes layout/display. This is
     /// the single entry point for every editing operation (typing, structural, list).
-    func editing(_ body: () -> Void) {
+    func editing(coalescing: UndoCoalescing = .none, _ body: () -> Void) {
         finalizeMarkedText()   // commit a composition (own undo step) / dismiss a prediction before this edit
         dismissEditMenuForSelectionOrTextChange()   // the text is about to change → close any open menu (native UITextView)
         let before = currentBlocks()
         let beforeAnchor = anchor, beforeHead = head
+        // Does this edit CONTINUE the open coalescing run? Same kind, a collapsed caret (not a
+        // selection-replace), landing exactly where the last keystroke left off. If so we skip
+        // registerUndo entirely — the snapshot taken at the run's START already captures the pre-run
+        // document, so one undo reverts the whole run. A caret move / kind switch / selection-replace
+        // fails this test and starts a fresh step; see docs/superpowers/specs/2026-07-01-richtext-undo-coalescing-design.md.
+        let continuesRun = coalescing != .none && beforeAnchor == beforeHead
+            && (openUndoRun.map { $0.kind == coalescing && $0.caret == beforeHead } ?? false)
         // Every edit also moves the caret, so bracket the SELECTION change too — not just the text change.
         // Without this the OS keeps a stale `selectedTextRange` after a programmatic edit (custom emoji
         // keyboard insert / delete), so the caret appears not to advance and the next insert lands at the
@@ -22,7 +29,21 @@ extension DocumentCanvasView {
         body()
         textInputDelegate?.selectionDidChange(self)
         textInputDelegate?.textDidChange(self)
-        registerUndo(snapshot: before, anchor: beforeAnchor, head: beforeHead)
+        if !continuesRun {
+            // Undo caret (iOS-style): a CONTENT edit (typing/deleting/paste) collapses the caret
+            // (post-body `anchor == head`) → restore a COLLAPSED caret at the end of the restored span,
+            // so undoing a deletion/replacement doesn't re-select the restored text. A selection-
+            // preserving edit (formatting: bold/italic/link/style) leaves a range post-body → restore the
+            // pre-edit SELECTION so you still see what was un-formatted. See the systematic-debugging note.
+            let restoreCaret = max(beforeAnchor, beforeHead)   // end of the pre-edit span
+            let undoAnchor = (anchor == head) ? restoreCaret : beforeAnchor
+            let undoHead   = (anchor == head) ? restoreCaret : beforeHead
+            registerUndo(snapshot: before, anchor: undoAnchor, head: undoHead)   // start a fresh undo step
+            undoRegistrationCount += 1
+        }   // else: coalesce — the run-start snapshot still stands, so no new registration
+        // Open / extend / close the coalescing run for the NEXT edit: a coalescable edit that left a
+        // collapsed caret opens (or extends) a run at the new caret; anything else closes it.
+        openUndoRun = (coalescing != .none && anchor == head) ? (coalescing, head) : nil
         recomputeDocumentHasSpoilers()   // an edit (toggleSpoiler/delete/paste/insert/structural) may add or remove the last spoiler — refresh the syncSpoilers gate before refreshSelectionUI runs it
         // A structural edit can create a fresh empty paragraph (Enter) or empty an existing one (delete its
         // last char), and an empty paragraph's caret side is driven by its per-box writing-direction hint

@@ -815,9 +815,16 @@ ring), and per-block frames (orange, indexed), with inset/margin numeric labels.
   content edit" bug (fixed 2026-06-30). Only the editor's own `registerUndo` (every content `editing{}` + the
   composition commit) may enter this buffer. Tests inject their own via `undoManagerOverride` (every undo test
   already did — production simply never wired a private manager until this fix). Regression-guarded by
-  `UndoBufferIsolationTests`. **Known trade-off:** the system shake-to-undo (which calls the responder-chain
-  `undoManager`) no longer reaches editor edits — the editor exposes explicit undo/redo instead (the
-  `RichTextAttachmentScreen` nav-bar pill).
+  `UndoBufferIsolationTests`. **The private manager is EXPOSED to the responder chain** via
+  `override var undoManager { effectiveUndoManager }` (added 2026-07-01), so the SYSTEM undo affordances —
+  hardware ⌘Z / ⌘⇧Z, shake-to-undo, and the Edit-menu Undo/Redo — act on our edits. They were DEAD between the
+  2026-06-30 private-manager switch and this fix, because the responder chain exposed the app-wide *shared*
+  manager (which our edits never touch). Safe by construction: the override changes only WHO can call `undo()`
+  on our manager, not WHAT is registered into it (still only `registerUndo` content edits — nothing on
+  selection), and it's a private instance no other responder holds, so the foreign-entry pollution above (which
+  lived in the shared instance) cannot reappear; UIKit records no cursor movements / typing undos into a bare
+  custom `UITextInput`. The `RichTextAttachmentScreen` nav-bar pill drives the same `undo()`/`redo()`.
+  (⌘Z runtime-verified 2026-07-01.)
 - **`undo()`/`redo()` fire a trailing `onChange` AFTER the manager settles** (`RichTextEditorView`). The undo/redo
   closure's own refresh (`notifyContentSizeChanged`) runs WHILE STILL INSIDE `UndoManager.undo()/redo()`, so a
   host that re-reads `currentState().canUndo/canRedo` synchronously from it sees the stack BEFORE the group is
@@ -825,6 +832,28 @@ ring), and per-block frames (orange, indexed), with inset/margin numeric labels.
   the undo (or redo) control stays enabled after the final undo (redo) until an unrelated `update()` (e.g. a
   rotation) re-reads state. The explicit trailing `onChange?()` refreshes the host with the settled availability.
   Regression-guarded by `UndoBufferIsolationTests.test_undoRedo_fireOnChange_soHostRefreshesAvailability`.
+- **Typing/deleting undo COALESCES into whole runs** (`editing(coalescing:)`, added 2026-07-01). Every edit
+  still snapshots the whole document, but `editing` SKIPS `registerUndo` when this edit CONTINUES an open run —
+  same kind (`.typing`/`.deleting`), collapsed caret, landing exactly where the last keystroke left off
+  (`openUndoRun.caret`) — so one undo reverts the whole uninterrupted run (like an iOS composer), not one char
+  per step. The run-start snapshot already captures the pre-run doc, so skipping registration is all it takes;
+  redo is unchanged (the closure lazily captures the post-run doc). A run BREAKS on: a caret move / a
+  typing↔deleting switch / a selection-replace (all caught by the contiguity check), any structural / format /
+  paste edit (the default `coalescing: .none`), and IME composition commit + resign-first-responder + `setBlocks`
+  (which call `breakUndoCoalescing()`; `setBlocks` also covers the undo/redo restore). Only the 3 char-insert
+  `insertText` sites pass `.typing` and the 3 plain-delete `deleteBackward` sites pass `.deleting`; every
+  structural delete (paragraph merge / `removeBlock` / media-replace / un-quote / un-code / cross-block merge)
+  stays `.none`. Scope note: system replacements via `replace(_:withText:)` (autocorrect/dictation) stay
+  `.none`, so a dictation utterance is its own undo step. `undoRegistrationCount` is a test seam counting new
+  steps; `UndoCoalescingTests`.
+- **Undo restores a CARET for content edits, the SELECTION for formatting** (`editing`, added 2026-07-01). The
+  undo closure restores the pre-edit `anchor`/`head` — which for a selection-delete/replace would re-select the
+  restored text. Instead, when the edit COLLAPSED the caret (post-`body()` `anchor == head` — every content
+  edit: delete / type-over / paste) the registration collapses the restored selection to a caret at the END of
+  the pre-edit span (`max(beforeAnchor, beforeHead)`); a selection-preserving edit (formatting — bold/italic/
+  link/style leaves a range post-`body()`) restores the pre-edit SELECTION so you still see what was
+  un-formatted. Matches an iOS composer (macOS/VSCode re-select the restored text; iOS uses a plain caret).
+  `UndoCoalescingTests`.
 - **`text(in:)` MUST emit a `"\n"` at every top-level paragraph boundary** (`DocumentCanvasView+UITextInput`),
   exactly like a `UITextView` over a `"\n"`-joined string — because the global axis carries NO newline char
   between blocks, only a structural token gap. The system keyboard reads document context through `text(in:)`,
