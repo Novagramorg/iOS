@@ -55,54 +55,6 @@ final class CanvasQuoteEditTests: XCTestCase {
         XCTAssertEqual((v.boxes[0] as! BlockBox).currentParagraph().text, "H")
     }
 
-    // MARK: C — Shift+Return exits a quote (above when on its first visual line, else below)
-
-    func test_shiftReturnOnFirstLineOfQuote_addsBodyParagraphAbove() {
-        let v = canvas([quote("q", "Quote")])           // single line → first line
-        caret(v, v.boxes[0].textStart + 5)
-        v.performShiftReturn()
-        XCTAssertEqual(v.boxes.count, 2)
-        XCTAssertEqual(style(v, 0), .body, "a new empty body paragraph is inserted ABOVE the quote")
-        XCTAssertEqual((v.boxes[0] as! BlockBox).textLength, 0)
-        XCTAssertEqual(style(v, 1), .quote, "the quote moves down, text unchanged")
-        XCTAssertEqual((v.boxes[1] as! BlockBox).currentParagraph().text, "Quote")
-        XCTAssertEqual(v.head, v.boxes[0].textStart, "caret moves into the new paragraph above")
-    }
-
-    func test_shiftReturnInEmptyQuote_addsBodyParagraphAbove() {
-        let v = canvas([quote("q")])
-        caret(v, v.boxes[0].textStart)
-        v.performShiftReturn()
-        XCTAssertEqual(v.boxes.count, 2)
-        XCTAssertEqual(style(v, 0), .body, "an empty quote's caret is on its first line → body paragraph above")
-        XCTAssertEqual(style(v, 1), .quote)
-        XCTAssertEqual(v.head, v.boxes[0].textStart)
-    }
-
-    func test_shiftReturnOnLaterLineOfQuote_addsBodyParagraphBelow() {
-        let long = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore"
-        let v = canvas([quote("q", long)])
-        let box = v.boxes[0] as! BlockBox
-        XCTAssertGreaterThan(box.textLayout.caretRect(atOffset: box.textLength).minY,
-                             box.textLayout.caretRect(atOffset: 0).minY + 1,
-                             "precondition: the quote wraps onto more than one visual line")
-        caret(v, box.textStart + box.textLength)        // caret on the LAST visual line
-        v.performShiftReturn()
-        XCTAssertEqual(v.boxes.count, 2)
-        XCTAssertEqual(style(v, 0), .quote, "the quote stays first")
-        XCTAssertEqual(style(v, 1), .body, "a body paragraph is inserted BELOW the quote")
-        XCTAssertEqual((v.boxes[1] as! BlockBox).textLength, 0)
-        XCTAssertEqual(v.head, v.boxes[1].textStart, "caret moves into the new paragraph below")
-    }
-
-    func test_shiftReturnOutsideQuote_isNormalParagraphBreak() {
-        let v = canvas([body("b", "Hello")])
-        caret(v, v.boxes[0].textStart + 5)
-        v.performShiftReturn()
-        XCTAssertEqual(v.boxes.count, 2, "outside a quote, Shift+Return splits like a normal Return")
-        XCTAssertEqual(style(v, 1), .body)
-    }
-
     // MARK: B — Tap below a trailing quote adds a body paragraph
 
     func test_tapBelowTrailingQuote_addsBodyParagraph() {

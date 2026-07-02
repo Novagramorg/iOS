@@ -121,21 +121,27 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                 let imageSize = CGSize(width: 80.0, height: 80.0)
                 let primaryTextColor = serviceMessageColorComponents(theme: item.presentationData.theme.theme, wallpaper: item.presentationData.theme.wallpaper).primaryText
                 
-                //TODO:localize
                 let community = communityChangedPeer(message: item.message)?.1
                 let authorName = item.message.author.flatMap { peer -> String? in
                     let title = EnginePeer(peer).compactDisplayTitle
                     return title.isEmpty ? nil : title
                 } ?? ""
+                
+                var isGroup = false
+                let messagePeer = item.message.peers[item.message.id.peerId]
+                if let channel = messagePeer as? TelegramChannel, case .group = channel.info {
+                    isGroup = true
+                }
+                
                 let text: String
-                if let community {
+                if isGroup {
                     if item.message.author?.id == item.context.account.peerId {
-                        text = "You added this group to **\(community.title)** community."
+                        text = item.presentationData.strings.Notification_CommunityAddedGroupYou("**\(community?.title ?? "")**").string
                     } else {
-                        text = "\(authorName) added this group to **\(community.title)** community."
+                        text = item.presentationData.strings.Notification_CommunityAddedGroup("**\(authorName)**","**\(community?.title ?? "")**").string
                     }
                 } else {
-                    text = "\(authorName) added this group to a community."
+                    text = item.presentationData.strings.Notification_CommunityAddedChannel("**\(community?.title ?? "")**").string
                 }
                 
                 let attributedText = parseMarkdownIntoAttributedString(text, attributes: MarkdownAttributes(

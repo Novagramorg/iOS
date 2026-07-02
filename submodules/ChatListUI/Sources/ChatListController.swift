@@ -2936,7 +2936,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     func ungroupCommunity(communityId: EnginePeer.Id) {
         self.present(textAlertController(context: self.context, title: self.presentationData.strings.ChatList_UngroupCommunity_Title, text: self.presentationData.strings.ChatList_UngroupCommunity_Text, actions: [
             TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {}),
-            TextAlertAction(type: .defaultDestructiveAction, title: self.presentationData.strings.ChatList_UngroupCommunity_Action, action: { [weak self] in
+            TextAlertAction(type: .destructiveAction, title: self.presentationData.strings.ChatList_UngroupCommunity_Action, action: { [weak self] in
                 guard let self else {
                     return
                 }

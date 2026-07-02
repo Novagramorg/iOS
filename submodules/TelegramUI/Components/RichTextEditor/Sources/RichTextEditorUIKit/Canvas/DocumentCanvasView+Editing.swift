@@ -7,11 +7,18 @@ extension DocumentCanvasView {
     /// Wraps a mutation: snapshots the document + selection, brackets the input-delegate change,
     /// runs `body`, registers a self-re-registering undo, and refreshes layout/display. This is
     /// the single entry point for every editing operation (typing, structural, list).
-    func editing(_ body: () -> Void) {
+    func editing(coalescing: UndoCoalescing = .none, _ body: () -> Void) {
         finalizeMarkedText()   // commit a composition (own undo step) / dismiss a prediction before this edit
         dismissEditMenuForSelectionOrTextChange()   // the text is about to change → close any open menu (native UITextView)
         let before = currentBlocks()
         let beforeAnchor = anchor, beforeHead = head
+        // Does this edit CONTINUE the open coalescing run? Same kind, a collapsed caret (not a
+        // selection-replace), landing exactly where the last keystroke left off. If so we skip
+        // registerUndo entirely — the snapshot taken at the run's START already captures the pre-run
+        // document, so one undo reverts the whole run. A caret move / kind switch / selection-replace
+        // fails this test and starts a fresh step; see docs/superpowers/specs/2026-07-01-richtext-undo-coalescing-design.md.
+        let continuesRun = coalescing != .none && beforeAnchor == beforeHead
+            && (openUndoRun.map { $0.kind == coalescing && $0.caret == beforeHead } ?? false)
         // Every edit also moves the caret, so bracket the SELECTION change too — not just the text change.
         // Without this the OS keeps a stale `selectedTextRange` after a programmatic edit (custom emoji
         // keyboard insert / delete), so the caret appears not to advance and the next insert lands at the
@@ -22,7 +29,21 @@ extension DocumentCanvasView {
         body()
         textInputDelegate?.selectionDidChange(self)
         textInputDelegate?.textDidChange(self)
-        registerUndo(snapshot: before, anchor: beforeAnchor, head: beforeHead)
+        if !continuesRun {
+            // Undo caret (iOS-style): a CONTENT edit (typing/deleting/paste) collapses the caret
+            // (post-body `anchor == head`) → restore a COLLAPSED caret at the end of the restored span,
+            // so undoing a deletion/replacement doesn't re-select the restored text. A selection-
+            // preserving edit (formatting: bold/italic/link/style) leaves a range post-body → restore the
+            // pre-edit SELECTION so you still see what was un-formatted. See the systematic-debugging note.
+            let restoreCaret = max(beforeAnchor, beforeHead)   // end of the pre-edit span
+            let undoAnchor = (anchor == head) ? restoreCaret : beforeAnchor
+            let undoHead   = (anchor == head) ? restoreCaret : beforeHead
+            registerUndo(snapshot: before, anchor: undoAnchor, head: undoHead)   // start a fresh undo step
+            undoRegistrationCount += 1
+        }   // else: coalesce — the run-start snapshot still stands, so no new registration
+        // Open / extend / close the coalescing run for the NEXT edit: a coalescable edit that left a
+        // collapsed caret opens (or extends) a run at the new caret; anything else closes it.
+        openUndoRun = (coalescing != .none && anchor == head) ? (coalescing, head) : nil
         recomputeDocumentHasSpoilers()   // an edit (toggleSpoiler/delete/paste/insert/structural) may add or remove the last spoiler — refresh the syncSpoilers gate before refreshSelectionUI runs it
         // A structural edit can create a fresh empty paragraph (Enter) or empty an existing one (delete its
         // last char), and an empty paragraph's caret side is driven by its per-box writing-direction hint
@@ -302,14 +323,6 @@ extension DocumentCanvasView {
         }
     }
 
-    /// True if a collapsed caret sits at the END of a `CodeBlockBox` whose text ends in "\n" (a blank
-    /// trailing line) or is empty — Enter there EXITS the block rather than adding another blank line.
-    func caretAtCodeBlockTrailingBlankLine(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) -> Bool {
-        guard active.box is CodeBlockBox else { return false }
-        let s = active.box.textLayout.attributedString.string as NSString
-        return active.local == s.length && (s.length == 0 || s.hasSuffix("\n"))
-    }
-
     /// Removes a code block's trailing "\n" (if present) and inserts an empty body paragraph after it;
     /// caret lands in the new paragraph. Wraps itself in `editing { }`. Mirrors the quote escape hatch
     /// (`insertEmptyBodyParagraph`) — the only way to start a normal paragraph after a code block that
@@ -330,6 +343,93 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Where double-return (Enter on an empty line of a code block) exits: `.after` for the trailing blank
+    /// line, `.before` for the first blank line, `.uncode` for a wholly-empty code block. `nil` for a
+    /// non-empty line or a MIDDLE blank line — which just inserts another newline (no exit).
+    enum CodeBlockDoubleReturnExit { case after, before, uncode }
+
+    func codeBlockDoubleReturnExit(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) -> CodeBlockDoubleReturnExit? {
+        guard active.box is CodeBlockBox else { return nil }
+        let s = active.box.textLayout.attributedString.string as NSString
+        if s.length == 0 { return .uncode }
+        let local = active.local, nl = unichar(10)   // "\n"
+        // Trailing blank line (caret at the end, last line empty) → after.
+        if local == s.length, s.character(at: s.length - 1) == nl { return .after }
+        // First blank line → before: the caret is ON it (local 0) OR at the start of the content right after
+        // it (local 1) — so Enter at the very beginning, then Enter again, exits (the first Enter lands the
+        // caret past the new "\n" on the content line, so the second is at local 1).
+        if s.character(at: 0) == nl, local <= 1 { return .before }
+        return nil                                    // a non-empty line or a MIDDLE blank line → normal newline
+    }
+
+    /// Removes a code block's leading "\n" and inserts an empty body paragraph BEFORE it (caret there) —
+    /// the mirror of `exitCodeBlockToBodyParagraph` for double-return on the first line.
+    func exitCodeBlockToBodyParagraphBefore(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        editing {
+            let s = active.box.textLayout.attributedString.string as NSString
+            if s.hasPrefix("\n") {
+                active.box.textLayout.replace(start: 0, end: 1, with: NSAttributedString(string: ""))
+            }
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = active.stack.boxes
+            newBoxes.insert(body, at: active.index)
+            active.stack.boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
+    }
+
+    /// Replaces a wholly-empty code block with an empty body paragraph (caret there) — double-return on an
+    /// empty code block exits it cleanly (mirrors the empty-quote exit and Backspace-in-empty-code).
+    func uncodeEmptyCodeBlock(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        editing {
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = active.stack.boxes
+            newBoxes.replaceSubrange(active.index...active.index, with: [body])
+            active.stack.boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
+    }
+
+    /// True when the top-level box at `index` is at the FIRST or LAST edge of its consecutive `.quote` run
+    /// (a single quote is both). Double-return on such an empty quote line exits; a MIDDLE one (both
+    /// neighbors are quotes) splits normally.
+    func emptyQuoteIsRunEdge(at index: Int) -> Bool {
+        func isQuote(_ i: Int) -> Bool { i >= 0 && i < boxes.count && (boxes[i] as? BlockBox)?.style == .quote }
+        return !isQuote(index - 1) || !isQuote(index + 1)
+    }
+
+    /// Replaces the empty top-level quote paragraph at `index` with an empty body paragraph (caret there).
+    /// Because that empty line sits at the run's first/last edge, the body lands before/after the rest of
+    /// the quote run automatically — double-return's quote exit.
+    func exitQuoteToBodyParagraph(at index: Int) {
+        editing {
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = boxes
+            newBoxes.replaceSubrange(index...index, with: [body])
+            boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
+    }
+
+    /// The top-level index of the empty quote line to replace with a body paragraph for a double-return quote
+    /// exit (via `exitQuoteToBodyParagraph`), or nil for a normal split. Two cases: (1) the caret is ON an
+    /// empty quote line at its run's first/last edge; (2) the caret is at the START of quote content with an
+    /// empty quote line directly ABOVE it at the run's edge — e.g. two newlines at the beginning, where the
+    /// first Enter splits off an empty line above and the second exits before it.
+    func quoteDoubleReturnExitIndex(at index: Int, local: Int) -> Int? {
+        guard index >= 0, index < boxes.count, let p = boxes[index] as? BlockBox, p.style == .quote else { return nil }
+        if p.textLength == 0, emptyQuoteIsRunEdge(at: index) { return index }
+        if local == 0, index > 0, let above = boxes[index - 1] as? BlockBox,
+           above.style == .quote, above.textLength == 0, emptyQuoteIsRunEdge(at: index - 1) { return index - 1 }
+        return nil
+    }
+
     /// Splits the caret's paragraph at the caret, within whatever `BlockStack` owns the caret (root
     /// or a cell). Deletes any selection first (bounded if it touches a table). Caret → new block start.
     func insertParagraphBreak() {
@@ -348,6 +448,32 @@ extension DocumentCanvasView {
                     restyle(p)
                     recomputeSpans()
                 }
+            }
+            return
+        }
+        // Enter in a media caption (image / video / location) splits it: the head stays as the caption,
+        // the tail becomes a new body paragraph immediately after the media (caret there). A caret at the
+        // end produces an empty new paragraph; a caret at the start moves the whole caption down. Audio is
+        // caption-less and excluded — its Enter fires the gap-caret branch in insertText before we reach here.
+        if selFrom == selTo, let active = activeStack(at: head),
+           let mediaBox = active.box as? MediaBlockBox, mediaBox.kind != .audio {
+            editing {
+                guard case .media(let mediaBlock) = mediaBox.currentBlock() else { return }
+                let tmpCaption = ParagraphBlock(id: BlockID.generate(), style: .caption, runs: mediaBlock.caption)
+                let parts = tmpCaption.split(at: active.local, newID: BlockID.generate())
+                let newMedia = MediaBlock(id: mediaBlock.id, mediaID: mediaBlock.mediaID, kind: mediaBlock.kind,
+                                          naturalSize: mediaBlock.naturalSize, displayWidth: mediaBlock.displayWidth,
+                                          alignment: mediaBlock.alignment, caption: parts.0.runs)
+                let newMediaBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
+                                                horizontalBleed: mediaBox.horizontalBleed)
+                let bodyBox = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: parts.1.runs),
+                                       mapper: mediaBox.mapper, width: effectiveWidth)
+                var newBoxes = active.stack.boxes
+                let replacement: [any CanvasBlock] = [newMediaBox, bodyBox]
+                newBoxes.replaceSubrange(active.index...active.index, with: replacement)
+                active.stack.boxes = newBoxes
+                recomputeSpans()
+                anchor = bodyBox.textStart; head = bodyBox.textStart
             }
             return
         }
@@ -402,7 +528,8 @@ extension DocumentCanvasView {
                                         naturalSize: Size2D(width: Double(naturalSize.width),
                                                             height: Double(naturalSize.height)),
                                         caption: caption)
-            let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth)
+            let mediaBox = MediaBlockBox(media: mediaBlock, mapper: mapper, width: effectiveWidth,
+                                         horizontalBleed: mediaBlockStyle.horizontalBleed)
             var newBoxes = boxes
             if let p = pos.box as? BlockBox, p.textLength == 0 {
                 newBoxes.replaceSubrange(pos.index...pos.index, with: [mediaBox])   // empty paragraph → replace it
@@ -475,24 +602,6 @@ extension DocumentCanvasView {
             recomputeSpans()
             anchor = newBox.textStart; head = newBox.textStart
         }
-    }
-
-    /// True when the caret at `local` sits on the FIRST visual (wrapped) line of `box` — i.e. its caret
-    /// shares the y of offset 0. Drives Shift+Return's exit direction out of a quote.
-    func caretIsOnFirstLine(of box: BlockBox, atLocal local: Int) -> Bool {
-        let firstY = box.textLayout.caretRect(atOffset: 0).minY
-        return abs(box.textLayout.caretRect(atOffset: local).minY - firstY) < 1
-    }
-
-    /// Shift+Return EXITS a quote with a new empty body paragraph (caret there): ABOVE the quote when the
-    /// caret is on its first visual line, else BELOW it. Outside a quote it falls back to a normal
-    /// paragraph break (like Return). Undoable.
-    func performShiftReturn() {
-        guard selFrom == selTo, let pos = resolveBox(at: head), let p = pos.box as? BlockBox, p.style == .quote else {
-            insertParagraphBreak()
-            return
-        }
-        insertEmptyBodyParagraph(at: caretIsOnFirstLine(of: p, atLocal: pos.local) ? pos.index : pos.index + 1)
     }
 
     /// In-place text replace within the leaf region's layout (used for typing inside cells, and as

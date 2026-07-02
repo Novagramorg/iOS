@@ -41,6 +41,20 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host media geometry (horizontal bleed). Defaults reproduce the editor's built-in edge-to-edge
+    /// look; the compact chat composer assigns `MediaBlockStyle(horizontalBleed: 0)` so media insets like
+    /// the text paragraphs. Set before the first `update(...)`/document seed (the compact-host knob
+    /// convention); assigning it after content reloads the boxes so the new geometry takes effect (like `quoteStyle`).
+    public var mediaBlockStyle: MediaBlockStyle = .default {
+        didSet {
+            canvas.applyMediaBlockStyle(mediaBlockStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Host-injected icons for the quote collapse (tall expanded quote) / expand (collapsed quote)
     /// affordance. `nil` (default) ⇒ no affordance icon is drawn (the package ships no fallback). Assigning
     /// it updates the live collapse button and reloads so collapsed boxes pick up the new glyph (like `quoteStyle`).
@@ -285,8 +299,15 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func setAlignment(_ alignment: TextAlignment) { canvas.setAlignment(alignment) }
     public func setList(_ marker: ListMarker?) { canvas.setList(marker) }
 
-    public func undo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.undo() }
-    public func redo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.redo() }
+    public func undo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.undo(); onChange?() }
+    public func redo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.redo(); onChange?() }
+    // The trailing `onChange?()` is load-bearing for a host toolbar's undo/redo availability. The undo/redo
+    // closure fires its `notifyContentSizeChanged` refresh WHILE STILL INSIDE `UndoManager.undo()/redo()`, so a
+    // host that re-reads `currentState().canUndo/canRedo` synchronously from that notification sees the stack
+    // BEFORE the manager finalizes popping the group — stale for the LAST undo/redo (the control that should
+    // disable stays enabled until an unrelated layout pass re-reads state). One more `onChange` AFTER the call
+    // returns (stack settled) refreshes the host with the final availability. Idempotent: an extra no-op
+    // `undo()`/`redo()` (empty stack) still re-notifies, which is harmless.
 
     // MARK: Table structural commands (operate on the caret's table; no-op otherwise)
     public func insertTableRowAbove() { canvas.insertTableRowAbove() }

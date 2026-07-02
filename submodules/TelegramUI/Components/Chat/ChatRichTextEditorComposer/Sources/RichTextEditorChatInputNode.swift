@@ -59,6 +59,11 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// `mediaByID` → this factory. Read lazily, so the panel may set it after `didLoad`. Mirrors `emojiViewProvider`.
     public var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)?
 
+    /// Panel-set "user is typing" hook (wired to `ChatTextInputPanelNode.updateActivity`). Fired from `onChange`
+    /// ONLY on a genuine text edit — see the gating in `didLoad`. The legacy backend reports this via the
+    /// `chatInputTextNode(shouldChangeTextIn:)` delegate, which this engine never calls; this is its replacement.
+    public var onTypingActivity: (() -> Void)?
+
     /// fileId → the file-bearing custom-emoji attribute, harvested from each `attributedText` /
     /// `setInputContent` push. The editor hosts inline emoji by their `EmojiRef` fileId STRING only
     /// (`document(from:)` / `document(fromChatInputContent:)` drop the `TelegramMediaFile`), but the host
@@ -74,6 +79,15 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// the chat layer sets round-trips through the structural model. A medium the editor never received via this
     /// path (no entry) resolves to nil and its block is dropped — see `resolveMedia` below.
     private var mediaByID: [String: Media] = [:]
+
+    /// Typing-activity bookkeeping. The editor's `onChange` funnels THREE kinds of event into one payload-free
+    /// call — a genuine text edit, a caret/selection move, and a programmatic `document` swap (draft restore /
+    /// send-clear / state echo). Only the first is "typing". `lastTypingActivityText` is the plain text at the
+    /// previous `onChange`, so a selection-only move (text unchanged) doesn't fire `onTypingActivity`; the flag
+    /// suppresses the synchronous `onChange` a programmatic `document =` triggers (via `reload` → `setBlocks` →
+    /// `notifyContentSizeChanged`) so a draft restore / state re-apply never reports typing.
+    private var lastTypingActivityText: String = ""
+    private var isApplyingProgrammaticContent = false
 
     /// Checklist checkbox palette, threaded across the `ChatRichTextThemeColors` seam (the node holds no
     /// `PresentationTheme`). Set on each `applyRichTextTheme`; the marker provider reads them lazily so a
@@ -141,6 +155,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             topInset: 3.0,
             bottomInset: 3.0
         )
+        // Media (image/video/location/audio) insets like the text paragraphs in the compact composer
+        // (the document/article editor keeps the default edge-to-edge bleed).
+        self.editorView.mediaBlockStyle = MediaBlockStyle(horizontalBleed: 0.0)
         // Quote collapse/expand affordance icons — the same bundle assets the legacy ChatInputTextNode uses.
         if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
            let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
@@ -184,6 +201,16 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             if self.editorView.bounds.width > 0.0 {
                 _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
             }
+            // Report "typing…" chat activity ONLY on a genuine user text edit. `onChange` also fires on a
+            // caret/selection move (text unchanged ⇒ no report) and on a programmatic content set (suppressed
+            // by `isApplyingProgrammaticContent`). This matches the legacy backend, which reports activity from
+            // `chatInputTextNode(shouldChangeTextIn:)` — a delegate the native editor never invokes. Reading the
+            // plain text is the existing hot-path send-counter read; the diff keeps cursor taps off the wire.
+            let currentText = self.text
+            if !self.isApplyingProgrammaticContent && currentText != self.lastTypingActivityText {
+                self.onTypingActivity?()
+            }
+            self.lastTypingActivityText = currentText
             self.storedDelegate?.chatInputTextNodeDidUpdateText()
         }
         self.editorView.onBecameFirstResponder = { [weak self] in
@@ -255,7 +282,11 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             if ComposerDocumentBridge.composerContentEqual(incoming, current) {
                 return
             }
+            // Programmatic set: the assignment fires `onChange` synchronously (reload → setBlocks →
+            // notifyContentSizeChanged); flag it so that isn't mistaken for the user typing.
+            self.isApplyingProgrammaticContent = true
             self.editorView.document = ComposerDocumentBridge.document(from: incoming)
+            self.isApplyingProgrammaticContent = false
         }
     }
     public var text: String {
@@ -337,7 +368,12 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             registerEmoji: { [weak self] fileId, file in self?.registerEmojiRef(fileId: fileId, file: file) ?? EmojiRef(id: String(fileId), instanceID: BlockID.generate().rawValue, altText: nil) },
             registerMedia: { [weak self] media in self?.registerMediaValue(media) ?? "" }
         )
+        // Programmatic set (draft restore / send-clear / state echo): the assignment fires `onChange`
+        // synchronously (reload → setBlocks → notifyContentSizeChanged); flag it so the typing-activity
+        // path in `onChange` doesn't treat this structural re-apply as the user typing.
+        self.isApplyingProgrammaticContent = true
         self.editorView.document = newDocument
+        self.isApplyingProgrammaticContent = false
         if self.editorView.bounds.width > 0.0 {
             _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)
         }

@@ -157,7 +157,7 @@ final class DocumentCanvasView: UIView {
     /// The built-in horizontal page margin applied to paragraph/table text (in addition to `contentMargins`).
     /// Defaults to the document metric (`CanvasMetrics.pageMargin`, 16pt); a compact host (e.g. the chat
     /// composer) can set it to 0 so the host controls all horizontal insets via the frame + `contentMargins`.
-    /// Image bleed (`MediaBlockBox`) keeps the static document metric.
+    /// Media bleed is governed separately by `mediaBlockStyle` / `applyMediaBlockStyle`.
     var pageMargin: CGFloat = CanvasMetrics.pageMargin
 
     /// The base inter-block vertical inset for the document root (each side). Defaults to the document
@@ -165,6 +165,10 @@ final class DocumentCanvasView: UIView {
     /// single paragraph hugs its text height instead of carrying the inter-paragraph gap. Applied to the
     /// root stack in `layoutContent`; nested (table-cell) stacks keep the document default.
     var blockVerticalInset: CGFloat = BlockBox.defaultVerticalInset
+
+    /// Per-host media geometry. Applied via `applyMediaBlockStyle(_:)`; read at `MediaBlockBox` creation
+    /// in `setBlocks` / `insertMedia`. Defaults to the document edge-to-edge look.
+    var mediaBlockStyle: MediaBlockStyle = .default
 
     /// Per-host quote geometry. Applied via `applyQuoteStyle(_:)` (rebuilds the mapper stylesheet + pushes
     /// render values to the underlay). Read by `blockquoteDecorations()` for the bar width.
@@ -326,7 +330,44 @@ final class DocumentCanvasView: UIView {
     /// Injectable pasteboard (defaults to the system pasteboard; tests inject a fake — see TextPasteboard).
     var pasteboard: TextPasteboard = UIPasteboard.general
     var undoManagerOverride: UndoManager?
-    var effectiveUndoManager: UndoManager? { undoManagerOverride ?? undoManager }
+    /// The editor's OWN undo manager, used in production. We deliberately do NOT fall back to the
+    /// responder-chain `UIResponder.undoManager`: that manager is shared app-wide, so OTHER responders'
+    /// (and the system text-input subsystem's) selection/typing undo registrations would surface in the
+    /// editor's `canUndo` / `undo()` — the "a selection change is undoable / undo is active on the first
+    /// tap before any content edit" bug. A private per-canvas manager keeps the buffer pristine: only the
+    /// editor's own content edits (every `registerUndo`) count. Tests inject their own via `undoManagerOverride`.
+    private let ownUndoManager = UndoManager()
+    var effectiveUndoManager: UndoManager? { undoManagerOverride ?? ownUndoManager }
+
+    /// Expose the editor's OWN (dedicated, private) undo manager to the responder chain so the SYSTEM undo
+    /// affordances act on our edits: hardware ⌘Z / ⌘⇧Z, shake-to-undo, and the Edit-menu Undo/Redo items.
+    /// Without this override, `UIResponder.undoManager` returns the app-wide SHARED manager (the window's),
+    /// which our edits never touch — so ⌘Z did nothing after we went private for buffer isolation.
+    ///
+    /// **Safe by construction:** overriding `undoManager` changes only WHO can call `undo()` on our manager,
+    /// not WHAT is registered into it. This manager only ever receives our `editing()` content-edit
+    /// registrations (we register nothing on selection changes), and it is a private instance no other
+    /// responder holds — so the foreign-entry pollution that motivated going private (which lived in the
+    /// shared instance we no longer use) cannot appear here. UIKit does not auto-register typing/selection
+    /// undos into a bare custom `UITextInput` (it owns no text here) and — like `UITextView` — never records
+    /// cursor movements as undo steps.
+    override var undoManager: UndoManager? { effectiveUndoManager }
+
+    /// Coalescing kind for an edit: consecutive `.typing` (or consecutive `.deleting`) edits that
+    /// are contiguous collapse into ONE undo step; `.none` always starts/breaks a step (structural,
+    /// format, paste, media, list, table edits).
+    enum UndoCoalescing { case typing, deleting, none }
+    /// The currently-open coalescing run. `caret` is where the NEXT contiguous keystroke must land
+    /// for it to join this run. `nil` = no open run (the next edit registers a fresh undo step).
+    var openUndoRun: (kind: UndoCoalescing, caret: Int)?
+    /// Number of NEW undo steps `editing` has started (a coalesced keystroke registers nothing, so it
+    /// does not increment). A test seam that measures coalescing directly, independent of NSUndoManager
+    /// grouping — mirrors the module's other internal test hooks.
+    var undoRegistrationCount = 0
+    /// Closes any open coalescing run so the next edit registers a fresh undo step. Called on every
+    /// run-breaking boundary that isn't already caught by the contiguity check (undo/redo restore,
+    /// IME commit, document swap, resign-first-responder).
+    func breakUndoCoalescing() { openUndoRun = nil }
 
     /// Token for the input-language-change observer (see init); removed in deinit.
     private var inputModeObserver: NSObjectProtocol?
@@ -434,6 +475,7 @@ final class DocumentCanvasView: UIView {
     @discardableResult
     override func resignFirstResponder() -> Bool {
         finalizeMarkedText()
+        breakUndoCoalescing()   // losing focus ends any open typing/deleting run (matches native)
         cancelFloatingCursor()                                           // tear down any in-flight floating-cursor gesture (display link retains self)
         let wasFirstResponder = isFirstResponder                         // capture BEFORE super flips it
         let resigned = super.resignFirstResponder()
@@ -445,12 +487,10 @@ final class DocumentCanvasView: UIView {
 
     override var keyCommands: [UIKeyCommand]? {
         [UIKeyCommand(input: "\t", modifierFlags: [], action: #selector(handleTabKey)),
-         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey)),
-         UIKeyCommand(input: "\r", modifierFlags: .shift, action: #selector(handleShiftReturn))]
+         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey))]
     }
     @objc private func handleTabKey() { moveToCell(forward: true) }
     @objc private func handleShiftTabKey() { moveToCell(forward: false) }
-    @objc private func handleShiftReturn() { performShiftReturn() }
 
     /// Applies a theme: updates the mapper (text/link colors used on the next reload) and pushes the accent
     /// color to the persistent caret/selection/blockquote views. The caller reloads content afterward so the
@@ -485,6 +525,12 @@ final class DocumentCanvasView: UIView {
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
     }
 
+    /// Applies host media geometry: stores it so the next box build (`setBlocks` / `insertMedia`) uses the
+    /// new bleed. Pure geometry — no mapper rebuild (unlike `applyQuoteStyle`). The caller reloads afterward.
+    func applyMediaBlockStyle(_ m: MediaBlockStyle) {
+        self.mediaBlockStyle = m
+    }
+
     /// Applies host-injected collapse/expand icons: stores them (read at `CollapsedQuoteBox` creation for the
     /// expand glyph) and pushes the collapse image to the overlay controls. The caller reloads afterward.
     func applyQuoteCollapseIcons(_ icons: RichTextEditorQuoteCollapseIcons?) {
@@ -510,6 +556,7 @@ final class DocumentCanvasView: UIView {
     /// cells the canvas reaches via `leafRegions()`.
     func setBlocks(_ blocks: [Block], width: CGFloat) {
         if width > 0 { lastLayoutWidth = width }
+        breakUndoCoalescing()   // a full document swap — programmatic set OR an undo/redo restore (the registerUndo closure calls setBlocks) — ends any open typing/deleting run
         tableSelection = nil
         imageSelection = nil   // a full document swap drops any transient structural selection
         spoilerDustViews.values.forEach { $0.view.removeFromSuperview() }
@@ -521,7 +568,8 @@ final class DocumentCanvasView: UIView {
         boxes = blocks.compactMap { block -> CanvasBlock? in
             switch block {
             case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: width)
-            case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width)
+            case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width,
+                                                       horizontalBleed: mediaBlockStyle.horizontalBleed)
             case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
             case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
             case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, expandImage: quoteCollapseIcons?.expand, width: width)

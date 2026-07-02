@@ -268,8 +268,8 @@ public extension TelegramEngine {
             return _internal_createGroup(account: self.account, title: title, peerIds: peerIds, ttlPeriod: ttlPeriod)
         }
 
-        public func createCommunity(title: String, about: String?, peerId: PeerId) -> Signal<PeerId, CreateCommunityError> {
-            return _internal_createCommunity(account: self.account, title: title, about: about, peerId: peerId)
+        public func createCommunity(title: String, about: String?, peerId: PeerId, visible: Bool) -> Signal<PeerId, CreateCommunityError> {
+            return _internal_createCommunity(account: self.account, title: title, about: about, peerId: peerId, visible: visible)
         }
 
         public func joinedCommunities() -> Signal<[EnginePeer], NoError> {

@@ -12,8 +12,6 @@ import AvatarComponent
 import BundleIconComponent
 import ListSectionComponent
 import ListActionItemComponent
-import AlertComponent
-import AlertInputFieldComponent
 import PeerListItemComponent
 
 private final class CommunitiesScreenComponent: Component {
@@ -74,6 +72,7 @@ private final class CommunitiesScreenComponent: Component {
         private var ignoreScrolling = false
         private var didRequestRefresh = false
         private var isActionInProgress = false
+        private weak var createCommunityController: ViewController?
 
         private var subjectPeer: EnginePeer?
         private var communities: [CommunityListEntry] = []
@@ -226,13 +225,14 @@ private final class CommunitiesScreenComponent: Component {
             }
         }
 
-        private func dismissController() {
+        private func dismissController(additionalController: ViewController? = nil) {
             guard let navigationController = self.environment?.controller()?.navigationController as? NavigationController else {
+                additionalController?.dismiss()
                 return
             }
             var viewControllers = navigationController.viewControllers
             viewControllers = viewControllers.filter { c in
-                if c is CommunitiesScreen || c is PeerInfoScreen {
+                if c is CommunitiesScreen || c is PeerInfoScreen || c === additionalController {
                     return false
                 } else {
                     return true
@@ -254,111 +254,21 @@ private final class CommunitiesScreenComponent: Component {
             guard let peerId = component.peerId, let environment = self.environment else {
                 return
             }
-
-            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
-            let inputState = AlertInputFieldComponent.ExternalState()
-            let isCreateEnabled = inputState.valueSignal
-            |> map { value -> Bool in
-                return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            }
-            |> distinctUntilChanged
-
-            let createProgress = Promise<Bool>(false)
-            let errorText = ValuePromise<String?>(nil)
-            var createImpl: (() -> Void)?
-
-            let contentSignal: Signal<[AnyComponentWithIdentity<AlertComponentEnvironment>], NoError> = errorText.get()
-            |> map { error -> [AnyComponentWithIdentity<AlertComponentEnvironment>] in
-                var content: [AnyComponentWithIdentity<AlertComponentEnvironment>] = []
-                content.append(AnyComponentWithIdentity(
-                    id: "title",
-                    component: AnyComponent(AlertTitleComponent(title: "New Community"))
-                ))
-                if let error {
-                    content.append(AnyComponentWithIdentity(
-                        id: "error",
-                        component: AnyComponent(AlertTextComponent(content: .plain(error), color: .destructive))
-                    ))
+            
+            let controller = component.context.sharedContext.makeCommunityEditScreen(
+                context: component.context,
+                mode: .create(peerId: peerId),
+                completed: { [weak self] in
+                    self?.dismissController(additionalController: self?.createCommunityController)
                 }
-                content.append(AnyComponentWithIdentity(
-                    id: "input",
-                    component: AnyComponent(AlertInputFieldComponent(
-                        context: component.context,
-                        placeholder: "Community Name",
-                        characterLimit: 128,
-                        hasClearButton: true,
-                        isInitiallyFocused: true,
-                        externalState: inputState,
-                        returnKeyAction: {
-                            createImpl?()
-                        }
-                    ))
-                ))
-                return content
-            }
-
-            let alertController = AlertScreen(
-                configuration: AlertScreen.Configuration(allowInputInset: true),
-                contentSignal: contentSignal,
-                actionsSignal: .single([
-                    AlertScreen.Action(title: environment.strings.Common_Cancel),
-                    AlertScreen.Action(
-                        id: "create",
-                        title: "Create",
-                        type: .default,
-                        action: {
-                            createImpl?()
-                        },
-                        autoDismiss: false,
-                        isEnabled: isCreateEnabled,
-                        progress: createProgress.get()
-                    )
-                ]),
-                updatedPresentationData: (presentationData, component.context.sharedContext.presentationData)
             )
-
-            createImpl = { [weak self, weak alertController, weak inputState] in
-                guard let self, let inputState else {
-                    return
-                }
-                if self.isActionInProgress {
-                    return
-                }
-                let title = inputState.value.trimmingCharacters(in: .whitespacesAndNewlines)
-                if title.isEmpty {
-                    inputState.animateError()
-                    return
-                }
-
-                self.isActionInProgress = true
-                createProgress.set(.single(true))
-                errorText.set(nil)
-
-                self.actionDisposable.set((component.context.engine.peers.createCommunity(
-                    title: title,
-                    about: nil,
-                    peerId: peerId
-                )
-                |> deliverOnMainQueue).startStrict(error: { [weak self, weak inputState] _ in
-                    guard let self else {
-                        return
-                    }
-                    self.isActionInProgress = false
-                    createProgress.set(.single(false))
-                    errorText.set("Something went wrong.")
-                    inputState?.animateError()
-                }, completed: { [weak self, weak alertController] in
-                    guard let self else {
-                        return
-                    }
-                    self.isActionInProgress = false
-                    createProgress.set(.single(false))
-                    alertController?.dismiss()
-                    self.dismissController()
-                }))
+            self.createCommunityController = controller
+            controller.navigationPresentation = .modal
+            if let navigationController = environment.controller()?.navigationController as? NavigationController {
+                navigationController.pushViewController(controller)
+            } else {
+                environment.controller()?.present(controller, in: .window(.root))
             }
-
-            environment.controller()?.present(alertController, in: .window(.root))
         }
 
         private func linkCommunity(component: CommunitiesScreenComponent, community: EnginePeer) {
@@ -502,11 +412,16 @@ private final class CommunitiesScreenComponent: Component {
             }
             contentHeight += navigationTitleSize.height + 13.0
 
+            var subtitleText: String = "Make your group a part of community with multiple related chats."
+            if case let .channel(channel) = self.subjectPeer, case .broadcast = channel.info {
+                subtitleText = "Make your channel a part of community with multiple related chats."
+            }
+            
             let subtitleSize = self.subtitle.update(
                 transition: transition,
                 component: AnyComponent(MultilineTextComponent(
                     text: .plain(NSAttributedString(
-                        string: "Make your group a part of community with multiple related chats.",
+                        string: subtitleText,
                         font: Font.regular(15.0),
                         textColor: theme.list.itemPrimaryTextColor
                     )),

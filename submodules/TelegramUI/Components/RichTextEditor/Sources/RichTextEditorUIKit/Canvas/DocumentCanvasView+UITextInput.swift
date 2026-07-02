@@ -53,6 +53,9 @@ extension DocumentCanvasView: UITextInput {
         // Route through the 3-way selection logic, not applyReplace directly: a system-initiated
         // replacement (autocorrect/dictation/marked-text) can span a table boundary, which the
         // same-stack-guarded applyReplace would silently drop.
+        // System-initiated replacement (autocorrect / dictation / marked-text spanning). Kept .none
+        // (its own undo step) — coalescing is scoped to insertText/deleteBackward typing/deleting, so a
+        // dictation utterance is one undo step. Intentional, not an oversight.
         editing { applySelectionReplace(globalFrom: lo, globalTo: hi, text: text) }
     }
 
@@ -64,6 +67,9 @@ extension DocumentCanvasView: UITextInput {
             if let img = boxes.compactMap({ $0 as? MediaBlockBox }).first(where: { region.ref == .caption($0.id) }) {
                 return img.captionTypingAttributes()
             }
+            // An empty code block types the monospace code attributes, not the body default — without this the
+            // first character typed into a just-created (empty) code block lands non-monospace at body size.
+            if case .code = region.ref { return CodeBlockBox.codeAttributes() }
             // Recover the owning paragraph — top-level OR nested in a table cell (via the active stack)
             // — so an empty styled/listed/cell paragraph keeps its paragraph style AND its box's mapper
             // on the next typed character. A table cell's mapper renders body text at a smaller base
@@ -280,21 +286,33 @@ extension DocumentCanvasView: UIKeyInput {
         }
         if text == "\n" {
             if let active = activeStack(at: head), active.box is CodeBlockBox {
-                // Enter on an empty trailing line of a code block EXITS it to a body paragraph (the escape
-                // hatch); otherwise it inserts a literal newline (no paragraph split). A selection always
-                // replaces-with-newline — only a collapsed caret can exit.
-                if selFrom == selTo, caretAtCodeBlockTrailingBlankLine(active) {
-                    exitCodeBlockToBodyParagraph(active)
+                // Double-return (Enter on an empty line) EXITS the code block: trailing → after, first →
+                // before, wholly-empty → un-code. A MIDDLE blank line and a non-empty line just insert a
+                // literal newline (no paragraph split). A selection always replaces-with-newline — only a
+                // collapsed caret can exit.
+                if selFrom == selTo, let exit = codeBlockDoubleReturnExit(active) {
+                    switch exit {
+                    case .after:  exitCodeBlockToBodyParagraph(active)
+                    case .before: exitCodeBlockToBodyParagraphBefore(active)
+                    case .uncode: uncodeEmptyCodeBlock(active)
+                    }
                 } else {
                     insertCodeBlockNewline()
                 }
+            } else if selFrom == selTo, let pos = resolveBox(at: head),
+                      let exitIndex = quoteDoubleReturnExitIndex(at: pos.index, local: pos.local) {
+                // Double-return EXITS the quote with a body paragraph (before/after follows from the run
+                // edge): either ON an empty quote line, or at the start of quote content with an empty quote
+                // line directly above (two newlines at the beginning). A middle empty quote line splits
+                // normally (the else branch).
+                exitQuoteToBodyParagraph(at: exitIndex)
             } else {
                 insertParagraphBreak()
             }
             return
         }
         if selFrom != selTo {
-            editing { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
+            editing(coalescing: .typing) { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
             return
         }
         // A collapsed caret that resolves to a table box (e.g. before a leading table / after a
@@ -307,10 +325,10 @@ extension DocumentCanvasView: UIKeyInput {
         }
         if isInsideTable(head) {
             // collapsed caret in a cell: text is in-place.
-            editing { applyLeafReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
+            editing(coalescing: .typing) { applyLeafReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
             return
         }
-        editing { applyReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
+        editing(coalescing: .typing) { applyReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
     }
 
     /// The number of UTF-16 units the composed character sequence (grapheme cluster) immediately
@@ -398,15 +416,32 @@ extension DocumentCanvasView: UIKeyInput {
             deleteTableStructuralSelection()
             return
         }
+        // iOS delivers Backspace in an empty paragraph immediately AFTER a non-paragraph atom (image /
+        // table / code / collapsed quote) as an object-replacement RANGE running from the atom's text end
+        // to the empty paragraph's start (device-log: `setRange [8,10]` overriding the collapsed caret at
+        // 10, then `deleteBackward selFrom=8 selTo=10`) — the same offset-geometry pattern for all atoms.
+        // The generic selection-replace below would mangle the boundary and strand the empty paragraph.
+        // Recognise it — selTo at the start of an EMPTY paragraph whose previous block is any non-paragraph
+        // atom, with selFrom only covering the structural slots before (`selFrom >=
+        // prevTextPosition(before: selTo)`, which excludes a genuine multi-char selection) — and remove the
+        // empty paragraph, parking the caret at the atom's text end (matching the collapsed-caret path for
+        // an empty paragraph after a non-text atom further below).
+        if selFrom != selTo, let posTo = resolveBox(at: selTo),
+           posTo.local == 0, posTo.box.textLength == 0, posTo.index > 0,
+           isNonParagraphAtom(boxes[posTo.index - 1]),
+           selFrom >= prevTextPosition(before: selTo) {
+            editing { removeBlock(at: posTo.index, parkingCaretAt: prevTextPosition(before: selTo)) }
+            return
+        }
         if selFrom != selTo {
-            editing { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
+            editing(coalescing: .deleting) { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             return
         }
         if isInsideTable(head) {
             guard let active = activeStack(at: head) else { return }
             if active.local > 0 {
                 let n = graphemeClusterLengthBeforeCaret(global: head)
-                editing { applyLeafReplace(globalFrom: head - n, globalTo: head, text: "") }
+                editing(coalescing: .deleting) { applyLeafReplace(globalFrom: head - n, globalTo: head, text: "") }
             } else if active.index > 0 {
                 editing { mergeParagraphs(in: active.stack, upperIndex: active.index - 1) }
             } else {
@@ -462,7 +497,7 @@ extension DocumentCanvasView: UIKeyInput {
             editing { replaceMediaWithEmptyParagraph(at: pos.index) }
         } else if pos.local > 0 {
             let n = graphemeClusterLengthBeforeCaret(global: head)
-            editing { applyReplace(globalFrom: head - n, globalTo: head, text: "") }
+            editing(coalescing: .deleting) { applyReplace(globalFrom: head - n, globalTo: head, text: "") }
         } else if pos.index > 0, isNonParagraphAtom(boxes[pos.index - 1]) {
             // Start of a paragraph after a NON-TEXT block (image / table / code) that can't absorb a text
             // merge. Backspace must NOT delete that block. An EMPTY paragraph is removed — so "deleting the

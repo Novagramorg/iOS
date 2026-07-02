@@ -100,8 +100,8 @@ The editor's defaults assume a full-page document; a compact host (the chat comp
 behavior, so the attachment screen / Demo / SwiftPM tests are unchanged.** The composer sets each in `didLoad`
 *before* seeding the document so the first layout picks them up:
 - `contentPageMargin` (default `CanvasMetrics.pageMargin` = 16) — the built-in horizontal page margin on each
-  side (`DocumentCanvasView.pageMargin`, used by `contentLeftPad`/`contentRightPad`; `MediaBlockBox` image
-  bleed keeps the static metric). Composer → 0.
+  side (`DocumentCanvasView.pageMargin`, used by `contentLeftPad`/`contentRightPad`; media bleed is governed
+  separately by the `mediaBlockStyle` knob). Composer → 0.
 - `minimumContentHeight` (default 44) — the floor `performLayout` applies to the returned content height.
   Composer → 0 (the height hugs the text; the host owns the min field height).
 - `blockVerticalInset` (default `BlockBox.defaultVerticalInset` = 8) — the root stack's base inter-block
@@ -137,6 +137,11 @@ behavior, so the attachment screen / Demo / SwiftPM tests are unchanged.** The c
   inter-line spacing that leaves the first line's baseline fixed, the right tool is `NSParagraphStyle.lineSpacing`
   (additive below each fragment; a lone line is unaffected) — add it as a `TextLayoutMetrics` field rather than
   abusing `lineHeightMultiple`.
+- `mediaBlockStyle` (`MediaBlockStyle`, default `.default` = `horizontalBleed` 16 == `CanvasMetrics.pageMargin`,
+  the document edge-to-edge look) — how far a top-level media block bleeds beyond the text content strip on each
+  side; applied via `applyMediaBlockStyle` (pure geometry, no mapper rebuild) and read at `MediaBlockBox` creation
+  (`setBlocks`/`insertMedia`); table-cell media always passes `horizontalBleed: 0`. Composer →
+  `MediaBlockStyle(horizontalBleed: 0)` so media insets like the text paragraphs.
 
 Two host-side runtime contracts the composer had to honor (apply to any non-attachment host): **seed an initial
 `document`** (the canvas starts with ZERO blocks; nothing renders/edits until the `document` setter runs), and
@@ -327,8 +332,12 @@ leaf, sized `content + 2` exactly like a wrap-heavy paragraph — multi-line int
 position/selection/tokenizer machinery (they're a linear UTF-16 range TextKit wraps). `currentBlock()` reads
 back the **plain** layout string (display-only monospace attrs never enter the model). Editing affordances
 mirror quotes (`+UITextInput`/`+Editing`/`+Interaction`): **Enter** inserts an interior newline via
-`insertCodeBlockNewline()` (replacing any selection), and **exits** to a new body paragraph on an empty
-trailing line (`exitCodeBlockToBodyParagraph`); **Backspace** in a fully-empty code block un-codes it to body;
+`insertCodeBlockNewline()` (replacing any selection); **double-return** (Enter on an empty line —
+`codeBlockDoubleReturnExit`) EXITS — a **trailing** blank line → body paragraph *after*
+(`exitCodeBlockToBodyParagraph`), the **first** blank line → body *before* (`exitCodeBlockToBodyParagraphBefore`; fires at local 0 OR local 1 — the
+start of content right after a leading blank — so **two newlines at the beginning** break out above),
+a **wholly-empty** block → un-code (`uncodeEmptyCodeBlock`); a MIDDLE blank line just inserts another newline.
+**Backspace** in a fully-empty code block un-codes it to body;
 a **tap below** a trailing code block appends a body paragraph; **cross-block** edits treat a code endpoint
 like media (truncate-and-keep partial coverage, drop full coverage) in `applyReplace`. **Creation:**
 `makeCodeBlock()` (`+ParagraphFormat`, façade-forwarded) toggles the touched top-level paragraphs into one code
@@ -543,13 +552,17 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   **Gated on `tapBelowAddsTrailingParagraph` (added 2026-06-28, default `true`):** the article editor keeps it;
   the chat composer sets it `false` (a compact field has no empty area below the content to grow into) — see the
   compact-host knob list above.
-  **(C)** **Shift+Return** inside a quote EXITS it with a new empty body paragraph (caret there): **ABOVE** the
-  quote when the caret is on its first visual (wrapped) line (`caretIsOnFirstLine` — compares the caret's `minY`
-  to offset 0's), else **BELOW** it. So a single-line / empty quote (caret always on its first line) exits
-  ABOVE; a multi-line quote exits above only from the first wrapped line, else below. Outside a quote it falls
-  back to a normal paragraph break. Wired via a new `UIKeyCommand(input: "\r", modifierFlags: .shift)` —
-  hardware-keyboard only, so the key-command dispatch is runtime-unverified (the `performShiftReturn` logic is
-  unit-tested; if "\r" doesn't match, Shift+Return falls back to `insertText("\n")`).
+  **(C)** **Double-return** (Enter on an empty line inside a quote or code block — added 2026-06-30, replacing
+  the earlier Shift+Return) EXITS the block with a new empty body paragraph (caret there): the run's **last /
+  wholly-empty** line → **after**, its **first** line → **before**, a wholly-empty block → un-quote / un-code;
+  a MIDDLE empty line splits normally (no exit). For a quote *run*, first/last = the first/last consecutive
+  `.quote` paragraph (`emptyQuoteIsRunEdge` → `exitQuoteToBodyParagraph`, which replaces the edge empty quote
+  line with a body so the before/after side follows from which edge it sat on). **Reachability (2026-06-30):**
+  after the first Enter at the start of a block the caret lands on the content line (past the new break), so the
+  *before*-exit also fires from the start of content with an empty line directly above — code via the local-1
+  branch of `codeBlockDoubleReturnExit`, quotes via `quoteDoubleReturnExitIndex` (caret at content start with an
+  empty quote line above) — so **two newlines at the beginning** break out *above* instead of stacking blank
+  lines. The old Shift+Return path (its `UIKeyCommand` + `performShiftReturn` + `caretIsOnFirstLine`) was removed.
 - **"Type something…" placeholder shows only on the document's LAST block** (`BlockBox.isLastBlock`, stamped
   in `stampListMarkers` like `isTopLevelBlock`); an empty body paragraph elsewhere shows no placeholder (list
   hints are unaffected). An empty non-last paragraph still reserves its line + caret — only the hint is gone.
@@ -794,6 +807,53 @@ ring), and per-block frames (orange, indexed), with inset/margin numeric labels.
   **outside** `editing{}` with one undo per composition; a system inline prediction (signalled by
   `setMarkedText` `sel:{0,0}`, ghost trailing) is **dismissed, never committed**, by our finalize
   chokepoints so the keyboard's own accept lands clean.
+- **The undo buffer is a PRIVATE, per-canvas `UndoManager`, NOT the responder-chain `UIResponder.undoManager`**
+  (`DocumentCanvasView.effectiveUndoManager = undoManagerOverride ?? ownUndoManager`, the latter a private
+  `UndoManager()`). The responder-chain manager is shared app-wide, so other responders' (and the system
+  text-input subsystem's) selection/typing undo registrations would surface in the editor's `canUndo` /
+  `undo()` — the device-observed "a selection change is undoable / undo is active on the FIRST tap before any
+  content edit" bug (fixed 2026-06-30). Only the editor's own `registerUndo` (every content `editing{}` + the
+  composition commit) may enter this buffer. Tests inject their own via `undoManagerOverride` (every undo test
+  already did — production simply never wired a private manager until this fix). Regression-guarded by
+  `UndoBufferIsolationTests`. **The private manager is EXPOSED to the responder chain** via
+  `override var undoManager { effectiveUndoManager }` (added 2026-07-01), so the SYSTEM undo affordances —
+  hardware ⌘Z / ⌘⇧Z, shake-to-undo, and the Edit-menu Undo/Redo — act on our edits. They were DEAD between the
+  2026-06-30 private-manager switch and this fix, because the responder chain exposed the app-wide *shared*
+  manager (which our edits never touch). Safe by construction: the override changes only WHO can call `undo()`
+  on our manager, not WHAT is registered into it (still only `registerUndo` content edits — nothing on
+  selection), and it's a private instance no other responder holds, so the foreign-entry pollution above (which
+  lived in the shared instance) cannot reappear; UIKit records no cursor movements / typing undos into a bare
+  custom `UITextInput`. The `RichTextAttachmentScreen` nav-bar pill drives the same `undo()`/`redo()`.
+  (⌘Z runtime-verified 2026-07-01.)
+- **`undo()`/`redo()` fire a trailing `onChange` AFTER the manager settles** (`RichTextEditorView`). The undo/redo
+  closure's own refresh (`notifyContentSizeChanged`) runs WHILE STILL INSIDE `UndoManager.undo()/redo()`, so a
+  host that re-reads `currentState().canUndo/canRedo` synchronously from it sees the stack BEFORE the group is
+  finalized — stale for the LAST undo/redo only (intermediate steps read the same value either way). Symptom:
+  the undo (or redo) control stays enabled after the final undo (redo) until an unrelated `update()` (e.g. a
+  rotation) re-reads state. The explicit trailing `onChange?()` refreshes the host with the settled availability.
+  Regression-guarded by `UndoBufferIsolationTests.test_undoRedo_fireOnChange_soHostRefreshesAvailability`.
+- **Typing/deleting undo COALESCES into whole runs** (`editing(coalescing:)`, added 2026-07-01). Every edit
+  still snapshots the whole document, but `editing` SKIPS `registerUndo` when this edit CONTINUES an open run —
+  same kind (`.typing`/`.deleting`), collapsed caret, landing exactly where the last keystroke left off
+  (`openUndoRun.caret`) — so one undo reverts the whole uninterrupted run (like an iOS composer), not one char
+  per step. The run-start snapshot already captures the pre-run doc, so skipping registration is all it takes;
+  redo is unchanged (the closure lazily captures the post-run doc). A run BREAKS on: a caret move / a
+  typing↔deleting switch / a selection-replace (all caught by the contiguity check), any structural / format /
+  paste edit (the default `coalescing: .none`), and IME composition commit + resign-first-responder + `setBlocks`
+  (which call `breakUndoCoalescing()`; `setBlocks` also covers the undo/redo restore). Only the 3 char-insert
+  `insertText` sites pass `.typing` and the 3 plain-delete `deleteBackward` sites pass `.deleting`; every
+  structural delete (paragraph merge / `removeBlock` / media-replace / un-quote / un-code / cross-block merge)
+  stays `.none`. Scope note: system replacements via `replace(_:withText:)` (autocorrect/dictation) stay
+  `.none`, so a dictation utterance is its own undo step. `undoRegistrationCount` is a test seam counting new
+  steps; `UndoCoalescingTests`.
+- **Undo restores a CARET for content edits, the SELECTION for formatting** (`editing`, added 2026-07-01). The
+  undo closure restores the pre-edit `anchor`/`head` — which for a selection-delete/replace would re-select the
+  restored text. Instead, when the edit COLLAPSED the caret (post-`body()` `anchor == head` — every content
+  edit: delete / type-over / paste) the registration collapses the restored selection to a caret at the END of
+  the pre-edit span (`max(beforeAnchor, beforeHead)`); a selection-preserving edit (formatting — bold/italic/
+  link/style leaves a range post-`body()`) restores the pre-edit SELECTION so you still see what was
+  un-formatted. Matches an iOS composer (macOS/VSCode re-select the restored text; iOS uses a plain caret).
+  `UndoCoalescingTests`.
 - **`text(in:)` MUST emit a `"\n"` at every top-level paragraph boundary** (`DocumentCanvasView+UITextInput`),
   exactly like a `UITextView` over a `"\n"`-joined string — because the global axis carries NO newline char
   between blocks, only a structural token gap. The system keyboard reads document context through `text(in:)`,

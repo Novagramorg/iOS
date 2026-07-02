@@ -11,7 +11,11 @@ block to one of these views via a host-registered provider, then positions/sizes
 
 - **`MediaItemNodeView`** — the `RichTextMediaItemView` adapter + **3-way dispatcher** by media kind,
   created once per media occurrence at three call sites (`RichTextAttachmentScreen`, `ChatControllerNode`,
-  `ChatInterfaceStateInputPanels`):
+  `ChatInterfaceStateInputPanels`). Accepts a `cornerRadius: CGFloat = 0` init param: when > 0 and the
+  audio branch was NOT taken, sets `layer.cornerRadius` + `masksToBounds` on the container (child fills
+  bounds, so the rounded rect clips it). Photo/video/location round to 10pt at the two composer call
+  sites; audio stays square (check is `audioView == nil`); `RichTextAttachmentScreen` (article editor)
+  leaves the default 0 and stays square.
   - **audio** (`.file` && (`isMusic` || `isVoice`)) → `StandaloneInstantPageAudioView` (a playable,
     themeable row; `audioColorOverride` themes it to the editor accent/text scheme).
   - **location** (`.geo`) → `StandaloneInstantPageImageView` + an `InstantPageMapAttribute`

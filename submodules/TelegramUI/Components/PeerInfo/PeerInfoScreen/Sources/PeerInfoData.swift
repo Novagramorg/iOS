@@ -1787,6 +1787,8 @@ func peerInfoScreenData(
             
             let personalChannel = peerInfoPersonalOrLinkedChannel(context: context, peerId: peerId, isSettings: false)
             
+            let forcedLinkedCommunityId = Atomic<PeerId?>(value: nil)
+            
             return combineLatest(
                 context.account.viewTracker.peerView(peerId, updateData: true),
                 peerInfoAvailableMediaPanes(context: context, peerId: peerId, chatLocation: chatLocation, isMyProfile: false, chatLocationContextHolder: chatLocationContextHolder, sharedMediaFromForumTopic: sharedMediaFromForumTopic),
@@ -1808,7 +1810,7 @@ func peerInfoScreenData(
                 profileGiftsContext.state,
                 personalChannel
             )
-            |> map { peerView, availablePanes, globalNotificationSettings, status, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, accountIsPremium, recommendedChannels, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndState, revenueContextAndState, profileGiftsState, personalChannel -> PeerInfoScreenData in
+            |> mapToSignal { peerView, availablePanes, globalNotificationSettings, status, currentInvitationsContext, invitations, currentRequestsContext, requests, hasStories, accountIsPremium, recommendedChannels, hasSavedMessages, hasSavedMessagesChats, hasSavedMessageTags, isPremiumRequiredForStoryPosting, starsRevenueContextAndState, revenueContextAndState, profileGiftsState, personalChannel -> Signal<PeerInfoScreenData, NoError> in
                 var availablePanes = availablePanes
                 if let hasStories {
                     if hasStories {
@@ -1878,54 +1880,96 @@ func peerInfoScreenData(
                         requestsStatePromise.set(requestsContext.state |> map(Optional.init))
                     }
                 }
-                                                                
-                return PeerInfoScreenData(
-                    peer: peerView.peers[peerId].flatMap(EnginePeer.init),
-                    chatPeer: peerView.peers[peerId].flatMap(EnginePeer.init),
-                    savedMessagesPeer: nil,
-                    cachedData: peerView.cachedData,
-                    status: status,
-                    peerNotificationSettings: peerView.notificationSettings as? TelegramPeerNotificationSettings,
-                    threadNotificationSettings: nil,
-                    globalNotificationSettings: globalNotificationSettings,
-                    isContact: peerView.peerIsContact,
-                    availablePanes: availablePanes ?? [],
-                    groupsInCommon: nil,
-                    linkedDiscussionPeer: discussionPeer,
-                    linkedMonoforumPeer: monoforumPeer,
-                    linkedCommunityData: nil,
-                    members: nil,
-                    storyListContext: storyListContext,
-                    storyArchiveListContext: nil,
-                    botPreviewStoryListContext: nil,
-                    encryptionKeyFingerprint: nil,
-                    globalSettings: nil,
-                    invitations: invitations,
-                    requests: requests,
-                    requestsContext: currentRequestsContext,
-                    threadData: nil,
-                    appConfiguration: nil,
-                    isPowerSavingEnabled: nil,
-                    accountIsPremium: accountIsPremium,
-                    hasSavedMessageTags: hasSavedMessageTags,
-                    hasBotPreviewItems: false,
-                    isPremiumRequiredForStoryPosting: isPremiumRequiredForStoryPosting,
-                    personalChannel: personalChannel,
-                    starsState: nil,
-                    tonState: nil,
-                    starsRevenueStatsState: starsRevenueContextAndState.1,
-                    starsRevenueStatsContext: starsRevenueContextAndState.0,
-                    revenueStatsState: revenueContextAndState.1,
-                    revenueStatsContext: revenueContextAndState.0,
-                    profileGiftsContext: profileGiftsContext,
-                    profileGiftsCollectionsContext: profileGiftsCollectionsContext,
-                    premiumGiftOptions: [],
-                    webAppPermissions: nil,
-                    savedMusicContext: nil,
-                    savedMusicState: nil,
-                    managedByBot: nil,
-                    businessConnectedBot: nil
-                )
+                
+                let linkedCommunityData: Signal<PeerInfoLinkedCommunityData?, NoError>
+                if let channel = peerViewMainPeer(peerView) as? TelegramChannel, let linkedCommunityId = channel.linkedCommunityId {
+                    let previousLinkedCommunityId = forcedLinkedCommunityId.swap(linkedCommunityId)
+                    if previousLinkedCommunityId != linkedCommunityId {
+                        context.account.viewTracker.forceUpdateCachedPeerData(peerId: linkedCommunityId)
+                    }
+
+                    linkedCommunityData = combineLatest(
+                        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: linkedCommunityId)),
+                        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.CachedData(id: linkedCommunityId))
+                    )
+                    |> map { peer, cachedData -> PeerInfoLinkedCommunityData? in
+                        guard let peer else {
+                            return nil
+                        }
+                        if case let .community(community) = peer {
+                            return PeerInfoLinkedCommunityData(peer: community, cachedData: cachedData as? CachedCommunityData)
+                        } else {
+                            return nil
+                        }
+                    }
+                } else {
+                    let _ = forcedLinkedCommunityId.swap(nil)
+                    linkedCommunityData = .single(nil)
+                }
+                
+                return linkedCommunityData
+                |> map { linkedCommunityData -> PeerInfoScreenData in
+                    var effectiveStatus = status
+                    if let linkedPeer = linkedCommunityData?.cachedData?.linkedPeers.first(where: { $0.peerId == peerId }), linkedPeer.visible == false, var status = effectiveStatus {
+                        //TODO:localize
+                        let statusComponents = status.text.components(separatedBy: ", ")
+                        var statusText = status.text
+                        if statusComponents.count > 1 {
+                            statusText = statusComponents[0]
+                        }
+                        status.text = "Hidden • \(statusText)"
+                        status.hasHiddenCommunityPrefix = true
+                        effectiveStatus = status
+                    }
+                    
+                    return PeerInfoScreenData(
+                        peer: peerView.peers[peerId].flatMap(EnginePeer.init),
+                        chatPeer: peerView.peers[peerId].flatMap(EnginePeer.init),
+                        savedMessagesPeer: nil,
+                        cachedData: peerView.cachedData,
+                        status: status,
+                        peerNotificationSettings: peerView.notificationSettings as? TelegramPeerNotificationSettings,
+                        threadNotificationSettings: nil,
+                        globalNotificationSettings: globalNotificationSettings,
+                        isContact: peerView.peerIsContact,
+                        availablePanes: availablePanes ?? [],
+                        groupsInCommon: nil,
+                        linkedDiscussionPeer: discussionPeer,
+                        linkedMonoforumPeer: monoforumPeer,
+                        linkedCommunityData: linkedCommunityData,
+                        members: nil,
+                        storyListContext: storyListContext,
+                        storyArchiveListContext: nil,
+                        botPreviewStoryListContext: nil,
+                        encryptionKeyFingerprint: nil,
+                        globalSettings: nil,
+                        invitations: invitations,
+                        requests: requests,
+                        requestsContext: currentRequestsContext,
+                        threadData: nil,
+                        appConfiguration: nil,
+                        isPowerSavingEnabled: nil,
+                        accountIsPremium: accountIsPremium,
+                        hasSavedMessageTags: hasSavedMessageTags,
+                        hasBotPreviewItems: false,
+                        isPremiumRequiredForStoryPosting: isPremiumRequiredForStoryPosting,
+                        personalChannel: personalChannel,
+                        starsState: nil,
+                        tonState: nil,
+                        starsRevenueStatsState: starsRevenueContextAndState.1,
+                        starsRevenueStatsContext: starsRevenueContextAndState.0,
+                        revenueStatsState: revenueContextAndState.1,
+                        revenueStatsContext: revenueContextAndState.0,
+                        profileGiftsContext: profileGiftsContext,
+                        profileGiftsCollectionsContext: profileGiftsCollectionsContext,
+                        premiumGiftOptions: [],
+                        webAppPermissions: nil,
+                        savedMusicContext: nil,
+                        savedMusicState: nil,
+                        managedByBot: nil,
+                        businessConnectedBot: nil
+                    )
+                }
             }
         case let .group(groupId):
             var onlineMemberCount: Signal<(total: Int32?, recent: Int32?), NoError> = .single((nil, nil))
@@ -2213,7 +2257,7 @@ func peerInfoScreenData(
                 let appConfiguration: AppConfiguration = preferencesView?.get(AppConfiguration.self) ?? .defaultValue
 
                 let linkedCommunityData: Signal<PeerInfoLinkedCommunityData?, NoError>
-                if let channel = peerViewMainPeer(peerView) as? TelegramChannel, case .group = channel.info, let linkedCommunityId = channel.linkedCommunityId {
+                if let channel = peerViewMainPeer(peerView) as? TelegramChannel, let linkedCommunityId = channel.linkedCommunityId {
                     let previousLinkedCommunityId = forcedLinkedCommunityId.swap(linkedCommunityId)
                     if previousLinkedCommunityId != linkedCommunityId {
                         context.account.viewTracker.forceUpdateCachedPeerData(peerId: linkedCommunityId)
