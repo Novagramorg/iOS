@@ -394,6 +394,89 @@ extension DocumentCanvasView {
         }
     }
 
+    // MARK: - Pull-quote in-block editing (mirrors the code-block editing affordances)
+
+    /// Where double-return (Enter on an empty line of a pull quote) exits: `.after` for the trailing blank
+    /// line, `.before` for the first blank line, `.unmake` for a wholly-empty pull quote. `nil` for a
+    /// non-empty line or a MIDDLE blank line — which just inserts another interior newline (no exit).
+    enum PullQuoteDoubleReturnExit { case after, before, unmake }
+
+    /// Inserts a literal newline inside the caret's pull quote (no paragraph split), replacing any selection
+    /// first. The inserted newline carries pull-quote attributes (italic/centered). Caller checks the caret
+    /// resolves to a `PullQuoteBox`. Wraps itself in `editing { }`.
+    func insertPullQuoteNewline() {
+        guard activeStack(at: head)?.box is PullQuoteBox else { return }
+        editing {
+            if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
+            guard let active = activeStack(at: head), active.box is PullQuoteBox else { return }
+            active.box.textLayout.replace(start: active.local, end: active.local,
+                with: NSAttributedString(string: "\n", attributes: PullQuoteBox.pullQuoteTypingAttributes(mapper)))
+            recomputeSpans()
+            let caret = active.box.textStart + active.local + 1
+            anchor = caret; head = caret
+        }
+    }
+
+    func pullQuoteDoubleReturnExit(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) -> PullQuoteDoubleReturnExit? {
+        guard active.box is PullQuoteBox else { return nil }
+        let s = active.box.textLayout.attributedString.string as NSString
+        if s.length == 0 { return .unmake }
+        let local = active.local, nl = unichar(10)   // "\n"
+        if local == s.length, s.character(at: s.length - 1) == nl { return .after }
+        if s.character(at: 0) == nl, local <= 1 { return .before }
+        return nil
+    }
+
+    /// Removes a pull quote's trailing "\n" (if present) and inserts an empty body paragraph after it;
+    /// caret lands in the new paragraph. Mirrors `exitCodeBlockToBodyParagraph`.
+    func exitPullQuoteToBodyParagraph(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        editing {
+            let s = active.box.textLayout.attributedString.string as NSString
+            if s.hasSuffix("\n") {
+                active.box.textLayout.replace(start: s.length - 1, end: s.length, with: NSAttributedString(string: ""))
+            }
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = active.stack.boxes
+            newBoxes.insert(body, at: active.index + 1)
+            active.stack.boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
+    }
+
+    /// Removes a pull quote's leading "\n" and inserts an empty body paragraph BEFORE it (caret there).
+    /// Mirrors `exitCodeBlockToBodyParagraphBefore`.
+    func exitPullQuoteToBodyParagraphBefore(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        editing {
+            let s = active.box.textLayout.attributedString.string as NSString
+            if s.hasPrefix("\n") {
+                active.box.textLayout.replace(start: 0, end: 1, with: NSAttributedString(string: ""))
+            }
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = active.stack.boxes
+            newBoxes.insert(body, at: active.index)
+            active.stack.boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
+    }
+
+    /// Replaces a wholly-empty pull quote with an empty body paragraph (caret there). Mirrors
+    /// `uncodeEmptyCodeBlock`.
+    func unmakeEmptyPullQuote(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        editing {
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = active.stack.boxes
+            newBoxes.replaceSubrange(active.index...active.index, with: [body])
+            active.stack.boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
+    }
+
     /// True when the top-level box at `index` is at the FIRST or LAST edge of its consecutive `.quote` run
     /// (a single quote is both). Double-return on such an empty quote line exits; a MIDDLE one (both
     /// neighbors are quotes) splits normally.

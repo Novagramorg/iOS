@@ -70,6 +70,9 @@ extension DocumentCanvasView: UITextInput {
             // An empty code block types the monospace code attributes, not the body default — without this the
             // first character typed into a just-created (empty) code block lands non-monospace at body size.
             if case .code = region.ref { return CodeBlockBox.codeAttributes() }
+            // An empty pull quote types the italic/centered pull-quote attributes — without this the first
+            // character typed into an empty pull quote lands body-upright-left instead of italic/centered.
+            if case .pullQuote = region.ref { return PullQuoteBox.pullQuoteTypingAttributes(mapper) }
             // Recover the owning paragraph — top-level OR nested in a table cell (via the active stack)
             // — so an empty styled/listed/cell paragraph keeps its paragraph style AND its box's mapper
             // on the next typed character. A table cell's mapper renders body text at a smaller base
@@ -299,6 +302,19 @@ extension DocumentCanvasView: UIKeyInput {
                 } else {
                     insertCodeBlockNewline()
                 }
+            } else if let active = activeStack(at: head), active.box is PullQuoteBox {
+                // Double-return EXITS the pull quote: trailing → after, first → before, wholly-empty → unmake.
+                // A MIDDLE blank line and a non-empty line just insert an interior newline. A selection always
+                // replaces-with-newline — only a collapsed caret can exit.
+                if selFrom == selTo, let exit = pullQuoteDoubleReturnExit(active) {
+                    switch exit {
+                    case .after:  exitPullQuoteToBodyParagraph(active)
+                    case .before: exitPullQuoteToBodyParagraphBefore(active)
+                    case .unmake: unmakeEmptyPullQuote(active)
+                    }
+                } else {
+                    insertPullQuoteNewline()
+                }
             } else if selFrom == selTo, let pos = resolveBox(at: head),
                       let exitIndex = quoteDoubleReturnExitIndex(at: pos.index, local: pos.local) {
                 // Double-return EXITS the quote with a body paragraph (before/after follows from the run
@@ -497,6 +513,22 @@ extension DocumentCanvasView: UIKeyInput {
             // no merge branch below and is undeletable.
             editing {
                 let body = BlockBox(paragraph: ParagraphBlock(id: codeBox.id, style: .body, runs: []),
+                                    mapper: mapper, width: effectiveWidth)
+                var newBoxes = active.stack.boxes
+                newBoxes.replaceSubrange(active.index...active.index, with: [body])
+                active.stack.boxes = newBoxes
+                recomputeSpans()
+                anchor = body.textStart; head = body.textStart
+            }
+            return
+        }
+        if let pqBox = pos.box as? PullQuoteBox, pqBox.textLength == 0,
+           let active = activeStack(at: head) {
+            // Backspace in an EMPTY pull quote converts it to a body paragraph (`PullQuoteBox` is a distinct
+            // class, so it's REPLACED in its stack with a body `BlockBox`). Mirrors the empty-code branch
+            // above — without this an empty pull quote matches no merge branch below and is undeletable.
+            editing {
+                let body = BlockBox(paragraph: ParagraphBlock(id: pqBox.id, style: .body, runs: []),
                                     mapper: mapper, width: effectiveWidth)
                 var newBoxes = active.stack.boxes
                 newBoxes.replaceSubrange(active.index...active.index, with: [body])

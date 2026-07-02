@@ -60,6 +60,15 @@ final class PullQuoteBox {
         guard layout.length == 0 else { return 0 }
         return mapper.styleSheet.font(for: .pullQuote, attributes: CharacterAttributes()).lineHeight
     }
+
+    /// Attributes for text typed into a pull quote (italic + centered paragraph style). Used by
+    /// `typingAttributeDict` and `insertPullQuoteNewline` so the first character typed into an
+    /// empty pull quote is italic/centered, not body-upright-left.
+    static func pullQuoteTypingAttributes(_ mapper: AttributedStringMapper) -> [NSAttributedString.Key: Any] {
+        let probe = mapper.attributedString(for: ParagraphBlock(id: BlockID("pq-typing"), style: .pullQuote,
+                                                                runs: [TextRun(text: " ")]))
+        return probe.attributes(at: 0, effectiveRange: nil)
+    }
 }
 
 @available(iOS 13.0, *)
