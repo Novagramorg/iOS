@@ -24,5 +24,20 @@ final class PullQuoteBoxTests: XCTestCase {
         canvas.setBlocks([.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "hi")]))], width: 320)
         XCTAssertTrue(canvas.boxes.contains { $0 is PullQuoteBox })
     }
+
+    func test_emptyPullQuote_showsPlaceholderAndHugsIt() {
+        let box = PullQuoteBox(pullQuote: PullQuote(id: BlockID("pq"), runs: []),
+                               mapper: AttributedStringMapper(), pullQuoteStyle: .default, width: 320)
+        box.placeholders = .default    // pullQuote == "Type a quote here"
+        XCTAssertEqual(box.placeholderText, "Type a quote here")
+        XCTAssertGreaterThan(box.contentWidth, 0)      // empty pill hugs the placeholder, not zero width
+    }
+
+    func test_nonEmptyPullQuote_hasNoPlaceholder() {
+        let box = PullQuoteBox(pullQuote: PullQuote(id: BlockID("pq"), runs: [TextRun(text: "hi")]),
+                               mapper: AttributedStringMapper(), pullQuoteStyle: .default, width: 320)
+        box.placeholders = .default
+        XCTAssertNil(box.placeholderText)
+    }
 }
 #endif

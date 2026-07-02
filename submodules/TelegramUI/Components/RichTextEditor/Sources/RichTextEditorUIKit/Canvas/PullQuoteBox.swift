@@ -16,6 +16,9 @@ final class PullQuoteBox {
 
     var frame: CGRect = .zero
     var globalStart: Int = 0
+    /// Placeholder strings stamped by the canvas in `stampListMarkers()`. Drives the centered
+    /// "Type a quote here" hint and the empty-state pill width.
+    var placeholders: RichTextEditorPlaceholders = .default
 
     var leftInset: CGFloat { pullQuoteStyle.horizontalPadding }
     var rightInset: CGFloat { pullQuoteStyle.horizontalPadding }
@@ -36,10 +39,20 @@ final class PullQuoteBox {
     var length: Int { layout.length }
     var textOrigin: CGPoint { CGPoint(x: frame.minX + leftInset, y: frame.minY + topInset) }
 
-    /// Widest laid-out line width (glyph-hugging), for the content-hugging pill. 0 when empty (the empty-state
-    /// pill is sized to the placeholder in a later task).
+    /// Placeholder text for an empty pull quote, or nil when non-empty or placeholder string is empty.
+    var placeholderText: String? {
+        guard layout.length == 0, !placeholders.pullQuote.isEmpty else { return nil }
+        return placeholders.pullQuote
+    }
+
+    /// Widest laid-out line width (glyph-hugging), for the content-hugging pill. When empty, returns
+    /// the placeholder's measured width so the pill hugs it (floored by the Task-10 minWidth).
     var contentWidth: CGFloat {
-        guard length > 0 else { return 0 }
+        if length == 0 {
+            guard let ph = placeholderText else { return 0 }
+            let font = mapper.styleSheet.font(for: .pullQuote, attributes: .plain)
+            return (ph as NSString).size(withAttributes: [.font: font]).width
+        }
         return layout.selectionRects(start: 0, end: length).map(\.width).max() ?? 0
     }
 
@@ -78,6 +91,14 @@ extension PullQuoteBox: CanvasBlock {
         // The pill background + corner marks are added by later tasks via the decorations layer.
         // This box draws only the (centered, italic) text.
         layout.drawText(in: ctx, at: textOrigin)
+        if let ph = placeholderText {
+            let font = mapper.styleSheet.font(for: .pullQuote, attributes: .plain)
+            let ps = NSMutableParagraphStyle(); ps.alignment = .center
+            let rect = CGRect(x: frame.minX + leftInset, y: textOrigin.y,
+                              width: max(frame.width - leftInset - rightInset, 1), height: frame.height - topInset - bottomInset)
+            NSAttributedString(string: ph, attributes: [.font: font, .foregroundColor: mapper.theme.placeholder,
+                                                        .paragraphStyle: ps]).draw(in: rect)
+        }
     }
 }
 #endif

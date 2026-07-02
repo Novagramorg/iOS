@@ -13,17 +13,21 @@ public struct RichTextEditorPlaceholders: Equatable {
     public var listEnd: String
     /// Shown on an empty nested list item ("return outdents").
     public var listOutdent: String
+    /// Shown centered in an empty pull-quote block.
+    public var pullQuote: String
 
-    public init(body: String, listEnd: String, listOutdent: String) {
+    public init(body: String, listEnd: String, listOutdent: String, pullQuote: String = "Type a quote here") {
         self.body = body
         self.listEnd = listEnd
         self.listOutdent = listOutdent
+        self.pullQuote = pullQuote
     }
 
     public static let `default` = RichTextEditorPlaceholders(
         body: "Type something…",
         listEnd: "Press return to end the list",
-        listOutdent: "Press return to outdent"
+        listOutdent: "Press return to outdent",
+        pullQuote: "Type a quote here"
     )
 }
 
