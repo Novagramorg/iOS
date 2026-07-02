@@ -41,6 +41,10 @@ final class DocumentCanvasView: UIView {
     /// the front each layout pass so it sits above text + block views; its `hitTest` passes only button
     /// touches, letting all other touches fall through to the canvas.
     let quoteCollapseControls = QuoteCollapseControlsView()
+    /// Non-interactive overlay hosting an opening (top-left) and closing (bottom-right, rotated 180°)
+    /// quote-mark image view per pull-quote pill, tinted to the accent. Purely decorative; all touches
+    /// fall through to the canvas (`isUserInteractionEnabled = false`).
+    let pullQuoteMarksView = PullQuoteMarksView()
     /// Non-interactive container for body/caption emoji views (canvas coords). Kept below the chrome
     /// overlay (which is brought to front each layout pass). Cell emoji live in the table content view.
     let emojiOverlay = UIView()
@@ -416,6 +420,8 @@ final class DocumentCanvasView: UIView {
         // so caret placement / text selection / table chrome all still work through it.
         quoteCollapseControls.onCollapse = { [weak self] idx in self?.collapseQuoteRun(atIndex: idx) }
         addSubview(quoteCollapseControls)
+        // Non-interactive pull-quote corner-mark overlay (decorative; isUserInteractionEnabled = false).
+        addSubview(pullQuoteMarksView)
         addSubview(caretView)   // own caret, above content; reparented into a table's content view when needed
         addSubview(transientCaretView)   // own floating caret, above content; reparented like caretView
         addSubview(startHandleView)   // own-drawn selection handles, hosted per-endpoint like the caret
@@ -513,6 +519,7 @@ final class DocumentCanvasView: UIView {
         self.blockquoteUnderlay.accentColor = theme.accent
         self.pullQuoteUnderlay.accentColor = theme.accent
         self.quoteCollapseControls.accentColor = theme.accent
+        self.pullQuoteMarksView.accentColor = theme.accent
     }
 
     /// Applies quote geometry: rebuilds the mapper's stylesheet with the indent/trailing/spacing fields
@@ -858,6 +865,8 @@ final class DocumentCanvasView: UIView {
         quoteCollapseControls.frame = bounds
         bringSubviewToFront(quoteCollapseControls)       // interactive: above underlay + text block views
         quoteCollapseControls.sync(runs: collapseButtonRuns())
+        pullQuoteMarksView.frame = bounds
+        pullQuoteMarksView.sync(marks: pullQuoteMarkRects())
         emojiOverlay.frame = bounds
         syncEmojiViews()
         syncChecklistMarkerViews()

@@ -57,6 +57,17 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Open (top-left) + close (bottom-right) quote-mark rects per pull-quote pill (canvas coords). The close mark
+    /// is rendered rotated 180° by the marks view. Sizes/insets are constants here; Task 10 sources them from a knob.
+    func pullQuoteMarkRects() -> [(open: CGRect, close: CGRect)] {
+        let s: CGFloat = 16      // Task 10 → pullQuoteStyle.markSize
+        let inset: CGFloat = 6   // Task 10 → pullQuoteStyle.markInset
+        return pullQuotePillRects().map { pill in
+            (open: CGRect(x: pill.minX + inset, y: pill.minY + inset, width: s, height: s),
+             close: CGRect(x: pill.maxX - inset - s, y: pill.maxY - inset - s, width: s, height: s))
+        }
+    }
+
     // MARK: - Collapse button runs
 
     /// Minimum run height (pts) for a quote run to earn a collapse affordance.
