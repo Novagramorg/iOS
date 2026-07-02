@@ -151,6 +151,10 @@ public struct ChatInputContent: Equatable, Codable {
                 if hasEmitted { result.append("\n") }
                 hasEmitted = true
                 result.append(" ")
+            case let .pullQuote(pq):
+                if hasEmitted { result.append("\n") }
+                hasEmitted = true
+                result.append(pq.text)
             case .media, .table:
                 // Off the flat axis: no character AND no separator (see `blockFlatLength`). Matches
                 // `attributedString(from:)` (drops them) and the editor's `composerParagraphs()` (skips them).
@@ -189,6 +193,8 @@ public struct ChatInputContent: Equatable, Codable {
             return false
         case .table:
             return false
+        case let .pullQuote(pq):
+            return pq.text.isEmpty
         }
     }
 
@@ -235,6 +241,7 @@ public struct ChatInputContent: Equatable, Codable {
                 return content.isEntityExpressible(options: options)
             case .media: return false
             case .table: return false
+            case .pullQuote: return false
             }
         }
     }
@@ -250,6 +257,9 @@ public enum ChatInputBlock: Equatable, Codable {
     case media(ChatInputMedia)
     /// A table. Mirrors the editor `Block.table`; one placeholder in the flat text (cell content is off-string).
     case table(ChatInputTable)
+    /// A pull-quote block. Mirrors the editor `Block.pullQuote`. Always non-entity-expressible (forces the
+    /// rich InstantPage path). On the flat axis — contributes its runs' text and an inter-block "\n" separator.
+    case pullQuote(ChatInputPullQuote)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -258,14 +268,16 @@ public enum ChatInputBlock: Equatable, Codable {
         case collapsedQuote
         case media
         case table
+        case pullQuote
     }
 
     private enum Kind: Int32, Codable {
-        case paragraph
-        case code
-        case collapsedQuote
-        case media
-        case table
+        case paragraph     // rawValue 0 — NEVER renumber: these are the persisted-draft discriminators.
+        case code          // rawValue 1
+        case collapsedQuote // rawValue 2
+        case media         // rawValue 3
+        case table         // rawValue 4
+        case pullQuote     // rawValue 5 — APPENDED LAST to avoid shifting existing raw values.
     }
 
     public init(from decoder: Decoder) throws {
@@ -287,6 +299,8 @@ public enum ChatInputBlock: Equatable, Codable {
             self = .media(try container.decode(ChatInputMedia.self, forKey: .media))
         case .table:
             self = .table(try container.decode(ChatInputTable.self, forKey: .table))
+        case .pullQuote:
+            self = .pullQuote(try container.decode(ChatInputPullQuote.self, forKey: .pullQuote))
         }
     }
 
@@ -308,6 +322,9 @@ public enum ChatInputBlock: Equatable, Codable {
         case let .table(table):
             try container.encode(Kind.table.rawValue, forKey: .kind)
             try container.encode(table, forKey: .table)
+        case let .pullQuote(pq):
+            try container.encode(Kind.pullQuote.rawValue, forKey: .kind)
+            try container.encode(pq, forKey: .pullQuote)
         }
     }
 }
@@ -393,6 +410,12 @@ public struct ChatInputCode: Equatable, Codable {
         self.language = language
         self.runs = runs
     }
+    public var text: String { runs.map(\.text).joined() }
+}
+
+public struct ChatInputPullQuote: Equatable, Codable {
+    public var runs: [ChatInputRun]
+    public init(runs: [ChatInputRun] = []) { self.runs = runs }
     public var text: String { runs.map(\.text).joined() }
 }
 
@@ -738,7 +761,7 @@ public extension ChatInputContent {
     /// `attributedString(from:)` emits and the editor's `composerParagraphs()` keeps.
     private func blockIsFlatParticipating(_ block: ChatInputBlock) -> Bool {
         switch block {
-        case .paragraph, .code, .collapsedQuote:
+        case .paragraph, .code, .collapsedQuote, .pullQuote:
             return true
         case .media, .table:
             return false
@@ -756,6 +779,8 @@ public extension ChatInputContent {
             return (code.text as NSString).length
         case .collapsedQuote:
             return 1
+        case let .pullQuote(pq):
+            return (pq.text as NSString).length
         case .media, .table:
             return 0
         }

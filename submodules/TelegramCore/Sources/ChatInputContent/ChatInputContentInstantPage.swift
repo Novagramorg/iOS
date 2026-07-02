@@ -75,6 +75,8 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
             }
         case let .code(c):
             result.append(.preformatted(text: richText(from: c.runs), language: c.language))
+        case let .pullQuote(pq):
+            result.append(.pullQuote(text: richText(from: pq.runs), caption: .empty))
         case let .collapsedQuote(inner):
             // `.collapsedQuote` (folded) and `.quote(isCollapsed: true)` (visible, collapse-flagged) both encode as
             // `collapsed: true` — they produce the identical sent message (`BlockQuote(isCollapsed: true)`), differing
@@ -214,6 +216,8 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             }
         case let .preformatted(rt, language):
             result.append(.code(ChatInputCode(language: language, runs: chatInputRuns(fromRichText: rt))))
+        case let .pullQuote(rt, _):
+            result.append(.pullQuote(ChatInputPullQuote(runs: chatInputRuns(fromRichText: rt))))
         case let .blockQuote(innerBlocks, _, collapsed):
             // Three composer quote states collapse onto one `Bool?`, by necessity: the MTProto wire has NO collapsed
             // field, so a cloud-received `Api.RichMessage` blockQuote always arrives `collapsed == nil`. `nil`/`false`

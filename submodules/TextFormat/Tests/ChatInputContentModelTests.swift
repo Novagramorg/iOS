@@ -311,6 +311,34 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertTrue(content.isEntityExpressible())
     }
 
+    // MARK: - Pull-quote block (ChatInputBlock.pullQuote)
+
+    /// `ChatInputBlock.pullQuote` Codable round-trip through AdaptedPostbox (the REAL persistence path).
+    func test_pullQuote_codableRoundTrip() throws {
+        let block = ChatInputBlock.pullQuote(ChatInputPullQuote(runs: [ChatInputRun(text: "a\nb")]))
+        let data = try AdaptedPostboxEncoder().encode(block)
+        XCTAssertEqual(try AdaptedPostboxDecoder().decode(ChatInputBlock.self, from: data), block)
+    }
+
+    /// `.pullQuote` is unconditionally NOT entity-expressible — it always forces the rich (InstantPage) path,
+    /// regardless of the `quotesRequireRichContent` option.
+    func test_pullQuote_notEntityExpressible() {
+        let c = ChatInputContent(blocks: [.pullQuote(ChatInputPullQuote(runs: [ChatInputRun(text: "hi")]))])
+        XCTAssertFalse(c.isEntityExpressible())
+        XCTAssertFalse(c.isEntityExpressible(options: [.quotesRequireRichContent]))   // unconditional
+    }
+
+    /// `.pullQuote` lives on the flat axis: its text contributes to `plainText` and `blockFlatLength`.
+    func test_pullQuote_flatAxisContribution() {
+        let pq = ChatInputPullQuote(runs: [ChatInputRun(text: "hello")])
+        let c = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "before")])),
+            .pullQuote(pq),
+        ])
+        XCTAssertEqual(c.plainText, "before\nhello")
+        XCTAssertEqual(c.length, (("before\nhello") as NSString).length)
+    }
+
     /// The old-client text fallback joins paragraph / blockQuote / preformatted text with "\n", skipping empty
     /// pieces (a blockQuote contributes its inner blocks' text, recursively).
     func test_instantPage_plainText() {

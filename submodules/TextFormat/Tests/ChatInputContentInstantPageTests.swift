@@ -417,6 +417,38 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         XCTAssertEqual(chatInputContent(fromInstantPage: page), content, "location round-trips through .map")
     }
 
+    // 15. Pull-quote: 1:1 round-trip preserving runs, bold attribute, and interior "\n".
+    func test_pullQuote_instantPageRoundTrip() {
+        // A pull quote with two runs: one bold and one plain, containing an interior newline.
+        var bold = ChatInputInlineAttributes(); bold.bold = true
+        let content = ChatInputContent(blocks: [
+            .pullQuote(ChatInputPullQuote(runs: [
+                ChatInputRun(text: "bold\nline", attributes: bold),
+                ChatInputRun(text: "plain"),
+            ]))
+        ])
+
+        // Forward: must produce exactly one .pullQuote block.
+        let page = instantPage(from: content)
+        XCTAssertEqual(page.blocks.count, 1, "one pullQuote block -> one InstantPage .pullQuote block")
+        guard case let .pullQuote(rt, _) = page.blocks[0] else {
+            return XCTFail("expected a .pullQuote block, got \(page.blocks[0])")
+        }
+        XCTAssertEqual(rt.plainText, "bold\nlineplain", "plain text is the joined run texts")
+
+        // Reverse: runs are preserved (bold attribute + interior newline + plain run boundary).
+        let restored = chatInputContent(fromInstantPage: page)
+        XCTAssertEqual(restored, content, "pull-quote round-trips exactly through InstantPage")
+        if case let .pullQuote(pq) = restored.blocks[0] {
+            XCTAssertEqual(pq.runs.count, 2, "run boundary preserved")
+            XCTAssertTrue(pq.runs[0].attributes.bold, "bold attribute preserved")
+            XCTAssertEqual(pq.runs[0].text, "bold\nline", "interior newline preserved")
+            XCTAssertEqual(pq.runs[1].text, "plain")
+        } else {
+            XCTFail("expected .pullQuote block after round-trip")
+        }
+    }
+
     // 16. ChatInputListMarker.checklist (rawValue 2) Codable round-trip, and back-compat: an old payload
     //     without `checked` decodes correctly (nil checked, marker preserved).
     func test_checklistMembership_codableRoundTrip_andBackCompat() throws {

@@ -108,6 +108,19 @@ public func attributedString(from content: ChatInputContent) -> NSAttributedStri
                 appendRuns(paragraph)
                 i += 1
             }
+        case let .pullQuote(pq):
+            // Legacy UITextView projection: render pull-quote text as a quote-attributed block, mirroring `.code`.
+            // The native Document ↔ ChatInputContent bridge bypasses this path for pull-quote blocks entirely.
+            appendSeparatorIfNeeded()
+            let start = result.length
+            result.append(NSAttributedString(string: pq.text))
+            let len = result.length - start
+            if len > 0 {
+                result.addAttribute(ChatTextInputAttributes.block,
+                    value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
+                    range: NSRange(location: start, length: len))
+            }
+            i += 1
         case .media, .table:
             // INTENTIONAL render-only filter (not deferred): the legacy `UITextView` composer cannot represent a
             // structural media/table block, so this `NSAttributedString` projection drops them. Heading/list
