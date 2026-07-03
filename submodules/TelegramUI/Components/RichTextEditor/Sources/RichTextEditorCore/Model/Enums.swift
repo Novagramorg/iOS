@@ -12,7 +12,7 @@ public enum ParagraphStyleName: String, Codable, Equatable, CaseIterable {
     // picker and never persists as a paragraph style (a caption serializes as the MediaBlock's runs).
     // `pullQuote` is a render-only style (pull quote blocks, body-scale italic+center) — it never
     // persists as a paragraph style and is never offered in the style picker.
-    case heading1, heading2, heading3, body, caption, pullQuote
+    case heading1, heading2, heading3, heading4, heading5, heading6, body, caption, pullQuote
 
     public init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)

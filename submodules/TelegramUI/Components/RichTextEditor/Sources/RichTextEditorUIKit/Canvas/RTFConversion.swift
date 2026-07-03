@@ -71,7 +71,7 @@ enum RTFConversion {
 
     static func fontSize(for style: ParagraphStyleName) -> CGFloat {
         switch style {
-        case .heading1: return 24; case .heading2: return 21; case .heading3: return 19
+        case .heading1: return 24; case .heading2: return 21; case .heading3: return 19; case .heading4: return 17; case .heading5: return 17; case .heading6: return 17
         case .body, .pullQuote: return 17; case .caption: return 15
         }
     }

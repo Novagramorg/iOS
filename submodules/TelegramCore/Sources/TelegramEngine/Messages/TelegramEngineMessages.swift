@@ -680,6 +680,10 @@ public extension TelegramEngine {
         public func composeMessageWithAI(text: String, entities: [MessageTextEntity], proofread: Bool = false, translateToLang: String? = nil, changeStyle: TelegramComposeAIMessageMode.CloudStyle.Reference? = nil, emojify: Bool = false) -> Signal<(String, [MessageTextEntity]), TranslationError> {
             return _internal_composeMessageWithAI(account: self.account, text: text, entities: entities, proofread: proofread, translateToLang: translateToLang, changeStyle: changeStyle, emojify: emojify)
         }
+
+        public func composeRichMessageWithAI(instantPage: InstantPage?, proofread: Bool = false, translateToLang: String? = nil, changeStyle: TelegramComposeAIMessageMode.CloudStyle.Reference? = nil, customPrompt: String? = nil, emojify: Bool = false) -> Signal<InstantPage, TranslationError> {
+            return _internal_composeRichMessageWithAI(account: self.account, instantPage: instantPage, proofread: proofread, translateToLang: translateToLang, changeStyle: changeStyle, customPrompt: customPrompt, emojify: emojify)
+        }
         
         public func createAITextStyle(displayAuthor: Bool, emojiFileId: Int64, title: String, prompt: String) -> Signal<TelegramComposeAIMessageMode.CloudStyle, CreateAITextStyleError> {
             return _internal_createAITextStyle(account: self.account, displayAuthor: displayAuthor, emojiFileId: emojiFileId, title: title, prompt: prompt)
@@ -707,6 +711,23 @@ public extension TelegramEngine {
 
         public func translate(texts: [(String, [MessageTextEntity])], toLang: String, tone: TranslationTone = .neutral) -> Signal<[(String, [MessageTextEntity])], TranslationError> {
             return _internal_translateTexts(network: self.account.network, texts: texts, toLang: toLang, tone: tone)
+        }
+
+        public func translateRichMessage(messageId: EngineMessage.Id, toLang: String, tone: TranslationTone = .neutral) -> Signal<InstantPage?, TranslationError> {
+            let account = self.account
+            return account.postbox.transaction { transaction -> Api.InputPeer? in
+                return transaction.getPeer(messageId.peerId).flatMap(apiInputPeer)
+            }
+            |> castError(TranslationError.self)
+            |> mapToSignal { inputPeer -> Signal<InstantPage?, TranslationError> in
+                guard let inputPeer else {
+                    return .fail(.generic)
+                }
+                return _internal_translateRichMessages(account: account, inputPeer: inputPeer, messageIds: [messageId], toLang: toLang, tone: tone)
+                |> map { pages in
+                    return pages[messageId]
+                }
+            }
         }
         
         public func translateMessages(messageIds: [EngineMessage.Id], fromLang: String?, toLang: String, enableLocalIfPossible: Bool, tone: TranslationTone = .neutral) -> Signal<Never, TranslationError> {

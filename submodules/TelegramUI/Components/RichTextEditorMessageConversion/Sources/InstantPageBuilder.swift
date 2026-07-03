@@ -90,6 +90,12 @@ private func headingOrParagraphBlock(_ paragraph: ParagraphBlock) -> InstantPage
         return .heading(text: text, level: 2)
     case .heading3:
         return .heading(text: text, level: 3)
+    case .heading4:
+        return .heading(text: text, level: 4)
+    case .heading5:
+        return .heading(text: text, level: 5)
+    case .heading6:
+        return .heading(text: text, level: 6)
     case .body, .caption:
         return .paragraph(text)
     case .pullQuote:

@@ -90,6 +90,9 @@ private func chatInputStyle(fromParagraphStyle style: ParagraphStyleName) -> Cha
         return .heading2
     case .heading3:
         return .heading3
+    case .heading4, .heading5, .heading6:
+        // ChatInputContent (the composer model) only models H1–H3; fold deeper editor headings to H3.
+        return .heading3
     case .caption:
         // `caption` is a render-only style (only ever appears in a media block's caption runs, handled
         // there). A `caption`-styled top-level paragraph should not exist, but map it to `.body` defensively.
