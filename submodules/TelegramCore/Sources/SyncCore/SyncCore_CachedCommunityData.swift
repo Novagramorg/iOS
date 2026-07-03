@@ -4,17 +4,22 @@ public final class CachedCommunityData: CachedPeerData {
     public struct CommunityLinkedPeer: PostboxCoding, Equatable {
         public let peerId: PeerId
         public let visible: Bool?
-        
-        public init(peerId: PeerId, visible: Bool?) {
+        /// The user can read this chat's message history right now, without joining (layer 228
+        /// `communityPeer.can_view_history`). When false, joining (or a join request) is required.
+        public let canViewHistory: Bool
+
+        public init(peerId: PeerId, visible: Bool?, canViewHistory: Bool = false) {
             self.peerId = peerId
             self.visible = visible
+            self.canViewHistory = canViewHistory
         }
-        
+
         public init(decoder: PostboxDecoder) {
             self.peerId = PeerId(decoder.decodeInt64ForKey("p", orElse: 0))
             self.visible = decoder.decodeOptionalBoolForKey("v")
+            self.canViewHistory = decoder.decodeBoolForKey("cvh", orElse: false)
         }
-        
+
         public func encode(_ encoder: PostboxEncoder) {
             encoder.encodeInt64(self.peerId.toInt64(), forKey: "p")
             if let visible = self.visible {
@@ -22,6 +27,7 @@ public final class CachedCommunityData: CachedPeerData {
             } else {
                 encoder.encodeNil(forKey: "v")
             }
+            encoder.encodeBool(self.canViewHistory, forKey: "cvh")
         }
     }
     
