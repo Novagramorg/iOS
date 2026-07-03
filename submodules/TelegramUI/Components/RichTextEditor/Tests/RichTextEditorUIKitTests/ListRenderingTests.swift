@@ -63,12 +63,31 @@ final class ListRenderingTests: XCTestCase {
                        StyleSheet.orderedListTextInset, accuracy: 0.5)
     }
 
-    func test_quoteList_isNotDoubleIndented() {
+    func test_quoteList_isIndentedByQuoteInsetPlusListSpacing() {
+        // A list inside a quote must clear the quote's inner inset: the quote's leading inset (the bar→
+        // text gap) AND the list's marker spacing both apply, so the item respects the quote's own inset.
+        let s = StyleSheet()
         let quoteList = ParagraphBlock(id: BlockID("a"), style: .quote,
                                        list: ListMembership(marker: .bullet, level: 0),
                                        runs: [TextRun(text: "Q")])
-        // The list's marker spacing should apply; the quote's flat +16 must NOT stack on top.
-        XCTAssertEqual(paragraphStyle(quoteList)?.headIndent ?? -1, StyleSheet.listMarkerSpacing)
+        XCTAssertEqual(paragraphStyle(quoteList)?.headIndent ?? -1,
+                       s.quoteIndent + StyleSheet.listMarkerSpacing, accuracy: 0.5)
+        XCTAssertEqual(paragraphStyle(quoteList)?.firstLineHeadIndent ?? -1,
+                       s.quoteIndent + StyleSheet.listMarkerSpacing, accuracy: 0.5)
+    }
+
+    func test_quoteList_addsQuoteInsetOnTopOfPlainListInset() {
+        // The combined inset must equal the plain-list inset plus exactly the quote's leading inset —
+        // i.e. the quote inset stacks on top of (does not replace) the list inset.
+        let s = StyleSheet()
+        let quoteList = ParagraphBlock(id: BlockID("a"), style: .quote,
+                                       list: ListMembership(marker: .ordered, level: 1),
+                                       runs: [TextRun(text: "Q")])
+        let plainList = ParagraphBlock(id: BlockID("b"), style: .body,
+                                       list: ListMembership(marker: .ordered, level: 1),
+                                       runs: [TextRun(text: "P")])
+        let delta = (paragraphStyle(quoteList)?.headIndent ?? 0) - (paragraphStyle(plainList)?.headIndent ?? 0)
+        XCTAssertEqual(delta, s.quoteIndent, accuracy: 0.5)
     }
 
     private func canvas(_ blocks: [ParagraphBlock]) -> DocumentCanvasView {
@@ -144,6 +163,60 @@ final class ListRenderingTests: XCTestCase {
         let d = draws.first { $0.id == BlockID("d") }!
         XCTAssertEqual(d.label, "◦")
         XCTAssertEqual(d.origin.x, (v.boxes[2] as! BlockBox).textOrigin.x + StyleSheet.listIndentStep, accuracy: 0.5)  // level 1
+    }
+
+    func test_quoteListItem_markerOrigin_clearsQuoteInset() {
+        // The list marker column of a quoted list item shifts right by the quote's leading inset so it
+        // clears the quote bar — matching a non-list quote paragraph whose text starts at
+        // textOrigin.x + quoteIndent, instead of sitting on top of the bar at textOrigin.x.
+        let v = canvas([ParagraphBlock(id: BlockID("a"), style: .quote,
+                                       list: ListMembership(marker: .ordered, level: 0),
+                                       runs: [TextRun(text: "One")])])
+        let box = v.boxes[0] as! BlockBox
+        let draw = v.listMarkerDraws().first { $0.id == box.id }!
+        XCTAssertEqual(draw.origin.x, box.textOrigin.x + box.mapper.styleSheet.quoteIndent, accuracy: 0.5)
+    }
+
+    func test_emptyQuoteListItem_caretRect_isInsetByQuotePlusList() {
+        // An empty quoted list item lays out no glyphs; its caret must still sit at the quoted list's
+        // text column (quote leading inset + list marker spacing), not at the page margin.
+        let v = canvas([ParagraphBlock(id: BlockID("a"), style: .quote,
+                                       list: ListMembership(marker: .bullet, level: 0), runs: [])])
+        let box = v.boxes[0] as! BlockBox
+        let caret = v.caretRect(for: DocumentTextPosition(box.textStart))
+        XCTAssertEqual(caret.minX,
+                       box.textOrigin.x + box.mapper.styleSheet.quoteIndent + StyleSheet.listMarkerSpacing,
+                       accuracy: 0.5)
+    }
+
+    func test_emptyNumberedListItem_markerBaseline_matchesNonEmptyItem() {
+        // TextKit's lineHeightMultiple centering (glyphs raised by `centeringDelta`) is reflected in a
+        // non-empty item's `firstLineBaselineFromTop`; the EMPTY-item fallback must mirror it too, else the
+        // empty item's number sits ~1pt LOWER than a non-empty item's.
+        let v = canvas([
+            ParagraphBlock(id: BlockID("e"), style: .body, list: ListMembership(marker: .ordered), runs: []),
+            ParagraphBlock(id: BlockID("n"), style: .body, list: ListMembership(marker: .ordered), runs: [TextRun(text: "Item")]),
+        ])
+        let empty = v.boxes[0] as! BlockBox
+        let nonEmpty = v.boxes[1] as! BlockBox
+        let ed = v.listMarkerDraws().first { $0.id == empty.id }!
+        let nd = v.listMarkerDraws().first { $0.id == nonEmpty.id }!
+        // Each marker's baseline offset from its OWN text origin (the two boxes sit at different y).
+        XCTAssertEqual(ed.origin.y - empty.textOrigin.y, nd.origin.y - nonEmpty.textOrigin.y, accuracy: 0.5,
+                       "empty and non-empty numbered markers share the same baseline offset from textOrigin")
+    }
+
+    func test_emptyListItem_placeholderBaseline_alignsWithMarker() {
+        // On an empty list item the hint placeholder and the marker share one visual line — both must sit
+        // at the centered baseline (guards against centering the marker but not the placeholder).
+        let v = canvas([ParagraphBlock(id: BlockID("e"), style: .body,
+                                       list: ListMembership(marker: .ordered), runs: [])])
+        let box = v.boxes[0] as! BlockBox
+        let marker = v.listMarkerDraws().first { $0.id == box.id }!
+        guard let ph = box.placeholderDraw() else { return XCTFail("expected a list hint placeholder") }
+        // Both draw as text (baseline = origin.y + ascender); their baselines must coincide.
+        XCTAssertEqual(marker.origin.y + marker.font.ascender, ph.origin.y + ph.font.ascender, accuracy: 0.5,
+                       "the empty-item marker and its hint share a baseline")
     }
 
     func test_emptyListItem_caretRect_isInsetByHeadIndent() {

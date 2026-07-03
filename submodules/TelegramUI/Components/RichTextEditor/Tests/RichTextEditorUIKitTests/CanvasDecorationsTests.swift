@@ -110,17 +110,18 @@ final class CanvasDecorationsTests: XCTestCase {
     }
 
     func test_placeholder_baselineMatchesRealFirstLineBaseline() {
-        // The placeholder must sit on the paragraph's real first-line baseline, not float above it. Real
-        // text's first baseline is pushed down by (lineHeightMultiple − 1)·lineHeight (body = 1.10); a
-        // placeholder drawn with bare font metrics would be ~2pt high. Assert the draw origin carries that
-        // downward shift (and x stays at the text column).
+        // The placeholder must sit on the paragraph's real first-line baseline (where the first typed glyph
+        // lands), not float above OR below it. Real text's first baseline is pushed down by the multiple's
+        // extra leading (body = 1.10) MINUS the render centering that raises the glyphs by HALF of it
+        // (BlockLayout.centeringDelta) — i.e. HALF the extra leading. (Using the full leading, as before the
+        // 2026-06-26 centering landed, left the ghost ~1pt below where typing actually appears.)
         let v = canvas([.paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: []))])
         let box = v.boxes[0] as! BlockBox
         let draw = v.placeholderDraws().first!
         let font = StyleSheet.default.font(for: .body, attributes: .plain)
         let ps = StyleSheet.default.paragraphStyle(for: .body, attributes: ParagraphAttributes(), list: nil)
-        let expectedShift = (ps.lineHeightMultiple - 1) * font.lineHeight
-        XCTAssertGreaterThan(expectedShift, 1.0)                                  // body shift is ~2pt
+        let expectedShift = (ps.lineHeightMultiple - 1) * font.lineHeight / 2     // centered: half the extra leading
+        XCTAssertGreaterThan(expectedShift, 0.5)                                  // body shift is ~1pt
         XCTAssertEqual(draw.origin.y, box.textOrigin.y + expectedShift, accuracy: 0.5)
         XCTAssertEqual(draw.origin.x, box.textOrigin.x, accuracy: 0.5)            // horizontal unchanged
     }

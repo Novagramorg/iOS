@@ -31,6 +31,15 @@ final class BlockStack {
     /// block), since a quote/code/table fills its own frame; the framed block's own inset is its internal padding.
     private static let framedNeighborMargin: CGFloat = 8
 
+    /// A block that draws its own bounded fill and is NOT a `BlockBox`, so `facingInset` never runs for
+    /// it: a code block, a table, or a collapsed quote. Its own top/bottom insets are INTERNAL padding
+    /// (fill→text), not external margin — so two of these adjacent would sit with their fills flush.
+    /// (An EXPANDED quote is a `BlockBox`; consecutive quotes merge into one fill, and a quote's
+    /// separation from a non-quote neighbor is reserved by that neighbor via `facingInset`.)
+    private static func isFramedAtom(_ box: CanvasBlock) -> Bool {
+        box is CodeBlockBox || box is TableBlockBox || box is CollapsedQuoteBox
+    }
+
     /// The inset for `box` on the side facing `neighbor` (or the stack edge, when nil). The facing
     /// insets of two adjacent blocks together make their gap: list items stack tight (0); two body
     /// paragraphs sit at half the default; a block facing a quote or table reserves extra margin;
@@ -48,7 +57,11 @@ final class BlockStack {
         // neighbors as a quote.
         if neighbor is TableBlockBox || neighbor is CollapsedQuoteBox || neighbor is CodeBlockBox { return base + BlockStack.framedNeighborMargin }
         guard let n = neighbor as? BlockBox else { return base }
-        if box.listMembership != nil && n.listMembership != nil { return 0 }
+        // Two list items stack tight (0) only when they share a container — both plain, or both in the
+        // same quote run. A plain list item next to a QUOTED list item are in different containers, so
+        // fall through to the framed-margin rules below (the quote needs visible separation).
+        if box.listMembership != nil && n.listMembership != nil
+            && (box.style == .quote) == (n.style == .quote) { return 0 }
         if box.isBodyParagraph && n.isBodyParagraph { return base / 2 }
         if n.style == .quote && box.style != .quote { return base + BlockStack.framedNeighborMargin }
         return base
@@ -77,6 +90,13 @@ final class BlockStack {
                 }
             }
             box.setWidth(width)
+            // Two adjacent framed atoms (code / table / collapsed quote) both fill their whole frames,
+            // so neither's internal padding separates the two fills. Insert an external gap between them
+            // — matching the separation a `BlockBox` neighbor reserves toward a framed atom
+            // (`facingInset` rule 1: base + framed margin), so it scales with the host's block inset.
+            if i > 0, BlockStack.isFramedAtom(boxes[i - 1]), BlockStack.isFramedAtom(box) {
+                y += self.verticalInsetBase + BlockStack.framedNeighborMargin
+            }
             box.frame = CGRect(x: origin.x, y: y, width: width, height: box.height)
             y += box.height
         }
@@ -88,7 +108,16 @@ final class BlockStack {
     /// Reads each box's structural insets (width-independent); never mutates a box. Reused by the
     /// document root and by each table cell.
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        boxes.reduce(0) { $0 + $1.measuredHeight(forWidth: width) }
+        var total: CGFloat = 0
+        for (i, box) in boxes.enumerated() {
+            // Mirror the external gap `layout` inserts between two adjacent framed atoms, so the
+            // stateless measure matches the laid-out height (otherwise the host sizes the field short).
+            if i > 0, BlockStack.isFramedAtom(boxes[i - 1]), BlockStack.isFramedAtom(box) {
+                total += self.verticalInsetBase + BlockStack.framedNeighborMargin
+            }
+            total += box.measuredHeight(forWidth: width)
+        }
+        return total
     }
 
     func leafRegions() -> [LeafTextRegion] { boxes.flatMap { $0.leafRegions() } }

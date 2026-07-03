@@ -128,21 +128,23 @@ public struct StyleSheet {
         ps.paragraphSpacingBefore += m.spacingBefore
         ps.paragraphSpacing += m.spacingAfter
         if ps.lineHeightMultiple == 1 { ps.lineHeightMultiple = m.lineHeightMultiple }
+        // The quote container's leading inset (the bar→text gap) and the list marker inset STACK: a
+        // list inside a quote clears the quote bar first, then hangs its marker/text past that. (A plain
+        // quote gets just the quote inset; a plain list gets just the list inset.)
+        var indent: CGFloat = (style == .quote) ? quoteIndent : 0
         if let list = list {
             // Marker sits at the level's indent; text hangs `listMarkerSpacing` past it. Ordered
             // (numbered) items get extra text inset since a number marker is wider than a bullet.
-            var indent = StyleSheet.listIndentStep * CGFloat(list.level) + StyleSheet.listMarkerSpacing
+            indent += StyleSheet.listIndentStep * CGFloat(list.level) + StyleSheet.listMarkerSpacing
             if list.marker == .ordered { indent += StyleSheet.orderedListTextInset }
             else if list.marker == .checklist {
                 let markerFont = self.font(for: style, attributes: .plain)
                 let scaledSide = StyleSheet.checklistMarkerSize(for: markerFont) * StyleSheet.checklistMarkerScale
                 indent += max(0, scaledSide + StyleSheet.checklistMarkerGap - StyleSheet.listMarkerSpacing)
             }
-            ps.firstLineHeadIndent += indent
-            ps.headIndent += indent
-        } else if style == .quote {
-            ps.headIndent += quoteIndent; ps.firstLineHeadIndent += quoteIndent
         }
+        ps.firstLineHeadIndent += indent
+        ps.headIndent += indent
         return ps
     }
 }
