@@ -1905,19 +1905,24 @@ public func universalServiceMessageString(presentationData: (PresentationTheme, 
                 }
                 var isGroup = false
                 let messagePeer = message.peers[message.id.peerId]
+                let isBot = messagePeer is TelegramUser
                 if let channel = messagePeer as? TelegramChannel, case .group = channel.info {
                     isGroup = true
                 }
-                if message.author?.id == accountPeerId || !isGroup {
+                if message.author?.id == accountPeerId || !isGroup || isBot {
                     let rawText: String
                     if communityName.isEmpty {
-                        if isGroup {
+                        if isBot {
+                            rawText = strings.Notification_CommunityRemovedBot
+                        } else if isGroup {
                             rawText = strings.Notification_CommunityRemovedGroupYou
                         } else {
                             rawText = strings.Notification_CommunityRemovedChannel
                         }
                     } else {
-                        if isGroup {
+                        if isBot {
+                            rawText = strings.Notification_CommunityAddedBot(communityName).string
+                        } else if isGroup {
                             rawText = strings.Notification_CommunityAddedGroupYou(communityName).string
                         } else {
                             rawText = strings.Notification_CommunityAddedChannel(communityName).string

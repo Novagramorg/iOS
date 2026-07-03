@@ -4081,7 +4081,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
     }
 
     private func editingRemoveFromCommunity(communityId: EnginePeer.Id) {
-        guard let data = self.data, case let .channel(channel) = data.peer, case .group = channel.info else {
+        guard let data = self.data, let peer = data.peer else {
             return
         }
         
@@ -4091,7 +4091,7 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             }
             self.activeActionDisposable.set((self.context.engine.peers.toggleCommunityPeerLink(
                 communityId: communityId,
-                peerId: channel.id,
+                peerId: peer.id,
                 action: .unlink
             )
             |> deliverOnMainQueue).startStrict(error: { [weak self] _ in
@@ -4106,17 +4106,19 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
                     return
                 }
                 let _ = self.context.account.postbox.transaction { transaction -> Void in
-                    updatePeersCustom(transaction: transaction, peers: [channel.withUpdatedLinkedCommunityId(nil)], update: { _, updated in
-                        guard let channel = updated as? TelegramChannel else {
-                            return updated
-                        }
-                        return channel.withUpdatedLinkedCommunityId(nil)
-                    })
+                    if case let .channel(channel) = peer {
+                        updatePeersCustom(transaction: transaction, peers: [channel.withUpdatedLinkedCommunityId(nil)], update: { _, updated in
+                            guard let channel = updated as? TelegramChannel else {
+                                return updated
+                            }
+                            return channel.withUpdatedLinkedCommunityId(nil)
+                        })
+                    }
                     transaction.updatePeerCachedData(peerIds: Set([communityId]), update: { _, current in
                         guard let current = current as? CachedCommunityData else {
                             return current
                         }
-                        return current.withUpdatedLinkedPeers(current.linkedPeers.filter { $0.peerId != channel.id })
+                        return current.withUpdatedLinkedPeers(current.linkedPeers.filter { $0.peerId != peer.id })
                     })
                 }.startStandalone()
             }))

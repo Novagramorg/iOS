@@ -101,6 +101,7 @@ private enum CommunityViewSection: Int {
     case joined
     case visible
     case requestable
+    case hidden
 }
 
 private struct CommunityViewRow: Equatable {
@@ -1174,6 +1175,17 @@ private final class CommunityViewContentComponent: Component {
             return interaction
         }
 
+        private func isBot(peer: EnginePeer) -> Bool {
+            if case let .user(user) = peer, user.botInfo != nil {
+                return true
+            }
+            return false
+        }
+
+        private func botHasPreview(peerId: EnginePeer.Id, component: CommunityViewContentComponent) -> Bool {
+            return component.previews[peerId]?.messages.isEmpty == false
+        }
+
         private func rows(component: CommunityViewContentComponent, section: CommunityViewSection) -> [CommunityViewRow] {
             guard let cachedData = component.cachedData else {
                 return []
@@ -1188,6 +1200,11 @@ private final class CommunityViewContentComponent: Component {
                 if case let .channel(channel) = peer, case .member = channel.participationStatus {
                     isJoined = true
                 }
+                let isPrivate = peer.addressName == nil
+                let isHidden = linkedPeer.visible == false
+                let isBot = self.isBot(peer: peer)
+                let botHasPreview = isBot && self.botHasPreview(peerId: peer.id, component: component)
+                
                 if let selectionOptions = component.selectionOptions {
                     let selectionState = communitySelectionPeerState(peer: peer, isJoined: isJoined, options: selectionOptions)
                     if !selectionState.isVisible {
@@ -1196,15 +1213,22 @@ private final class CommunityViewContentComponent: Component {
                 }
                 switch section {
                 case .joined:
-                    if isJoined {
+                    if isJoined || botHasPreview {
                         result.append(CommunityViewRow(peer: peer, linkedPeer: linkedPeer))
                     }
                 case .visible:
-                    if !isJoined && peer.addressName != nil {
+                    if !isJoined && !isBot && !isPrivate {
                         result.append(CommunityViewRow(peer: peer, linkedPeer: linkedPeer))
                     }
                 case .requestable:
-                    if !isJoined && peer.addressName == nil {
+                    if !isJoined && !isBot && isPrivate && !isHidden {
+                        result.append(CommunityViewRow(peer: peer, linkedPeer: linkedPeer))
+                    }
+                    if isBot && !botHasPreview {
+                        result.append(CommunityViewRow(peer: peer, linkedPeer: linkedPeer))
+                    }
+                case .hidden:
+                    if !isJoined && !isBot && isPrivate && isHidden {
                         result.append(CommunityViewRow(peer: peer, linkedPeer: linkedPeer))
                     }
                 }
@@ -1300,6 +1324,8 @@ private final class CommunityViewContentComponent: Component {
                 return "CHATS YOU CAN VIEW"
             case .requestable:
                 return "CHATS YOU CAN REQUEST TO JOIN"
+            case .hidden:
+                return "HIDDEN CHATS"
             }
         }
 
@@ -1417,7 +1443,7 @@ private final class CommunityViewContentComponent: Component {
                         },
                         actionMode: .gesture
                     ))))
-                case .requestable:
+                case .requestable, .hidden:
                     let subtitle = self.memberCountString(component: component, peerId: row.peer.id).flatMap {
                         PeerListItemComponent.Subtitle(text: $0, color: .neutral)
                     }
@@ -1428,6 +1454,7 @@ private final class CommunityViewContentComponent: Component {
                         style: .list,
                         sideInset: 0.0,
                         title: row.peer.compactDisplayTitle,
+                        titleAccessory: row.linkedPeer.visible == false ? .hidden : .none,
                         peer: row.peer,
                         subtitle: subtitle,
                         subtitleAccessory: .none,
@@ -1698,7 +1725,7 @@ private final class CommunityViewContentComponent: Component {
             }
 
 
-            let sections: [CommunityViewSection] = component.selectionOptions != nil ? [.joined] : [.joined, .visible, .requestable]
+            let sections: [CommunityViewSection] = component.selectionOptions != nil ? [.joined] : [.joined, .visible, .requestable, .hidden]
             for section in sections {
                 let rows = self.rows(component: component, section: section)
                 guard !rows.isEmpty else {
@@ -2129,14 +2156,15 @@ private final class CommunityViewScreenComponent: Component {
             }
             self.currentPendingRequestsCount = pendingCount
 
+            let pendingRequestsLimit: Int32 = 100
             let requestsContext: CommunityPeerLinkRequestsContext
             if let current = self.pendingRequestsContext {
                 requestsContext = current
                 if force {
-                    requestsContext.reload(limit: 2)
+                    requestsContext.reload(limit: pendingRequestsLimit)
                 }
             } else {
-                requestsContext = component.context.engine.peers.communityPeerLinkRequestsContext(communityId: component.communityId, initialLimit: 2)
+                requestsContext = component.context.engine.peers.communityPeerLinkRequestsContext(communityId: component.communityId, initialLimit: pendingRequestsLimit)
                 self.pendingRequestsContext = requestsContext
             }
 

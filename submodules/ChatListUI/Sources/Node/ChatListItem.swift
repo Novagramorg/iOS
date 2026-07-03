@@ -1868,9 +1868,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 if case let .channel(channel) = peerData.peer.peer, channel.isMonoForum {
                     peerIsMonoforum = true
                 }
-                if case let .channel(channel) = peerData.peer.peer {
-                    peerLinkedCommunityId = channel.linkedCommunityId
-                }
+                peerLinkedCommunityId = peerData.peer.peer?.containerPeerId
             }
             if peerData.peer.peerId.namespace == Namespaces.Peer.SecretChat {
                 enablePreview = false
@@ -2354,8 +2352,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                     let peerValue = peerData.peer
                     if case .community = peerValue.peer {
                         isCommunity = true
-                    }
-                    if !item.hideCommunityAvatarBadge, case let .channel(channel) = peerValue.peer, channel.linkedCommunityId != nil {
+                    } else if !item.hideCommunityAvatarBadge, peerValue.peer?.containerPeerId != nil {
                         displayCommunityAvatarBadge = true
                     }
                     let threadInfoValue = peerData.threadInfo
@@ -5819,7 +5816,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
                 isCommunity = true
             }
             var shouldHitTestAvatar = !isCommunity && self.avatarNode.storyStats != nil
-            if case let .peer(peerData) = item.content, case let .channel(channel) = peerData.peer.peer, channel.linkedCommunityId != nil {
+            if case let .peer(peerData) = item.content, let peer = peerData.peer.peer, peer.containerPeerId != nil {
                 shouldHitTestAvatar = true
             }
             if shouldHitTestAvatar {
@@ -5841,7 +5838,7 @@ public class ChatListItemNode: ItemListRevealOptionsItemNode {
             case .loading:
                 break
             case let .peer(peerData):
-                if let peer = peerData.peer.peer, case let .channel(channel) = peer, let linkedCommunityId = channel.linkedCommunityId {
+                if let peer = peerData.peer.peer, let linkedCommunityId = peer.containerPeerId {
                     item.interaction.openCommunity(linkedCommunityId)
                 } else {
                     item.interaction.openStories(.peer(peerData.peer.peerId), self)

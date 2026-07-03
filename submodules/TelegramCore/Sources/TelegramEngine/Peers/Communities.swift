@@ -74,6 +74,48 @@ public struct CommunityPeerLinkRequests: Equatable {
     }
 }
 
+private final class CachedCommunityPeerLinkRequests: Codable {
+    let peerIds: [PeerId]
+    let requestedByIds: [PeerId]
+    let dates: [Int32]
+    let visibility: [Bool]
+    let count: Int32
+
+    static func key(communityId: PeerId) -> ValueBoxKey {
+        let key = ValueBoxKey(length: 8)
+        key.setInt64(0, value: communityId.toInt64())
+        return key
+    }
+
+    init(requests: [CommunityPeerRequest], count: Int32) {
+        self.peerIds = requests.map(\.peerId)
+        self.requestedByIds = requests.map(\.requestedBy)
+        self.dates = requests.map(\.date)
+        self.visibility = requests.map(\.isVisible)
+        self.count = count
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: StringCodingKey.self)
+
+        self.peerIds = (try container.decode([Int64].self, forKey: "peerIds")).map(PeerId.init)
+        self.requestedByIds = (try container.decode([Int64].self, forKey: "requestedByIds")).map(PeerId.init)
+        self.dates = try container.decode([Int32].self, forKey: "dates")
+        self.visibility = try container.decode([Int32].self, forKey: "visibility").map { $0 == 1 }
+        self.count = try container.decode(Int32.self, forKey: "count")
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: StringCodingKey.self)
+
+        try container.encode(self.peerIds.map { $0.toInt64() }, forKey: "peerIds")
+        try container.encode(self.requestedByIds.map { $0.toInt64() }, forKey: "requestedByIds")
+        try container.encode(self.dates, forKey: "dates")
+        try container.encode(self.visibility.map { Int32($0 ? 1 : 0) }, forKey: "visibility")
+        try container.encode(self.count, forKey: "count")
+    }
+}
+
 public struct CommunityParticipantJoinedChats: Equatable {
     public let creatorChatIds: [EnginePeer.Id]
     public let joinedChatIds: [EnginePeer.Id]
@@ -255,7 +297,7 @@ func _internal_toggleCommunityPeerLink(account: Account, communityId: PeerId, pe
     |> switchToLatest
 }
 
-func _internal_communityPeerLinkRequests(account: Account, communityId: PeerId, offset: String?, limit: Int32) -> Signal<CommunityPeerLinkRequests, NoError> {
+private func _internal_communityPeerLinkRequestsResult(account: Account, communityId: PeerId, offset: String?, limit: Int32) -> Signal<CommunityPeerLinkRequests?, NoError> {
     return account.postbox.transaction { transaction -> Api.InputChannel? in
         return communityInputChannel(transaction: transaction, communityId: communityId)
     }
@@ -269,15 +311,15 @@ func _internal_communityPeerLinkRequests(account: Account, communityId: PeerId, 
             return .single(nil)
         }
     }
-    |> mapToSignal { result -> Signal<CommunityPeerLinkRequests, NoError> in
+    |> mapToSignal { result -> Signal<CommunityPeerLinkRequests?, NoError> in
         guard let result else {
-            return .single(CommunityPeerLinkRequests(totalCount: 0, requests: [], nextOffset: nil, peers: [:]))
+            return .single(nil)
         }
 
         switch result {
         case let .peerLinkRequests(peerLinkRequestsData):
             let (totalCount, apiRequests, nextOffset, chats, users) = (peerLinkRequestsData.totalCount, peerLinkRequestsData.requests, peerLinkRequestsData.nextOffset, peerLinkRequestsData.chats, peerLinkRequestsData.users)
-            return account.postbox.transaction { transaction -> CommunityPeerLinkRequests in
+            return account.postbox.transaction { transaction -> CommunityPeerLinkRequests? in
                 let parsedPeers = AccumulatedPeers(transaction: transaction, chats: chats, users: users)
                 updatePeers(transaction: transaction, accountPeerId: account.peerId, peers: parsedPeers)
 
@@ -315,6 +357,13 @@ func _internal_communityPeerLinkRequests(account: Account, communityId: PeerId, 
                 return CommunityPeerLinkRequests(totalCount: totalCount, requests: requests, nextOffset: nextOffset, peers: peers)
             }
         }
+    }
+}
+
+func _internal_communityPeerLinkRequests(account: Account, communityId: PeerId, offset: String?, limit: Int32) -> Signal<CommunityPeerLinkRequests, NoError> {
+    return _internal_communityPeerLinkRequestsResult(account: account, communityId: communityId, offset: offset, limit: limit)
+    |> map { result -> CommunityPeerLinkRequests in
+        return result ?? CommunityPeerLinkRequests(totalCount: 0, requests: [], nextOffset: nil, peers: [:])
     }
 }
 
@@ -522,6 +571,8 @@ private final class CommunityPeerLinkRequestsContextImpl {
     private var isLoadingMore = false
     private var hasLoadedOnce = false
     private var canLoadMore = true
+    private var loadedFromCache = false
+    private var populateCache = true
     private var count: Int32 = 0
 
     let state = Promise<CommunityPeerLinkRequestsState>()
@@ -532,7 +583,46 @@ private final class CommunityPeerLinkRequestsContextImpl {
         self.communityId = communityId
         self.initialLimit = initialLimit
 
+        self.isLoadingMore = true
         self.updateState()
+        self.disposable.set((account.postbox.transaction { transaction -> (requests: [CommunityPeerRequest], peers: [EnginePeer.Id: EnginePeer], count: Int32, canLoadMore: Bool)? in
+            guard let cachedResult = transaction.retrieveItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedCommunityPeerLinkRequests, key: CachedCommunityPeerLinkRequests.key(communityId: communityId)))?.get(CachedCommunityPeerLinkRequests.self) else {
+                return nil
+            }
+            guard cachedResult.peerIds.count == cachedResult.requestedByIds.count, cachedResult.peerIds.count == cachedResult.dates.count, cachedResult.peerIds.count == cachedResult.visibility.count else {
+                return nil
+            }
+
+            var requests: [CommunityPeerRequest] = []
+            var peers: [EnginePeer.Id: EnginePeer] = [:]
+            for index in cachedResult.peerIds.indices {
+                let peerId = cachedResult.peerIds[index]
+                let requestedBy = cachedResult.requestedByIds[index]
+                guard let peer = transaction.getPeer(peerId), let requestedByPeer = transaction.getPeer(requestedBy) else {
+                    return nil
+                }
+                requests.append(CommunityPeerRequest(peerId: peerId, requestedBy: requestedBy, date: cachedResult.dates[index], isVisible: cachedResult.visibility[index]))
+                peers[peerId] = EnginePeer(peer)
+                peers[requestedBy] = EnginePeer(requestedByPeer)
+            }
+
+            return (requests, peers, cachedResult.count, Int(cachedResult.count) > requests.count)
+        }
+        |> deliverOn(self.queue)).start(next: { [weak self] cachedResult in
+            guard let strongSelf = self else {
+                return
+            }
+            strongSelf.isLoadingMore = false
+            if let cachedResult {
+                strongSelf.requests = cachedResult.requests
+                strongSelf.peers = cachedResult.peers
+                strongSelf.count = cachedResult.count
+                strongSelf.hasLoadedOnce = true
+                strongSelf.canLoadMore = cachedResult.canLoadMore
+                strongSelf.loadedFromCache = true
+            }
+            strongSelf.loadMore(limit: initialLimit)
+        }))
         self.loadMore(limit: initialLimit)
     }
 
@@ -543,18 +633,27 @@ private final class CommunityPeerLinkRequestsContextImpl {
     }
 
     func loadMore(limit: Int32?) {
-        if self.isLoadingMore || !self.canLoadMore {
+        if self.isLoadingMore || (!self.canLoadMore && !self.loadedFromCache) {
             return
         }
         self.isLoadingMore = true
-        self.updateState()
 
         let account = self.account
         let communityId = self.communityId
-        let offset = self.nextOffset
+        let loadedFromCache = self.loadedFromCache
+        let offset: String?
+        if self.loadedFromCache {
+            self.loadedFromCache = false
+            self.populateCache = true
+            offset = nil
+        } else {
+            offset = self.nextOffset
+        }
+        let populateCache = self.populateCache
         let requestLimit = limit ?? self.initialLimit
+        self.updateState()
 
-        self.disposable.set((_internal_communityPeerLinkRequests(
+        self.disposable.set((_internal_communityPeerLinkRequestsResult(
             account: account,
             communityId: communityId,
             offset: offset,
@@ -564,7 +663,24 @@ private final class CommunityPeerLinkRequestsContextImpl {
             guard let strongSelf = self else {
                 return
             }
+            guard let result else {
+                strongSelf.isLoadingMore = false
+                if !strongSelf.hasLoadedOnce {
+                    strongSelf.hasLoadedOnce = true
+                    strongSelf.canLoadMore = false
+                    strongSelf.count = 0
+                } else if loadedFromCache {
+                    strongSelf.loadedFromCache = true
+                }
+                strongSelf.updateState()
+                return
+            }
 
+            if strongSelf.populateCache {
+                strongSelf.populateCache = false
+                strongSelf.requests.removeAll()
+                strongSelf.peers.removeAll()
+            }
             var existingIds = Set(strongSelf.requests.map(\.peerId))
             for request in result.requests {
                 if existingIds.contains(request.peerId) {
@@ -585,6 +701,9 @@ private final class CommunityPeerLinkRequestsContextImpl {
             if !strongSelf.canLoadMore {
                 strongSelf.count = Int32(strongSelf.requests.count)
             }
+            if populateCache {
+                strongSelf.updateCache()
+            }
             strongSelf.updateState()
         }))
     }
@@ -597,6 +716,8 @@ private final class CommunityPeerLinkRequestsContextImpl {
         self.isLoadingMore = false
         self.hasLoadedOnce = false
         self.canLoadMore = true
+        self.loadedFromCache = false
+        self.populateCache = true
         self.count = 0
         self.updateState()
         self.loadMore(limit: limit ?? self.initialLimit)
@@ -613,6 +734,7 @@ private final class CommunityPeerLinkRequestsContextImpl {
         self.requests.removeAll(where: { $0.peerId == request.peerId })
         self.count = max(0, self.count - 1)
         self.updateCachedData(approvedRequests: action == .approve ? [request] : [], pendingRequestsCount: self.count)
+        self.updateCache()
         self.updateState()
     }
 
@@ -629,7 +751,23 @@ private final class CommunityPeerLinkRequestsContextImpl {
         self.canLoadMore = false
         self.nextOffset = nil
         self.updateCachedData(approvedRequests: approvedRequests, pendingRequestsCount: 0)
+        self.updateCache()
         self.updateState()
+    }
+
+    private func updateCache() {
+        guard self.hasLoadedOnce && !self.isLoadingMore else {
+            return
+        }
+
+        let communityId = self.communityId
+        let requests = Array(self.requests.prefix(100))
+        let count = self.count
+        self.updateDisposables.add(self.account.postbox.transaction({ transaction in
+            if let entry = CodableEntry(CachedCommunityPeerLinkRequests(requests: requests, count: count)) {
+                transaction.putItemCacheEntry(id: ItemCacheEntryId(collectionId: Namespaces.CachedItemCollection.cachedCommunityPeerLinkRequests, key: CachedCommunityPeerLinkRequests.key(communityId: communityId)), entry: entry)
+            }
+        }).start())
     }
 
     private func updateCachedData(approvedRequests: [CommunityPeerRequest], pendingRequestsCount: Int32) {

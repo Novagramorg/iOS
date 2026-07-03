@@ -189,6 +189,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1401984889] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionToggleSlowMode($0) }
     dict[-370660328] = { return Api.ChannelAdminLogEventAction.parse_channelAdminLogEventActionUpdatePinned($0) }
     dict[-368018716] = { return Api.ChannelAdminLogEventsFilter.parse_channelAdminLogEventsFilter($0) }
+    dict[206065458] = { return Api.ChannelCategory.parse_channelCategory($0) }
     dict[547062491] = { return Api.ChannelLocation.parse_channelLocation($0) }
     dict[-1078612597] = { return Api.ChannelLocation.parse_channelLocationEmpty($0) }
     dict[-847783593] = { return Api.ChannelMessagesFilter.parse_channelMessagesFilter($0) }
@@ -844,6 +845,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-193510921] = { return Api.PeerSettings.parse_peerSettings($0) }
     dict[-1707742823] = { return Api.PeerStories.parse_peerStories($0) }
     dict[-404214254] = { return Api.PendingSuggestion.parse_pendingSuggestion($0) }
+    dict[431767677] = { return Api.PersonalChannel.parse_personalChannel($0) }
     dict[810769141] = { return Api.PhoneCall.parse_phoneCall($0) }
     dict[912311057] = { return Api.PhoneCall.parse_phoneCallAccepted($0) }
     dict[1355435489] = { return Api.PhoneCall.parse_phoneCallDiscarded($0) }
@@ -1331,7 +1333,7 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[1648005024] = { return Api.UrlAuthResult.parse_urlAuthResultAccepted($0) }
     dict[-1445536993] = { return Api.UrlAuthResult.parse_urlAuthResultDefault($0) }
     dict[1020666860] = { return Api.UrlAuthResult.parse_urlAuthResultRequest($0) }
-    dict[829899656] = { return Api.User.parse_user($0) }
+    dict[-1313289085] = { return Api.User.parse_user($0) }
     dict[-742634630] = { return Api.User.parse_userEmpty($0) }
     dict[114026053] = { return Api.UserFull.parse_userFull($0) }
     dict[-2100168954] = { return Api.UserProfilePhoto.parse_userProfilePhoto($0) }
@@ -1446,6 +1448,8 @@ fileprivate let parsers: [Int32 : (BufferReader) -> Any?] = {
     dict[-541588713] = { return Api.channels.ChannelParticipant.parse_channelParticipant($0) }
     dict[-1699676497] = { return Api.channels.ChannelParticipants.parse_channelParticipants($0) }
     dict[-266911767] = { return Api.channels.ChannelParticipants.parse_channelParticipantsNotModified($0) }
+    dict[824755388] = { return Api.channels.Found.parse_found($0) }
+    dict[-694491059] = { return Api.channels.PersonalChannels.parse_personalChannels($0) }
     dict[-191450938] = { return Api.channels.SendAsPeers.parse_sendAsPeers($0) }
     dict[1044107055] = { return Api.channels.SponsoredMessageReportResult.parse_sponsoredMessageReportResultAdsHidden($0) }
     dict[-2073059774] = { return Api.channels.SponsoredMessageReportResult.parse_sponsoredMessageReportResultChooseOption($0) }
@@ -1851,6 +1855,8 @@ public extension Api {
             _1.serialize(buffer, boxed)
         case let _1 as Api.ChannelAdminLogEventsFilter:
             _1.serialize(buffer, boxed)
+        case let _1 as Api.ChannelCategory:
+            _1.serialize(buffer, boxed)
         case let _1 as Api.ChannelLocation:
             _1.serialize(buffer, boxed)
         case let _1 as Api.ChannelMessagesFilter:
@@ -2251,6 +2257,8 @@ public extension Api {
             _1.serialize(buffer, boxed)
         case let _1 as Api.PendingSuggestion:
             _1.serialize(buffer, boxed)
+        case let _1 as Api.PersonalChannel:
+            _1.serialize(buffer, boxed)
         case let _1 as Api.PhoneCall:
             _1.serialize(buffer, boxed)
         case let _1 as Api.PhoneCallDiscardReason:
@@ -2618,6 +2626,10 @@ public extension Api {
         case let _1 as Api.channels.ChannelParticipant:
             _1.serialize(buffer, boxed)
         case let _1 as Api.channels.ChannelParticipants:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.channels.Found:
+            _1.serialize(buffer, boxed)
+        case let _1 as Api.channels.PersonalChannels:
             _1.serialize(buffer, boxed)
         case let _1 as Api.channels.SendAsPeers:
             _1.serialize(buffer, boxed)

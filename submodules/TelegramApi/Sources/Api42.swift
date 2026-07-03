@@ -3642,6 +3642,21 @@ public extension Api.functions.channels {
     }
 }
 public extension Api.functions.channels {
+    static func getCategories(langCode: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<[Api.ChannelCategory]>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-1814446679)
+        serializeString(langCode, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "channels.getCategories", parameters: [("langCode", ConstructorParameterDescription(langCode))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> [Api.ChannelCategory]? in
+            let reader = BufferReader(buffer)
+            var result: [Api.ChannelCategory]?
+            if let _ = reader.readInt32() {
+                result = Api.parseVector(reader, elementSignature: 0, elementType: Api.ChannelCategory.self)
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.channels {
     static func getChannelRecommendations(flags: Int32, channel: Api.InputChannel?) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.messages.Chats>) {
         let buffer = Buffer()
         buffer.appendInt32(631707458)
@@ -3673,6 +3688,20 @@ public extension Api.functions.channels {
             var result: Api.messages.Chats?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.messages.Chats
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.channels {
+    static func getContactPersonalChannels() -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.channels.PersonalChannels>) {
+        let buffer = Buffer()
+        buffer.appendInt32(1352350822)
+        return (FunctionDescription(name: "channels.getContactPersonalChannels", parameters: []), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.channels.PersonalChannels? in
+            let reader = BufferReader(buffer)
+            var result: Api.channels.PersonalChannels?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.channels.PersonalChannels
             }
             return result
         })
@@ -3977,6 +4006,28 @@ public extension Api.functions.channels {
             var result: Api.Updates?
             if let signature = reader.readInt32() {
                 result = Api.parse(reader, signature: signature) as? Api.Updates
+            }
+            return result
+        })
+    }
+}
+public extension Api.functions.channels {
+    static func search(flags: Int32, q: String?, categoryId: Int32?, offset: String) -> (FunctionDescription, Buffer, DeserializeFunctionResponse<Api.channels.Found>) {
+        let buffer = Buffer()
+        buffer.appendInt32(-940686817)
+        serializeInt32(flags, buffer: buffer, boxed: false)
+        if Int(flags) & Int(1 << 0) != 0 {
+            serializeString(q!, buffer: buffer, boxed: false)
+        }
+        if Int(flags) & Int(1 << 1) != 0 {
+            serializeInt32(categoryId!, buffer: buffer, boxed: false)
+        }
+        serializeString(offset, buffer: buffer, boxed: false)
+        return (FunctionDescription(name: "channels.search", parameters: [("flags", ConstructorParameterDescription(flags)), ("q", ConstructorParameterDescription(q)), ("categoryId", ConstructorParameterDescription(categoryId)), ("offset", ConstructorParameterDescription(offset))]), buffer, DeserializeFunctionResponse { (buffer: Buffer) -> Api.channels.Found? in
+            let reader = BufferReader(buffer)
+            var result: Api.channels.Found?
+            if let signature = reader.readInt32() {
+                result = Api.parse(reader, signature: signature) as? Api.channels.Found
             }
             return result
         })

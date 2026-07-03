@@ -129,12 +129,15 @@ public class ChatMessageCommunityChangedBubbleContentNode: ChatMessageBubbleCont
                 
                 var isGroup = false
                 let messagePeer = item.message.peers[item.message.id.peerId]
+                let isBot = messagePeer is TelegramUser
                 if let channel = messagePeer as? TelegramChannel, case .group = channel.info {
                     isGroup = true
                 }
                 
                 let text: String
-                if isGroup {
+                if isBot {
+                    text = item.presentationData.strings.Notification_CommunityAddedBot("**\(community?.title ?? "")**").string
+                } else if isGroup {
                     if item.message.author?.id == item.context.account.peerId {
                         text = item.presentationData.strings.Notification_CommunityAddedGroupYou("**\(community?.title ?? "")**").string
                     } else {

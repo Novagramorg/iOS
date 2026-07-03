@@ -573,6 +573,10 @@ public extension EnginePeer {
     var associatedPeerId: Id? {
         return self._asPeer().associatedPeerId
     }
+    
+    var containerPeerId: Id? {
+        return self._asPeer().containerPeerId
+    }
 
     var hasCustomNameColor: Bool {
         return self._asPeer().hasCustomNameColor

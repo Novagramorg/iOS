@@ -109,6 +109,7 @@ func infoItems(
         let ItemBotAddToChat = 9002
         let ItemBotAddToChatInfo = 9003
         let ItemVerification = 9004
+        let ItemCommunity = 10000
         
         if let cachedUserData = data.cachedData as? CachedUserData, cachedUserData.flags.contains(.unofficialSecurityRisk) {
             items[.unofficial]!.append(PeerInfoScreenInfoItem(id: 0, title: "", text: .markdown(presentationData.strings.PeerInfo_UnofficialSecurityRisk(EnginePeer(user).compactDisplayTitle).string), style: .compact, linkAction: nil))
@@ -136,6 +137,22 @@ func infoItems(
                 }
                 interaction.openChat(peerId)
             }))
+        }
+        
+        if let linkedCommunityData = data.linkedCommunityData {
+            items[.community]!.append(PeerInfoScreenCommunityItem(
+                id: ItemCommunity,
+                context: context,
+                community: linkedCommunityData.peer,
+                chatCount: linkedCommunityData.cachedData?.linkedPeers.count,
+                action: {
+                    guard let controller = interaction.getController() else {
+                        return
+                    }
+                    let communityController = context.sharedContext.makeCommunityViewScreen(context: context, communityId: linkedCommunityData.peer.id, mode: .sheet)
+                    controller.push(communityController)
+                }
+            ))
         }
         
         if let phone = user.phone {
@@ -190,24 +207,20 @@ func infoItems(
         
         if let cachedData = data.cachedData as? CachedUserData {
             if let birthday = cachedData.birthday {
-                var hasBirthdayToday = false
-                let today = Calendar.current.dateComponents(Set([.day, .month]), from: Date())
-                if today.day == Int(birthday.day) && today.month == Int(birthday.month) {
-                    hasBirthdayToday = true
-                }
+                let isBirthdayToday = hasBirthdayToday(birthday: birthday)
                 
                 var birthdayAction: ((ASDisplayNode, Promise<Bool>?) -> Void)?
                 if isMyProfile {
                     birthdayAction = { node, _ in
                         birthdayContextAction(node, nil, nil)
                     }
-                } else if hasBirthdayToday && cachedData.disallowedGifts != TelegramDisallowedGifts.All {
+                } else if isBirthdayToday && cachedData.disallowedGifts != TelegramDisallowedGifts.All {
                     birthdayAction = { _, _ in
                         interaction.openPremiumGift()
                     }
                 }
                 
-                items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: ItemBirthdate, context: context, label: hasBirthdayToday ? presentationData.strings.UserInfo_BirthdayToday : presentationData.strings.UserInfo_Birthday, text: stringForCompactBirthday(birthday, strings: presentationData.strings, showAge: true), textColor: .primary, leftIcon: hasBirthdayToday ? .birthday : nil, icon: hasBirthdayToday ? .premiumGift : nil, action: birthdayAction, longTapAction: nil, iconAction: {
+                items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: ItemBirthdate, context: context, label: isBirthdayToday ? presentationData.strings.UserInfo_BirthdayToday : presentationData.strings.UserInfo_Birthday, text: stringForCompactBirthday(birthday, strings: presentationData.strings, showAge: true), textColor: .primary, leftIcon: isBirthdayToday ? .birthday : nil, icon: isBirthdayToday ? .premiumGift : nil, action: birthdayAction, longTapAction: nil, iconAction: {
                     interaction.openPremiumGift()
                 }, contextAction: birthdayContextAction, requestLayout: { _ in
                 }))
@@ -941,6 +954,11 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
             let ItemBotSettings = 13
             let ItemBotInfo = 14
             
+            let ItemCommunity = 15
+            let ItemAddToCommunity = 16
+            let ItemAddToCommunityInfo = 17
+            let ItemRemoveFromCommunity = 18
+            
             if let botInfo = user.botInfo, botInfo.flags.contains(.canEdit) {
                 items[.peerDataSettings]!.append(PeerInfoScreenDisclosureItem(id: ItemUsername, label: .text("@\(user.addressName ?? "")"), text: presentationData.strings.PeerInfo_Bot_Username, icon: PresentationResourcesSettings.bot, action: {
                     interaction.editingOpenPublicLinkSetup()
@@ -985,6 +1003,33 @@ func editingItems(data: PeerInfoScreenData?, boostStatus: ChannelBoostStatus?, s
                 items[.peerSettings]!.append(PeerInfoScreenCommentItem(id: ItemBotInfo, text: presentationData.strings.PeerInfo_Bot_BotFatherInfo, linkAction: { _ in
                     interaction.openPeerMention("botfather", .default)
                 }))
+                
+                if let linkedCommunityId = user.linkedCommunityId {
+                    if let linkedCommunityData = data.linkedCommunityData {
+                        items[.community]!.append(PeerInfoScreenCommunityItem(
+                            id: ItemCommunity,
+                            context: context,
+                            community: linkedCommunityData.peer,
+                            chatCount: linkedCommunityData.cachedData?.linkedPeers.count,
+                            action: {
+                                guard let controller = interaction.getController() else {
+                                    return
+                                }
+                                let communityController = context.sharedContext.makeCommunityViewScreen(context: context, communityId: linkedCommunityData.peer.id, mode: .sheet)
+                                controller.push(communityController)
+                            }
+                        ))
+                        items[.community]!.append(PeerInfoScreenActionItem(id: ItemRemoveFromCommunity, text: "Remove Bot from Community", color: .destructive, icon: generateTintedImage(image: UIImage(bundleImageName: "Peer Info/RemoveIcon"), color: presentationData.theme.list.itemDestructiveColor), alignment: .natural, action: {
+                            interaction.editingRemoveFromCommunity(linkedCommunityId)
+                        }))
+                    }
+                } else {
+                    //TODO:localize
+                    items[.community]!.append(PeerInfoScreenActionItem(id: ItemAddToCommunity, text: "Add Bot to a Community", color: .accent, icon: generateTintedImage(image: UIImage(bundleImageName: "Item List/CommunitiesIcon"), color: presentationData.theme.list.itemAccentColor), alignment: .natural, action: {
+                        interaction.editingOpenAddToCommunity()
+                    }))
+                    items[.community]!.append(PeerInfoScreenCommentItem(id: ItemAddToCommunityInfo, text: "Make your bot part of a community with multiple related chats"))
+                }
             } else if !user.flags.contains(.isSupport) {
                 let compactName = EnginePeer(user).compactDisplayTitle
                 

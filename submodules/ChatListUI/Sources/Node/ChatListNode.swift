@@ -1161,7 +1161,18 @@ private func mappedUpdateEntries(context: AccountContext, nodeInteraction: ChatL
     }
 }
 
-private func mappedChatListNodeViewListTransition(context: AccountContext, nodeInteraction: ChatListNodeInteraction, location: ChatListControllerLocation, isPremium: Bool, filterData: ChatListItemFilterData?, chatListFilters: [ChatListFilter]?, mode: ChatListNodeMode, isPeerEnabled: ((EnginePeer) -> Bool)?, presentationData: ChatListPresentationData, transition: ChatListNodeViewTransition) -> ChatListNodeListViewTransition {
+private func mappedChatListNodeViewListTransition(
+    context: AccountContext,
+    nodeInteraction: ChatListNodeInteraction,
+    location: ChatListControllerLocation,
+    isPremium: Bool,
+    filterData: ChatListItemFilterData?,
+    chatListFilters: [ChatListFilter]?,
+    mode: ChatListNodeMode,
+    isPeerEnabled: ((EnginePeer) -> Bool)?,
+    presentationData: ChatListPresentationData,
+    transition: ChatListNodeViewTransition
+) -> ChatListNodeListViewTransition {
     return ChatListNodeListViewTransition(chatListView: transition.chatListView, deleteItems: transition.deleteItems, insertItems: mappedInsertEntries(context: context, nodeInteraction: nodeInteraction, location: location, isPremium: isPremium, filterData: filterData, chatListFilters: chatListFilters, mode: mode, isPeerEnabled: isPeerEnabled, entries: transition.insertEntries, presentationData: presentationData), updateItems: mappedUpdateEntries(context: context, nodeInteraction: nodeInteraction, location: location, isPremium: isPremium, filterData: filterData, chatListFilters: chatListFilters, mode: mode, isPeerEnabled: isPeerEnabled, entries: transition.updateEntries, presentationData: presentationData), options: transition.options, scrollToItem: transition.scrollToItem, stationaryItemRange: transition.stationaryItemRange, adjustScrollToFirstItem: transition.adjustScrollToFirstItem, animateCrossfade: transition.animateCrossfade)
 }
 
