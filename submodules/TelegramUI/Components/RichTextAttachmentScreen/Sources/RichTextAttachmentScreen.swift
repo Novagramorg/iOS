@@ -18,6 +18,9 @@ import ContextUI
 import Postbox
 import TelegramCore
 import CheckNode
+import GlassControls
+import ChatRichTextEditorComposer
+import TextFormat
 
 /// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
 /// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
@@ -71,9 +74,11 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     }
 
     private let sendMessage: (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void
+    private let syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)?
 
-    public init(context: AccountContext, initialContents: Document? = nil, initialMedia: [String: Media] = [:], initialEmojiFiles: [Int64: TelegramMediaFile] = [:], sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+    public init(context: AccountContext, initialContents: Document? = nil, initialMedia: [String: Media] = [:], initialEmojiFiles: [Int64: TelegramMediaFile] = [:], sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void, syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
         self.sendMessage = sendMessage
+        self.syncContent = syncContent
 
         let overNavigationContainer = SparseContainerView()
 
@@ -95,6 +100,14 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         if let navigationBar = self.navigationBar {
             navigationBar.customOverBackgroundContentView.insertSubview(overNavigationContainer, at: 0)
         }
+        
+        self.attemptNavigation = { [weak self] _ in
+            guard let self, let syncContent = self.syncContent, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+                return true
+            }
+            syncContent(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
+            return true
+        }
     }
 
     required public init(coder aDecoder: NSCoder) {
@@ -105,6 +118,15 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         if let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View {
             self.sendMessage(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
         }
+        self.dismiss()
+    }
+    
+    fileprivate func close() {
+        guard let syncContent = self.syncContent, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+            self.dismiss()
+            return
+        }
+        syncContent(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
         self.dismiss()
     }
 }
@@ -136,8 +158,8 @@ final class RichTextAttachmentScreenComponent: Component {
 
     final class View: UIView {
         private let title = ComponentView<Empty>()
-        private let doneButton = ComponentView<Empty>()
-        private let navActionsBar = ComponentView<Empty>()
+        private let leftNavActionsBar = ComponentView<Empty>()
+        private let rightNavActionsBar = ComponentView<Empty>()
         
         private let editor = RichTextEditorView()
         // Frosted fade at the screen top (mirrors ComposePollScreen) — scrolling content dissolves into the
@@ -167,6 +189,8 @@ final class RichTextAttachmentScreenComponent: Component {
         private var environment: EnvironmentType?
         
         private let actionBar = ComponentView<Empty>()
+        private let aiButton = ComponentView<Empty>()
+        private let sendButton = ComponentView<Empty>()
 
         private var emojiKeyboard: RichTextEmojiKeyboardController?
         private var componentState: EmptyComponentState?
@@ -455,82 +479,57 @@ final class RichTextAttachmentScreenComponent: Component {
             let barButtonSize = CGSize(width: 44.0, height: 44.0)
             
             let editorState = self.editor.currentState()
-
-            // Close + undo + redo share ONE glass pill (a single glass background), built from the same
-            // RichTextActionBarComponent the bottom toolbar uses — each segment is independently tappable and
-            // dims to 0.4 alpha (inert) when its action is nil. Close dismisses; undo/redo drive the editor's
-            // undo manager (canUndo/canRedo ↔ undo()/redo()) and dim when unavailable. Undo and redo share the
-            // Media Editor undo glyph (redo mirrored via flipHorizontally). After an undo/redo the editor fires
-            // onChange → this update runs again and refreshes the segments + the rest of the toolbar.
-            let navActions: [RichTextActionBarComponent.Action] = [
-                RichTextActionBarComponent.Action(
-                    id: AnyHashable("close"), icon: "Navigation/Close",
-                    action: { [weak self] _ in
-                        guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
-                            return
-                        }
-                        controller.dismiss()
-                    },
-                    isSelected: false
-                ),
-                RichTextActionBarComponent.Action(
-                    id: AnyHashable("undo"), icon: "Media Editor/Undo",
-                    action: editorState.canUndo ? { [weak self] _ in self?.editor.undo() } : nil,
-                    isSelected: false
-                ),
-                RichTextActionBarComponent.Action(
-                    id: AnyHashable("redo"), icon: "Media Editor/Undo",
-                    action: editorState.canRedo ? { [weak self] _ in self?.editor.redo() } : nil,
-                    isSelected: false,
-                    flipHorizontally: true
-                ),
-            ]
-            let navActionsBarSize = self.navActionsBar.update(
+            
+            let leftNavActionsBarSize = self.leftNavActionsBar.update(
                 transition: transition,
-                component: AnyComponent(RichTextActionBarComponent(
+                component: AnyComponent(GlassControlGroupComponent(
                     theme: environment.theme,
-                    actions: navActions
-                )),
+                    preferClearGlass: false,
+                    background: .panel,
+                    items: [
+                        GlassControlGroupComponent.Item(id: 0, content: .icon("Navigation/Close"), action: { [weak self] in
+                            guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
+                                return
+                            }
+                            controller.close()
+                        })
+                    ], minWidth: 44.0)
+                ),
                 environment: {},
-                containerSize: CGSize(width: 146.0, height: barButtonSize.height)
+                containerSize: CGSize(width: availableSize.width, height: barButtonSize.height)
             )
-            let navActionsBarFrame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: 16.0), size: navActionsBarSize)
-            if let navActionsBarView = self.navActionsBar.view {
-                if navActionsBarView.superview == nil {
-                    component.overNavigationContainer.addSubview(navActionsBarView)
+            let leftNavActionsBarFrame = CGRect(origin: CGPoint(x: environment.safeInsets.left + 16.0, y: 16.0), size: leftNavActionsBarSize)
+            if let leftNavActionsBarView = self.leftNavActionsBar.view {
+                if leftNavActionsBarView.superview == nil {
+                    component.overNavigationContainer.addSubview(leftNavActionsBarView)
                 }
-                transition.setFrame(view: navActionsBarView, frame: navActionsBarFrame)
+                transition.setFrame(view: leftNavActionsBarView, frame: leftNavActionsBarFrame)
             }
-
-            let doneButtonSize = self.doneButton.update(
+            
+            let rightNavActionsBarSize = self.rightNavActionsBar.update(
                 transition: transition,
-                component: AnyComponent(GlassBarButtonComponent(
-                    size: barButtonSize,
-                    backgroundColor: environment.theme.list.itemCheckColors.fillColor,
-                    isDark: environment.theme.overallDarkAppearance,
-                    state: .tintedGlass,
-                    isEnabled: true,
-                    component: AnyComponentWithIdentity(id: "done", component: AnyComponent(
-                        BundleIconComponent(
-                            name: "Navigation/Done", tintColor: environment.theme.list.itemCheckColors.foregroundColor
-                        )
-                    )),
-                    action: { [weak self] _ in
-                        guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
-                            return
-                        }
-                        controller.donePressed()
-                    }
-                )),
+                component: AnyComponent(GlassControlGroupComponent(
+                    theme: environment.theme,
+                    preferClearGlass: false,
+                    background: .panel,
+                    items: [
+                        GlassControlGroupComponent.Item(id: 0, content: .icon("Media Editor/Undo"), action: editorState.canUndo ? { [weak self] in
+                            self?.editor.undo()
+                        } : nil),
+                        GlassControlGroupComponent.Item(id: 1, content: .icon("Media Editor/Redo"), action: editorState.canRedo ? { [weak self] in
+                            self?.editor.redo()
+                        } : nil)
+                    ], minWidth: 44.0)
+                ),
                 environment: {},
-                containerSize: CGSize(width: 120.0, height: barButtonSize.height)
+                containerSize: CGSize(width: availableSize.width, height: barButtonSize.height)
             )
-            let doneButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - environment.safeInsets.right - 16.0 - doneButtonSize.width, y: 16.0), size: doneButtonSize)
-            if let doneButtonView = self.doneButton.view {
-                if doneButtonView.superview == nil {
-                    component.overNavigationContainer.addSubview(doneButtonView)
+            let rightNavActionsBarFrame = CGRect(origin: CGPoint(x: availableSize.width - (environment.safeInsets.left + 16.0) - rightNavActionsBarSize.width, y: 16.0), size: rightNavActionsBarSize)
+            if let rightNavActionsBarView = self.rightNavActionsBar.view {
+                if rightNavActionsBarView.superview == nil {
+                    component.overNavigationContainer.addSubview(rightNavActionsBarView)
                 }
-                transition.setFrame(view: doneButtonView, frame: doneButtonFrame)
+                transition.setFrame(view: rightNavActionsBarView, frame: rightNavActionsBarFrame)
             }
 
             //TODO:localize
@@ -552,10 +551,10 @@ final class RichTextAttachmentScreenComponent: Component {
             // Done button. When the natural center would overlap either side, re-center it in the gap between
             // the cluster's trailing edge and Done (needed on narrow screens where the centered title would
             // otherwise sit under the redo pill).
-            let leftClusterMaxX = navActionsBarFrame.maxX
+            let leftClusterMaxX = leftNavActionsBarFrame.maxX
             var titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - titleSize.width) / 2.0), y: floorToScreenPixels((environment.navigationHeight - titleSize.height) / 2.0) + 3.0), size: titleSize)
-            if titleFrame.minX < leftClusterMaxX + 16.0 || titleFrame.maxX > doneButtonFrame.minX - 16.0 {
-                titleFrame.origin.x = leftClusterMaxX + floorToScreenPixels((doneButtonFrame.minX - leftClusterMaxX) - titleSize.width) / 2.0
+            if titleFrame.minX < leftClusterMaxX + 16.0 || titleFrame.maxX > rightNavActionsBarFrame.minX - 16.0 {
+                titleFrame.origin.x = leftClusterMaxX + floorToScreenPixels((rightNavActionsBarFrame.minX - leftClusterMaxX) - titleSize.width) / 2.0
             }
             if let titleView = self.title.view {
                 if titleView.superview == nil {
@@ -622,20 +621,27 @@ final class RichTextAttachmentScreenComponent: Component {
                     guard let self else { return }
                     // Re-read live state at tap time rather than the build-time snapshot.
                     let state = self.editor.currentState()
-                    let isQuote = state.paragraphStyle == .quote
+                    let isQuote = state.blockQuoteDepth > 0   // inside a Block.blockQuote container (Task 16b)
                     let isCode = state.isCodeBlock
+                    let isPullQuote = state.isPullQuote
                     let items: [ContextMenuItem] = [
                         .action(ContextMenuActionItem(text: "None", icon: { theme in
-                            (!isQuote && !isCode)
+                            (!isQuote && !isCode && !isPullQuote)
                                 ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                                 : UIImage()
                         }, action: { [weak self] _, f in
                             f(.default)
                             guard let self else { return }
-                            // Return to a plain body paragraph (un-code first if needed; setParagraphStyle
-                            // doesn't touch a CodeBlockBox).
-                            if self.editor.currentState().isCodeBlock {
+                            // Return to a plain body paragraph. Un-code / un-pullquote / un-blockquote as
+                            // needed. `unwrapBlockQuoteLevel()` peels one `Block.blockQuote` container;
+                            // `setParagraphStyle(.body)` resets a heading paragraph.
+                            let live = self.editor.currentState()
+                            if live.isCodeBlock {
                                 self.editor.makeCodeBlock()
+                            } else if live.isPullQuote {
+                                self.editor.makePullQuote()
+                            } else if live.blockQuoteDepth > 0 {
+                                self.editor.unwrapBlockQuoteLevel()
                             } else {
                                 self.editor.setParagraphStyle(.body)
                             }
@@ -647,11 +653,24 @@ final class RichTextAttachmentScreenComponent: Component {
                         }, action: { [weak self] _, f in
                             f(.default)
                             guard let self else { return }
-                            // Exit a code block first (its text becomes body paragraphs), then apply the quote style.
+                            // Exit a code block first (its text becomes body paragraphs), then wrap in a
+                            // Block.blockQuote container (wrapInBlockQuote nests; unwrap is via None above).
                             if self.editor.currentState().isCodeBlock {
                                 self.editor.makeCodeBlock()
                             }
-                            self.editor.setParagraphStyle(.quote)
+                            self.editor.wrapInBlockQuote()
+                        })),
+                        .action(ContextMenuActionItem(text: "Pull Quote", icon: { theme in
+                            isPullQuote
+                                ? generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
+                                : UIImage()
+                        }, action: { [weak self] _, f in
+                            f(.default)
+                            guard let self else { return }
+                            // makePullQuote() toggles; only turn it ON so re-selecting Pull Quote is idempotent.
+                            if !self.editor.currentState().isPullQuote {
+                                self.editor.makePullQuote()
+                            }
                         })),
                         .action(ContextMenuActionItem(text: "Code Block", icon: { theme in
                             isCode
@@ -668,7 +687,7 @@ final class RichTextAttachmentScreenComponent: Component {
                     ]
                     self.presentActionMenu(from: sourceView, items: items)
                 },
-                isSelected: editorState.paragraphStyle == .quote || editorState.isCodeBlock
+                isSelected: editorState.blockQuoteDepth > 0 || editorState.isCodeBlock || editorState.isPullQuote
             ))
             barActions.append(RichTextActionBarComponent.Action(
                 id: AnyHashable("writingDirection"), icon: "RichText/ToolParagraphStyle",
@@ -782,6 +801,82 @@ final class RichTextAttachmentScreenComponent: Component {
                 sideInset = 20.0
             }
             
+            let actionBarSpacing: CGFloat = 6.0
+            
+            let aiButtonSize = self.aiButton.update(
+                transition: transition,
+                component: AnyComponent(GlassControlGroupComponent(
+                    theme: environment.theme,
+                    preferClearGlass: false,
+                    background: .panel,
+                    items: [
+                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/InputAIIcon"), action: { [weak self] in
+                            Task { @MainActor in
+                                guard let self, let component = self.component, let environment = self.environment else {
+                                    return
+                                }
+                                
+                                let currentContent = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
+                                let currentPage = instantPage(from: currentContent)
+                                
+                                let textProcessingScreen = await component.context.sharedContext.makeTextProcessingScreen(
+                                    context: component.context,
+                                    theme: environment.theme,
+                                    mode: .edit(
+                                        saveRestoreStateId: nil,
+                                        completion: { [weak self] result in
+                                            guard let self else {
+                                                return
+                                            }
+                                            let content: ChatInputContent
+                                            switch result {
+                                            case let .rich(instantPage):
+                                                content = chatInputContent(fromInstantPage: instantPage)
+                                            case let .plain(text, entities):
+                                                content = chatInputContent(from: chatInputStateStringWithAppliedEntities(text, entities: entities))
+                                            case .empty:
+                                                return
+                                            }
+                                            let (document, media, emojiFiles) = documentMediaAndEmoji(fromChatInputContent: content)
+                                            self.emojiKeyboard?.seedEmojiFiles(emojiFiles)
+                                            self.attachedMedia.merge(media) { _, new in new }
+                                            self.editor.document = document
+                                        },
+                                        send: nil,
+                                        sendContextActions: nil
+                                    ),
+                                    inputText: ComposedRichMessage.rich(instantPage: currentPage),
+                                    copyResult: nil,
+                                    translateChat: nil
+                                )
+                                environment.controller()?.push(textProcessingScreen)
+                            }
+                        })
+                    ], minWidth: 44.0)
+                ),
+                environment: {},
+                containerSize: CGSize(width: 44.0, height: 44.0)
+            )
+            
+            let sendButtonSize = self.sendButton.update(
+                transition: transition,
+                component: AnyComponent(GlassControlGroupComponent(
+                    theme: environment.theme,
+                    preferClearGlass: false,
+                    background: .activeTint(inset: false),
+                    items: [
+                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/SendIcon"), action: { [weak self] in
+                            guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
+                                return
+                            }
+                            controller.donePressed()
+                        })
+                    ], minWidth: 44.0)
+                ),
+                environment: {},
+                containerSize: CGSize(width: 44.0, height: 44.0)
+            )
+            
             let actionBarSize = self.actionBar.update(
                 transition: transition,
                 component: AnyComponent(RichTextActionBarComponent(
@@ -789,12 +884,28 @@ final class RichTextAttachmentScreenComponent: Component {
                     actions: barActions
                 )),
                 environment: {},
-                containerSize: CGSize(width: availableSize.width - (sideInset + environment.safeInsets.left) * 2.0, height: 44.0)
+                containerSize: CGSize(width: availableSize.width - (sideInset + environment.safeInsets.left) * 2.0 - actionBarSpacing * 2.0 - aiButtonSize.width - sendButtonSize.width, height: 44.0)
             )
             
             var bottomInset = max(environment.inputHeight, emojiPanelHeight, environment.safeInsets.bottom)
             
-            let actionBarFrame = CGRect(origin: CGPoint(x: sideInset + environment.safeInsets.left, y: availableSize.height - bottomInset - 6.0 - actionBarSize.height), size: actionBarSize)
+            let aiButtonFrame = CGRect(origin: CGPoint(x: sideInset + environment.safeInsets.left, y: availableSize.height - bottomInset - 6.0 - aiButtonSize.height), size: aiButtonSize)
+            if let aiButtonView = self.aiButton.view {
+                if aiButtonView.superview == nil {
+                    self.addSubview(aiButtonView)
+                }
+                transition.setFrame(view: aiButtonView, frame: aiButtonFrame)
+            }
+            
+            let sendButtonFrame = CGRect(origin: CGPoint(x: availableSize.width - (sideInset + environment.safeInsets.left) - sendButtonSize.width, y: availableSize.height - bottomInset - 6.0 - sendButtonSize.height), size: sendButtonSize)
+            if let sendButtonView = self.sendButton.view {
+                if sendButtonView.superview == nil {
+                    self.addSubview(sendButtonView)
+                }
+                transition.setFrame(view: sendButtonView, frame: sendButtonFrame)
+            }
+            
+            let actionBarFrame = CGRect(origin: CGPoint(x: sideInset + environment.safeInsets.left + aiButtonSize.width + actionBarSpacing, y: availableSize.height - bottomInset - 6.0 - actionBarSize.height), size: actionBarSize)
             if let actionBarView = self.actionBar.view {
                 if actionBarView.superview == nil {
                     self.addSubview(actionBarView)

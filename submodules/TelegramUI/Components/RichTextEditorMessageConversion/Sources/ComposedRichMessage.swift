@@ -3,16 +3,6 @@ import TelegramCore
 import Postbox
 import RichTextEditorCore
 
-/// The result of serializing a RichTextEditor `Document` into a sendable Telegram message.
-public enum ComposedRichMessage {
-    /// Structured content → a rich message (`RichTextMessageAttribute(instantPage:)`, sent with `text: ""`).
-    case rich(instantPage: InstantPage)
-    /// Entity-expressible content → a normal message (`text` + `TextEntitiesMessageAttribute`).
-    case plain(text: String, entities: [MessageTextEntity])
-    /// Nothing worth sending (empty / whitespace-only document).
-    case empty
-}
-
 /// Serialize a RichTextEditor `Document` into a `ComposedRichMessage`.
 ///
 /// `forSendPreview`: when set, a blockquote forces the rich (InstantPage) path even though it is otherwise
@@ -40,7 +30,7 @@ func normalizedBlocks(_ blocks: [Block], media: [String: Media]) -> [Block] {
     var out: [Block] = []
     for block in blocks {
         switch block {
-        case .paragraph, .table, .code, .collapsedQuote:
+        case .paragraph, .table, .code, .pullQuote:
             out.append(block)
         case let .media(mediaBlock):
             if media[mediaBlock.mediaID] != nil {
@@ -48,18 +38,21 @@ func normalizedBlocks(_ blocks: [Block], media: [String: Media]) -> [Block] {
             } else if !mediaBlock.caption.isEmpty {
                 out.append(.paragraph(ParagraphBlock(id: mediaBlock.id, style: .body, runs: mediaBlock.caption)))
             }
+        case .blockQuote:
+            // Pass through; children are resolved in downstream builders.
+            out.append(block)
         }
     }
     return out
 }
 
-/// Trim trailing empty body/quote paragraphs (e.g. the editor's blank end paragraph).
+/// Trim trailing empty body paragraphs (e.g. the editor's blank end paragraph).
 func trimmedTrailingEmpty(_ blocks: [Block]) -> [Block] {
     var result = blocks
     while let last = result.last,
           case let .paragraph(paragraph) = last,
           paragraph.list == nil,
-          paragraph.style == .body || paragraph.style == .quote,
+          paragraph.style == .body,
           paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         result.removeLast()
     }
@@ -78,13 +71,13 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
                 return true
             }
             switch paragraph.style {
-            case .heading1, .heading2, .heading3:
+            case .heading1, .heading2, .heading3, .heading4, .heading5, .heading6:
                 return true
-            case .quote:
-                if forSendPreview {
-                    return true
-                }
             case .body, .caption:
+                break
+            case .pullQuote:
+                // `pullQuote` is a render-only paragraph style; a `.paragraph` block with this style
+                // should not exist, but treat it as non-rich defensively (it is unreachable in practice).
                 break
             }
         case .media:
@@ -94,8 +87,11 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
             // A code block is entity-expressible (.Pre) and does NOT force the rich path — it round-trips
             // through the normal text+entities builder (buildEntityMessage).
             break
-        case .collapsedQuote:
-            // A collapsed quote can't be represented as plain text + entities → always forces the rich path.
+        case .pullQuote:
+            // A pull quote has no entity equivalent → always forces the rich path.
+            return true
+        case .blockQuote:
+            // A block quote has no entity form → always forces the rich path.
             return true
         }
     }

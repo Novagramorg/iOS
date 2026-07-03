@@ -32,12 +32,10 @@ final class BlockStack {
     private static let framedNeighborMargin: CGFloat = 8
 
     /// A block that draws its own bounded fill and is NOT a `BlockBox`, so `facingInset` never runs for
-    /// it: a code block, a table, or a collapsed quote. Its own top/bottom insets are INTERNAL padding
-    /// (fill→text), not external margin — so two of these adjacent would sit with their fills flush.
-    /// (An EXPANDED quote is a `BlockBox`; consecutive quotes merge into one fill, and a quote's
-    /// separation from a non-quote neighbor is reserved by that neighbor via `facingInset`.)
+    /// it: a code block, a table, a pull quote, or a block-quote box. Its own top/bottom insets are INTERNAL
+    /// padding (fill→text), not external margin — so two of these adjacent would sit with their fills flush.
     private static func isFramedAtom(_ box: CanvasBlock) -> Bool {
-        box is CodeBlockBox || box is TableBlockBox || box is CollapsedQuoteBox
+        box is CodeBlockBox || box is TableBlockBox || box is PullQuoteBox || box is BlockQuoteBox
     }
 
     /// The inset for `box` on the side facing `neighbor` (or the stack edge, when nil). The facing
@@ -51,19 +49,13 @@ final class BlockStack {
 
     private func facingInset(of box: BlockBox, toward neighbor: CanvasBlock?) -> CGFloat {
         let base = self.verticalInsetBase
-        // A table, a collapsed quote, and a code block all draw their own bounded fill, so a neighbor reserves
-        // the extra framed margin — matching an EXPANDED quote (handled below), so collapsing a quote (or
-        // un-coding a code block) doesn't shrink the gap, and a code block sits the same distance from its
-        // neighbors as a quote.
-        if neighbor is TableBlockBox || neighbor is CollapsedQuoteBox || neighbor is CodeBlockBox { return base + BlockStack.framedNeighborMargin }
+        // A table, a code block, a pull quote, and a block-quote box all draw their own bounded fill,
+        // so a neighbor reserves extra framed margin for visible separation.
+        if neighbor is TableBlockBox || neighbor is CodeBlockBox || neighbor is PullQuoteBox || neighbor is BlockQuoteBox { return base + BlockStack.framedNeighborMargin }
         guard let n = neighbor as? BlockBox else { return base }
-        // Two list items stack tight (0) only when they share a container — both plain, or both in the
-        // same quote run. A plain list item next to a QUOTED list item are in different containers, so
-        // fall through to the framed-margin rules below (the quote needs visible separation).
-        if box.listMembership != nil && n.listMembership != nil
-            && (box.style == .quote) == (n.style == .quote) { return 0 }
+        // Two list items stack tight (0).
+        if box.listMembership != nil && n.listMembership != nil { return 0 }
         if box.isBodyParagraph && n.isBodyParagraph { return base / 2 }
-        if n.style == .quote && box.style != .quote { return base + BlockStack.framedNeighborMargin }
         return base
     }
 
@@ -78,16 +70,6 @@ final class BlockStack {
                 let next: CanvasBlock? = i + 1 < boxes.count ? boxes[i + 1] : nil
                 b.topInset = facingInset(of: b, toward: prev)
                 b.bottomInset = facingInset(of: b, toward: next)
-                // A top-level quote run shares one continuous fill; an explicit QuoteStyle vertical inset
-                // overrides the block inset at the run's OUTER edges only (first block's top, last block's
-                // bottom). A neighbor that is not a `.quote` BlockBox — a stack edge (nil) or a
-                // CollapsedQuoteBox — is a run boundary. nil insets leave facingInset untouched. The value
-                // rides the box's own mapper, so a table-cell quote (`.tableCells` mapper) yields nil here.
-                if b.style == .quote {
-                    let s = b.mapper.styleSheet
-                    if (prev as? BlockBox)?.style != .quote, let t = s.quoteTopInset { b.topInset = t }
-                    if (next as? BlockBox)?.style != .quote, let bt = s.quoteBottomInset { b.bottomInset = bt }
-                }
             }
             box.setWidth(width)
             // Two adjacent framed atoms (code / table / collapsed quote) both fill their whole frames,

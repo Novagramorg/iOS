@@ -786,19 +786,27 @@ public class AttachmentController: ViewController, MinimizableController {
                                 guard let self, let mediaPickerContext = self.mediaPickerContext else {
                                     return
                                 }
-                                self.panel.updateCaption(chatInputStateStringWithAppliedEntities(text.text, entities: text.entities))
-                                mediaPickerContext.setCaption(chatInputStateStringWithAppliedEntities(text.text, entities: text.entities))
+                                // Captions are plain text with entities; the API only returns a rich result for rich input.
+                                guard case let .plain(text, entities) = text else {
+                                    return
+                                }
+                                self.panel.updateCaption(chatInputStateStringWithAppliedEntities(text, entities: entities))
+                                mediaPickerContext.setCaption(chatInputStateStringWithAppliedEntities(text, entities: entities))
                             },
                             send: { [weak self] text in
                                 guard let self, let mediaPickerContext = self.mediaPickerContext else {
                                     return
                                 }
-                                mediaPickerContext.setCaption(chatInputStateStringWithAppliedEntities(text.text, entities: text.entities))
+                                // Captions are plain text with entities; the API only returns a rich result for rich input.
+                                guard case let .plain(text, entities) = text else {
+                                    return
+                                }
+                                mediaPickerContext.setCaption(chatInputStateStringWithAppliedEntities(text, entities: entities))
                                 mediaPickerContext.send(mode: .generic, attachmentMode: .media, parameters: nil)
                             },
                             sendContextActions: nil
                         ),
-                        inputText: TextWithEntities(text: caption.string, entities: []),
+                        inputText: .plain(text: caption.string, entities: []),
                         copyResult: nil,
                         translateChat: nil
                     )

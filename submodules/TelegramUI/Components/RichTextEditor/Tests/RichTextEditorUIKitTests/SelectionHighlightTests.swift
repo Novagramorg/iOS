@@ -49,23 +49,27 @@ final class SelectionHighlightTests: XCTestCase {
         XCTAssertGreaterThan(eFill!.height, 1, "and has a real line height")
     }
 
-    func test_selectionHighlight_quoteFirstLine_coveredInFull_startsAtFarLeft() {
+    func test_selectionHighlight_indentedFirstLine_coveredInFull_startsAtFarLeft() {
+        // A list item has head indent (the marker column) — same mechanism as the old flat-quote indent.
+        // A fully-covered first line of ANY indented paragraph extends to the far LEFT (container origin),
+        // not just to the first glyph.
         let v = canvas([
-            .paragraph(ParagraphBlock(id: BlockID("q"), style: .quote, runs: [TextRun(text: "Quote")])),
+            .paragraph(ParagraphBlock(id: BlockID("li"), style: .body,
+                                      list: ListMembership(marker: .bullet),
+                                      runs: [TextRun(text: "Indented list item")])),
             .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "After")])),
         ])
-        let q = v.boxes[0], b = v.boxes[1]
-        let qRegion = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("q")) }!
-        // Precondition: the quote text is indented (firstLineHeadIndent), so the glyph rect starts past the far left.
-        let hug = v.selectionRects(globalFrom: q.textStart, globalTo: b.textStart + 2)
-            .first { abs($0.minY - qRegion.canvasOrigin.y) < 6 }!
-        XCTAssertGreaterThan(hug.minX, qRegion.canvasOrigin.x + 4, "quote text is indented from the far left")
-        // The fully-covered first line of the quote starts at the FAR LEFT (the container origin), like its
-        // continuation lines — not the indented first glyph.
-        let fill = v.selectionHighlightRects(globalFrom: q.textStart, globalTo: b.textStart + 2)
-            .first { abs($0.minY - qRegion.canvasOrigin.y) < 6 }!
-        XCTAssertEqual(fill.minX, qRegion.canvasOrigin.x, accuracy: 1.0,
-                       "the quote's fully-covered first line starts at the far left")
+        let li = v.boxes[0], b = v.boxes[1]
+        let liRegion = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("li")) }!
+        // Precondition: the list item text is indented (firstLineHeadIndent), so the glyph rect starts past the far left.
+        let hug = v.selectionRects(globalFrom: li.textStart, globalTo: b.textStart + 2)
+            .first { abs($0.minY - liRegion.canvasOrigin.y) < 6 }!
+        XCTAssertGreaterThan(hug.minX, liRegion.canvasOrigin.x + 4, "list item text is indented from the far left")
+        // The fully-covered first line extends to the FAR LEFT (the container origin), not the indented glyph.
+        let fill = v.selectionHighlightRects(globalFrom: li.textStart, globalTo: b.textStart + 2)
+            .first { abs($0.minY - liRegion.canvasOrigin.y) < 6 }!
+        XCTAssertEqual(fill.minX, liRegion.canvasOrigin.x, accuracy: 1.0,
+                       "a fully-covered indented first line starts at the far left")
     }
 
     func test_selectionHighlight_midLineSelection_stillHugsGlyphs() {

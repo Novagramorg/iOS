@@ -75,11 +75,12 @@ public struct StyleSheet {
         case .heading1: return 24
         case .heading2: return 21
         case .heading3: return 19
+        case .heading4: return 17
+        case .heading5: return 17
+        case .heading6: return 17
         case .body: return bodyBaseSize
-        // Quotes always read denser than body — a fixed 15pt, like captions, in every context
-        // (document and table cell). Not a field: nothing overrides it per-context.
-        case .quote: return 15
         case .caption: return 15
+        case .pullQuote: return bodyBaseSize
         }
     }
 
@@ -90,9 +91,13 @@ public struct StyleSheet {
         case .heading1: return StyleMetrics(spacingBefore: 18, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading2: return StyleMetrics(spacingBefore: 16, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .heading3: return StyleMetrics(spacingBefore: 14, spacingAfter: 6, lineHeightMultiple: 1.05)
+        case .heading4: return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
+        case .heading5: return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
+        case .heading6: return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
         case .body:     return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
         case .caption:  return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
-        case .quote:    return StyleMetrics(spacingBefore: quoteSpacingBefore, spacingAfter: quoteSpacingAfter, lineHeightMultiple: 1.10)
+        // Pull quote: tight, no inter-paragraph spacing (box insets provide padding); runs read close together.
+        case .pullQuote: return StyleMetrics(spacingBefore: 0, spacingAfter: 0, lineHeightMultiple: 1.10)
         }
     }
 
@@ -102,7 +107,8 @@ public struct StyleSheet {
         // Bold is purely user emphasis (`CharacterAttributes.bold`), so it stays an independent toggle
         // that round-trips uniformly in every style (no style-injected weight to leak into the model).
         let bold = attributes.bold
-        let italic = attributes.italic   // quote is upright; its bar/fill is a drawn canvas decoration (see DocumentCanvasView+Decorations)
+        // Pull quotes force italic render — the italic is ambient (render-only), stripped on read-back.
+        let italic = attributes.italic || style == .pullQuote
         let serif = style == .heading1 || style == .heading2 || style == .heading3
         return FontResolver.font(family: attributes.fontFamily, size: size, bold: bold, italic: italic, serif: serif)
     }
@@ -118,6 +124,8 @@ public struct StyleSheet {
         case .right: ps.alignment = .right
         case .justified: ps.alignment = .justified
         }
+        // Pull quotes always render centered regardless of the user's alignment setting.
+        if style == .pullQuote { ps.alignment = .center }
         ps.baseWritingDirection = baseWritingDirection
         ps.firstLineHeadIndent = CGFloat(attributes.firstLineIndent)
         ps.headIndent = CGFloat(attributes.headIndent)
@@ -128,10 +136,7 @@ public struct StyleSheet {
         ps.paragraphSpacingBefore += m.spacingBefore
         ps.paragraphSpacing += m.spacingAfter
         if ps.lineHeightMultiple == 1 { ps.lineHeightMultiple = m.lineHeightMultiple }
-        // The quote container's leading inset (the bar→text gap) and the list marker inset STACK: a
-        // list inside a quote clears the quote bar first, then hangs its marker/text past that. (A plain
-        // quote gets just the quote inset; a plain list gets just the list inset.)
-        var indent: CGFloat = (style == .quote) ? quoteIndent : 0
+        var indent: CGFloat = 0
         if let list = list {
             // Marker sits at the level's indent; text hangs `listMarkerSpacing` past it. Ordered
             // (numbered) items get extra text inset since a number marker is wider than a bullet.

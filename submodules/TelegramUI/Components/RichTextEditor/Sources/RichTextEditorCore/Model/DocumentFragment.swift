@@ -7,26 +7,34 @@ import Foundation
 public func isInlineMergeable(_ block: Block) -> Bool {
     guard case .paragraph(let p) = block else { return false }
     switch p.style {
-    case .body, .heading1, .heading2, .heading3: return p.list == nil
-    case .quote, .caption: return false
+    case .body, .heading1, .heading2, .heading3, .heading4, .heading5, .heading6: return p.list == nil
+    case .caption, .pullQuote: return false
+    }
+}
+
+/// Recursively regenerates fresh `BlockID`s for a list of blocks (for paste collision avoidance).
+private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
+    blocks.map { block in
+        switch block {
+        case .paragraph(let p):
+            return .paragraph(ParagraphBlock(id: .generate(), style: p.style,
+                                             paragraph: p.paragraph, list: p.list, runs: p.runs))
+        case .code(let c):
+            return .code(CodeBlock(id: .generate(), language: c.language, runs: c.runs))
+        case .pullQuote(let pq):
+            return .pullQuote(PullQuote(id: .generate(), runs: pq.runs))
+        case .blockQuote(let bq):
+            return .blockQuote(BlockQuote(id: .generate(), children: regeneratingIDs(bq.children), collapsed: bq.collapsed))
+        default:
+            return block
+        }
     }
 }
 
 extension Document {
-    /// Returns a copy with every top-level paragraph/code block given a fresh `BlockID`
-    /// (fragments only carry paragraph/code blocks, per scope).
+    /// Returns a copy with every top-level block given a fresh `BlockID`, recursing into block quotes.
     public func regeneratingTopLevelIDs() -> Document {
-        Document(schemaVersion: schemaVersion, blocks: blocks.map { block in
-            switch block {
-            case .paragraph(let p):
-                return .paragraph(ParagraphBlock(id: .generate(), style: p.style,
-                                                 paragraph: p.paragraph, list: p.list, runs: p.runs))
-            case .code(let c):
-                return .code(CodeBlock(id: .generate(), language: c.language, runs: c.runs))
-            default:
-                return block
-            }
-        })
+        Document(schemaVersion: schemaVersion, blocks: regeneratingIDs(blocks))
     }
 
     /// Splices `fragment` into this document at the global caret. Returns the new document and the
@@ -108,6 +116,7 @@ extension Document {
             switch assembled.last! {
             case .paragraph(let p): lastLen = p.utf16Count
             case .code(let c): lastLen = c.utf16Count
+            case .pullQuote(let pq): lastLen = pq.utf16Count
             default: lastLen = 0
             }
             caretPos = newDoc.globalTextStart(ofBlockAt: lastIndex) + lastLen
@@ -119,11 +128,13 @@ extension Document {
     }
 }
 
-/// Plain text of a paragraph/code block (empty for media/table). Used for the code-destination flatten.
+/// Plain text of a paragraph/code/blockQuote block (empty for media/table). Used for the code-destination flatten.
 public func blockPlainText(_ block: Block) -> String {
     switch block {
     case .paragraph(let p): return p.text
     case .code(let c): return c.text
+    case .pullQuote(let pq): return pq.text
+    case .blockQuote(let bq): return bq.children.map(blockPlainText).joined(separator: "\n")
     default: return ""
     }
 }
@@ -180,6 +191,21 @@ extension Document {
                 // Note: empty code blocks (utf16Count == 0) are intentionally not captured — they
                 // carry no content and are meaningless to paste (asymmetric with empty paragraphs,
                 // which preserve the blank line's structure on intra-document paste).
+            case .pullQuote(let pq):
+                let a = max(lo, textStart), b = min(hi, textStart + pq.utf16Count)
+                if a < b {
+                    let r = sliceRuns(pq.runs, fromUTF16: a - textStart, toUTF16: b - textStart)
+                    out.append(.pullQuote(PullQuote(id: .generate(), runs: r)))
+                }
+            case .blockQuote(let bq):
+                // Capture the whole block quote only when the selection fully covers its span
+                // [cursor, cursor+size). Partial coverage stays dropped (like media/table) — a
+                // partial block quote is structurally incomplete and not meaningful to paste.
+                if lo <= cursor && hi >= cursor + size {
+                    out.append(.blockQuote(BlockQuote(id: .generate(),
+                                                      children: regeneratingIDs(bq.children),
+                                                      collapsed: bq.collapsed)))
+                }
             default:
                 break   // media/table not carried in a fragment
             }

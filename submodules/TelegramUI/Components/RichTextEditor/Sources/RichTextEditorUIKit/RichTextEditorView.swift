@@ -41,6 +41,19 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
+    /// Per-host pull-quote geometry (padding, pill, marks, minWidth). Defaults reproduce the editor's built-in look.
+    /// Set before the first `update(...)`/document seed (the compact-host knob convention); assigning it
+    /// after content reloads the boxes so the new geometry takes effect (like `quoteStyle`).
+    public var pullQuoteStyle: PullQuoteStyle = .default {
+        didSet {
+            canvas.applyPullQuoteStyle(pullQuoteStyle)
+            if bounds.width > 0.0 {
+                canvas.reload(self.document.blocks, width: bounds.width)
+            }
+            canvas.setNeedsDisplay()
+        }
+    }
+
     /// Per-host media geometry (horizontal bleed). Defaults reproduce the editor's built-in edge-to-edge
     /// look; the compact chat composer assigns `MediaBlockStyle(horizontalBleed: 0)` so media insets like
     /// the text paragraphs. Set before the first `update(...)`/document seed (the compact-host knob
@@ -55,9 +68,8 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         }
     }
 
-    /// Host-injected icons for the quote collapse (tall expanded quote) / expand (collapsed quote)
-    /// affordance. `nil` (default) ⇒ no affordance icon is drawn (the package ships no fallback). Assigning
-    /// it updates the live collapse button and reloads so collapsed boxes pick up the new glyph (like `quoteStyle`).
+    /// Host-injected icons for the block-quote collapse/expand affordance. `nil` (default) ⇒ no affordance
+    /// icon is drawn. Assigning it reloads so `BlockQuoteBox`es pick up the new glyphs.
     public var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons? = nil {
         didSet {
             canvas.applyQuoteCollapseIcons(quoteCollapseIcons)
@@ -149,12 +161,17 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         /// True when the caret/selection is inside a first-class code block (`Block.code` / `CodeBlockBox`).
         /// Distinct from `code` (the inline-monospace character format). `paragraphStyle` is nil in a code block.
         public let isCodeBlock: Bool
+        /// True when the caret/selection is inside a pull-quote block (`Block.pullQuote` / `PullQuoteBox`).
+        public let isPullQuote: Bool
         public let listMarker: ListMarker?
         public let link: String?
         public let hasSelection: Bool
         public let isInTable: Bool
         public let canUndo: Bool
         public let canRedo: Bool
+        /// Number of `Block.blockQuote` containers enclosing the caret (0 = not in a quote; N = nested N levels
+        /// deep). Drives a host toolbar's Quote check-state (≥1 → checked). Pure: reads canvas state only.
+        public let blockQuoteDepth: Int
     }
 
     public func currentState() -> EditorState { canvas.currentState() }
@@ -298,6 +315,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func setParagraphStyle(_ name: ParagraphStyleName) { canvas.setParagraphStyle(name) }
     public func setAlignment(_ alignment: TextAlignment) { canvas.setAlignment(alignment) }
     public func setList(_ marker: ListMarker?) { canvas.setList(marker) }
+    public func makePullQuote() { canvas.makePullQuote() }
+    public func wrapInBlockQuote() { canvas.wrapInBlockQuote() }
+    public func unwrapBlockQuoteLevel() { canvas.unwrapBlockQuoteLevel() }
 
     public func undo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.undo(); onChange?() }
     public func redo() { canvas.finalizeMarkedText(); canvas.effectiveUndoManager?.redo(); onChange?() }
@@ -323,11 +343,6 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// Inserts an empty `rows`×`cols` table (row 0 a header) at the caret. No-op unless the caret is in
     /// a top-level paragraph.
     public func insertTable(rows: Int, cols: Int) { canvas.insertTable(rows: rows, columns: cols) }
-
-    /// Collapse the quote run containing the block at `blockIndex` into a folded `.collapsedQuote` (one undo step).
-    public func collapseQuoteRun(atBlockIndex blockIndex: Int) { canvas.collapseQuoteRun(atIndex: blockIndex) }
-    /// Expand the `.collapsedQuote` at `blockIndex` back to quote paragraphs (one undo step).
-    public func expandCollapsedQuote(atBlockIndex blockIndex: Int) { canvas.expandCollapsedQuote(atIndex: blockIndex) }
 
     /// Sets `url` as a link over the current selection (no-op if the selection is empty).
     public func setLink(_ url: String) { canvas.setLink(url) }

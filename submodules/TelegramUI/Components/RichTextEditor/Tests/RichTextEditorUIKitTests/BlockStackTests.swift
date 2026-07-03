@@ -94,27 +94,6 @@ final class BlockStackTests: XCTestCase {
         XCTAssertEqual(gap, 8, accuracy: 0.5)   // reduced from the previous 16 (two full 8pt insets)
     }
 
-    func test_quoteNeighbors_reserveExtraExternalMargin() {
-        let mapper = AttributedStringMapper()
-        func body(_ id: String) -> BlockBox {
-            BlockBox(paragraph: ParagraphBlock(id: BlockID(id), runs: [TextRun(text: "x")]), mapper: mapper, width: 300)
-        }
-        func quote(_ id: String) -> BlockBox {
-            BlockBox(paragraph: ParagraphBlock(id: BlockID(id), style: .quote, runs: [TextRun(text: "q")]), mapper: mapper, width: 300)
-        }
-        let a = body("a"), q = quote("q"), c = body("c")
-        BlockStack(boxes: [a, q, c]).layout(origin: .zero, width: 300)
-        // The neighbors reserve extra margin on the quote-facing side (the quote's filled background
-        // needs breathing room) — that external margin lives on the neighbor, not inside the quote.
-        XCTAssertGreaterThan(a.bottomInset, BlockBox.defaultVerticalInset)   // block above the quote
-        XCTAssertGreaterThan(c.topInset, BlockBox.defaultVerticalInset)      // block below the quote
-        // The quote's own insets (its background's internal padding) stay at the default — not doubled.
-        XCTAssertEqual(q.topInset, BlockBox.defaultVerticalInset, accuracy: 0.5)
-        XCTAssertEqual(q.bottomInset, BlockBox.defaultVerticalInset, accuracy: 0.5)
-        // A's far side (away from the quote) is unaffected.
-        XCTAssertEqual(a.topInset, BlockBox.defaultVerticalInset, accuracy: 0.5)
-    }
-
     func test_codeBlockNeighbors_reserveExtraExternalMargin() {
         let mapper = AttributedStringMapper()
         func body(_ id: String) -> BlockBox {

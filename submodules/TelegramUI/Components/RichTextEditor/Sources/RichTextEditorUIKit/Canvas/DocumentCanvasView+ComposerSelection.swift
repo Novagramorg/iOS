@@ -33,33 +33,46 @@ extension DocumentCanvasView {
     /// The document's top-level text blocks (paragraphs + code blocks) in order, each tagged with its start
     /// offset in the composer's flat UTF-16 string — the blocks' text joined by "\n", with each custom emoji
     /// expanded to its alt-string length. Non-text blocks (tables/images) contribute nothing, matching the bridge.
+    ///
+    /// An expanded `BlockQuoteBox` is transparent: its children are recursively inlined into the flat string
+    /// (joined by "\n" like top-level paragraphs), matching `ComposerDocumentBridge.attributedString(from:)`.
+    /// A collapsed `BlockQuoteBox` — like `CollapsedQuoteBox` — contributes exactly ONE flat placeholder char.
     private func composerParagraphs() -> [ComposerParagraph] {
         var result: [ComposerParagraph] = []
         var flat = 0
-        for box in boxes {
-            if box is CollapsedQuoteBox {
-                // A collapsed quote is an off-the-editable-axis ATOM (`leafRegions() == []`) but contributes
-                // EXACTLY ONE flat placeholder char, matching `ChatInputContent.collapsedQuote` (blockFlatLength
-                // == 1, plainText " "). `length` stays 0: the getter (`composerFlatOffset`) advances flat 1:1
-                // with the global axis (plus emoji expansion), so it can only EXPAND a region — it cannot
-                // compress an atom's 3-token global span down to 1 flat unit. A wider `length` would make a real
-                // caret at the NEXT block's start (global == nodeStart + nodeSize) fall inside this segment and
-                // map past `flatStart` (the caret drifts). With length 0 the segment is a single global point at
-                // `nodeStart` (non-renderable, never a real caret), so it never steals a neighbor's position.
-                if !result.isEmpty { flat += 1 }   // the "\n" joining this block to the previous one
-                result.append(ComposerParagraph(globalStart: box.nodeStart, length: 0,
-                                                flatLength: 1, flatStart: flat, emoji: []))
-                flat += 1
-                continue
-            }
-            guard (box is BlockBox || box is CodeBlockBox), let region = box.leafRegions().first else { continue }
-            if !result.isEmpty { flat += 1 }   // the "\n" that joins this paragraph to the previous one
-            let emoji = composerEmojiOccurrences(in: region)
-            let flatLength = region.length + emoji.reduce(0) { $0 + ($1.altLen - 1) }
-            result.append(ComposerParagraph(globalStart: region.globalStart, length: region.length,
-                                            flatLength: flatLength, flatStart: flat, emoji: emoji))
-            flat += flatLength
+
+        /// Emit a 1-char flat atom for a non-editable block (collapsed quote / collapsedQuote).
+        /// `length` stays 0: `composerFlatOffset` advances flat 1:1 with the global axis and can only EXPAND
+        /// a region — it cannot compress an atom's multi-token global span to 1 flat unit. With length 0 the
+        /// segment is a single global point at `nodeStart` (non-renderable, never a real caret), so it never
+        /// steals a neighbor's position.
+        func emitAtom(_ box: CanvasBlock) {
+            if !result.isEmpty { flat += 1 }   // "\n" joining this atom to the previous block
+            result.append(ComposerParagraph(globalStart: box.nodeStart, length: 0,
+                                            flatLength: 1, flatStart: flat, emoji: []))
+            flat += 1
         }
+
+        func walk(_ boxes: [CanvasBlock]) {
+            for box in boxes {
+                if let bq = box as? BlockQuoteBox {
+                    // Expanded → inline children into the flat string (like ComposerDocumentBridge recursing
+                    // the children document); collapsed → 1-char atom matching collapsedQuote + the bridge.
+                    if bq.collapsed { emitAtom(box) } else { walk(bq.children.boxes) }
+                    continue
+                }
+                guard (box is BlockBox || box is CodeBlockBox || box is PullQuoteBox),
+                      let region = box.leafRegions().first else { continue }
+                if !result.isEmpty { flat += 1 }   // "\n" joining this paragraph to the previous one
+                let emoji = composerEmojiOccurrences(in: region)
+                let flatLength = region.length + emoji.reduce(0) { $0 + ($1.altLen - 1) }
+                result.append(ComposerParagraph(globalStart: region.globalStart, length: region.length,
+                                                flatLength: flatLength, flatStart: flat, emoji: emoji))
+                flat += flatLength
+            }
+        }
+
+        walk(boxes)
         return result
     }
 

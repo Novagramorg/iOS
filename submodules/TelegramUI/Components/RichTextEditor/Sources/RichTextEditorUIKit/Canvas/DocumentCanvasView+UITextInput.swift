@@ -70,6 +70,9 @@ extension DocumentCanvasView: UITextInput {
             // An empty code block types the monospace code attributes, not the body default — without this the
             // first character typed into a just-created (empty) code block lands non-monospace at body size.
             if case .code = region.ref { return CodeBlockBox.codeAttributes() }
+            // An empty pull quote types the italic/centered pull-quote attributes — without this the first
+            // character typed into an empty pull quote lands body-upright-left instead of italic/centered.
+            if case .pullQuote = region.ref { return PullQuoteBox.pullQuoteTypingAttributes(mapper) }
             // Recover the owning paragraph — top-level OR nested in a table cell (via the active stack)
             // — so an empty styled/listed/cell paragraph keeps its paragraph style AND its box's mapper
             // on the next typed character. A table cell's mapper renders body text at a smaller base
@@ -220,11 +223,6 @@ extension DocumentCanvasView: UITextInput {
             let rr = img.mediaRect()
             return CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height)
         }
-        // A collapsed quote is a media-shaped atom: its leading gap is a real caret slot. Report a vertical
-        // bar at its leading edge (same as a media gap) so the OS caret / loupe / scroll-follow have geometry.
-        if let cq = boxes.first(where: { ($0 as? CollapsedQuoteBox)?.nodeStart == pos }) as? CollapsedQuoteBox {
-            return CGRect(x: cq.frame.minX, y: cq.frame.minY, width: 2, height: cq.frame.height)
-        }
         return .zero
     }
 
@@ -277,13 +275,6 @@ extension DocumentCanvasView: UIKeyInput {
             editing { insertBodyParagraph(beforeBoxAt: i, text: text == "\n" ? "" : text) }
             return
         }
-        // Caret on a collapsed quote's gap (reached by arrow-nav) → open a body paragraph before it, rather
-        // than letting the keystroke fall into the atom's display-only preview layout (where it would be
-        // silently dropped). Mirrors the media-gap branch above.
-        if selFrom == selTo, let cq = collapsedQuoteBox(atGap: head), let i = boxIndex(of: cq) {
-            editing { insertBodyParagraph(beforeBoxAt: i, text: text == "\n" ? "" : text) }
-            return
-        }
         if text == "\n" {
             if let active = activeStack(at: head), active.box is CodeBlockBox {
                 // Double-return (Enter on an empty line) EXITS the code block: trailing → after, first →
@@ -299,13 +290,25 @@ extension DocumentCanvasView: UIKeyInput {
                 } else {
                     insertCodeBlockNewline()
                 }
-            } else if selFrom == selTo, let pos = resolveBox(at: head),
-                      let exitIndex = quoteDoubleReturnExitIndex(at: pos.index, local: pos.local) {
-                // Double-return EXITS the quote with a body paragraph (before/after follows from the run
-                // edge): either ON an empty quote line, or at the start of quote content with an empty quote
-                // line directly above (two newlines at the beginning). A middle empty quote line splits
-                // normally (the else branch).
-                exitQuoteToBodyParagraph(at: exitIndex)
+            } else if let active = activeStack(at: head), active.box is PullQuoteBox {
+                // Double-return EXITS the pull quote: trailing → after, first → before, wholly-empty → unmake.
+                // A MIDDLE blank line and a non-empty line just insert an interior newline. A selection always
+                // replaces-with-newline — only a collapsed caret can exit.
+                if selFrom == selTo, let exit = pullQuoteDoubleReturnExit(active) {
+                    switch exit {
+                    case .after:  exitPullQuoteToBodyParagraph(active)
+                    case .before: exitPullQuoteToBodyParagraphBefore(active)
+                    case .unmake: unmakeEmptyPullQuote(active)
+                    }
+                } else {
+                    insertPullQuoteNewline()
+                }
+            } else if selFrom == selTo, isInsideBlockQuote(head), blockQuoteEmptyTrailingChildExit() {
+                // Double-return EXITS the block quote: empty trailing child → body paragraph after the quote;
+                // wholly-empty quote → body in place. Handled inside the helper; execution falls through to
+                // the outer `return`. Non-empty or non-trailing children fall through to insertParagraphBreak()
+                // (adds/splits a child normally).
+                _ = ()
             } else {
                 insertParagraphBreak()
             }
@@ -315,12 +318,13 @@ extension DocumentCanvasView: UIKeyInput {
             editing(coalescing: .typing) { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
             return
         }
-        // A collapsed caret that resolves to a table box (e.g. before a leading table / after a
-        // trailing table) is a structural boundary — snap it into the nearest cell so the edit goes
-        // through that cell's stack, never through the table's degenerate textLayout (which would drop
-        // the keystroke).
-        if !isInsideTable(head), let r = resolveBox(at: head), r.box is TableBlockBox {
-            let snapped = caretSnappedIntoCell(head)
+        // A collapsed caret that resolves to a table or block-quote box (e.g. before a leading
+        // container / after a trailing one) is a structural boundary — snap it into the nearest
+        // in-container text start so the edit goes through that container's stack, never through
+        // the container's degenerate textLayout (which would drop the keystroke).
+        if !isInsideTable(head) && !isInsideBlockQuote(head),
+           let r = resolveBox(at: head), r.box is TableBlockBox || r.box is BlockQuoteBox {
+            let snapped = caretSnappedIntoContainer(head)
             anchor = snapped; head = snapped
         }
         if isInsideTable(head) {
@@ -384,31 +388,6 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         imageObjectDeletePending = nil
-        // Backspace whose HEAD lands on a collapsed quote's LEADING gap (a block boundary, drawn at the quote's
-        // left edge). iOS delivers this two ways: a collapsed caret on the gap (arrow nav), OR — exactly like a
-        // media atom — an object-replacement RANGE anchored at the END of the PRECEDING block (device-log:
-        // `setRange anchor=2 head=4` then `deleteBackward selFrom=2 selTo=4`). That range covers only the
-        // structural slots before the gap (no real content), so `selFrom >= prevTextPosition(before: selTo)`
-        // admits it while excluding a genuine multi-char selection that merely ENDS at the gap. BOTH forms act on
-        // the previous block (delete its last grapheme / merge an empty one) — never deleting or expanding the
-        // quote. A LEADING collapsed quote (nothing before to receive the Backspace) expands instead.
-        if let cq = collapsedQuoteBox(atGap: selTo), selFrom >= prevTextPosition(before: selTo),
-           let idx = boxIndex(of: cq) {
-            if idx > 0, let p = boxes[idx - 1] as? BlockBox, p.textLength == 0 {
-                // Empty previous paragraph → remove it (the quote shifts up into its slot; its new gap equals the
-                // removed paragraph's old node start, so the caret stays on the quote's gap).
-                editing { removeBlock(at: idx - 1, parkingCaretAt: boxes[idx - 1].nodeStart) }
-            } else if idx > 0 {
-                // Previous block has content (or is a non-text atom) → delete backward into it (its last grapheme,
-                // a merge, etc.) via the normal Backspace path from the previous text position.
-                let prev = prevTextPosition(before: cq.nodeStart)
-                if prev != cq.nodeStart { setCaret(global: prev); deleteBackward() }
-            } else {
-                // Leading collapsed quote (nothing before to receive the Backspace) → expand so its content is editable.
-                expandCollapsedQuote(atIndex: idx)
-            }
-            return
-        }
         if tableSelection != nil {
             // A structural row/column selection is active → Backspace deletes those rows/columns (or the
             // whole table when every row/column is selected). The caret is parked in a cell, so the normal
@@ -480,13 +459,16 @@ extension DocumentCanvasView: UIKeyInput {
             }
             return
         }
-        if let p = pos.box as? BlockBox, p.style == .quote, p.textLength == 0 {
-            // Backspace in an EMPTY quote un-quotes it → a plain empty body PARAGRAPH. Otherwise an empty
-            // quote — especially the document's FIRST block, which matches no merge branch below — can't be
-            // removed at all. Mirrors empty-list-item Return (DocumentCanvasView+Editing.insertParagraphBreak).
-            // The list membership is cleared too, so an empty quoted LIST item collapses all the way to a
-            // plain paragraph (not a body list item with a stray marker) — `nil` is a no-op for a plain quote.
-            editing { p.style = .body; p.listMembership = nil; restyle(p); recomputeSpans() }
+        // Backspace at the start of a LONE child of a block quote → un-quote one level (via unwrapBlockQuoteLevel).
+        // "Lone" = the only child in its quote container (boxes.count == 1). Content is preserved; the quote
+        // wrapper is removed and children are spliced to the parent. A non-lone child backspaces normally
+        // (merges with the previous sibling). Mirrors the flat empty-quote branch above, adapted for the
+        // `BlockQuoteBox` container structure.
+        if selFrom == selTo, isInsideBlockQuote(head),
+           let active = activeStack(at: head), let child = active.box as? BlockBox,
+           active.local == 0,
+           active.stack.boxes.count == 1 {
+            unwrapBlockQuoteLevel()   // already wraps itself in editing { }
             return
         }
         if let codeBox = pos.box as? CodeBlockBox, codeBox.textLength == 0,
@@ -497,6 +479,22 @@ extension DocumentCanvasView: UIKeyInput {
             // no merge branch below and is undeletable.
             editing {
                 let body = BlockBox(paragraph: ParagraphBlock(id: codeBox.id, style: .body, runs: []),
+                                    mapper: mapper, width: effectiveWidth)
+                var newBoxes = active.stack.boxes
+                newBoxes.replaceSubrange(active.index...active.index, with: [body])
+                active.stack.boxes = newBoxes
+                recomputeSpans()
+                anchor = body.textStart; head = body.textStart
+            }
+            return
+        }
+        if let pqBox = pos.box as? PullQuoteBox, pqBox.textLength == 0,
+           let active = activeStack(at: head) {
+            // Backspace in an EMPTY pull quote converts it to a body paragraph (`PullQuoteBox` is a distinct
+            // class, so it's REPLACED in its stack with a body `BlockBox`). Mirrors the empty-code branch
+            // above — without this an empty pull quote matches no merge branch below and is undeletable.
+            editing {
+                let body = BlockBox(paragraph: ParagraphBlock(id: pqBox.id, style: .body, runs: []),
                                     mapper: mapper, width: effectiveWidth)
                 var newBoxes = active.stack.boxes
                 newBoxes.replaceSubrange(active.index...active.index, with: [body])

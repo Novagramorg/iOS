@@ -9,9 +9,9 @@ import Postbox
 //
 // This is a fresh, separate pair from the lossy `RichTextEditorMessageConversion` converter — do not
 // conflate them. The round-trip is identity, so the reverse must invert the forward EXACTLY, in
-// particular preserving run boundaries (one top-level `RichText` part ⇄ exactly one run; no merging)
-// and the quote-coalescing boundary (a maximal run of same-`isCollapsed` quote paragraphs ⇄ one
-// `.blockQuote`).
+// particular preserving run boundaries (one top-level `RichText` part ⇄ exactly one run; no merging).
+// `.blockQuote` is the sole quote path — the old flat-`.quote` paragraph and `.collapsedQuote` block
+// are retired; old persisted drafts degrade via the lenient `ChatInputContent.init(from:)` decoder.
 
 // MARK: - Forward: ChatInputContent -> InstantPage
 
@@ -30,16 +30,7 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
     while i < content.blocks.count {
         switch content.blocks[i] {
         case let .paragraph(p):
-            if case let .quote(isCollapsed) = p.style {
-                // Coalesce a maximal run of consecutive quote paragraphs with the SAME isCollapsed into one .blockQuote.
-                var quoteParagraphs: [InstantPageBlock] = []
-                while i < content.blocks.count, case let .paragraph(q) = content.blocks[i], case let .quote(qCollapsed) = q.style, qCollapsed == isCollapsed {
-                    quoteParagraphs.append(.paragraph(richText(from: q.runs)))
-                    i += 1
-                }
-                result.append(.blockQuote(blocks: quoteParagraphs, caption: .empty, collapsed: isCollapsed))
-                continue
-            } else if let list = p.list, case .body = p.style {
+            if let list = p.list, case .body = p.style {
                 // Coalesce a maximal run of consecutive BODY-styled list paragraphs with the SAME marker into one
                 // `.list`. (Adjacent paragraphs with different markers — a bullet list followed by an ordered list —
                 // stay separate `.list` blocks.) `InstantPageListItem` has no indent-level field, so the per-paragraph
@@ -69,19 +60,18 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                     result.append(.heading(text: richText(from: p.runs), level: 2))
                 case .heading3:
                     result.append(.heading(text: richText(from: p.runs), level: 3))
-                case .body, .quote:
+                case .body:
                     result.append(.paragraph(richText(from: p.runs)))
                 }
             }
         case let .code(c):
             result.append(.preformatted(text: richText(from: c.runs), language: c.language))
-        case let .collapsedQuote(inner):
-            // `.collapsedQuote` (folded) and `.quote(isCollapsed: true)` (visible, collapse-flagged) both encode as
-            // `collapsed: true` — they produce the identical sent message (`BlockQuote(isCollapsed: true)`), differing
-            // only in composer display. The reverse canonicalizes `collapsed == true` to `.collapsedQuote` (the more
-            // general container — it holds arbitrary nested content, so the normalization is lossless), folding the
-            // rare visible-collapse-flagged paragraph. See the reverse for the `collapsed == nil/false` rationale.
-            result.append(.blockQuote(blocks: instantPageBlocks(from: inner, collectingMediaInto: &media), caption: .empty, collapsed: true))
+        case let .pullQuote(pq):
+            result.append(.pullQuote(text: richText(from: pq.runs), caption: .empty))
+        case let .blockQuote(bq):
+            // Recursive structured blockquote: forward the inner content unchanged. `collapsed` maps 1:1.
+            result.append(.blockQuote(blocks: instantPageBlocks(from: bq.content, collectingMediaInto: &media),
+                                      caption: .empty, collapsed: bq.collapsed))
         case let .media(m):
             let caption = InstantPageCaption(text: richText(from: m.caption), credit: .empty)
             switch m.kind {
@@ -214,27 +204,16 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             }
         case let .preformatted(rt, language):
             result.append(.code(ChatInputCode(language: language, runs: chatInputRuns(fromRichText: rt))))
+        case let .pullQuote(rt, _):
+            result.append(.pullQuote(ChatInputPullQuote(runs: chatInputRuns(fromRichText: rt))))
         case let .blockQuote(innerBlocks, _, collapsed):
-            // Three composer quote states collapse onto one `Bool?`, by necessity: the MTProto wire has NO collapsed
-            // field, so a cloud-received `Api.RichMessage` blockQuote always arrives `collapsed == nil`. `nil`/`false`
-            // must therefore map to the benign common state — a visible non-collapsed quote — otherwise EVERY
-            // cloud-synced quote would fold. `collapsed == true` maps to `.collapsedQuote`. Net: `.quote(false)` and
-            // `.collapsedQuote` are strict round-trip identity; only the rare `.quote(isCollapsed: true)` normalizes to
-            // `.collapsedQuote` (semantically identical — same sent message). Local Postbox coding preserves the flag
-            // ("qcol"); only the cloud wire degrades it (documented spec limitation).
-            if collapsed == true {
-                result.append(.collapsedQuote(ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: innerBlocks, media: media))))
-            } else {
-                // The forward emitted one `.paragraph(rt)` per quote line; map each back to a quote-style paragraph.
-                for inner in innerBlocks {
-                    if case let .paragraph(rt) = inner {
-                        result.append(.paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: chatInputRuns(fromRichText: rt))))
-                    } else {
-                        // Defensive: a non-paragraph inside a non-collapsed quote (won't happen from forward) — recurse.
-                        result.append(contentsOf: chatInputBlocks(fromInstantPageBlocks: [inner], media: media))
-                    }
-                }
-            }
+            // Recursive structured blockquote: map back to `ChatInputBlock.blockQuote` with the same `collapsed`
+            // flag. Nil (cloud-received wire, no collapsed field) is treated as `false` (visible, non-collapsed).
+            // This is the symmetric inverse of the forward `.blockQuote(bq)` arm. Old flat-`.quote` paragraphs
+            // and `.collapsedQuote` blocks are no longer produced by the forward (Task 16b removed them).
+            result.append(.blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: innerBlocks, media: media)),
+                collapsed: collapsed == true)))
         case let .image(id, caption, _, _):
             // Resolve the concrete `Media` from the page's `media` dict; a missing entry (the forward always stores it,
             // so this is defensive against a malformed page) drops the block. `naturalSize`/`displayWidth`/`alignment`

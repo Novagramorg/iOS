@@ -70,6 +70,44 @@ final class DocumentFragmentTests: XCTestCase {
         XCTAssertTrue(twoParas().extractFragment(globalFrom: 4, globalTo: 4).blocks.isEmpty)
     }
 
+    // MARK: - Block-quote extraction (I3)
+
+    /// A block quote containing one paragraph "hi".
+    func blockQuoteDoc() -> Document {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi")]))],
+                            collapsed: false)
+        return Document(blocks: [.blockQuote(bq)])
+    }
+
+    func test_extract_blockQuote_fullyCovered_capturesBlock() {
+        // A document consisting of exactly one block quote. Selecting the whole document [0, size)
+        // must extract a fragment containing that block quote.
+        let d = blockQuoteDoc()
+        let size = DocumentTree.documentSize(d)
+        let f = d.extractFragment(globalFrom: 0, globalTo: size)
+        XCTAssertEqual(f.blocks.count, 1, "one block quote should be captured")
+        guard case .blockQuote(let bq) = f.blocks[0] else { return XCTFail("extracted block is not a block quote") }
+        XCTAssertFalse(bq.collapsed)
+        XCTAssertEqual(bq.children.count, 1)
+    }
+
+    func test_extract_blockQuote_partiallyCovered_isDropped() {
+        // Place a paragraph before the block quote. Select only the paragraph — the block quote
+        // is NOT fully covered and must be dropped (partial coverage stays dropped).
+        let d = Document(blocks: [
+            para("a", "AB"),
+            .blockQuote(BlockQuote(id: BlockID("q"),
+                                   children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi")]))],
+                                   collapsed: false))
+        ])
+        // globalFrom: start of "AB", globalTo: just before the block quote
+        let paraSize = DocumentTree.documentSize(Document(blocks: [para("a", "AB")]))
+        let f = d.extractFragment(globalFrom: 1, globalTo: paraSize)
+        XCTAssertEqual(f.blocks.count, 1)
+        guard case .paragraph = f.blocks[0] else { return XCTFail("expected only the paragraph") }
+    }
+
     func test_extract_skipsMediaBlock() {
         let d = Document(blocks: [
             para("a", "AB"),
@@ -90,7 +128,11 @@ final class DocumentFragmentTests: XCTestCase {
     // MARK: - Task 3: insertingFragment tests
 
     func code(_ id: String, _ t: String) -> Block { .code(CodeBlock(id: BlockID(id), runs: [TextRun(text: t)])) }
-    func quote(_ id: String, _ t: String) -> Block { para(id, t, style: .quote) }
+    func listItem(_ id: String, _ t: String) -> Block {
+        .paragraph(ParagraphBlock(id: BlockID(id), style: .body,
+                                  list: ListMembership(marker: .bullet),
+                                  runs: t.isEmpty ? [] : [TextRun(text: t)]))
+    }
 
     func test_insert_singleInlineParagraph_mergesAtCaret() {
         // host "Hello" caret after "He" (global 3). Fragment one body paragraph "XX".
@@ -114,15 +156,15 @@ final class DocumentFragmentTests: XCTestCase {
         XCTAssertEqual(r.caret, r.document.globalTextStart(ofBlockAt: 1) + 2)
     }
 
-    func test_insert_leadingQuote_insertsAsOwnBlock() {
-        // Fragment [quote "Q", body "B"] pasted into "Hello" at caret 3.
-        let r = doc(para("a", "Hello")).insertingFragment(doc(quote("q", "Q"), para("b", "B")), atGlobal: 3)!
-        // head paragraph "He" stays; quote inserts as its own block; "B" merges into tail "llo".
+    func test_insert_leadingListItem_insertsAsOwnBlock() {
+        // Fragment [list-item "Q", body "B"] pasted into "Hello" at caret 3.
+        // A list item is not inline-mergeable → inserts as its own block; "B" merges into tail "llo".
+        let r = doc(para("a", "Hello")).insertingFragment(doc(listItem("q", "Q"), para("b", "B")), atGlobal: 3)!
         XCTAssertEqual(r.document.blocks.count, 3)
         guard case .paragraph(let h) = r.document.blocks[0] else { return XCTFail() }
         guard case .paragraph(let q) = r.document.blocks[1] else { return XCTFail() }
         XCTAssertEqual(h.text, "He")
-        XCTAssertEqual(q.style, .quote)
+        XCTAssertNotNil(q.list, "list item survives as its own block")
         XCTAssertEqual(q.text, "Q")
     }
 

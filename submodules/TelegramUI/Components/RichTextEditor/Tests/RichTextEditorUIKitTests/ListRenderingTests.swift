@@ -63,33 +63,6 @@ final class ListRenderingTests: XCTestCase {
                        StyleSheet.orderedListTextInset, accuracy: 0.5)
     }
 
-    func test_quoteList_isIndentedByQuoteInsetPlusListSpacing() {
-        // A list inside a quote must clear the quote's inner inset: the quote's leading inset (the bar→
-        // text gap) AND the list's marker spacing both apply, so the item respects the quote's own inset.
-        let s = StyleSheet()
-        let quoteList = ParagraphBlock(id: BlockID("a"), style: .quote,
-                                       list: ListMembership(marker: .bullet, level: 0),
-                                       runs: [TextRun(text: "Q")])
-        XCTAssertEqual(paragraphStyle(quoteList)?.headIndent ?? -1,
-                       s.quoteIndent + StyleSheet.listMarkerSpacing, accuracy: 0.5)
-        XCTAssertEqual(paragraphStyle(quoteList)?.firstLineHeadIndent ?? -1,
-                       s.quoteIndent + StyleSheet.listMarkerSpacing, accuracy: 0.5)
-    }
-
-    func test_quoteList_addsQuoteInsetOnTopOfPlainListInset() {
-        // The combined inset must equal the plain-list inset plus exactly the quote's leading inset —
-        // i.e. the quote inset stacks on top of (does not replace) the list inset.
-        let s = StyleSheet()
-        let quoteList = ParagraphBlock(id: BlockID("a"), style: .quote,
-                                       list: ListMembership(marker: .ordered, level: 1),
-                                       runs: [TextRun(text: "Q")])
-        let plainList = ParagraphBlock(id: BlockID("b"), style: .body,
-                                       list: ListMembership(marker: .ordered, level: 1),
-                                       runs: [TextRun(text: "P")])
-        let delta = (paragraphStyle(quoteList)?.headIndent ?? 0) - (paragraphStyle(plainList)?.headIndent ?? 0)
-        XCTAssertEqual(delta, s.quoteIndent, accuracy: 0.5)
-    }
-
     private func canvas(_ blocks: [ParagraphBlock]) -> DocumentCanvasView {
         let v = DocumentCanvasView()
         v.setParagraphs(blocks, width: 300)
@@ -165,30 +138,6 @@ final class ListRenderingTests: XCTestCase {
         XCTAssertEqual(d.origin.x, (v.boxes[2] as! BlockBox).textOrigin.x + StyleSheet.listIndentStep, accuracy: 0.5)  // level 1
     }
 
-    func test_quoteListItem_markerOrigin_clearsQuoteInset() {
-        // The list marker column of a quoted list item shifts right by the quote's leading inset so it
-        // clears the quote bar — matching a non-list quote paragraph whose text starts at
-        // textOrigin.x + quoteIndent, instead of sitting on top of the bar at textOrigin.x.
-        let v = canvas([ParagraphBlock(id: BlockID("a"), style: .quote,
-                                       list: ListMembership(marker: .ordered, level: 0),
-                                       runs: [TextRun(text: "One")])])
-        let box = v.boxes[0] as! BlockBox
-        let draw = v.listMarkerDraws().first { $0.id == box.id }!
-        XCTAssertEqual(draw.origin.x, box.textOrigin.x + box.mapper.styleSheet.quoteIndent, accuracy: 0.5)
-    }
-
-    func test_emptyQuoteListItem_caretRect_isInsetByQuotePlusList() {
-        // An empty quoted list item lays out no glyphs; its caret must still sit at the quoted list's
-        // text column (quote leading inset + list marker spacing), not at the page margin.
-        let v = canvas([ParagraphBlock(id: BlockID("a"), style: .quote,
-                                       list: ListMembership(marker: .bullet, level: 0), runs: [])])
-        let box = v.boxes[0] as! BlockBox
-        let caret = v.caretRect(for: DocumentTextPosition(box.textStart))
-        XCTAssertEqual(caret.minX,
-                       box.textOrigin.x + box.mapper.styleSheet.quoteIndent + StyleSheet.listMarkerSpacing,
-                       accuracy: 0.5)
-    }
-
     func test_emptyNumberedListItem_markerBaseline_matchesNonEmptyItem() {
         // TextKit's lineHeightMultiple centering (glyphs raised by `centeringDelta`) is reflected in a
         // non-empty item's `firstLineBaselineFromTop`; the EMPTY-item fallback must mirror it too, else the
@@ -228,15 +177,6 @@ final class ListRenderingTests: XCTestCase {
         let box = v.boxes[0] as! BlockBox
         let caret = v.caretRect(for: DocumentTextPosition(box.textStart))
         XCTAssertEqual(caret.minX, box.textOrigin.x + StyleSheet.listMarkerSpacing, accuracy: 0.5)
-    }
-
-    func test_emptyQuote_caretRect_isInset() {
-        // Same issue for an empty quote (flat +16 indent): the empty-line caret must align with the
-        // quote's text column, not the page margin.
-        let v = canvas([ParagraphBlock(id: BlockID("q"), style: .quote, runs: [])])
-        let box = v.boxes[0] as! BlockBox
-        let caret = v.caretRect(for: DocumentTextPosition(box.textStart))
-        XCTAssertEqual(caret.minX, box.textOrigin.x + 16, accuracy: 0.5)
     }
 
     func test_emptyPlainParagraph_caretRect_notInset() {

@@ -302,6 +302,16 @@ final class RTFConversionTests: XCTestCase {
         XCTAssertEqual(p1.list?.marker, .checklist); XCTAssertEqual(p1.list?.checked, true); XCTAssertEqual(p1.text, "done")
     }
 
+    // MARK: Task 23 — pull quote RTF export
+
+    func test_rtfExport_pullQuote_textSurvives_centeredItalic() {
+        let doc = Document(blocks: [.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "Few understood")]))])
+        let rtf = String(data: RTFConversion.rtfData(from: doc)!, encoding: .utf8)!
+        XCTAssertTrue(rtf.contains("Few understood"))   // text never lost
+        XCTAssertTrue(rtf.contains("\\qc"))              // centered
+        XCTAssertTrue(rtf.contains("\\i"))               // italic
+    }
+
     // MARK: Finding 1 — unescaped URL in HYPERLINK field destination
 
     func test_roundTrip_linkWithRTFSpecialChars_doesNotDropContent() throws {

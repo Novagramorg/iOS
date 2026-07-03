@@ -35,6 +35,7 @@ extension DocumentCanvasView {
             bold: fmt.bold, italic: fmt.italic, underline: fmt.underline, strikethrough: fmt.strikethrough, code: fmt.code,
             paragraphStyle: topBlock?.style,
             isCodeBlock: resolveBox(at: head)?.box is CodeBlockBox,
+            isPullQuote: resolveBox(at: head)?.box is PullQuoteBox,
             listMarker: topBlock?.listMembership?.marker,
             link: currentLink(),
             // Either endpoint in a table: a selection partially overlapping a table still counts as
@@ -42,7 +43,8 @@ extension DocumentCanvasView {
             hasSelection: selFrom < selTo,
             isInTable: isInsideTable(head) || isInsideTable(anchor),
             canUndo: effectiveUndoManager?.canUndo ?? false,
-            canRedo: effectiveUndoManager?.canRedo ?? false
+            canRedo: effectiveUndoManager?.canRedo ?? false,
+            blockQuoteDepth: blockQuoteDepth(at: head)
         )
     }
 }

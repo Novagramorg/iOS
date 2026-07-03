@@ -988,7 +988,7 @@ func _internal_fetchAndUpdateCachedPeerData(accountPeerId: PeerId, peerId rawPee
                                                 }
                                                 switch apiPeer {
                                                 case let .communityPeer(communityPeerData):
-                                                    return CachedCommunityData.CommunityLinkedPeer(peerId: communityPeerData.peer.peerId, visible: boolValue(communityPeerData.visible))
+                                                    return CachedCommunityData.CommunityLinkedPeer(peerId: communityPeerData.peer.peerId, visible: boolValue(communityPeerData.visible), canViewHistory: (communityPeerData.flags & (1 << 2)) != 0)
                                                 }
                                             }
                                             

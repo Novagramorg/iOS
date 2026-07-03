@@ -56,7 +56,7 @@ final class TextProcessingTranslateContentComponent: Component {
         case translate(ignoredLanguages: [String])
         case stylize
         case fix
-        case preview(from: TextWithEntities?, to: TextWithEntities?, authorPeer: EnginePeer?, userCount: Int, isRequesting: Bool)
+        case preview(from: ComposedRichMessage?, to: ComposedRichMessage?, authorPeer: EnginePeer?, userCount: Int, isRequesting: Bool)
     }
     
     final class ExternalState {
@@ -64,14 +64,14 @@ final class TextProcessingTranslateContentComponent: Component {
         fileprivate(set) var sectionHeader: AnyComponentWithIdentity<Empty>?
         fileprivate(set) var sectionFooter: AnyComponentWithIdentity<Empty>?
         
-        fileprivate(set) var result: (language: String, text: TextWithEntities?, textCorrectionRanges: [Range<Int>])? = nil {
+        fileprivate(set) var result: (language: String, text: ComposedRichMessage?, textCorrectionRanges: [Range<Int>])? = nil {
             didSet {
                 if self.result?.language != oldValue?.language || self.result?.text != oldValue?.text {
                     self.resultUpdated?(self.result)
                 }
             }
         }
-        var resultUpdated: (((language: String, text: TextWithEntities?, textCorrectionRanges: [Range<Int>])?) -> Void)?
+        var resultUpdated: (((language: String, text: ComposedRichMessage?, textCorrectionRanges: [Range<Int>])?) -> Void)?
         
         fileprivate(set) var emojify: Bool = false
         fileprivate(set) var isSourceTextExpanded: Bool = false
@@ -104,7 +104,7 @@ final class TextProcessingTranslateContentComponent: Component {
     let theme: PresentationTheme
     let strings: PresentationStrings
     let styles: [TextProcessingScreen.Style]
-    let inputText: TextWithEntities
+    let inputText: ComposedRichMessage
     let externalState: ExternalState
     let mode: Mode
     let copyAction: (() -> Void)?
@@ -122,7 +122,7 @@ final class TextProcessingTranslateContentComponent: Component {
         strings: PresentationStrings,
         styles: [TextProcessingScreen.Style],
         externalState: ExternalState,
-        inputText: TextWithEntities,
+        inputText: ComposedRichMessage,
         mode: Mode,
         copyAction: (() -> Void)?,
         displayLanguageSelectionMenu: @escaping (UIView, String, TelegramComposeAIMessageMode.StyleId, Bool, @escaping (String, TelegramComposeAIMessageMode.StyleReference) -> Void) -> Void,
@@ -288,7 +288,17 @@ final class TextProcessingTranslateContentComponent: Component {
             }
             
             if component.externalState.sourceLanguage == nil {
-                languageRecognizer.processString(component.inputText.text)
+                let plainText: String
+                switch component.inputText {
+                case .empty:
+                    plainText = ""
+                case let .plain(text, _):
+                    plainText = text
+                case let .rich(instantPage):
+                    plainText = instantPage.plainText
+                }
+
+                languageRecognizer.processString(plainText)
                 let hypotheses = languageRecognizer.languageHypotheses(withMaximum: 3)
                 languageRecognizer.reset()
                         
@@ -387,10 +397,10 @@ final class TextProcessingTranslateContentComponent: Component {
                 toTitle = ""
             }
             
-            var fromText: TextWithEntities? = component.inputText
-            var fromTextMeasurementString: String?
-            var toTextMeasurementString: String?
-            var toText: TextWithEntities? = component.externalState.result?.text
+            var fromText: ComposedRichMessage? = component.inputText
+            var fromTextMeasurementString: ComposedRichMessage?
+            var toTextMeasurementString: ComposedRichMessage?
+            var toText: ComposedRichMessage? = component.externalState.result?.text
             var isPreview = false
             if case let .preview(from, to, _, _, isRequesting) = component.mode {
                 isPreview = true
@@ -401,8 +411,8 @@ final class TextProcessingTranslateContentComponent: Component {
                     fromText = from
                     toText = to
                 }
-                fromTextMeasurementString = from?.text
-                toTextMeasurementString = to?.text
+                fromTextMeasurementString = from
+                toTextMeasurementString = to
             }
             
             if case .stylize = component.mode {
@@ -671,7 +681,7 @@ final class TextProcessingTranslateContentComponent: Component {
                         }
                     ) : nil,
                     text: toText,
-                    loadingStateMeasuringText: toTextMeasurementString ?? component.inputText.text,
+                    loadingStateMeasuringText: toTextMeasurementString ?? component.inputText,
                     textCorrectionRanges: component.mode == .fix ? (component.externalState.result?.textCorrectionRanges ?? []) : [],
                     present: component.present,
                     rootViewForTextSelection: component.rootViewForTextSelection

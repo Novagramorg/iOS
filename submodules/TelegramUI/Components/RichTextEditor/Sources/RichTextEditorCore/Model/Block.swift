@@ -5,7 +5,8 @@ public enum Block: Equatable {
     case media(MediaBlock)
     case table(TableBlock)
     case code(CodeBlock)
-    case collapsedQuote(CollapsedQuote)
+    case pullQuote(PullQuote)
+    case blockQuote(BlockQuote)
 
     public var id: BlockID {
         switch self {
@@ -13,13 +14,14 @@ public enum Block: Equatable {
         case .media(let m): return m.id
         case .table(let t): return t.id
         case .code(let c): return c.id
-        case .collapsedQuote(let q): return q.id
+        case .pullQuote(let q): return q.id
+        case .blockQuote(let q): return q.id
         }
     }
 }
 
 extension Block: Codable {
-    private enum Kind: String, Codable { case paragraph, media, table, code, collapsedQuote }
+    private enum Kind: String, Codable { case paragraph, media, table, code, pullQuote, blockQuote }
     private enum CodingKeys: String, CodingKey { case type, value }
 
     public init(from decoder: Decoder) throws {
@@ -28,8 +30,9 @@ extension Block: Codable {
         case .paragraph: self = .paragraph(try c.decode(ParagraphBlock.self, forKey: .value))
         case .media:     self = .media(try c.decode(MediaBlock.self, forKey: .value))
         case .table:     self = .table(try c.decode(TableBlock.self, forKey: .value))
-        case .code:          self = .code(try c.decode(CodeBlock.self, forKey: .value))
-        case .collapsedQuote: self = .collapsedQuote(try c.decode(CollapsedQuote.self, forKey: .value))
+        case .code:      self = .code(try c.decode(CodeBlock.self, forKey: .value))
+        case .pullQuote: self = .pullQuote(try c.decode(PullQuote.self, forKey: .value))
+        case .blockQuote: self = .blockQuote(try c.decode(BlockQuote.self, forKey: .value))
         }
     }
 
@@ -48,8 +51,11 @@ extension Block: Codable {
         case .code(let code):
             try c.encode(Kind.code, forKey: .type)
             try c.encode(code, forKey: .value)
-        case .collapsedQuote(let q):
-            try c.encode(Kind.collapsedQuote, forKey: .type)
+        case .pullQuote(let q):
+            try c.encode(Kind.pullQuote, forKey: .type)
+            try c.encode(q, forKey: .value)
+        case .blockQuote(let q):
+            try c.encode(Kind.blockQuote, forKey: .type)
             try c.encode(q, forKey: .value)
         }
     }

@@ -12,67 +12,19 @@ final class CanvasDecorationsTests: XCTestCase {
         return v
     }
 
-    func test_quote_notItalic() {
-        XCTAssertFalse(StyleSheet.default.font(for: .quote, attributes: .plain)
-            .fontDescriptor.symbolicTraits.contains(.traitItalic))
-    }
-
-    func test_blockquoteDecoration_barAndFill() {
-        let v = canvas([
-            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Body")])),
-            .paragraph(ParagraphBlock(id: BlockID("q"), style: .quote, runs: [TextRun(text: "Quote")])),
-        ])
-        let decs = v.blockquoteDecorations()
-        XCTAssertEqual(decs.count, 1)                                  // only the quote block
-        XCTAssertEqual(decs[0].bar.minX, CanvasMetrics.pageMargin, accuracy: 0.5)   // bar at the text margin (16)
-        XCTAssertEqual(decs[0].bar.width, 3, accuracy: 0.5)
-        XCTAssertGreaterThan(decs[0].fill.width, decs[0].bar.width)    // fill spans the block
-    }
-
-    func test_consecutiveQuoteBlocks_shareOneBackground() {
-        let v = canvas([
-            .paragraph(ParagraphBlock(id: BlockID("q1"), style: .quote, runs: [TextRun(text: "First line")])),
-            .paragraph(ParagraphBlock(id: BlockID("q2"), style: .quote, runs: [TextRun(text: "Second line")])),
-        ])
-        let decs = v.blockquoteDecorations()
-        XCTAssertEqual(decs.count, 1)                                          // one background for the whole quote
-        XCTAssertEqual(decs[0].fill.minY, v.boxes[0].frame.minY, accuracy: 0.5)  // spans from the first block...
-        XCTAssertEqual(decs[0].fill.maxY, v.boxes[1].frame.maxY, accuracy: 0.5)  // ...through the last
-        XCTAssertEqual(decs[0].bar.height, decs[0].fill.height, accuracy: 0.5)   // one continuous bar
-    }
-
-    func test_quoteRunsSeparatedByParagraph_makeSeparateBackgrounds() {
-        let v = canvas([
-            .paragraph(ParagraphBlock(id: BlockID("q1"), style: .quote, runs: [TextRun(text: "A")])),
-            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Body")])),
-            .paragraph(ParagraphBlock(id: BlockID("q2"), style: .quote, runs: [TextRun(text: "B")])),
-        ])
-        XCTAssertEqual(v.blockquoteDecorations().count, 2)                     // two distinct quotes → two backgrounds
-    }
-
     func test_codeBlock_contributesItsOwnBackgroundRun() {
         let v = canvas([
-            .paragraph(ParagraphBlock(id: BlockID("q"), style: .quote, runs: [TextRun(text: "Quote")])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), runs: [TextRun(text: "Body")])),
             .code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "let x = 1")])),
         ])
         let decs = v.blockquoteDecorations()
-        XCTAssertEqual(decs.count, 2, "quote run and code run are distinct backgrounds, not merged")
+        XCTAssertEqual(decs.count, 1, "only the code block makes a decoration run")
         let codeBox = v.boxes.first(where: { $0 is CodeBlockBox })!
         let codeDec = decs.first(where: { $0.fill == codeBox.frame })!
         XCTAssertEqual(codeDec.fill.minY, codeBox.frame.minY, accuracy: 0.5)   // fill spans the code block
         XCTAssertEqual(codeDec.fill.maxY, codeBox.frame.maxY, accuracy: 0.5)
         XCTAssertEqual(codeDec.bar.minX, codeBox.frame.minX, accuracy: 0.5)     // bar at the block's left edge
         XCTAssertEqual(codeDec.bar.width, v.quoteStyle.barWidth, accuracy: 0.5) // bar width tracks the quote bar
-    }
-
-    func test_codeBlockBetweenQuotes_splitsIntoThreeRuns() {
-        let v = canvas([
-            .paragraph(ParagraphBlock(id: BlockID("q1"), style: .quote, runs: [TextRun(text: "A")])),
-            .code(CodeBlock(id: BlockID("c"), runs: [TextRun(text: "code")])),
-            .paragraph(ParagraphBlock(id: BlockID("q2"), style: .quote, runs: [TextRun(text: "B")])),
-        ])
-        XCTAssertEqual(v.blockquoteDecorations().count, 3,
-                       "the code block flushes the quote run before and after it")
     }
 
     func test_typeSomethingPlaceholder_onlyOnLastBlock() {
@@ -186,46 +138,6 @@ final class CanvasDecorationsTests: XCTestCase {
         XCTAssertEqual(d.text, "Type something…")
         XCTAssertEqual(d.origin.x, seam.origin.x, accuracy: 0.01)
         XCTAssertEqual(d.origin.y, seam.origin.y, accuracy: 0.01)
-    }
-
-    func test_blockquoteRun_rendersAsOnePooledImageView_behindParagraphs() {
-        let v = DocumentCanvasView()
-        v.setParagraphs([
-            ParagraphBlock(id: BlockID("q1"), style: .quote, runs: [TextRun(text: "Line one")]),
-            ParagraphBlock(id: BlockID("q2"), style: .quote, runs: [TextRun(text: "Line two")]),
-            ParagraphBlock(id: BlockID("p"),  style: .body,  runs: [TextRun(text: "Body")]),
-        ], width: 300)
-        v.frame = CGRect(x: 0, y: 0, width: 300, height: 300); v.layoutIfNeeded()
-        let run = v.blockquoteDecorations().first!
-        let imgViews = v.blockquoteUnderlay.subviews.compactMap { $0 as? UIImageView }
-        XCTAssertEqual(imgViews.count, 1, "one stretched image view per quote run")
-        XCTAssertEqual(imgViews[0].frame.minY, run.fill.minY, accuracy: 0.5)
-        XCTAssertEqual(imgViews[0].frame.height, run.fill.height, accuracy: 0.5)
-        XCTAssertNotNil(imgViews[0].image?.capInsets, "uses a resizable (cap-inset) image")
-        XCTAssertLessThan(v.subviews.firstIndex(of: v.blockquoteUnderlay)!,
-                          v.subviews.firstIndex(of: v.blockViews[BlockID("q1")]!)!)
-    }
-
-    func test_blockquoteFill_rebuildsOnAppearanceChange() {
-        // BlockquoteUnderlay.fillImage() bakes the dynamic systemBlue into a cached bitmap against the current
-        // traits, and the cache is only rebuilt from layoutSubviews (sync). A pure light↔dark appearance switch
-        // fires trait callbacks but NOT layoutSubviews, so registerForTraitChanges must invalidate the cache and
-        // re-apply the fresh image to the visible pooled views — otherwise the on-screen quote keeps stale colors.
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 300, height: 300))
-        window.overrideUserInterfaceStyle = .light
-        let v = DocumentCanvasView()
-        v.frame = window.bounds
-        window.addSubview(v); window.makeKeyAndVisible()
-        v.setParagraphs([ParagraphBlock(id: BlockID("q"), style: .quote, runs: [TextRun(text: "Quote")])], width: 300)
-        v.layoutIfNeeded()
-        let before = v.blockquoteUnderlay.subviews.compactMap { ($0 as? UIImageView)?.image }.first
-        XCTAssertNotNil(before, "a visible quote produces a pooled fill image view")
-
-        window.overrideUserInterfaceStyle = .dark
-        v.layoutIfNeeded()
-        let after = v.blockquoteUnderlay.subviews.compactMap { ($0 as? UIImageView)?.image }.first
-        XCTAssertNotNil(after)
-        XCTAssertFalse(before === after, "the blockquote fill image is rebuilt for the new appearance")
     }
 
     func test_emptyCellParagraph_drawsNoPlaceholder() {

@@ -128,6 +128,13 @@ extension DocumentCanvasView {
             insertEmptyBodyParagraph(at: boxes.count)   // append a body paragraph after the trailing block
             return
         }
+        // A tap on a BlockQuoteBox's collapse or expand glyph toggles collapsed state. Check this BEFORE
+        // the normal caret path so every block-quote glyph hit routes here — including nested quotes.
+        if let bq = firstBlockQuoteGlyphHit(at: point) {
+            clearStructuralSelections()
+            toggleCollapsed(box: bq)
+            return
+        }
         if let checklist = checklistBox(atCanvasPoint: point) {
             ensureFirstResponder()
             toggleChecklistItem(box: checklist)
@@ -153,19 +160,6 @@ extension DocumentCanvasView {
             return
         }
         let p = closestGlobalPosition(to: point)
-        // Tap on a collapsed quote (an image-like atom): the corner "expand" glyph unfolds it; a tap ELSEWHERE
-        // on it places the caret at its leading gap (drawn at the left edge), like tapping an image — so the
-        // cursor can be positioned at the collapsed quote instead of the whole atom always expanding.
-        if let cq = boxes.first(where: { ($0 as? CollapsedQuoteBox)?.frame.contains(point) == true }) as? CollapsedQuoteBox,
-           let idx = boxes.firstIndex(where: { $0 === cq }) {
-            clearStructuralSelections()   // match the normal caret path; prevents stale table row/column highlight
-            if cq.expandGlyphRect().insetBy(dx: -12, dy: -12).contains(point) {
-                expandCollapsedQuote(atIndex: idx)
-            } else {
-                setCaret(global: cq.nodeStart)
-            }
-            return
-        }
         // Tap on an image body (resolves to its gap AND the point is inside the image) → atom-select /
         // menu. MUST precede the clear below (else a 2nd tap on a selected image would clear it before
         // its menu could open).

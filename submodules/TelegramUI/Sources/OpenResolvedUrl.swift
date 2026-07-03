@@ -2060,7 +2060,7 @@ func openResolvedUrlImpl(
                             return true
                         }), nil)
                     }
-                }), inputText: TextWithEntities(text: "", entities: []), copyResult: nil, translateChat: nil)
+                }), inputText: .plain(text: "", entities: []), copyResult: nil, translateChat: nil)
                 navigationController?.pushViewController(controller)
             }
     }

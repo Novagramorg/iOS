@@ -4717,9 +4717,16 @@ extension ChatControllerImpl {
                     self.push(await TextProcessingScreen(
                         context: self.context,
                         mode: .translate(fromLanguage: language, applyResult: { text in
-                            replace(chatInputStateStringWithAppliedEntities(text.text, entities: text.entities))
+                            switch text {
+                            case let .plain(text, entities):
+                                replace(chatInputStateStringWithAppliedEntities(text, entities: entities))
+                            case .rich, .empty:
+                                // This flow translates the (plain) contents of the text input panel, and the API
+                                // only returns a rich result for rich input, so there is nothing to apply here.
+                                break
+                            }
                         }),
-                        inputText: TextWithEntities(text: text.string, entities: entities),
+                        inputText: .plain(text: text.string, entities: entities),
                         copyResult: nil,
                         translateChat: nil
                     ))

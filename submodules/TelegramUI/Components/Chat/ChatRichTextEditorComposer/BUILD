@@ -19,6 +19,7 @@ swift_library(
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
         "//submodules/TelegramUI/Components/Chat/ChatInputTextNode",
         "//submodules/CheckNode",
+        "//submodules/Pasteboard",
     ],
     visibility = [
         "//visibility:public",

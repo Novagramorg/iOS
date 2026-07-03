@@ -37,8 +37,6 @@ enum ComposerDocumentBridge {
 
             for pRange in paragraphRanges {
                 var runs: [TextRun] = []
-                var isQuote = false
-                var isCollapsedQuote = false
                 if pRange.length > 0 {
                     attributedText.enumerateAttributes(in: pRange, options: []) { dict, range, _ in
                         if let emoji = dict[ChatTextInputAttributes.customEmoji] as? ChatTextInputTextCustomEmojiAttribute {
@@ -71,34 +69,14 @@ enum ComposerDocumentBridge {
                         } else if let url = dict[ChatTextInputAttributes.textUrl] as? ChatTextInputTextUrlAttribute {
                             ca.link = url.url
                         }
-                        // Only a `.quote`-kind block maps to a quote paragraph. The `.block` attribute also
-                        // carries `.code` blocks, but those are carved out as `.code` blocks by the driver
-                        // below before `appendParagraphs` ever sees them — so any `.block` reaching here is a
-                        // quote. (The forward path only ever emits `.quote`, mirroring EntityMessageBuilder.)
-                        if let quote = dict[ChatTextInputAttributes.block] as? ChatTextInputTextQuoteAttribute, case .quote = quote.kind {
-                            isQuote = true
-                            if quote.isCollapsed { isCollapsedQuote = true }
-                        }
                         runs.append(TextRun(text: runText, attributes: ca))
                     }
                 }
-                if isCollapsedQuote {
-                    // Mirror the forward path's 1-char collapsed-quote placeholder back to a `.collapsedQuote`
-                    // atom so the collapsed STATE round-trips (collapsed stays collapsed). The placeholder
-                    // carries no folded content — full fidelity rides the direct `chatInputContent` bridge — so
-                    // the folded body degrades to the placeholder run here; the native node never relies on this
-                    // path for structural content (it uses `setInputContent`).
-                    blocks.append(.collapsedQuote(CollapsedQuote(
-                        id: BlockID.generate(),
-                        paragraphs: [ParagraphBlock(id: BlockID.generate(), style: .quote, runs: runs)]
-                    )))
-                } else {
-                    blocks.append(.paragraph(ParagraphBlock(
-                        id: BlockID.generate(),
-                        style: isQuote ? .quote : .body,
-                        runs: runs
-                    )))
-                }
+                blocks.append(.paragraph(ParagraphBlock(
+                    id: BlockID.generate(),
+                    style: .body,
+                    runs: runs
+                )))
             }
         }
 
@@ -136,11 +114,6 @@ enum ComposerDocumentBridge {
         let marker = true as NSNumber
         let baseFont = UIFont.systemFont(ofSize: baseFontSize)
         var isFirstParagraph = true
-        // Whether the immediately-previous emitted block was a quote paragraph. Used to extend a quote's
-        // `.block` attribute back over the joining "\n" so consecutive quotes merge into one `.Pre`/blockquote
-        // on send (otherwise the unattributed separator splits them).
-        var prevWasQuote = false
-
         for block in document.blocks {
             if case let .code(code) = block {
                 if !isFirstParagraph {
@@ -156,27 +129,44 @@ enum ComposerDocumentBridge {
                     let attr = chatInputCodeBlockAttribute(language: code.language)
                     result.addAttribute(attr.key, value: attr.value, range: NSRange(location: start, length: len))
                 }
-                prevWasQuote = false  // a code block breaks the quote-fusion chain (code and quote never fuse)
                 continue
             }
-            if case .collapsedQuote = block {
-                // A collapsed quote occupies exactly ONE flat placeholder char — matching the editor's composer
-                // flat axis (`composerSelectedRange`) and `ChatInputContent.collapsedQuote` (both count it as 1).
-                // It carries a COLLAPSED quote attribute on that single char. Emitting 0 chars (the old
-                // `guard case .paragraph else continue`) made `attributedText` SHORTER than `selectedRange`, so
-                // indexing it by the flat caret offset (e.g. the emoji-suggestion substring) crashed out of
-                // bounds. The folded content is intentionally NOT carried in `attributedText`: the native node
-                // round-trips structure via the direct `chatInputContent(fromDocument:)` bridge, not this string.
+            if case let .pullQuote(pq) = block {
                 if !isFirstParagraph {
                     result.append(NSAttributedString(string: "\n", attributes: [.font: baseFont]))
                 }
                 isFirstParagraph = false
-                let piece = NSMutableAttributedString(string: " ", attributes: [.font: baseFont])
-                piece.addAttribute(ChatTextInputAttributes.block,
-                                   value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: true),
-                                   range: NSRange(location: 0, length: piece.length))
-                result.append(piece)
-                prevWasQuote = false   // a collapsed quote is its own atom — never fuse with adjacent quotes
+                result.append(NSAttributedString(string: pq.text, attributes: [.font: baseFont]))
+                continue
+            }
+            if case let .blockQuote(bq) = block {
+                if bq.collapsed {
+                    // A COLLAPSED block quote occupies exactly ONE flat placeholder char — matching the
+                    // editor's composer flat axis (`composerParagraphs` emitAtom) and
+                    // `ChatInputContent.blockQuote` blockFlatLength == 1.
+                    if !isFirstParagraph {
+                        result.append(NSAttributedString(string: "\n", attributes: [.font: baseFont]))
+                    }
+                    isFirstParagraph = false
+                    let piece = NSMutableAttributedString(string: " ", attributes: [.font: baseFont])
+                    piece.addAttribute(ChatTextInputAttributes.block,
+                                       value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: true),
+                                       range: NSRange(location: 0, length: piece.length))
+                    result.append(piece)
+                } else {
+                    // Expanded block quote on the flat composer axis: recurse its children so
+                    // composerSelectedRange counts the inner text. Matches Part-1's walk recursion.
+                    // Append unconditionally (even for an empty quote) so the flat axis stays in sync
+                    // with composerParagraphs() and ChatInputContent.plainText — an empty expanded quote
+                    // contributes a "\n" separator (like a blank paragraph), preventing composerSelectedRange
+                    // from exceeding attributedText.length.
+                    let childStr = ComposerDocumentBridge.attributedString(from: Document(blocks: bq.children), baseFontSize: baseFontSize)
+                    if !isFirstParagraph {
+                        result.append(NSAttributedString(string: "\n", attributes: [.font: baseFont]))
+                    }
+                    isFirstParagraph = false
+                    result.append(childStr)
+                }
                 continue
             }
             guard case let .paragraph(paragraph) = block else { continue }
@@ -185,7 +175,6 @@ enum ComposerDocumentBridge {
             }
             isFirstParagraph = false
 
-            let paragraphStart = result.length
             for run in paragraph.runs {
                 if let emoji = run.attributes.emoji {
                     // Re-emit a custom emoji as a ChatTextInputAttributes.customEmoji run. Prefer the
@@ -223,24 +212,6 @@ enum ComposerDocumentBridge {
                 }
                 result.append(piece)
             }
-
-            if paragraph.style == .quote {
-                // Cover this paragraph's text; when the previous block was ALSO a quote, extend back over the
-                // one joining "\n" (which sits at paragraphStart - 1) so the two quote ranges fuse into one
-                // contiguous `.block` run → a single blockquote on send. Re-parsing is unaffected:
-                // `document(from:)` scans attributes only WITHIN each paragraph's range (the "\n" is excluded
-                // from pRange), so each quote line still becomes its own quote paragraph.
-                let rangeStart = prevWasQuote ? max(0, paragraphStart - 1) : paragraphStart
-                let rangeLen = result.length - rangeStart
-                if rangeLen > 0 {
-                    result.addAttribute(
-                        ChatTextInputAttributes.block,
-                        value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
-                        range: NSRange(location: rangeStart, length: rangeLen)
-                    )
-                }
-            }
-            prevWasQuote = (paragraph.style == .quote)
         }
         return result
     }

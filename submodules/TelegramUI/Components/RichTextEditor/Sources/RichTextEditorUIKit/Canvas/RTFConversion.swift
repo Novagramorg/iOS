@@ -71,8 +71,8 @@ enum RTFConversion {
 
     static func fontSize(for style: ParagraphStyleName) -> CGFloat {
         switch style {
-        case .heading1: return 24; case .heading2: return 21; case .heading3: return 19
-        case .body, .quote: return 17; case .caption: return 15
+        case .heading1: return 24; case .heading2: return 21; case .heading3: return 19; case .heading4: return 17; case .heading5: return 17; case .heading6: return 17
+        case .body, .pullQuote: return 17; case .caption: return 15
         }
     }
 
@@ -95,6 +95,12 @@ enum RTFConversion {
                 paragraphs.append("\\pard\\fs34 \(inline)")
             case .table(let t):
                 paragraphs.append(tableRTF(t, emojiSeq: &emojiSeq))
+            case let .pullQuote(pq):
+                let pt = fontSize(for: .pullQuote)
+                let inline = inlineRTF(pq.runs, mono: false, emojiSeq: &emojiSeq)
+                // Centered (\qc) + italic (\i … \i0) — the pull quote's render-only italic isn't in the
+                // runs, so emit it here. Best-effort degradation: recipients see a centered italic paragraph.
+                paragraphs.append("\\pard\(alignmentRTF(.center))\\fs\(Int(pt * 2))\\i \(inline)\\i0")
             default:
                 break   // media has no RTF text rep
             }

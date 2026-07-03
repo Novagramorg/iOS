@@ -109,10 +109,10 @@ extension DocumentCanvasView {
         // Select-All over a document whose first/last block is an image/code fully covers it, so it is
         // dropped here exactly as a covered MIDDLE block already is.
         func endpointFullyCovered(_ box: CanvasBlock) -> Bool {
-            (box is MediaBlockBox || box is CodeBlockBox) && lo <= box.nodeStart && hi >= coverableContentEnd(box)
+            (box is MediaBlockBox || box is CodeBlockBox || box is PullQuoteBox) && lo <= box.nodeStart && hi >= coverableContentEnd(box)
         }
-        let keepStartMedia = (start.box is MediaBlockBox || start.box is CodeBlockBox) && !endpointFullyCovered(start.box)
-        let keepEndMedia = (end.box is MediaBlockBox || end.box is CodeBlockBox) && !endpointFullyCovered(end.box)
+        let keepStartMedia = (start.box is MediaBlockBox || start.box is CodeBlockBox || start.box is PullQuoteBox) && !endpointFullyCovered(start.box)
+        let keepEndMedia = (end.box is MediaBlockBox || end.box is CodeBlockBox || end.box is PullQuoteBox) && !endpointFullyCovered(end.box)
 
         // Merge path: each endpoint is a paragraph OR a fully-covered media/code block (which contributes
         // nothing and is dropped). The surviving paragraph is startPrefix + text + endSuffix; replaceSubrange
@@ -194,12 +194,12 @@ extension DocumentCanvasView {
         anchor = empty.textStart; head = empty.textStart
     }
 
-    /// True for a block that is NOT an editable text paragraph — an image, a table, or a code block. A
-    /// backspace at the start of the paragraph AFTER one of these can't merge text into it, so it removes
-    /// an empty paragraph instead of the block (and never deletes the block). A `BlockBox` (body / heading /
-    /// quote / list paragraph) is text and merges normally.
+    /// True for a block that is NOT an editable text paragraph — an image, a table, a block quote
+    /// container, or a code block. A backspace at the start of the paragraph AFTER one of these can't
+    /// merge text into it, so it removes an empty paragraph instead of the block (and never deletes
+    /// the block). A `BlockBox` (body / heading / quote / list paragraph) is text and merges normally.
     func isNonParagraphAtom(_ box: CanvasBlock) -> Bool {
-        box is MediaBlockBox || box is TableBlockBox || box is CodeBlockBox || box is CollapsedQuoteBox
+        box is MediaBlockBox || box is TableBlockBox || box is BlockQuoteBox || box is CodeBlockBox || box is PullQuoteBox
     }
 
     /// The position just past a media/code block's coverable content, for the Select-All / covered-range
@@ -208,9 +208,6 @@ extension DocumentCanvasView {
     /// collapsed `textStart + textLength` (which equals `nodeStart` for audio).
     func coverableContentEnd(_ box: CanvasBlock) -> Int {
         if let m = box as? MediaBlockBox, m.kind == .audio { return box.nodeStart + 1 }
-        // A collapsed quote is also a caption-less atom (textLength == 0, textStart == nodeStart), so its
-        // "coverable content" is a single position past the gap — mirroring the audio shape exactly.
-        if box is CollapsedQuoteBox { return box.nodeStart + 1 }
         return box.textStart + box.textLength
     }
 
@@ -227,35 +224,63 @@ extension DocumentCanvasView {
         anchor = caret; head = caret
     }
 
-    /// Resolves a global position to its owning `BlockStack` — a cell stack when inside a table,
-    /// else the root stack (via `resolveBox`, which snaps boundary positions). Returns the box and
-    /// the local offset + index within that stack.
+    /// Resolves a global position to the innermost owning `BlockStack` — recursing through `BlockQuoteBox`
+    /// children by token span, routing table cells through `cellStack`, and matching leaf boxes by their
+    /// single leaf region. Handles top-level, in-cell, in-quote (incl. nested quotes), and
+    /// quote-inside-table scenarios in one uniform recursive descent. Table selection is preserved:
+    /// a table still resolves via `cellStack(containing:)`.
+    ///
+    /// For positions that fall outside all leaf regions (document start/end boundary, structural gap),
+    /// falls back to `resolveBox`'s snapping behaviour — preserving the pre-Task-5 snapping that
+    /// callers relied on. Container-structural boundary positions (at a `TableBlockBox` or
+    /// `BlockQuoteBox` boundary) are filtered out of the fallback and return nil, so callers that
+    /// handle them separately (`caretSnappedIntoContainer`, `selectionEndpointsEditableTopLevel`) still
+    /// own that routing.
     func activeStack(at pos: Int) -> (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)? {
-        if isInsideTable(pos) {
-            for box in boxes {
-                if let t = box as? TableBlockBox, let hit = t.cellStack(containing: pos) { return hit }
+        func descend(_ stack: BlockStack) -> (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)? {
+            for (i, b) in stack.boxes.enumerated() {
+                // A block-quote child stack: descend by TOKEN SPAN (pos strictly inside the container).
+                if let bq = b as? BlockQuoteBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    return descend(bq.children)
+                }
+                // A table: keep the existing per-cell resolver (cells hold no nested containers in v1).
+                if let t = b as? TableBlockBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    return t.cellStack(containing: pos)
+                }
+                // A leaf text box (paragraph/code/pullQuote/media-caption): match by its single leaf region.
+                if let first = b.leafRegions().first, pos >= first.globalStart, pos <= first.globalStart + first.length {
+                    return (stack, b, pos - first.globalStart, i)
+                }
             }
             return nil
         }
-        guard let r = resolveBox(at: pos) else { return nil }
+        if let hit = descend(root) { return hit }
+        // Fallback: snap structural/document-boundary positions (before first leaf, past last leaf,
+        // inter-block gaps) the same way the old resolveBox-based code did. Container-structural
+        // boundaries (table or block-quote nodeStart) are excluded — callers that need them use
+        // caretSnappedIntoContainer or selectionEndpointsEditableTopLevel.
+        guard let r = resolveBox(at: pos), !(r.box is TableBlockBox), !(r.box is BlockQuoteBox) else { return nil }
         return (root, r.box, r.local, r.index)
     }
 
     /// True when a range can be safely edited by the top-level cross-block engine: neither endpoint
-    /// is inside a cell, and neither endpoint resolves to a table box. (Spanning a table is fine —
-    /// the table is a covered middle box that the merge drops.)
+    /// is inside a cell or block-quote child, and neither endpoint resolves to a table or block-quote box.
+    /// (Spanning a table or block quote as a covered middle box is fine — the merge drops it.)
     func selectionEndpointsEditableTopLevel(_ a: Int, _ b: Int) -> Bool {
-        if isInsideTable(a) || isInsideTable(b) { return false }
+        if isInsideTable(a) || isInsideBlockQuote(a) || isInsideTable(b) || isInsideBlockQuote(b) { return false }
         if let ra = resolveBox(at: a), ra.box is TableBlockBox { return false }
+        if let ra = resolveBox(at: a), ra.box is BlockQuoteBox { return false }
         if let rb = resolveBox(at: b), rb.box is TableBlockBox { return false }
+        if let rb = resolveBox(at: b), rb.box is BlockQuoteBox { return false }
         return true
     }
 
-    /// True when both positions resolve to the **same** table cell's `BlockStack` — so the full
-    /// (stack-scoped) `applyReplace` engine can edit within that cell, exactly like top-level.
-    func bothInSameCellStack(_ a: Int, _ b: Int) -> Bool {
-        guard isInsideTable(a), isInsideTable(b),
-              let sa = activeStack(at: a), let sb = activeStack(at: b) else { return false }
+    /// True when both positions resolve to the **same** owning `BlockStack` — either the same table
+    /// cell's stack, or the same block-quote child stack — so the full (stack-scoped) `applyReplace`
+    /// engine can edit within that container, exactly like top-level. Generalizes the former
+    /// table-only `bothInSameCellStack`.
+    func sameOwningStack(_ a: Int, _ b: Int) -> Bool {
+        guard let sa = activeStack(at: a), let sb = activeStack(at: b) else { return false }
         return sa.stack === sb.stack
     }
 
@@ -283,24 +308,31 @@ extension DocumentCanvasView {
             replaceMediaWithEmptyParagraph(at: i)
             return
         }
-        if selectionEndpointsEditableTopLevel(globalFrom, globalTo) || bothInSameCellStack(globalFrom, globalTo) {
+        if selectionEndpointsEditableTopLevel(globalFrom, globalTo) || sameOwningStack(globalFrom, globalTo) {
             applyReplace(globalFrom: globalFrom, globalTo: globalTo, text: text)
         } else {
             applyMultiRegionClear(globalFrom: globalFrom, globalTo: globalTo, text: text)
         }
     }
 
-    /// If a collapsed caret resolves to a table box — a structural boundary such as the position just
-    /// before a leading table or after a trailing table — returns the global start of that table's
-    /// nearest cell so the edit can route through the cell's stack. Returns `pos` unchanged when it is
-    /// not at such a boundary (or the table has no cells). Prevents writing through a table's degenerate
-    /// `textLayout` (which would silently drop the keystroke).
-    func caretSnappedIntoCell(_ pos: Int) -> Int {
-        guard !isInsideTable(pos), let r = resolveBox(at: pos), let table = r.box as? TableBlockBox else { return pos }
-        let snap = pos <= table.nodeStart
-            ? table.cellTextStart(row: 0, column: 0)
-            : table.cellTextStart(row: table.rowCount - 1, column: table.columnCount - 1)
-        return snap ?? pos
+    /// If a collapsed caret resolves to a table or block-quote box — a structural boundary such as the
+    /// position just before/after one of these containers — returns the nearest in-container text start
+    /// so the edit routes through that container's stack. Returns `pos` unchanged when it is not at such
+    /// a boundary (or the container has no reachable text). Prevents writing through a container's
+    /// degenerate `textLayout` (which would silently drop the keystroke).
+    func caretSnappedIntoContainer(_ pos: Int) -> Int {
+        guard let r = resolveBox(at: pos) else { return pos }
+        if !isInsideTable(pos), let table = r.box as? TableBlockBox {
+            let snap = pos <= table.nodeStart
+                ? table.cellTextStart(row: 0, column: 0)
+                : table.cellTextStart(row: table.rowCount - 1, column: table.columnCount - 1)
+            return snap ?? pos
+        }
+        if !isInsideBlockQuote(pos), let bq = r.box as? BlockQuoteBox,
+           let first = bq.children.boxes.first?.leafRegions().first {
+            return first.globalStart
+        }
+        return pos
     }
 
     /// Inserts a literal newline inside the caret's code block (no paragraph split), replacing any
@@ -394,43 +426,87 @@ extension DocumentCanvasView {
         }
     }
 
-    /// True when the top-level box at `index` is at the FIRST or LAST edge of its consecutive `.quote` run
-    /// (a single quote is both). Double-return on such an empty quote line exits; a MIDDLE one (both
-    /// neighbors are quotes) splits normally.
-    func emptyQuoteIsRunEdge(at index: Int) -> Bool {
-        func isQuote(_ i: Int) -> Bool { i >= 0 && i < boxes.count && (boxes[i] as? BlockBox)?.style == .quote }
-        return !isQuote(index - 1) || !isQuote(index + 1)
+    // MARK: - Pull-quote in-block editing (mirrors the code-block editing affordances)
+
+    /// Where double-return (Enter on an empty line of a pull quote) exits: `.after` for the trailing blank
+    /// line, `.before` for the first blank line, `.unmake` for a wholly-empty pull quote. `nil` for a
+    /// non-empty line or a MIDDLE blank line — which just inserts another interior newline (no exit).
+    enum PullQuoteDoubleReturnExit { case after, before, unmake }
+
+    /// Inserts a literal newline inside the caret's pull quote (no paragraph split), replacing any selection
+    /// first. The inserted newline carries pull-quote attributes (italic/centered). Caller checks the caret
+    /// resolves to a `PullQuoteBox`. Wraps itself in `editing { }`.
+    func insertPullQuoteNewline() {
+        guard activeStack(at: head)?.box is PullQuoteBox else { return }
+        editing {
+            if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
+            guard let active = activeStack(at: head), active.box is PullQuoteBox else { return }
+            active.box.textLayout.replace(start: active.local, end: active.local,
+                with: NSAttributedString(string: "\n", attributes: PullQuoteBox.pullQuoteTypingAttributes(mapper)))
+            recomputeSpans()
+            let caret = active.box.textStart + active.local + 1
+            anchor = caret; head = caret
+        }
     }
 
-    /// Replaces the empty top-level quote paragraph at `index` with an empty body paragraph (caret there).
-    /// Because that empty line sits at the run's first/last edge, the body lands before/after the rest of
-    /// the quote run automatically — double-return's quote exit.
-    func exitQuoteToBodyParagraph(at index: Int) {
+    func pullQuoteDoubleReturnExit(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) -> PullQuoteDoubleReturnExit? {
+        guard active.box is PullQuoteBox else { return nil }
+        let s = active.box.textLayout.attributedString.string as NSString
+        if s.length == 0 { return .unmake }
+        let local = active.local, nl = unichar(10)   // "\n"
+        if local == s.length, s.character(at: s.length - 1) == nl { return .after }
+        if s.character(at: 0) == nl, local <= 1 { return .before }
+        return nil
+    }
+
+    /// Removes a pull quote's trailing "\n" (if present) and inserts an empty body paragraph after it;
+    /// caret lands in the new paragraph. Mirrors `exitCodeBlockToBodyParagraph`.
+    func exitPullQuoteToBodyParagraph(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
         editing {
+            let s = active.box.textLayout.attributedString.string as NSString
+            if s.hasSuffix("\n") {
+                active.box.textLayout.replace(start: s.length - 1, end: s.length, with: NSAttributedString(string: ""))
+            }
             let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
                                 mapper: mapper, width: effectiveWidth)
-            var newBoxes = boxes
-            newBoxes.replaceSubrange(index...index, with: [body])
-            boxes = newBoxes
+            var newBoxes = active.stack.boxes
+            newBoxes.insert(body, at: active.index + 1)
+            active.stack.boxes = newBoxes
             recomputeSpans()
             anchor = body.textStart; head = body.textStart
         }
     }
 
-    /// The top-level index of the empty quote line to replace with a body paragraph for a double-return quote
-    /// exit (via `exitQuoteToBodyParagraph`), or nil for a normal split. Two cases: (1) the caret is ON an
-    /// empty quote line at its run's first/last edge; (2) the caret is at the START of quote content with an
-    /// empty quote line directly ABOVE it at the run's edge — e.g. two newlines at the beginning, where the
-    /// first Enter splits off an empty line above and the second exits before it.
-    func quoteDoubleReturnExitIndex(at index: Int, local: Int) -> Int? {
-        guard index >= 0, index < boxes.count, let p = boxes[index] as? BlockBox, p.style == .quote else { return nil }
-        // An empty quote line that is still a LIST item must first END THE LIST (staying in the quote,
-        // via `insertParagraphBreak`); the quote exit only applies once it's a bare empty quote line.
-        if p.textLength == 0, p.listMembership == nil, emptyQuoteIsRunEdge(at: index) { return index }
-        if local == 0, index > 0, let above = boxes[index - 1] as? BlockBox,
-           above.style == .quote, above.textLength == 0, above.listMembership == nil,
-           emptyQuoteIsRunEdge(at: index - 1) { return index - 1 }
-        return nil
+    /// Removes a pull quote's leading "\n" and inserts an empty body paragraph BEFORE it (caret there).
+    /// Mirrors `exitCodeBlockToBodyParagraphBefore`.
+    func exitPullQuoteToBodyParagraphBefore(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        editing {
+            let s = active.box.textLayout.attributedString.string as NSString
+            if s.hasPrefix("\n") {
+                active.box.textLayout.replace(start: 0, end: 1, with: NSAttributedString(string: ""))
+            }
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = active.stack.boxes
+            newBoxes.insert(body, at: active.index)
+            active.stack.boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
+    }
+
+    /// Replaces a wholly-empty pull quote with an empty body paragraph (caret there). Mirrors
+    /// `uncodeEmptyCodeBlock`.
+    func unmakeEmptyPullQuote(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        editing {
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var newBoxes = active.stack.boxes
+            newBoxes.replaceSubrange(active.index...active.index, with: [body])
+            active.stack.boxes = newBoxes
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
     }
 
     /// Splits the caret's paragraph at the caret, within whatever `BlockStack` owns the caret (root
@@ -448,10 +524,7 @@ extension DocumentCanvasView {
             } else {
                 editing {
                     p.listMembership = nil
-                    // Ending a list keeps the paragraph's container: a quoted list item stays an (empty)
-                    // quote line — a further Return then exits the quote (`quoteDoubleReturnExitIndex`) —
-                    // while a plain list item becomes a body paragraph.
-                    if p.style != .quote { p.style = .body }
+                    p.style = .body
                     restyle(p)
                     recomputeSpans()
                 }
@@ -577,8 +650,8 @@ extension DocumentCanvasView {
         }
     }
 
-    /// Inserts a new body paragraph immediately before the (top-level) ATOM box at `index` — a media block
-    /// or a collapsed quote — containing `text` (empty for a bare newline). The caret lands at the end of the
+    /// Inserts a new body paragraph immediately before the (top-level) ATOM box at `index` — currently a
+    /// media block — containing `text` (empty for a bare newline). The caret lands at the end of the
     /// inserted text. Used when a keystroke arrives with the caret on an atom's leading gap, so it opens a
     /// normal paragraph there instead of falling into the atom's (display-only) layout. Mirrors `insertMedia`'s
     /// block-insert. Caller wraps this in `editing { … }`.
@@ -670,6 +743,16 @@ extension DocumentCanvasView {
     /// True if `pos` is inside a table (its owning top-level box is a `TableBlockBox`).
     func isInsideTable(_ pos: Int) -> Bool {
         for box in boxes where box is TableBlockBox {
+            for r in box.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return true }
+        }
+        return false
+    }
+
+    /// True if `pos` is inside a block-quote container (its owning top-level box is a `BlockQuoteBox`).
+    /// Mirrors `isInsideTable` over `BlockQuoteBox` leaf regions. Because `BlockQuoteBox.leafRegions()`
+    /// recurses into nested quotes, checking the top-level `BlockQuoteBox`es is sufficient.
+    func isInsideBlockQuote(_ pos: Int) -> Bool {
+        for box in boxes where box is BlockQuoteBox {
             for r in box.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return true }
         }
         return false

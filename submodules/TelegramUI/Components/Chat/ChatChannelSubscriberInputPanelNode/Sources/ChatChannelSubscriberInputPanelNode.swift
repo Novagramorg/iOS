@@ -491,7 +491,7 @@ public final class ChatChannelSubscriberInputPanelNode: ChatInputPanelNode {
                         self?.buttonPressed()
                     }
                 )],
-                background: centerAction.isAccent ? .activeTint : .panel,
+                background: centerAction.isAccent ? .activeTint(inset: true) : .panel,
                 keepWide: true
             )
         }

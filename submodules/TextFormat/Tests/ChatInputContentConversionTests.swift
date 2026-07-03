@@ -30,15 +30,18 @@ final class ChatInputContentConversionTests: XCTestCase {
 
     // MARK: - Task 0 (1b-ii): multi-line quote contiguity
 
-    /// A multi-line non-collapsed blockquote must emit as ONE contiguous `.block` range carrying a SINGLE
-    /// shared quote object (interior "\n"s included) — the display groups quote boxes by object identity and
-    /// the send path merges only directly-touching ranges, so per-line fragments would render N boxes / send N
-    /// entities. This matches `ChatTextInputStateText`, which keeps a quote contiguous.
-    func test_attributedString_multiLineQuote_emitsOneContiguousBlock() {
+    /// A `.blockQuote(collapsed: false)` with multiple inner paragraphs emits as ONE contiguous `.block` range
+    /// (interior "\n"s included) — the content.plainText joins inner paragraphs with "\n", and a single
+    /// `.block` attribute covers the whole range.
+    func test_attributedString_multiLineBlockQuote_emitsOneContiguousBlock() {
         let content = ChatInputContent(blocks: [
             .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "x")])),
-            .paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "a")])),
-            .paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "b")])),
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [
+                    .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "a")])),
+                    .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "b")])),
+                ]),
+                collapsed: false))
         ])
         let s = attributedString(from: content)
         XCTAssertEqual(s.string, "x\na\nb")
@@ -49,17 +52,17 @@ final class ChatInputContentConversionTests: XCTestCase {
                 ranges.append(range); objects.insert(ObjectIdentifier(v))
             }
         }
-        XCTAssertEqual(ranges, [NSRange(location: 2, length: 3)], "quote must be one contiguous range incl. the interior newline")
-        XCTAssertEqual(objects.count, 1, "the whole quote must share one attribute object")
-        XCTAssertEqual(chatInputContent(from: s), content)
+        XCTAssertEqual(ranges, [NSRange(location: 2, length: 3)], "blockQuote must emit as one contiguous range incl. the interior newline")
+        XCTAssertEqual(objects.count, 1, "the whole blockQuote emits one attribute object")
+        // Note: the NSAttributedString → model round-trip is LOSSY for a multi-paragraph blockQuote: the plain-text
+        // projection ("a\nb") is split back into two paragraph ranges, each becoming its own single-paragraph
+        // `.blockQuote`, so the inverse has two `.blockQuote` blocks instead of one multi-paragraph `.blockQuote`.
+        // This is documented lossy behavior of the legacy NSAttributedString path.
     }
 
-    /// Worst-case draft-restore shape: a multi-line quote arriving as PER-LINE separate ranges carrying
-    /// DISTINCT `ChatTextInputTextQuoteAttribute` objects (what a naive serialization round-trip can produce),
-    /// surrounded by body text. The conversion must still re-contiguate it to ONE block range with ONE shared
-    /// object — otherwise the restored composer renders stacked quote boxes. This isolates the conversion layer
-    /// (the only quote-touching code Piece 2 changed) from the UIKit fix-up/rendering.
-    func test_chatCurrencyRoundTrip_multiLineQuote_perLineObjects_recontiguates() {
+    /// Per-line `.quote`-attributed spans map to separate `.blockQuote` blocks on parse (Task 16b). The resulting
+    /// content's attributed-string projection then emits each blockQuote as its own range. No coalescing.
+    func test_chatCurrencyRoundTrip_perLineQuoteAttrs_mapToSeparateBlockQuotes() {
         let s = NSMutableAttributedString(string: "before\nq1\nq2\nafter")
         // "before"=[0,6] \n=6 "q1"=[7,2] \n=9 "q2"=[10,2] \n=12 "after"=[13,5]
         s.addAttribute(ChatTextInputAttributes.block,
@@ -69,17 +72,26 @@ final class ChatInputContentConversionTests: XCTestCase {
             value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
             range: NSRange(location: 10, length: 2))
 
-        let back = attributedString(from: chatInputContent(from: s))
+        let parsed = chatInputContent(from: s)
+        // Each quote paragraph becomes its own `.blockQuote` block.
+        XCTAssertEqual(parsed.blocks.count, 4, "before + bq1 + bq2 + after")
+        guard case .paragraph = parsed.blocks[0],
+              case .blockQuote = parsed.blocks[1],
+              case .blockQuote = parsed.blocks[2],
+              case .paragraph = parsed.blocks[3] else {
+            XCTFail("expected paragraph/blockQuote/blockQuote/paragraph"); return
+        }
+
+        let back = attributedString(from: parsed)
         XCTAssertEqual(back.string, "before\nq1\nq2\nafter")
         var ranges: [NSRange] = []
-        var objects = Set<ObjectIdentifier>()
         back.enumerateAttribute(ChatTextInputAttributes.block, in: NSRange(location: 0, length: back.length), options: []) { value, range, _ in
             if let v = value as? ChatTextInputTextQuoteAttribute, case .quote = v.kind {
-                ranges.append(range); objects.insert(ObjectIdentifier(v))
+                ranges.append(range)
             }
         }
-        XCTAssertEqual(ranges, [NSRange(location: 7, length: 5)], "quote must re-contiguate to one range incl. the interior newline")
-        XCTAssertEqual(objects.count, 1, "the whole quote must share one attribute object")
+        // Two separate ranges — one per blockQuote block.
+        XCTAssertEqual(ranges.count, 2, "two separate blockQuote blocks emit two separate ranges")
     }
 
     // MARK: - Task 5: chatInputContent(from:)
@@ -93,9 +105,9 @@ final class ChatInputContentConversionTests: XCTestCase {
         let c = chatInputContent(from: s)
         XCTAssertEqual(c.blocks.count, 2)
         guard case let .paragraph(p0) = c.blocks[0],
-              case let .paragraph(p1) = c.blocks[1] else { return XCTFail() }
+              case let .blockQuote(bq) = c.blocks[1] else { return XCTFail("expected paragraph + blockQuote") }
         XCTAssertTrue(p0.runs.first?.attributes.bold == true)
-        if case .quote(let collapsed) = p1.style { XCTAssertFalse(collapsed) } else { XCTFail("expected quote") }
+        XCTAssertFalse(bq.collapsed, "expanded quote maps to collapsed:false")
     }
 
     // MARK: - Task 6: round-trip identity
@@ -126,7 +138,11 @@ final class ChatInputContentConversionTests: XCTestCase {
                 ChatInputRun(text: "\u{FFFC}", attributes: emoji),
                 ChatInputRun(text: "@x", attributes: mention),
             ])),
-            .paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "q")])),
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [
+                    .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q")])),
+                ]),
+                collapsed: false)),
             .code(ChatInputCode(language: "swift", runs: [ChatInputRun(text: "let x = 1\nlet y = 2")])),
         ])
         XCTAssertEqual(chatInputContent(from: attributedString(from: content)), content)
@@ -135,8 +151,8 @@ final class ChatInputContentConversionTests: XCTestCase {
     // MARK: - Piece 4: model affordances must match the attributed string exactly
 
     /// A rich fixture exercising every block kind + inline attribute, so `plainText`/`length` parity is
-    /// meaningfully tested (body run + bold + custom emoji + mention, a multi-line quote, a code block with an
-    /// interior newline, and a collapsed quote).
+    /// meaningfully tested (body run + bold + custom emoji + mention, an expanded blockQuote, a code block with an
+    /// interior newline, and a collapsed blockQuote).
     private func richFixture() -> ChatInputContent {
         var bold = ChatInputInlineAttributes(); bold.bold = true
         var emoji = ChatInputInlineAttributes(); emoji.entity = .customEmoji(fileId: 7, file: nil, enableAnimation: true)
@@ -151,10 +167,14 @@ final class ChatInputContentConversionTests: XCTestCase {
                 ChatInputRun(text: "\u{FFFC}", attributes: emoji),
                 ChatInputRun(text: "@x", attributes: mention),
             ])),
-            .paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "q1")])),
-            .paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "q2")])),
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [
+                    .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q1")])),
+                    .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q2")])),
+                ]),
+                collapsed: false)),
             .code(ChatInputCode(language: "swift", runs: [ChatInputRun(text: "let a = 1\nlet b = 2")])),
-            .collapsedQuote(collapsedNested),
+            .blockQuote(ChatInputBlockQuote(content: collapsedNested, collapsed: true)),
         ])
     }
 
@@ -232,7 +252,7 @@ final class ChatInputContentConversionTests: XCTestCase {
 
     // MARK: - Task 0 (1b-ii): collapsed-quote fidelity
 
-    func test_modelRoundTrip_collapsedQuote_preservesNestedContent() {
+    func test_modelRoundTrip_collapsedBlockQuote_preservesNestedContent() {
         var bold = ChatInputInlineAttributes(); bold.bold = true
         let nested = ChatInputContent(blocks: [
             .paragraph(ChatInputParagraph(style: .body, runs: [
@@ -242,16 +262,16 @@ final class ChatInputContentConversionTests: XCTestCase {
         ])
         let content = ChatInputContent(blocks: [
             .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "before")])),
-            .collapsedQuote(nested),
+            .blockQuote(ChatInputBlockQuote(content: nested, collapsed: true)),
             .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "after")])),
         ])
         XCTAssertEqual(chatInputContent(from: attributedString(from: content)), content)
     }
 
-    func test_modelRoundTrip_collapsedQuote_atStart() {
+    func test_modelRoundTrip_collapsedBlockQuote_atStart() {
         let nested = ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q")]))])
         let content = ChatInputContent(blocks: [
-            .collapsedQuote(nested),
+            .blockQuote(ChatInputBlockQuote(content: nested, collapsed: true)),
             .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "after")])),
         ])
         XCTAssertEqual(chatInputContent(from: attributedString(from: content)), content)

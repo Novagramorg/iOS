@@ -3,8 +3,8 @@ import XCTest
 @testable import RichTextEditorUIKit
 @testable import RichTextEditorCore
 
-/// Double-return (Enter on an empty line inside a quote/code block) exits the block: trailing/empty line →
-/// after, first line → before, middle empty line → normal Enter. The triggering empty line is removed.
+/// Double-return (Enter on an empty line inside a code block) exits the block: trailing/empty line →
+/// after, first line → before, wholly-empty → un-code. The triggering empty line is removed.
 /// Shift+Return special handling is gone.
 @available(iOS 13.0, *)
 final class DoubleReturnExitTests: XCTestCase {
@@ -13,43 +13,15 @@ final class DoubleReturnExitTests: XCTestCase {
         c.setBlocks(blocks, width: 320)
         return c
     }
-    private func quote(_ id: String, _ text: String) -> Block {
-        .paragraph(ParagraphBlock(id: BlockID(id), style: .quote, runs: text.isEmpty ? [] : [TextRun(text: text)]))
-    }
     private func style(_ box: CanvasBlock) -> ParagraphStyleName? { (box as? BlockBox)?.style }
-    private func quoteListItem(_ id: String, _ text: String) -> Block {
-        .paragraph(ParagraphBlock(id: BlockID(id), style: .quote, list: ListMembership(marker: .bullet),
-                                  runs: text.isEmpty ? [] : [TextRun(text: text)]))
-    }
     private func bodyListItem(_ id: String, _ text: String) -> Block {
         .paragraph(ParagraphBlock(id: BlockID(id), style: .body, list: ListMembership(marker: .bullet),
                                   runs: text.isEmpty ? [] : [TextRun(text: text)]))
     }
     private func list(_ box: CanvasBlock) -> ListMembership? { (box as? BlockBox)?.listMembership }
 
-    // MARK: List inside a quote — Return ends the list before it exits the quote
-
-    func test_quotedList_firstReturnEndsListInsideQuote_secondReturnExitsQuote() {
-        // A list inside a quote: Return on an empty quoted list item ENDS THE LIST but stays in the quote
-        // (an empty quote line); only a SECOND Return then leaves the quote.
-        let canvas = makeCanvas([quoteListItem("q1", "A"), quoteListItem("q2", "")])
-        canvas.setCaret(global: canvas.boxes[1].textStart)
-
-        canvas.insertText("\n")   // first return: end the list, stay in the quote
-        XCTAssertEqual(canvas.boxes.count, 2, "no new block and no quote exit yet")
-        XCTAssertEqual(style(canvas.boxes[1]), .quote, "still inside the quote")
-        XCTAssertNil(list(canvas.boxes[1]), "the list has ended")
-        XCTAssertEqual(list(canvas.boxes[0])?.marker, .bullet, "the earlier list item is unchanged")
-
-        canvas.insertText("\n")   // second return: now leave the quote
-        XCTAssertEqual(canvas.boxes.count, 2, "the empty quote line becomes the escape body paragraph")
-        XCTAssertEqual(style(canvas.boxes[0]), .quote, "the quoted content remains")
-        XCTAssertEqual(style(canvas.boxes[1]), .body, "an empty body paragraph after the quote")
-        XCTAssertNil(list(canvas.boxes[1]))
-    }
-
     func test_plainList_emptyItemReturn_endsIntoBodyParagraph_unchanged() {
-        // Guard: a plain (non-quote) list is unaffected — an empty item + Return still ends into body.
+        // A plain (non-quote) list: an empty item + Return ends into body.
         let canvas = makeCanvas([bodyListItem("l1", "A"), bodyListItem("l2", "")])
         canvas.setCaret(global: canvas.boxes[1].textStart)
         canvas.insertText("\n")
@@ -66,43 +38,7 @@ final class DoubleReturnExitTests: XCTestCase {
         XCTAssertFalse(hasShiftReturn, "Shift+Return key command is removed")
     }
 
-    // MARK: Quote double-return
-
-    func test_quote_doubleReturnOnTrailingEmptyLine_exitsAfter() {
-        let canvas = makeCanvas([quote("q1", "abc"), quote("q2", "")])   // trailing empty quote line
-        canvas.setCaret(global: canvas.boxes[1].textStart)
-        canvas.insertText("\n")
-        XCTAssertEqual(canvas.boxes.count, 2, "the empty quote line becomes the escape body paragraph")
-        XCTAssertEqual(style(canvas.boxes[0]), .quote, "the quote content remains")
-        XCTAssertEqual(style(canvas.boxes[1]), .body, "an empty body paragraph after the quote")
-        XCTAssertEqual(canvas.head, canvas.boxes[1].textStart, "caret in the new body paragraph")
-    }
-
-    func test_quote_doubleReturnOnFirstEmptyLine_exitsBefore() {
-        let canvas = makeCanvas([quote("q1", ""), quote("q2", "abc")])   // leading empty quote line
-        canvas.setCaret(global: canvas.boxes[0].textStart)
-        canvas.insertText("\n")
-        XCTAssertEqual(canvas.boxes.count, 2)
-        XCTAssertEqual(style(canvas.boxes[0]), .body, "an empty body paragraph before the quote")
-        XCTAssertEqual(style(canvas.boxes[1]), .quote, "the quote content remains")
-        XCTAssertEqual(canvas.head, canvas.boxes[0].textStart, "caret in the new body paragraph")
-    }
-
-    func test_quote_doubleReturnOnEmptyBlock_unquotes() {
-        let canvas = makeCanvas([quote("q1", "")])   // a lone empty quote
-        canvas.setCaret(global: canvas.boxes[0].textStart)
-        canvas.insertText("\n")
-        XCTAssertEqual(canvas.boxes.count, 1)
-        XCTAssertEqual(style(canvas.boxes[0]), .body, "the empty quote becomes a body paragraph")
-    }
-
-    func test_quote_returnOnMiddleEmptyLine_isNormalSplit() {
-        let canvas = makeCanvas([quote("a", "A"), quote("m", ""), quote("b", "B")])   // empty line BETWEEN quotes
-        canvas.setCaret(global: canvas.boxes[1].textStart)
-        canvas.insertText("\n")
-        XCTAssertEqual(canvas.boxes.count, 4, "a middle empty quote line splits normally (no exit)")
-        XCTAssertTrue(canvas.boxes.allSatisfy { style($0) == .quote }, "still all quote paragraphs")
-    }
+    // MARK: Code-block double-return
 
     // Typing two newlines at the BEGINNING of a code block exits before it (the first Enter lands the caret
     // on the content line past the new "\n"; the second Enter at the start-of-content-after-a-leading-blank
@@ -117,19 +53,6 @@ final class DoubleReturnExitTests: XCTestCase {
         guard case let .code(cb) = canvas.boxes[1].currentBlock() else { return XCTFail("expected .code second") }
         XCTAssertEqual(cb.text, "abc", "no stray leading blank lines remain in the code block")
     }
-
-    func test_quote_twoNewlinesAtBeginning_exitsBefore() {
-        let canvas = makeCanvas([quote("q", "abc")])
-        canvas.setCaret(global: canvas.boxes[0].textStart)
-        canvas.insertText("\n")
-        canvas.insertText("\n")
-        XCTAssertEqual(canvas.boxes.count, 2, "the second newline at the beginning exits before the quote")
-        XCTAssertEqual(style(canvas.boxes[0]), .body, "an empty body paragraph before the quote")
-        XCTAssertEqual(style(canvas.boxes[1]), .quote, "the quote content remains")
-        XCTAssertEqual((canvas.boxes[1] as! BlockBox).currentParagraph().text, "abc")
-    }
-
-    // MARK: Code-block double-return
 
     func test_codeBlock_doubleReturnOnTrailingEmptyLine_exitsAfter() {
         let canvas = makeCanvas([.code(CodeBlock(id: BlockID("c1"), runs: [TextRun(text: "abc\n")]))])

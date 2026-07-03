@@ -36,7 +36,7 @@ public enum InstantPageV2StableItemId: Hashable {
 }
 
 public enum InstantPageV2ItemKind: Hashable {
-    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, mediaPlaceholder, table, anchor, formula, slideshow
+    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow
 }
 
 // MARK: - Render context
@@ -647,6 +647,10 @@ public final class InstantPageV2View: UIView {
             guard let v = existingView as? InstantPageV2ShapeView else { return nil }
             v.update(item: shape, theme: theme)
             return v
+        case let .imageOrnament(ornament):
+            guard let v = existingView as? InstantPageV2ImageOrnamentView else { return nil }
+            v.update(item: ornament, theme: theme)
+            return v
         case let .mediaPlaceholder(media):
             guard let v = existingView as? InstantPageV2MediaPlaceholderView else { return nil }
             v.update(item: media, theme: theme)
@@ -712,6 +716,7 @@ public final class InstantPageV2View: UIView {
         case .listMarker:              return .positional(.listMarker, position)
         case .blockQuoteBar:           return .positional(.blockQuoteBar, position)
         case .shape:                   return .positional(.shape, position)
+        case .imageOrnament:           return .positional(.imageOrnament, position)
         case .mediaPlaceholder:        return .positional(.mediaPlaceholder, position)
         case .table:                   return .positional(.table, position)
         case .anchor:                  return .positional(.anchor, position)
@@ -772,6 +777,8 @@ public final class InstantPageV2View: UIView {
             return InstantPageV2BlockQuoteBarView(item: bar, theme: theme)
         case let .shape(shape):
             return InstantPageV2ShapeView(item: shape, theme: theme)
+        case let .imageOrnament(ornament):
+            return InstantPageV2ImageOrnamentView(item: ornament)
         case let .mediaPlaceholder(media):
             return InstantPageV2MediaPlaceholderView(item: media, theme: theme)
         case let .details(details):
@@ -1667,6 +1674,36 @@ final class InstantPageV2ShapeView: UIView, InstantPageItemView {
             self.backgroundColor = self.item.color
             self.layer.cornerRadius = 0.0
         }
+    }
+}
+
+// MARK: - Image ornament view (for pullQuote corner marks)
+
+final class InstantPageV2ImageOrnamentView: UIView, InstantPageItemView {
+    private(set) var item: InstantPageV2ImageOrnamentItem
+    var itemFrame: CGRect { return self.item.frame }
+    private let imageView: UIImageView
+
+    init(item: InstantPageV2ImageOrnamentItem) {
+        self.item = item
+        let iv = UIImageView(image: UIImage(bundleImageName: item.imageName)?.withRenderingMode(.alwaysTemplate))
+        iv.tintColor = item.color
+        iv.frame = CGRect(origin: .zero, size: item.frame.size)
+        iv.contentMode = .scaleAspectFit
+        if item.rotated { iv.transform = CGAffineTransform(rotationAngle: .pi) }
+        self.imageView = iv
+        super.init(frame: item.frame)
+        addSubview(iv)
+        isUserInteractionEnabled = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(item: InstantPageV2ImageOrnamentItem, theme: InstantPageTheme) {
+        let _ = theme
+        self.item = item
+        self.imageView.tintColor = item.color
     }
 }
 
