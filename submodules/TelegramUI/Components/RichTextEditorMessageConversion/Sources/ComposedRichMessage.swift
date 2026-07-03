@@ -40,7 +40,7 @@ func normalizedBlocks(_ blocks: [Block], media: [String: Media]) -> [Block] {
     var out: [Block] = []
     for block in blocks {
         switch block {
-        case .paragraph, .table, .code, .collapsedQuote, .pullQuote:
+        case .paragraph, .table, .code, .pullQuote:
             out.append(block)
         case let .media(mediaBlock):
             if media[mediaBlock.mediaID] != nil {
@@ -48,18 +48,21 @@ func normalizedBlocks(_ blocks: [Block], media: [String: Media]) -> [Block] {
             } else if !mediaBlock.caption.isEmpty {
                 out.append(.paragraph(ParagraphBlock(id: mediaBlock.id, style: .body, runs: mediaBlock.caption)))
             }
+        case .blockQuote:
+            // Pass through; children are resolved in downstream builders.
+            out.append(block)
         }
     }
     return out
 }
 
-/// Trim trailing empty body/quote paragraphs (e.g. the editor's blank end paragraph).
+/// Trim trailing empty body paragraphs (e.g. the editor's blank end paragraph).
 func trimmedTrailingEmpty(_ blocks: [Block]) -> [Block] {
     var result = blocks
     while let last = result.last,
           case let .paragraph(paragraph) = last,
           paragraph.list == nil,
-          paragraph.style == .body || paragraph.style == .quote,
+          paragraph.style == .body,
           paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         result.removeLast()
     }
@@ -80,10 +83,6 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
             switch paragraph.style {
             case .heading1, .heading2, .heading3:
                 return true
-            case .quote:
-                if forSendPreview {
-                    return true
-                }
             case .body, .caption:
                 break
             case .pullQuote:
@@ -98,11 +97,11 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
             // A code block is entity-expressible (.Pre) and does NOT force the rich path — it round-trips
             // through the normal text+entities builder (buildEntityMessage).
             break
-        case .collapsedQuote:
-            // A collapsed quote can't be represented as plain text + entities → always forces the rich path.
-            return true
         case .pullQuote:
             // A pull quote has no entity equivalent → always forces the rich path.
+            return true
+        case .blockQuote:
+            // A block quote has no entity form → always forces the rich path.
             return true
         }
     }

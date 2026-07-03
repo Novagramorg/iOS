@@ -126,7 +126,7 @@ final class BlockBox {
     var textRef: TextNodeRef { .paragraph(id) }
     var height: CGFloat { max(layout.boundingHeight, emptyLineHeight) + topInset + bottomInset }
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        max(layout.boundingHeight(forWidth: max(width - textInset.x * 2 - quoteContentWidthInset, 1)), emptyLineHeight) + topInset + bottomInset
+        max(layout.boundingHeight(forWidth: max(width - textInset.x * 2, 1)), emptyLineHeight) + topInset + bottomInset
     }
     var textOrigin: CGPoint { CGPoint(x: frame.minX + textInset.x, y: frame.minY + topInset) }
 
@@ -157,16 +157,7 @@ final class BlockBox {
                                                 baseWritingDirection: writingDirectionOverride ?? mapper.baseWritingDirection).firstLineHeadIndent
     }
 
-    /// Extra horizontal content-width reduction beyond `textInset`, applied to quotes so their text wraps
-    /// before the fill's trailing edge. Non-quote blocks reduce by 0 (unchanged).
-    private var quoteContentWidthInset: CGFloat { style == .quote ? mapper.styleSheet.quoteTrailingInset : 0 }
-
-    /// Leading inset (points) contributed by a quote container — the bar→content gap. A list marker sits
-    /// past this so it clears the quote bar, matching the paragraph-style `headIndent` (which also stacks
-    /// this on top of the list inset). 0 for non-quote blocks, so plain lists are unchanged.
-    private var quoteLeadingInset: CGFloat { style == .quote ? mapper.styleSheet.quoteIndent : 0 }
-
-    func setWidth(_ width: CGFloat) { layout.setWidth(max(width - textInset.x * 2 - quoteContentWidthInset, 1)) }
+    func setWidth(_ width: CGFloat) { layout.setWidth(max(width - textInset.x * 2, 1)) }
 
     /// Y (relative to `textOrigin.y`) at which a list marker's baseline must sit to align with this
     /// paragraph's first text line. Uses the real laid-out baseline when text exists; for an empty list
@@ -190,7 +181,7 @@ final class BlockBox {
     func listMarkerDraw() -> (label: String, origin: CGPoint, font: UIFont)? {
         guard let label = resolvedListMarker, let membership = listMembership else { return nil }
         let font = mapper.styleSheet.font(for: style, attributes: .plain)
-        let x = textOrigin.x + quoteLeadingInset + StyleSheet.listIndentStep * CGFloat(membership.level)
+        let x = textOrigin.x + StyleSheet.listIndentStep * CGFloat(membership.level)
         let y = textOrigin.y + listMarkerBaselineFromTop(markerFont: font) - font.ascender
         return (label, CGPoint(x: x, y: y), font)
     }
@@ -205,7 +196,7 @@ final class BlockBox {
         let font = mapper.styleSheet.font(for: style, attributes: .plain)
         let baseSide = StyleSheet.checklistMarkerSize(for: font)               // cap-height base (unscaled)
         let side = floorToScreenPixels(baseSide * StyleSheet.checklistMarkerScale)
-        let x = textOrigin.x + quoteLeadingInset + StyleSheet.listIndentStep * CGFloat(membership.level)   // LEFT anchored
+        let x = textOrigin.x + StyleSheet.listIndentStep * CGFloat(membership.level)   // LEFT anchored
         let baselineFromTop = listMarkerBaselineFromTop(markerFont: font)
         // Preserve the base (bottom-on-baseline) box's vertical center, so the extra height grows equally
         // into the top & bottom; extra width grows to the right (left edge fixed).

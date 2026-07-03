@@ -76,9 +76,6 @@ public struct StyleSheet {
         case .heading2: return 21
         case .heading3: return 19
         case .body: return bodyBaseSize
-        // Quotes always read denser than body — a fixed 15pt, like captions, in every context
-        // (document and table cell). Not a field: nothing overrides it per-context.
-        case .quote: return 15
         case .caption: return 15
         case .pullQuote: return bodyBaseSize
         }
@@ -93,7 +90,6 @@ public struct StyleSheet {
         case .heading3: return StyleMetrics(spacingBefore: 14, spacingAfter: 6, lineHeightMultiple: 1.05)
         case .body:     return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
         case .caption:  return StyleMetrics(spacingBefore: bodyParagraphSpacingBefore, spacingAfter: bodyParagraphSpacingAfter, lineHeightMultiple: bodyLineHeightMultiple)
-        case .quote:    return StyleMetrics(spacingBefore: quoteSpacingBefore, spacingAfter: quoteSpacingAfter, lineHeightMultiple: 1.10)
         // Pull quote: tight, no inter-paragraph spacing (box insets provide padding); runs read close together.
         case .pullQuote: return StyleMetrics(spacingBefore: 0, spacingAfter: 0, lineHeightMultiple: 1.10)
         }
@@ -134,10 +130,7 @@ public struct StyleSheet {
         ps.paragraphSpacingBefore += m.spacingBefore
         ps.paragraphSpacing += m.spacingAfter
         if ps.lineHeightMultiple == 1 { ps.lineHeightMultiple = m.lineHeightMultiple }
-        // The quote container's leading inset (the bar→text gap) and the list marker inset STACK: a
-        // list inside a quote clears the quote bar first, then hangs its marker/text past that. (A plain
-        // quote gets just the quote inset; a plain list gets just the list inset.)
-        var indent: CGFloat = (style == .quote) ? quoteIndent : 0
+        var indent: CGFloat = 0
         if let list = list {
             // Marker sits at the level's indent; text hangs `listMarkerSpacing` past it. Ordered
             // (numbered) items get extra text inset since a number marker is wider than a bullet.

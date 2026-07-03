@@ -52,24 +52,10 @@ public func attributedString(from content: ChatInputContent) -> NSAttributedStri
         }
     }
 
-    // Returns the collapsed flag if the block is a non-collapsed-style quote paragraph, else nil.
-    func quoteFlag(_ block: ChatInputBlock) -> Bool? {
-        if case let .paragraph(p) = block, case let .quote(isCollapsed) = p.style { return isCollapsed }
-        return nil
-    }
-
     var i = 0
     while i < content.blocks.count {
         let block = content.blocks[i]
         switch block {
-        case let .collapsedQuote(nested):
-            // Folded form: a single placeholder character carrying the nested (semantic) content as
-            // the `.collapsedBlock` value. Mirrors `stateAttributedStringForText` exactly.
-            appendSeparatorIfNeeded()
-            result.append(NSAttributedString(string: " ", attributes: [
-                ChatTextInputAttributes.collapsedBlock: attributedString(from: nested)
-            ]))
-            i += 1
         case let .code(code):
             appendSeparatorIfNeeded()
             let start = result.length
@@ -79,35 +65,9 @@ public func attributedString(from content: ChatInputContent) -> NSAttributedStri
                 let attr = chatInputCodeBlockAttribute(language: code.language)
                 result.addAttribute(attr.key, value: attr.value, range: NSRange(location: start, length: len))
             }
-            i += 1
         case let .paragraph(paragraph):
-            if let collapsed = quoteFlag(block) {
-                // Coalesce a maximal run of consecutive quote paragraphs (same collapsed flag) into ONE
-                // contiguous `.block` carrying a SINGLE shared object, interior "\n"s included — the display
-                // groups quote boxes by object identity and the send path merges only touching ranges, so a
-                // multi-line quote must not fragment. Matches `ChatTextInputStateText`'s contiguous quote.
-                appendSeparatorIfNeeded()
-                let start = result.length
-                var j = i
-                var firstInRun = true
-                while j < content.blocks.count, quoteFlag(content.blocks[j]) == collapsed {
-                    if !firstInRun { result.append(NSAttributedString(string: "\n")) }
-                    firstInRun = false
-                    if case let .paragraph(q) = content.blocks[j] { appendRuns(q) }
-                    j += 1
-                }
-                let len = result.length - start
-                if len > 0 {
-                    result.addAttribute(ChatTextInputAttributes.block,
-                        value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: collapsed),
-                        range: NSRange(location: start, length: len))
-                }
-                i = j
-            } else {
-                appendSeparatorIfNeeded()
-                appendRuns(paragraph)
-                i += 1
-            }
+            appendSeparatorIfNeeded()
+            appendRuns(paragraph)
         case let .pullQuote(pq):
             // Legacy UITextView projection: render pull-quote text as a quote-attributed block, mirroring `.code`.
             // The native Document ↔ ChatInputContent bridge bypasses this path for pull-quote blocks entirely.
@@ -120,15 +80,35 @@ public func attributedString(from content: ChatInputContent) -> NSAttributedStri
                     value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
                     range: NSRange(location: start, length: len))
             }
-            i += 1
+        case let .blockQuote(bq):
+            // Legacy UITextView projection for the structured blockQuote. The native Document ↔ ChatInputContent
+            // bridge bypasses this path entirely (like `.pullQuote`). For the flat view:
+            // - collapsed → " " placeholder with `.collapsedBlock`
+            // - expanded → inner plain text with `.block` / `.quote` attribute (mirrors quote paragraphs)
+            appendSeparatorIfNeeded()
+            if bq.collapsed {
+                result.append(NSAttributedString(string: " ", attributes: [
+                    ChatTextInputAttributes.collapsedBlock: attributedString(from: bq.content)
+                ]))
+            } else {
+                let start = result.length
+                result.append(NSAttributedString(string: bq.content.plainText))
+                let len = result.length - start
+                if len > 0 {
+                    result.addAttribute(ChatTextInputAttributes.block,
+                        value: ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false),
+                        range: NSRange(location: start, length: len))
+                }
+            }
         case .media, .table:
             // INTENTIONAL render-only filter (not deferred): the legacy `UITextView` composer cannot represent a
             // structural media/table block, so this `NSAttributedString` projection drops them. Heading/list
             // paragraphs above similarly render as plain text (`appendRuns` ignores heading style + list membership).
             // `ChatInputContent` stays the sole authoritative storage; this flat view is lossy by design. The native
             // engine carries these blocks via the direct `Document ↔ ChatInputContent` bridge, never this path.
-            i += 1
+            break
         }
+        i += 1
     }
     return result
 }
@@ -176,6 +156,7 @@ public func chatInputContent(from attributedText: NSAttributedString) -> ChatInp
                     } else if let u = dict[ChatTextInputAttributes.textUrl] as? ChatTextInputTextUrlAttribute {
                         a.entity = .url(u.url)
                     }
+                    // A `.block`/`.quote`-kind attribute now maps to `.blockQuote` (Task 16b).
                     if let q = dict[ChatTextInputAttributes.block] as? ChatTextInputTextQuoteAttribute,
                        case .quote = q.kind {
                         isQuote = true
@@ -184,17 +165,25 @@ public func chatInputContent(from attributedText: NSAttributedString) -> ChatInp
                     runs.append(ChatInputRun(text: full.substring(with: r), attributes: a))
                 }
             }
-            blocks.append(.paragraph(ChatInputParagraph(
-                style: isQuote ? .quote(isCollapsed: quoteCollapsed) : .body,
-                runs: runs)))
+            if isQuote {
+                // A `.block`/`.quote`-kind attribute now maps to `.blockQuote` (Task 16b). Each quote
+                // paragraph on the legacy NSAttributedString path becomes its own `.blockQuote` block
+                // (multi-paragraph grouping is handled by the native Document ↔ ChatInputContent bridge).
+                blocks.append(.blockQuote(ChatInputBlockQuote(
+                    content: ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: runs))]),
+                    collapsed: quoteCollapsed)))
+            } else {
+                blocks.append(.paragraph(ChatInputParagraph(style: .body, runs: runs)))
+            }
         }
     }
 
-    // Carve out the non-paragraph block regions (code blocks + collapsed quotes), then fill the gaps
-    // with paragraphs, consuming one separator "\n" per boundary — mirrors `ComposerDocumentBridge`.
+    // Carve out the non-paragraph block regions (code blocks + collapsed blockQuotes), then fill the
+    // gaps with paragraphs, consuming one separator "\n" per boundary — mirrors `ComposerDocumentBridge`.
     enum CarveKind {
         case code(language: String?)
-        case collapsedQuote(content: NSAttributedString)
+        /// A `.collapsedBlock`-attributed character: maps to `.blockQuote(collapsed: true)` (Task 16b).
+        case collapsedBlock(content: NSAttributedString)
     }
     var carves: [(range: NSRange, kind: CarveKind)] = []
     for region in codeBlockRanges(in: attributedText) {
@@ -202,7 +191,7 @@ public func chatInputContent(from attributedText: NSAttributedString) -> ChatInp
     }
     attributedText.enumerateAttribute(ChatTextInputAttributes.collapsedBlock, in: NSRange(location: 0, length: attributedText.length), options: []) { value, range, _ in
         if let nested = value as? NSAttributedString {
-            carves.append((range: range, kind: .collapsedQuote(content: nested)))
+            carves.append((range: range, kind: .collapsedBlock(content: nested)))
         }
     }
     carves.sort { $0.range.location < $1.range.location }
@@ -217,8 +206,11 @@ public func chatInputContent(from attributedText: NSAttributedString) -> ChatInp
             blocks.append(.code(ChatInputCode(
                 language: language,
                 runs: [ChatInputRun(text: full.substring(with: carve.range))])))
-        case let .collapsedQuote(content):
-            blocks.append(.collapsedQuote(chatInputContent(from: content)))
+        case let .collapsedBlock(content):
+            // `.collapsedBlock` attribute now maps to a collapsed `.blockQuote` (Task 16b).
+            blocks.append(.blockQuote(ChatInputBlockQuote(
+                content: chatInputContent(from: content),
+                collapsed: true)))
         }
         cursor = carve.range.location + carve.range.length
         if cursor < full.length && full.character(at: cursor) == 0x0A { cursor += 1 }

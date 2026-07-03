@@ -51,6 +51,16 @@ public struct AttributedStringMapper {
                                baseWritingDirection: baseWritingDirection)
     }
 
+    /// A copy that renders body/pull-quote content at `size` base points, PRESERVING this mapper's
+    /// stylesheet customizations (quote insets, spacing, metrics), emoji scale, theme, and writing direction.
+    /// (Unlike `tableCellVariant()`, which swaps in the fixed `.tableCells` stylesheet.)
+    public func withBodyBaseSize(_ size: CGFloat) -> AttributedStringMapper {
+        var s = styleSheet
+        s.bodyBaseSize = size
+        return AttributedStringMapper(styleSheet: s, emojiScale: emojiScale, theme: theme,
+                                      baseWritingDirection: baseWritingDirection)
+    }
+
     /// Points to enlarge a rendered inline emoji beyond its glyph box, per paragraph style (decoupled from
     /// the layout box, so it never expands the line — see `EmojiTextAttachment.renderBoost`). Body emoji
     /// read small at their bare glyph box, so they get +4pt; other styles use their glyph box as-is.

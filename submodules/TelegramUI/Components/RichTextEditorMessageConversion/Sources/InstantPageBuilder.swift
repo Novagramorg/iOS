@@ -20,14 +20,6 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                 }
                 pageBlocks.append(contentsOf: buildListBlocks(from: run[...]))
                 continue
-            } else if paragraph.style == .quote {
-                var quotes: [RichText] = []
-                while index < blocks.count, case let .paragraph(next) = blocks[index], next.list == nil, next.style == .quote {
-                    quotes.append(richText(from: next.runs))
-                    index += 1
-                }
-                pageBlocks.append(.blockQuote(blocks: quotes.map { .paragraph($0) }, caption: .empty, collapsed: nil))
-                continue
             } else {
                 pageBlocks.append(headingOrParagraphBlock(paragraph))
                 index += 1
@@ -76,11 +68,12 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
                 }
             }
             index += 1
-        case let .collapsedQuote(cq):
-            // A collapsed quote sends as a collapsed blockQuote (collapsed: true). The folded paragraphs
-            // become the quote's child blocks; the recipient renders it collapsed via the InstantPage path.
-            pageBlocks.append(.blockQuote(blocks: cq.paragraphs.map { .paragraph(richText(from: $0.runs)) },
-                                          caption: .empty, collapsed: true))
+        case let .blockQuote(bq):
+            // A block quote → a structured InstantPage blockQuote. Recurse the children through the same
+            // builder; merge child media into the page-level dict so media inside a quote renders correctly.
+            let innerPage = buildInstantPage(from: bq.children, media: media)
+            for (id, m) in innerPage.media { pageMedia[id] = m }
+            pageBlocks.append(.blockQuote(blocks: innerPage.blocks, caption: .empty, collapsed: bq.collapsed))
             index += 1
         }
     }
@@ -99,9 +92,6 @@ private func headingOrParagraphBlock(_ paragraph: ParagraphBlock) -> InstantPage
         return .heading(text: text, level: 3)
     case .body, .caption:
         return .paragraph(text)
-    case .quote:
-        // Quotes are merged by the caller; this is an unreached fallback for exhaustiveness.
-        return .blockQuote(blocks: [.paragraph(text)], caption: .empty, collapsed: nil)
     case .pullQuote:
         // A `Block.paragraph` with `.pullQuote` style is render-only and unreachable here
         // (pull quotes arrive as `Block.pullQuote`, handled by the `buildInstantPage` switch).

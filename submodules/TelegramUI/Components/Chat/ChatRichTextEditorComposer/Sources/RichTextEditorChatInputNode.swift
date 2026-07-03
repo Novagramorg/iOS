@@ -292,14 +292,16 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public var text: String {
         // Read plain text straight from the document model rather than round-tripping through the full
         // `Document → NSAttributedString` conversion — `text` is a hot path (the send-button counter
-        // re-reads it on every keystroke). Body/quote paragraphs joined by "\n", matching the bridge's
-        // Document→string flattening (non-paragraph blocks contribute nothing).
-        return self.editorView.document.blocks.compactMap { block -> String? in
-            if case let .paragraph(paragraph) = block {
-                return paragraph.text
+        // re-reads it on every keystroke). Mirrors ChatInputContent.plainText recursion: paragraphs +
+        // block-quote children joined by "\n" (non-paragraph atoms and table blocks contribute nothing).
+        func blockText(_ block: Block) -> String? {
+            switch block {
+            case .paragraph(let p): return p.text
+            case .blockQuote(let bq): return bq.children.compactMap(blockText).joined(separator: "\n")
+            default: return nil
             }
-            return nil
-        }.joined(separator: "\n")
+        }
+        return self.editorView.document.blocks.compactMap(blockText).joined(separator: "\n")
     }
     // MARK: ChatInputContent model — the STRUCTURAL draft currency (direct bridge)
 
@@ -513,7 +515,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         case .underline: self.editorView.toggleUnderline()
         case .monospace: self.editorView.toggleInlineCode()
         case .spoiler: self.editorView.toggleSpoiler()
-        case .quote: self.editorView.setParagraphStyle(.quote)
+        case .quote: self.editorView.wrapInBlockQuote()
         case .pullQuote: self.editorView.makePullQuote()
         case .code: self.editorView.makeCodeBlock()
         case .date:

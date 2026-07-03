@@ -46,22 +46,6 @@ final class ListNumberingTests: XCTestCase {
         XCTAssertEqual(labels[BlockID("d")], "◦")
     }
 
-    func test_quoteInterruptsOrderedList_ownScope_andOuterRestarts() {
-        // A quote is a distinct block container: quoted list items form their own numbering scope, and
-        // the surrounding (non-quote) list restarts after the quote — a quote boundary breaks the run
-        // the same way an intervening non-list paragraph does.
-        let labels = ListNumbering.labels(for: [
-            item("a", .ordered, 0),                  // 1.  outer list
-            item("b", .ordered, 0, style: .quote),   // 1.  quote is its own scope
-            item("c", .ordered, 0, style: .quote),   // 2.  contiguous quote continues within the quote
-            item("d", .ordered, 0),                  // 1.  outer restarts after the quote
-        ])
-        XCTAssertEqual(labels[BlockID("a")], "1.")
-        XCTAssertEqual(labels[BlockID("b")], "1.")
-        XCTAssertEqual(labels[BlockID("c")], "2.")
-        XCTAssertEqual(labels[BlockID("d")], "1.")
-    }
-
     func test_sameLevelBulletRestartsOrderedRun() {
         let labels = ListNumbering.labels(for: [
             item("x", .ordered, 0),   // 1.

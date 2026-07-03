@@ -168,35 +168,16 @@ final class BlockViewVirtualizationTests: XCTestCase {
         XCTAssertEqual(tv2.scroll.contentOffset.x, 120, accuracy: 0.5, "the H-scroll is restored into the new view")
     }
 
-    func test_visibleBlockquoteFills_excludesOffscreenRuns() {
-        let v = DocumentCanvasView()
-        // Two quote runs separated by a tall stack of body paragraphs, so the runs are far apart vertically.
-        var blocks: [Block] = [.paragraph(ParagraphBlock(id: BlockID("q0"), style: .quote, runs: [TextRun(text: "Top quote")]))]
-        blocks += (0..<200).map { .paragraph(ParagraphBlock(id: BlockID("b\($0)"), runs: [TextRun(text: "Body \($0)")])) }
-        blocks.append(.paragraph(ParagraphBlock(id: BlockID("q1"), style: .quote, runs: [TextRun(text: "Bottom quote")])))
-        v.setBlocks(blocks, width: 300)
-        v.frame = CGRect(x: 0, y: 0, width: 300, height: v.intrinsicContentSize.height); v.layoutIfNeeded()
-        let allFills = v.blockquoteDecorations().map { $0.fill }
-        XCTAssertEqual(allFills.count, 2, "two quote runs in the document")
-        // A band over the very top excludes the bottom run.
-        // A band that covers the TOP run but stops well before the bottom run (after 200 body paragraphs),
-        // derived from the top run's own extent so it doesn't depend on paragraph metrics.
-        let topBand = CGRect(x: 0, y: 0, width: 300, height: allFills[0].maxY + 10)
-        let visible = v.visibleBlockquoteFills(band: topBand)
-        XCTAssertEqual(visible.count, 1, "only the on-screen quote run's fill is kept")
-        XCTAssertTrue(visible.contains { $0.minY < 100 }, "the kept fill is the TOP run")
-    }
-
     func test_visibleBlockquoteFills_noScrollHost_keepsAllRuns() {
         let v = DocumentCanvasView()
         v.setBlocks([
-            .paragraph(ParagraphBlock(id: BlockID("q0"), style: .quote, runs: [TextRun(text: "Q0")])),
-            .paragraph(ParagraphBlock(id: BlockID("q1"), style: .quote, runs: [TextRun(text: "Q1")])),
+            .paragraph(ParagraphBlock(id: BlockID("q0"), runs: [TextRun(text: "Q0")])),
+            .paragraph(ParagraphBlock(id: BlockID("q1"), runs: [TextRun(text: "Q1")])),
         ], width: 300)
         v.frame = CGRect(x: 0, y: 0, width: 300, height: v.intrinsicContentSize.height); v.layoutIfNeeded()
-        // Adjacent quotes merge into ONE run; either way every run is on-screen via the bounds band.
+        // Every run is on-screen via the bounds band.
         XCTAssertEqual(v.visibleBlockquoteFills(band: v.viewportBand()).count, v.blockquoteDecorations().count,
-                       "no scroll host ⇒ every quote run kept (invariance)")
+                       "no scroll host ⇒ every run kept (invariance)")
     }
 
     func test_reconcile_signalsWhenAFreshTableIsRealized() {

@@ -30,7 +30,7 @@ public struct QuoteStyle: Equatable {
     /// edge. `nil` (default) keeps the current behavior. The vertical parallel to `trailingInset`.
     public var bottomInset: CGFloat?
 
-    public init(leadingInset: CGFloat = 16, trailingInset: CGFloat = 0,
+    public init(leadingInset: CGFloat = 16, trailingInset: CGFloat = 22,
                 spacingBefore: CGFloat = 8, spacingAfter: CGFloat = 8,
                 barWidth: CGFloat = 3, cornerRadius: CGFloat = 2.5, fillAlpha: CGFloat = 0.10,
                 topInset: CGFloat? = nil, bottomInset: CGFloat? = nil) {

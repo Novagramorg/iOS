@@ -67,15 +67,13 @@ final class TableBlockBox: CanvasBlock {
         layoutWidth = max(width, 1)
         cells = table.rows.map { row in
             row.cells.map { c in
-                let stack = BlockStack(boxes: c.blocks.compactMap { block in
+                let stack = BlockStack(boxes: c.blocks.compactMap { block -> CanvasBlock? in
                     switch block {
-                    case .paragraph(let p): return BlockBox(paragraph: p, mapper: cellMapper, width: 100)
-                    case .media(let img): return MediaBlockBox(media: img, mapper: cellMapper, width: 100,
-                                                               horizontalBleed: 0)   // nested media never bleeds (see NOTE in MediaBlockBox)
-                    case .table: return nil              // no nested tables in v1
-                    case .code: return nil               // no nested code blocks in a table cell in v1
-                    case .collapsedQuote: return nil     // not rendered inside a table cell
-                    case .pullQuote: return nil          // pull quotes not supported inside a table cell in v1
+                    case .paragraph, .media:
+                        // Delegate to the shared factory; nested media never bleeds (see NOTE in MediaBlockBox).
+                        return makeBox(for: block, mapper: cellMapper, horizontalBleed: 0, width: 100)
+                    default:
+                        return nil  // no nested table/code/collapsedQuote/pullQuote/blockQuote in a cell (v1)
                     }
                 })
                 // The cell owns its vertical padding (`cellVerticalPadding`), so its stack adds no
@@ -437,7 +435,7 @@ final class TableBlockBox: CanvasBlock {
 
     // Degenerate single-text-region conformance (unused: the canvas uses leafRegions() for tables).
     // Per-instance (not static): the canvas never edits through a table's `textLayout` — a collapsed
-    // caret resting on a table boundary is snapped into a cell first (see `caretSnappedIntoCell`) — but
+    // caret resting on a table boundary is snapped into a cell first (see `caretSnappedIntoContainer`) — but
     // keeping this per-instance contains any future accidental write to one table rather than leaking
     // it into a process-wide shared layout.
     private let emptyLayout = makeBlockLayout(attributedString: NSAttributedString(string: ""), width: 1)

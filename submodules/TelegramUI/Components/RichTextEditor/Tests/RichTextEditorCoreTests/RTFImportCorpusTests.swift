@@ -31,10 +31,10 @@ final class RTFImportCorpusTests: XCTestCase {
                 result.append(c.runs.map(\.text).joined())
             case .media:
                 break
-            case .collapsedQuote:
-                break
             case .pullQuote(let pq):
                 result.append(pq.text)
+            case .blockQuote:
+                break
             }
         }
         return result

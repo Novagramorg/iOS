@@ -15,10 +15,11 @@ extension DocumentCanvasView {
         let ref = EmojiRef(id: id, instanceID: BlockID.generate().rawValue, altText: altText)
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
-            // A collapsed caret resolving to a table box is a structural boundary — snap into the nearest
-            // cell so the insert goes through a real leaf region (mirrors insertText).
-            if !isInsideTable(head), let r = resolveBox(at: head), r.box is TableBlockBox {
-                let snapped = caretSnappedIntoCell(head); anchor = snapped; head = snapped
+            // A collapsed caret resolving to a table or block-quote box is a structural boundary —
+            // snap into the nearest in-container text start (mirrors insertText).
+            if !isInsideTable(head) && !isInsideBlockQuote(head),
+               let r = resolveBox(at: head), r.box is TableBlockBox || r.box is BlockQuoteBox {
+                let snapped = caretSnappedIntoContainer(head); anchor = snapped; head = snapped
             }
             // A caret on a structural slot with no owning leaf region (e.g. document start = position 0,
             // which sits before the first block's textStart) snaps forward to the nearest renderable slot

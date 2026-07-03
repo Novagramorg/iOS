@@ -12,7 +12,7 @@ final class BlockLayoutTK1EmojiTests: XCTestCase {
     private func ref() -> EmojiRef { EmojiRef(id: "star", instanceID: "i1", altText: ":star:") }
 
     func test_tk1_attachmentBox_squareSizedToGlyphPlusBoost() {
-        for style in [ParagraphStyleName.body, .heading1, .heading2, .quote] {
+        for style in [ParagraphStyleName.body, .heading1, .heading2, .heading3] {
             let font = mapper.styleSheet.font(for: style, attributes: CharacterAttributes())
             let boost: CGFloat = style == .body ? 4 : 0
             let block = ParagraphBlock(id: BlockID("e"), style: style, runs: [
@@ -35,7 +35,7 @@ final class BlockLayoutTK1EmojiTests: XCTestCase {
     /// `lineFragmentRect.minY + location(forGlyphAt: 0).y − centeringDelta` (glyph 0 = "A"). For a no-boost
     /// style the box spans baseline−ascender … baseline−descender (a glyph cell).
     func test_tk1_emoji_sitsOnTextBaseline() {
-        for style in [ParagraphStyleName.heading1, .quote, .heading2] {   // boost == 0 styles
+        for style in [ParagraphStyleName.heading1, .caption, .heading2] {   // boost == 0 styles
             let font = mapper.styleSheet.font(for: style, attributes: CharacterAttributes())
             let block = ParagraphBlock(id: BlockID("e"), style: style, runs: [
                 TextRun(text: "Agjy"),

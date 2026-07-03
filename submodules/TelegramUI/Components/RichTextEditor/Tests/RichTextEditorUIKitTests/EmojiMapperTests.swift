@@ -66,7 +66,7 @@ final class EmojiMapperTests: XCTestCase {
     /// derived from the attachment's own bounds, NOT the full line-fragment `selectionRects` rect (which is
     /// `lineHeight × lineHeightMultiple` tall and would stretch the emoji).
     func test_attachmentBox_squareSizedAndCenteredOnGlyph() {
-        for style in [ParagraphStyleName.body, .heading1, .heading2, .quote] {
+        for style in [ParagraphStyleName.body, .heading1, .heading2, .heading3] {
             let font = mapper.styleSheet.font(for: style, attributes: CharacterAttributes())
             let boost: CGFloat = style == .body ? 4 : 0   // spec: body emoji are 4pt larger
             let block = ParagraphBlock(id: BlockID("e"), style: style, runs: [

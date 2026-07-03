@@ -43,7 +43,8 @@ extension DocumentCanvasView {
             hasSelection: selFrom < selTo,
             isInTable: isInsideTable(head) || isInsideTable(anchor),
             canUndo: effectiveUndoManager?.canUndo ?? false,
-            canRedo: effectiveUndoManager?.canRedo ?? false
+            canRedo: effectiveUndoManager?.canRedo ?? false,
+            blockQuoteDepth: blockQuoteDepth(at: head)
         )
     }
 }

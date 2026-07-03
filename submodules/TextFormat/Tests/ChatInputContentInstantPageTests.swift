@@ -11,10 +11,6 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         return .paragraph(ChatInputParagraph(style: .body, runs: runs))
     }
 
-    private func quote(collapsed: Bool, _ runs: [ChatInputRun]) -> ChatInputBlock {
-        return .paragraph(ChatInputParagraph(style: .quote(isCollapsed: collapsed), runs: runs))
-    }
-
     // 1. Plain + each inline attribute separately, plus several combined into one run.
     func test_plainAndInlineAttributes() {
         var bold = ChatInputInlineAttributes(); bold.bold = true
@@ -116,59 +112,26 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         ]), "code without language")
     }
 
-    // 6. Single quote paragraph and TWO consecutive same-collapse quote paragraphs (coalesce ⇄ split).
-    func test_quoteParagraphs() {
-        assertRoundTrips(ChatInputContent(blocks: [
-            quote(collapsed: false, [ChatInputRun(text: "one line quote")])
-        ]), "single quote paragraph")
-
-        assertRoundTrips(ChatInputContent(blocks: [
-            quote(collapsed: false, [ChatInputRun(text: "line 1")]),
-            quote(collapsed: false, [ChatInputRun(text: "line 2")])
-        ]), "two consecutive non-collapsed quote paragraphs")
-    }
-
-    // 7. Adjacent quote paragraphs with DIFFERENT collapse state must NOT coalesce together.
-    //
-    // NOTE on the forward design (taken verbatim from the task spec): a `.quote(isCollapsed: true)`
-    // PARAGRAPH and a `.collapsedQuote` BLOCK both forward to `.blockQuote(collapsed: true)`, and the
-    // reverse canonicalizes `.blockQuote(collapsed: true)` to `.collapsedQuote`. So a *collapsed-style
-    // quote paragraph* is the one input shape that does not survive a full round-trip — it normalizes to
-    // the `.collapsedQuote` block (which IS its semantic folded equivalent). We therefore verify the
-    // stated intent of this case — that differently-collapsed adjacent quotes do NOT coalesce — at the
-    // InstantPage level (two distinct blockQuote blocks with the right `collapsed` flags), rather than
-    // asserting full identity on the collapsed-true paragraph. The non-collapsed coalescing identity is
-    // covered by `test_quoteParagraphs`; the collapsed-true block identity by `test_collapsedQuote`.
-    func test_quoteParagraphsDifferentCollapse() {
-        let content = ChatInputContent(blocks: [
-            quote(collapsed: false, [ChatInputRun(text: "open")]),
-            quote(collapsed: true, [ChatInputRun(text: "folded")])
-        ])
-        let page = instantPage(from: content)
-        XCTAssertEqual(page.blocks.count, 2, "differently-collapsed quotes must not coalesce into one blockQuote")
-        guard case let .blockQuote(_, _, c0) = page.blocks[0], case let .blockQuote(_, _, c1) = page.blocks[1] else {
-            XCTFail("expected two blockQuote blocks"); return
-        }
-        XCTAssertEqual(c0, false, "first quote keeps its non-collapsed flag")
-        XCTAssertEqual(c1, true, "second quote keeps its collapsed flag")
-    }
-
-    // 8. collapsedQuote, and a nested collapsedQuote inside a collapsedQuote.
+    // 6. Collapsed blockquote round-trips (Task 16b: `.blockQuote(collapsed: true)` is the sole collapsed form).
     func test_collapsedQuote() {
+        // Single collapsed blockQuote — canonical form.
         assertRoundTrips(ChatInputContent(blocks: [
-            .collapsedQuote(ChatInputContent(blocks: [
-                body([ChatInputRun(text: "folded body")])
-            ]))
-        ]), "single collapsedQuote")
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [body([ChatInputRun(text: "folded body")])]),
+                collapsed: true))
+        ]), "single collapsed blockQuote (collapsed: true)")
 
+        // Nested: a collapsed blockQuote inside a collapsed blockQuote.
         assertRoundTrips(ChatInputContent(blocks: [
-            .collapsedQuote(ChatInputContent(blocks: [
-                body([ChatInputRun(text: "outer")]),
-                .collapsedQuote(ChatInputContent(blocks: [
-                    body([ChatInputRun(text: "inner")])
-                ]))
-            ]))
-        ]), "nested collapsedQuote inside collapsedQuote")
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [
+                    body([ChatInputRun(text: "outer")]),
+                    .blockQuote(ChatInputBlockQuote(
+                        content: ChatInputContent(blocks: [body([ChatInputRun(text: "inner")])]),
+                        collapsed: true))
+                ]),
+                collapsed: true))
+        ]), "nested collapsed blockQuote inside collapsed blockQuote")
     }
 
     // 9. Two adjacent plain runs in one paragraph must survive as TWO runs (no-merge rule).
@@ -305,16 +268,27 @@ final class ChatInputContentInstantPageTests: XCTestCase {
     }
 
     // Bonus: a mixed document combining several block kinds.
+    // Uses the new canonical `.blockQuote` form (which round-trips 1:1); quote paragraphs and `.collapsedQuote`
+    // still forward correctly but normalize to `.blockQuote` on the reverse, so those inputs cannot use assertRoundTrips.
     func test_mixedDocument() {
         var bold = ChatInputInlineAttributes(); bold.bold = true
         var mention = ChatInputInlineAttributes(); mention.entity = .mention(EnginePeer.Id(5))
         assertRoundTrips(ChatInputContent(blocks: [
             body([ChatInputRun(text: "intro "), ChatInputRun(text: "bold", attributes: bold)]),
-            quote(collapsed: false, [ChatInputRun(text: "q1")]),
-            quote(collapsed: false, [ChatInputRun(text: "q2")]),
+            // Two quote paragraphs formerly used here. They forward as one coalesced blockQuote
+            // (collapsed:false) with two inner body paragraphs — use the canonical blockQuote form.
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [
+                    body([ChatInputRun(text: "q1")]),
+                    body([ChatInputRun(text: "q2")])
+                ]),
+                collapsed: false)),
             .code(ChatInputCode(language: "py", runs: [ChatInputRun(text: "print(1)")])),
             body([ChatInputRun(text: "by ", attributes: ChatInputInlineAttributes()), ChatInputRun(text: "@user", attributes: mention)]),
-            .collapsedQuote(ChatInputContent(blocks: [body([ChatInputRun(text: "hidden")])]))
+            // Formerly .collapsedQuote(...) — replaced by the canonical collapsed blockQuote form.
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [body([ChatInputRun(text: "hidden")])]),
+                collapsed: true))
         ]), "mixed multi-block document")
     }
 
@@ -460,5 +434,52 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ChatInputListMembership.self, from: old)
         XCTAssertEqual(decoded.marker, .bullet)
         XCTAssertNil(decoded.checked)
+    }
+
+    // 18. ChatInputBlock.blockQuote — nested + collapsed round-trip through InstantPage 1:1.
+    func test_chatInputBlockQuote_instantPageRoundTrip_nestedAndCollapsed() {
+        let innerPara = ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "hi")])
+        let inner = ChatInputBlockQuote(content: ChatInputContent(blocks: [.paragraph(innerPara)]), collapsed: false)
+        let outer = ChatInputBlockQuote(content: ChatInputContent(blocks: [.blockQuote(inner)]), collapsed: true)
+        let content = ChatInputContent(blocks: [.blockQuote(outer)])
+        let back = chatInputContent(fromInstantPage: instantPage(from: content))
+        XCTAssertEqual(back, content, "nested + collapsed blockQuote must survive InstantPage round-trip 1:1")
+    }
+
+    // 19. isEntityExpressible flat-only rule for ChatInputBlock.blockQuote.
+    func test_blockQuote_isEntityExpressible_flatOnly() {
+        // Flat single-paragraph non-collapsed quote → entity-expressible.
+        let flat = ChatInputContent(blocks: [
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [
+                    .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q")]))
+                ]),
+                collapsed: false))
+        ])
+        XCTAssertTrue(flat.isEntityExpressible(), "flat single-paragraph non-collapsed blockQuote → entity-expressible")
+
+        // Nested quote (blockQuote inside blockQuote) → not entity-expressible.
+        let nested = ChatInputContent(blocks: [
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [
+                    .blockQuote(ChatInputBlockQuote(
+                        content: ChatInputContent(blocks: [
+                            .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q")]))
+                        ]),
+                        collapsed: false))
+                ]),
+                collapsed: false))
+        ])
+        XCTAssertFalse(nested.isEntityExpressible(), "nested blockQuote → not entity-expressible")
+
+        // Collapsed single-paragraph quote → not entity-expressible.
+        let collapsed = ChatInputContent(blocks: [
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [
+                    .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q")]))
+                ]),
+                collapsed: true))
+        ])
+        XCTAssertFalse(collapsed.isEntityExpressible(), "collapsed blockQuote → not entity-expressible")
     }
 }

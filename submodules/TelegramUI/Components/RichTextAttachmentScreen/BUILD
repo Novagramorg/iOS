@@ -36,6 +36,7 @@ swift_library(
         "//submodules/ContextUI",
         "//submodules/InstantPageUI",
         "//submodules/CheckNode",
+        "//submodules/TelegramUI/Components/GlassControls",
     ],
     visibility = [
         "//visibility:public",

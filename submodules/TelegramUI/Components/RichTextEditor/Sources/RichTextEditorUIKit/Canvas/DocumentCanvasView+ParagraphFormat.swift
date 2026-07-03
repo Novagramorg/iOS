@@ -156,6 +156,122 @@ extension DocumentCanvasView {
         return paras
     }
 
+    /// Wraps the touched block(s) of the active stack into one `Block.blockQuote`, preserving them as
+    /// children (no flattening). When the caret is already inside a block quote, the active stack is that
+    /// quote's child stack, so re-applying Quote nests one level deeper. Runs in `editing { }`. Expanded
+    /// quotes only (collapse is a later task).
+    ///
+    /// No-ops when the caret (or either selection endpoint) is inside a table cell — wrapping a cell's
+    /// content into a block quote is not supported (a `TableBlockBox.cellStack` does not recurse into
+    /// block quotes; the result would be a half-broken state where Enter is silently dropped).
+    func wrapInBlockQuote() {
+        let lo = min(selFrom, selTo), hi = max(selFrom, selTo)
+        // Refuse if either endpoint is inside a table cell.
+        guard !isInsideTable(lo), !isInsideTable(hi) else { return }
+        // Require both endpoints share the same owning stack (root, or a quote's child stack).
+        // Fall back to the top-level stack for cross-stack selections.
+        guard sameOwningStack(lo, hi), let owning = activeStack(at: lo)?.stack else {
+            wrapTopLevelInBlockQuote(); return
+        }
+        let stackBoxes = owning.boxes
+        let touched = stackBoxes.indices.filter { i in
+            let b = stackBoxes[i]; return lo <= b.textStart + b.textLength && hi >= b.textStart
+        }
+        guard let first = touched.first, let last = touched.last else { return }
+        let children = (first...last).map { stackBoxes[$0].currentBlock() }
+        let bqBox = BlockQuoteBox(blockQuote: BlockQuote(id: .generate(), children: children, collapsed: false),
+                                  mapper: mapper, quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                                  expandImage: quoteCollapseIcons?.expand,
+                                  collapseImage: quoteCollapseIcons?.collapse, width: effectiveWidth)
+        editing {
+            owning.boxes.replaceSubrange(first...last, with: [bqBox])
+            recomputeSpans()
+            // Land the caret at the start of the first child in the new block quote.
+            let caret = bqBox.children.boxes.first?.leafRegions().first?.globalStart ?? (bqBox.nodeStart + 1)
+            anchor = caret; head = caret
+        }
+    }
+
+    /// Fallback for cross-stack selections: wraps the touched TOP-LEVEL boxes (root stack) into one
+    /// `Block.blockQuote`. Called when the selection endpoints don't share a single owning stack.
+    private func wrapTopLevelInBlockQuote() {
+        let lo = min(selFrom, selTo), hi = max(selFrom, selTo)
+        let touched = boxes.indices.filter { i in
+            let b = boxes[i]; return lo <= b.textStart + b.textLength && hi >= b.textStart
+        }
+        guard let first = touched.first, let last = touched.last else { return }
+        let children = (first...last).map { boxes[$0].currentBlock() }
+        let bqBox = BlockQuoteBox(blockQuote: BlockQuote(id: .generate(), children: children, collapsed: false),
+                                  mapper: mapper, quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                                  expandImage: quoteCollapseIcons?.expand,
+                                  collapseImage: quoteCollapseIcons?.collapse, width: effectiveWidth)
+        editing {
+            var newBoxes = boxes
+            newBoxes.replaceSubrange(first...last, with: [bqBox])
+            boxes = newBoxes
+            recomputeSpans()
+            let caret = bqBox.children.boxes.first?.leafRegions().first?.globalStart ?? (bqBox.nodeStart + 1)
+            anchor = caret; head = caret
+        }
+    }
+
+    /// The DEEPEST BlockQuoteBox whose token span contains `pos`, plus the stack it lives in and its index there.
+    private func enclosingBlockQuote(at pos: Int) -> (box: BlockQuoteBox, parentStack: BlockStack, index: Int)? {
+        var result: (BlockQuoteBox, BlockStack, Int)? = nil
+        func descend(_ stack: BlockStack) {
+            for (i, b) in stack.boxes.enumerated() {
+                if let bq = b as? BlockQuoteBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    result = (bq, stack, i)          // record; a deeper quote inside overwrites it
+                    descend(bq.children)
+                } else if let t = b as? TableBlockBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    for row in t.cells { for cell in row { descend(cell) } }
+                }
+            }
+        }
+        descend(root)
+        return result
+    }
+
+    /// "None": removes exactly one block-quote level around the caret — the deepest enclosing quote's children are
+    /// spliced back into its parent stack in place. At level 1 they become top-level blocks. Runs in `editing { }`.
+    func unwrapBlockQuoteLevel() {
+        guard let (bqBox, parentStack, index) = enclosingBlockQuote(at: min(anchor, head)) else { return }
+        guard case .blockQuote(let model) = bqBox.currentBlock() else { return }
+        let childBoxes = model.children.compactMap {
+            makeBox(for: $0, mapper: mapper, quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                    expandImage: quoteCollapseIcons?.expand, collapseImage: quoteCollapseIcons?.collapse,
+                    horizontalBleed: 0, width: effectiveWidth) }
+        editing {
+            parentStack.boxes.replaceSubrange(index...index, with: childBoxes)
+            recomputeSpans()
+            let caret = childBoxes.first?.leafRegions().first?.globalStart ?? bqBox.nodeStart
+            anchor = caret; head = caret
+        }
+    }
+
+    /// If the caret sits on an EMPTY child that is the LAST child of its enclosing block quote, exit: remove that
+    /// empty child and drop a body paragraph AFTER the quote (or, if it was the quote's only child, REPLACE the quote
+    /// with that body paragraph). Returns true when it handled the exit. Runs in `editing { }`.
+    func blockQuoteEmptyTrailingChildExit() -> Bool {
+        guard let active = activeStack(at: head), let child = active.box as? BlockBox, child.textLength == 0,
+              let (bqBox, parentStack, index) = enclosingBlockQuote(at: head),
+              bqBox.children.boxes.last === child else { return false }
+        editing {
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            if bqBox.children.boxes.count == 1 {
+                parentStack.boxes.replaceSubrange(index...index, with: [body])  // wholly-empty quote → body
+            } else {
+                bqBox.children.boxes.removeLast()                                // drop the empty trailing child
+                parentStack.boxes.insert(body, at: index + 1)                   // body after the quote
+            }
+            recomputeSpans()
+            let caret = body.leafRegions().first?.globalStart ?? body.nodeStart
+            anchor = caret; head = caret
+        }
+        return true
+    }
+
     /// Sets paragraph alignment on the touched paragraphs. Alignment is a pure paragraph-style
     /// property, so `restyle` (which re-applies `.paragraphStyle`) suffices — no font rebuild.
     func setAlignment(_ alignment: TextAlignment) {
@@ -170,6 +286,22 @@ extension DocumentCanvasView {
             }
             recomputeSpans()
         }
+    }
+
+    /// Number of block quotes enclosing `pos` (0 = not in a quote; N = nested N levels deep).
+    func blockQuoteDepth(at pos: Int) -> Int {
+        var depth = 0
+        func descend(_ stack: BlockStack) {
+            for b in stack.boxes {
+                if let bq = b as? BlockQuoteBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    depth += 1; descend(bq.children)
+                } else if let t = b as? TableBlockBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    for row in t.cells { for cell in row { descend(cell) } }
+                }
+            }
+        }
+        descend(root)
+        return depth
     }
 }
 #endif

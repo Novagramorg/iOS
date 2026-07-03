@@ -8,6 +8,36 @@ public protocol RichTextChecklistMarkerView: AnyObject {
     func setChecked(_ checked: Bool, animated: Bool)
 }
 
+/// Shared factory: turns one `Block` into its `CanvasBlock` box. Used by the document root
+/// (`DocumentCanvasView.setBlocks`), table cells (`TableBlockBox.init`), and — once landed —
+/// `BlockQuoteBox` (Task 4), so all three build children through one recursive function.
+///
+/// - Parameters:
+///   - quoteStyle:     The canvas-level `QuoteStyle`; ignored by cell callers (default is fine).
+///   - pullQuoteStyle: The canvas-level `PullQuoteStyle`; ignored by cell callers.
+///   - expandImage:    The expand icon for `BlockQuoteBox`; nil when irrelevant.
+///   - horizontalBleed: Media bleed beyond the content strip; 0 for table cells.
+@available(iOS 13.0, *)
+func makeBox(for block: Block, mapper: AttributedStringMapper,
+             quoteStyle: QuoteStyle = .default, pullQuoteStyle: PullQuoteStyle = .default,
+             expandImage: UIImage? = nil, collapseImage: UIImage? = nil,
+             horizontalBleed: CGFloat = 0, width: CGFloat) -> CanvasBlock? {
+    switch block {
+    case .paragraph(let p):      return BlockBox(paragraph: p, mapper: mapper, width: width)
+    case .media(let img):        return MediaBlockBox(media: img, mapper: mapper, width: width,
+                                                      horizontalBleed: horizontalBleed)
+    case .table(let t):          return TableBlockBox(table: t, mapper: mapper, width: width)
+    case .code(let c):           return CodeBlockBox(code: c, mapper: mapper, width: width)
+    case .pullQuote(let pq):     return PullQuoteBox(pullQuote: pq, mapper: mapper,
+                                                     pullQuoteStyle: pullQuoteStyle, width: width)
+    case .blockQuote(let bq):   return BlockQuoteBox(blockQuote: bq, mapper: mapper,
+                                                      quoteStyle: quoteStyle,
+                                                      pullQuoteStyle: pullQuoteStyle,
+                                                      expandImage: expandImage,
+                                                      collapseImage: collapseImage, width: width)
+    }
+}
+
 /// The multi-block document surface. ONE view owns every block and the unified global selection.
 /// (Internal — only `RichTextEditorView` is public; keeps `UITextInput` witnesses internal.)
 @available(iOS 13.0, *)
@@ -37,10 +67,6 @@ final class DocumentCanvasView: UIView {
     /// `barWidth = 0` (no leading bar, symmetric rounded pill). Behind every block view, alongside the
     /// blockquote underlay.
     let pullQuoteUnderlay = BlockquoteUnderlay()
-    /// Interactive overlay hosting the per-run collapse buttons for tall expanded quote runs. Brought to
-    /// the front each layout pass so it sits above text + block views; its `hitTest` passes only button
-    /// touches, letting all other touches fall through to the canvas.
-    let quoteCollapseControls = QuoteCollapseControlsView()
     /// Non-interactive overlay hosting an opening (top-left) and closing (bottom-right, rotated 180°)
     /// quote-mark image view per pull-quote pill, tinted to the accent. Purely decorative; all touches
     /// fall through to the canvas (`isUserInteractionEnabled = false`).
@@ -186,8 +212,8 @@ final class DocumentCanvasView: UIView {
     /// to the underlay). Read by `pullQuotePillRects()` / `pullQuoteMarkRects()` for the pill + mark geometry.
     var pullQuoteStyle: PullQuoteStyle = .default
 
-    /// Host-injected collapse/expand icons (nil ⇒ no affordance drawn). The `collapse` image goes to the
-    /// overlay button; the `expand` image is read when building `CollapsedQuoteBox`es.
+    /// Host-injected collapse/expand icons (nil ⇒ no affordance drawn). The `collapse` image goes to
+    /// `BlockQuoteBox`; the `expand` image likewise.
     var quoteCollapseIcons: RichTextEditorQuoteCollapseIcons?
 
     /// Placeholder strings drawn in empty paragraphs. Stamped onto each top-level box during layout.
@@ -422,8 +448,6 @@ final class DocumentCanvasView: UIView {
         addSubview(blockChromeOverlay)
         // Interactive collapse-button overlay: above text/chrome, but hitTest passes only button touches
         // so caret placement / text selection / table chrome all still work through it.
-        quoteCollapseControls.onCollapse = { [weak self] idx in self?.collapseQuoteRun(atIndex: idx) }
-        addSubview(quoteCollapseControls)
         // Non-interactive pull-quote corner-mark overlay (decorative; isUserInteractionEnabled = false).
         addSubview(pullQuoteMarksView)
         addSubview(caretView)   // own caret, above content; reparented into a table's content view when needed
@@ -522,7 +546,6 @@ final class DocumentCanvasView: UIView {
         self.endHandleView.accentColor = theme.accent
         self.blockquoteUnderlay.accentColor = theme.accent
         self.pullQuoteUnderlay.accentColor = theme.accent
-        self.quoteCollapseControls.accentColor = theme.accent
         self.pullQuoteMarksView.accentColor = theme.accent
     }
 
@@ -561,11 +584,10 @@ final class DocumentCanvasView: UIView {
         self.mediaBlockStyle = m
     }
 
-    /// Applies host-injected collapse/expand icons: stores them (read at `CollapsedQuoteBox` creation for the
-    /// expand glyph) and pushes the collapse image to the overlay controls. The caller reloads afterward.
+    /// Applies host-injected collapse/expand icons: stores them (read at `BlockQuoteBox` creation).
+    /// The caller reloads afterward.
     func applyQuoteCollapseIcons(_ icons: RichTextEditorQuoteCollapseIcons?) {
         self.quoteCollapseIcons = icons
-        self.quoteCollapseControls.collapseImage = icons?.collapse
     }
 
     /// Applies tunable text-layout metrics: rebuilds the mapper's stylesheet with the line-height/spacing
@@ -595,16 +617,10 @@ final class DocumentCanvasView: UIView {
         spoilerRevealHint = nil
         // `width` here is the raw canvas width; the per-box TextKit layout is re-done at the content width
         // (bounds − 2·pageMargin) on the next `layoutSubviews` pass, so this init width is a transient hint.
-        boxes = blocks.compactMap { block -> CanvasBlock? in
-            switch block {
-            case .paragraph(let p): return BlockBox(paragraph: p, mapper: mapper, width: width)
-            case .media(let img): return MediaBlockBox(media: img, mapper: mapper, width: width,
-                                                       horizontalBleed: mediaBlockStyle.horizontalBleed)
-            case .table(let t): return TableBlockBox(table: t, mapper: mapper, width: width)
-            case .code(let c): return CodeBlockBox(code: c, mapper: mapper, width: width)
-            case .collapsedQuote(let q): return CollapsedQuoteBox(collapsedQuote: q, mapper: mapper, quoteStyle: quoteStyle, expandImage: quoteCollapseIcons?.expand, width: width)
-            case .pullQuote(let pq): return PullQuoteBox(pullQuote: pq, mapper: mapper, pullQuoteStyle: pullQuoteStyle, width: width)
-            }
+        boxes = blocks.compactMap {
+            makeBox(for: $0, mapper: mapper, quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                    expandImage: quoteCollapseIcons?.expand, collapseImage: quoteCollapseIcons?.collapse,
+                    horizontalBleed: mediaBlockStyle.horizontalBleed, width: width)
         }
         recomputeSpans()
         recomputeDocumentHasSpoilers()   // a fresh document may load spoilers, or none (gates syncSpoilers)
@@ -643,7 +659,10 @@ final class DocumentCanvasView: UIView {
     /// The blockquote run fills that intersect `band` (off-screen runs are dropped so they allocate no
     /// underlay image view). The no-scroll-host fallback band covers the whole document ⇒ all runs kept.
     func visibleBlockquoteFills(band: CGRect) -> [CGRect] {
-        blockquoteDecorations().map { $0.fill }.filter { $0.intersects(band) }
+        // Flat-quote runs + collapsed-quote / code fills come from blockquoteDecorations(); BlockQuoteBox
+        // fills (including nested) come from the recursive blockQuoteFillRects().
+        let all = blockquoteDecorations().map { $0.fill } + blockQuoteFillRects()
+        return all.filter { $0.intersects(band) }
     }
 
     /// Reconciles the back-most blockquote underlay to only the on-screen quote runs, and the barless
@@ -804,6 +823,7 @@ final class DocumentCanvasView: UIView {
     func recomputeSpans() {
         documentSize = root.recompute(baseOffset: 0)
         for case let t as TableBlockBox in boxes { t.recompute() }
+        for case let bq as BlockQuoteBox in boxes { bq.recompute() }
     }
 
     /// The box whose text contains `pos` (inclusive of the trailing caret slot), or nil at a
@@ -865,6 +885,7 @@ final class DocumentCanvasView: UIView {
         _ = root.layout(origin: CGPoint(x: contentLeftPad, y: contentMargins.top),
                         width: contentWidth(forWidth: bounds.width))
         for case let t as TableBlockBox in boxes { t.recompute() }   // cell frames depend on the table frame
+        for case let bq as BlockQuoteBox in boxes { bq.recompute() }   // child frames depend on the quote frame
         stampListMarkers()
         syncBlockViews()
         blockquoteUnderlay.frame = bounds
@@ -872,9 +893,6 @@ final class DocumentCanvasView: UIView {
         pullQuoteUnderlay.frame = bounds
         sendSubviewToBack(pullQuoteUnderlay)   // goes below blockquoteUnderlay; block views (inserted aboveSubview: blockquoteUnderlay) are above both
         syncBlockquoteUnderlay()
-        quoteCollapseControls.frame = bounds
-        bringSubviewToFront(quoteCollapseControls)       // interactive: above underlay + text block views
-        quoteCollapseControls.sync(runs: collapseButtonRuns())
         pullQuoteMarksView.frame = bounds
         pullQuoteMarksView.sync(marks: pullQuoteMarkRects())
         emojiOverlay.frame = bounds
@@ -961,14 +979,6 @@ final class DocumentCanvasView: UIView {
         for case let img as MediaBlockBox in boxes {
             if let rect = imageSelectionTintRect(for: img) { ctx.fill(rect) }
         }
-        // Collapsed-quote atom wash when a range selection covers it (it has no leaf region, so the
-        // text-region highlight above skips it) — mirrors the image-atom wash so a collapsed quote reads as
-        // selected like an image block.
-        if selFrom != selTo {
-            for case let cq as CollapsedQuoteBox in boxes where selFrom <= cq.nodeStart && selTo >= coverableContentEnd(cq) {
-                ctx.fill(cq.frame)
-            }
-        }
     }
 
     /// True if `region` belongs to a table (its global start falls in a `TableBlockBox`'s node span). Such
@@ -1042,22 +1052,14 @@ final class DocumentCanvasView: UIView {
     /// unscrolled-canvas rect into a VISIBLE canvas rect.
     func tableContentOffsetX(forGlobal pos: Int) -> CGFloat { tableBox(containingGlobal: pos)?.contentOffsetX ?? 0 }
 
-    /// True if `pos` is the gap before an atom (a media OR collapsed-quote box's `nodeStart`).
-    /// A collapsed quote reuses the media-atom DocNode shape, so its leading gap is a renderable caret slot
-    /// too — `isGapPosition`/`snapToRenderable`/`caretRect` must recognize it alongside `MediaBlockBox`, or the
-    /// post-collapse caret (parked at the atom's `nodeStart`) is non-renderable and the composer offset drifts.
+    /// True if `pos` is the gap before a media atom box's `nodeStart` — a renderable caret slot.
     func isGapPosition(_ pos: Int) -> Bool {
-        boxes.contains { ($0 is MediaBlockBox || $0 is CollapsedQuoteBox) && $0.nodeStart == pos }
+        boxes.contains { $0 is MediaBlockBox && $0.nodeStart == pos }
     }
 
     /// The media box whose gap-before-atom is at `pos`, if any.
     func mediaBox(atGap pos: Int) -> MediaBlockBox? {
         boxes.first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
-    }
-
-    /// The collapsed-quote box whose gap-before-atom is at `pos`, if any.
-    func collapsedQuoteBox(atGap pos: Int) -> CollapsedQuoteBox? {
-        boxes.first { ($0 as? CollapsedQuoteBox)?.nodeStart == pos } as? CollapsedQuoteBox
     }
 
     /// If the caret (`head`) is inside a horizontally-scrollable table, scroll its cell into view.
@@ -1324,10 +1326,6 @@ final class DocumentCanvasView: UIView {
         } else if let img = mediaBox(atGap: pos) {
             let rr = img.mediaRect()
             return (self, CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height))
-        } else if let cq = collapsedQuoteBox(atGap: pos) {
-            // A caret on a collapsed quote's gap draws as a bar at its leading (left) edge — like the media
-            // gap cursor. Without this branch the caret had no placement here and was hidden.
-            return (self, CGRect(x: cq.frame.minX, y: cq.frame.minY, width: 2, height: cq.frame.height))
         }
         return nil
     }

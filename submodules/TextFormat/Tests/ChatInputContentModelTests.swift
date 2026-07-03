@@ -25,18 +25,18 @@ final class ChatInputContentModelTests: XCTestCase {
         let c1 = ChatInputContent(blocks: [.paragraph(p), .code(code)])
         XCTAssertEqual(c1, ChatInputContent(blocks: [.paragraph(p), .code(code)]))
         XCTAssertNotEqual(c1, ChatInputContent(blocks: [.paragraph(p)]))
-        XCTAssertEqual(ChatInputParagraphStyle.quote(isCollapsed: true), .quote(isCollapsed: true))
-        XCTAssertNotEqual(ChatInputParagraphStyle.quote(isCollapsed: true), .quote(isCollapsed: false))
     }
 
     // MARK: - Structural selection + content-aware bridge (Piece 5 stage 1)
 
-    /// Fixture: body "ab" / code "x\ny" / collapsedQuote — plainText "ab\nx\ny\n " (length 8).
+    /// Fixture: body "ab" / code "x\ny" / blockQuote(collapsed: true) — plainText "ab\nx\ny\n " (length 8).
     private func bridgeFixture() -> ChatInputContent {
         ChatInputContent(blocks: [
             .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "ab")])),
             .code(ChatInputCode(language: "swift", runs: [ChatInputRun(text: "x\ny")])),
-            .collapsedQuote(ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")]))])),
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")]))]),
+                collapsed: true)),
         ])
     }
 
@@ -84,7 +84,7 @@ final class ChatInputContentModelTests: XCTestCase {
             ChatInputContent(blocks: [p("")]),                    // single empty paragraph
             ChatInputContent(blocks: [p("a")]),                   // single non-empty
             ChatInputContent(blocks: [p(""), p("")]),             // two empty paragraphs -> "\n" -> non-empty
-            ChatInputContent(blocks: [.collapsedQuote(ChatInputContent(blocks: [p("x")]))]), // placeholder -> non-empty
+            ChatInputContent(blocks: [.blockQuote(ChatInputBlockQuote(content: ChatInputContent(blocks: [p("x")]), collapsed: true))]), // collapsed placeholder -> non-empty
             ChatInputContent(blocks: [.code(ChatInputCode(runs: []))]),                      // single empty code
         ]
         for c in cases {
@@ -104,8 +104,8 @@ final class ChatInputContentModelTests: XCTestCase {
     /// exactly as `attributedString(from:)` drops them and the editor's `composerParagraphs()` skips them.
     /// (Regression for the native-composer caret drift: media/table were given a 1-char placeholder bracketed
     /// by separators, so the model's flat space disagreed with the editor's `composerSelectedRange` — the caret
-    /// drifted into the non-text block by the count of preceding non-text blocks. `.collapsedQuote` is the only
-    /// off-string block that DOES contribute a " " placeholder, because its `.collapsedBlock` projection does.)
+    /// drifted into the non-text block by the count of preceding non-text blocks. `.blockQuote(collapsed: true)`
+    /// is the only off-string block that DOES contribute a " " placeholder.)
     func test_flatCoordinates_mediaAndTable_areOffAxis() {
         func p(_ s: String) -> ChatInputBlock { .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: s)])) }
         let image = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 7), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
@@ -160,8 +160,8 @@ final class ChatInputContentModelTests: XCTestCase {
             ChatInputRun(text: "\u{FFFC}", attributes: emoji),
             ChatInputRun(text: "@me", attributes: mention),
         ])
-        let quote1 = ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "first line")])
-        let quote2 = ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "second line")])
+        let heading1 = ChatInputParagraph(style: .heading1, runs: [ChatInputRun(text: "first line")])
+        let heading2 = ChatInputParagraph(style: .heading2, runs: [ChatInputRun(text: "second line")])
         let code = ChatInputCode(language: "swift", runs: [ChatInputRun(text: "let x = 1\nprint(x)")])
         let folded = ChatInputContent(blocks: [
             .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "hidden")])),
@@ -169,10 +169,10 @@ final class ChatInputContentModelTests: XCTestCase {
 
         let content = ChatInputContent(schemaVersion: 2, blocks: [
             .paragraph(bodyParagraph),
-            .paragraph(quote1),
-            .paragraph(quote2),
+            .paragraph(heading1),
+            .paragraph(heading2),
             .code(code),
-            .collapsedQuote(folded),
+            .blockQuote(ChatInputBlockQuote(content: folded, collapsed: true)),
         ])
 
         // Encode via AdaptedPostbox — the REAL persistence path (ChatTextInputState stores the model under "cm"
@@ -267,46 +267,51 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertFalse(media.isEntityExpressible())
 
         let plain = single(.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "p")])))
-        let quote = single(.paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "q")])))
+        let bq = single(.blockQuote(ChatInputBlockQuote(
+            content: ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q")]))]),
+            collapsed: false)))
         let code = single(.code(ChatInputCode(language: "swift", runs: [ChatInputRun(text: "c")])))
         XCTAssertTrue(plain.isEntityExpressible())
-        XCTAssertTrue(quote.isEntityExpressible())
+        XCTAssertTrue(bq.isEntityExpressible())  // flat non-collapsed single-paragraph blockQuote → expressible
         XCTAssertTrue(code.isEntityExpressible())
     }
 
-    /// With `.quotesRequireRichContent`, a blockquote (a `.quote` paragraph or a collapsed quote) is no longer
+    /// With `.quotesRequireRichContent`, a non-collapsed flat single-paragraph `.blockQuote` is no longer
     /// entity-expressible — so quote-bearing content routes onto the rich (InstantPage) path — while a plain /
-    /// code-only content stays entity-expressible.
+    /// code-only content stays entity-expressible. A collapsed `.blockQuote` is never entity-expressible.
     func test_isEntityExpressible_quotesRequireRichContent() {
         func single(_ block: ChatInputBlock) -> ChatInputContent { ChatInputContent(blocks: [block]) }
 
         let plain = single(.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "p")])))
-        let quote = single(.paragraph(ChatInputParagraph(style: .quote(isCollapsed: false), runs: [ChatInputRun(text: "q")])))
-        let collapsed = single(.collapsedQuote(ChatInputContent(blocks: [
-            .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")])),
-        ])))
+        let bq = single(.blockQuote(ChatInputBlockQuote(
+            content: ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "q")]))]),
+            collapsed: false)))
+        let collapsed = single(.blockQuote(ChatInputBlockQuote(
+            content: ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")]))]),
+            collapsed: true)))
 
-        // Default options: a blockquote stays entity-expressible.
-        XCTAssertTrue(quote.isEntityExpressible())
-        XCTAssertTrue(collapsed.isEntityExpressible())
+        // Default options: a flat non-collapsed single-paragraph blockQuote stays entity-expressible.
+        XCTAssertTrue(bq.isEntityExpressible())
+        // A collapsed blockQuote is never entity-expressible (regardless of options).
+        XCTAssertFalse(collapsed.isEntityExpressible())
 
         // With the option: a blockquote requires the rich path; non-quote content is unaffected.
         XCTAssertTrue(plain.isEntityExpressible(options: [.quotesRequireRichContent]))
-        XCTAssertFalse(quote.isEntityExpressible(options: [.quotesRequireRichContent]))
+        XCTAssertFalse(bq.isEntityExpressible(options: [.quotesRequireRichContent]))
         XCTAssertFalse(collapsed.isEntityExpressible(options: [.quotesRequireRichContent]))
     }
 
     // MARK: - Entity-expressibility + InstantPage plainText fallback
 
-    /// Every block type that exists today (paragraph, code, and a nested collapsedQuote) is entity-expressible,
-    /// so a content built from them takes the `.textEntities` branch (never `.instantPage`).
+    /// Every entity-expressible block type today (paragraph, code, flat non-collapsed single-paragraph blockQuote)
+    /// yields a content that takes the `.textEntities` branch (never `.instantPage`).
     func test_isEntityExpressible_allCurrentBlocks_true() {
         let content = ChatInputContent(blocks: [
             .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "ab")])),
             .code(ChatInputCode(language: "swift", runs: [ChatInputRun(text: "x\ny")])),
-            .collapsedQuote(ChatInputContent(blocks: [
-                .paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")])),
-            ])),
+            .blockQuote(ChatInputBlockQuote(
+                content: ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "z")]))]),
+                collapsed: false)),
         ])
         XCTAssertTrue(content.isEntityExpressible())
     }

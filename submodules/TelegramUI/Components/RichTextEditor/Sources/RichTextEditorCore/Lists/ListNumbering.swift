@@ -4,31 +4,20 @@ public enum ListNumbering {
     private static let bulletGlyphs = ["•", "◦", "▪"]
 
     /// Computes the marker label for each list paragraph in `blocks`, keyed by block id.
-    /// Non-list paragraphs are absent from the result and reset all counters. A quote is a distinct
-    /// block container, so crossing into or out of a quote also resets the counters: quoted list items
-    /// form their own numbering scope, and the surrounding list restarts after the quote.
+    /// Non-list paragraphs are absent from the result and reset all counters.
     public static func labels(for blocks: [ParagraphBlock]) -> [BlockID: String] {
         var result: [BlockID: String] = [:]
         var counters: [Int] = []   // counters[level] = current ordinal at that level
-        var previousWasQuote = false   // whether the previous block sat inside a quote container
 
         func resetDeeper(than level: Int) {
             if counters.count > level + 1 { counters.removeSubrange((level + 1)...) }
         }
 
         for block in blocks {
-            let isQuote = block.style == .quote
             guard let list = block.list else {
                 counters.removeAll()       // non-list paragraph resets everything
-                previousWasQuote = isQuote
                 continue
             }
-            // A quote boundary breaks the numbering run the same way a non-list paragraph does, so a
-            // quoted list and the list around it number independently.
-            if isQuote != previousWasQuote {
-                counters.removeAll()
-            }
-            previousWasQuote = isQuote
             let level = max(0, list.level)
             while counters.count <= level { counters.append(0) }
 

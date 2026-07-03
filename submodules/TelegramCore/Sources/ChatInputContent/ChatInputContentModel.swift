@@ -119,7 +119,18 @@ public enum ChatInputInlineEntity: Equatable, Codable {
     }
 }
 
-public struct ChatInputContent: Equatable, Codable {
+// Used by ChatInputContent's lenient [ChatInputBlock] decode: each element in the objectArray is
+// decoded by a fresh AdaptedPostboxDecoder, so catching the error per-element is safe and does not
+// corrupt the array cursor. Unknown / removed block kinds (e.g. old "collapsedQuote" rawValue 2)
+// produce block = nil, which the outer init filters out with compactMap.
+private struct _LenientChatInputBlock: Decodable {
+    let block: ChatInputBlock?
+    init(from decoder: Decoder) throws {
+        block = try? ChatInputBlock(from: decoder)
+    }
+}
+
+public struct ChatInputContent: Equatable {
     public var schemaVersion: Int32
     public var blocks: [ChatInputBlock]
     public init(schemaVersion: Int32 = 1, blocks: [ChatInputBlock] = []) {
@@ -127,10 +138,14 @@ public struct ChatInputContent: Equatable, Codable {
         self.blocks = blocks
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case blocks
+    }
+
     /// The flat plain text, identical to `attributedString(from: self).string`: the flat-axis blocks joined by a
-    /// single "\n", a paragraph/code block contributing its runs' text and a `collapsedQuote` contributing one " "
-    /// placeholder. (Quote coalescing in the conversion changes only the block *attribute*, not the text, so a
-    /// per-block "\n" join reproduces it exactly.) A `.media`/`.table` block is OFF the flat axis — it contributes
+    /// single "\n", a paragraph/code block contributing its runs' text and a `.blockQuote(collapsed: true)`
+    /// contributing one " " placeholder. A `.media`/`.table` block is OFF the flat axis — it contributes
     /// no character AND no separator (matching `attributedString(from:)`, which drops them, and the editor's
     /// `composerParagraphs()`, which skips them); a non-text block has no flat-text/caret representation. Lets
     /// `inputText`-string readers move to the model — a round-trip-parity test guards the equivalence.
@@ -147,14 +162,18 @@ public struct ChatInputContent: Equatable, Codable {
                 if hasEmitted { result.append("\n") }
                 hasEmitted = true
                 result.append(code.text)
-            case .collapsedQuote:
-                if hasEmitted { result.append("\n") }
-                hasEmitted = true
-                result.append(" ")
             case let .pullQuote(pq):
                 if hasEmitted { result.append("\n") }
                 hasEmitted = true
                 result.append(pq.text)
+            case let .blockQuote(bq):
+                if hasEmitted { result.append("\n") }
+                hasEmitted = true
+                if bq.collapsed {
+                    result.append(" ")
+                } else {
+                    result.append(bq.content.plainText)
+                }
             case .media, .table:
                 // Off the flat axis: no character AND no separator (see `blockFlatLength`). Matches
                 // `attributedString(from:)` (drops them) and the editor's `composerParagraphs()` (skips them).
@@ -173,7 +192,7 @@ public struct ChatInputContent: Equatable, Codable {
     /// Matches `plainText.isEmpty` / `length == 0` for text content, but is **content-aware, not flat-text-aware**:
     /// a single `.media`/`.table` block has empty flat text yet is NOT empty (a medium/table IS content), so
     /// `isEmpty == false` while `plainText.isEmpty == true` there. Empty iff there are no blocks, or exactly one
-    /// block whose text is empty (2+ blocks always carry an inter-block "\n"; a `collapsedQuote`/`media`/`table`
+    /// block whose text is empty (2+ blocks always carry an inter-block "\n"; a `.media`/`.table`/`.blockQuote`
     /// is non-empty).
     public var isEmpty: Bool {
         guard self.blocks.count <= 1 else {
@@ -187,14 +206,14 @@ public struct ChatInputContent: Equatable, Codable {
             return paragraph.text.isEmpty
         case let .code(code):
             return code.text.isEmpty
-        case .collapsedQuote:
-            return false
         case .media:
             return false
         case .table:
             return false
         case let .pullQuote(pq):
             return pq.text.isEmpty
+        case .blockQuote:
+            return false
         }
     }
 
@@ -205,9 +224,9 @@ public struct ChatInputContent: Equatable, Codable {
             self.rawValue = rawValue
         }
 
-        /// Treat a blockquote (a `.quote` paragraph or a collapsed quote) as NOT entity-expressible, so
-        /// quote-bearing content is routed onto the rich (InstantPage) path even though message entities could
-        /// represent it. The default (no options) keeps a blockquote entity-expressible.
+        /// Treat a blockquote as NOT entity-expressible, so quote-bearing content is routed onto the rich
+        /// (InstantPage) path even though message entities could represent it.
+        /// The default (no options) keeps a flat non-collapsed single-paragraph blockquote entity-expressible.
         public static let quotesRequireRichContent = EntityExpressibleOptions(rawValue: 1 << 0)
     }
 
@@ -228,31 +247,65 @@ public struct ChatInputContent: Equatable, Codable {
                 switch paragraph.style {
                 case .body:
                     return true
-                case .quote:
-                    return !options.contains(.quotesRequireRichContent)
                 case .heading1, .heading2, .heading3:
                     return false
                 }
             case .code: return true
-            case let .collapsedQuote(content):
-                if options.contains(.quotesRequireRichContent) {
-                    return false
-                }
-                return content.isEntityExpressible(options: options)
             case .media: return false
             case .table: return false
             case .pullQuote: return false
+            case let .blockQuote(bq):
+                // FLAT-ONLY rule: expressible only when the quote is non-collapsed AND every child block is
+                // a plain body paragraph with no list membership (the message-entity blockquote can represent
+                // exactly one level of flat-text quote).
+                if options.contains(.quotesRequireRichContent) { return false }
+                guard !bq.collapsed else { return false }
+                return bq.content.blocks.allSatisfy {
+                    if case let .paragraph(p) = $0, case .body = p.style, p.list == nil { return true }
+                    return false
+                }
             }
         }
+    }
+}
+
+extension ChatInputContent: Codable {
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = (try? c.decode(Int32.self, forKey: .schemaVersion)) ?? 1
+        // Lenient [ChatInputBlock] decode: the AdaptedPostbox objectArray decodes each element via a fresh
+        // child decoder, so wrapping in _LenientChatInputBlock catches per-element failures without
+        // corrupting the array cursor. Unknown/removed kinds (e.g. old "collapsedQuote" rawValue 2)
+        // decode to block == nil and are filtered out. Mirrors Document's lenient block decode.
+        let lenient = try c.decode([_LenientChatInputBlock].self, forKey: .blocks)
+        blocks = lenient.compactMap(\.block)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(schemaVersion, forKey: .schemaVersion)
+        try c.encode(blocks, forKey: .blocks)
+    }
+}
+
+/// A structured blockquote block carrying arbitrary nested `ChatInputContent`.
+/// Mirrors `InstantPage.blockQuote`; the `collapsed` flag maps 1:1 to the wire field.
+/// `collapsed == true` is the folded (hidden) state (one " " placeholder on the flat axis);
+/// `collapsed == false` is the visible expanded state (inner content on the flat axis).
+public struct ChatInputBlockQuote: Equatable, Codable {
+    public var content: ChatInputContent
+    public var collapsed: Bool
+    public init(content: ChatInputContent, collapsed: Bool) {
+        self.content = content
+        self.collapsed = collapsed
     }
 }
 
 public enum ChatInputBlock: Equatable, Codable {
     case paragraph(ChatInputParagraph)
     case code(ChatInputCode)
-    /// A collapsed blockquote: a single placeholder in the flat text whose folded content is carried
-    /// recursively. Mirrors `ChatTextInputStateText.collapsedQuote` / the `.collapsedBlock` attribute.
-    case collapsedQuote(ChatInputContent)
+    // rawValue 2 (old "collapsedQuote") is permanently retired. Old drafts containing kind=2 are
+    // lenient-skipped by ChatInputContent.init(from:). Do NOT reuse rawValue 2.
     /// An attached medium (image or video). Mirrors the editor `Block.media`; one placeholder in the flat text.
     case media(ChatInputMedia)
     /// A table. Mirrors the editor `Block.table`; one placeholder in the flat text (cell content is off-string).
@@ -260,24 +313,28 @@ public enum ChatInputBlock: Equatable, Codable {
     /// A pull-quote block. Mirrors the editor `Block.pullQuote`. Always non-entity-expressible (forces the
     /// rich InstantPage path). On the flat axis — contributes its runs' text and an inter-block "\n" separator.
     case pullQuote(ChatInputPullQuote)
+    /// A structured blockquote block carrying arbitrary nested content. Mirrors `InstantPage.blockQuote`.
+    /// Collapsed → 1 " " placeholder on the flat axis; expanded → inner content on the flat axis.
+    case blockQuote(ChatInputBlockQuote)
 
     private enum CodingKeys: String, CodingKey {
         case kind
         case paragraph
         case code
-        case collapsedQuote
         case media
         case table
         case pullQuote
+        case blockQuote
     }
 
     private enum Kind: Int32, Codable {
-        case paragraph     // rawValue 0 — NEVER renumber: these are the persisted-draft discriminators.
-        case code          // rawValue 1
-        case collapsedQuote // rawValue 2
-        case media         // rawValue 3
-        case table         // rawValue 4
-        case pullQuote     // rawValue 5 — APPENDED LAST to avoid shifting existing raw values.
+        case paragraph  = 0  // NEVER renumber: these are the persisted-draft discriminators.
+        case code       = 1
+        // 2 was collapsedQuote — retired. Kept as a gap so downstream rawValues are stable.
+        case media      = 3
+        case table      = 4
+        case pullQuote  = 5
+        case blockQuote = 6
     }
 
     public init(from decoder: Decoder) throws {
@@ -286,6 +343,8 @@ public enum ChatInputBlock: Equatable, Codable {
         // not support the `singleValueContainer` that a `RawRepresentable` enum's synthesized Codable uses.
         let kindValue = try container.decode(Int32.self, forKey: .kind)
         guard let kind = Kind(rawValue: kindValue) else {
+            // Unknown / removed kind (e.g. old "collapsedQuote" rawValue 2). Throw so that
+            // ChatInputContent's lenient unkeyed-container loop can skip this block cleanly.
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown discriminator \(kindValue)")
         }
         switch kind {
@@ -293,14 +352,14 @@ public enum ChatInputBlock: Equatable, Codable {
             self = .paragraph(try container.decode(ChatInputParagraph.self, forKey: .paragraph))
         case .code:
             self = .code(try container.decode(ChatInputCode.self, forKey: .code))
-        case .collapsedQuote:
-            self = .collapsedQuote(try container.decode(ChatInputContent.self, forKey: .collapsedQuote))
         case .media:
             self = .media(try container.decode(ChatInputMedia.self, forKey: .media))
         case .table:
             self = .table(try container.decode(ChatInputTable.self, forKey: .table))
         case .pullQuote:
             self = .pullQuote(try container.decode(ChatInputPullQuote.self, forKey: .pullQuote))
+        case .blockQuote:
+            self = .blockQuote(try container.decode(ChatInputBlockQuote.self, forKey: .blockQuote))
         }
     }
 
@@ -313,9 +372,6 @@ public enum ChatInputBlock: Equatable, Codable {
         case let .code(code):
             try container.encode(Kind.code.rawValue, forKey: .kind)
             try container.encode(code, forKey: .code)
-        case let .collapsedQuote(content):
-            try container.encode(Kind.collapsedQuote.rawValue, forKey: .kind)
-            try container.encode(content, forKey: .collapsedQuote)
         case let .media(media):
             try container.encode(Kind.media.rawValue, forKey: .kind)
             try container.encode(media, forKey: .media)
@@ -325,6 +381,9 @@ public enum ChatInputBlock: Equatable, Codable {
         case let .pullQuote(pq):
             try container.encode(Kind.pullQuote.rawValue, forKey: .kind)
             try container.encode(pq, forKey: .pullQuote)
+        case let .blockQuote(bq):
+            try container.encode(Kind.blockQuote.rawValue, forKey: .kind)
+            try container.encode(bq, forKey: .blockQuote)
         }
     }
 }
@@ -345,22 +404,21 @@ public struct ChatInputParagraph: Equatable, Codable {
 
 public enum ChatInputParagraphStyle: Equatable, Codable {
     case body
-    case quote(isCollapsed: Bool)
+    // rawValue 1 (old "quote") is permanently retired. Old drafts decode this as .body (lenient).
     case heading1
     case heading2
     case heading3
 
     private enum CodingKeys: String, CodingKey {
         case kind
-        case isCollapsed
     }
 
     private enum Kind: Int32, Codable {
-        case body
-        case quote
-        case heading1
-        case heading2
-        case heading3
+        case body     = 0
+        // 1 was quote — retired; lenient decode falls back to .body for any unknown kind.
+        case heading1 = 2
+        case heading2 = 3
+        case heading3 = 4
     }
 
     public init(from decoder: Decoder) throws {
@@ -369,13 +427,13 @@ public enum ChatInputParagraphStyle: Equatable, Codable {
         // not support the `singleValueContainer` that a `RawRepresentable` enum's synthesized Codable uses.
         let kindValue = try container.decode(Int32.self, forKey: .kind)
         guard let kind = Kind(rawValue: kindValue) else {
-            throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "Unknown discriminator \(kindValue)")
+            // Unknown / removed kind (e.g. old "quote" rawValue 1) — degrade to .body.
+            self = .body
+            return
         }
         switch kind {
         case .body:
             self = .body
-        case .quote:
-            self = .quote(isCollapsed: try container.decode(Bool.self, forKey: .isCollapsed))
         case .heading1:
             self = .heading1
         case .heading2:
@@ -390,9 +448,6 @@ public enum ChatInputParagraphStyle: Equatable, Codable {
         switch self {
         case .body:
             try container.encode(Kind.body.rawValue, forKey: .kind)
-        case let .quote(isCollapsed):
-            try container.encode(Kind.quote.rawValue, forKey: .kind)
-            try container.encode(isCollapsed, forKey: .isCollapsed)
         case .heading1:
             try container.encode(Kind.heading1.rawValue, forKey: .kind)
         case .heading2:
@@ -755,13 +810,13 @@ public struct ChatInputSelection: Equatable {
 }
 
 public extension ChatInputContent {
-    /// Whether a block lives on the flat caret axis (`plainText`): paragraphs, code, and `collapsedQuote` do (they
-    /// contribute text / a " " placeholder + an inter-block "\n"); `.media`/`.table` do NOT (off-axis — no
-    /// character, no separator), so a non-text block has no flat-text/caret position. Mirrors which blocks
+    /// Whether a block lives on the flat caret axis (`plainText`): paragraphs, code, pullQuote, and blockQuote
+    /// do (they contribute text / a " " placeholder + an inter-block "\n"); `.media`/`.table` do NOT (off-axis
+    /// — no character, no separator), so a non-text block has no flat-text/caret position. Mirrors which blocks
     /// `attributedString(from:)` emits and the editor's `composerParagraphs()` keeps.
     private func blockIsFlatParticipating(_ block: ChatInputBlock) -> Bool {
         switch block {
-        case .paragraph, .code, .collapsedQuote, .pullQuote:
+        case .paragraph, .code, .pullQuote, .blockQuote:
             return true
         case .media, .table:
             return false
@@ -769,18 +824,21 @@ public extension ChatInputContent {
     }
 
     /// Flat (caret) extent of a top-level block in `plainText`: a paragraph/code block contributes its text
-    /// length; a `collapsedQuote` contributes 1 (its folded " " placeholder; its nested content is off-string);
-    /// a `.media`/`.table` block contributes 0 (off-axis — see `blockIsFlatParticipating`).
+    /// length; a `.blockQuote(collapsed: true)` contributes 1 (its " " placeholder); a collapsed blockQuote's
+    /// nested content is off-string; a `.media`/`.table` block contributes 0 (off-axis — see
+    /// `blockIsFlatParticipating`).
     private func blockFlatLength(_ block: ChatInputBlock) -> Int {
         switch block {
         case let .paragraph(paragraph):
             return (paragraph.text as NSString).length
         case let .code(code):
             return (code.text as NSString).length
-        case .collapsedQuote:
-            return 1
         case let .pullQuote(pq):
             return (pq.text as NSString).length
+        case let .blockQuote(bq):
+            // Collapsed → 1 (the " " placeholder); expanded → the recursed interior flat length
+            // (the inner ChatInputContent's plainText already applies the same inter-block accounting).
+            return bq.collapsed ? 1 : (bq.content.plainText as NSString).length
         case .media, .table:
             return 0
         }
