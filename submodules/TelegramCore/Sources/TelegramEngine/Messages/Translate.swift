@@ -222,6 +222,55 @@ public protocol ExperimentalInternalTranslationService: AnyObject {
 
 public var engineExperimentalInternalTranslationService: ExperimentalInternalTranslationService?
 
+/// Translates rich messages (those carrying a `RichTextMessageAttribute`) by id via
+/// `messages.translateRichMessage`, stores each result as a `TranslationMessageAttribute` with the
+/// translated `InstantPage`, and returns the pages keyed by message id.
+func _internal_translateRichMessages(account: Account, inputPeer: Api.InputPeer, messageIds: [EngineMessage.Id], toLang: String, tone: TranslationTone = .neutral) -> Signal<[EngineMessage.Id: InstantPage], TranslationError> {
+    var flags: Int32 = 0
+    flags |= (1 << 0)
+    if tone != .neutral {
+        flags |= (1 << 2)
+    }
+    return account.network.request(Api.functions.messages.translateRichMessage(flags: flags, peer: inputPeer, id: messageIds.map { $0.id }, text: nil, toLang: toLang, tone: tone != .neutral ? tone.rawValue : nil))
+    |> mapError { error -> TranslationError in
+        if error.errorDescription.hasPrefix("FLOOD_WAIT") {
+            return .limitExceeded
+        } else if error.errorDescription == "MSG_ID_INVALID" {
+            return .invalidMessageId
+        } else if error.errorDescription == "INPUT_TEXT_EMPTY" {
+            return .textIsEmpty
+        } else if error.errorDescription == "INPUT_TEXT_TOO_LONG" {
+            return .textTooLong
+        } else if error.errorDescription == "TO_LANG_INVALID" {
+            return .invalidLanguage
+        } else {
+            return .generic
+        }
+    }
+    |> mapToSignal { result -> Signal<[EngineMessage.Id: InstantPage], TranslationError> in
+        var pages: [EngineMessage.Id: InstantPage] = [:]
+        switch result {
+        case let .translatedRichMessage(data):
+            for (i, richMessage) in data.result.enumerated() where i < messageIds.count {
+                pages[messageIds[i]] = RichTextMessageAttribute(apiRichMessage: richMessage).instantPage
+            }
+        }
+        return account.postbox.transaction { transaction -> [EngineMessage.Id: InstantPage] in
+            for (messageId, page) in pages {
+                let updatedAttribute = TranslationMessageAttribute(text: "", entities: [], toLang: toLang, instantPage: page)
+                transaction.updateMessage(messageId, update: { currentMessage in
+                    let storeForwardInfo = currentMessage.forwardInfo.flatMap(StoreMessageForwardInfo.init)
+                    var attributes = currentMessage.attributes.filter { !($0 is TranslationMessageAttribute) }
+                    attributes.append(updatedAttribute)
+                    return .update(StoreMessage(id: currentMessage.id, customStableId: nil, globallyUniqueId: currentMessage.globallyUniqueId, groupingKey: currentMessage.groupingKey, threadId: currentMessage.threadId, timestamp: currentMessage.timestamp, flags: StoreMessageFlags(currentMessage.flags), tags: currentMessage.tags, globalTags: currentMessage.globalTags, localTags: currentMessage.localTags, forwardInfo: storeForwardInfo, authorId: currentMessage.author?.id, text: currentMessage.text, attributes: attributes, media: currentMessage.media))
+                })
+            }
+            return pages
+        }
+        |> castError(TranslationError.self)
+    }
+}
+
 private func _internal_translateMessagesByPeerId(account: Account, peerId: EnginePeer.Id, messageIds: [EngineMessage.Id], fromLang: String?, toLang: String, enableLocalIfPossible: Bool, tone: TranslationTone = .neutral) -> Signal<Void, TranslationError> {
     return account.postbox.transaction { transaction -> (Api.InputPeer?, [Message]) in
         return (transaction.getPeer(peerId).flatMap(apiInputPeer), messageIds.compactMap({ transaction.getMessage($0) }))
@@ -268,7 +317,20 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
             flags |= (1 << 2)
         }
 
-        let id: [Int32] = messageIds.map { $0.id }
+        // Rich messages (a `RichTextMessageAttribute`) translate through `messages.translateRichMessage`
+        // (per the layer-228 contract: pick translateText vs translateRichMessage by message type).
+        let richMessageIds = messages.filter { $0.attributes.contains(where: { $0 is RichTextMessageAttribute }) }.map { $0.id }
+        let plainMessageIds = messageIds.filter { !richMessageIds.contains($0) }
+
+        let richSignal: Signal<Void, TranslationError>
+        if richMessageIds.isEmpty {
+            richSignal = .single(Void())
+        } else {
+            richSignal = _internal_translateRichMessages(account: account, inputPeer: inputPeer, messageIds: richMessageIds, toLang: toLang, tone: tone)
+            |> map { _ in Void() }
+        }
+
+        let id: [Int32] = plainMessageIds.map { $0.id }
 
         let msgs: Signal<Api.messages.TranslatedText?, TranslationError>
         if id.isEmpty {
@@ -277,7 +339,7 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
             if enableLocalIfPossible, let engineExperimentalInternalTranslationService, let fromLang {
                 msgs = account.postbox.transaction { transaction -> [MessageId: String] in
                     var texts: [MessageId: String] = [:]
-                    for messageId in messageIds {
+                    for messageId in plainMessageIds {
                         if let message = transaction.getMessage(messageId) {
                             texts[message.id] = message.text
                         }
@@ -297,7 +359,7 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
                             return .fail(.generic)
                         }
                         var result: [Api.TextWithEntities] = []
-                        for messageId in messageIds {
+                        for messageId in plainMessageIds {
                             if let text = resultTexts[AnyHashable(messageId)] {
                                 result.append(.textWithEntities(.init(text: text, entities: [])))
                             } else if let text = messageTexts[messageId] {
@@ -330,14 +392,15 @@ private func _internal_translateMessagesByPeerId(account: Account, peerId: Engin
             }
         }
         
-        return combineLatest(msgs, combineLatest(pollSignals), combineLatest(audioTranscriptionsSignals))
-        |> mapToSignal { (result, pollResults, audioTranscriptionsResults) -> Signal<Void, TranslationError> in
+        return combineLatest(msgs, richSignal, combineLatest(pollSignals), combineLatest(audioTranscriptionsSignals))
+        |> mapToSignal { (result, _, pollResults, audioTranscriptionsResults) -> Signal<Void, TranslationError> in
             return account.postbox.transaction { transaction in
                 if case let .translateResult(translateResultData) = result {
                     let results = translateResultData.result
                     var index = 0
                     for result in results {
-                        let messageId = messageIds[index]
+                        guard index < plainMessageIds.count else { break }
+                        let messageId = plainMessageIds[index]
                         if case let .textWithEntities(textWithEntitiesData) = result {
                             let (text, entities) = (textWithEntitiesData.text, textWithEntitiesData.entities)
                             let updatedAttribute: TranslationMessageAttribute = TranslationMessageAttribute(text: text, entities: messageTextEntitiesFromApiEntities(entities), toLang: toLang)
