@@ -70,50 +70,24 @@ final class BlockQuoteBoxTests: XCTestCase {
     }
     // MARK: - Caret relocation on collapse (Finding 2)
 
-    func test_toggleCollapsed_collapsingWithCaretInside_caretLandsInFollowingParagraph() {
-        // A quote followed by a body paragraph; caret is inside the quote.
-        // After collapsing, the caret must land in the following paragraph — NOT on the
-        // collapsed atom's gap (which would park it on a display-only slot and freeze typing).
+    func test_toggleCollapsed_collapsingWithFollowingParagraph_caretFocusesQuoteGap() {
+        // A quote followed by a body paragraph; caret inside the quote. After collapsing, the caret FOCUSES
+        // the collapsed quote's own leading gap (its cursor slot) — it does NOT jump into the following
+        // paragraph, and no block is added or removed.
         let bq = BlockQuote(id: BlockID("q"), children: [
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "inside text")]))
         ], collapsed: false)
         let after = ParagraphBlock(id: BlockID("a"), runs: [TextRun(text: "after")])
         let c = canvas([.blockQuote(bq), .paragraph(after)])
         let box = c.boxes[0] as! BlockQuoteBox
-        // Place caret inside the quote's first leaf
         let insidePos = box.children.boxes.first?.leafRegions().first?.globalStart ?? 0
         c.anchor = insidePos; c.head = insidePos
         c.toggleCollapsed(box: box)
+        XCTAssertEqual(c.boxes.count, 2, "no block added/removed (quote + the existing following paragraph)")
         guard let collapsedBox = c.boxes.first as? BlockQuoteBox else { return XCTFail("box should remain a BlockQuoteBox") }
         XCTAssertEqual(collapsedBox.nodeSize, 3, "quote should now be a collapsed atom")
-        guard let followBox = (c.boxes.count > 1 ? c.boxes[1] : nil) as? BlockBox else {
-            return XCTFail("following body paragraph should still exist")
-        }
-        // Caret should not be on the atom's gap
-        XCTAssertNotEqual(c.head, collapsedBox.nodeStart, "caret must NOT park on the collapsed atom gap")
-        XCTAssertEqual(c.head, followBox.textStart, "caret should land at the following paragraph's textStart")
-        XCTAssertEqual(c.anchor, c.head, "selection should be collapsed")
-    }
-
-    func test_toggleCollapsed_collapsingLastBlock_appendsEmptyBodyParagraphForCaret() {
-        // A quote is the LAST block. Collapsing with the caret inside must append an empty body
-        // paragraph (so the user has somewhere to type) and land the caret there.
-        let bq = BlockQuote(id: BlockID("q"), children: [
-            .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "inside text")]))
-        ], collapsed: false)
-        let c = canvas([.blockQuote(bq)])      // quote is the ONLY block
-        let box = c.boxes[0] as! BlockQuoteBox
-        let insidePos = box.children.boxes.first?.leafRegions().first?.globalStart ?? 0
-        c.anchor = insidePos; c.head = insidePos
-        c.toggleCollapsed(box: box)
-        // Must now have 2 blocks: collapsed quote + appended empty body paragraph
-        XCTAssertEqual(c.boxes.count, 2, "an empty body paragraph should have been appended")
-        guard let collapsedBox = c.boxes.first as? BlockQuoteBox else { return XCTFail("first box should be collapsed BlockQuoteBox") }
-        guard let appendedBox = c.boxes[1] as? BlockBox else { return XCTFail("second box should be a BlockBox paragraph") }
-        XCTAssertEqual(collapsedBox.nodeSize, 3, "first box should be a collapsed atom")
-        XCTAssertNotEqual(c.head, collapsedBox.nodeStart, "caret must NOT park on the collapsed atom gap")
-        XCTAssertEqual(c.head, appendedBox.textStart, "caret should land at the appended paragraph's textStart")
-        XCTAssertEqual(c.anchor, c.head, "selection should be collapsed")
+        XCTAssertEqual(c.head, collapsedBox.nodeStart, "caret focuses the collapsed quote's leading gap")
+        XCTAssertEqual(c.anchor, c.head, "selection collapsed")
     }
 
     // MARK: - Glyph hit walks table cells (Finding 1)
@@ -239,5 +213,144 @@ final class BlockQuoteBoxTests: XCTestCase {
         guard case .blockQuote(let round) = outerBox.currentBlock() else { return XCTFail() }
         guard case .blockQuote = round.children.first else { return XCTFail("nested quote lost") }
     }
+
+    func test_emptyBlockQuote_showsPlaceholder() {
+        let bq = BlockQuote(id: BlockID("q"), children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: []))], collapsed: false)
+        let box = canvas([.blockQuote(bq)]).boxes.first as! BlockQuoteBox
+        XCTAssertEqual(box.placeholderText, "Type a quote here")
+    }
+    func test_nonEmptyBlockQuote_noPlaceholder() {
+        let bq = BlockQuote(id: BlockID("q"), children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi")]))], collapsed: false)
+        let box = canvas([.blockQuote(bq)]).boxes.first as! BlockQuoteBox
+        XCTAssertNil(box.placeholderText)
+    }
+    func test_blockQuote_placeholdersStampedFromCanvas_suppressed() {
+        let c = DocumentCanvasView()
+        c.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: "", blockQuote: "", codeBlock: "")
+        c.setBlocks([.blockQuote(BlockQuote(id: BlockID("q"), children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: []))]))], width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 600); c.layoutIfNeeded(); c.simulateParentLayout()
+        let box = c.boxes.first as! BlockQuoteBox
+        XCTAssertNil(box.placeholderText)   // canvas placeholders (empty blockQuote) stamped onto the box
+    }
+
+    func test_collapse_focusesQuoteGap_noTrailingParagraph() {
+        let bq = BlockQuote(id: BlockID("q"), children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi there long enough")]))], collapsed: false)
+        let c = canvas([.blockQuote(bq)])
+        let box = c.boxes.first as! BlockQuoteBox
+        c.setCaret(global: box.nodeStart + 1)          // caret inside the (expanded) quote
+        c.toggleCollapsed(box: box)
+        XCTAssertEqual(c.boxes.count, 1, "collapse adds no trailing body paragraph")
+        let newBox = c.boxes.first as! BlockQuoteBox
+        XCTAssertTrue(newBox.collapsed)
+        XCTAssertEqual(c.head, newBox.nodeStart, "caret focuses the collapsed quote's leading gap")
+        let caret = c.caretRect(for: DocumentTextPosition(c.head))
+        XCTAssertGreaterThan(caret.height, 0, "a visible caret renders on the collapsed quote (not .zero)")
+        XCTAssertGreaterThanOrEqual(caret.minX, newBox.frame.minX, "caret is within the folded quote")
+        XCTAssertLessThan(caret.minX, newBox.frame.maxX, "caret sits near the quote's leading edge")
+    }
+
+    // REPRO of the REAL app bug: iOS delivers backspace at an empty quote's start as an object-replacement
+    // RANGE anchored in the previous block (the atom pattern), NOT a collapsed caret. A direct-caret test
+    // misses it. Desired: delete the quote → empty body paragraph in place (NOT merge into the previous block).
+    func test_backspace_emptyBlockQuote_deliveredAsOSRange_replacesWithBodyParagraph() {
+        let prev = ParagraphBlock(id: BlockID("prev"), runs: [TextRun(text: "hello")])
+        let bq = BlockQuote(id: BlockID("q"), children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: []))], collapsed: false)
+        let c = canvas([.paragraph(prev), .blockQuote(bq)])
+        let box = c.boxes[1] as! BlockQuoteBox
+        let childStart = box.children.boxes.first?.leafRegions().first?.globalStart ?? 0
+        let prevEnd = c.prevTextPosition(before: childStart)
+        c.anchor = prevEnd; c.head = childStart          // the OS-delivered object-replacement range
+        c.deleteBackward()
+        XCTAssertFalse(c.boxes.contains { $0 is BlockQuoteBox }, "quote deleted, not merged into the previous block")
+        XCTAssertEqual(c.boxes.count, 2, "hello paragraph + empty body paragraph in the quote's place")
+        guard case let .paragraph(h) = c.boxes[0].currentBlock() else { return XCTFail("1st block paragraph") }
+        XCTAssertEqual(h.runs.map(\.text).joined(), "hello", "previous block preserved")
+        guard case let .paragraph(e) = c.boxes[1].currentBlock() else { return XCTFail("2nd block paragraph") }
+        XCTAssertEqual(e.style, .body); XCTAssertTrue(e.runs.isEmpty, "quote replaced by an empty body paragraph")
+    }
+
+    func test_backspace_emptyCodeBlock_deliveredAsOSRange_replacesWithBodyParagraph() {
+        let prev = ParagraphBlock(id: BlockID("prev"), runs: [TextRun(text: "hello")])
+        let c = canvas([.paragraph(prev), .code(CodeBlock(id: BlockID("c"), runs: []))])
+        let codeStart = c.boxes[1].textStart
+        c.anchor = c.prevTextPosition(before: codeStart); c.head = codeStart   // OS object-replacement range
+        c.deleteBackward()
+        XCTAssertFalse(c.boxes.contains { $0 is CodeBlockBox }, "code block deleted, not merged into the previous block")
+        guard case let .paragraph(e) = c.boxes[1].currentBlock() else { return XCTFail("2nd block paragraph") }
+        XCTAssertEqual(e.style, .body); XCTAssertTrue(e.runs.isEmpty)
+    }
+    func test_backspace_emptyPullQuote_deliveredAsOSRange_replacesWithBodyParagraph() {
+        let prev = ParagraphBlock(id: BlockID("prev"), runs: [TextRun(text: "hello")])
+        let c = canvas([.paragraph(prev), .pullQuote(PullQuote(id: BlockID("pq"), runs: []))])
+        let pqStart = c.boxes[1].textStart
+        c.anchor = c.prevTextPosition(before: pqStart); c.head = pqStart       // OS object-replacement range
+        c.deleteBackward()
+        XCTAssertFalse(c.boxes.contains { $0 is PullQuoteBox }, "pull quote deleted, not merged into the previous block")
+        guard case let .paragraph(e) = c.boxes[1].currentBlock() else { return XCTFail("2nd block paragraph") }
+        XCTAssertEqual(e.style, .body); XCTAssertTrue(e.runs.isEmpty)
+    }
+
+    // REPRO of the app bug: an empty quote with a PREVIOUS block. Backspace at its start should still delete
+    // the quote → empty body paragraph in place (NOT move the caret into the previous block leaving the quote).
+    func test_backspace_emptyBlockQuote_withPreviousBlock_replacesWithBodyParagraph() {
+        let prev = ParagraphBlock(id: BlockID("prev"), runs: [TextRun(text: "hello")])
+        let bq = BlockQuote(id: BlockID("q"), children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: []))], collapsed: false)
+        let c = canvas([.paragraph(prev), .blockQuote(bq)])
+        let box = c.boxes[1] as! BlockQuoteBox
+        let childStart = box.children.boxes.first?.leafRegions().first?.globalStart ?? 0
+        c.setCaret(global: childStart)
+        c.deleteBackward()
+        XCTAssertFalse(c.boxes.contains { $0 is BlockQuoteBox }, "quote deleted even with a previous block")
+        XCTAssertEqual(c.boxes.count, 2, "prev paragraph + a new empty body paragraph in the quote's place")
+        guard case let .paragraph(p) = c.boxes[1].currentBlock() else { return XCTFail("2nd block is a paragraph") }
+        XCTAssertEqual(p.style, .body); XCTAssertTrue(p.runs.isEmpty)
+    }
+
+    // REPRO: backspace at the start of an EMPTY container should delete it and leave a single empty BODY paragraph.
+    func test_backspace_emptyBlockQuote_replacesWithBodyParagraph() {
+        let bq = BlockQuote(id: BlockID("q"), children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: []))], collapsed: false)
+        let c = canvas([.blockQuote(bq)])
+        let box = c.boxes.first as! BlockQuoteBox
+        let childStart = box.children.boxes.first?.leafRegions().first?.globalStart ?? 0
+        c.setCaret(global: childStart)
+        c.deleteBackward()
+        XCTAssertFalse(c.boxes.contains { $0 is BlockQuoteBox }, "the quote is deleted")
+        XCTAssertEqual(c.boxes.count, 1, "single block remains")
+        guard case let .paragraph(p) = c.boxes[0].currentBlock() else { return XCTFail("should be a paragraph") }
+        XCTAssertEqual(p.style, .body, "empty BODY paragraph"); XCTAssertTrue(p.runs.isEmpty)
+    }
+    func test_backspace_emptyCodeBlock_replacesWithBodyParagraph() {
+        let c = canvas([.code(CodeBlock(id: BlockID("c"), runs: []))])
+        c.setCaret(global: c.boxes[0].textStart)
+        c.deleteBackward()
+        XCTAssertFalse(c.boxes.contains { $0 is CodeBlockBox }, "the code block is deleted")
+        guard case let .paragraph(p) = c.boxes[0].currentBlock() else { return XCTFail("should be a paragraph") }
+        XCTAssertEqual(p.style, .body)
+    }
+    func test_backspace_emptyPullQuote_replacesWithBodyParagraph() {
+        let c = canvas([.pullQuote(PullQuote(id: BlockID("pq"), runs: []))])
+        c.setCaret(global: c.boxes[0].textStart)
+        c.deleteBackward()
+        XCTAssertFalse(c.boxes.contains { $0 is PullQuoteBox }, "the pull quote is deleted")
+        guard case let .paragraph(p) = c.boxes[0].currentBlock() else { return XCTFail("should be a paragraph") }
+        XCTAssertEqual(p.style, .body)
+    }
+
+    func test_collapse_thenTypeChar_opensBodyParagraphBeforeQuote() {
+        // Focused on a collapsed quote, typing lazily opens a body paragraph BEFORE it carrying the character
+        // (the folded atom holds no text) — mirroring typing on a media atom's gap. No paragraph on collapse.
+        let bq = BlockQuote(id: BlockID("q"), children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi there long enough")]))], collapsed: false)
+        let c = canvas([.blockQuote(bq)])
+        let box = c.boxes.first as! BlockQuoteBox
+        c.setCaret(global: box.nodeStart + 1)
+        c.toggleCollapsed(box: box)                       // caret focuses the collapsed quote's gap
+        c.insertText("x")
+        XCTAssertEqual(c.boxes.count, 2, "typing opens a body paragraph before the folded quote")
+        guard case let .paragraph(p) = c.boxes[0].currentBlock() else { return XCTFail("first block is a paragraph") }
+        XCTAssertEqual(p.runs.map(\.text).joined(), "x", "the character lands in the new paragraph")
+        XCTAssertTrue(c.boxes[1] is BlockQuoteBox, "the collapsed quote follows it")
+        XCTAssertEqual(c.head, c.boxes[0].textStart + 1, "caret sits after the typed character")
+    }
+
 }
 #endif

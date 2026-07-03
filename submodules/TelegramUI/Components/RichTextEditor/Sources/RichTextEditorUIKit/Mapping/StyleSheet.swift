@@ -80,7 +80,7 @@ public struct StyleSheet {
         case .heading6: return 17
         case .body: return bodyBaseSize
         case .caption: return 15
-        case .pullQuote: return bodyBaseSize
+        case .pullQuote: return 15   // pull quotes read at 15pt (like block quotes), not the ambient body size
         }
     }
 

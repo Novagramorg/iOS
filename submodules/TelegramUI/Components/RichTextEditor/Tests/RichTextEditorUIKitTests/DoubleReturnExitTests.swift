@@ -75,6 +75,27 @@ final class DoubleReturnExitTests: XCTestCase {
         XCTAssertEqual(canvas.head, canvas.boxes[0].textStart, "caret in the new body paragraph")
     }
 
+    // REPRO: two-line code block, caret at the start of the (non-empty) first line, one Return → a leading
+    // newline is inserted and the block grows by a line.
+    func test_codeBlock_returnAtStartOfNonEmptyFirstLine_insertsLeadingNewline_growsHeight() {
+        let canvas = makeCanvas([.code(CodeBlock(id: BlockID("c1"), runs: [TextRun(text: "A\nB")]))])
+        canvas.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
+        canvas.simulateParentLayout()
+        let before = (canvas.boxes[0] as! CodeBlockBox).height
+        let beforeFrame = (canvas.boxes[0] as! CodeBlockBox).frame.height
+        let beforeMeasured = (canvas.boxes[0] as! CodeBlockBox).measuredHeight(forWidth: 320)
+        canvas.setCaret(global: canvas.boxes[0].textStart)      // local 0 — start of the first (non-empty) line
+        canvas.insertText("\n")
+        guard case let .code(cb) = canvas.boxes[0].currentBlock() else { return XCTFail("expected .code") }
+        XCTAssertEqual(cb.text, "\nA\nB", "Return at the line start inserts a leading newline")
+        let after = (canvas.boxes[0] as! CodeBlockBox).height
+        XCTAssertGreaterThan(after, before, "the code block grows by one line")
+        let afterFrame = (canvas.boxes[0] as! CodeBlockBox).frame.height
+        XCTAssertGreaterThan(afterFrame, beforeFrame, "the code block laid-out FRAME grows by one line")
+        let afterMeasured = (canvas.boxes[0] as! CodeBlockBox).measuredHeight(forWidth: 320)
+        XCTAssertGreaterThan(afterMeasured, beforeMeasured, "the code block PURE MEASURE (field-sizing path) grows by one line")
+    }
+
     func test_codeBlock_doubleReturnOnEmptyBlock_uncodes() {
         let canvas = makeCanvas([.code(CodeBlock(id: BlockID("c1"), runs: []))])
         canvas.setCaret(global: 1)

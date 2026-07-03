@@ -32,7 +32,7 @@ public struct QuoteStyle: Equatable {
 
     public init(leadingInset: CGFloat = 16, trailingInset: CGFloat = 22,
                 spacingBefore: CGFloat = 8, spacingAfter: CGFloat = 8,
-                barWidth: CGFloat = 3, cornerRadius: CGFloat = 2.5, fillAlpha: CGFloat = 0.10,
+                barWidth: CGFloat = 3, cornerRadius: CGFloat = 6, fillAlpha: CGFloat = 0.10,
                 topInset: CGFloat? = nil, bottomInset: CGFloat? = nil) {
         self.leadingInset = leadingInset
         self.trailingInset = trailingInset

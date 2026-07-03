@@ -35,6 +35,8 @@ extension DocumentCanvasView {
             p.hostsChecklistCheckbox = (self.checklistMarkerViewProvider != nil) && (p.listMembership?.marker == .checklist)
         }
         for case let pq as PullQuoteBox in boxes { pq.placeholders = self.placeholders }
+        for case let cb as CodeBlockBox in boxes { cb.placeholders = self.placeholders }
+        for case let bq as BlockQuoteBox in boxes { bq.placeholders = self.placeholders }
     }
 
     /// Test/geometry seam: the per-box marker draws keyed by `BlockID`. Production draws each marker in

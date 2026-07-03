@@ -20,6 +20,11 @@ final class PullQuoteBox {
     /// "Type a quote here" hint and the empty-state pill width.
     var placeholders: RichTextEditorPlaceholders = .default
 
+    /// The outer box width last configured via `init`/`setWidth` — construction-time-stable, so geometry that
+    /// must be correct BEFORE the canvas assigns `frame` (the empty-line caret indent) reads it instead of the
+    /// not-yet-set `frame.width`. Mirrors `MediaBlockBox.layoutWidth`.
+    private(set) var layoutWidth: CGFloat
+
     var leftInset: CGFloat { pullQuoteStyle.horizontalPadding }
     var rightInset: CGFloat { pullQuoteStyle.horizontalPadding }
     var topInset: CGFloat
@@ -29,8 +34,9 @@ final class PullQuoteBox {
         self.id = pullQuote.id
         self.mapper = mapper
         self.pullQuoteStyle = pullQuoteStyle
-        self.topInset = pullQuoteStyle.verticalPadding
-        self.bottomInset = pullQuoteStyle.verticalPadding
+        self.topInset = pullQuoteStyle.topInset
+        self.bottomInset = pullQuoteStyle.bottomInset
+        self.layoutWidth = width
         self.layout = makeBlockLayout(
             attributedString: mapper.attributedString(for: ParagraphBlock(id: pullQuote.id, style: .pullQuote, runs: pullQuote.runs)),
             width: max(width - pullQuoteStyle.horizontalPadding - pullQuoteStyle.horizontalPadding, 1))
@@ -58,7 +64,24 @@ final class PullQuoteBox {
 
     private var emptyLineHeight: CGFloat {
         guard layout.length == 0 else { return 0 }
-        return mapper.styleSheet.font(for: .pullQuote, attributes: CharacterAttributes()).lineHeight
+        // Match a single laid-out line's height by applying the pull-quote paragraph style's lineHeightMultiple
+        // (TextKit scales each line box by it) — else an empty pull quote is shorter than a one-line one. Mirrors
+        // BlockBox.emptyLineHeight.
+        let font = mapper.styleSheet.font(for: .pullQuote, attributes: CharacterAttributes())
+        let mult = mapper.styleSheet.paragraphStyle(for: .pullQuote, attributes: ParagraphAttributes()).lineHeightMultiple
+        return font.lineHeight * (mult > 0 ? mult : 1)
+    }
+
+    /// Leading indent for the EMPTY-line caret so it lands at the centered placeholder's leading edge
+    /// (→ the container center when there is no placeholder). 0 once any text exists — the centered glyph
+    /// layout already carries the position, so adding an indent would double-count. Mirrors the
+    /// `contentWidth` / `emptyLineHeight` empty-guards. Placeholder-start (not center) matches the mockup
+    /// and the "caret at start" spec decision. Reads `layoutWidth`, NOT `frame.width` — `frame` is `.zero`
+    /// until the canvas lays the box out, so this must stay correct before that first layout pass.
+    private var emptyLinePlaceholderIndent: CGFloat {
+        guard length == 0 else { return 0 }
+        let containerWidth = max(layoutWidth - leftInset - rightInset, 1)
+        return max((containerWidth - contentWidth) / 2, 0)
     }
 
     /// Attributes for text typed into a pull quote (italic + centered paragraph style). Used by
@@ -84,7 +107,10 @@ extension PullQuoteBox: CanvasBlock {
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
         max(layout.boundingHeight(forWidth: max(width - leftInset - rightInset, 1)), emptyLineHeight) + topInset + bottomInset
     }
-    func setWidth(_ width: CGFloat) { layout.setWidth(max(width - leftInset - rightInset, 1)) }
+    func setWidth(_ width: CGFloat) {
+        layoutWidth = width
+        layout.setWidth(max(width - leftInset - rightInset, 1))
+    }
     func currentBlock() -> Block {
         .pullQuote(PullQuote(id: id, runs: mapper.runs(from: layout.attributedString, style: .pullQuote)))
     }
@@ -94,7 +120,7 @@ extension PullQuoteBox: CanvasBlock {
     func leafRegions() -> [LeafTextRegion] {
         [LeafTextRegion(layout: layout, globalStart: globalStart, length: length,
                         ref: .pullQuote(id), canvasOrigin: textOrigin,
-                        emptyLineLeadingIndent: 0, emptyLineHeight: emptyLineHeight)]
+                        emptyLineLeadingIndent: emptyLinePlaceholderIndent, emptyLineHeight: emptyLineHeight)]
     }
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {
         // The pill background + corner marks are added by later tasks via the decorations layer.
@@ -105,7 +131,7 @@ extension PullQuoteBox: CanvasBlock {
             let ps = NSMutableParagraphStyle(); ps.alignment = .center
             let rect = CGRect(x: frame.minX + leftInset, y: textOrigin.y,
                               width: max(frame.width - leftInset - rightInset, 1), height: frame.height - topInset - bottomInset)
-            NSAttributedString(string: ph, attributes: [.font: font, .foregroundColor: mapper.theme.placeholder,
+            NSAttributedString(string: ph, attributes: [.font: font, .foregroundColor: mapper.theme.containerPlaceholder,
                                                         .paragraphStyle: ps]).draw(in: rect)
         }
     }

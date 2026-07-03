@@ -58,15 +58,29 @@ extension DocumentCanvasView {
         }
     }
 
-    /// Open (top-left) + close (bottom-right) quote-mark rects per pull-quote pill (canvas coords). The close mark
-    /// is rendered rotated 180° by the marks view. Sizes/insets come from `pullQuoteStyle`.
-    func pullQuoteMarkRects() -> [(open: CGRect, close: CGRect)] {
-        let s = pullQuoteStyle.markSize
-        let inset = pullQuoteStyle.markInset
-        return pullQuotePillRects().map { pill in
-            (open: CGRect(x: pill.minX + inset, y: pill.minY + inset, width: s, height: s),
-             close: CGRect(x: pill.maxX - inset - s, y: pill.maxY - inset - s, width: s, height: s))
+    /// Pure geometry seam: anchor the open mark at each pill's top-left and the close mark at the bottom-right,
+    /// each at its OWN (possibly non-square) size, inset from the corner by `inset`. Taking the two sizes
+    /// explicitly keeps the non-square anchoring unit-testable without bundle images.
+    static func pullQuoteMarkRects(pills: [CGRect], inset: CGFloat,
+                                   openSize: CGSize, closeSize: CGSize) -> [(open: CGRect, close: CGRect)] {
+        pills.map { pill in
+            (open: CGRect(x: pill.minX + inset, y: pill.minY + inset,
+                          width: openSize.width, height: openSize.height),
+             close: CGRect(x: pill.maxX - inset - closeSize.width, y: pill.maxY - inset - closeSize.height,
+                           width: closeSize.width, height: closeSize.height))
         }
+    }
+
+    /// Open (top-left) + close (bottom-right) quote-mark rects per pull-quote pill (canvas coords). Each mark's
+    /// size is DERIVED FROM ITS IMAGE's natural size (`RichText/QuoteOpen` / `RichText/QuoteClose`, or the
+    /// generated stub where unavailable), so a non-square glyph is not letterboxed into a square. The corner
+    /// inset is `pullQuoteStyle.markInset`.
+    func pullQuoteMarkRects() -> [(open: CGRect, close: CGRect)] {
+        DocumentCanvasView.pullQuoteMarkRects(
+            pills: pullQuotePillRects(),
+            inset: pullQuoteStyle.markInset,
+            openSize: PullQuoteMarksView.openImageNaturalSize,
+            closeSize: PullQuoteMarksView.closeImageNaturalSize)
     }
 
     // MARK: - BlockQuoteBox collapse button geometry constants

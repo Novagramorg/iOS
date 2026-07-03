@@ -13,6 +13,10 @@ public struct RichTextEditorTheme {
     public var secondaryText: UIColor
     /// Empty-paragraph, marked-text, and media placeholder ("ghost") text.
     public var placeholder: UIColor
+    /// Placeholder ("ghost") text INSIDE containers — the pull-quote / block-quote / code-block empty hints and
+    /// the code-block language label — so a host can contrast them against the container fill. Defaults to
+    /// `placeholder`.
+    public var containerPlaceholder: UIColor
     /// Accent color. Drives link-text foreground, the blockquote bar + fill, the caret, and the selection
     /// highlight (these render sites are wired to read this across the theme feature's tasks).
     public var accent: UIColor
@@ -42,7 +46,8 @@ public struct RichTextEditorTheme {
         listMarker: UIColor = .label,
         inlineCodeBackground: UIColor = .systemGray5,
         markedTextUnderline: UIColor = .label,
-        spoilerDust: UIColor = .secondaryLabel
+        spoilerDust: UIColor = .secondaryLabel,
+        containerPlaceholder: UIColor = .placeholderText
     ) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
@@ -55,6 +60,7 @@ public struct RichTextEditorTheme {
         self.inlineCodeBackground = inlineCodeBackground
         self.markedTextUnderline = markedTextUnderline
         self.spoilerDust = spoilerDust
+        self.containerPlaceholder = containerPlaceholder
     }
 
     /// Reproduces the editor's prior hardcoded colors exactly (see the design doc's site inventory).
@@ -75,7 +81,8 @@ public struct RichTextEditorTheme {
         listMarker: .label,
         inlineCodeBackground: .systemGray5,
         markedTextUnderline: .label,
-        spoilerDust: .secondaryLabel
+        spoilerDust: .secondaryLabel,
+        containerPlaceholder: .placeholderText
     )
 }
 #endif

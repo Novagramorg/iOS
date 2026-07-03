@@ -15,6 +15,8 @@ final class CodeBlockBox {
 
     var frame: CGRect = .zero
     var globalStart: Int = 0
+    /// Host placeholder strings (stamped by the canvas in `stampListMarkers`). Drives the empty-code hint.
+    var placeholders: RichTextEditorPlaceholders = .default
     /// Fallback interior top/bottom padding (points) when the host hasn't set a quote top/bottom inset.
     static let defaultVerticalInset: CGFloat = 8
     /// Monospace point size — matches the quote's 15pt so a code block reads at the same scale as a quote.
@@ -56,6 +58,12 @@ final class CodeBlockBox {
         return ((CodeBlockBox.codeAttributes()[.font] as? UIFont) ?? UIFont.monospacedSystemFont(ofSize: CodeBlockBox.fontSize, weight: .regular)).lineHeight
     }
 
+    /// Placeholder text for an empty code block, or nil when non-empty or the placeholder string is empty.
+    var placeholderText: String? {
+        guard layout.length == 0, !placeholders.codeBlock.isEmpty else { return nil }
+        return placeholders.codeBlock
+    }
+
     func currentCode() -> CodeBlock {
         CodeBlock(id: id, language: language, runs: [TextRun(text: layout.attributedString.string)])
     }
@@ -89,10 +97,16 @@ extension CodeBlockBox: CanvasBlock {
         // way quotes render — via the `CodeBlockBox` case in `blockquoteDecorations()`. The backing view
         // stays clear; here we draw only the monospace text and the optional language label.
         layout.drawText(in: ctx, at: textOrigin)
+        if let ph = placeholderText {
+            NSAttributedString(string: ph, attributes: [
+                .font: UIFont.monospacedSystemFont(ofSize: CodeBlockBox.fontSize, weight: .regular),
+                .foregroundColor: mapper.theme.containerPlaceholder
+            ]).draw(at: textOrigin)
+        }
         if let lang = language, !lang.isEmpty {
             NSAttributedString(string: lang, attributes: [
                 .font: UIFont.monospacedSystemFont(ofSize: 11, weight: .regular),
-                .foregroundColor: mapper.theme.placeholder
+                .foregroundColor: mapper.theme.containerPlaceholder
             ]).draw(at: CGPoint(x: frame.maxX - 8 - 40, y: frame.minY + 2))
         }
     }

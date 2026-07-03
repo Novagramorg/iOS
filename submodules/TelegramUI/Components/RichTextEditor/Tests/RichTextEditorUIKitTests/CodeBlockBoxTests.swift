@@ -62,5 +62,38 @@ final class CodeBlockBoxTests: XCTestCase {
             accent: .link, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .red)
         XCTAssertEqual(theme.codeBackground, .red)
     }
+
+    func test_emptyCodeBox_showsPlaceholder() {
+        let box = makeBox("", language: nil)
+        box.placeholders = .default
+        XCTAssertEqual(box.placeholderText, "Type code here")
+    }
+    func test_nonEmptyCodeBox_noPlaceholder() {
+        let box = makeBox("x")
+        box.placeholders = .default
+        XCTAssertNil(box.placeholderText)
+    }
+    func test_placeholders_containerDefaults() {
+        XCTAssertEqual(RichTextEditorPlaceholders.default.codeBlock, "Type code here")
+        XCTAssertEqual(RichTextEditorPlaceholders.default.blockQuote, "Type a quote here")
+    }
+    func test_theme_containerPlaceholder_settable() {
+        var theme = RichTextEditorTheme.default
+        theme.containerPlaceholder = .red
+        XCTAssertEqual(theme.containerPlaceholder, .red)
+    }
+
+    // Regression: a TextKit-2 text edit that does NOT change the container width must still re-flow the
+    // layout — otherwise the box height stays stale (the "code block doesn't grow on Enter; only rotation,
+    // a width change, fixes it" bug). setWidth(200) after building at 200 is a genuine no-op, so the edit's
+    // own invalidation is the only thing that can re-flow the height.
+    func test_codeBox_editAtSameWidth_reflowsHeight() {
+        let box = makeBox("a\nb", language: nil)   // built at width 300
+        box.setWidth(300)                          // same width → genuine no-op (does not re-flow)
+        let before = box.height
+        box.textLayout.replace(start: 0, end: 0,
+                               with: NSAttributedString(string: "\n", attributes: CodeBlockBox.codeAttributes()))
+        XCTAssertGreaterThan(box.height, before, "height must grow after an insert even without a width change")
+    }
 }
 #endif

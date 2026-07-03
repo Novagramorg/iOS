@@ -132,7 +132,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         )
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
-        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: "")
+        self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: "Type a quote here", blockQuote: "Type a quote here", codeBlock: "Type code here")
         // The composer sits over the input panel's own background — clear the editor's document "page"
         // background (`.systemBackground`, opaque white in light mode) so the panel shows through. `nil`
         // (no background) rather than `.clear`: same transparency, but signals "unset" and avoids an
@@ -439,7 +439,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             accent: colors.accent,
             tableBorder: colors.tableBorder,
             tableHeaderBackground: colors.tableHeaderBackground,
-            codeBackground: colors.tableHeaderBackground  // v1: reuse the subtle panel fill; a dedicated code-bg seam color is a follow-up
+            codeBackground: colors.tableHeaderBackground,  // v1: reuse the subtle panel fill; a dedicated code-bg seam color is a follow-up
+            containerPlaceholder: colors.placeholder.mixedWith(colors.accent, alpha: 0.15).withMultipliedBrightnessBy(colors.primaryText.brightness >= 0.4 ? 1.1 : 0.9).withMultipliedAlpha(0.8)
         )
     }
 

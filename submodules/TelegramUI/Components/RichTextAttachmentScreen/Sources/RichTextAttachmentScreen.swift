@@ -329,7 +329,8 @@ final class RichTextAttachmentScreenComponent: Component {
                 listMarker: theme.list.itemPrimaryTextColor,
                 inlineCodeBackground: codeFill,
                 markedTextUnderline: theme.list.itemPrimaryTextColor,
-                spoilerDust: theme.list.itemSecondaryTextColor
+                spoilerDust: theme.list.itemSecondaryTextColor,
+                containerPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9)
             )
         }
 
@@ -382,6 +383,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 // Quote geometry for the full-page article editor. Defaults == the editor's built-in look;
                 // tune here to diverge from the chat composer.
                 editor.quoteStyle = QuoteStyle()
+                editor.pullQuoteStyle = PullQuoteStyle()
                 // Quote collapse/expand affordance icons (same assets as the chat composer / legacy input).
                 if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
                    let expand = UIImage(bundleImageName: "Media Gallery/Fullscreen")?.precomposed().withRenderingMode(.alwaysTemplate) {
@@ -563,7 +565,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 transition.setFrame(view: titleView, frame: titleFrame)
             }
             
-            self.backgroundColor = environment.theme.list.plainBackgroundColor
+            self.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor
 
             let emojiPanelHeight = self.emojiKeyboard?.updatePanel(container: self, availableSize: availableSize, environment: environment, transition: transition) ?? 0.0
             let editorTop = environment.navigationHeight
@@ -926,7 +928,7 @@ final class RichTextAttachmentScreenComponent: Component {
             let edgeEffectHeight: CGFloat = 88.0
             let topEdgeEffectFrame = CGRect(origin: .zero, size: CGSize(width: availableSize.width, height: edgeEffectHeight))
             transition.setFrame(view: self.topEdgeEffectView, frame: topEdgeEffectFrame)
-            self.topEdgeEffectView.update(content: environment.theme.list.plainBackgroundColor, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
+            self.topEdgeEffectView.update(content: environment.theme.actionSheet.opaqueItemBackgroundColor, blur: true, alpha: 1.0, rect: topEdgeEffectFrame, edge: .top, edgeSize: topEdgeEffectFrame.height, transition: transition)
 
             // While the emoji panel is up, hide the AttachmentController's bottom menu/tab bar so the
             // container collapses that panel and re-lays out this screen at full height — otherwise the

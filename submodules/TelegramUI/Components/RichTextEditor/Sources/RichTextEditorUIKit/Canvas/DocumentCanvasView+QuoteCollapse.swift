@@ -30,21 +30,10 @@ extension DocumentCanvasView {
                     let caret = newBox.children.boxes.first?.leafRegions().first?.globalStart
                         ?? (newBox.nodeStart + 1)
                     anchor = caret; head = caret
-                } else {            // COLLAPSING: relocate caret AFTER the folded atom into a real text block.
-                    // Parking on the atom's gap (newBox.nodeStart) would cause the "typing expands /
-                    // cursor doesn't move" bug — a keystroke on a display-only gap is swallowed by the
-                    // preview layout without touching the model. Mirror the `collapseQuoteRun` strategy:
-                    // reuse the following BlockBox if there is one; otherwise append a fresh empty body
-                    // paragraph and land the caret there.
-                    let afterIndex = index + 1
-                    if afterIndex < parentStack.boxes.count, let next = parentStack.boxes[afterIndex] as? BlockBox {
-                        anchor = next.textStart; head = next.textStart
-                    } else {
-                        let trailing = BlockBox(paragraph: ParagraphBlock(id: .generate(), style: .body), mapper: mapper, width: effectiveWidth)
-                        parentStack.boxes.insert(trailing, at: afterIndex)
-                        recomputeSpans()
-                        anchor = trailing.textStart; head = trailing.textStart
-                    }
+                } else {            // COLLAPSING: focus the caret on the collapsed quote's own leading gap —
+                    // the atom's cursor slot (where a tap on the folded quote lands via `closestPosition`),
+                    // NOT a trailing body paragraph. The folded quote is a block and owns this position.
+                    anchor = newBox.nodeStart; head = newBox.nodeStart
                 }
             } else {                // caret outside — preserve, shifted by the size delta
                 let delta = newBox.nodeSize - oldSize
