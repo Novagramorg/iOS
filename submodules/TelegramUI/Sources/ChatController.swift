@@ -71,6 +71,7 @@ import ChatPresentationInterfaceState
 import Pasteboard
 import ChatSendMessageActionUI
 import ChatTextLinkEditUI
+import ChatRichTextEditorComposer
 import WebUI
 import PremiumUI
 import ImageTransparency
@@ -4408,13 +4409,13 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                             self.push(await TextProcessingScreen(
                                 context: self.context,
                                 mode: .translate(fromLanguage: language, applyResult: nil),
-                                inputText: TextWithEntities(text: text.string, entities: entities ?? []),
+                                inputText: .plain(text: text.string, entities: entities ?? []),
                                 copyResult: canCopy ? { [weak self] text in
                                     guard let self else {
                                         return
                                     }
-                                    storeMessageTextInPasteboard(text.text, entities: text.entities)
-                                    
+                                    storeComposedRichMessageInPasteboard(text)
+
                                     let infoText = self.presentationData.strings.Conversation_TextCopied
                                     self.present(UndoOverlayController(presentationData: self.presentationData, content: .copy(text: infoText), elevatedLayout: false, animateInAsReplacement: false, action: { _ in
                                             return true

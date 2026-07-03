@@ -1,7 +1,9 @@
 import Foundation
+import UIKit
 import TelegramCore
 import RichTextEditorCore
 import RichTextEditorUIKit
+import Pasteboard
 
 /// Builds the pasteboard item for copying a RICH message — a `RichTextMessageAttribute`'s `InstantPage` —
 /// in the new WYSIWYG-editor clipboard formats (the private fragment UTI + RTF + plain), so a copied rich
@@ -21,4 +23,18 @@ public func richMessagePasteboardItem(fromInstantPage page: InstantPage) -> [Str
         registerMedia: { _ in BlockID.generate().rawValue }
     )
     return RichTextEditorClipboard.pasteboardItem(for: doc)
+}
+
+/// Copies a `ComposedRichMessage` to the pasteboard: `.plain` in the classic text-with-entities
+/// formats, `.rich` in the structure-preserving rich-message formats (see
+/// `richMessagePasteboardItem(fromInstantPage:)`), `.empty` copies nothing.
+public func storeComposedRichMessageInPasteboard(_ message: ComposedRichMessage) {
+    switch message {
+    case let .rich(instantPage):
+        UIPasteboard.general.items = [richMessagePasteboardItem(fromInstantPage: instantPage)]
+    case let .plain(text, entities):
+        storeMessageTextInPasteboard(text, entities: entities)
+    case .empty:
+        break
+    }
 }

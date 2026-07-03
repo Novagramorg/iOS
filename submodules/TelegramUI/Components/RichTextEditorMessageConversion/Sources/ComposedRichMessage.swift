@@ -3,16 +3,6 @@ import TelegramCore
 import Postbox
 import RichTextEditorCore
 
-/// The result of serializing a RichTextEditor `Document` into a sendable Telegram message.
-public enum ComposedRichMessage {
-    /// Structured content → a rich message (`RichTextMessageAttribute(instantPage:)`, sent with `text: ""`).
-    case rich(instantPage: InstantPage)
-    /// Entity-expressible content → a normal message (`text` + `TextEntitiesMessageAttribute`).
-    case plain(text: String, entities: [MessageTextEntity])
-    /// Nothing worth sending (empty / whitespace-only document).
-    case empty
-}
-
 /// Serialize a RichTextEditor `Document` into a `ComposedRichMessage`.
 ///
 /// `forSendPreview`: when set, a blockquote forces the rich (InstantPage) path even though it is otherwise

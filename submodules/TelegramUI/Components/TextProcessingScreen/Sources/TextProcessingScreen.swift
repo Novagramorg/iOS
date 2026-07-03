@@ -33,7 +33,7 @@ final class TextProcessingContentComponent: Component {
     final class ExternalState {
         fileprivate(set) var isProcessing: Bool = false
         fileprivate(set) var nonPremiumFloodTriggered: Bool = false
-        fileprivate(set) var result: TextWithEntities?
+        fileprivate(set) var result: ComposedRichMessage?
         
         init() {
         }
@@ -44,7 +44,7 @@ final class TextProcessingContentComponent: Component {
     let mode: TextProcessingScreen.Mode
     let previewIconFile: TelegramMediaFile?
     let styles: [TextProcessingScreen.Style]
-    let inputText: TextWithEntities
+    let inputText: ComposedRichMessage
     let initialEditState: TextProcessingScreen.EditState?
     let ignoredTranslationLanguages: [String]
     let shouldDisplayStyleNotice: Bool
@@ -63,7 +63,7 @@ final class TextProcessingContentComponent: Component {
         mode: TextProcessingScreen.Mode,
         previewIconFile: TelegramMediaFile?,
         styles: [TextProcessingScreen.Style],
-        inputText: TextWithEntities,
+        inputText: ComposedRichMessage,
         initialEditState: TextProcessingScreen.EditState?,
         ignoredTranslationLanguages: [String],
         shouldDisplayStyleNotice: Bool,
@@ -752,14 +752,14 @@ final class TextProcessingContentComponent: Component {
             case .stylize:
                 var inputText = component.inputText
                 var isPreview = false
-                var fromText: TextWithEntities?
-                var toText: TextWithEntities?
+                var fromText: ComposedRichMessage?
+                var toText: ComposedRichMessage?
                 var isRequestingPreview: Bool = false
                 var authorPeer: EnginePeer?
                 var userCount: Int = 0
                 if case let .preview(style, authorPeerValue, _, _, _) = component.mode {
                     isPreview = true
-                    inputText = TextWithEntities(text: "", entities: [])
+                    inputText = .plain(text: "", entities: [])
                     authorPeer = authorPeerValue
                     userCount = style.userCount ?? 0
                     isRequestingPreview = self.isRequestingStylePreview
@@ -1148,11 +1148,11 @@ private final class TextProcessingSheetComponent: Component {
     let mode: TextProcessingScreen.Mode
     let ignoredTranslationLanguages: [String]
     let initialStyles: [TextProcessingScreen.Style]
-    let inputText: TextWithEntities
+    let inputText: ComposedRichMessage
     let initialEditState: TextProcessingScreen.EditState?
     let shouldDisplayStyleNotice: Bool
     let previewIconFile: TelegramMediaFile?
-    let copyCurrentResult: ((TextWithEntities) -> Void)?
+    let copyCurrentResult: ((ComposedRichMessage) -> Void)?
     let translateChat: ((String) -> Void)?
 
     init(
@@ -1160,11 +1160,11 @@ private final class TextProcessingSheetComponent: Component {
         mode: TextProcessingScreen.Mode,
         ignoredTranslationLanguages: [String],
         initialStyles: [TextProcessingScreen.Style],
-        inputText: TextWithEntities,
+        inputText: ComposedRichMessage,
         initialEditState: TextProcessingScreen.EditState?,
         shouldDisplayStyleNotice: Bool,
         previewIconFile: TelegramMediaFile?,
-        copyCurrentResult: ((TextWithEntities) -> Void)?,
+        copyCurrentResult: ((ComposedRichMessage) -> Void)?,
         translateChat: ((String) -> Void)?
     ) {
         self.context = context
@@ -1386,7 +1386,7 @@ private final class TextProcessingSheetComponent: Component {
             }
 
             let performMainAction: () -> Void
-            var performSendAction: ((TextWithEntities) -> Void)?
+            var performSendAction: ((ComposedRichMessage) -> Void)?
             var hasLongPressActions = false
             let isMainActionEnabled: Bool
             let actionButtonTitle: String
@@ -2047,8 +2047,8 @@ public class TextProcessingScreen: ViewControllerComponentContainer {
         context: AccountContext,
         theme: PresentationTheme? = nil,
         mode: Mode,
-        inputText: TextWithEntities,
-        copyResult: ((TextWithEntities) -> Void)?,
+        inputText: ComposedRichMessage,
+        copyResult: ((ComposedRichMessage) -> Void)?,
         translateChat: ((String) -> Void)?
     ) async {
         self.context = context

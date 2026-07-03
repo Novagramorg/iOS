@@ -4614,6 +4614,22 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     return state.updatedInterfaceState { interfaceState in
                         return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
                     }
+                }, completion: { [weak self] _ in
+                    guard let self else {
+                        return
+                    }
+                    self.sendCurrentMessage()
+                })
+            },
+            syncContent: { [weak self] document, media, emojiFiles in
+                guard let self else {
+                    return
+                }
+                let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                self.controller?.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
+                    return state.updatedInterfaceState { interfaceState in
+                        return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(content: content, selectionRange: content.length ..< content.length))
+                    }
                 })
             },
             presentAttachmentMenu: { [weak self] completion in
@@ -4639,27 +4655,39 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                 effectivePresentationInterfaceState = effectivePresentationInterfaceState.updatedInterfaceState { $0.withUpdatedEffectiveInputState(textInputPanelNode.inputTextState) }
             }
             
-            let effectiveInputText: NSAttributedString
+            let effectiveInputContent: ChatInputContent
             var isEdit = false
             if effectivePresentationInterfaceState.interfaceState.editMessage != nil {
                 isEdit = true
-                effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.effectiveInputState.inputText)
+                effectiveInputContent = effectivePresentationInterfaceState.interfaceState.effectiveInputState.content
             } else {
-                effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.composeInputState.inputText)
+                effectiveInputContent = effectivePresentationInterfaceState.interfaceState.composeInputState.content
             }
             
-            if effectiveInputText.length == 0 {
+            if effectiveInputContent.isEmpty {
                 return
             }
             
-            let inputText = trimChatInputText(effectiveInputText)
-            var entities: [MessageTextEntity] = []
-            if inputText.length != 0 {
-                if case let .customChatContents(customChatContents) = self.chatPresentationInterfaceState.subject, case .businessLinkSetup = customChatContents.kind {
-                    entities = generateChatInputTextEntities(inputText, generateLinks: false)
-                } else {
-                    entities = generateTextEntities(inputText.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(inputText, maxAnimatedEmojisInText: 0))
+            let composedInputText: ComposedRichMessage
+            if effectiveInputContent.isEntityExpressible() {
+                let effectiveInputText = expandedInputStateAttributedString(attributedString(from: effectiveInputContent))
+                if effectiveInputText.length == 0 {
+                    return
                 }
+                let inputText = trimChatInputText(effectiveInputText)
+                var entities: [MessageTextEntity] = []
+                if inputText.length != 0 {
+                    if case let .customChatContents(customChatContents) = self.chatPresentationInterfaceState.subject, case .businessLinkSetup = customChatContents.kind {
+                        entities = generateChatInputTextEntities(inputText, generateLinks: false)
+                    } else {
+                        entities = generateTextEntities(inputText.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(inputText, maxAnimatedEmojisInText: 0))
+                    }
+                }
+                composedInputText = .plain(text: inputText.string, entities: entities)
+            } else {
+                // Mirrors the send path (ChatControllerNode ~4982): structured content that entities
+                // can't express goes to the AI as a rich InstantPage; no trim, matching send.
+                composedInputText = .rich(instantPage: instantPage(from: effectiveInputContent))
             }
             
             self.controller?.push(await TextProcessingScreen(
@@ -4672,7 +4700,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                         controller.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
                             return state.updatedInterfaceState { interfaceState in
-                                return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(inputText: chatInputStateStringWithAppliedEntities(text.text, entities: text.entities)))
+                                return interfaceState.withUpdatedEffectiveInputState(chatTextInputState(fromComposedRichMessage: text))
                             }.updatedInputMode({ _ in return .text })
                         })
                     },
@@ -4682,7 +4710,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         }
                         controller.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
                             return state.updatedInterfaceState { interfaceState in
-                                return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(inputText: chatInputStateStringWithAppliedEntities(text.text, entities: text.entities)))
+                                return interfaceState.withUpdatedEffectiveInputState(chatTextInputState(fromComposedRichMessage: text))
                             }
                         })
                         self.sendCurrentMessage()
@@ -4695,7 +4723,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                 }
                                 controller.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
                                     return state.updatedInterfaceState { interfaceState in
-                                        return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(inputText: chatInputStateStringWithAppliedEntities(text.text, entities: text.entities)))
+                                        return interfaceState.withUpdatedEffectiveInputState(chatTextInputState(fromComposedRichMessage: text))
                                     }
                                 })
                                 switch mode {
@@ -4721,7 +4749,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                                 }
                                 controller.updateChatPresentationInterfaceState(animated: true, interactive: true, { state in
                                     return state.updatedInterfaceState { interfaceState in
-                                        return interfaceState.withUpdatedEffectiveInputState(ChatTextInputState(inputText: chatInputStateStringWithAppliedEntities(text.text, entities: text.entities)))
+                                        return interfaceState.withUpdatedEffectiveInputState(chatTextInputState(fromComposedRichMessage: text))
                                     }
                                 })
                                 controller.controllerInteraction?.scheduleCurrentMessage(params)
@@ -4729,13 +4757,13 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                         )
                     }
                 ),
-                inputText: TextWithEntities(text: inputText.string, entities: entities),
+                inputText: composedInputText,
                 copyResult: { [weak self] text in
                     guard let self, let controller = self.controller else {
                         return
                     }
-                    storeMessageTextInPasteboard(text.text, entities: text.entities)
-                    
+                    storeComposedRichMessageInPasteboard(text)
+
                     let infoText = controller.presentationData.strings.Conversation_TextCopied
                     controller.present(UndoOverlayController(presentationData: controller.presentationData, content: .copy(text: infoText), elevatedLayout: false, animateInAsReplacement: false, action: { _ in
                             return true

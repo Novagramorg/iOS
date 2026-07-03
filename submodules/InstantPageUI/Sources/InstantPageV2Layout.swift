@@ -3506,3 +3506,56 @@ func layoutTextItem(
 
     return (textItem, items, textItem.frame.size)
 }
+
+/// Line-level metrics for hosts that apply text-style layout heuristics to a rendered page
+/// (first-line collapse, trailing-line/copy-button overlap). Text items contribute their
+/// laid-out lines (offset into page coordinates); substantive block items (code blocks,
+/// tables, media, …) contribute their whole frame as one "line" and mark the trailing
+/// position as a block; pure decorations (list markers, quote bars, shapes, dividers, image
+/// ornaments) and anchors contribute nothing.
+public struct InstantPageV2TextLineMetrics {
+    public let numberOfLines: Int
+    public let lineRects: [CGRect]
+    public let trailingLineWidth: CGFloat
+    public let trailingLineIsRTL: Bool
+    public let trailingIsBlock: Bool
+}
+
+public extension InstantPageV2Layout {
+    func textLineMetrics() -> InstantPageV2TextLineMetrics {
+        var lineRects: [CGRect] = []
+        var trailingLineWidth: CGFloat = 0.0
+        var trailingLineIsRTL = false
+        var trailingIsBlock = false
+
+        for item in self.items {
+            switch item {
+            case .anchor, .listMarker, .blockQuoteBar, .shape, .divider, .imageOrnament:
+                continue
+            case let .text(textItem):
+                if textItem.textItem.lines.isEmpty {
+                    continue
+                }
+                for line in textItem.textItem.lines {
+                    lineRects.append(line.frame.offsetBy(dx: textItem.frame.minX, dy: textItem.frame.minY))
+                    trailingLineWidth = line.frame.maxX + textItem.frame.minX
+                    trailingLineIsRTL = line.isRTL
+                }
+                trailingIsBlock = false
+            default:
+                lineRects.append(item.frame)
+                trailingLineWidth = item.frame.maxX
+                trailingLineIsRTL = false
+                trailingIsBlock = true
+            }
+        }
+
+        return InstantPageV2TextLineMetrics(
+            numberOfLines: lineRects.count,
+            lineRects: lineRects,
+            trailingLineWidth: trailingLineWidth,
+            trailingLineIsRTL: trailingLineIsRTL,
+            trailingIsBlock: trailingIsBlock
+        )
+    }
+}

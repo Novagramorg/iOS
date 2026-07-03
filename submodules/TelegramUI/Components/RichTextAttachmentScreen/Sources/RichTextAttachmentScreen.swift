@@ -19,6 +19,8 @@ import Postbox
 import TelegramCore
 import CheckNode
 import GlassControls
+import ChatRichTextEditorComposer
+import TextFormat
 
 /// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
 /// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
@@ -72,9 +74,11 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     }
 
     private let sendMessage: (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void
+    private let syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)?
 
-    public init(context: AccountContext, initialContents: Document? = nil, initialMedia: [String: Media] = [:], initialEmojiFiles: [Int64: TelegramMediaFile] = [:], sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+    public init(context: AccountContext, initialContents: Document? = nil, initialMedia: [String: Media] = [:], initialEmojiFiles: [Int64: TelegramMediaFile] = [:], sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void, syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
         self.sendMessage = sendMessage
+        self.syncContent = syncContent
 
         let overNavigationContainer = SparseContainerView()
 
@@ -96,6 +100,14 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         if let navigationBar = self.navigationBar {
             navigationBar.customOverBackgroundContentView.insertSubview(overNavigationContainer, at: 0)
         }
+        
+        self.attemptNavigation = { [weak self] _ in
+            guard let self, let syncContent = self.syncContent, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+                return true
+            }
+            syncContent(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
+            return true
+        }
     }
 
     required public init(coder aDecoder: NSCoder) {
@@ -106,6 +118,15 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         if let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View {
             self.sendMessage(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
         }
+        self.dismiss()
+    }
+    
+    fileprivate func close() {
+        guard let syncContent = self.syncContent, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+            self.dismiss()
+            return
+        }
+        syncContent(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
         self.dismiss()
     }
 }
@@ -470,7 +491,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
                                 return
                             }
-                            controller.dismiss()
+                            controller.close()
                         })
                     ], minWidth: 44.0)
                 ),
@@ -789,8 +810,47 @@ final class RichTextAttachmentScreenComponent: Component {
                     preferClearGlass: false,
                     background: .panel,
                     items: [
-                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/InputAIIcon"), action: {
-                            
+                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/InputAIIcon"), action: { [weak self] in
+                            Task { @MainActor in
+                                guard let self, let component = self.component, let environment = self.environment else {
+                                    return
+                                }
+                                
+                                let currentContent = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
+                                let currentPage = instantPage(from: currentContent)
+                                
+                                let textProcessingScreen = await component.context.sharedContext.makeTextProcessingScreen(
+                                    context: component.context,
+                                    theme: environment.theme,
+                                    mode: .edit(
+                                        saveRestoreStateId: nil,
+                                        completion: { [weak self] result in
+                                            guard let self else {
+                                                return
+                                            }
+                                            let content: ChatInputContent
+                                            switch result {
+                                            case let .rich(instantPage):
+                                                content = chatInputContent(fromInstantPage: instantPage)
+                                            case let .plain(text, entities):
+                                                content = chatInputContent(from: chatInputStateStringWithAppliedEntities(text, entities: entities))
+                                            case .empty:
+                                                return
+                                            }
+                                            let (document, media, emojiFiles) = documentMediaAndEmoji(fromChatInputContent: content)
+                                            self.emojiKeyboard?.seedEmojiFiles(emojiFiles)
+                                            self.attachedMedia.merge(media) { _, new in new }
+                                            self.editor.document = document
+                                        },
+                                        send: nil,
+                                        sendContextActions: nil
+                                    ),
+                                    inputText: ComposedRichMessage.rich(instantPage: currentPage),
+                                    copyResult: nil,
+                                    translateChat: nil
+                                )
+                                environment.controller()?.push(textProcessingScreen)
+                            }
                         })
                     ], minWidth: 44.0)
                 ),

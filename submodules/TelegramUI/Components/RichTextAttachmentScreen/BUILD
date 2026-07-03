@@ -37,6 +37,7 @@ swift_library(
         "//submodules/InstantPageUI",
         "//submodules/CheckNode",
         "//submodules/TelegramUI/Components/GlassControls",
+        "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
     ],
     visibility = [
         "//visibility:public",
