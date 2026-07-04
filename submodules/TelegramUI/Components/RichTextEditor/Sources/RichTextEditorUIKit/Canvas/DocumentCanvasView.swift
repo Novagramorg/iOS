@@ -431,8 +431,10 @@ final class DocumentCanvasView: UIView {
         addSubview(blockquoteUnderlay)   // back-most: blockquote fills behind every block view
         pullQuoteUnderlay.barWidth = 0                             // no leading bar — a symmetric pill
         pullQuoteUnderlay.accentColor = blockquoteUnderlay.accentColor
-        pullQuoteUnderlay.cornerRadius = blockquoteUnderlay.cornerRadius
-        pullQuoteUnderlay.fillAlpha = blockquoteUnderlay.fillAlpha
+        // Corner radius + fill come from the pull-quote style (NOT the block-quote underlay) so the default
+        // pull-quote look applies even in hosts that never assign a custom pullQuoteStyle (e.g. the composer).
+        pullQuoteUnderlay.cornerRadius = pullQuoteStyle.cornerRadius
+        pullQuoteUnderlay.fillAlpha = pullQuoteStyle.fillAlpha
         addSubview(pullQuoteUnderlay)    // back-most: pull-quote pill fills behind every block view
         emojiOverlay.isUserInteractionEnabled = false
         emojiOverlay.backgroundColor = .clear
@@ -1060,6 +1062,13 @@ final class DocumentCanvasView: UIView {
     /// The media box whose gap-before-atom is at `pos`, if any.
     func mediaBox(atGap pos: Int) -> MediaBlockBox? {
         boxes.first { ($0 as? MediaBlockBox)?.nodeStart == pos } as? MediaBlockBox
+    }
+
+    /// The COLLAPSED block-quote box whose leading gap is at `pos` (top-level), if any. The folded quote is a
+    /// caption-less atom holding no editable text, so a caret can focus its gap but typing there must open a
+    /// body paragraph before it — mirroring `mediaBox(atGap:)`.
+    func collapsedBlockQuoteBox(atGap pos: Int) -> BlockQuoteBox? {
+        boxes.first { ($0 as? BlockQuoteBox).map { $0.collapsed && $0.nodeStart == pos } ?? false } as? BlockQuoteBox
     }
 
     /// If the caret (`head`) is inside a horizontally-scrollable table, scroll its cell into view.

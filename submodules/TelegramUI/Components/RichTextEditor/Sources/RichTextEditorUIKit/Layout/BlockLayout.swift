@@ -300,6 +300,11 @@ final class BlockLayout: BlockLayoutEngine {
     func replace(start: Int, end: Int, with string: NSAttributedString) {
         contentStorage.textStorage?.replaceCharacters(in: NSRange(location: start, length: end - start),
                                                        with: string)
+        // Force a TK2 re-flow: a raw storage edit leaves the layout "valid", so a later measure at the SAME
+        // container width returns the STALE height — an interior newline in a code / pull-quote block didn't
+        // grow the box until a width change (rotation) forced a re-flow. Guarded by CodeBlockBoxTests
+        // `test_codeBox_editAtSameWidth_reflowsHeight`.
+        layoutManager.invalidateLayout(for: layoutManager.documentRange)
         renderVersion &+= 1
         ghostRange = nil; spoilerRanges = []; spoilerLocalRanges = []
     }

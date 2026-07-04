@@ -50,6 +50,8 @@ final class BlockQuoteBox: CanvasBlock {
 
     var frame: CGRect = .zero
     var nodeStart: Int = 0
+    /// Host placeholder strings (stamped by the canvas). Drives the empty block-quote hint.
+    var placeholders: RichTextEditorPlaceholders = .default
     private(set) var layoutWidth: CGFloat
 
     /// Interior top padding (fill → first child). Mirrors `CodeBlockBox`: uses the QuoteStyle vertical
@@ -133,6 +135,13 @@ final class BlockQuoteBox: CanvasBlock {
     }
     private var lineHeight: CGFloat {
         mapper.styleSheet.font(for: .body, attributes: .plain).lineHeight
+    }
+
+    /// Caret rect for the COLLAPSED atom's leading gap (canvas coords): a 2pt bar at the folded preview's
+    /// leading edge, one line tall. The canvas `caretRect` reports this — the folded quote owns no text leaf,
+    /// so without it the caret focused on a collapsed quote would be invisible. Mirrors the media-gap caret.
+    var collapsedCaretRect: CGRect {
+        CGRect(x: frame.minX + leadingPad, y: frame.minY + topInset, width: 2, height: lineHeight)
     }
     private var previewHeight: CGFloat {
         guard let layout = previewLayout else { return 0 }
@@ -257,6 +266,14 @@ final class BlockQuoteBox: CanvasBlock {
         collapsed ? nodeStart : children.closestPosition(toCanvasPoint: point)
     }
 
+    /// When the (expanded) quote is a single empty paragraph, the host placeholder to show, else nil.
+    var placeholderText: String? {
+        guard !collapsed, children.boxes.count == 1,
+              let first = children.boxes.first as? BlockBox, first.textLength == 0,
+              !placeholders.blockQuote.isEmpty else { return nil }
+        return placeholders.blockQuote
+    }
+
     /// Collapsed → draws the clipped preview text + the tinted expand glyph (mirrors BlockQuoteBox.draw).
     /// Expanded → draws child boxes. The fill (accent bar + tinted background) is provided by
     /// `blockquoteDecorations()` in both modes — this method draws only the text content.
@@ -276,6 +293,14 @@ final class BlockQuoteBox: CanvasBlock {
             return
         }
         children.draw(in: ctx, imageProvider: imageProvider)
+        if let ph = placeholderText, let first = children.boxes.first {
+            // Empty quote: draw the host hint left-aligned at the child paragraph's text position (the quote is
+            // left-aligned, unlike the centered pull quote). Baseline shift mirrors BlockBox.placeholderDraw.
+            let font = mapper.styleSheet.font(for: .body, attributes: .plain)
+            let mult = mapper.styleSheet.paragraphStyle(for: .body, attributes: ParagraphAttributes()).lineHeightMultiple
+            let origin = CGPoint(x: first.textOrigin.x, y: first.textOrigin.y + (max(mult, 1) - 1) * font.lineHeight / 2)
+            NSAttributedString(string: ph, attributes: [.font: font, .foregroundColor: mapper.theme.containerPlaceholder]).draw(at: origin)
+        }
         // Draw the collapse glyph only when the quote is worth collapsing (`isCollapsible`: content
         // taller than the ≤maxPreviewLines-line preview), at any nesting level. The flat-quote
         // QuoteCollapseControlsView gating is untouched — this glyph is the BlockQuoteBox's own control.

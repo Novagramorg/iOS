@@ -20,5 +20,10 @@ final class StyleSheetPullQuoteTests: XCTestCase {
         XCTAssertEqual(runs.map(\.text).joined(), "hi")
         XCTAssertFalse(runs.contains { $0.attributes.italic })   // forced italic never persists
     }
+    func test_pullQuote_baseSizeIs15() {
+        // Pull quotes render at 15pt like block quotes, not the ambient body size (17 in StyleSheet.default).
+        let font = StyleSheet.default.font(for: .pullQuote, attributes: CharacterAttributes())
+        XCTAssertEqual(font.pointSize, 15, accuracy: 0.001)
+    }
 }
 #endif

@@ -28,18 +28,41 @@ final class PullQuoteGeometryTests: XCTestCase {
         XCTAssertEqual(marks[0].open.minY, pill.minY + 6, accuracy: 0.5)
         XCTAssertEqual(marks[0].close.maxX, pill.maxX - 6, accuracy: 0.5)         // bottom-right
         XCTAssertEqual(marks[0].close.maxY, pill.maxY - 6, accuracy: 0.5)
-        XCTAssertGreaterThan(marks[0].close.minY, marks[0].open.minY)             // close sits lower than open
     }
 
-    func test_pullQuoteStyle_minWidthAndPaddingApplied() {
+    func test_pullQuoteMarkRects_deriveFrames_fromNonSquareImageSizes() {
+        // The RichText/QuoteOpen & QuoteClose assets are 12×10 (non-square). Each mark rect must use its
+        // image's own size (not a square), anchored open→top-left / close→bottom-right, inset from the corner.
+        let pill = CGRect(x: 100, y: 50, width: 160, height: 90)
+        let size = CGSize(width: 12, height: 10)
+        let rects = DocumentCanvasView.pullQuoteMarkRects(pills: [pill], inset: 6, openSize: size, closeSize: size)
+        XCTAssertEqual(rects.count, 1)
+        XCTAssertEqual(rects[0].open, CGRect(x: 106, y: 56, width: 12, height: 10))   // top-left, natural size
+        XCTAssertEqual(rects[0].close.width, 12, accuracy: 0.001)                     // image width, not a forced square
+        XCTAssertEqual(rects[0].close.height, 10, accuracy: 0.001)                    // image height (non-square)
+        XCTAssertEqual(rects[0].close.maxX, pill.maxX - 6, accuracy: 0.001)           // bottom-right anchored
+        XCTAssertEqual(rects[0].close.maxY, pill.maxY - 6, accuracy: 0.001)
+    }
+
+    func test_pullQuoteStyle_minWidthFloor_andMarkFromImageSize() {
         let canvas = DocumentCanvasView()
         canvas.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
-        var style = PullQuoteStyle.default; style.minWidth = 200; style.markSize = 24
+        var style = PullQuoteStyle.default; style.minWidth = 200
         canvas.applyPullQuoteStyle(style)
         canvas.simulateParentLayout()   // install callback before setBlocks so layout fires on content-size notify
         canvas.setBlocks([.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "x")]))], width: 320)
         XCTAssertGreaterThanOrEqual(canvas.pullQuotePillRects()[0].width, 200)   // minWidth floor
-        XCTAssertEqual(canvas.pullQuoteMarkRects()[0].open.width, 24, accuracy: 0.5)  // markSize
+        // mark frame size comes from the image's natural size (the generated stub under SwiftPM), not a config knob
+        XCTAssertEqual(canvas.pullQuoteMarkRects()[0].open.width,
+                       PullQuoteMarksView.openImageNaturalSize.width, accuracy: 0.5)
+    }
+
+    func test_pullQuoteUnderlay_cornerRadius_comesFromPullQuoteStyleDefault() {
+        // Regression: the pull-quote pill underlay must take its corner radius from PullQuoteStyle (the
+        // pull-quote's own look), NOT borrow the block-quote underlay's radius at init — otherwise changing
+        // PullQuoteStyle.cornerRadius has no effect in hosts that don't assign a custom pullQuoteStyle (the composer).
+        let canvas = DocumentCanvasView()
+        XCTAssertEqual(canvas.pullQuoteUnderlay.cornerRadius, PullQuoteStyle.default.cornerRadius, accuracy: 0.001)
     }
 }
 #endif

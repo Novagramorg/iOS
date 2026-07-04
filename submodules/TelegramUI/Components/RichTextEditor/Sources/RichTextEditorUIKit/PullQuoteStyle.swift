@@ -7,27 +7,28 @@ import UIKit
 public struct PullQuoteStyle: Equatable {
     /// Interior horizontal padding: text→pill-edge on each side (points). Also the pill's horizontal breathing room.
     public var horizontalPadding: CGFloat
-    /// Interior vertical padding: text→pill-edge top/bottom (points).
-    public var verticalPadding: CGFloat
+    /// Interior TOP padding (points): pill top edge → first text line. Manual (default 0). The corner marks
+    /// inset the content HORIZONTALLY and never overlap it vertically, so no vertical clearance is needed here.
+    public var topInset: CGFloat
+    /// Interior BOTTOM padding (points): last text line → pill bottom edge. Manual (default 0).
+    public var bottomInset: CGFloat
     /// Pill corner radius (points).
     public var cornerRadius: CGFloat
     /// Pill fill opacity (0…1).
     public var fillAlpha: CGFloat
-    /// Corner quote-mark side length (points).
-    public var markSize: CGFloat
     /// Inset of each corner mark from the pill's corner (points).
     public var markInset: CGFloat
     /// Minimum pill width (points) — the floor for a short/empty pull quote so the corner marks + placeholder fit.
     public var minWidth: CGFloat
 
-    public init(horizontalPadding: CGFloat = 12, verticalPadding: CGFloat = 8,
-                cornerRadius: CGFloat = 2.5, fillAlpha: CGFloat = 0.10,
-                markSize: CGFloat = 16, markInset: CGFloat = 6, minWidth: CGFloat = 160) {
+    public init(horizontalPadding: CGFloat = 30, topInset: CGFloat = 8.0, bottomInset: CGFloat = 8.0,
+                cornerRadius: CGFloat = 6.0, fillAlpha: CGFloat = 0.10,
+                markInset: CGFloat = 6, minWidth: CGFloat = 0) {
         self.horizontalPadding = horizontalPadding
-        self.verticalPadding = verticalPadding
+        self.topInset = topInset
+        self.bottomInset = bottomInset
         self.cornerRadius = cornerRadius
         self.fillAlpha = fillAlpha
-        self.markSize = markSize
         self.markInset = markInset
         self.minWidth = minWidth
     }

@@ -15,19 +15,28 @@ public struct RichTextEditorPlaceholders: Equatable {
     public var listOutdent: String
     /// Shown centered in an empty pull-quote block.
     public var pullQuote: String
+    /// Shown in an empty block-quote (left-aligned at the quote's text position).
+    public var blockQuote: String
+    /// Shown in an empty code block.
+    public var codeBlock: String
 
-    public init(body: String, listEnd: String, listOutdent: String, pullQuote: String = "Type a quote here") {
+    public init(body: String, listEnd: String, listOutdent: String, pullQuote: String = "Type a quote here",
+                blockQuote: String = "Type a quote here", codeBlock: String = "Type code here") {
         self.body = body
         self.listEnd = listEnd
         self.listOutdent = listOutdent
         self.pullQuote = pullQuote
+        self.blockQuote = blockQuote
+        self.codeBlock = codeBlock
     }
 
     public static let `default` = RichTextEditorPlaceholders(
         body: "Type something…",
         listEnd: "Press return to end the list",
         listOutdent: "Press return to outdent",
-        pullQuote: "Type a quote here"
+        pullQuote: "Type a quote here",
+        blockQuote: "Type a quote here",
+        codeBlock: "Type code here"
     )
 }
 

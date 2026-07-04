@@ -223,6 +223,11 @@ extension DocumentCanvasView: UITextInput {
             let rr = img.mediaRect()
             return CGRect(x: rr.minX, y: rr.minY, width: 2, height: rr.height)
         }
+        // A collapsed quote's leading gap is a real caret slot (no text leaf) — a bar at the folded preview's
+        // leading edge, so the caret focused on a collapsed quote is visible. Mirrors the media-gap branch.
+        if let bq = collapsedBlockQuoteBox(atGap: pos) {
+            return bq.collapsedCaretRect
+        }
         return .zero
     }
 
@@ -272,6 +277,12 @@ extension DocumentCanvasView: UIKeyInput {
         // (Enter inserts an empty one), rather than letting the text fall into the caption. Symmetric
         // to deleteBackward's gap branch below.
         if selFrom == selTo, let img = mediaBox(atGap: head), let i = boxIndex(of: img) {
+            editing { insertBodyParagraph(beforeBoxAt: i, text: text == "\n" ? "" : text) }
+            return
+        }
+        // Caret focused on a COLLAPSED quote's gap → open a body paragraph immediately before the folded
+        // quote (the atom holds no editable text), so a keystroke there isn't swallowed. Mirrors the media gap.
+        if selFrom == selTo, let bq = collapsedBlockQuoteBox(atGap: head), let i = boxIndex(of: bq) {
             editing { insertBodyParagraph(beforeBoxAt: i, text: text == "\n" ? "" : text) }
             return
         }
@@ -370,6 +381,17 @@ extension DocumentCanvasView: UIKeyInput {
         return (snap(lo, up: false), snap(hi, up: true))
     }
 
+    /// True when `pos` is the START (local 0) of an empty CONTAINER whose Backspace un-makes it to a body
+    /// paragraph: an empty code block, an empty pull quote, or the lone empty child of a block quote. Used to
+    /// recognise the OS-delivered object-replacement Backspace RANGE at an empty container so it can be collapsed
+    /// to a caret and routed through the same un-quote / un-code / un-make branches as a direct tap.
+    func startsEmptyContainer(at pos: Int) -> Bool {
+        guard let active = activeStack(at: pos), active.local == 0, active.box.textLength == 0 else { return false }
+        if active.box is CodeBlockBox || active.box is PullQuoteBox { return true }
+        if active.box is BlockBox, active.stack.boxes.count == 1, isInsideBlockQuote(pos) { return true }
+        return false
+    }
+
     func deleteBackward() {
         if markedRange != nil { commitMarkedText() }   // delete acts on committed text, not the composition
         guard !boxes.isEmpty else { return }
@@ -394,6 +416,18 @@ extension DocumentCanvasView: UIKeyInput {
             // in-cell branch below would otherwise just delete a character.
             deleteTableStructuralSelection()
             return
+        }
+        // iOS delivers Backspace at the START of an empty CONTAINER (block quote / code block / pull quote) as an
+        // object-replacement RANGE anchored at the previous block's text end — the same offset geometry as a
+        // media atom, NOT a collapsed caret. Left as a range it falls to the generic selection-replace below and
+        // MERGES the container's (empty) content into the previous block, stranding the empty container — the
+        // device bug ("Backspace jumps the caret to the previous line and the quote stays"). When the range only
+        // spans the structural slots before the container's start (`selFrom >= prevTextPosition(before: selTo)`,
+        // which excludes a genuine text selection), COLLAPSE it to a caret at the container start so the
+        // collapsed-caret un-quote / un-code / un-make branches below un-make it — exactly like a direct tap.
+        if selFrom != selTo, startsEmptyContainer(at: selTo),
+           selFrom >= prevTextPosition(before: selTo) {
+            anchor = selTo; head = selTo
         }
         // iOS delivers Backspace in an empty paragraph immediately AFTER a non-paragraph atom (image /
         // table / code / collapsed quote) as an object-replacement RANGE running from the atom's text end
