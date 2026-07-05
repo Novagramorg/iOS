@@ -8,10 +8,19 @@ extension DocumentCanvasView {
             // One 1-tap recognizer that fires IMMEDIATELY on every tap; multi-tap escalation
             // (caret → word → paragraph) is counted manually in handleTap. We deliberately do NOT chain
             // `require(toFail:)` to double-/triple-tap recognizers — that gate made every caret placement
-            // wait out the ~0.35s multi-tap window, which was the reported tap-to-caret latency.
+            // wait out the `N`s multi-tap window, which was the reported tap-to-caret latency.
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
             tap.numberOfTapsRequired = 1
-            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+            // The loupe/caret-drag delay adapts to the touch's PROXIMITY to the caret: near-instant when it lands
+            // within `loupeNearCursorRadius` of the cursor (grab-the-cursor), longer otherwise. `minimumPressDuration`
+            // is chosen per-touch in the recognizer's `touchesBegan` from `loupeDelayNearCursor` / `loupeDelayFarFromCursor`.
+            let longPress = LocationAdaptiveLongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+            longPress.durationForLocation = { [weak self] point in
+                guard let self else { return DocumentCanvasView.loupeDelayFarFromCursor }
+                return self.isPointNearCursor(point)
+                    ? DocumentCanvasView.loupeDelayNearCursor
+                    : DocumentCanvasView.loupeDelayFarFromCursor
+            }
             [tap, longPress].forEach { addGestureRecognizer($0) }
             // Arbitration with the enclosing UIScrollView's pan is intentionally gate-only (see
             // gestureRecognizerShouldBegin) pending on-device verification — do NOT add require(toFail:) or
@@ -41,6 +50,27 @@ extension DocumentCanvasView {
         // interaction exists). Everything we still need is independent of it — the loupe
         // (`UITextLoupeSession`), the edit menu (`UIEditMenuInteraction`), and `caretRect(for:)` (which feeds
         // the loupe / hit-test / edit-menu geometry).
+        //
+        // SPIKE (loupe grow-from-cursor): we do NOT install a persistent one here. A persistent interaction goes
+        // stale across our view virtualization / edits and crashes (use-after-free in `setActivated:`). Instead a
+        // FRESH interaction is created per loupe drag and torn down on release (see `handleLongPress`), so nothing
+        // survives between drags to be corrupted, and `removeInteraction` clears its chrome.
+    }
+
+    /// The loupe "shadow" cursor tint — the desaturated snapped real-caret shown while the accent-colored cursor
+    /// glides at the finger. Host-set via `RichTextEditorTheme.shadowCursor` (defaults to a light gray).
+    func loupeShadowColor() -> UIColor {
+        return self.mapper.theme.shadowCursor
+    }
+
+    /// Positions the `transientCaretView` shadow at the raw finger x (unsnapped) on the line of the snapped caret
+    /// position, so it glides continuously under the finger during a loupe drag — the same visual the
+    /// floating-cursor gesture uses (`moveFloatingCaret`'s shadow half, without touching selection).
+    func positionLoupeShadow(fingerX: CGFloat, snappedGlobal pos: Int) {
+        guard var placement = caretHostPlacement(forGlobal: pos) else { return }
+        let raw = (placement.container === self) ? fingerX : convert(CGPoint(x: fingerX, y: 0), to: placement.container).x
+        placement.frame.origin.x = min(max(raw, 0), max(0, placement.container.bounds.width - placement.frame.width))
+        hostOverlay(transientCaretView, at: placement)
     }
 
     private func ensureFirstResponder() { if !isFirstResponder { becomeFirstResponder() } }
@@ -49,6 +79,29 @@ extension DocumentCanvasView {
     /// (caret → word → paragraph); otherwise it starts a fresh count. Approximates the system double-tap.
     static let multiTapWindow: TimeInterval = 0.4
     static let multiTapSlop: CGFloat = 40
+
+    // ── Long-press → loupe delay, chosen per-touch by the touch's PROXIMITY to the current caret. ──
+    // Matches iOS: a touch that starts within `loupeNearCursorRadius` of the caret can "grab" it almost
+    // immediately; a touch farther away needs the longer hold before the loupe/caret-drag begins.
+    /// Radius (pt) around the caret within which a touch counts as "grabbing the cursor".
+    static let loupeNearCursorRadius: CGFloat = 35
+    /// Delay when the touch starts WITHIN `loupeNearCursorRadius` of the caret. Near-instant. NOTE: a literal
+    /// `0` is NOT usable — the tap and long-press recognizers share touches, so `0` fires the loupe on every
+    /// quick tap; keep it small-but-nonzero.
+    static let loupeDelayNearCursor: TimeInterval = 0.05
+    /// Delay when the touch starts OUTSIDE that radius.
+    static let loupeDelayFarFromCursor: TimeInterval = 0.3
+
+    /// True when `point` (canvas coords) is within `loupeNearCursorRadius` of the current caret (`head`).
+    /// `caretRect(for:)` is the same OS-facing geometry the loupe/hit-test use, so it tracks the caret even in a
+    /// horizontally-scrolled table cell. Returns false when there's no real caret (e.g. `head` at a media gap).
+    func isPointNearCursor(_ point: CGPoint) -> Bool {
+        guard isFirstResponder else { return false }   // no visible caret to grab until the field is focused
+        let caret = caretRect(for: DocumentTextPosition(head))
+        guard caret != .zero else { return false }
+        let dx = point.x - caret.midX, dy = point.y - caret.midY
+        return dx * dx + dy * dy <= Self.loupeNearCursorRadius * Self.loupeNearCursorRadius
+    }
 
     @objc private func handleSingleTap(_ g: UITapGestureRecognizer) {
         handleTap(at: g.location(in: self), time: Date().timeIntervalSinceReferenceDate)
@@ -197,15 +250,51 @@ extension DocumentCanvasView {
         switch g.state {
         case .began:
             dismissEditMenu()
+            // Mark the loupe drag active BEFORE `setCaret` so the caret it renders is already SOLID (see
+            // `loupeDragActive` / `updateCaretView`) by the time `begin(...)` below captures it as the
+            // selection-widget — otherwise the loupe grows from a mid-blink (near-invisible) caret.
+            if #available(iOS 17.0, *) { loupeDragActive = true }
             setCaret(global: p)
             // The magnifier loupe is iOS 17+; below it, the long-press still places the caret + (on release)
             // presents the menu — just without the magnifier.
+            // `setCaret` above has already positioned + shown our own `caretView` at `p`; pass it as the
+            // selection-widget so the loupe lifts off from / settles back onto the real caret (the native
+            // magnifier animation) instead of fading in at the touch point. It's our custom cursor — the
+            // canvas installs no `UITextSelectionDisplayInteraction`, so this is the only caret view there is.
             if #available(iOS 17.0, *) {
-                loupeSession = UITextLoupeSession.begin(at: point, fromSelectionWidgetView: nil, in: self)
+                // SPIKE: activate the display interaction and borrow ITS system cursorView as the loupe widget
+                // (a bare/own caret view is ignored by the loupe's grow animation — 3 approaches proved it).
+                // Create a FRESH interaction for THIS drag (torn down on release) so nothing stale survives to crash.
+                let sel = UITextSelectionDisplayInteraction(textInput: self, delegate: self)
+                addInteraction(sel)
+                selectionDisplayInteraction = sel
+                sel.isActivated = true
+                sel.setNeedsSelectionUpdate()
+                sel.layoutManagedSubviews()
+                let cv = sel.cursorView
+                loupeSession = UITextLoupeSession.begin(at: point, fromSelectionWidgetView: cv, in: self)
+                // Keep the borrowed system cursor NEAR-INVISIBLE (alpha 0.01) — it exists only as the loupe's
+                // grow anchor. It blinks natively; a visible-but-dimmed one would flicker through when the finger
+                // is idle. Our own bright TransientCaretView is the visible cursor, gliding at the raw finger x.
+                cv.alpha = 0.01
+                // The GLIDING cursor (follows the finger) is the ACCENT; the snapped landing caret is the GRAY
+                // "shadow" (the real position). Recolor the steady caret to gray for the drag; restore on end.
+                transientCaretView.accentColor = caretView.accentColor
+                loupeSavedCaretAccent = caretView.accentColor
+                caretView.accentColor = loupeShadowColor()
+                positionLoupeShadow(fingerX: point.x, snappedGlobal: p)
+                transientCaretView.show(animated: true)
             }
         case .changed:
             setCaret(global: p)
             if #available(iOS 17.0, *) {
+                // Keep the borrowed system cursor tracking (grow anchor) but NEAR-INVISIBLE (its native blink
+                // would flicker through otherwise); our TransientCaretView is the visible cursor.
+                selectionDisplayInteraction?.setNeedsSelectionUpdate()
+                selectionDisplayInteraction?.layoutManagedSubviews()
+                selectionDisplayInteraction?.cursorView.alpha = 0.01
+                // Glide the bright shadow at the raw finger x (unsnapped).
+                positionLoupeShadow(fingerX: point.x, snappedGlobal: p)
                 // At an image gap caretRect(for:) is .zero; the loupe wants CGRectNull there (no caret) so it
                 // tracks the touch instead of snapping toward the view origin. No real caret sits at {0,0}.
                 let caret = caretRect(for: DocumentTextPosition(p))
@@ -213,11 +302,31 @@ extension DocumentCanvasView {
                                    trackingCaret: caret != .zero)
             }
         case .ended, .cancelled, .failed:
+            if let accent = loupeSavedCaretAccent {   // restore the caret's accent (was recolored gray for the drag)
+                caretView.accentColor = accent
+                loupeSavedCaretAccent = nil
+            }
+            if g.state == .ended { setCaret(global: p) }   // finalize the caret at the release position first
             if #available(iOS 17.0, *) {
+                // Snap the invisible system cursor (the loupe's animate-OUT anchor) to the FINAL caret before
+                // invalidating. The loupe's move(to: finger) had been dragging the widget along with the touch, so
+                // without this the loupe settles back onto the finger instead of the caret on release.
+                selectionDisplayInteraction?.setNeedsSelectionUpdate()
+                selectionDisplayInteraction?.layoutManagedSubviews()
                 loupeSession?.invalidate()
                 loupeSession = nil
+                transientCaretView.hide(animated: true)   // fade the gliding shadow
+                // SPIKE: tear the interaction DOWN (not just deactivate) so its chrome is removed and nothing
+                // persists to be corrupted before the next drag.
+                if let sel = selectionDisplayInteraction {
+                    sel.isActivated = false
+                    removeInteraction(sel)
+                    selectionDisplayInteraction = nil
+                }
             }
-            if g.state == .ended { setCaret(global: p); presentEditMenu() }
+            loupeDragActive = false   // resume the steady caret's blink
+            if g.state == .ended { presentEditMenu() }   // setCaret already done above
+            else { updateCaretView() }   // .cancelled/.failed take no setCaret path — refresh so the caret blinks again
         default:
             break
         }
@@ -282,6 +391,34 @@ extension DocumentCanvasView: UIGestureRecognizerDelegate {
         let endRect = caretRect(for: DocumentTextPosition(selTo))
         return startRect.insetBy(dx: -tol, dy: -tol).contains(point)
             || endRect.insetBy(dx: -tol, dy: -tol).contains(point)
+    }
+}
+
+/// SPIKE: required delegate for the borrowed `UITextSelectionDisplayInteraction`. Returning `nil` uses the
+/// default container (the interaction hosts its own chrome). If the spike shows a leak we can't otherwise hide,
+/// the next step is to return a dedicated, hidden container here so the orphaned lollipops land somewhere we own.
+/// A long-press recognizer whose `minimumPressDuration` is chosen per-touch from the initial touch location
+/// (near-instant on selectable content, longer on empty area). The duration is set in `touchesBegan` BEFORE
+/// `super` — which is where the recognizer schedules its timer — so the per-touch value takes effect.
+@available(iOS 13.0, *)
+final class LocationAdaptiveLongPressGestureRecognizer: UILongPressGestureRecognizer {
+    /// Returns the press duration to use for a touch that begins at `point` (in the recognizer's `view`).
+    var durationForLocation: ((CGPoint) -> TimeInterval)?
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        if let provider = durationForLocation, let point = touches.first?.location(in: view) {
+            minimumPressDuration = provider(point)
+        }
+        super.touchesBegan(touches, with: event)
+    }
+}
+
+@available(iOS 17.0, *)
+extension DocumentCanvasView: UITextSelectionDisplayInteractionDelegate {
+    func selectionContainerViewBelowText(for interaction: UITextSelectionDisplayInteraction) -> UIView? {
+        // Host all of the interaction's chrome in our stable, untracked container so (a) our reload/virtualization
+        // never frees its views and (b) it's corralled where we can hide it.
+        bringSubviewToFront(selectionChromeContainer)
+        return selectionChromeContainer
     }
 }
 #endif

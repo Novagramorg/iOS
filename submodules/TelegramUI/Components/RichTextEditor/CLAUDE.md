@@ -393,6 +393,42 @@ stray selection); full SwiftPM suite green (Core 102 + UIKit; incl. `TransientCa
 `FloatingCursorTests`) and the full Bazel app build is green. (Per the module convention, the per-phase
 design spec/plan are not retained in-tree; this note is the in-tree record.)
 
+**Loupe grow-from-cursor + gliding shadow caret (added 2026-07-06, runtime-verified, squashed to master, `feature/richtext-loupe-grow-cursor`).**
+The long-press magnifier (`UITextLoupeSession`) now **animates from the caret** and drags with the floating-cursor
+visual. **This is the ONE scoped exception to "no `UITextSelectionDisplayInteraction`":** the loupe's grow
+animation IGNORES a bare/own caret view passed as `fromSelectionWidgetView` — device-verified, a bare `UIView`,
+a frozen-solid one, AND even a `UITextCursorView`-conforming view all fail (the loupe grows at the *touch*, not
+the widget). It only honors a real system `cursorView`, which is owned by a `UITextSelectionDisplayInteraction`.
+So `handleLongPress` **creates a FRESH interaction per drag and tears it down on release** (`removeInteraction`),
+borrowing `interaction.cursorView` as the widget. **Per-drag lifecycle is load-bearing:** a PERSISTENT interaction
+goes stale against the canvas's view virtualization and crashes with a use-after-free in
+`-[UITextSelectionDisplayInteraction setActivated:]` (`objc_retain` on a freed selection view) on a SUBSEQUENT
+drag after intervening edits (device-log-verified). Its injected chrome (cursor / lollipops / accessory, ~26
+views) is corralled in a dedicated `selectionChromeContainer` (returned from the `selectionContainerViewBelowText`
+delegate) that the block-view reload loop never frees, and `removeInteraction` clears it on release — no
+orphaned-lollipop leak.
+
+**Visual during the drag** (the spacebar floating-cursor look): the **accent** `TransientCaretView` glides at the
+raw finger x (unsnapped, `positionLoupeShadow`); OUR own `CaretView` is the desaturated **"shadow"** at the
+snapped real-caret position (`RichTextEditorTheme.shadowCursor`, a light **HSL-lightness** gray — NOT HSB
+`saturation:0`, which whitens a bright accent; recolored for the drag and restored on `.ended` via
+`loupeSavedCaretAccent`); the borrowed system cursor is kept **near-invisible** (`alpha 0.01`, grow anchor only)
+so its native blink can't flicker through. On release the widget is **snapped to the final caret**
+(`setNeedsSelectionUpdate`+`layoutManagedSubviews`) BEFORE `invalidate()`, so the loupe animates OUT onto the
+caret, not the finger (the loupe's `move(to: finger)` had been dragging the widget along). `CaretView`
+**conforms to `UITextCursorView`** (`isBlinking`/`resetBlinkAnimation`) so a future non-interaction path could
+hand it directly, but the loupe still needs the interaction-owned cursor today.
+
+**Proximity-adaptive long-press delay** (`LocationAdaptiveLongPressGestureRecognizer` — sets `minimumPressDuration`
+per-touch in `touchesBegan` before `super`): near-instant (`loupeDelayNearCursor`) when the touch starts within
+`loupeNearCursorRadius` of the caret ("grab the cursor"), longer (`loupeDelayFarFromCursor`) otherwise. A literal
+`0` is unusable — tap and long-press share touches, so `0` fires the loupe on every quick tap.
+
+**`inputHitTestSlop` (composer, `RichTextEditorChatInputNode`).** The panel's negative slop (a bigger tap target)
+is now applied by a `hitTest(_:with:)` override on the node, routing a touch in the slop ring around `editorView`
+into the editor's canvas — `ASDisplayNode.hitTest` is forwarded to by `_ASDisplayView` when overridden (with a
+re-entrancy guard, so `super.hitTest` is the standard UIView pass). Build-verified only.
+
 The host action bar (12 icon actions + ContextUI context menus) lives in the separate `RichTextAttachmentScreen`
 module, not this package. Full session handoff: `~/Documents/RichTextEditor/docs/superpowers/handoffs/2026-06-12-richtext-session-handoff.md`.
 
@@ -797,15 +833,18 @@ a RANGE. Centralizing in `merging` + testing the range form fixed it.)
   first responders. `caretRect`/`closestPosition`/`selectionRects`/`contentSize` derive from **box frames
   over ALL boxes**, never the realized (possibly culled) views, so off-screen view virtualization changes
   no editing/selection/nav/hit-test behavior.
-- **No `UITextSelectionDisplayInteraction`; everything is own-drawn.** The canvas installs none and has
-  **no `draw(_:)` override** — it is a pure container of bounded subviews (a single CALayer/CGContext can't
-  back an arbitrarily tall document; GPU max-texture ~16K px). Caret (`CaretView`), selection wash
-  (`SelectionHighlightView` + per-table `CellSelectionView`), and handles (`SelectionHandleView`) are
-  dedicated on-top layers/views, hosted in a table's scrolling content view for cell endpoints so they
+- **No PERSISTENT `UITextSelectionDisplayInteraction`; everything is own-drawn.** The canvas installs none
+  persistently and has **no `draw(_:)` override** — it is a pure container of bounded subviews (a single
+  CALayer/CGContext can't back an arbitrarily tall document; GPU max-texture ~16K px). Caret (`CaretView`),
+  selection wash (`SelectionHighlightView` + per-table `CellSelectionView`), and handles (`SelectionHandleView`)
+  are dedicated on-top layers/views, hosted in a table's scrolling content view for cell endpoints so they
   **ride horizontal overscroll**. (Un-clamping a table's `contentOffsetX` so the OS selection UI could ride
   the bounce makes the OS text system *fight* the caret — rejected; the clamp stays and we own-draw.)
   `caretRect(for:)` must still report a **real** position even when the visible caret is hidden — it feeds
-  the OS's nav/scroll/loupe/edit-menu.
+  the OS's nav/scroll/loupe/edit-menu. **The ONE scoped exception:** a FRESH interaction is created per
+  long-press loupe drag and torn down on release, borrowed only to hand the loupe a real `cursorView` widget
+  (a bare/own caret is ignored by the grow animation) — per-drag, or it crashes against the view virtualization.
+  See the "Loupe grow-from-cursor" note above.
 - **`caretRect` is OS-facing nav geometry.** Hardware vertical arrows are driven by the OS via
   `position(from:in:direction:)` + the `selectedTextRange` setter — **not** `keyCommands` (arrow
   `keyCommands` never fire here). Vertical-nav results are `snapToRenderable`'d so the caret can't strand

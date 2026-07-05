@@ -70,5 +70,25 @@ final class CaretView: UIView {
         layer.opacity = 1
         isHidden = false
     }
+
+    /// Whether the blink animation is currently running (read by `UITextCursorView` below).
+    var isBlinkingNow: Bool { layer.animation(forKey: Self.blinkKey) != nil }
+}
+
+/// Adopt `UITextCursorView` (iOS 17+) so `UITextLoupeSession.begin(at:fromSelectionWidgetView:in:)` treats our
+/// own caret as a real insertion-point view and animates the magnifier from / around it. Apple documents
+/// `fromSelectionWidgetView` as "the view associated with the insertion point" — normally a
+/// `UITextSelectionDisplayInteraction`'s `cursorView`, which is `UIView & UITextCursorView`. We own-draw the
+/// caret and deliberately install no such interaction (it leaks orphaned selection lollipops on iOS 18+/26 —
+/// see `installSelectionInteractions`), so we conform our caret view to the protocol directly instead. A bare
+/// `UIView` passed as the widget is accepted but ignored by the loupe's grow animation (device-verified).
+@available(iOS 17.0, *)
+extension CaretView: UITextCursorView {
+    /// `readwrite` per the protocol: the loupe reads it and may drive it to steady the cursor while magnifying.
+    var isBlinking: Bool {
+        get { isBlinkingNow }
+        set { if newValue { startBlink() } else { freezeSolid() } }
+    }
+    func resetBlinkAnimation() { resetBlink() }
 }
 #endif

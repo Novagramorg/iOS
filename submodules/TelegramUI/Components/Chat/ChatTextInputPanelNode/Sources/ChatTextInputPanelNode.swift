@@ -1147,7 +1147,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         // `chatInputTextNode(shouldChangeTextIn:)`; the native editor never calls that delegate, so it fires
         // this hook instead (and gates out caret moves / programmatic content sets — see the node).
         richTextInputNode.onTypingActivity = { [weak self] in self?.updateActivity() }
-        richTextInputNode.inputHitTestSlop = UIEdgeInsets(top: -5.0, left: -5.0, bottom: -5.0, right: -5.0)
+        richTextInputNode.inputHitTestSlop = UIEdgeInsets(top: -5.0, left: -12.0, bottom: -5.0, right: -5.0)
         richTextInputNode.keyboardAppearance = keyboardAppearance
         richTextInputNode.inputTintColor = tintColor
         richTextInputNode.setInputScrollIndicatorInsets(UIEdgeInsets(top: 9.0, left: 0.0, bottom: 9.0, right: -12.0))
@@ -3914,6 +3914,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     /// `primaryText` matches the legacy `refreshTextInputAttributes` body color; `accent` matches the legacy
     /// caret (`list.itemAccentColor`); table colors are approximations (tables rarely appear in the composer).
     private func makeRichTextThemeColors(_ theme: PresentationTheme) -> ChatRichTextThemeColors {
+        let shadowCursorColor: UIColor
+        if theme.overallDarkAppearance {
+            shadowCursorColor = UIColor(white: 1.0, alpha: 0.4)
+        } else {
+            shadowCursorColor = UIColor(white: 0.0, alpha: 0.3)
+        }
+        
         return ChatRichTextThemeColors(
             primaryText: theme.chat.inputPanel.primaryTextColor,
             secondaryText: theme.chat.inputPanel.secondaryTextColor,
@@ -3925,7 +3932,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             listCheckForegroundColor: theme.list.itemCheckColors.foregroundColor,
             listCheckBorderColor: theme.list.itemCheckColors.strokeColor,
             quoteAuthorText: theme.list.itemAccentColor,
-            quoteAuthorPlaceholder: theme.chat.inputPanel.inputPlaceholderColor
+            quoteAuthorPlaceholder: theme.chat.inputPanel.inputPlaceholderColor,
+            shadowCursor: shadowCursorColor
         )
     }
 

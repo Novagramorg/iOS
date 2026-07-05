@@ -323,6 +323,36 @@ final class DocumentCanvasView: UIView {
         get { loupeSessionStorage as? UITextLoupeSession }
         set { loupeSessionStorage = newValue }
     }
+    /// SPIKE (loupe grow-from-cursor): a `UITextSelectionDisplayInteraction` (iOS 17+) installed solely to borrow
+    /// its system `cursorView` for the loupe's `fromSelectionWidgetView`. Kept DEACTIVATED except during a loupe
+    /// drag. Untyped storage for the same availability reason as `loupeSessionStorage`. INSTRUMENTED — evaluate
+    /// the leaked-chrome logs before deciding whether this can stay.
+    private var selectionDisplayInteractionStorage: AnyObject?
+    @available(iOS 17.0, *)
+    var selectionDisplayInteraction: UITextSelectionDisplayInteraction? {
+        get { selectionDisplayInteractionStorage as? UITextSelectionDisplayInteraction }
+        set { selectionDisplayInteractionStorage = newValue }
+    }
+    /// SPIKE: a stable container the borrowed interaction hosts its selection chrome in (via the delegate). It is
+    /// NOT tracked in `blockViews`, so the block-view reload loop never removes it, and it is created lazily on the
+    /// first loupe drag. All the interaction's chrome (cursor / lollipops / accessory) lands here so we can hide it.
+    lazy var selectionChromeContainer: UIView = {
+        let v = UIView()
+        v.isUserInteractionEnabled = false
+        v.clipsToBounds = false
+        addSubview(v)
+        return v
+    }()
+    /// True for the duration of a long-press magnifier (loupe) drag. While set, `updateCaretView` keeps the
+    /// steady caret SOLID (no blink, full alpha) so the loupe lifts off from / magnifies a crisp caret — a
+    /// blinking caret is invisible for the part of each cycle its opacity dips toward 0, which made the loupe
+    /// appear to pop in "from nothing" with no visible cursor (device-log-verified). Set BEFORE `begin(...)`
+    /// (so the caret is already solid when the loupe captures it) and cleared on drag end.
+    var loupeDragActive = false
+    /// The steady caret's normal accent, saved while a loupe drag recolors it to the desaturated "shadow" gray
+    /// (the snapped landing caret is the gray shadow; the gliding `transientCaretView` is the accent). Restored
+    /// on drag end.
+    var loupeSavedCaretAccent: UIColor?
     var draggingEndpoint: SelectionEndpoint?
     // The (caret-center − initial-touch) offset captured when a selection-handle drag begins, so the dragged
     // endpoint keeps its starting offset from the finger instead of snapping to the line under the touch (the
@@ -1329,6 +1359,18 @@ final class DocumentCanvasView: UIView {
             hostOverlay(caretView, at: placement)
             caretView.freezeSolid()
             caretView.alpha = 0.4
+            lastCaretContainer = placement.container
+            lastCaretFrame = placement.frame
+            return
+        }
+        // During a long-press magnifier (loupe) drag, draw the spacebar-style two-cursor visual: OUR own accent
+        // caret is the "landing" at the snapped position, while the desaturated `transientCaretView` glides at the
+        // finger (the borrowed system cursor is near-invisible — grow anchor only). Solid, no blink.
+        if loupeDragActive {
+            guard isFirstResponder, let placement = caretHostPlacement(forGlobal: head) else { return hideCaretView() }
+            hostOverlay(caretView, at: placement)
+            caretView.alpha = 1
+            caretView.freezeSolid()
             lastCaretContainer = placement.container
             lastCaretFrame = placement.frame
             return
