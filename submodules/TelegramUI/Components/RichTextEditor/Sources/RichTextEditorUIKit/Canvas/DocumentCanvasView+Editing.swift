@@ -312,9 +312,11 @@ extension DocumentCanvasView {
     /// insert-image's pre-clear) MUST route through here so none drives a cross-stack range into
     /// `applyReplace`'s same-stack guard (which would silently no-op). Caller wraps in `editing { … }`.
     func applySelectionReplace(globalFrom: Int, globalTo: Int, text: String) {
-        // Never delete/replace a PARTIAL grapheme (e.g. one half of a surrogate-pair emoji, which the OS can
-        // request on backspace as a 1-unit range) — expand to whole clusters so no stray code unit is left.
-        let (globalFrom, globalTo) = rangeExpandedToGraphemeBoundaries(globalFrom: globalFrom, globalTo: globalTo)
+        // Never delete/replace a PARTIAL surrogate pair (one half of an astral scalar, which the OS can
+        // request on backspace as a 1-unit range) — expand to the whole scalar so no stray code unit is left.
+        // (Combining-mark clusters like the Tamil consonant+virama are NOT expanded — a composing IME edits
+        // the lone mark to recompose the syllable; see `rangeExpandedToScalarBoundaries`.)
+        let (globalFrom, globalTo) = rangeExpandedToScalarBoundaries(globalFrom: globalFrom, globalTo: globalTo)
         // A delete covering the WHOLE document (Select-All → Backspace) resets to a single empty BODY paragraph,
         // dropping ALL block formatting/containers (heading style, quote, list, code, table, media) — not just
         // the text. Without this the cross-block merge/clear paths keep the FIRST block's style/container: an

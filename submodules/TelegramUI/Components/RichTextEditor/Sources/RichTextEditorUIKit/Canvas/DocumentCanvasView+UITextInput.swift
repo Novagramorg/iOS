@@ -430,20 +430,31 @@ extension DocumentCanvasView: UIKeyInput {
         return max(1, local - r.location)
     }
 
-    /// Expands a global range so neither endpoint sits INSIDE a composed character sequence: `from` snaps
-    /// DOWN to its cluster start, `to` snaps UP to its cluster end. The OS can request a delete/replace of a
-    /// PARTIAL grapheme — notably a backspace arriving as a 1-UTF-16-unit range covering only one half of a
-    /// surrogate-pair emoji (`selFrom≠selTo`) — and deleting it verbatim leaves a stray code unit (a
-    /// "service character"). A grapheme never spans leaf regions, so each endpoint is snapped within its own
-    /// region; a range already on boundaries (the common case) is returned unchanged.
-    func rangeExpandedToGraphemeBoundaries(globalFrom: Int, globalTo: Int) -> (from: Int, to: Int) {
+    /// Expands a global range so neither endpoint SPLITS A UTF-16 SURROGATE PAIR (a single astral Unicode
+    /// scalar whose two code units must stay together): `from` snaps DOWN to the pair start, `to` snaps UP
+    /// to the pair end. The OS can request a delete/replace of a partial scalar — notably a backspace
+    /// arriving as a 1-UTF-16-unit range covering only one half of a surrogate-pair emoji (`selFrom≠selTo`)
+    /// — and deleting it verbatim leaves a stray code unit (a "service character").
+    ///
+    /// It deliberately does NOT expand across whole GRAPHEME CLUSTERS. A base + combining-mark sequence — a
+    /// Tamil consonant + virama ("க்" = U+0B95 U+0BCD), and other Indic / Thai scripts — is two INDEPENDENT
+    /// scalars that a composing IME (e.g. Tamil **Anjal**) edits individually: it selects the lone combining
+    /// mark and deletes/replaces it to recompose the syllable (verified against the real iOS keyboard driving
+    /// this view). Snapping that to the whole cluster would erase the base consonant, so the syllable could
+    /// never be formed — the "can't type Tamil" bug. Matching a stock `UITextView`, only surrogate pairs are
+    /// kept atomic here; grapheme atomicity is enforced for CARET stepping by the tokenizer, not for IME
+    /// edits. A scalar never spans leaf regions, so each endpoint is snapped within its own region.
+    func rangeExpandedToScalarBoundaries(globalFrom: Int, globalTo: Int) -> (from: Int, to: Int) {
         func snap(_ g: Int, up: Bool) -> Int {
             guard let (region, local) = leafRegion(containingGlobal: g), local > 0 else { return g }
             let s = region.layout.attributedString.string as NSString
             guard local < s.length else { return g }
-            let r = s.rangeOfComposedCharacterSequence(at: local)
-            guard r.location != local else { return g }   // already on a cluster boundary
-            return region.globalStart + (up ? r.location + r.length : r.location)
+            // A split point sits INSIDE a surrogate pair iff the unit before is a high surrogate and the
+            // unit at `local` is a low surrogate. Every other boundary (incl. base↔combining-mark) is kept.
+            let unit = s.character(at: local), prev = s.character(at: local - 1)
+            let splitsSurrogatePair = prev >= 0xD800 && prev <= 0xDBFF && unit >= 0xDC00 && unit <= 0xDFFF
+            guard splitsSurrogatePair else { return g }
+            return region.globalStart + (up ? local + 1 : local - 1)
         }
         let lo = min(globalFrom, globalTo), hi = max(globalFrom, globalTo)
         return (snap(lo, up: false), snap(hi, up: true))
