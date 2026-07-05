@@ -343,7 +343,8 @@ public class ChatMessageRichDataBubbleContentNode: ChatMessageBubbleContentNode 
                     imageTintColor: nil,
                     overlayPanelColor: isDark ? UIColor(white: 0.0, alpha: 0.13) : UIColor(white: 1.0, alpha: 0.13),
                     separatorColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
-                    secondaryControlColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3)
+                    secondaryControlColor: messageTheme.secondaryTextColor.mixedWith(mainColor.withMultipliedAlpha(0.2), alpha: 0.3),
+                    quoteAccentColor: mainColor
                 )
                 
                 var hasDraft = false

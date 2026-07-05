@@ -192,6 +192,7 @@ private func textProcessingInstantPageTheme(theme: PresentationTheme) -> Instant
         imageTintColor: nil,
         overlayPanelColor: accent.withMultipliedAlpha(0.25),
         separatorColor: accent.withMultipliedAlpha(0.25),
-        secondaryControlColor: secondary
+        secondaryControlColor: secondary,
+        quoteAccentColor: accent
     )
 }
