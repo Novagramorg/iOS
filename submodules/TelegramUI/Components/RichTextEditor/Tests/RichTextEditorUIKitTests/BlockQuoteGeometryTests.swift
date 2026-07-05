@@ -45,8 +45,17 @@ final class BlockQuoteGeometryTests: XCTestCase {
     }
 
     /// Collapsed vs expanded height parity for a single-line body-paragraph quote.
-    /// Before the fix, `previewAttributes` used a plain NSMutableParagraphStyle (no lineHeightMultiple),
-    /// making the collapsed box ~2pt shorter than the expanded one for the same content.
+    /// Before the original fix, `previewAttributes` used a plain NSMutableParagraphStyle (no
+    /// lineHeightMultiple), making the collapsed box ~2pt shorter than the expanded one for the same content.
+    ///
+    /// Task 4 update: the expanded box now ALSO reserves an always-present author-line region below its
+    /// child stack (bold caption, showing an "Add author" placeholder when empty) — the collapsed folded
+    /// preview never shows one (`DocumentTree` maps a collapsed quote to a caption-less atom, entirely off
+    /// the position axis; collapsing the quote loses the author's ON-CANVAS rendering, not the underlying
+    /// model field). So the two TOTAL heights are no longer expected to be equal. The original invariant
+    /// this test guarded — the child stack's CONTENT height (topInset + children + bottomInset) matches the
+    /// collapsed preview's height for identical single-line body content — still holds; verify it directly,
+    /// independent of the (now additive) author-line reservation, and separately assert the new inequality.
     func test_collapsedVsExpanded_singleLineBodyChild_heightParity() {
         let text = "Hello world"
         let paraBlock = ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: text)])
@@ -55,11 +64,16 @@ final class BlockQuoteGeometryTests: XCTestCase {
         let width: CGFloat = 320
         let expandedCanvas = canvas([.blockQuote(expandedBQ)], width: width)
         let collapsedCanvas = canvas([.blockQuote(collapsedBQ)], width: width)
-        let expandedHeight = expandedCanvas.boxes[0].height
+        let expandedBox = expandedCanvas.boxes[0] as! BlockQuoteBox
         let collapsedHeight = collapsedCanvas.boxes[0].height
-        XCTAssertEqual(expandedHeight, collapsedHeight, accuracy: 0.5,
-                       "Collapsed and expanded BlockQuoteBox must have equal height for identical single-line body content. " +
-                       "Expanded: \(expandedHeight), Collapsed: \(collapsedHeight)")
+        let innerWidth = max(width - expandedBox.quoteStyle.leadingInset - expandedBox.quoteStyle.trailingInset, 1)
+        let contentHeight = expandedBox.topInset + expandedBox.children.measuredHeight(forWidth: innerWidth) + expandedBox.bottomInset
+        XCTAssertEqual(contentHeight, collapsedHeight, accuracy: 0.5,
+                       "Collapsed and expanded BlockQuoteBox must have equal CONTENT height (excluding the " +
+                       "author-line reservation) for identical single-line body content. " +
+                       "Content: \(contentHeight), Collapsed: \(collapsedHeight)")
+        XCTAssertGreaterThan(expandedBox.height, collapsedHeight,
+                             "Expanded is now taller than collapsed by the always-reserved (placeholder) author-line region")
     }
 
     /// A nested block quote must receive its OWN fill rect from the recursive `blockQuoteFillRects()`

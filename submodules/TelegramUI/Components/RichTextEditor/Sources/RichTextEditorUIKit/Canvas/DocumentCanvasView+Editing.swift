@@ -109,7 +109,7 @@ extension DocumentCanvasView {
         // Select-All over a document whose first/last block is an image/code fully covers it, so it is
         // dropped here exactly as a covered MIDDLE block already is.
         func endpointFullyCovered(_ box: CanvasBlock) -> Bool {
-            (box is MediaBlockBox || box is CodeBlockBox || box is PullQuoteBox) && lo <= box.nodeStart && hi >= coverableContentEnd(box)
+            (box is MediaBlockBox || box is CodeBlockBox || box is PullQuoteBox) && lo <= coverableContentStart(box) && hi >= coverableContentEnd(box)
         }
         let keepStartMedia = (start.box is MediaBlockBox || start.box is CodeBlockBox || start.box is PullQuoteBox) && !endpointFullyCovered(start.box)
         let keepEndMedia = (end.box is MediaBlockBox || end.box is CodeBlockBox || end.box is PullQuoteBox) && !endpointFullyCovered(end.box)
@@ -206,9 +206,27 @@ extension DocumentCanvasView {
     /// delete checks. Captioned media and code end at their caption/text end; a caption-less AUDIO block has
     /// no text region, so its coverable content ends just after the media atom (`nodeStart + 1`) — NOT at the
     /// collapsed `textStart + textLength` (which equals `nodeStart` for audio).
+    /// NOTE: for a `PullQuoteBox` this deliberately only reaches the END OF THE PULL TEXT, not the trailing
+    /// author region — `textStart`/`textLength` are the pull-text-only convenience members (see `PullQuoteBox`).
+    /// That is fine for the CROSS-BLOCK drop (a fully-covered endpoint quote is removed wholesale, author and
+    /// all). A LONE quote whose entire content (incl. author) is selected is dropped separately by the
+    /// exact-content-span branch in `applySelectionReplace` (Task 5), which uses the box's full `leafRegions()`.
     func coverableContentEnd(_ box: CanvasBlock) -> Int {
         if let m = box as? MediaBlockBox, m.kind == .audio { return box.nodeStart + 1 }
         return box.textStart + box.textLength
+    }
+
+    /// The position at or before which a selection must start to cover a media/code/pull-quote block's
+    /// LEADING edge, for the Select-All / covered-range delete checks (paired with `coverableContentEnd`).
+    /// A media atom's leading gap (`nodeStart`) is itself a reachable/renderable caret stop (`isGapPosition`),
+    /// so `lo <= nodeStart` is achievable via a real selection. A `PullQuoteBox`'s `nodeStart` is NOT reachable
+    /// — it sits on the structural token that opens the `.blockQuote` container wrapping the pull/author
+    /// paragraphs (added for the author region), one token before the pull text's own `textStart` — so the
+    /// true leading edge a real selection can reach is `textStart`. Code blocks and non-audio/audio media have
+    /// no such wrapper (`textStart == nodeStart` there already), so this is a no-op for them.
+    func coverableContentStart(_ box: CanvasBlock) -> Int {
+        if box is PullQuoteBox { return box.textStart }
+        return box.nodeStart
     }
 
     /// Removes the block at `index`, parking the caret at an explicit global position the caller computed
@@ -256,10 +274,12 @@ extension DocumentCanvasView {
         }
         if let hit = descend(root) { return hit }
         // Fallback: snap structural/document-boundary positions (before first leaf, past last leaf,
-        // inter-block gaps) the same way the old resolveBox-based code did. Container-structural
-        // boundaries (table or block-quote nodeStart) are excluded — callers that need them use
-        // caretSnappedIntoContainer or selectionEndpointsEditableTopLevel.
-        guard let r = resolveBox(at: pos), !(r.box is TableBlockBox), !(r.box is BlockQuoteBox) else { return nil }
+        // inter-block gaps) the same way the old resolveBox-based code did. A position INSIDE a container
+        // (table cell or block quote) that `descend` couldn't reach — notably a quote/pull-quote AUTHOR
+        // region, which is a second leaf region off the child stack — must return nil, NOT the following
+        // top-level block that `resolveBox` mis-resolves it to. Genuine top-level boundaries pass through.
+        guard !isInsideBlockQuote(pos), !isInsideTable(pos),
+              let r = resolveBox(at: pos), !(r.box is TableBlockBox), !(r.box is BlockQuoteBox) else { return nil }
         return (root, r.box, r.local, r.index)
     }
 
@@ -295,6 +315,24 @@ extension DocumentCanvasView {
         // Never delete/replace a PARTIAL grapheme (e.g. one half of a surrogate-pair emoji, which the OS can
         // request on backspace as a 1-unit range) — expand to whole clusters so no stray code unit is left.
         let (globalFrom, globalTo) = rangeExpandedToGraphemeBoundaries(globalFrom: globalFrom, globalTo: globalTo)
+        // A delete covering the WHOLE document (Select-All → Backspace) resets to a single empty BODY paragraph,
+        // dropping ALL block formatting/containers (heading style, quote, list, code, table, media) — not just
+        // the text. Without this the cross-block merge/clear paths keep the FIRST block's style/container: an
+        // empty heading stays a heading, a leading quote survives. Detected as the range spanning from the first
+        // renderable text position to the last.
+        // (Endpoints inside a table are a cross-CELL selection — an all-empty table can make a partial cell
+        // range look whole because empty cells collapse the positions; that must keep its cell-collapse
+        // behavior, not nuke the table.)
+        if text.isEmpty, !isInsideTable(globalFrom), !isInsideTable(globalTo),
+           min(globalFrom, globalTo) <= snapToRenderable(0, forward: true),
+           max(globalFrom, globalTo) >= snapToRenderable(documentSizeValue, forward: false) {
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            root.boxes = [body]
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+            return
+        }
         // A delete whose selection EXACTLY covers one media block's node span — UIKit expands a collapsed caret
         // at an image's empty caption / right after the image into [nodeStart, captionEnd], the "object
         // replacement" atom — resolves BOTH endpoints to that one media box, so the same-stack `applyReplace`
@@ -306,6 +344,34 @@ extension DocumentCanvasView {
             $0 is MediaBlockBox && globalFrom == $0.nodeStart && globalTo == coverableContentEnd($0)
         }) {
             replaceMediaWithEmptyParagraph(at: i)
+            return
+        }
+        // A delete whose selection covers EXACTLY one (expanded) pull/block quote's entire content — every
+        // leaf region including the trailing author line, and nothing outside it (e.g. Select-All over a lone
+        // quote). Without this, `activeStack`/`resolveBox` collapse the author position back onto the
+        // pull-text / last-child region, so the same-stack `applyReplace` clears only that region's text and
+        // STRANDS the box together with its author (the author line survives). Drop the whole quote here,
+        // replacing it with an empty body paragraph in place — the exact-span guard means a wider selection
+        // (a quote plus a neighbour) still falls through to the normal cross-block path. (`replaceMedia…` is
+        // reused generically: it just swaps boxes[i] for an empty body paragraph.)
+        if text.isEmpty, let i = boxes.firstIndex(where: { box in
+            guard box is PullQuoteBox || box is BlockQuoteBox else { return false }
+            let regions = box.leafRegions()   // collapsed quote → [] (handled by the gap/atom paths, not here)
+            guard let first = regions.first, let last = regions.last else { return false }
+            return globalFrom == first.globalStart && globalTo == last.globalStart + last.length
+        }) {
+            replaceMediaWithEmptyParagraph(at: i)
+            return
+        }
+        // A replace whose (expanded) range lies entirely within ONE quote AUTHOR region — a selection-replace
+        // inside the author, or a system word-replace (autocorrect / dictation) via replace(_:withText:). The
+        // author is a SECOND leaf region on the box (off activeStack's radar), so the same-stack applyReplace
+        // below would mis-resolve BOTH endpoints to the following block. Route it region-aware, like a cell.
+        if let (rf, _) = leafRegion(containingGlobal: clampGlobal(min(globalFrom, globalTo))),
+           case .quoteAuthor = rf.ref,
+           let (rt, _) = leafRegion(containingGlobal: clampGlobal(max(globalFrom, globalTo))),
+           rt.globalStart == rf.globalStart {
+            applyLeafReplace(globalFrom: globalFrom, globalTo: globalTo, text: text)
             return
         }
         if selectionEndpointsEditableTopLevel(globalFrom, globalTo) || sameOwningStack(globalFrom, globalTo) {
@@ -383,8 +449,15 @@ extension DocumentCanvasView {
     func codeBlockDoubleReturnExit(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) -> CodeBlockDoubleReturnExit? {
         guard active.box is CodeBlockBox else { return nil }
         let s = active.box.textLayout.attributedString.string as NSString
-        if s.length == 0 { return .uncode }
-        let local = active.local, nl = unichar(10)   // "\n"
+        let nl = unichar(10)   // "\n"
+        // A wholly-empty code block (a single blank line) must NOT un-code on a single Return — the escape
+        // requires a double Return. The first Return inserts a newline (→ a wholly-BLANK two-line block); a
+        // wholly-blank block then un-codes on the next Return.
+        if s.length == 0 { return nil }
+        var allBlank = true
+        for i in 0..<s.length where s.character(at: i) != nl { allBlank = false; break }
+        if allBlank { return .uncode }
+        let local = active.local
         // Trailing blank line (caret at the end, last line empty) → after.
         if local == s.length, s.character(at: s.length - 1) == nl { return .after }
         // First blank line → before: the caret is ON it (local 0) OR at the start of the content right after
@@ -452,8 +525,15 @@ extension DocumentCanvasView {
     func pullQuoteDoubleReturnExit(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) -> PullQuoteDoubleReturnExit? {
         guard active.box is PullQuoteBox else { return nil }
         let s = active.box.textLayout.attributedString.string as NSString
-        if s.length == 0 { return .unmake }
-        let local = active.local, nl = unichar(10)   // "\n"
+        let nl = unichar(10)   // "\n"
+        // A wholly-empty pull quote must NOT un-make on a single Return — the escape requires a double Return.
+        // The first Return inserts a newline (→ a wholly-BLANK two-line quote); a wholly-blank quote then
+        // un-makes on the next Return.
+        if s.length == 0 { return nil }
+        var allBlank = true
+        for i in 0..<s.length where s.character(at: i) != nl { allBlank = false; break }
+        if allBlank { return .unmake }
+        let local = active.local
         if local == s.length, s.character(at: s.length - 1) == nl { return .after }
         if s.character(at: 0) == nl, local <= 1 { return .before }
         return nil
@@ -565,6 +645,17 @@ extension DocumentCanvasView {
             let split = p.currentParagraph().split(at: active.local, newID: BlockID.generate())
             let upper = split.0
             var lower = split.1
+            // A heading is a single-line title: the paragraph AFTER a Return is a body paragraph, not another
+            // heading (matches word processors' "next paragraph style"). Applies to the split-off lower half —
+            // empty when Return is at the heading's end, or carrying the tail text when mid-heading.
+            switch upper.style {
+            case .heading1, .heading2, .heading3, .heading4, .heading5, .heading6:
+                lower.style = .body
+                // `currentParagraph()` PINS the rendered font size into each run on read-back, so the tail
+                // carries the heading's large size; drop it so the now-body tail inherits the body style size.
+                lower.runs = lower.runs.map { var r = $0; r.attributes.fontSize = nil; return r }
+            default: break
+            }
             if lower.list?.marker == .checklist { lower.list?.checked = false }   // a new checklist item is never pre-checked
             // Both halves inherit `p`'s mapper so an in-cell split keeps the cell's smaller base font
             // (including the new EMPTY half, whose later first-typed character reads its box's mapper).
@@ -585,6 +676,8 @@ extension DocumentCanvasView {
               let upper = stack.boxes[upperIndex] as? BlockBox,
               let lower = stack.boxes[upperIndex + 1] as? BlockBox else { return }
         let joinLocal = upper.currentParagraph().utf16Count
+        // `merging` drops the lower paragraph's pinned font size on a cross-style merge (body→heading etc.),
+        // so the merged text inherits the surviving upper style's size. See ParagraphBlock.merging.
         let merged = upper.currentParagraph().merging(lower.currentParagraph())
         // Inherit `upper`'s mapper (same stack as `lower`) so an in-cell merge keeps the cell's base font.
         let mergedBox = BlockBox(paragraph: merged, mapper: upper.mapper, width: effectiveWidth)
@@ -600,7 +693,10 @@ extension DocumentCanvasView {
     /// if mid-text. The host resolves `mediaID` to a view via the canvas's `mediaViewProvider` (each
     /// occurrence gets its own view, keyed by the new block's `BlockID`). Caret lands in the new caption.
     func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun] = []) {
-        guard !boxes.isEmpty else { return }
+        // `!isInsideBlockQuote(head)` is load-bearing: a caret inside a quote has no degenerate-container-safe
+        // resolveBox, so `resolveBox(at: head)` below mis-resolves to the FOLLOWING top-level block and the media
+        // would be inserted there. Media isn't supported inside quotes (v1) → no-op.
+        guard !boxes.isEmpty, !isInsideBlockQuote(head) else { return }
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }
             guard let pos = resolveBox(at: head) else { return }

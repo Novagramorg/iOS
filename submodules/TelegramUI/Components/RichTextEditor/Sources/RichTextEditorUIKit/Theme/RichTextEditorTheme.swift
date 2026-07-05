@@ -34,6 +34,14 @@ public struct RichTextEditorTheme {
     public var markedTextUnderline: UIColor
     /// Spoiler particle ("dust") color. (Was hardcoded `.secondaryLabel`.)
     public var spoilerDust: UIColor
+    /// Quote AUTHOR (attribution) line text color — pull-quote and block-quote author runs. Render-only,
+    /// like `primaryText`/`secondaryText` (see `QuoteAuthorSupport.swift`: injected as the runs' default
+    /// foreground on render, stripped back to nil on read-back). Defaults to `secondaryText` until a host
+    /// sets a distinct value, so there is no visual change out of the box.
+    public var quoteAuthorText: UIColor
+    /// Quote AUTHOR (attribution) line placeholder ("Add author") color. Defaults to `placeholder` until a
+    /// host sets a distinct value.
+    public var quoteAuthorPlaceholder: UIColor
 
     public init(
         primaryText: UIColor,
@@ -47,7 +55,9 @@ public struct RichTextEditorTheme {
         inlineCodeBackground: UIColor = .systemGray5,
         markedTextUnderline: UIColor = .label,
         spoilerDust: UIColor = .secondaryLabel,
-        containerPlaceholder: UIColor = .placeholderText
+        containerPlaceholder: UIColor = .placeholderText,
+        quoteAuthorText: UIColor? = nil,
+        quoteAuthorPlaceholder: UIColor? = nil
     ) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
@@ -61,6 +71,8 @@ public struct RichTextEditorTheme {
         self.markedTextUnderline = markedTextUnderline
         self.spoilerDust = spoilerDust
         self.containerPlaceholder = containerPlaceholder
+        self.quoteAuthorText = quoteAuthorText ?? secondaryText
+        self.quoteAuthorPlaceholder = quoteAuthorPlaceholder ?? placeholder
     }
 
     /// Reproduces the editor's prior hardcoded colors exactly (see the design doc's site inventory).

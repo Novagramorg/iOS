@@ -30,7 +30,11 @@ extension DocumentCanvasView {
     /// True iff `pos` is inside a TOP-LEVEL body paragraph (a `BlockBox`) — not a table cell, image
     /// caption, or structural boundary. v1 composes only here (cells/captions are a follow-up).
     func isBodyParagraphPosition(_ pos: Int) -> Bool {
-        guard !isInsideTable(clampGlobal(pos)) else { return false }
+        // Exclude container interiors: a caret inside a table cell OR a block quote is not a TOP-LEVEL body
+        // paragraph. `box(containingGlobal:)` has no degenerate-safe resolution there and would mis-resolve a
+        // quote-interior position to the FOLLOWING top-level BlockBox and wrongly report `true` — letting IME
+        // marked text compose in a quote (v1 composes only in top-level body paragraphs).
+        guard !isInsideTable(clampGlobal(pos)), !isInsideBlockQuote(clampGlobal(pos)) else { return false }
         if let (box, _) = box(containingGlobal: clampGlobal(pos)), box is BlockBox { return true }
         return false
     }

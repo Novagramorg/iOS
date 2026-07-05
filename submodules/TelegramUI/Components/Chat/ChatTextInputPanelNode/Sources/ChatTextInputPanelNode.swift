@@ -3923,7 +3923,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             tableHeaderBackground: theme.list.itemAccentColor.withMultipliedAlpha(0.1),
             listCheckFillColor: theme.list.itemCheckColors.fillColor,
             listCheckForegroundColor: theme.list.itemCheckColors.foregroundColor,
-            listCheckBorderColor: theme.list.itemCheckColors.strokeColor
+            listCheckBorderColor: theme.list.itemCheckColors.strokeColor,
+            quoteAuthorText: theme.list.itemAccentColor,
+            quoteAuthorPlaceholder: theme.chat.inputPanel.inputPlaceholderColor
         )
     }
 

@@ -29,11 +29,13 @@ public struct QuoteStyle: Equatable {
     /// Interior BOTTOM padding (points): the gap between the last text line and the quote fill's bottom
     /// edge. `nil` (default) keeps the current behavior. The vertical parallel to `trailingInset`.
     public var bottomInset: CGFloat?
+    /// Vertical gap (points) between the quote content and the author line.
+    public var authorSpacing: CGFloat
 
     public init(leadingInset: CGFloat = 16, trailingInset: CGFloat = 22,
                 spacingBefore: CGFloat = 8, spacingAfter: CGFloat = 8,
                 barWidth: CGFloat = 3, cornerRadius: CGFloat = 6, fillAlpha: CGFloat = 0.10,
-                topInset: CGFloat? = nil, bottomInset: CGFloat? = nil) {
+                topInset: CGFloat? = nil, bottomInset: CGFloat? = nil, authorSpacing: CGFloat = 1) {
         self.leadingInset = leadingInset
         self.trailingInset = trailingInset
         self.spacingBefore = spacingBefore
@@ -43,6 +45,7 @@ public struct QuoteStyle: Equatable {
         self.fillAlpha = fillAlpha
         self.topInset = topInset
         self.bottomInset = bottomInset
+        self.authorSpacing = authorSpacing
     }
 
     public static let `default` = QuoteStyle()

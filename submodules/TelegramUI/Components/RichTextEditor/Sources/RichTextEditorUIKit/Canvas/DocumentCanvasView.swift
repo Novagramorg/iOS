@@ -178,6 +178,14 @@ final class DocumentCanvasView: UIView {
     var canPasteMedia: (() -> Bool)?
     var onPasteMedia: (() -> Bool)?
 
+    /// A HARDWARE-keyboard Return (plain or ⌘) routes here before the editor inserts a newline, so a host
+    /// (the chat composer) can send-on-Enter / send-on-⌘-Enter. Mirrors the legacy `ChatInputTextViewImpl`'s
+    /// `shouldReturn`. Return `true` to have the editor insert a newline (the default when unset — standalone
+    /// editors like the article composer and Demo just add a line); `false` means the host consumed the Return
+    /// (e.g. sent the message) and the editor does nothing. The SOFTWARE keyboard's Return never triggers a
+    /// keyCommand, so it always inserts a newline (there's a separate send button) — matching the legacy input.
+    var onHardwareReturn: ((UIKeyModifierFlags) -> Bool)?
+
     /// Interior content margins — interactable padding around the document, ADDED to the built-in
     /// `pageMargin`. Unlike the host's scroll insets (covered by chrome/keyboard, content scrolls under),
     /// these are PART of the content: the text lays out inset by them (so it wraps narrower and is offset
@@ -532,10 +540,43 @@ final class DocumentCanvasView: UIView {
 
     override var keyCommands: [UIKeyCommand]? {
         [UIKeyCommand(input: "\t", modifierFlags: [], action: #selector(handleTabKey)),
-         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey))]
+         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey)),
+         // HARDWARE Return (plain + ⌘) routes to the host's return handler (send-on-Enter / ⌘-Enter) before
+         // the editor inserts a newline — mirrors the legacy ChatInputTextViewImpl's own \r keyCommands. As the
+         // first responder these take precedence over the app-level empty-action \r shortcut (which only
+         // supplied the "Send Message" discoverability title). The SOFTWARE keyboard's Return doesn't fire
+         // keyCommands, so it still inserts a newline via insertText.
+         UIKeyCommand(input: "\r", modifierFlags: [], action: #selector(handleReturnKey(_:))),
+         UIKeyCommand(input: "\r", modifierFlags: .command, action: #selector(handleReturnKey(_:))),
+         // Formatting shortcuts owned by the editor. The app-level ones (ChatControllerKeyShortcuts) mutate
+         // the LEGACY ChatTextInputState (NSAttributedString), which the native editor doesn't use — so ⌘B
+         // etc. silently no-op'd once the editor became the composer. The editor is the first responder, so
+         // these keyCommands take precedence over KeyShortcutsController's (which sits higher in the chain),
+         // fixing BOTH the chat composer and the attachment/article editor (both embed this view). Inputs +
+         // modifiers match the app-level shortcuts.
+         UIKeyCommand(input: "B", modifierFlags: .command, action: #selector(keyToggleBold)),
+         UIKeyCommand(input: "I", modifierFlags: .command, action: #selector(keyToggleItalic)),
+         UIKeyCommand(input: "U", modifierFlags: .command, action: #selector(keyToggleUnderline)),
+         UIKeyCommand(input: "X", modifierFlags: [.command, .shift], action: #selector(keyToggleStrikethrough)),
+         UIKeyCommand(input: "M", modifierFlags: [.command, .shift], action: #selector(keyToggleMonospace))]
     }
-    @objc private func handleTabKey() { moveToCell(forward: true) }
+    @objc private func handleTabKey() {
+        // Inside a table cell → cell nav; otherwise a quote-aware Tab (body → author end, author → out).
+        if isInsideTable(head) { moveToCell(forward: true); return }
+        handleQuoteTabForward()
+    }
     @objc private func handleShiftTabKey() { moveToCell(forward: false) }
+    @objc private func handleReturnKey(_ command: UIKeyCommand) { performHardwareReturn(command.modifierFlags) }
+    /// Ask the host first (send-on-Enter etc.). true (or no host) → insert a newline like a normal Return;
+    /// false → the host consumed it (sent the message), so the editor does nothing.
+    func performHardwareReturn(_ modifierFlags: UIKeyModifierFlags) {
+        if onHardwareReturn?(modifierFlags) ?? true { insertText("\n") }
+    }
+    @objc private func keyToggleBold() { toggleBold() }
+    @objc private func keyToggleItalic() { toggleItalic() }
+    @objc private func keyToggleUnderline() { toggleUnderline() }
+    @objc private func keyToggleStrikethrough() { toggleStrikethrough() }
+    @objc private func keyToggleMonospace() { toggleInlineCode() }
 
     /// Applies a theme: updates the mapper (text/link colors used on the next reload) and pushes the accent
     /// color to the persistent caret/selection/blockquote views. The caller reloads content afterward so the

@@ -130,6 +130,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public var canPasteMedia: (() -> Bool)? { didSet { canvas.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { canvas.onPasteMedia = onPasteMedia } }
 
+    /// A HARDWARE-keyboard Return (plain or ⌘) is offered to the host before the editor inserts a newline, so
+    /// a chat composer can implement send-on-Enter / send-on-⌘-Enter. Return `true` to have the editor insert
+    /// a newline (the default when unset); `false` when the host consumed the Return (e.g. sent the message).
+    /// The software keyboard's Return is unaffected (it always inserts a newline).
+    public var onHardwareReturn: ((UIKeyModifierFlags) -> Bool)? { didSet { canvas.onHardwareReturn = onHardwareReturn } }
+
     /// Configure each selection-handle ("knob") view. The closure is invoked once per handle view (start and
     /// end), passing it as a bare `UIView`. Use it to set host-framework properties the editor package can't
     /// reach — e.g. Display's `disablesInteractiveTransitionGestureRecognizer` (the navigation back-swipe a

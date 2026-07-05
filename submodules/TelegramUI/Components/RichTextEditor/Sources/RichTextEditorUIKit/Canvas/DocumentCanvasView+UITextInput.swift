@@ -73,6 +73,11 @@ extension DocumentCanvasView: UITextInput {
             // An empty pull quote types the italic/centered pull-quote attributes — without this the first
             // character typed into an empty pull quote lands body-upright-left instead of italic/centered.
             if case .pullQuote = region.ref { return PullQuoteBox.pullQuoteTypingAttributes(mapper) }
+            // An empty quote author types the BOLD caption attributes — without this the first character typed
+            // into an empty author lands body-styled (17pt, non-bold), which then pollutes the model on read-back.
+            if case .quoteAuthor = region.ref, let attrs = authorTypingAttributes(forRegion: region.ref) {
+                return attrs
+            }
             // Recover the owning paragraph — top-level OR nested in a table cell (via the active stack)
             // — so an empty styled/listed/cell paragraph keeps its paragraph style AND its box's mapper
             // on the next typed character. A table cell's mapper renders body text at a smaller base
@@ -89,6 +94,23 @@ extension DocumentCanvasView: UITextInput {
             return attrs
         }
         return storage.attributes(at: min(max(0, location - 1), storage.length - 1), effectiveRange: nil)
+    }
+
+    /// Bold caption typing attributes for an empty quote author region: resolves the owning PullQuoteBox /
+    /// BlockQuoteBox (recursing nested block quotes) by id and returns its `authorTypingAttributes()`.
+    func authorTypingAttributes(forRegion ref: TextNodeRef) -> [NSAttributedString.Key: Any]? {
+        guard case let .quoteAuthor(id) = ref else { return nil }
+        func search(_ list: [CanvasBlock]) -> [NSAttributedString.Key: Any]? {
+            for b in list {
+                if let pq = b as? PullQuoteBox, pq.id == id { return pq.authorTypingAttributes() }
+                if let bq = b as? BlockQuoteBox {
+                    if bq.id == id { return bq.authorTypingAttributes() }
+                    if let hit = search(bq.children.boxes) { return hit }
+                }
+            }
+            return nil
+        }
+        return search(boxes)
     }
 
     /// Typing attributes for the caret at a global position: the leaf region's attributes, or body
@@ -287,6 +309,40 @@ extension DocumentCanvasView: UIKeyInput {
             return
         }
         if text == "\n" {
+            // Return in a quote AUTHOR line splits the author at the caret (like a media caption): the head runs
+            // stay as the author, the tail runs become a NEW body paragraph immediately after the quote (caret
+            // there). Handled here, at the TOP of the "\n" dispatch, because a caret in the author resolves
+            // through neither activeStack (off the child stack) nor resolveBox (outside the container's
+            // degenerate/pull-text extent), so the code/pull-quote/block-quote branches below (and the general
+            // insertParagraphBreak() fallback) would mis-route the break into the following sibling block.
+            if selFrom == selTo, let (region, authorLocal) = leafRegion(containingGlobal: head),
+               case .quoteAuthor = region.ref, let (quoteBox, parentStack, index) = enclosingQuote(at: head) {
+                let authorRuns: [TextRun]
+                let rebuildQuote: ([TextRun]) -> Block
+                switch quoteBox.currentBlock() {
+                case .pullQuote(let pq):
+                    authorRuns = pq.author
+                    rebuildQuote = { .pullQuote(PullQuote(id: pq.id, runs: pq.runs, author: $0)) }
+                case .blockQuote(let bq):
+                    authorRuns = bq.author
+                    rebuildQuote = { .blockQuote(BlockQuote(id: bq.id, children: bq.children, collapsed: bq.collapsed, author: $0)) }
+                default:
+                    return
+                }
+                editing {
+                    let tmp = ParagraphBlock(id: BlockID.generate(), style: .caption, runs: authorRuns)
+                    let parts = tmp.split(at: authorLocal, newID: BlockID.generate())   // .0 = head (author), .1 = tail (new paragraph)
+                    guard let newQuoteBox = makeBox(for: rebuildQuote(parts.0.runs), mapper: mapper, quoteStyle: quoteStyle,
+                                                    pullQuoteStyle: pullQuoteStyle, expandImage: quoteCollapseIcons?.expand,
+                                                    collapseImage: quoteCollapseIcons?.collapse, width: effectiveWidth) else { return }
+                    let bodyBox = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: parts.1.runs),
+                                           mapper: mapper, width: effectiveWidth)
+                    parentStack.boxes.replaceSubrange(index...index, with: [newQuoteBox, bodyBox])
+                    recomputeSpans()
+                    anchor = bodyBox.textStart; head = bodyBox.textStart
+                }
+                return
+            }
             if let active = activeStack(at: head), active.box is CodeBlockBox {
                 // Double-return (Enter on an empty line) EXITS the code block: trailing → after, first →
                 // before, wholly-empty → un-code. A MIDDLE blank line and a non-empty line just insert a
@@ -315,10 +371,14 @@ extension DocumentCanvasView: UIKeyInput {
                     insertPullQuoteNewline()
                 }
             } else if selFrom == selTo, isInsideBlockQuote(head), blockQuoteEmptyTrailingChildExit() {
-                // Double-return EXITS the block quote: empty trailing child → body paragraph after the quote;
-                // wholly-empty quote → body in place. Handled inside the helper; execution falls through to
-                // the outer `return`. Non-empty or non-trailing children fall through to insertParagraphBreak()
-                // (adds/splits a child normally).
+                // Double-return EXITS the block quote at the END: empty trailing child → body paragraph after
+                // the quote; a wholly-empty quote (after \n\n) → one body paragraph in place. A SINGLE Return
+                // in a wholly-empty quote just adds a line (the escape requires \n\n). Handled inside the
+                // helper; execution falls through to the outer `return`.
+                _ = ()
+            } else if selFrom == selTo, isInsideBlockQuote(head), blockQuoteEmptyLeadingChildExit() {
+                // Double-return at the BEGINNING → body paragraph BEFORE the quote (the leading blank line is
+                // dropped). Checked after the trailing exit so a wholly-empty quote takes the un-quote path.
                 _ = ()
             } else {
                 insertParagraphBreak()
@@ -327,6 +387,14 @@ extension DocumentCanvasView: UIKeyInput {
         }
         if selFrom != selTo {
             editing(coalescing: .typing) { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
+            return
+        }
+        // A collapsed caret in a quote AUTHOR line: the author is a SECOND leaf region on the box (outside the
+        // box's primary textStart/textLength extent and off the child stack), so applyReplace/activeStack would
+        // mis-route the insert to the following block. Route it through the region-aware applyLeafReplace, exactly
+        // as an in-cell edit does below.
+        if let (region, _) = leafRegion(containingGlobal: head), case .quoteAuthor = region.ref {
+            editing(coalescing: .typing) { applyLeafReplace(globalFrom: selFrom, globalTo: selTo, text: text) }
             return
         }
         // A collapsed caret that resolves to a table or block-quote box (e.g. before a leading
@@ -417,6 +485,21 @@ extension DocumentCanvasView: UIKeyInput {
             deleteTableStructuralSelection()
             return
         }
+        // iOS delivers Backspace at the START (local 0) of a NON-FIRST block-quote CHILD as an object-replacement
+        // RANGE anchored at the previous child's text end (the paragraph break INSIDE the quote), NOT a collapsed
+        // caret — verified at runtime (Return at a quote line's end then Backspace arrives as e.g. `sel=3..5`, head
+        // at the new empty 2nd child). This MUST run BEFORE the empty-container / empty-paragraph-after-atom handlers
+        // below: `resolveBox(at: selTo)` mis-resolves this in-quote position to the FOLLOWING block, so the "empty
+        // paragraph after a non-paragraph atom" handler (a BlockQuoteBox IS such an atom) would REMOVE that following
+        // block (the device bug: "Backspace deletes the paragraph after the quote, not the quote's own line"). When
+        // the range only spans the structural break before the child's start (`selFrom >= prevTextPosition(before:
+        // selTo)`, excluding a genuine text selection), COLLAPSE it to a caret at the child start so the
+        // collapsed-caret quote-child branch below merges it into its previous sibling.
+        if selFrom != selTo, isInsideBlockQuote(selTo),
+           let active = activeStack(at: selTo), active.box is BlockBox, active.local == 0, active.index > 0,
+           selFrom >= prevTextPosition(before: selTo) {
+            anchor = selTo; head = selTo
+        }
         // iOS delivers Backspace at the START of an empty CONTAINER (block quote / code block / pull quote) as an
         // object-replacement RANGE anchored at the previous block's text end — the same offset geometry as a
         // media atom, NOT a collapsed caret. Left as a range it falls to the generic selection-replace below and
@@ -438,12 +521,35 @@ extension DocumentCanvasView: UIKeyInput {
         // atom, with selFrom only covering the structural slots before (`selFrom >=
         // prevTextPosition(before: selTo)`, which excludes a genuine multi-char selection) — and remove the
         // empty paragraph, parking the caret at the atom's text end (matching the collapsed-caret path for
-        // an empty paragraph after a non-text atom further below).
-        if selFrom != selTo, let posTo = resolveBox(at: selTo),
+        // an empty paragraph after a non-text atom further below). `selTo` must be a genuine TOP-LEVEL position:
+        // a position INSIDE a block quote has no degenerate-container-safe `resolveBox`, so `resolveBox(selTo)`
+        // mis-resolves it to the FOLLOWING top-level block — and a mid-text Backspace inside a quote (delivered
+        // as the 1-char range [local0, local1]) satisfies `selFrom >= prevTextPosition(before: selTo)`, so
+        // without the `!isInsideBlockQuote(selTo)` guard this would REMOVE the (empty) block after the quote
+        // instead of deleting the char (the "mid-quote delete misroutes into the following block" device bug).
+        if selFrom != selTo, !isInsideBlockQuote(selTo), let posTo = resolveBox(at: selTo),
            posTo.local == 0, posTo.box.textLength == 0, posTo.index > 0,
            isNonParagraphAtom(boxes[posTo.index - 1]),
            selFrom >= prevTextPosition(before: selTo) {
             editing { removeBlock(at: posTo.index, parkingCaretAt: prevTextPosition(before: selTo)) }
+            return
+        }
+        // iOS may deliver Backspace at the START (local 0) of a quote AUTHOR line as an object-replacement
+        // RANGE anchored at the previous child's text end (the same offset geometry as an empty container /
+        // atom), NOT a collapsed caret. When the range only spans the structural slots before the author's
+        // start (`selFrom >= prevTextPosition(before: selTo)`, which excludes a genuine text selection),
+        // COLLAPSE it to a caret at the author start so the collapsed-caret relocation branch below handles it.
+        if selFrom != selTo, let (region, local) = leafRegion(containingGlobal: selTo),
+           case .quoteAuthor = region.ref, local == 0,
+           selFrom >= prevTextPosition(before: selTo) {
+            anchor = selTo; head = selTo
+        }
+        // Backspace with a collapsed caret at the START of a quote author line: relocate the caret to the end
+        // of the quote's last child (recursive via `prevTextPosition`) — the author is always present, so you
+        // simply step OUT of it into the body. Never merge the author into the body, never delete the quote.
+        if selFrom == selTo, let (region, local) = leafRegion(containingGlobal: head),
+           case .quoteAuthor = region.ref, local == 0 {
+            setCaret(global: prevTextPosition(before: region.globalStart))
             return
         }
         if selFrom != selTo {
@@ -477,6 +583,83 @@ extension DocumentCanvasView: UIKeyInput {
             editing { replaceMediaWithEmptyParagraph(at: i) }
             clearImageSelection()
             return
+        }
+        // Collapsed caret with text before it inside a block quote (a child's body OR the author line) →
+        // delete the grapheme in that leaf region. `resolveBox(at:)` below cannot resolve a position inside
+        // the container (its `textLength == 0`), so without this it mis-resolves to the container (lone quote
+        // → silent no-op) or to the following sibling (wrong block). Mirrors the `isInsideTable` branch above.
+        if selFrom == selTo, isInsideBlockQuote(head),
+           let (_, local) = leafRegion(containingGlobal: head), local > 0 {
+            let n = graphemeClusterLengthBeforeCaret(global: head)
+            editing(coalescing: .deleting) { applyLeafReplace(globalFrom: head - n, globalTo: head, text: "") }
+            return
+        }
+        // Collapsed caret at the START (local 0) of a block quote CHILD. resolveBox below mis-resolves any
+        // local-0 position inside the degenerate container to the FOLLOWING sibling block, so resolve it here
+        // via activeStack and peel one structural level:
+        //   • a quoted LIST item → outdent (nested) or break the list to a plain paragraph (top-level), in place;
+        //   • a non-first NON-list child (index > 0) → merge into its previous sibling within the quote;
+        //   • an EMPTY first NON-list child (a stray leading blank line) → removed, caret to the next child;
+        //   • a NON-empty first NON-list child → un-quoted: extracted as a plain paragraph before the quote.
+        // A lone NON-list child (count == 1) keeps the whole-quote un-quote branch below (line ~593).
+        if selFrom == selTo, isInsideBlockQuote(head),
+           let active = activeStack(at: head), let child = active.box as? BlockBox, active.local == 0 {
+            if let list = child.listMembership {
+                editing {
+                    if list.level > 0 {
+                        child.listMembership = ListMembership(marker: list.marker, level: list.level - 1, checked: list.checked)
+                    } else {
+                        child.listMembership = nil
+                        child.style = .body
+                    }
+                    restyle(child)
+                    recomputeSpans()
+                }
+                return
+            }
+            if active.stack.boxes.count > 1 {
+                if active.index > 0 {
+                    editing { mergeParagraphs(in: active.stack, upperIndex: active.index - 1) }
+                    return
+                }
+                if child.textLength == 0 {
+                    editing {
+                        active.stack.boxes.removeFirst()
+                        recomputeSpans()
+                        let caret = active.stack.boxes.first?.leafRegions().first?.globalStart ?? head
+                        anchor = caret; head = caret
+                    }
+                    return
+                }
+                // non-empty first child → un-quote it (extract as a plain paragraph before the quote)
+                if let (quoteBox, parentStack, qIndex) = enclosingQuote(at: head),
+                   case .blockQuote(let model) = quoteBox.currentBlock(), model.children.count > 1 {
+                    editing {
+                        let firstBox = makeBox(for: model.children[0], mapper: mapper, quoteStyle: quoteStyle,
+                                               pullQuoteStyle: pullQuoteStyle, expandImage: quoteCollapseIcons?.expand,
+                                               collapseImage: quoteCollapseIcons?.collapse, horizontalBleed: 0, width: effectiveWidth)
+                        let restBox = makeBox(for: .blockQuote(BlockQuote(id: model.id, children: Array(model.children.dropFirst()),
+                                                                          collapsed: model.collapsed, author: model.author)),
+                                              mapper: mapper, quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                                              expandImage: quoteCollapseIcons?.expand, collapseImage: quoteCollapseIcons?.collapse,
+                                              horizontalBleed: 0, width: effectiveWidth)
+                        let replacement = [firstBox, restBox].compactMap { $0 }
+                        parentStack.boxes.replaceSubrange(qIndex...qIndex, with: replacement)
+                        recomputeSpans()
+                        let caret = firstBox?.leafRegions().first?.globalStart ?? head
+                        anchor = caret; head = caret
+                    }
+                    return
+                }
+            } else {
+                // A LONE non-list child at local 0 → un-quote the whole quote HERE, before the resolveBox path
+                // below (which mis-resolves this in-quote position to a FOLLOWING block and could mis-fire the
+                // list-item / merge branches, e.g. when the block after the quote is a list item). Reached via
+                // activeStack so a mis-resolved following block can't pre-empt it. (The later count==1
+                // un-quote branch is now redundant but harmless.)
+                unwrapBlockQuoteLevel()
+                return
+            }
         }
         guard let pos = resolveBox(at: head) else { return }
         // Backspace at the START of a list item: cancel one indent level, or (at the top level) break the
@@ -561,6 +744,8 @@ extension DocumentCanvasView: UIKeyInput {
         } else if pos.index > 0 {
             let prev = boxes[pos.index - 1]
             let from = prev.textStart + prev.textLength
+            // The cross-block merge runs through applyReplace → ParagraphBlock.merging, which drops the merged-
+            // in runs' pinned font size on a style mismatch (body→heading renders heading-sized).
             editing { applyReplace(globalFrom: from, globalTo: head, text: "") }
         }
     }

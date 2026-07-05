@@ -54,7 +54,8 @@ public func chatInputContent(
             )))
         case let .pullQuote(pq):
             blocks.append(.pullQuote(ChatInputPullQuote(
-                runs: chatInputRuns(fromRuns: pq.runs, resolveEmoji: resolveEmoji))))
+                runs: chatInputRuns(fromRuns: pq.runs, resolveEmoji: resolveEmoji),
+                author: chatInputRuns(fromRuns: pq.author, resolveEmoji: resolveEmoji))))
         case let .media(media):
             // An unresolved medium has no `ChatInputMedia` representation (`media:` is non-optional) — drop it.
             guard let resolved = resolveMedia(media.mediaID) else {
@@ -74,7 +75,9 @@ public func chatInputContent(
             // Editor block-quote container → currency .blockQuote, recursing its children as a sub-document.
             let inner = chatInputContent(fromDocument: Document(blocks: bq.children),
                                          resolveEmoji: resolveEmoji, resolveMedia: resolveMedia)
-            blocks.append(.blockQuote(ChatInputBlockQuote(content: inner, collapsed: bq.collapsed)))
+            blocks.append(.blockQuote(ChatInputBlockQuote(
+                content: inner, collapsed: bq.collapsed,
+                author: chatInputRuns(fromRuns: bq.author, resolveEmoji: resolveEmoji))))
         }
     }
     return ChatInputContent(blocks: blocks)
@@ -193,7 +196,9 @@ private func cellRuns(fromBlocks blocks: [Block]) -> [TextRun] {
             runs.append(contentsOf: paragraph.runs)
         case let .code(code):
             runs.append(contentsOf: code.runs)
-        case let .pullQuote(pq): runs.append(contentsOf: pq.runs)
+        case let .pullQuote(pq):
+            runs.append(contentsOf: pq.runs)
+            runs.append(contentsOf: pq.author)
         case let .media(media):
             // No inline text for the medium itself; keep only its caption text.
             runs.append(contentsOf: media.caption)
@@ -206,6 +211,7 @@ private func cellRuns(fromBlocks blocks: [Block]) -> [TextRun] {
             for child in bq.children {
                 runs.append(contentsOf: cellRuns(fromBlocks: [child]))
             }
+            runs.append(contentsOf: bq.author)
         }
     }
     return runs
@@ -299,7 +305,8 @@ private func documentBlocks(
     case let .pullQuote(pq):
         return [.pullQuote(PullQuote(
             id: BlockID.generate(),
-            runs: runs(fromChatInputRuns: pq.runs, registerEmoji: registerEmoji)))]
+            runs: runs(fromChatInputRuns: pq.runs, registerEmoji: registerEmoji),
+            author: runs(fromChatInputRuns: pq.author, registerEmoji: registerEmoji)))]
     case let .media(media):
         return [.media(MediaBlock(
             id: BlockID.generate(),
@@ -318,7 +325,8 @@ private func documentBlocks(
         let children = bq.content.blocks.flatMap {
             documentBlocks(fromChatInputBlock: $0, registerEmoji: registerEmoji, registerMedia: registerMedia)
         }
-        return [.blockQuote(BlockQuote(id: BlockID.generate(), children: children, collapsed: bq.collapsed))]
+        return [.blockQuote(BlockQuote(id: BlockID.generate(), children: children, collapsed: bq.collapsed,
+                                       author: runs(fromChatInputRuns: bq.author, registerEmoji: registerEmoji)))]
     }
 }
 

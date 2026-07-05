@@ -330,7 +330,10 @@ final class RichTextAttachmentScreenComponent: Component {
                 inlineCodeBackground: codeFill,
                 markedTextUnderline: theme.list.itemPrimaryTextColor,
                 spoilerDust: theme.list.itemSecondaryTextColor,
-                containerPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9)
+                containerPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9),
+                // Same source as secondaryText/placeholder above — no visual change until a distinct value is set.
+                quoteAuthorText: theme.list.itemAccentColor,
+                quoteAuthorPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9)
             )
         }
 
@@ -382,7 +385,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 self.appliedTheme = environment.theme
                 // Quote geometry for the full-page article editor. Defaults == the editor's built-in look;
                 // tune here to diverge from the chat composer.
-                editor.quoteStyle = QuoteStyle()
+                editor.quoteStyle = QuoteStyle(leadingInset: 9.0, topInset: 4.0, bottomInset: 4.0)
                 editor.pullQuoteStyle = PullQuoteStyle()
                 // Quote collapse/expand affordance icons (same assets as the chat composer / legacy input).
                 if let collapse = UIImage(bundleImageName: "Media Gallery/Minimize")?.precomposed().withRenderingMode(.alwaysTemplate),
@@ -534,35 +537,37 @@ final class RichTextAttachmentScreenComponent: Component {
                 transition.setFrame(view: rightNavActionsBarView, frame: rightNavActionsBarFrame)
             }
 
-            //TODO:localize
-            let titleSize = self.title.update(
-                transition: .immediate,
-                component: AnyComponent(
-                    MultilineTextComponent(
-                        text: .plain(NSAttributedString(
-                            string: "Text",
-                            font: Font.semibold(17.0),
-                            textColor: environment.theme.rootController.navigationBar.primaryTextColor
-                        ))
-                    )
-                ),
-                environment: {},
-                containerSize: CGSize(width: 200.0, height: 40.0)
-            )
-            // The title is centered, but must clear both the left button cluster (Close + undo + redo) and the
-            // Done button. When the natural center would overlap either side, re-center it in the gap between
-            // the cluster's trailing edge and Done (needed on narrow screens where the centered title would
-            // otherwise sit under the redo pill).
-            let leftClusterMaxX = leftNavActionsBarFrame.maxX
-            var titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - titleSize.width) / 2.0), y: floorToScreenPixels((environment.navigationHeight - titleSize.height) / 2.0) + 3.0), size: titleSize)
-            if titleFrame.minX < leftClusterMaxX + 16.0 || titleFrame.maxX > rightNavActionsBarFrame.minX - 16.0 {
-                titleFrame.origin.x = leftClusterMaxX + floorToScreenPixels((rightNavActionsBarFrame.minX - leftClusterMaxX) - titleSize.width) / 2.0
-            }
-            if let titleView = self.title.view {
-                if titleView.superview == nil {
-                    component.overNavigationContainer.addSubview(titleView)
+            if component.initialContents == nil {
+                //TODO:localize
+                let titleSize = self.title.update(
+                    transition: .immediate,
+                    component: AnyComponent(
+                        MultilineTextComponent(
+                            text: .plain(NSAttributedString(
+                                string: "Text",
+                                font: Font.semibold(17.0),
+                                textColor: environment.theme.rootController.navigationBar.primaryTextColor
+                            ))
+                        )
+                    ),
+                    environment: {},
+                    containerSize: CGSize(width: 200.0, height: 40.0)
+                )
+                // The title is centered, but must clear both the left button cluster (Close + undo + redo) and the
+                // Done button. When the natural center would overlap either side, re-center it in the gap between
+                // the cluster's trailing edge and Done (needed on narrow screens where the centered title would
+                // otherwise sit under the redo pill).
+                let leftClusterMaxX = leftNavActionsBarFrame.maxX
+                var titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((availableSize.width - titleSize.width) / 2.0), y: floorToScreenPixels((environment.navigationHeight - titleSize.height) / 2.0) + 3.0), size: titleSize)
+                if titleFrame.minX < leftClusterMaxX + 16.0 || titleFrame.maxX > rightNavActionsBarFrame.minX - 16.0 {
+                    titleFrame.origin.x = leftClusterMaxX + floorToScreenPixels((rightNavActionsBarFrame.minX - leftClusterMaxX) - titleSize.width) / 2.0
                 }
-                transition.setFrame(view: titleView, frame: titleFrame)
+                if let titleView = self.title.view {
+                    if titleView.superview == nil {
+                        component.overNavigationContainer.addSubview(titleView)
+                    }
+                    transition.setFrame(view: titleView, frame: titleFrame)
+                }
             }
             
             self.backgroundColor = environment.theme.actionSheet.opaqueItemBackgroundColor

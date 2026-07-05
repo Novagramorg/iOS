@@ -22,9 +22,9 @@ private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
         case .code(let c):
             return .code(CodeBlock(id: .generate(), language: c.language, runs: c.runs))
         case .pullQuote(let pq):
-            return .pullQuote(PullQuote(id: .generate(), runs: pq.runs))
+            return .pullQuote(PullQuote(id: .generate(), runs: pq.runs, author: pq.author))
         case .blockQuote(let bq):
-            return .blockQuote(BlockQuote(id: .generate(), children: regeneratingIDs(bq.children), collapsed: bq.collapsed))
+            return .blockQuote(BlockQuote(id: .generate(), children: regeneratingIDs(bq.children), collapsed: bq.collapsed, author: bq.author))
         default:
             return block
         }
@@ -160,8 +160,16 @@ extension Document {
     }
 
     /// The global position of the first editable text offset of the top-level block at `index`.
+    /// A paragraph/code block's text sits one token in (the block's own container-open token) —
+    /// `cursor + 1`. A pull quote is a `.blockQuote(children: [pullTextPara, authorPara])`
+    /// container (see `DocumentTree.node(for:)`), so its pull text is nested one level deeper —
+    /// `cursor + 2` (the pull-quote container's open token, THEN the pull-text paragraph's own).
     public func globalTextStart(ofBlockAt index: Int) -> Int {
-        DocumentTree.documentSize(Document(blocks: Array(blocks[..<index]))) + 1
+        let cursor = DocumentTree.documentSize(Document(blocks: Array(blocks[..<index])))
+        if case .pullQuote = blocks[index] {
+            return cursor + 2
+        }
+        return cursor + 1
     }
 
     /// A sub-`Document` of the selection `[lo, hi)`. Paragraph and code blocks are copied (boundary
@@ -192,10 +200,18 @@ extension Document {
                 // carry no content and are meaningless to paste (asymmetric with empty paragraphs,
                 // which preserve the blank line's structure on intra-document paste).
             case .pullQuote(let pq):
-                let a = max(lo, textStart), b = min(hi, textStart + pq.utf16Count)
+                // A pull quote is now a `.blockQuote` container [pullPara, authorPara] (Task 2), so the pull
+                // text starts at cursor + 2 (container open + pullPara open), NOT the shared `textStart`
+                // (cursor + 1, correct for paragraph/code). Using `textStart` here slices the wrong UTF-16
+                // range and computes the author-carry condition against the wrong base.
+                let ptStart = cursor + 2
+                let a = max(lo, ptStart), b = min(hi, ptStart + pq.utf16Count)
                 if a < b {
-                    let r = sliceRuns(pq.runs, fromUTF16: a - textStart, toUTF16: b - textStart)
-                    out.append(.pullQuote(PullQuote(id: .generate(), runs: r)))
+                    let r = sliceRuns(pq.runs, fromUTF16: a - ptStart, toUTF16: b - ptStart)
+                    // A partial pull-text copy carries no author — the author is off the flat text axis,
+                    // so it only survives when the WHOLE pull text is captured.
+                    let author = (a == ptStart && b == ptStart + pq.utf16Count) ? pq.author : []
+                    out.append(.pullQuote(PullQuote(id: .generate(), runs: r, author: author)))
                 }
             case .blockQuote(let bq):
                 // Capture the whole block quote only when the selection fully covers its span
@@ -204,7 +220,8 @@ extension Document {
                 if lo <= cursor && hi >= cursor + size {
                     out.append(.blockQuote(BlockQuote(id: .generate(),
                                                       children: regeneratingIDs(bq.children),
-                                                      collapsed: bq.collapsed)))
+                                                      collapsed: bq.collapsed,
+                                                      author: bq.author)))
                 }
             default:
                 break   // media/table not carried in a fragment

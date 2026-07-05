@@ -26,8 +26,14 @@ public struct ChatRichTextThemeColors {
     public var listCheckFillColor: UIColor
     public var listCheckForegroundColor: UIColor
     public var listCheckBorderColor: UIColor
+    /// Quote AUTHOR (attribution) line text color — dedicated (defaults to `secondaryText` at the mapping
+    /// site so there is no visual change until the host picks a distinct value). See `RichTextEditorTheme.quoteAuthorText`.
+    public var quoteAuthorText: UIColor
+    /// Quote AUTHOR (attribution) line placeholder color — dedicated (defaults to `placeholder` at the
+    /// mapping site). See `RichTextEditorTheme.quoteAuthorPlaceholder`.
+    public var quoteAuthorPlaceholder: UIColor
 
-    public init(primaryText: UIColor, secondaryText: UIColor, placeholder: UIColor, accent: UIColor, tableBorder: UIColor, tableHeaderBackground: UIColor, listCheckFillColor: UIColor, listCheckForegroundColor: UIColor, listCheckBorderColor: UIColor) {
+    public init(primaryText: UIColor, secondaryText: UIColor, placeholder: UIColor, accent: UIColor, tableBorder: UIColor, tableHeaderBackground: UIColor, listCheckFillColor: UIColor, listCheckForegroundColor: UIColor, listCheckBorderColor: UIColor, quoteAuthorText: UIColor, quoteAuthorPlaceholder: UIColor) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
         self.placeholder = placeholder
@@ -37,6 +43,8 @@ public struct ChatRichTextThemeColors {
         self.listCheckFillColor = listCheckFillColor
         self.listCheckForegroundColor = listCheckForegroundColor
         self.listCheckBorderColor = listCheckBorderColor
+        self.quoteAuthorText = quoteAuthorText
+        self.quoteAuthorPlaceholder = quoteAuthorPlaceholder
     }
 }
 

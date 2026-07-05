@@ -702,6 +702,88 @@ non-interactive topmost overlay: the field frame (red outline), scroll insets (b
 ring), and per-block frames (orange, indexed), with inset/margin numeric labels. Refreshed from `performLayout` /
 `scrollViewDidScroll`; reads geometry via `bounds` / `debugContentInset` / `canvas`. Compiled out of release entirely.
 
+## TECH DEBT — `resolveBox` degenerate-container misroute (needs generalization; may require re-architecture)
+
+**Status: known-brittle. The current fixes are point-patches, not a design. Generalize this — changing the
+architecture if that's what it takes.**
+
+**Root cause (one bug, many faces).** Position→box resolution has TWO mechanisms that disagree:
+- `activeStack(at:)` / `leafRegion(containingGlobal:)` — **container-aware**: they descend into
+  `BlockQuoteBox.children` / table cells and resolve the real leaf.
+- `resolveBox(at:)` / `box(containingGlobal:)` — **NOT** container-aware: a `BlockQuoteBox`/`TableBlockBox`
+  has a *degenerate* `CanvasBlock` text extent (`textStart == nodeStart`, `textLength == 0`; the real text is
+  in children), so a position **inside** such a container matches no top-level box and the fallback loop
+  returns the **following top-level block** (`pos < nextBox.textStart`). A quote/pull-quote **author** region
+  is the same trap from the other side: it's a *second* leaf region off `activeStack`'s child-descent, so
+  `activeStack`'s own resolveBox-based fallback mis-resolves it too.
+
+So **any code that calls `resolveBox`/`box(containingGlobal:)` with a position that can be container-interior,
+and then ACTS on the result, edits/reads the wrong (following) block.** This produced a whole family of device
+bugs, each fixed individually (see git log ~2026-07-05): in-text/first-line/sibling/mid-text Backspace, the
+object-replacement-range Backspace (`sel=a..b`), Return-in-author, the empty-paragraph-after-atom handler
+(line ~530, twice), `insertTable`/`insertMedia`, `currentState()` toolbar state, and IME
+`isBodyParagraphPosition`.
+
+**How they were patched (the brittle part).** Two ad-hoc moves, applied per call site: (a) swap `resolveBox`
+→ `activeStack`/`leafRegion`; or (b) bolt on a `!isInsideBlockQuote(pos)` / `!isInsideTable(pos)` guard. There
+is **no invariant** preventing the next `resolveBox` consumer from re-introducing the bug — every new call
+site is a fresh landmine, and the guards are easy to forget. `RTEDBG q0705*` instrumentation (now stripped)
+was needed twice because unit tests with a *non-empty* following block hid the misroute (line ~530 only fires
+when the following block is empty).
+
+**The real fix (do this).** Make position resolution container-aware **by construction** so a single resolver
+cannot mis-resolve a container-interior position:
+- Unify on ONE descending resolver (fold `resolveBox`/`box(containingGlobal:)` into the `activeStack` descent,
+  or give containers a non-degenerate `CanvasBlock` extent so the fallback loop can't skip them), and retire
+  the degenerate-`textLength` fallback that returns the following block.
+- Represent the author as a first-class leaf on the child axis (or make `activeStack` descend to it) so it
+  stops being a special-cased "second region."
+- Then delete the scattered `!isInsideBlockQuote`/`!isInsideTable` guards and the `resolveBox`→`activeStack`
+  swaps — they become unnecessary once resolution can't misroute.
+- Guardrail until then: a new `resolveBox`/`box(containingGlobal:)` call site that acts on the result is a
+  code smell — prefer `activeStack`/`leafRegion`, and if you must use `resolveBox`, guard the container cases.
+
+## TECH DEBT — display-only font size is PINNED into runs on read-back (needs a style-inheritance re-think)
+
+**Status: known-brittle. The style-transition font fixes are point-patches. Generalize this.**
+
+**Root cause.** A run's rendered font SIZE is display-derived from the paragraph style (heading1 = 24, body =
+17, table cells = 15 via the `tableCells` mapper variant), NOT stored per-run — EXCEPT that
+`AttributedStringMapper.characterAttributes(from:)` **unconditionally PINS** the rendered size into
+`CharacterAttributes.fontSize` on read-back (`currentParagraph()` / `runs(from:)`). That pin exists so a
+non-default size survives being moved between contexts (the "15pt table-cell round-trip": copy a cell, paste
+elsewhere, keep 15pt). But it means **any run that moves to a paragraph with a DIFFERENT style keeps its old
+size, overriding the new style** — because the pinned `fontSize` beats the style default at layout time. Font
+FAMILY does NOT have this problem (it's deliberately not round-tripped — see the RTL font-family invariant).
+
+**Where it bites (patched ~2026-07-05):**
+- **MERGE across styles is handled centrally in `ParagraphBlock.merging`** (Core): when the two paragraphs'
+  styles differ, the appended (other) runs get their `fontSize` cleared so they inherit the surviving style's
+  size. This covers every merge path at once — `deleteBackward`'s top-level `applyReplace` merge (Backspace at
+  a body paragraph's start into a preceding heading — reached as a RANGE `[prevEnd, thisStart]`, NOT a
+  collapsed caret, so it goes through `applySelectionReplace` → `applyReplace` → `merging`) and
+  `mergeParagraphs`. Same-style merges keep the pin (preserving the 15pt table-cell round-trip).
+- **SPLIT (`insertParagraphBreak`) is still a separate patch**: Return in a heading makes the tail a body
+  paragraph and clears the tail runs' `fontSize` (a split is not a `merging` call, so it needs its own sweep).
+
+**Still ad-hoc on the split side and anywhere else runs cross a style boundary WITHOUT going through
+`merging`** — paste, RTF import, format-menu style change, list/quote wraps, drag are each a fresh place the
+pinned size can leak the wrong value. There is **no invariant** enforcing "a run's size follows its paragraph
+style unless the user explicitly overrode it." (**Lesson:** the merge fix was first written as scattered
+per-call-site patches AND a collapsed-caret-only unit test; both missed that iOS delivers Backspace-at-start as
+a RANGE. Centralizing in `merging` + testing the range form fixed it.)
+
+**The real fix (do this).** Separate *style-derived* size from a *user-explicit* size override:
+- Do NOT pin the style-default size on read-back; only pin a size that DIFFERS from the run's paragraph-style
+  default (mirrors how foreground color is stripped when it equals the style default — see the round-trip
+  invariant). Then a heading run reads back with `fontSize == nil` and inherits whatever paragraph style it
+  lands in; the 15pt cell case is handled by resolving the size against the *cell's* style at pin time (pin
+  only when 15 ≠ the destination style's default), or by carrying the cell size as context, not per-run.
+- Then delete the scattered `fontSize = nil` patches in `insertParagraphBreak` / `mergeParagraphs` — they
+  become unnecessary once size inherits the style by construction.
+- Guardrail until then: any new code path that moves runs into a different-styled paragraph must strip the
+  runs' pinned `fontSize` (or it will render at the wrong size).
+
 ## Load-bearing invariants (compiler-invisible — violating these silently breaks the editor)
 
 - **One flat global `(anchor, head)` range, coordinate-free.** Selection is a single linear range over one

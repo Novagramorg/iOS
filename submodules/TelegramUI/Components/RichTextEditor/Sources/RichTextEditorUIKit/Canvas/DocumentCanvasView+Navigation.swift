@@ -1,8 +1,20 @@
 #if canImport(UIKit)
 import UIKit
+import RichTextEditorCore
 
 @available(iOS 13.0, *)
 extension DocumentCanvasView {
+    /// True for an EMPTY quote/pull-quote author-line leaf region. It isn't independently reachable via
+    /// arrow-key/backspace stepping yet (wiring that up is Task 5 scope), so `prevTextPosition`/
+    /// `nextTextPosition` skip over it — stepping around a quote lands on its pull/quote text exactly as
+    /// before the author region existed. A NON-empty author region is real content and stays fully
+    /// navigable (only the `length == 0` placeholder state is skipped).
+    private func isEmptyAuthorRegion(_ region: LeafTextRegion) -> Bool {
+        guard region.length == 0 else { return false }
+        if case .quoteAuthor = region.ref { return true }
+        return false
+    }
+
     /// Next text position to the right: within the current leaf region, or to the next region's
     /// start — except when an image gap sits before that region (then stop at the gap). Handles
     /// paragraphs, image captions, and table cells uniformly (regions are in document order).
@@ -18,7 +30,12 @@ extension DocumentCanvasView {
                 return regions[i].globalStart + (r.location + r.length)
             }
             guard i + 1 < regions.count else { return pos }
-            let nextStart = regions[i + 1].globalStart
+            var j = i + 1
+            while isEmptyAuthorRegion(regions[j]) {
+                j += 1
+                guard j < regions.count else { return pos }
+            }
+            let nextStart = regions[j].globalStart
             // Stop at an atom gap (media OR collapsed quote) sitting between this region and the next.
             if let gap = atomGap(in: pos..<nextStart) { return gap }
             return nextStart
@@ -45,10 +62,14 @@ extension DocumentCanvasView {
                 let r = s.rangeOfComposedCharacterSequence(at: local - 1)
                 return regions[i].globalStart + r.location
             }
-            let prevEnd = i > 0 ? regions[i - 1].globalStart + regions[i - 1].length : 0
+            // Walk back past any EMPTY quote-author region to the nearest real text end (see
+            // `isEmptyAuthorRegion`).
+            var j = i - 1
+            while j >= 0, isEmptyAuthorRegion(regions[j]) { j -= 1 }
+            let prevEnd = j >= 0 ? regions[j].globalStart + regions[j].length : 0
             // Stop at an atom gap (media OR collapsed quote) between the previous region and this one.
             if let gap = atomGap(in: prevEnd..<regions[i].globalStart) { return gap }
-            if i > 0 { return prevEnd }
+            if j >= 0 { return prevEnd }
             return pos
         }
         if let img = mediaBox(atGap: pos) {   // media gap → previous block's text end, or doc start
@@ -165,15 +186,33 @@ extension DocumentCanvasView {
             return escaped != pos ? escaped : snapped
         }
 
-        // Top-level: the geometric snap can stall (e.g. just above a table, the one-line step re-snaps
-        // to the same paragraph). On no progress, push the target just past the owning top-level box and
-        // re-snap so the caret escapes over an adjacent table.
+        // The one-line geometric snap can STALL (re-snap to the same line) when the gap to the next line
+        // exceeds `step/2` — e.g. just above a table, OR (the reported bug) between a quote's last child and
+        // its author line when `authorSpacing` is large. On a stall, step to the ADJACENT leaf region (the
+        // next/previous LINE in document order — which INCLUDES the quote author and every quote child), so
+        // vertical nav visits every line. Probing at the adjacent region's edge line clears any gap; it is
+        // NOT the old "escape past the owning top-level box", which jumped over the ENTIRE quote (skipping its
+        // remaining lines + author — "Down skips the rest of the quote / the author field").
         if let (snapRegion, _) = leafRegion(containingGlobal: snapped),
-           snapRegion.globalStart == region.globalStart, snapped == pos,
-           let owner = boxes.first(where: { caret.midY >= $0.frame.minY && caret.midY < $0.frame.maxY }) {
-            let escapeY = down ? owner.frame.maxY + step / 2 : owner.frame.minY - step / 2
-            let escaped = closestGlobalPosition(to: CGPoint(x: caret.midX - off, y: escapeY))
-            if escaped != pos { return escaped }
+           snapRegion.globalStart == region.globalStart, snapped == pos {
+            let regions = allLeafRegions()
+            if let i = regions.firstIndex(where: { $0.globalStart == region.globalStart }) {
+                let j = down ? i + 1 : i - 1
+                if j >= 0, j < regions.count {
+                    let nr = regions[j]
+                    let lineH = max(nr.layout.caretRect(atOffset: 0).height, 16)
+                    let probeY = down ? nr.canvasOrigin.y + lineH / 2
+                                      : nr.canvasOrigin.y + max(nr.layout.boundingHeight, lineH) - lineH / 2
+                    let stepped = closestGlobalPosition(to: CGPoint(x: caret.midX - off, y: probeY))
+                    if stepped != pos { return stepped }
+                }
+            }
+            // Fallback (document boundary / no adjacent region resolved): the original escape-past-owner.
+            if let owner = boxes.first(where: { caret.midY >= $0.frame.minY && caret.midY < $0.frame.maxY }) {
+                let escapeY = down ? owner.frame.maxY + step / 2 : owner.frame.minY - step / 2
+                let escaped = closestGlobalPosition(to: CGPoint(x: caret.midX - off, y: escapeY))
+                if escaped != pos { return escaped }
+            }
         }
         return snapped
     }
@@ -219,6 +258,29 @@ extension DocumentCanvasView {
             else { return }   // first cell → no-op
         }
         if let t = target, let pos = table.cellTextStart(row: t.row, column: t.column) { setCaret(global: pos) }
+    }
+
+    /// Tab affordance for quotes (block quote or pull quote). A caret in the quote BODY jumps to the END of
+    /// the author line (a quick way to type an attribution). A caret already IN the author jumps OUT of the
+    /// quote — to the first text position after it — when there is a following place to move to; otherwise it
+    /// stays put. Returns `true` when the Tab was consumed by a quote (so the caller skips table nav).
+    @discardableResult
+    func handleQuoteTabForward() -> Bool {
+        guard let (region, _) = leafRegion(containingGlobal: head) else { return false }
+        if case .quoteAuthor = region.ref {
+            // In the author → step OUT past the whole author to the first text position after the quote.
+            let authorEnd = region.globalStart + region.length
+            let out = nextTextPosition(after: authorEnd)
+            if out != authorEnd { setCaret(global: out) }   // else: nothing follows the quote → stay
+            return true
+        }
+        // In the quote body → focus the END of the innermost enclosing quote's author line.
+        guard let (quoteBox, _, _) = enclosingQuote(at: head),
+              let author = quoteBox.leafRegions().first(where: {
+                  if case .quoteAuthor = $0.ref { return true } else { return false }
+              }) else { return false }
+        setCaret(global: author.globalStart + author.length)
+        return true
     }
 }
 #endif

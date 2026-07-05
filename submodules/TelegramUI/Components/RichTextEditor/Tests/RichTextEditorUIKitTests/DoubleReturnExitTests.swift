@@ -38,6 +38,136 @@ final class DoubleReturnExitTests: XCTestCase {
         XCTAssertFalse(hasShiftReturn, "Shift+Return key command is removed")
     }
 
+    func test_keyCommands_includeEditorOwnedFormattingShortcuts() {
+        // ⌘B etc. must be owned by the editor (the app-level shortcuts mutate the legacy NSAttributedString
+        // state the native editor doesn't use). As first responder these take precedence.
+        let cmds = DocumentCanvasView().keyCommands ?? []
+        func has(_ input: String, _ mods: UIKeyModifierFlags) -> Bool {
+            cmds.contains { $0.input == input && $0.modifierFlags == mods }
+        }
+        XCTAssertTrue(has("B", .command), "⌘B (bold)")
+        XCTAssertTrue(has("I", .command), "⌘I (italic)")
+        XCTAssertTrue(has("U", .command), "⌘U (underline)")
+        XCTAssertTrue(has("X", [.command, .shift]), "⇧⌘X (strikethrough)")
+        XCTAssertTrue(has("M", [.command, .shift]), "⇧⌘M (monospace)")
+        XCTAssertTrue(has("\t", []) && has("\t", .shift), "Tab / Shift-Tab still present")
+    }
+
+    // MARK: Hardware Return → host send hook
+
+    func test_keyCommands_includeHardwareReturn() {
+        let cmds = DocumentCanvasView().keyCommands ?? []
+        XCTAssertTrue(cmds.contains { $0.input == "\r" && $0.modifierFlags == [] }, "plain Return")
+        XCTAssertTrue(cmds.contains { $0.input == "\r" && $0.modifierFlags == .command }, "⌘Return")
+    }
+
+    func test_hardwareReturn_hostConsumes_noNewlineInserted() {
+        let c = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "hi")]))])
+        c.setCaret(global: c.boxes[0].leafRegions().first!.globalStart + 2)   // end of "hi"
+        var seen: UIKeyModifierFlags?
+        c.onHardwareReturn = { flags in seen = flags; return false }          // host sent the message
+        c.performHardwareReturn([])
+        XCTAssertEqual(seen, [], "host hook was invoked with the modifier flags")
+        XCTAssertEqual(c.boxes.count, 1, "no new paragraph — the host consumed the Return")
+        guard case .paragraph(let p) = c.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(p.text, "hi", "text unchanged")
+    }
+
+    func test_hardwareReturn_hostDeclines_insertsNewline() {
+        let c = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "hi")]))])
+        c.setCaret(global: c.boxes[0].leafRegions().first!.globalStart + 2)
+        c.onHardwareReturn = { _ in true }                                   // insert a newline instead
+        c.performHardwareReturn([])
+        XCTAssertEqual(c.boxes.count, 2, "a new paragraph was inserted")
+    }
+
+    func test_hardwareReturn_noHost_insertsNewline() {
+        let c = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "hi")]))])
+        c.setCaret(global: c.boxes[0].leafRegions().first!.globalStart + 2)
+        c.performHardwareReturn([])                                          // onHardwareReturn unset → default newline
+        XCTAssertEqual(c.boxes.count, 2, "standalone editor inserts a newline by default")
+    }
+
+    // MARK: Return in a heading → next paragraph is body
+
+    func test_return_atEndOfHeading_nextParagraphIsBody() {
+        let canvas = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("h"), style: .heading1, runs: [TextRun(text: "Title")]))])
+        canvas.setCaret(global: canvas.boxes[0].leafRegions().first!.globalStart + 5)   // end of "Title"
+        canvas.insertText("\n")
+        XCTAssertEqual(canvas.boxes.count, 2)
+        XCTAssertEqual(style(canvas.boxes[0]), .heading1, "the heading stays a heading")
+        XCTAssertEqual(style(canvas.boxes[1]), .body, "the new paragraph is body, not another heading")
+    }
+
+    func test_return_midHeading_lowerHalfIsBody() {
+        let canvas = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("h"), style: .heading2, runs: [TextRun(text: "Title")]))])
+        canvas.setCaret(global: canvas.boxes[0].leafRegions().first!.globalStart + 2)   // "Ti|tle"
+        canvas.insertText("\n")
+        XCTAssertEqual(canvas.boxes.count, 2)
+        XCTAssertEqual(style(canvas.boxes[0]), .heading2, "the first part stays a heading")
+        XCTAssertEqual(style(canvas.boxes[1]), .body, "the split-off tail becomes body")
+        guard case .paragraph(let lower) = canvas.boxes[1].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(lower.text, "tle")
+    }
+
+    func test_return_midHeading_lowerTail_rendersAtBodyFontSize_notHeading() {
+        let canvas = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("h"), style: .heading1, runs: [TextRun(text: "Title")]))])
+        canvas.setCaret(global: canvas.boxes[0].leafRegions().first!.globalStart + 2)   // "Ti|tle"
+        canvas.insertText("\n")
+        guard case .paragraph(let lower) = canvas.boxes[1].currentBlock() else { return XCTFail() }
+        // Reference: a plain body paragraph "tle" — its read-back run font size is the body size.
+        let ref = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: [TextRun(text: "tle")]))])
+        guard case .paragraph(let refBody) = ref.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(lower.runs.first?.attributes.fontSize, refBody.runs.first?.attributes.fontSize,
+                       "the heading tail must render at the BODY font size, not the pinned heading size")
+    }
+
+    func test_backspace_bodyStartIntoHeading_mergedTailRendersAtHeadingSize() {
+        let c = makeCanvas([
+            .paragraph(ParagraphBlock(id: BlockID("h"), style: .heading1, runs: [TextRun(text: "Head")])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: [TextRun(text: "small")])),
+        ])
+        c.setCaret(global: c.boxes[1].leafRegions().first!.globalStart)   // start of "small"
+        c.deleteBackward()                                                // merge "small" into the heading
+        XCTAssertEqual(c.boxes.count, 1)
+        guard case .paragraph(let merged) = c.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(merged.style, .heading1)
+        XCTAssertEqual(merged.text, "Headsmall")
+        // Reference all-heading paragraph — the merged-in tail must render at the SAME (heading) size.
+        let ref = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("r"), style: .heading1, runs: [TextRun(text: "Headsmall")]))])
+        guard case .paragraph(let refH) = ref.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(merged.runs.last?.attributes.fontSize, refH.runs.last?.attributes.fontSize,
+                       "the merged-in body text renders at the heading size, not the pinned body size")
+    }
+
+    func test_backspace_RANGE_bodyStartIntoHeading_mergedTailRendersAtHeadingSize() {
+        // iOS delivers Backspace at a paragraph's START as a RANGE [previous paragraph end, this start], NOT a
+        // collapsed caret — so it goes through applySelectionReplace, not the collapsed-caret merge branch.
+        let c = makeCanvas([
+            .paragraph(ParagraphBlock(id: BlockID("h"), style: .heading1, runs: [TextRun(text: "Head")])),
+            .paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: [TextRun(text: "small")])),
+        ])
+        let headEnd = c.boxes[0].leafRegions().first!.globalStart + 4     // end of "Head"
+        let bodyStart = c.boxes[1].leafRegions().first!.globalStart        // start of "small"
+        c.anchor = headEnd; c.head = bodyStart                            // the object-replacement range
+        c.deleteBackward()
+        XCTAssertEqual(c.boxes.count, 1)
+        guard case .paragraph(let merged) = c.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(merged.style, .heading1)
+        XCTAssertEqual(merged.text, "Headsmall")
+        let ref = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("r"), style: .heading1, runs: [TextRun(text: "Headsmall")]))])
+        guard case .paragraph(let refH) = ref.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(merged.runs.last?.attributes.fontSize, refH.runs.last?.attributes.fontSize,
+                       "merged-in body text renders at the heading size (range path)")
+    }
+
+    func test_return_inBody_staysBody() {
+        let canvas = makeCanvas([.paragraph(ParagraphBlock(id: BlockID("b"), style: .body, runs: [TextRun(text: "text")]))])
+        canvas.setCaret(global: canvas.boxes[0].leafRegions().first!.globalStart + 4)
+        canvas.insertText("\n")
+        XCTAssertEqual(style(canvas.boxes[1]), .body, "body stays body (unchanged)")
+    }
+
     // MARK: Code-block double-return
 
     // Typing two newlines at the BEGINNING of a code block exits before it (the first Enter lands the caret
@@ -96,12 +226,101 @@ final class DoubleReturnExitTests: XCTestCase {
         XCTAssertGreaterThan(afterMeasured, beforeMeasured, "the code block PURE MEASURE (field-sizing path) grows by one line")
     }
 
-    func test_codeBlock_doubleReturnOnEmptyBlock_uncodes() {
+    func test_codeBlock_singleReturnOnEmptyBlock_addsLine_doesNotUncode() {
         let canvas = makeCanvas([.code(CodeBlock(id: BlockID("c1"), runs: []))])
         canvas.setCaret(global: 1)
         canvas.insertText("\n")
         XCTAssertEqual(canvas.boxes.count, 1)
-        XCTAssertEqual(style(canvas.boxes[0]), .body, "the empty code block becomes a body paragraph")
+        guard case let .code(cb) = canvas.boxes[0].currentBlock() else { return XCTFail("still a code block after one Return") }
+        XCTAssertEqual(cb.text, "\n", "the first Return adds a blank line (no un-code — the escape requires \\n\\n)")
+    }
+
+    func test_codeBlock_doubleReturnOnEmptyBlock_uncodes() {
+        let canvas = makeCanvas([.code(CodeBlock(id: BlockID("c1"), runs: []))])
+        canvas.setCaret(global: 1)
+        canvas.insertText("\n")   // adds a blank line
+        canvas.insertText("\n")   // \n\n → un-code
+        XCTAssertEqual(canvas.boxes.count, 1)
+        XCTAssertEqual(style(canvas.boxes[0]), .body, "\\n\\n un-codes the empty code block to a body paragraph")
+    }
+
+    // MARK: Block-quote leading exit (\n\n at the beginning)
+
+    func test_blockQuote_doubleReturnAtBeginningOfContent_exitsBefore() {
+        let canvas = makeCanvas([
+            .blockQuote(BlockQuote(id: BlockID("q"), children: [
+                .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hello")]))
+            ], collapsed: false, author: []))
+        ])
+        let box = canvas.boxes[0] as! BlockQuoteBox
+        canvas.setCaret(global: box.children.boxes[0].leafRegions().first!.globalStart)   // start of "hello"
+        canvas.insertText("\n")   // splits → ["", "hello"], caret on "hello"
+        canvas.insertText("\n")   // \n\n at the beginning → exit before
+        XCTAssertEqual(canvas.boxes.count, 2, "an empty body paragraph BEFORE the quote")
+        XCTAssertEqual(style(canvas.boxes[0]), .body, "the body paragraph is first")
+        guard case .blockQuote(let q) = canvas.boxes[1].currentBlock() else { return XCTFail("second still a quote") }
+        XCTAssertEqual(q.children.count, 1, "the quote keeps just \"hello\" (leading blank dropped)")
+        guard case .paragraph(let only) = q.children.first else { return XCTFail("expected a paragraph child") }
+        XCTAssertEqual(only.text, "hello")
+    }
+
+    func test_blockQuote_singleReturnAtStartOfContent_addsLeadingLine_doesNotExit() {
+        let canvas = makeCanvas([
+            .blockQuote(BlockQuote(id: BlockID("q"), children: [
+                .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hello")]))
+            ], collapsed: false, author: []))
+        ])
+        let box = canvas.boxes[0] as! BlockQuoteBox
+        canvas.setCaret(global: box.children.boxes[0].leafRegions().first!.globalStart)
+        canvas.insertText("\n")   // one Return at the start → a leading blank line, still inside the quote
+        XCTAssertEqual(canvas.boxes.count, 1, "a single Return does NOT exit")
+        guard let q = canvas.boxes.first as? BlockQuoteBox else { return XCTFail("still a quote") }
+        XCTAssertEqual(q.children.boxes.count, 2, "a leading empty line was added inside the quote")
+    }
+
+    // MARK: Block-quote wholly-empty requires \n\n (single Return must NOT escape)
+
+    private func emptyQuote() -> Block {
+        .blockQuote(BlockQuote(id: BlockID("q"), children: [
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: []))
+        ], collapsed: false, author: []))
+    }
+
+    func test_blockQuote_singleReturnInWhollyEmptyQuote_addsLine_doesNotEscape() {
+        let canvas = makeCanvas([emptyQuote()])
+        let box = canvas.boxes[0] as! BlockQuoteBox
+        canvas.setCaret(global: box.children.boxes[0].leafRegions().first!.globalStart)
+        canvas.insertText("\n")
+        XCTAssertEqual(canvas.boxes.count, 1, "a single Return must NOT escape the empty quote")
+        guard let q = canvas.boxes.first as? BlockQuoteBox else { return XCTFail("still a quote after one Return") }
+        XCTAssertEqual(q.children.boxes.count, 2, "the first Return adds a second empty line inside the quote")
+    }
+
+    func test_blockQuote_doubleReturnInWhollyEmptyQuote_escapesToBody() {
+        let canvas = makeCanvas([emptyQuote()])
+        let box = canvas.boxes[0] as! BlockQuoteBox
+        canvas.setCaret(global: box.children.boxes[0].leafRegions().first!.globalStart)
+        canvas.insertText("\n")   // adds a line
+        canvas.insertText("\n")   // \n\n → escape
+        XCTAssertEqual(canvas.boxes.count, 1, "the wholly-empty quote is replaced by a single body paragraph")
+        XCTAssertFalse(canvas.boxes[0] is BlockQuoteBox, "no longer a quote")
+        XCTAssertEqual(style(canvas.boxes[0]), .body, "escaped to a body paragraph")
+    }
+
+    func test_blockQuote_doubleReturnAtEndOfContent_exitsAfter_unchanged() {
+        let canvas = makeCanvas([
+            .blockQuote(BlockQuote(id: BlockID("q"), children: [
+                .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hello")]))
+            ], collapsed: false, author: []))
+        ])
+        let box = canvas.boxes[0] as! BlockQuoteBox
+        canvas.setCaret(global: box.children.boxes[0].leafRegions().first!.globalStart + 5)   // end of "hello"
+        canvas.insertText("\n")   // adds empty trailing line inside the quote
+        canvas.insertText("\n")   // \n\n → exit after
+        XCTAssertEqual(canvas.boxes.count, 2, "quote + body paragraph after it")
+        guard case .blockQuote(let q) = canvas.boxes[0].currentBlock() else { return XCTFail("first still a quote") }
+        XCTAssertEqual(q.children.count, 1, "the quote keeps just \"hello\" (the trailing empty line is dropped)")
+        XCTAssertEqual(style(canvas.boxes[1]), .body, "a body paragraph after the quote")
     }
 
     func test_codeBlock_returnOnMiddleEmptyLine_insertsNewline() {

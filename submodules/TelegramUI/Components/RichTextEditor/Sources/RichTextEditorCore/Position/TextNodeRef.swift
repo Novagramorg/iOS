@@ -10,4 +10,6 @@ public enum TextNodeRef: Equatable {
     case code(BlockID)
     /// The runs of a pull quote block.
     case pullQuote(BlockID)
+    /// The author (attribution) runs of a block quote or pull quote.
+    case quoteAuthor(BlockID)
 }

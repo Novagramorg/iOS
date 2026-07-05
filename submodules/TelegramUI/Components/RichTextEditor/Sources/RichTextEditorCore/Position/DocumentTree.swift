@@ -1,5 +1,15 @@
 import Foundation
 
+/// True when a block quote's body has content that keeps its author line visible: any child that is NOT a
+/// text-less, list-less paragraph (a blank line). Structural children — tables, sub-quotes, pull quotes,
+/// media, code — count even when empty; an empty list item counts (it is structure the user created).
+func quoteBodyHasContent(_ children: [Block]) -> Bool {
+    children.contains { block in
+        if case let .paragraph(p) = block { return p.utf16Count > 0 || p.list != nil }
+        return true
+    }
+}
+
 public enum DocumentTree {
     /// Builds the `.doc` root node for a document.
     public static func build(from document: Document) -> DocNode {
@@ -33,16 +43,29 @@ public enum DocumentTree {
             return .paragraph(id: cb.id,
                               children: [.text(length: cb.utf16Count, ref: .code(cb.id))])
         case .pullQuote(let pq):
-            // A pull quote reuses the paragraph node shape (content + 2 tokens), analogous to a code block.
-            return .paragraph(id: pq.id,
-                              children: [.text(length: pq.utf16Count, ref: .pullQuote(pq.id))])
+            // Always a `.blockQuote` container so the pull text stays at nodeStart+1 whether the author is
+            // shown or hidden. The trailing author paragraph is present only when the quote has content
+            // (author text OR pull text) — else the author region is absent (no tokens, no caret target).
+            var children: [DocNode] = [
+                .paragraph(id: pq.id, children: [.text(length: pq.utf16Count, ref: .pullQuote(pq.id))]),
+            ]
+            if pq.authorUTF16Count > 0 || pq.utf16Count > 0 {   // authorUTF16Count>0 mirrors PullQuoteBox.authorLength>0 exactly
+                children.append(.paragraph(id: pq.id, children: [.text(length: pq.authorUTF16Count, ref: .quoteAuthor(pq.id))]))
+            }
+            return .blockQuote(id: pq.id, children: children)
         case .blockQuote(let bq):
             if bq.collapsed {
                 // Folded → a caption-less atom, off the editable axis (nodeSize 3), like the old collapsedQuote.
                 return .mediaBlock(id: bq.id, children: [.mediaAtom(id: bq.id)])
             }
-            // Expanded → recursive container (Σ children + 2), directly recursing node(for:).
-            return .blockQuote(id: bq.id, children: bq.children.map(node(for:)))
+            // Expanded → recursive container. The trailing author paragraph is present only when the quote
+            // has content (author text OR body content — see `quoteBodyHasContent`); else the author region
+            // is absent. Children are before the author, so their positions are unaffected either way.
+            var children = bq.children.map(node(for:))
+            if bq.authorUTF16Count > 0 || quoteBodyHasContent(bq.children) {   // authorUTF16Count>0 mirrors BlockQuoteBox.authorLength>0 exactly
+                children.append(.paragraph(id: bq.id, children: [.text(length: bq.authorUTF16Count, ref: .quoteAuthor(bq.id))]))
+            }
+            return .blockQuote(id: bq.id, children: children)
         }
     }
 

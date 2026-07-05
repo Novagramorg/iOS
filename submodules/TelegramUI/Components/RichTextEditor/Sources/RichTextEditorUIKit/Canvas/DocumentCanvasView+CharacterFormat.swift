@@ -92,7 +92,66 @@ extension DocumentCanvasView {
         return all
     }
 
+    /// True when every character-format target lies in a `.quoteAuthor` region — a quote's author line,
+    /// whose bold is always-on/ambient (forced at render, stripped on read-back). A bold toggle there would
+    /// only un-bold the always-bold author (or dirty the model with an inert edit), so the toggle locks out.
+    func selectionIsEntirelyInAuthorRegion() -> Bool {
+        let targets = characterFormatTargets()
+        guard !targets.isEmpty else {
+            // Collapsed caret (no format targets): check the region under `head`.
+            if let (region, _) = leafRegion(containingGlobal: head), case .quoteAuthor = region.ref { return true }
+            return false
+        }
+        // `characterFormatTargets()` returns `(storage, range, layout)` triples drawn from `allLeafRegions()`;
+        // map each back to its region by the (unique per region) layout object and require it be `.quoteAuthor`.
+        let regions = allLeafRegions()
+        return targets.allSatisfy { target in
+            guard let region = regions.first(where: { $0.layout === target.layout }) else { return false }
+            if case .quoteAuthor = region.ref { return true }
+            return false
+        }
+    }
+
+    /// True when every character-format target lies in a PULL quote's `.quoteAuthor` region specifically —
+    /// unlike `selectionIsEntirelyInAuthorRegion` (bold, shared by both quote kinds), a pull-quote author is
+    /// ALSO always-italic (ambient, forced at render / stripped on read-back), so an italic toggle there
+    /// must lock out too. A block-quote author's italic stays toggleable (its ambient styling is bold-only).
+    func selectionIsEntirelyInPullQuoteAuthorRegion() -> Bool {
+        // Resolves the CanvasBlock owning a `.quoteAuthor(id)` region, recursing into nested block quotes —
+        // mirrors the box-resolution search in `authorTypingAttributes(forRegion:)`.
+        func owningBoxIsPullQuote(_ id: BlockID) -> Bool {
+            func search(_ list: [CanvasBlock]) -> CanvasBlock? {
+                for b in list {
+                    if let pq = b as? PullQuoteBox, pq.id == id { return pq }
+                    if let bq = b as? BlockQuoteBox {
+                        if bq.id == id { return bq }
+                        if let hit = search(bq.children.boxes) { return hit }
+                    }
+                }
+                return nil
+            }
+            guard let owner = search(boxes) else { return false }
+            return owner is PullQuoteBox
+        }
+        let targets = characterFormatTargets()
+        guard !targets.isEmpty else {
+            // Collapsed caret (no format targets): check the region under `head`.
+            if let (region, _) = leafRegion(containingGlobal: head), case let .quoteAuthor(id) = region.ref {
+                return owningBoxIsPullQuote(id)
+            }
+            return false
+        }
+        let regions = allLeafRegions()
+        return targets.allSatisfy { target in
+            guard let region = regions.first(where: { $0.layout === target.layout }),
+                  case let .quoteAuthor(id) = region.ref else { return false }
+            return owningBoxIsPullQuote(id)
+        }
+    }
+
     func toggleBold() {
+        // The author line is always-bold (ambient); a bold toggle there is inert — never un-bold it.
+        if selectionIsEntirelyInAuthorRegion() { return }
         applyCharacterToggle(isSet: { s, r in self.rangeIsBold(s, r) }, setOn: { storage, range, allOn in
             storage.enumerateAttribute(.font, in: range, options: []) { v, sub, _ in
                 let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)
@@ -110,6 +169,9 @@ extension DocumentCanvasView {
     }
 
     func toggleItalic() {
+        // A pull-quote author line is always-italic (ambient), in addition to always-bold; an italic toggle
+        // there is inert — never un-italicize it. (Block-quote authors are bold-only, so they stay toggleable.)
+        if selectionIsEntirelyInPullQuoteAuthorRegion() { return }
         applyCharacterToggle(isSet: { s, r in self.rangeIsItalic(s, r) }, setOn: { storage, range, allOn in
             storage.enumerateAttribute(.font, in: range, options: []) { v, sub, _ in
                 let f = (v as? UIFont) ?? UIFont.systemFont(ofSize: 16)

@@ -69,6 +69,14 @@ final class BlockQuoteBox: CanvasBlock {
     /// Display-only preview layout for collapsed mode (nil when expanded). NOT part of the position axis.
     private let previewLayout: BlockLayoutEngine?
 
+    /// The author (attribution) line's own TextKit layout, rendered as a bold `.caption` style AFTER the
+    /// child stack — recursive: each nested block quote carries its own. Bold and the text color are both
+    /// ambient (forced via `quoteAuthorRenderRuns`, stripped on read-back). Unlike the centered pull-quote
+    /// author, this one is leading-aligned (mirrors the quote's own leading-aligned body text).
+    let authorLayout: BlockLayoutEngine
+    /// The author renders leading-aligned (unlike the centered pull-quote author).
+    private static let authorParagraph = ParagraphAttributes(alignment: .natural)
+
     init(blockQuote: BlockQuote, mapper: AttributedStringMapper,
          quoteStyle: QuoteStyle = .default,
          pullQuoteStyle: PullQuoteStyle = .default,
@@ -105,6 +113,13 @@ final class BlockQuoteBox: CanvasBlock {
         // vertical padding. The quote's topInset/bottomInset are the sole outer padding.
         stack.verticalInsetBase = 0
         self.children = stack
+
+        // The author line uses the same 15pt quote mapper as the children, laid out at the same inner width.
+        self.authorLayout = makeBlockLayout(
+            attributedString: quoteMapper.attributedString(for: ParagraphBlock(
+                id: blockQuote.id, style: .caption, paragraph: BlockQuoteBox.authorParagraph,
+                runs: quoteAuthorRenderRuns(blockQuote.author, textColor: quoteMapper.theme.quoteAuthorText.rgba))),
+            width: max(inner, 1))
 
         // Collapsed mode: build a display-only preview layout from the children's flattened plain text.
         // Newlines → spaces so the preview is a single wrapped text run (≤3 lines), matching BlockQuoteBox.
@@ -175,15 +190,63 @@ final class BlockQuoteBox: CanvasBlock {
         max(w - quoteStyle.leadingInset - quoteStyle.trailingInset, 1)
     }
 
+    // MARK: - Author region helpers (Task 4; mirrors PullQuoteBox but leading-aligned)
+
+    var authorLength: Int { authorLayout.length }
+
+    /// The author line is shown only when the quote has content — the author itself has text, OR the body
+    /// has content (any child that is not an empty, list-less `BlockBox`; nested quotes/tables/media/code/
+    /// list-items count even when empty). A blank quote hides the author region entirely.
+    var shouldShowAuthor: Bool {
+        authorLength > 0 || children.boxes.contains { box in
+            if let bb = box as? BlockBox { return bb.textLength > 0 || bb.listMembership != nil }
+            return true
+        }
+    }
+
+    private var authorEmptyLineHeight: CGFloat {
+        guard authorLayout.length == 0 else { return 0 }
+        let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
+        let mult = mapper.styleSheet.paragraphStyle(for: .caption, attributes: BlockQuoteBox.authorParagraph,
+                                                    list: nil, baseWritingDirection: mapper.baseWritingDirection).lineHeightMultiple
+        return font.lineHeight * (mult > 0 ? mult : 1)
+    }
+
+    /// Height occupied by the child stack, so the author sits just below it. Uses `BlockStack`'s real
+    /// laid-out content height (`contentHeight`, populated by `layout(...)` in `recompute()`) rather than
+    /// summing each child's own `height` — the sum would ignore the inter-child spacing (`facingInset`
+    /// gaps) `BlockStack.layout` inserts between children, landing the author line too high.
+    private var childStackHeight: CGFloat { children.contentHeight }
+
+    /// The author line's canvas origin: below the child stack, at the quote's leading text inset.
+    private var authorOrigin: CGPoint {
+        CGPoint(x: frame.minX + quoteStyle.leadingInset,
+                y: frame.minY + topInset + childStackHeight + quoteStyle.authorSpacing)
+    }
+
+    /// Bold caption typing attributes (leading-aligned) for the FIRST char typed into an empty author line.
+    func authorTypingAttributes() -> [NSAttributedString.Key: Any] {
+        var ca = CharacterAttributes(); ca.bold = true; ca.foreground = mapper.theme.quoteAuthorText.rgba
+        var attrs = mapper.attributes(for: ca, style: .caption)
+        attrs[.paragraphStyle] = mapper.styleSheet.paragraphStyle(for: .caption, attributes: BlockQuoteBox.authorParagraph,
+                                                                  list: nil, baseWritingDirection: mapper.baseWritingDirection)
+        return attrs
+    }
+
     // MARK: - CanvasBlock
 
     /// Block-quote boxes use a `BlockBackingView`, like tables and pull-quotes.
     var rendersAsBlockView: Bool { true }
 
     /// Collapsed → 3 (non-editable atom, matching DocumentTree's collapsed mapping).
-    /// Expanded → open + children tokens + close (Σchildren + 2).
+    /// Expanded, author shown → open + children tokens + author paragraph (authorLength + 2) + close
+    /// (Σchildren + authorLength + 4), matching `DocumentTree`'s `.blockQuote(id, children + [authorPara])`.
+    /// Expanded, author hidden → open + children tokens + close (Σchildren + 2), matching `DocumentTree`'s
+    /// `.blockQuote(id, children)` (no trailing author paragraph).
     var nodeSize: Int {
-        collapsed ? 3 : children.boxes.reduce(0) { $0 + $1.nodeSize } + 2
+        if collapsed { return 3 }
+        let childrenSize = children.boxes.reduce(0) { $0 + $1.nodeSize }
+        return shouldShowAuthor ? childrenSize + (authorLength + 2) + 2 : childrenSize + 2
     }
 
     func setWidth(_ width: CGFloat) {
@@ -197,12 +260,14 @@ final class BlockQuoteBox: CanvasBlock {
     }
 
     /// Collapsed → preview height (capped at maxPreviewLines) + insets.
-    /// Expanded → topInset + child stack measured height + bottomInset.
+    /// Expanded → topInset + child stack measured height + the author line (gap + its own height) + bottomInset.
     var height: CGFloat {
         if collapsed {
             return previewHeight + topInset + bottomInset
         }
-        return topInset + children.measuredHeight(forWidth: innerWidth(layoutWidth)) + bottomInset
+        let base = topInset + children.measuredHeight(forWidth: innerWidth(layoutWidth)) + bottomInset
+        guard shouldShowAuthor else { return base }
+        return base + quoteStyle.authorSpacing + max(authorLayout.boundingHeight, authorEmptyLineHeight)
     }
 
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
@@ -213,7 +278,10 @@ final class BlockQuoteBox: CanvasBlock {
                         lineHeight * CGFloat(BlockQuoteBox.maxPreviewLines))
             return h + topInset + bottomInset
         }
-        return topInset + children.measuredHeight(forWidth: innerWidth(max(width, 1))) + bottomInset
+        let inner = innerWidth(max(width, 1))
+        let base = topInset + children.measuredHeight(forWidth: inner) + bottomInset
+        guard shouldShowAuthor else { return base }
+        return base + quoteStyle.authorSpacing + max(authorLayout.boundingHeight(forWidth: inner), authorEmptyLineHeight)
     }
 
     /// Assigns `nodeStart` to every child box and lays out child frames. Mirrors `TableBlockBox.recompute()`
@@ -232,20 +300,37 @@ final class BlockQuoteBox: CanvasBlock {
         )
         // Propagate recompute recursively into nested block quotes (their frames are now set above).
         for case let nested as BlockQuoteBox in children.boxes { nested.recompute() }
+        // Refresh the author layout's width now that `frame` is set (it was built at `inner` width in
+        // `init`, which is correct on the first pass but stale after a resize via `setWidth`).
+        authorLayout.setWidth(max(innerWidth(frame.width), 1))
     }
 
-    /// Round-trips back to the Core model: rebuilds the `BlockQuote` from the current child boxes.
-    /// Children are preserved even in collapsed mode (for expand + send round-trip).
+    /// Round-trips back to the Core model: rebuilds the `BlockQuote` from the current child boxes plus the
+    /// read-back author line (bold and the author text color are ambient — stripped here so neither persists
+    /// into the model). Children are preserved even in collapsed mode (for expand + send round-trip). The
+    /// author is NOT counted as a model child — it's carried on the dedicated `BlockQuote.author` field.
     func currentBlock() -> Block {
         .blockQuote(BlockQuote(id: id,
                                children: children.boxes.map { $0.currentBlock() },
-                               collapsed: collapsed))
+                               collapsed: collapsed,
+                               author: quoteAuthorStripAmbientStyle(mapper.runs(from: authorLayout.attributedString, style: .caption),
+                                                                    textColor: mapper.theme.quoteAuthorText.rgba)))
     }
 
     /// Collapsed → [] (non-editable atom, off the position axis).
-    /// Expanded → delegates to the child stack (recurses into nested quotes).
+    /// Expanded, author shown → the child stack's leaf regions (recurses into nested quotes) followed by the
+    /// author region — the author paragraph is the LAST child of the `.blockQuote` container (`DocumentTree`),
+    /// so its `globalStart` sits right after every child's token span.
+    /// Expanded, author hidden → just the child stack's leaf regions (no trailing author region).
     func leafRegions() -> [LeafTextRegion] {
-        collapsed ? [] : children.leafRegions()
+        if collapsed { return [] }
+        guard shouldShowAuthor else { return children.leafRegions() }
+        let childrenSize = children.boxes.reduce(0) { $0 + $1.nodeSize }
+        let authorRegion = LeafTextRegion(
+            layout: authorLayout, globalStart: nodeStart + 1 + childrenSize, length: authorLength,
+            ref: .quoteAuthor(id), canvasOrigin: authorOrigin,
+            emptyLineLeadingIndent: 0, emptyLineHeight: authorEmptyLineHeight)
+        return children.leafRegions() + [authorRegion]
     }
 
     /// The child `BlockStack` + box that owns global position `pos`, with its local offset + index.
@@ -261,9 +346,17 @@ final class BlockQuoteBox: CanvasBlock {
     }
 
     /// Collapsed → nodeStart (atom: caret lands at the gap, like CollapsedQuoteBox).
-    /// Expanded → delegates to the child stack.
+    /// Expanded → a tap at/below the author line routes into the author region (directly editable,
+    /// incl. its empty "Add author" placeholder); otherwise into the child stack.
     func closestPosition(toCanvasPoint point: CGPoint) -> Int {
-        collapsed ? nodeStart : children.closestPosition(toCanvasPoint: point)
+        if collapsed { return nodeStart }
+        if shouldShowAuthor, point.y >= authorOrigin.y {
+            // `nodeStart + 1 + childrenSize` is the author region's globalStart (see `leafRegions()`).
+            let childrenSize = children.boxes.reduce(0) { $0 + $1.nodeSize }
+            return (nodeStart + 1 + childrenSize)
+                + authorLayout.closestOffset(toPoint: CGPoint(x: point.x - authorOrigin.x, y: point.y - authorOrigin.y))
+        }
+        return children.closestPosition(toCanvasPoint: point)
     }
 
     /// When the (expanded) quote is a single empty paragraph, the host placeholder to show, else nil.
@@ -300,6 +393,16 @@ final class BlockQuoteBox: CanvasBlock {
             let mult = mapper.styleSheet.paragraphStyle(for: .body, attributes: ParagraphAttributes()).lineHeightMultiple
             let origin = CGPoint(x: first.textOrigin.x, y: first.textOrigin.y + (max(mult, 1) - 1) * font.lineHeight / 2)
             NSAttributedString(string: ph, attributes: [.font: font, .foregroundColor: mapper.theme.containerPlaceholder]).draw(at: origin)
+        }
+        // The author (attribution) line, drawn after the child stack when the quote has content — bold
+        // caption, leading-aligned.
+        if shouldShowAuthor {
+            authorLayout.drawText(in: ctx, at: authorOrigin)
+            if authorLength == 0 {
+                let font = mapper.styleSheet.font(for: .caption, attributes: CharacterAttributes(bold: true))
+                NSAttributedString(string: quoteAuthorPlaceholderText,
+                                   attributes: [.font: font, .foregroundColor: mapper.theme.quoteAuthorPlaceholder]).draw(at: authorOrigin)
+            }
         }
         // Draw the collapse glyph only when the quote is worth collapsing (`isCollapsible`: content
         // taller than the ≤maxPreviewLines-line preview), at any nesting level. The flat-quote

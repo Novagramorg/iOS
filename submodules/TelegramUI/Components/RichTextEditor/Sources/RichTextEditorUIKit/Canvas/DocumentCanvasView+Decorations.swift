@@ -53,7 +53,7 @@ extension DocumentCanvasView {
         boxes.compactMap { box in
             guard let pq = box as? PullQuoteBox else { return nil }
             let hPad = pullQuoteStyle.horizontalPadding
-            let w = min(max(pq.contentWidth + hPad * 2, pullQuoteStyle.minWidth), box.frame.width)
+            let w = min(max(pq.pillContentWidth + hPad * 2, pullQuoteStyle.minWidth), box.frame.width)
             return CGRect(x: box.frame.midX - w / 2, y: box.frame.minY, width: w, height: box.frame.height)
         }
     }
@@ -76,8 +76,16 @@ extension DocumentCanvasView {
     /// generated stub where unavailable), so a non-square glyph is not letterboxed into a square. The corner
     /// inset is `pullQuoteStyle.markInset`.
     func pullQuoteMarkRects() -> [(open: CGRect, close: CGRect)] {
-        DocumentCanvasView.pullQuoteMarkRects(
-            pills: pullQuotePillRects(),
+        // Corner marks bracket the QUOTE TEXT only — the close mark sits at the last text line, EXCLUDING the
+        // author line (the pill background still spans the full box height). Use each pill's x/width but the
+        // box's author-less height.
+        let pills = pullQuotePillRects()
+        let pullBoxes = boxes.compactMap { $0 as? PullQuoteBox }
+        let markBounds = zip(pills, pullBoxes).map { pill, pq in
+            CGRect(x: pill.minX, y: pill.minY, width: pill.width, height: pq.quoteOnlyHeight)
+        }
+        return DocumentCanvasView.pullQuoteMarkRects(
+            pills: markBounds,
             inset: pullQuoteStyle.markInset,
             openSize: PullQuoteMarksView.openImageNaturalSize,
             closeSize: PullQuoteMarksView.closeImageNaturalSize)

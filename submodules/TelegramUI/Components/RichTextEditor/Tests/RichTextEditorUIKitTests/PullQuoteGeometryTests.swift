@@ -21,13 +21,16 @@ final class PullQuoteGeometryTests: XCTestCase {
         canvas.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         canvas.simulateParentLayout()
         canvas.setBlocks([.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "Hi")]))], width: 320)
+        guard let box = canvas.boxes.first as? PullQuoteBox else { return XCTFail("expected a PullQuoteBox") }
         let pill = canvas.pullQuotePillRects()[0]
         let marks = canvas.pullQuoteMarkRects()
         XCTAssertEqual(marks.count, 1)
         XCTAssertEqual(marks[0].open.minX, pill.minX + 6, accuracy: 0.5)          // top-left, inset 6
         XCTAssertEqual(marks[0].open.minY, pill.minY + 6, accuracy: 0.5)
-        XCTAssertEqual(marks[0].close.maxX, pill.maxX - 6, accuracy: 0.5)         // bottom-right
-        XCTAssertEqual(marks[0].close.maxY, pill.maxY - 6, accuracy: 0.5)
+        XCTAssertEqual(marks[0].close.maxX, pill.maxX - 6, accuracy: 0.5)         // bottom-right (x/width unaffected)
+        // The close mark's Y now brackets the quote TEXT only (excludes the always-present author region,
+        // even the empty "Add author" placeholder) — the pill itself still spans the full box height.
+        XCTAssertEqual(marks[0].close.maxY, box.frame.minY + box.quoteOnlyHeight - 6, accuracy: 0.5)
     }
 
     func test_pullQuoteMarkRects_deriveFrames_fromNonSquareImageSizes() {
@@ -55,6 +58,27 @@ final class PullQuoteGeometryTests: XCTestCase {
         // mark frame size comes from the image's natural size (the generated stub under SwiftPM), not a config knob
         XCTAssertEqual(canvas.pullQuoteMarkRects()[0].open.width,
                        PullQuoteMarksView.openImageNaturalSize.width, accuracy: 0.5)
+    }
+
+    func test_pullQuoteCloseMark_excludesAuthorLine() {
+        // The close (bottom-right) corner mark must bracket the QUOTE TEXT only — sitting at the last text
+        // line's bottom, ABOVE the author line — even though the tinted pill background still spans the
+        // full box height (text + author).
+        let canvas = DocumentCanvasView()
+        canvas.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+        canvas.simulateParentLayout()
+        canvas.setBlocks([.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "Hi")], author: [TextRun(text: "Ada")]))], width: 320)
+        guard let box = canvas.boxes.first as? PullQuoteBox else { return XCTFail("expected a PullQuoteBox") }
+        XCTAssertGreaterThan(box.frame.maxY, box.frame.minY + box.quoteOnlyHeight,
+                             "sanity: the author line adds height beyond the quote-only height")
+        let marks = canvas.pullQuoteMarkRects()
+        XCTAssertEqual(marks.count, 1)
+        let close = marks[0].close
+        XCTAssertEqual(close.maxY, box.frame.minY + box.quoteOnlyHeight - canvas.pullQuoteStyle.markInset, accuracy: 0.5)
+        XCTAssertLessThan(close.maxY, box.frame.maxY, "close mark sits above the author line, not at the box bottom")
+        // The OPEN (top-left) mark is unaffected — still anchored off the box's top edge.
+        let open = marks[0].open
+        XCTAssertEqual(open.minY, box.frame.minY + canvas.pullQuoteStyle.markInset, accuracy: 0.5)
     }
 
     func test_pullQuoteUnderlay_cornerRadius_comesFromPullQuoteStyleDefault() {

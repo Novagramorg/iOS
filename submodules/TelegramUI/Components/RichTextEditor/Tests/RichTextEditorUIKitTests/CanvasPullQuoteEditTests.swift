@@ -123,14 +123,25 @@ final class CanvasPullQuoteEditTests: XCTestCase {
         XCTAssertEqual(canvas.head, canvas.boxes[0].textStart, "caret in the new body paragraph")
     }
 
-    func test_pullQuote_doubleReturnOnEmptyBlock_unmakes() {
+    func test_pullQuote_singleReturnOnEmptyBlock_addsLine_doesNotUnmake() {
         let canvas = pullQuoteCanvas("")   // wholly-empty pull quote
         let box = canvas.boxes[0]
         canvas.setCaret(global: box.textStart)
         canvas.insertText("\n")
         XCTAssertEqual(canvas.boxes.count, 1)
+        guard case .pullQuote(let pq) = canvas.boxes[0].currentBlock() else { return XCTFail("still a pull quote after one Return") }
+        XCTAssertEqual(pq.text, "\n", "the first Return adds a blank line (no un-make — the escape requires \\n\\n)")
+    }
+
+    func test_pullQuote_doubleReturnOnEmptyBlock_unmakes() {
+        let canvas = pullQuoteCanvas("")   // wholly-empty pull quote
+        let box = canvas.boxes[0]
+        canvas.setCaret(global: box.textStart)
+        canvas.insertText("\n")   // adds a blank line
+        canvas.insertText("\n")   // \n\n → un-make
+        XCTAssertEqual(canvas.boxes.count, 1)
         guard case .paragraph(let p) = canvas.boxes[0].currentBlock() else { return XCTFail("expected .paragraph") }
-        XCTAssertEqual(p.style, .body, "the empty pull quote becomes a body paragraph")
+        XCTAssertEqual(p.style, .body, "\\n\\n un-makes the empty pull quote to a body paragraph")
     }
 
     func test_pullQuote_returnOnMiddleEmptyLine_insertsNewline() {
@@ -170,6 +181,121 @@ final class CanvasPullQuoteEditTests: XCTestCase {
         XCTAssertEqual(p.style, .body, "Backspace in an empty pull quote converts it to a body paragraph")
     }
 
+    // MARK: - Task 5: author-region backspace
+
+    /// Backspace with a collapsed caret at the START of a pull quote's author line relocates the caret to the
+    /// pull text's end (via `prevTextPosition`) — it never merges the author into the pull text, never deletes
+    /// the pull quote. (The block-quote analogue lives in `BlockQuoteEditTests`.)
+    func test_backspace_atPullQuoteAuthorStart_relocatesToPullTextEnd_neverDeletesQuote() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")],
+                                               author: [TextRun(text: "Ada")]))], width: 320)
+        canvas.simulateParentLayout()
+        let um = UndoManager()
+        canvas.undoManagerOverride = um
+        let box = canvas.boxes[0] as! PullQuoteBox
+        guard let authorRegion = box.leafRegions().first(where: { $0.ref == .quoteAuthor(BlockID("pq")) }) else {
+            return XCTFail("no author region")
+        }
+        canvas.setCaret(global: authorRegion.globalStart)   // caret at author local 0
+        canvas.deleteBackward()
+        guard case let .pullQuote(out) = canvas.boxes[0].currentBlock() else { return XCTFail("pull quote deleted") }
+        XCTAssertEqual(out.author.map(\.text).joined(), "Ada", "author preserved")
+        XCTAssertEqual(out.text, "quote", "pull text preserved")
+        XCTAssertEqual(canvas.head, box.textStart + box.textLength, "caret parks at the pull quote's text end")
+        // It's a pure caret RELOCATION — no content edit ran, so nothing is undoable (the pre-fix path
+        // routed through a spurious `applyReplace` inside `editing { }`, which would register an undo step).
+        XCTAssertFalse(um.canUndo, "stepping out of the author must not register a content edit")
+    }
+
+    // MARK: - Task 5: entering the author region (arrow + tap)
+
+    /// Arrow-right from the end of the pull text enters a NON-empty author region (only an EMPTY author is
+    /// skipped by prev/nextTextPosition; real author content stays fully navigable).
+    func test_arrowRight_intoNonEmptyPullQuoteAuthor_entersAuthorRegion() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")],
+                                               author: [TextRun(text: "Ada")]))], width: 320)
+        canvas.simulateParentLayout()
+        let box = canvas.boxes[0] as! PullQuoteBox
+        let pullEnd = box.textStart + box.textLength
+        let authorRegion = box.leafRegions().first(where: { $0.ref == .quoteAuthor(BlockID("pq")) })!
+        XCTAssertEqual(canvas.nextTextPosition(after: pullEnd), authorRegion.globalStart,
+                       "arrow-right from the pull text end enters the non-empty author region")
+    }
+
+    /// A tap in the author line's area routes to the author region (so the author is directly editable),
+    /// for a NON-empty author.
+    func test_tapInPullQuoteAuthorArea_nonEmpty_placesCaretInAuthor() {
+        let v = laidOutCanvas([.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")],
+                                                    author: [TextRun(text: "Ada")]))])
+        let box = v.boxes[0] as! PullQuoteBox
+        let authorRegion = box.leafRegions().first(where: { $0.ref == .quoteAuthor(BlockID("pq")) })!
+        let p = CGPoint(x: authorRegion.canvasOrigin.x + 4, y: authorRegion.canvasOrigin.y + 4)
+        let resolved = v.closestGlobalPosition(to: p)
+        XCTAssertTrue(resolved >= authorRegion.globalStart && resolved <= authorRegion.globalStart + authorRegion.length,
+                      "a tap in the author area must resolve into the author region")
+    }
+
+    /// A tap on the empty "Add author" placeholder routes to the (empty) author region so it can be typed.
+    func test_tapInPullQuoteAuthorArea_empty_placesCaretInAuthor() {
+        let v = laidOutCanvas([.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")], author: []))])
+        let box = v.boxes[0] as! PullQuoteBox
+        let authorRegion = box.leafRegions().first(where: { $0.ref == .quoteAuthor(BlockID("pq")) })!
+        let p = CGPoint(x: authorRegion.canvasOrigin.x + 4, y: authorRegion.canvasOrigin.y + 4)
+        XCTAssertEqual(v.closestGlobalPosition(to: p), authorRegion.globalStart,
+                       "tapping the empty 'Add author' placeholder places the caret at the author region start")
+    }
+
+    // MARK: - Runtime bug: typing into an empty author leaked into the NEXT paragraph
+
+    /// The author is a SECOND leaf region on the box (outside its primary `textStart..textStart+textLength`
+    /// extent and off the block-quote child stack), so the plain `applyReplace`/`activeStack` insert path
+    /// (keyed on that primary extent) used to mis-route a collapsed-caret author insert into the FOLLOWING
+    /// top-level paragraph instead of the author. This is the reported bug.
+    func test_insertText_atEmptyPullQuoteAuthor_landsInAuthorNotNextParagraph() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([
+            .pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")], author: [])),
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "next")])),
+        ], width: 320)
+        canvas.simulateParentLayout()
+        let box = canvas.boxes[0] as! PullQuoteBox
+        guard let authorRegion = box.leafRegions().first(where: { $0.ref == .quoteAuthor(BlockID("pq")) }) else {
+            return XCTFail("no author region")
+        }
+        canvas.setCaret(global: authorRegion.globalStart)
+        canvas.insertText("X")
+        guard case .pullQuote(let pq) = canvas.boxes[0].currentBlock() else { return XCTFail("expected .pullQuote") }
+        XCTAssertEqual(pq.author.map(\.text).joined(), "X", "typed char must land in the author line")
+        XCTAssertEqual(pq.text, "quote", "pull text must stay unchanged")
+        guard case .paragraph(let p) = canvas.boxes[1].currentBlock() else { return XCTFail("expected .paragraph") }
+        XCTAssertEqual(p.text, "next", "the following paragraph must be unaffected by the author insert")
+    }
+
+    /// The first character typed into an EMPTY pull-quote author must be caption-styled (bold caption,
+    /// 15pt) — not body-styled (17pt, non-bold), which is what the empty-region typing-attributes branch
+    /// fell back to before it gained a `.quoteAuthor` case.
+    func test_insertText_atEmptyPullQuoteAuthor_isCaptionStyledNotBody() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([
+            .pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")], author: [])),
+        ], width: 320)
+        canvas.simulateParentLayout()
+        let box = canvas.boxes[0] as! PullQuoteBox
+        guard let authorRegion = box.leafRegions().first(where: { $0.ref == .quoteAuthor(BlockID("pq")) }) else {
+            return XCTFail("no author region")
+        }
+        canvas.setCaret(global: authorRegion.globalStart)
+        canvas.insertText("X")
+        guard case .pullQuote(let pq) = canvas.boxes[0].currentBlock() else { return XCTFail("expected .pullQuote") }
+        guard let run = pq.author.first else { return XCTFail("no author run") }
+        XCTAssertEqual(run.text, "X")
+        XCTAssertFalse(run.attributes.bold, "author bold is ambient/rendered-only — stripped on read-back")
+        XCTAssertEqual(run.attributes.fontSize, 15, "author must be caption-sized (15pt), not body (17pt)")
+        XCTAssertNotEqual(run.attributes.fontSize, 17)
+    }
+
     // MARK: Typing attributes are italic/centered
 
     func test_pullQuote_emptyTypingAttributesAreItalic() {
@@ -198,6 +324,57 @@ final class CanvasPullQuoteEditTests: XCTestCase {
         guard let font = attrs[.font] as? UIFont else { return XCTFail("no font") }
         XCTAssertTrue(font.fontDescriptor.symbolicTraits.contains(.traitItalic),
                       "typing into an empty pull quote via the canvas must return an italic font")
+    }
+
+    // MARK: - Runtime bug: selection-replace / system word-replace in the author region mis-routed
+
+    /// `replace(_:withText:)` (the path the OS drives for autocorrect / dictation) with a range that lies
+    /// entirely within the author region must land the replacement in the author — not in the following
+    /// top-level paragraph. Before the fix, `applySelectionReplace` fell through to the same-stack
+    /// `applyReplace`, which mis-resolves both endpoints (the author is a second leaf region off
+    /// `activeStack`'s radar) to the next box.
+    func test_replace_atPullQuoteAuthor_landsInAuthorNotNextParagraph() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([
+            .pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")], author: [TextRun(text: "Ada")])),
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "next")])),
+        ], width: 320)
+        canvas.simulateParentLayout()
+        let box = canvas.boxes[0] as! PullQuoteBox
+        guard let authorRegion = box.leafRegions().first(where: { $0.ref == .quoteAuthor(BlockID("pq")) }) else {
+            return XCTFail("no author region")
+        }
+        let range = DocumentTextRange(DocumentTextPosition(authorRegion.globalStart),
+                                       DocumentTextPosition(authorRegion.globalStart + authorRegion.length))
+        canvas.replace(range, withText: "Bob")
+        guard case .pullQuote(let pq) = canvas.boxes[0].currentBlock() else { return XCTFail("expected .pullQuote") }
+        XCTAssertEqual(pq.author.map(\.text).joined(), "Bob", "the replacement must land in the author line")
+        XCTAssertEqual(pq.text, "quote", "pull text must stay unchanged")
+        guard case .paragraph(let p) = canvas.boxes[1].currentBlock() else { return XCTFail("expected .paragraph") }
+        XCTAssertEqual(p.text, "next", "the following paragraph must be unaffected by the author replace")
+    }
+
+    /// A selection-replace via `insertText` (select "Ada" then type "Bob") over a range confined to the
+    /// author region must also land in the author, not the following paragraph.
+    func test_selectionReplace_viaInsertText_atPullQuoteAuthor_landsInAuthorNotNextParagraph() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([
+            .pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")], author: [TextRun(text: "Ada")])),
+            .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "next")])),
+        ], width: 320)
+        canvas.simulateParentLayout()
+        let box = canvas.boxes[0] as! PullQuoteBox
+        guard let authorRegion = box.leafRegions().first(where: { $0.ref == .quoteAuthor(BlockID("pq")) }) else {
+            return XCTFail("no author region")
+        }
+        canvas.anchor = authorRegion.globalStart
+        canvas.head = authorRegion.globalStart + authorRegion.length
+        canvas.insertText("Bob")
+        guard case .pullQuote(let pq) = canvas.boxes[0].currentBlock() else { return XCTFail("expected .pullQuote") }
+        XCTAssertEqual(pq.author.map(\.text).joined(), "Bob", "the replacement must land in the author line")
+        XCTAssertEqual(pq.text, "quote", "pull text must stay unchanged")
+        guard case .paragraph(let p) = canvas.boxes[1].currentBlock() else { return XCTFail("expected .paragraph") }
+        XCTAssertEqual(p.text, "next", "the following paragraph must be unaffected by the author replace")
     }
 
     // MARK: - Task 14: editing AROUND a pull quote (framed-atom integration)
@@ -254,6 +431,22 @@ final class CanvasPullQuoteEditTests: XCTestCase {
         XCTAssertFalse(v.boxes.contains { $0 is PullQuoteBox },
                        "the fully-covered pull quote is dropped by the cross-block delete")
         XCTAssertEqual(v.boxes.count, 1, "exactly one block remains (an empty body paragraph)")
+    }
+
+    /// Select-All + Backspace on a lone pull-quote-WITH-author removes the whole block INCLUDING its author
+    /// (the block is dropped wholesale — its nodeSize covers the trailing author region).
+    func test_selectAll_delete_pullQuoteWithAuthor_removesQuoteAndAuthor() {
+        let pq = Block.pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "quote")],
+                                          author: [TextRun(text: "Ada")]))
+        let v = laidOutCanvas([pq])
+        v.selectAll(nil)
+        v.deleteBackward()
+        XCTAssertFalse(v.boxes.contains { $0 is PullQuoteBox },
+                       "the pull quote (with its author) is dropped by Select-All + delete")
+        XCTAssertEqual(v.boxes.count, 1, "exactly one empty body paragraph remains")
+        for b in v.currentBlocks() {
+            if case .paragraph(let p) = b { XCTAssertFalse(p.text.contains("Ada"), "author text must not survive") }
+        }
     }
 
     // MARK: Framed spacing (isFramedAtom / facingInset)
@@ -330,6 +523,25 @@ final class CanvasPullQuoteEditTests: XCTestCase {
         canvas.composerSelectedRange = got
         XCTAssertEqual(canvas.head, pqBox.textStart + 1,
                        "setting flat offset 4 back must land at the same global position")
+    }
+
+    // MARK: - Conditional author (hidden unless the quote has content)
+
+    func test_pullQuote_authorAppearsWhenBodyTyped_thenDisappears_caretUnmoved() {
+        let canvas = makeCanvas()
+        canvas.setBlocks([.pullQuote(PullQuote(id: BlockID("pq"), runs: [], author: []))], width: 320)
+        canvas.simulateParentLayout()
+        let box = canvas.boxes[0] as! PullQuoteBox
+        XCTAssertFalse(box.shouldShowAuthor)                 // fresh empty pull quote: no author
+        canvas.setCaret(global: box.leafRegions()[0].globalStart)   // caret in the (empty) pull text
+        canvas.insertText("x")
+        XCTAssertTrue(box.shouldShowAuthor)                  // body has text → author appears
+        XCTAssertEqual(box.leafRegions().count, 2)
+        let caretAfterType = canvas.head
+        canvas.deleteBackward()                              // remove the only body char
+        XCTAssertFalse(box.shouldShowAuthor)                 // body empty again → author disappears
+        XCTAssertEqual(box.leafRegions().count, 1)
+        XCTAssertEqual(canvas.head, caretAfterType - 1, "caret stays in the body, unmoved by the author toggle")
     }
 
     // MARK: Tap-below affordance

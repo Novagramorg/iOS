@@ -183,12 +183,20 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
         // Phase 1 delegate subset: the editor exposes onChange + the two focus transitions. The panel's
         // height/state refresh keys off chatInputTextNodeDidUpdateText (it then reads `attributedText`).
-        // The remaining ChatInputTextNodeDelegate methods (chatInputTextNodeShouldReturn,
-        // chatInputTextNodeDidChangeSelection, chatInputTextNodeBackspaceWhileEmpty, chatInputTextNodeMenu,
-        // chatInputTextNode(shouldChangeTextIn:), chatInputTextNodeShouldCopy/Paste,
-        // chatInputTextNodeShouldRespondToAction/TargetForAction) require new RichTextEditorView callbacks
-        // and are deferred to Phase 2 — the editor handles selection/menu/return/backspace internally, so
-        // omitting them only means the panel doesn't receive those hooks (acceptable for display/layout/editing).
+        // The remaining ChatInputTextNodeDelegate methods (chatInputTextNodeDidChangeSelection,
+        // chatInputTextNodeBackspaceWhileEmpty, chatInputTextNodeMenu, chatInputTextNode(shouldChangeTextIn:),
+        // chatInputTextNodeShouldCopy/Paste, chatInputTextNodeShouldRespondToAction/TargetForAction) require
+        // new RichTextEditorView callbacks and are deferred to Phase 2 — the editor handles selection/menu/
+        // backspace internally, so omitting them only means the panel doesn't receive those hooks.
+
+        // Hardware Return → the panel's send-on-Enter / send-on-⌘-Enter decision (chatInputTextNodeShouldReturn
+        // returns true to insert a newline, false when it sent the message). Without this a hardware Return
+        // just inserted a paragraph break and never sent — the legacy backend wired this via
+        // ChatInputTextViewImpl's own \r keyCommand; the native editor surfaces it as onHardwareReturn.
+        self.editorView.onHardwareReturn = { [weak self] modifierFlags in
+            return self?.storedDelegate?.chatInputTextNodeShouldReturn(modifierFlags: modifierFlags) ?? true
+        }
+
         self.editorView.onChange = { [weak self] in
             guard let self else { return }
             // RichTextEditorView is parent-driven: it does NOT self-layout on a content change (unlike the
@@ -440,7 +448,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             tableBorder: colors.tableBorder,
             tableHeaderBackground: colors.tableHeaderBackground,
             codeBackground: colors.tableHeaderBackground,  // v1: reuse the subtle panel fill; a dedicated code-bg seam color is a follow-up
-            containerPlaceholder: colors.placeholder.mixedWith(colors.accent, alpha: 0.15).withMultipliedBrightnessBy(colors.primaryText.brightness >= 0.4 ? 1.1 : 0.9).withMultipliedAlpha(0.8)
+            containerPlaceholder: colors.placeholder.mixedWith(colors.accent, alpha: 0.15).withMultipliedBrightnessBy(colors.primaryText.brightness >= 0.4 ? 1.1 : 0.9).withMultipliedAlpha(0.8),
+            quoteAuthorText: colors.quoteAuthorText,
+            quoteAuthorPlaceholder: colors.quoteAuthorPlaceholder
         )
     }
 
