@@ -263,6 +263,9 @@ extension DocumentCanvasView {
             }
             return
         }
+        if handleFormulaTapIfNeeded(at: point) {
+            return
+        }
         let p = closestGlobalPosition(to: point)
         // Tap on an image body (resolves to its gap AND the point is inside the image) → atom-select /
         // menu. MUST precede the clear below (else a 2nd tap on a selected image would clear it before

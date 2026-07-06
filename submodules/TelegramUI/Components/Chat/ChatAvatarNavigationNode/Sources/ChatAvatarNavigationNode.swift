@@ -34,6 +34,8 @@ public final class ChatAvatarNavigationNode: ASDisplayNode {
     
     public var statusView: ComponentView<Empty>
     private var starView: StarView?
+    private weak var communityAvatarBadgeReferenceContainerView: UIView?
+    private weak var communityAvatarBadgeReferenceView: UIView?
     private var communityAvatarBadgeBackgroundView: GlassBackgroundView?
     private var communityAvatarBadgeIconView: GlassBackgroundView.ContentImageView?
     
@@ -153,18 +155,44 @@ public final class ChatAvatarNavigationNode: ASDisplayNode {
                 communityAvatarBadgeIconView.isUserInteractionEnabled = false
 
                 communityAvatarBadgeBackgroundView.contentView.addSubview(communityAvatarBadgeIconView)
-                self.containerNode.view.addSubview(communityAvatarBadgeBackgroundView)
-
+                  
+                func findParentGlassBackgroundView(_ view: UIView) -> GlassBackgroundView? {
+                    if let view = view as? GlassBackgroundView {
+                        return view
+                    } else if let superview = view.superview {
+                        return findParentGlassBackgroundView(superview)
+                    }
+                    return nil
+                }
+                func findParentGlassBackgroundContainerView(_ view: UIView) -> GlassBackgroundContainerView? {
+                    if let view = view as? GlassBackgroundContainerView {
+                        return view
+                    } else if let superview = view.superview {
+                        return findParentGlassBackgroundContainerView(superview)
+                    }
+                    return nil
+                }
+                if let parentGlassView = findParentGlassBackgroundView(self.view), let parentGlassContainerView = findParentGlassBackgroundContainerView(self.view), let parentView = parentGlassContainerView.superview {
+                    self.communityAvatarBadgeReferenceView = parentGlassView
+                    self.communityAvatarBadgeReferenceContainerView = parentGlassContainerView
+                    parentView.addSubview(communityAvatarBadgeBackgroundView)
+                }
+                
                 self.communityAvatarBadgeBackgroundView = communityAvatarBadgeBackgroundView
                 self.communityAvatarBadgeIconView = communityAvatarBadgeIconView
             }
 
             let badgeSize = CGSize(width: 20.0, height: 20.0)
-            let badgeFrame = CGRect(origin: CGPoint(x: self.avatarNode.frame.maxX - badgeSize.width + 1.0, y: self.avatarNode.frame.maxY - badgeSize.height + 1.0), size: badgeSize)
-            communityAvatarBadgeBackgroundView.isHidden = false
-            communityAvatarBadgeBackgroundView.update(size: badgeSize, cornerRadius: badgeSize.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .clear), transition: .immediate)
-            communityAvatarBadgeBackgroundView.frame = badgeFrame
-
+            
+            if let referenceView = self.communityAvatarBadgeReferenceView, let referenceContainer = self.communityAvatarBadgeReferenceContainerView {
+                let referenceFrame = referenceView.convert(referenceView.bounds, to: referenceContainer)
+                
+                let badgeFrame = CGRect(origin: CGPoint(x: referenceFrame.minX + 44.0 - badgeSize.width + 2.0, y: referenceFrame.minY + 44.0 - badgeSize.height + 2.0), size: badgeSize)
+                communityAvatarBadgeBackgroundView.isHidden = false
+                communityAvatarBadgeBackgroundView.update(size: badgeSize, cornerRadius: badgeSize.height * 0.5, isDark: theme.overallDarkAppearance, tintColor: .init(kind: .clear), transition: .immediate)
+                communityAvatarBadgeBackgroundView.frame = badgeFrame
+            }
+            
             if let arrowImage = UIImage(bundleImageName: "Media Editor/DownArrow") {
                 communityAvatarBadgeIconView.image = arrowImage
                 communityAvatarBadgeIconView.tintColor = theme.rootController.navigationBar.primaryTextColor

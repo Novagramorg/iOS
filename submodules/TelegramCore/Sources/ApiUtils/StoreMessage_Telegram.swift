@@ -485,7 +485,7 @@ extension StoreMessage {
     convenience init(apiEphemeralMessage: Api.EphemeralMessage) {
         switch apiEphemeralMessage {
         case let .ephemeralMessage(messageData):
-            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, date, text, entities, media, replyMarkup, replyTo) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.date, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo)
+            let (flags, id, fromId, apiPeerId, receiverId, topMsgId, text, entities, media, replyMarkup, replyTo) = (messageData.flags, messageData.id, messageData.fromId, messageData.peerId, messageData.receiverId, messageData.topMsgId, messageData.message, messageData.entities, messageData.media, messageData.replyMarkup, messageData.replyTo)
             let peerId = apiPeerId.peerId
             let authorId = fromId.peerId
 
@@ -560,9 +560,11 @@ extension StoreMessage {
                 attributes.append(ReplyMarkupMessageAttribute(apiMarkup: replyMarkup))
             }
 
+            var date = messageData.date
             var storeFlags = StoreMessageFlags()
             if (flags & (1 << 0)) == 0 {
                 storeFlags.insert(.Incoming)
+                date += 1
             }
 
             self.init(

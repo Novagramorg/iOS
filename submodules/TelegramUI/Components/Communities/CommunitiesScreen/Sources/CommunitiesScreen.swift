@@ -412,9 +412,12 @@ private final class CommunitiesScreenComponent: Component {
             }
             contentHeight += navigationTitleSize.height + 13.0
 
+            //TODO:localize
             var subtitleText: String = "Make your group a part of community with multiple related chats."
             if case let .channel(channel) = self.subjectPeer, case .broadcast = channel.info {
                 subtitleText = "Make your channel a part of community with multiple related chats."
+            } else if case .user = self.subjectPeer {
+                subtitleText = "Make your bot a part of community with multiple related chats."
             }
             
             let subtitleSize = self.subtitle.update(

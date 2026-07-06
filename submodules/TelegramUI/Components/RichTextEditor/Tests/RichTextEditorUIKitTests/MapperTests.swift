@@ -7,6 +7,11 @@ import RichTextEditorCore
 final class MapperTests: XCTestCase {
     private let mapper = AttributedStringMapper()
 
+    private func formulaRenderResult(size: CGSize = CGSize(width: 28.0, height: 12.0)) -> RichTextFormulaRenderResult {
+        let image = UIGraphicsImageRenderer(size: size).image { _ in }
+        return RichTextFormulaRenderResult(image: image, size: size, ascent: 9.0, descent: 3.0)
+    }
+
     func test_characterAttributes_roundTripThroughDict() {
         // No link here: a link deliberately suppresses foreground/underline on read-back (covered by
         // AttributedStringMapperLinkTests), so those fields are exercised here on an unlinked run.
@@ -121,6 +126,46 @@ final class MapperTests: XCTestCase {
         XCTAssertFalse(back.bold, "monospaced .regular carries no bold trait")
         XCTAssertFalse(back.italic, "monospaced .regular carries no italic trait")
         XCTAssertEqual((dict[.font] as? UIFont)?.pointSize, 17, "body inline code renders at the body base size")
+    }
+
+    func test_formulaDisplaysRawLatex_andRoundTripsMetadata() {
+        let latex = "x_{1,2}=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}"
+        let block = ParagraphBlock(id: BlockID("formula"), style: .body, runs: [
+            TextRun(text: latex, attributes: CharacterAttributes(formula: latex))
+        ])
+
+        let attr = mapper.attributedString(for: block)
+        XCTAssertEqual(attr.string, latex)
+
+        let runs = mapper.runs(from: attr)
+        XCTAssertEqual(runs.count, 1)
+        XCTAssertEqual(runs[0].text, latex)
+        XCTAssertEqual(runs[0].attributes.formula, latex)
+    }
+
+    func test_formulaRendererDisplaysAttachmentAtom_andRoundTripsMetadata() throws {
+        let latex = "e^{I\\pi}=-1"
+        var capturedContext: RichTextFormulaRenderContext?
+        let mapper = AttributedStringMapper(formulaRenderer: { context in
+            capturedContext = context
+            return self.formulaRenderResult()
+        })
+        let block = ParagraphBlock(id: BlockID("formula"), style: .body, runs: [
+            TextRun(text: latex, attributes: CharacterAttributes(formula: latex))
+        ])
+
+        let attr = mapper.attributedString(for: block)
+        XCTAssertEqual(attr.string, "\u{FFFC}")
+        XCTAssertEqual(capturedContext?.latex, latex)
+        XCTAssertEqual(capturedContext?.fontSize ?? 0.0, 17.0, accuracy: 0.01)
+
+        let attachment = try XCTUnwrap(attr.attribute(.attachment, at: 0, effectiveRange: nil) as? FormulaTextAttachment)
+        XCTAssertEqual(attachment.latex, latex)
+
+        let runs = mapper.runs(from: attr)
+        XCTAssertEqual(runs.count, 1)
+        XCTAssertEqual(runs[0].text, "\u{FFFC}")
+        XCTAssertEqual(runs[0].attributes.formula, latex)
     }
 }
 #endif

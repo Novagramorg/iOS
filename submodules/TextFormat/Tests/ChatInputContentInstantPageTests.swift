@@ -101,6 +101,42 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         ])]), "spoiler+italic url")
     }
 
+    func test_formulaRun_roundTripsAsStandaloneFormulaBlock() {
+        var formula = ChatInputInlineAttributes()
+        formula.formula = "e^{I\\pi}=-1"
+        let content = ChatInputContent(blocks: [body([
+            ChatInputRun(text: "e^{I\\pi}=-1", attributes: formula)
+        ])])
+
+        assertRoundTrips(content, "standalone formula run")
+
+        let page = instantPage(from: content)
+        guard case let .formula(latex) = page.blocks.first else {
+            XCTFail("standalone formula run should emit an InstantPage formula block")
+            return
+        }
+        XCTAssertEqual(latex, "e^{I\\pi}=-1")
+    }
+
+    func test_formulaRun_roundTripsInlineInsideParagraph() {
+        var formula = ChatInputInlineAttributes()
+        formula.formula = "x^2"
+        let content = ChatInputContent(blocks: [body([
+            ChatInputRun(text: "before "),
+            ChatInputRun(text: "x^2", attributes: formula),
+            ChatInputRun(text: " after")
+        ])])
+
+        assertRoundTrips(content, "inline formula inside paragraph")
+
+        let page = instantPage(from: content)
+        guard case let .paragraph(text) = page.blocks.first else {
+            XCTFail("mixed text + formula should emit a paragraph")
+            return
+        }
+        XCTAssertEqual(text.plainText, "before x^2 after")
+    }
+
     // 5. Code blocks with and without a language.
     func test_codeBlocks() {
         assertRoundTrips(ChatInputContent(blocks: [

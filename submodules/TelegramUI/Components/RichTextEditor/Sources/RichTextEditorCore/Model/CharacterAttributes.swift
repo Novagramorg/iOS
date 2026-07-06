@@ -17,9 +17,8 @@ public struct CharacterAttributes: Codable, Equatable {
     /// An inline custom emoji. When non-nil this run's text MUST be exactly one `U+FFFC` (the emoji
     /// occupies one UTF-16 position). Has no Markdown form beyond `altText` (see the markdown-target steer).
     public var emoji: EmojiRef?
-    /// An inline math formula stored as its LaTeX source. When non-nil this run's text MUST be exactly
-    /// one `U+FFFC` (the formula occupies one UTF-16 position, mirroring `emoji`). Rendered as a math
-    /// image; serializes to `$latex$` / `\(latex\)`. macOS editor only today (additive — iOS ignores it).
+    /// An inline math formula stored as its LaTeX source. The editor may render it as a one-character
+    /// atom; raw LaTeX remains the visible fallback and chat/plain-text representation.
     public var formula: String?
     /// Telegram-style spoiler: the run's text is hidden behind an animated "dust" overlay (UIKit) until
     /// revealed. Additive — suppresses no other attribute. No Markdown form yet (deferred to Phase 5c).

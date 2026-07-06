@@ -21,6 +21,40 @@ final class EmojiEditingTests: XCTestCase {
         }.flatMap { $0 }.first { $0.attributes.emoji != nil }
     }
 
+    private func installFormulaRenderer(_ c: DocumentCanvasView) {
+        c.mapper.formulaRenderer = { context in
+            let size = CGSize(width: max(12.0, CGFloat((context.latex as NSString).length) * 4.0), height: 14.0)
+            let image = UIGraphicsImageRenderer(size: size).image { _ in }
+            return RichTextFormulaRenderResult(image: image, size: size, ascent: 10.0, descent: 4.0)
+        }
+    }
+
+    private func firstFormulaRun(_ c: DocumentCanvasView) -> TextRun? {
+        c.currentBlocks().compactMap { block -> [TextRun]? in
+            if case let .paragraph(p) = block { return p.runs }; return nil
+        }.flatMap { $0 }.first { $0.attributes.formula != nil }
+    }
+
+    private func firstFormulaRect(_ c: DocumentCanvasView) -> CGRect? {
+        for region in c.allLeafRegions() {
+            let attr = region.layout.attributedString
+            var result: CGRect?
+            attr.enumerateAttribute(.attachment, in: NSRange(location: 0, length: attr.length), options: []) { value, range, stop in
+                guard value is FormulaTextAttachment,
+                      let box = region.layout.attachmentBox(at: range.location)
+                else {
+                    return
+                }
+                result = box.offsetBy(dx: region.canvasOrigin.x, dy: region.canvasOrigin.y)
+                stop.pointee = true
+            }
+            if let result {
+                return result
+            }
+        }
+        return nil
+    }
+
     func test_insertEmoji_insertsOneCharRun_caretAfter() {
         let c = makeCanvas(text: "ab")
         c.anchor = c.boxes[0].textStart + 1; c.head = c.anchor   // between a and b
@@ -58,6 +92,58 @@ final class EmojiEditingTests: XCTestCase {
         c.insertEmoji(id: "star", altText: nil)   // caret now after emoji
         c.deleteBackward()
         XCTAssertNil(firstEmojiRun(c))
+    }
+
+    func test_insertFormula_insertsOneCharAtom_caretAfter() {
+        let c = makeCanvas(text: "ab")
+        installFormulaRenderer(c)
+        c.anchor = c.boxes[0].textStart + 1; c.head = c.anchor
+        c.insertFormula(latex: "x^2")
+        let run = firstFormulaRun(c)
+        XCTAssertEqual(run?.text, "\u{FFFC}")
+        XCTAssertEqual(run?.attributes.formula, "x^2")
+        XCTAssertEqual(c.head, c.boxes[0].textStart + 2, "caret lands after the inserted formula atom")
+    }
+
+    func test_textIn_substitutesFormulaLatex() {
+        let c = makeCanvas(text: "ab")
+        installFormulaRenderer(c)
+        c.anchor = c.boxes[0].textStart + 1; c.head = c.anchor
+        c.insertFormula(latex: "x^2")
+        let range = DocumentTextRange(DocumentTextPosition(0),
+                                      DocumentTextPosition(c.documentSizeValue))
+        XCTAssertEqual(c.text(in: range), "ax^2b")
+    }
+
+    func test_deleteBackward_removesFormulaAtom() {
+        let c = makeCanvas(text: "ab")
+        installFormulaRenderer(c)
+        c.anchor = c.boxes[0].textStart + 1; c.head = c.anchor
+        c.insertFormula(latex: "x^2")
+        c.deleteBackward()
+        XCTAssertNil(firstFormulaRun(c))
+    }
+
+    func test_tapFormula_requestsEditAndReplacesAtom() throws {
+        let c = makeCanvas(text: "ab")
+        installFormulaRenderer(c)
+        c.anchor = c.boxes[0].textStart + 1; c.head = c.anchor
+        c.insertFormula(latex: "x^2")
+        c.layoutIfNeeded()
+
+        var requestedLatex: String?
+        c.formulaEditRequested = { latex, completion in
+            requestedLatex = latex
+            completion("y^2")
+        }
+
+        let rect = try XCTUnwrap(firstFormulaRect(c))
+        c.performSingleTapForTesting(at: CGPoint(x: rect.midX, y: rect.midY))
+
+        XCTAssertEqual(requestedLatex, "x^2")
+        let run = try XCTUnwrap(firstFormulaRun(c))
+        XCTAssertEqual(run.text, "\u{FFFC}")
+        XCTAssertEqual(run.attributes.formula, "y^2")
     }
 
     // MARK: - Backspace deletes a whole grapheme cluster (standard Unicode emoji)

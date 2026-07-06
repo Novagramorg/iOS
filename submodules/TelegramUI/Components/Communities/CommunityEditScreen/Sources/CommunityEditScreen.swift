@@ -1817,8 +1817,7 @@ private final class CommunityEditScreenComponent: Component {
             guard let count else {
                 return nil
             }
-            let formattedCount = presentationStringsFormattedNumber(count, presentationData.dateTimeFormat.groupingSeparator)
-            return count == 1 ? "\(formattedCount) member" : "\(formattedCount) members"
+            return presentationData.strings.Conversation_StatusMembers(count)
         }
 
         private func addChatItem(
@@ -1853,9 +1852,15 @@ private final class CommunityEditScreenComponent: Component {
             presentationData: PresentationData,
             isHidden: Bool = false
         ) -> AnyComponentWithIdentity<Empty> {
-            let subtitle = self.memberCountString(peerId: peer.id, presentationData: presentationData).flatMap {
-                PeerListItemComponent.Subtitle(text: $0, color: .neutral)
+            let subtitle: PeerListItemComponent.Subtitle?
+            if case .user = peer {
+                subtitle = PeerListItemComponent.Subtitle(text: presentationData.strings.Bot_GenericBotStatus, color: .neutral)
+            } else {
+                subtitle = self.memberCountString(peerId: peer.id, presentationData: presentationData).flatMap {
+                    PeerListItemComponent.Subtitle(text: $0, color: .neutral)
+                }
             }
+                
             return AnyComponentWithIdentity(id: peer.id, component: AnyComponent(PeerListItemComponent(
                 context: context,
                 theme: theme,
@@ -2321,7 +2326,7 @@ public final class CommunityEditScreen: ViewControllerComponentContainer {
         super.init(
             context: context,
             component: CommunityEditScreenComponent(context: context, mode: mode, completed: completed),
-            navigationBarAppearance: .transparent,
+            navigationBarAppearance: .default,
             theme: .default,
             updatedPresentationData: nil
         )

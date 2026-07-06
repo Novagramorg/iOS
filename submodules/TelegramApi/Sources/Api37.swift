@@ -1,4 +1,108 @@
 public extension Api.messages {
+    enum ForumTopics: TypeConstructorDescription {
+        public class Cons_forumTopics: TypeConstructorDescription {
+            public var flags: Int32
+            public var count: Int32
+            public var topics: [Api.ForumTopic]
+            public var messages: [Api.Message]
+            public var chats: [Api.Chat]
+            public var users: [Api.User]
+            public var pts: Int32
+            public init(flags: Int32, count: Int32, topics: [Api.ForumTopic], messages: [Api.Message], chats: [Api.Chat], users: [Api.User], pts: Int32) {
+                self.flags = flags
+                self.count = count
+                self.topics = topics
+                self.messages = messages
+                self.chats = chats
+                self.users = users
+                self.pts = pts
+            }
+            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+                return ("forumTopics", [("flags", ConstructorParameterDescription(self.flags)), ("count", ConstructorParameterDescription(self.count)), ("topics", ConstructorParameterDescription(self.topics)), ("messages", ConstructorParameterDescription(self.messages)), ("chats", ConstructorParameterDescription(self.chats)), ("users", ConstructorParameterDescription(self.users)), ("pts", ConstructorParameterDescription(self.pts))])
+            }
+        }
+        case forumTopics(Cons_forumTopics)
+
+        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
+            switch self {
+            case .forumTopics(let _data):
+                if boxed {
+                    buffer.appendInt32(913709011)
+                }
+                serializeInt32(_data.flags, buffer: buffer, boxed: false)
+                serializeInt32(_data.count, buffer: buffer, boxed: false)
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.topics.count))
+                for item in _data.topics {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.messages.count))
+                for item in _data.messages {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.chats.count))
+                for item in _data.chats {
+                    item.serialize(buffer, true)
+                }
+                buffer.appendInt32(481674261)
+                buffer.appendInt32(Int32(_data.users.count))
+                for item in _data.users {
+                    item.serialize(buffer, true)
+                }
+                serializeInt32(_data.pts, buffer: buffer, boxed: false)
+                break
+            }
+        }
+
+        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
+            switch self {
+            case .forumTopics(let _data):
+                return ("forumTopics", [("flags", ConstructorParameterDescription(_data.flags)), ("count", ConstructorParameterDescription(_data.count)), ("topics", ConstructorParameterDescription(_data.topics)), ("messages", ConstructorParameterDescription(_data.messages)), ("chats", ConstructorParameterDescription(_data.chats)), ("users", ConstructorParameterDescription(_data.users)), ("pts", ConstructorParameterDescription(_data.pts))])
+            }
+        }
+
+        public static func parse_forumTopics(_ reader: BufferReader) -> ForumTopics? {
+            var _1: Int32?
+            _1 = reader.readInt32()
+            var _2: Int32?
+            _2 = reader.readInt32()
+            var _3: [Api.ForumTopic]?
+            if let _ = reader.readInt32() {
+                _3 = Api.parseVector(reader, elementSignature: 0, elementType: Api.ForumTopic.self)
+            }
+            var _4: [Api.Message]?
+            if let _ = reader.readInt32() {
+                _4 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Message.self)
+            }
+            var _5: [Api.Chat]?
+            if let _ = reader.readInt32() {
+                _5 = Api.parseVector(reader, elementSignature: 0, elementType: Api.Chat.self)
+            }
+            var _6: [Api.User]?
+            if let _ = reader.readInt32() {
+                _6 = Api.parseVector(reader, elementSignature: 0, elementType: Api.User.self)
+            }
+            var _7: Int32?
+            _7 = reader.readInt32()
+            let _c1 = _1 != nil
+            let _c2 = _2 != nil
+            let _c3 = _3 != nil
+            let _c4 = _4 != nil
+            let _c5 = _5 != nil
+            let _c6 = _6 != nil
+            let _c7 = _7 != nil
+            if _c1 && _c2 && _c3 && _c4 && _c5 && _c6 && _c7 {
+                return Api.messages.ForumTopics.forumTopics(Cons_forumTopics(flags: _1!, count: _2!, topics: _3!, messages: _4!, chats: _5!, users: _6!, pts: _7!))
+            }
+            else {
+                return nil
+            }
+        }
+    }
+}
+public extension Api.messages {
     enum FoundStickerSets: TypeConstructorDescription {
         public class Cons_foundStickerSets: TypeConstructorDescription {
             public var hash: Int64
@@ -1824,73 +1928,6 @@ public extension Api.messages {
         }
         public static func parse_savedGifsNotModified(_ reader: BufferReader) -> SavedGifs? {
             return Api.messages.SavedGifs.savedGifsNotModified
-        }
-    }
-}
-public extension Api.messages {
-    enum SavedReactionTags: TypeConstructorDescription {
-        public class Cons_savedReactionTags: TypeConstructorDescription {
-            public var tags: [Api.SavedReactionTag]
-            public var hash: Int64
-            public init(tags: [Api.SavedReactionTag], hash: Int64) {
-                self.tags = tags
-                self.hash = hash
-            }
-            public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-                return ("savedReactionTags", [("tags", ConstructorParameterDescription(self.tags)), ("hash", ConstructorParameterDescription(self.hash))])
-            }
-        }
-        case savedReactionTags(Cons_savedReactionTags)
-        case savedReactionTagsNotModified
-
-        public func serialize(_ buffer: Buffer, _ boxed: Swift.Bool) {
-            switch self {
-            case .savedReactionTags(let _data):
-                if boxed {
-                    buffer.appendInt32(844731658)
-                }
-                buffer.appendInt32(481674261)
-                buffer.appendInt32(Int32(_data.tags.count))
-                for item in _data.tags {
-                    item.serialize(buffer, true)
-                }
-                serializeInt64(_data.hash, buffer: buffer, boxed: false)
-                break
-            case .savedReactionTagsNotModified:
-                if boxed {
-                    buffer.appendInt32(-2003084817)
-                }
-                break
-            }
-        }
-
-        public func descriptionFields() -> (String, [(String, ConstructorParameterDescription)]) {
-            switch self {
-            case .savedReactionTags(let _data):
-                return ("savedReactionTags", [("tags", ConstructorParameterDescription(_data.tags)), ("hash", ConstructorParameterDescription(_data.hash))])
-            case .savedReactionTagsNotModified:
-                return ("savedReactionTagsNotModified", [])
-            }
-        }
-
-        public static func parse_savedReactionTags(_ reader: BufferReader) -> SavedReactionTags? {
-            var _1: [Api.SavedReactionTag]?
-            if let _ = reader.readInt32() {
-                _1 = Api.parseVector(reader, elementSignature: 0, elementType: Api.SavedReactionTag.self)
-            }
-            var _2: Int64?
-            _2 = reader.readInt64()
-            let _c1 = _1 != nil
-            let _c2 = _2 != nil
-            if _c1 && _c2 {
-                return Api.messages.SavedReactionTags.savedReactionTags(Cons_savedReactionTags(tags: _1!, hash: _2!))
-            }
-            else {
-                return nil
-            }
-        }
-        public static func parse_savedReactionTagsNotModified(_ reader: BufferReader) -> SavedReactionTags? {
-            return Api.messages.SavedReactionTags.savedReactionTagsNotModified
         }
     }
 }

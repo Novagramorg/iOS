@@ -757,8 +757,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     let canSelect = !isAction && !hasEphemeralMessages
     
     let message = messages[0]
-    let isReplyableEphemeralMessage = canReplyToEphemeralMessage(message)
-    let isNonReplyableEphemeralMessage = Namespaces.Message.allEphemeral.contains(message.id.namespace) && !isReplyableEphemeralMessage
+    let isNonReplyableEphemeralMessage = Namespaces.Message.allEphemeral.contains(message.id.namespace) && !canReplyToEphemeralMessage(message)
     
     if case .peer = chatPresentationInterfaceState.chatLocation, let channel = chatPresentationInterfaceState.renderedPeer?.peer as? TelegramChannel, channel.isForumOrMonoForum {
         if message.threadId == nil {
@@ -810,9 +809,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
         if !(peer is TelegramSecretChat) && messages[0].id.namespace != Namespaces.Message.Cloud {
             canPin = false
-            if !isReplyableEphemeralMessage {
-                canReply = false
-            }
         }
     }
     

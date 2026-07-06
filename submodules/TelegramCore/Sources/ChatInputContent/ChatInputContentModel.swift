@@ -17,6 +17,7 @@ public struct ChatInputInlineAttributes: Equatable, Codable {
     public var strikethrough: Bool
     public var underline: Bool
     public var spoiler: Bool
+    public var formula: String?
     public var entity: ChatInputInlineEntity?
     public init(
         bold: Bool = false,
@@ -25,6 +26,7 @@ public struct ChatInputInlineAttributes: Equatable, Codable {
         strikethrough: Bool = false,
         underline: Bool = false,
         spoiler: Bool = false,
+        formula: String? = nil,
         entity: ChatInputInlineEntity? = nil
     ) {
         self.bold = bold
@@ -33,6 +35,7 @@ public struct ChatInputInlineAttributes: Equatable, Codable {
         self.strikethrough = strikethrough
         self.underline = underline
         self.spoiler = spoiler
+        self.formula = formula
         self.entity = entity
     }
 }
@@ -240,6 +243,9 @@ public struct ChatInputContent: Equatable {
         return self.blocks.allSatisfy { block in
             switch block {
             case let .paragraph(paragraph):
+                if chatInputRunsContainFormula(paragraph.runs) {
+                    return false
+                }
                 // A heading or a list paragraph carries structure the message-entity set can't express.
                 if paragraph.list != nil {
                     return false
@@ -250,10 +256,12 @@ public struct ChatInputContent: Equatable {
                 case .heading1, .heading2, .heading3:
                     return false
                 }
-            case .code: return true
+            case let .code(code):
+                return !chatInputRunsContainFormula(code.runs)
             case .media: return false
             case .table: return false
-            case .pullQuote: return false
+            case .pullQuote:
+                return false
             case let .blockQuote(bq):
                 if !bq.author.isEmpty { return false }
                 // FLAT-ONLY rule: expressible only when the quote is non-collapsed AND every child block is
@@ -261,6 +269,9 @@ public struct ChatInputContent: Equatable {
                 // exactly one level of flat-text quote).
                 if options.contains(.quotesRequireRichContent) { return false }
                 guard !bq.collapsed else { return false }
+                if !bq.content.isEntityExpressible() {
+                    return false
+                }
                 return bq.content.blocks.allSatisfy {
                     if case let .paragraph(p) = $0, case .body = p.style, p.list == nil { return true }
                     return false
@@ -268,6 +279,15 @@ public struct ChatInputContent: Equatable {
             }
         }
     }
+}
+
+private func chatInputRunsContainFormula(_ runs: [ChatInputRun]) -> Bool {
+    for run in runs {
+        if run.attributes.formula != nil {
+            return true
+        }
+    }
+    return false
 }
 
 extension ChatInputContent: Codable {

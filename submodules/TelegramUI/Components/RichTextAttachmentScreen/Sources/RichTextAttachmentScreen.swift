@@ -76,7 +76,16 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     private let sendMessage: (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void
     private let syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)?
 
-    public init(context: AccountContext, initialContents: Document? = nil, initialMedia: [String: Media] = [:], initialEmojiFiles: [Int64: TelegramMediaFile] = [:], sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void, syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+    public init(
+        context: AccountContext,
+        initialContents: Document? = nil,
+        initialMedia: [String: Media] = [:],
+        initialEmojiFiles: [Int64: TelegramMediaFile] = [:],
+        sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void,
+        syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
+        presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
+    ) {
         self.sendMessage = sendMessage
         self.syncContent = syncContent
 
@@ -88,7 +97,8 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
             initialMedia: initialMedia,
             initialEmojiFiles: initialEmojiFiles,
             overNavigationContainer: overNavigationContainer,
-            presentAttachmentMenu: presentAttachmentMenu
+            presentAttachmentMenu: presentAttachmentMenu,
+            presentFormulaEditor: presentFormulaEditor
         ), navigationBarAppearance: .transparent, theme: .default)
 
         self._hasGlassStyle = true
@@ -142,14 +152,16 @@ final class RichTextAttachmentScreenComponent: Component {
     let initialEmojiFiles: [Int64: TelegramMediaFile]
     let overNavigationContainer: UIView
     let presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?
+    let presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
 
-    init(context: AccountContext, initialContents: Document?, initialMedia: [String: Media], initialEmojiFiles: [Int64: TelegramMediaFile], overNavigationContainer: UIView, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?) {
+    init(context: AccountContext, initialContents: Document?, initialMedia: [String: Media], initialEmojiFiles: [Int64: TelegramMediaFile], overNavigationContainer: UIView, presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?, presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?) {
         self.context = context
         self.initialContents = initialContents
         self.initialMedia = initialMedia
         self.initialEmojiFiles = initialEmojiFiles
         self.overNavigationContainer = overNavigationContainer
         self.presentAttachmentMenu = presentAttachmentMenu
+        self.presentFormulaEditor = presentFormulaEditor
     }
 
     static func ==(lhs: RichTextAttachmentScreenComponent, rhs: RichTextAttachmentScreenComponent) -> Bool {
@@ -431,6 +443,35 @@ final class RichTextAttachmentScreenComponent: Component {
 
                 editor.registerEmojiViewProvider { [weak self] id, size in
                     return self?.emojiKeyboard?.customEmojiView(forId: id, size: size)
+                }
+
+                editor.registerFormulaRenderer { context in
+                    guard let attachment = instantPageMathAttachment(
+                        latex: context.latex,
+                        fontSize: context.fontSize,
+                        textColor: context.textColor,
+                        mode: .inline
+                    ) else {
+                        return nil
+                    }
+                    return RichTextFormulaRenderResult(
+                        image: attachment.rendered.image,
+                        size: attachment.rendered.size,
+                        ascent: attachment.rendered.ascent,
+                        descent: attachment.rendered.descent
+                    )
+                }
+
+                editor.onEditFormulaRequested = { [weak self] latex, completion in
+                    guard let self, let component = self.component else {
+                        return
+                    }
+                    component.presentFormulaEditor?(latex, { [weak self] updatedLatex in
+                        completion(updatedLatex)
+                        DispatchQueue.main.async { [weak self] in
+                            self?.editor.becomeFirstResponder()
+                        }
+                    })
                 }
 
                 editor.registerMediaViewProvider { [weak self] mediaID, _ in
@@ -778,6 +819,27 @@ final class RichTextAttachmentScreenComponent: Component {
                             } else {
                                 self.editor.makeCodeBlock()
                             }
+                            c?.dismiss(completion: nil)
+                        })))
+                        
+                        items.append(.action(ContextMenuActionItem(text: "Formula", icon: { theme in
+                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatFormula"), color: theme.contextMenu.primaryColor)
+                        }, action: { [weak self] c, _ in
+                            guard let self else {
+                                c?.dismiss(completion: nil)
+                                return
+                            }
+                            
+                            self.component?.presentFormulaEditor?(nil, { [weak self] latex in
+                                guard let self else {
+                                    return
+                                }
+                                self.editor.insertFormula(latex: latex)
+                                DispatchQueue.main.async { [weak self] in
+                                    self?.editor.becomeFirstResponder()
+                                }
+                            })
+                            
                             c?.dismiss(completion: nil)
                         })))
                         

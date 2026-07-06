@@ -391,6 +391,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// emoji and any programmatic plain-text insertion.
     public func insertText(_ text: String) { canvas.insertText(text) }
 
+    /// Inserts a formula at the caret as a single inline atom carrying formula metadata. Without a
+    /// registered renderer, invalid/unrenderable formula content degrades to visible raw LaTeX.
+    public func insertFormula(latex: String) { canvas.insertFormula(latex: latex) }
+
     /// Deletes one unit before the caret (drives a custom keyboard's backspace key).
     public func deleteBackward() { canvas.deleteBackward() }
 
@@ -411,6 +415,24 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// interactive view. The editor owns/positions/removes it and makes it ride scrolling.
     public func registerEmojiViewProvider(_ provider: @escaping (_ id: String, _ size: CGSize) -> UIView?) {
         canvas.emojiViewProvider = provider
+    }
+
+    /// Registers a host-provided formula renderer. The editor owns the inline text atom; formula parsing
+    /// and drawing stay outside this package.
+    public func registerFormulaRenderer(_ provider: @escaping (RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?) {
+        canvas.mapper.formulaRenderer = provider
+        let blocks = canvas.currentBlocks()
+        if !blocks.isEmpty {
+            canvas.reload(blocks, width: canvas.effectiveWidth)
+            performLayout(size: bounds.size)
+        }
+    }
+
+    /// Called when the user taps an existing formula atom. The host presents UI and invokes `completion`
+    /// with the replacement LaTeX.
+    public var onEditFormulaRequested: ((_ latex: String, _ completion: @escaping (String) -> Void) -> Void)? {
+        get { canvas.formulaEditRequested }
+        set { canvas.formulaEditRequested = newValue }
     }
 
     /// Registers a provider that builds the checklist checkbox view (host-side `CheckNode`). When unset,

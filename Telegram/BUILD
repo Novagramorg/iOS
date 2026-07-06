@@ -1618,6 +1618,7 @@ plist_fragment(
         <string>instagram-stories</string>
         <string>yangomaps</string>
         <string>vivaldi</string>
+        <string>rizogo</string>
     </array>
     <key>LSRequiresIPhoneOS</key>
     <true/>

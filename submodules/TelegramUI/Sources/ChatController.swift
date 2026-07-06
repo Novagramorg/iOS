@@ -3676,19 +3676,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self?.interfaceInteraction?.setupReplyMessage(messageId, nil, { _, f in f() })
         }, canSetupReply: { [weak self] message in
             if Namespaces.Message.allEphemeral.contains(message.id.namespace) {
-                if message.id.namespace != Namespaces.Message.EphemeralLocal || message.id.id <= 0 {
-                    return .none
-                }
-                if !message.flags.intersection([.Failed, .Sending, .Unsent]).isEmpty {
-                    return .none
-                }
-                if message.attributes.contains(where: { attribute in
-                    if let attribute = attribute as? EphemeralOutgoingMessageAttribute {
-                        return attribute.state == .failed
-                    } else {
-                        return false
-                    }
-                }) {
+                if !message.flags.contains(.Incoming) {
                     return .none
                 }
             } else {
@@ -3716,6 +3704,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                     }
                 }
                 if case let .customChatContents(customChatContents) = strongSelf.presentationInterfaceState.subject, case .quickReplyMessageInput = customChatContents.kind {
+                    return .none
+                }
+                
+                if !canSendMessagesToChat(strongSelf.presentationInterfaceState) && (strongSelf.presentationInterfaceState.copyProtectionEnabled || message.isCopyProtected()) {
                     return .none
                 }
                 

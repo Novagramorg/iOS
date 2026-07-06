@@ -5,15 +5,21 @@ import RichTextEditorCore
 /// Map a single text run to inline `RichText`, applying its character attributes as nested wrappers.
 func richText(from run: TextRun) -> RichText? {
     let attributes = run.attributes
-    if let emoji = attributes.emoji {
+    var result: RichText
+    if let formula = attributes.formula {
+        result = .formula(latex: formula)
+    } else if let emoji = attributes.emoji {
         // v1: custom emoji has no backing file here — emit its alt text as plain text.
         let alt = emoji.altText ?? ""
-        return alt.isEmpty ? nil : .plain(alt)
-    }
-    if run.text.isEmpty {
+        if alt.isEmpty {
+            return nil
+        }
+        result = .plain(alt)
+    } else if run.text.isEmpty {
         return nil
+    } else {
+        result = .plain(run.text)
     }
-    var result: RichText = .plain(run.text)
     if attributes.inlineCode {
         result = .fixed(result)
     }

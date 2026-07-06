@@ -33,11 +33,12 @@ extension DocumentCanvasView: UITextInput {
             let attr = region.layout.attributedString
             let ns = attr.string as NSString
             let slice = NSRange(location: a - rStart, length: b - a)
-            // Replace each emoji spacer (U+FFFC + EmojiTextAttachment) with its altText (or nothing);
-            // copy every other span verbatim. Keeps non-emoji behaviour identical.
+            // Replace inline atoms with their plain-text forms; copy every other span verbatim.
             attr.enumerateAttribute(.attachment, in: slice, options: []) { value, sub, _ in
                 if let att = value as? EmojiTextAttachment {
                     result += att.ref.altText ?? ""
+                } else if let att = value as? FormulaTextAttachment {
+                    result += att.latex
                 } else {
                     result += ns.substring(with: sub)
                 }
