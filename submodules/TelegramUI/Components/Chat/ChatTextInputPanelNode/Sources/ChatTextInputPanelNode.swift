@@ -61,6 +61,7 @@ import RasterizedCompositionComponent
 import VideoMessageCameraScreen
 import FenixuzSpeechToText
 import FenixuzLocalization
+import FenixuzRoundVideoFromGallery
 
 private let counterFont = Font.with(size: 14.0, design: .regular, traits: [.monospacedNumbers])
 
@@ -923,25 +924,35 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 // Fenixuz: localized camera picker labels (was hardcoded "Oldi Camera"/"Orqa Camera").
                 let l10n = FenixuzL10n(presentationInterfaceState.strings)
                 let actionSheet = ActionSheetController(theme: ActionSheetControllerTheme(presentationTheme: presentationInterfaceState.theme, fontSize: presentationInterfaceState.fontSize))
+                // Fenixuz: Front/Back camera picker + optional "Photos" (gallery video -> round video note).
+                var fenixCameraItems: [ActionSheetItem] = [
+                    ActionSheetButtonItem(title: l10n.cameraPicker_front, color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                        actionSheet?.dismissAnimated()
+                        if let interfaceInteraction = strongSelf?.interfaceInteraction {
+                            VideoMessageCameraScreen.pendingCameraPosition = .front
+                            interfaceInteraction.beginMediaRecording(true)
+                            interfaceInteraction.lockMediaRecording()
+                        }
+                    }),
+                    ActionSheetButtonItem(title: l10n.cameraPicker_back, color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                        actionSheet?.dismissAnimated()
+                        if let interfaceInteraction = strongSelf?.interfaceInteraction {
+                            VideoMessageCameraScreen.pendingCameraPosition = .back
+                            interfaceInteraction.beginMediaRecording(true)
+                            interfaceInteraction.lockMediaRecording()
+                        }
+                    })
+                ]
+                if FenixRoundVideoFromGallery.isEnabled {
+                    fenixCameraItems.append(ActionSheetButtonItem(title: l10n.cameraPicker_gallery, color: .accent, action: { [weak actionSheet, weak strongSelf] in
+                        actionSheet?.dismissAnimated()
+                        if let strongSelf, let context = strongSelf.context, let presentationInterfaceState = strongSelf.presentationInterfaceState, let peerId = presentationInterfaceState.chatLocation.peerId, let controller = strongSelf.interfaceInteraction?.chatController() {
+                            FenixRoundVideoFromGallery.present(context: context, peerId: peerId, threadId: presentationInterfaceState.chatLocation.threadId, from: controller)
+                        }
+                    }))
+                }
                 actionSheet.setItemGroups([
-                    ActionSheetItemGroup(items: [
-                        ActionSheetButtonItem(title: l10n.cameraPicker_front, color: .accent, action: { [weak actionSheet, weak strongSelf] in
-                            actionSheet?.dismissAnimated()
-                            if let interfaceInteraction = strongSelf?.interfaceInteraction {
-                                VideoMessageCameraScreen.pendingCameraPosition = .front
-                                interfaceInteraction.beginMediaRecording(true)
-                                interfaceInteraction.lockMediaRecording()
-                            }
-                        }),
-                        ActionSheetButtonItem(title: l10n.cameraPicker_back, color: .accent, action: { [weak actionSheet, weak strongSelf] in
-                            actionSheet?.dismissAnimated()
-                            if let interfaceInteraction = strongSelf?.interfaceInteraction {
-                                VideoMessageCameraScreen.pendingCameraPosition = .back
-                                interfaceInteraction.beginMediaRecording(true)
-                                interfaceInteraction.lockMediaRecording()
-                            }
-                        })
-                    ]),
+                    ActionSheetItemGroup(items: fenixCameraItems),
                     ActionSheetItemGroup(items: [
                         ActionSheetButtonItem(title: presentationInterfaceState.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet, weak strongSelf] in
                             actionSheet?.dismissAnimated()

@@ -53,6 +53,7 @@ private enum FenixEntry: ItemListNodeEntry {
     case showGhostMode(PresentationTheme, String, String, Bool)
     case longPressCameraSelection(PresentationTheme, String, String, Bool)
     case editedHistoryEnabled(PresentationTheme, String, String, Bool)
+    case roundVideoFromGallery(PresentationTheme, String, String, Bool)
     case chatFooter(PresentationTheme, String)
 
     // — Interface Section —
@@ -152,7 +153,7 @@ private enum FenixEntry: ItemListNodeEntry {
 
     var section: ItemListSectionId {
         switch self {
-        case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .chatFooter:
+        case .chatHeader, .calls, .deletedMessages, .showViewFirstMessage, .showGhostMode, .longPressCameraSelection, .editedHistoryEnabled, .roundVideoFromGallery, .chatFooter:
             return FenixSection.chat.rawValue
         case .interfaceHeader, .hideFolders, .showStories, .showMutualContactSymbol, .interfaceFooter:
             return FenixSection.interface.rawValue
@@ -189,6 +190,7 @@ private enum FenixEntry: ItemListNodeEntry {
         case .showGhostMode:             return 4
         case .longPressCameraSelection:  return 5
         case .editedHistoryEnabled:      return 7
+        case .roundVideoFromGallery:     return 8
         case .chatFooter:                return 6
         // Interface
         case .interfaceHeader:           return 10
@@ -280,6 +282,8 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .longPressCameraSelection(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .editedHistoryEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .editedHistoryEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .roundVideoFromGallery(lhsTheme, lhsTitle, lhsText, lhsValue):
+            if case let .roundVideoFromGallery(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .chatFooter(lhsTheme, lhsText):
             if case let .chatFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -477,6 +481,10 @@ private enum FenixEntry: ItemListNodeEntry {
         case let .editedHistoryEnabled(_, title, text, value):
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "clock.arrow.circlepath", color: .teal), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateEditedHistoryEnabled(val)
+            })
+        case let .roundVideoFromGallery(_, title, text, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "video.circle.fill", color: .blue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateRoundVideoFromGallery(val)
             })
         case let .chatFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -858,6 +866,7 @@ private struct FenixSettingsState: Equatable {
     var showViewFirstMessage: Bool
     var longPressCameraSelection: Bool
     var editedHistoryEnabled: Bool
+    var roundVideoFromGallery: Bool
     var showTranslateMessages: Bool
     var textStyle: String
     var autoTextEnabled: Bool
@@ -905,6 +914,7 @@ private struct FenixSettingsState: Equatable {
         self.showViewFirstMessage = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_view_first_message") ?? false
         self.longPressCameraSelection = UserDefaults(suiteName: "pro_messager")?.object(forKey: "long_press_camera_selection") as? Bool ?? true
         self.editedHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "edited_history_enabled") as? Bool ?? true
+        self.roundVideoFromGallery = UserDefaults(suiteName: "pro_messager")?.object(forKey: "round_video_from_gallery") as? Bool ?? true
         self.showTranslateMessages = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? true
         self.textStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
         self.autoTextEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
@@ -968,6 +978,9 @@ private struct FenixSettingsState: Equatable {
             return false
         }
         if lhs.editedHistoryEnabled != rhs.editedHistoryEnabled {
+            return false
+        }
+        if lhs.roundVideoFromGallery != rhs.roundVideoFromGallery {
             return false
         }
         if lhs.showTranslateMessages != rhs.showTranslateMessages {
@@ -1134,6 +1147,7 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.showGhostMode(presentationData.theme, l10n.settings_chat_ghost_title, l10n.settings_chat_ghost_subtitle, state.showGhostMode))
     entries.append(.longPressCameraSelection(presentationData.theme, l10n.settings_chat_camera_title, l10n.settings_chat_camera_subtitle, state.longPressCameraSelection))
     entries.append(.editedHistoryEnabled(presentationData.theme, l10n.settings_chat_editedHistory_title, l10n.settings_chat_editedHistory_subtitle, state.editedHistoryEnabled))
+    entries.append(.roundVideoFromGallery(presentationData.theme, l10n.settings_chat_roundVideoGallery_title, l10n.settings_chat_roundVideoGallery_subtitle, state.roundVideoFromGallery))
     entries.append(.chatFooter(presentationData.theme, l10n.settings_chat_footer))
 
     // ─── MESSAGING ───
@@ -1258,6 +1272,7 @@ private final class FenixSettingsArguments {
     let updateShowViewFirstMessage: (Bool) -> Void
     let updateLongPressCameraSelection: (Bool) -> Void
     let updateEditedHistoryEnabled: (Bool) -> Void
+    let updateRoundVideoFromGallery: (Bool) -> Void
     let updateTranslateMessages: (Bool) -> Void
     let openTranslationSettings: () -> Void
     let openTextStyleSettings: () -> Void
@@ -1290,7 +1305,7 @@ private final class FenixSettingsArguments {
     // Ads section (Feature #6 — hidden Easter-egg)
     let updateShowAds: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1303,6 +1318,7 @@ private final class FenixSettingsArguments {
         self.updateShowViewFirstMessage = updateShowViewFirstMessage
         self.updateLongPressCameraSelection = updateLongPressCameraSelection
         self.updateEditedHistoryEnabled = updateEditedHistoryEnabled
+        self.updateRoundVideoFromGallery = updateRoundVideoFromGallery
         self.updateTranslateMessages = updateTranslateMessages
         self.openTranslationSettings = openTranslationSettings
         self.openTextStyleSettings = openTextStyleSettings
@@ -1432,6 +1448,13 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         updateState { state in
             var state = state
             state.editedHistoryEnabled = value
+            return state
+        }
+    }, updateRoundVideoFromGallery: { value in
+        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "round_video_from_gallery")
+        updateState { state in
+            var state = state
+            state.roundVideoFromGallery = value
             return state
         }
     }, updateTranslateMessages: { value in

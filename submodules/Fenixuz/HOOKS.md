@@ -2135,3 +2135,23 @@ New `FenixSection.secretVault` section: `secretVaultEnabled` toggle + `secretVau
 - **`submodules/Fenixuz/SecretVault/Sources/SecretVaultBiometric.swift`** (module-owned) — `LAContext` device-owner (Face ID / passcode) auth for the "Forgot vault PIN?" path.
 - **`submodules/ChatListUI/Sources/ChatListController.swift`** — in `fenixOpenSecretVault` the verify screen's `onForgot` (was `nil`) now runs `SecretVaultBiometric.authenticateDeviceOwner` → on success dismisses the PIN modal and opens the vault. The independent vault PIN has no master, so device-owner auth is the recovery.
 - **`submodules/ChatListUI/Sources/ChatContextMenus.swift`** — `import FenixuzSecretVault`; add an "Unhide from Vault" long-press context-menu item (after the ChatLock item) shown when `SecretVaultManager.shared.isVaulted(peerId)` → `removeFromVault([peerId])` + unmute. Reason: the pushed vault list (`.chatList(.root)`, not a tab-bar child) does not render the bulk edit toolbar, so unhide is offered per-chat via long-press.
+
+
+---
+
+## 📌 Round video from gallery (2026-07-06)
+
+**Feature:** in the video-message camera picker (long-press the video button, gated by `long_press_camera_selection`), a third option **"Photos"** lets the user pick a gallery video and send it as a **round video note** (`.instantRoundVideo`). Gated by NovagramPro toggle `round_video_from_gallery` (default **ON**). Module: `submodules/Fenixuz/RoundVideoFromGallery/` (`FenixuzRoundVideoFromGallery`) — mirrors `VideoMessageCameraScreen.sendVideoRecording` (MediaEditorValues `.videoMessage` + `LocalFileVideoMediaResource` + `.instantRoundVideo`), fed a PHPicker video cropped to a centered square, capped at 60s, enqueued via `enqueueMessages`.
+
+**Hooked upstream files (re-inject on upstream pull):**
+
+1. `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/Sources/ChatTextInputPanelNode.swift`
+   - Added `import FenixuzRoundVideoFromGallery` (next to the existing `import FenixuzLocalization`).
+   - Inside the `presentCameraSelection` closure action sheet: the first `ActionSheetItemGroup` is built as `var fenixCameraItems: [ActionSheetItem]` (Front + Back buttons unchanged); when `FenixRoundVideoFromGallery.isEnabled`, a third `l10n.cameraPicker_gallery` ("Photos") button is appended that calls `FenixRoundVideoFromGallery.present(context:peerId:threadId:from:)` using `presentationInterfaceState.chatLocation.peerId/threadId` + `interfaceInteraction.chatController()`. This block is already a Fenixuz hook (camera-picker localization, 2026-06-08) — extend it.
+
+2. `submodules/TelegramUI/Components/Chat/ChatTextInputPanelNode/BUILD`
+   - Added dep `//submodules/Fenixuz/RoundVideoFromGallery:FenixuzRoundVideoFromGallery`.
+
+**Fork-only files (pure Fenixuz, no upstream conflict):**
+- `submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift` — `roundVideoFromGallery` toggle (enum case, section, stableId 8, equality, item builder, state field/init/equality, entries.append, arguments decl/init/assign/closure) mirroring `editedHistoryEnabled`. UserDefaults key `round_video_from_gallery`, default ON.
+- `submodules/Fenixuz/Localization/Sources/FenixuzL10n.swift` — `cameraPicker_gallery`, `settings_chat_roundVideoGallery_title`, `settings_chat_roundVideoGallery_subtitle`.

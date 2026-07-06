@@ -71,6 +71,7 @@ swift_library(
         "//submodules/TelegramUI/Components/VideoMessageCameraScreen",
         "//submodules/Fenixuz/SpeechToText:FenixuzSpeechToText",
         "//submodules/Fenixuz/Localization:FenixuzLocalization",
+        "//submodules/Fenixuz/RoundVideoFromGallery:FenixuzRoundVideoFromGallery",
     ],
     visibility = [
         "//visibility:public",

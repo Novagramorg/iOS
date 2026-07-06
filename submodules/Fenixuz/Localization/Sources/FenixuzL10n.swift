@@ -382,6 +382,18 @@ public struct FenixuzL10n {
         pick(en: "Camera picker", uz: "Kamerani tanlash", ru: "Выбор камеры")
     }
 
+    public var settings_chat_roundVideoGallery_title: String {
+        pick(en: "Round video from gallery", uz: "Galereyadan dumaloq video", ru: "Круглое видео из галереи")
+    }
+
+    public var settings_chat_roundVideoGallery_subtitle: String {
+        pick(
+            en: "Adds a \"Photos\" option to the video-message camera menu to send any gallery video as a round video",
+            uz: "Video xabar kamera menyusiga \"Galereya\" qoʻshib, istalgan videoni dumaloq video qilib yuborish",
+            ru: "Добавляет \"Галерею\" в меню камеры для отправки любого видео кружком"
+        )
+    }
+
     public var settings_chat_camera_subtitle: String {
         pick(
             en: "Long-press the video-message button to switch front/back camera",
@@ -766,6 +778,10 @@ public struct FenixuzL10n {
 
     public var cameraPicker_back: String {
         pick(en: "Back Camera", uz: "Orqa kamera", ru: "Задняя камера")
+    }
+
+    public var cameraPicker_gallery: String {
+        pick(en: "Photos", uz: "Galereyadan", ru: "Из галереи")
     }
 
     // MARK: - Update check alert
