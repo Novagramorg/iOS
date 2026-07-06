@@ -24,7 +24,7 @@ import FenixuzChatLock
 
 /// Temporarily set to a peerId after successful pincode verification so the
 /// recursive navigateToChatControllerImpl call bypasses the lock gate.
-private var chatPincodeBypassPeerId: PeerId? = nil
+private var chatPincodeBypassPeerId: EnginePeer.Id? = nil
 
 public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParams) {
     // MARK: - Per-chat pincode protection
