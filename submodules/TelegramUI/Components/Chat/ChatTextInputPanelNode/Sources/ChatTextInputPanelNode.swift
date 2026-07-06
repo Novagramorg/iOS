@@ -245,10 +245,11 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     public var mediaRecordingAccessibilityArea: AccessibilityAreaNode?
     private let counterTextNode: ImmediateTextNode
     
-    private var aiButton: (button: HighlightTrackingButton, icon: UIImageView)?
-    private var heightDependentAiButtonAlpha: CGFloat = 0.0
-    private var inlineAiButtonAlpha: CGFloat = 0.0
-    private var inlineAiButton: (button: HighlightTrackingButton, icon: UIImageView)?
+    // The AI (compose) button now lives inside the attachment button's glass background (top slot of the
+    // capsule), not in the text field. See the 3-line capsule geometry in updateLayout.
+    private var attachmentAIButton: (button: HighlightTrackingButton, icon: UIImageView)?
+    private struct ThreeLineHeightCacheEntry { let width: CGFloat; let baseFontSize: CGFloat; let value: CGFloat }
+    private var threeLineHeightCache: ThreeLineHeightCacheEntry?
     private let aiButtonMinTextLength: Int = 50
 
     private var expandButton: (button: HighlightTrackingButton, icon: UIImageView)?
@@ -1307,7 +1308,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         // The expand button (rich text input) shares the inline AI button's slot, so reserve the same accessory width for either.
         let isExpandInputEnabled = self.enableRichTextInput
-        if (self.isAIEnabled || isExpandInputEnabled) && width >= 500.0 {
+        if isExpandInputEnabled && width >= 500.0 {
             if firstButton {
                 firstButton = false
                 accessoryButtonsWidth += self.accessoryButtonInset
@@ -3427,21 +3428,75 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             transition.updateFrame(layer: self.searchLayoutClearButtonIcon.layer, frame: clearIconFrame.offsetBy(dx: clearButtonFrame.minX, dy: clearButtonFrame.minY))
         }
         
-        let attachmentButtonFrame = CGRect(origin: CGPoint(x: attachmentButtonX, y: textInputFrame.maxY - 40.0), size: CGSize(width: 40.0, height: 40.0))
-        attachmentButtonX += 40.0 + 6.0
-        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: attachmentButtonFrame.height * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: true, transition: ComponentTransition(transition))
-        
-        transition.updateFrame(layer: self.attachmentButtonBackground.layer, frame: attachmentButtonFrame)
-        transition.updateFrame(layer: self.attachmentButton.layer, frame: CGRect(origin: CGPoint(), size: attachmentButtonFrame.size))
-        transition.updateFrame(node: self.attachmentButtonDisabledNode, frame: self.attachmentButtonBackground.frame)
-        
-        if let image = self.attachmentButtonIcon.image {
-            let attachmentButtonIconFrame = CGRect(origin: CGPoint(x: floor((attachmentButtonFrame.width - image.size.width) * 0.5), y: floor((attachmentButtonFrame.height - image.size.height) * 0.5)), size: image.size)
-            let transition = ComponentTransition(transition)
-            transition.setPosition(view: self.attachmentButtonIcon, position: attachmentButtonIconFrame.center)
-            transition.setBounds(view: self.attachmentButtonIcon, bounds: CGRect(origin: CGPoint(), size: attachmentButtonIconFrame.size))
+        // AI-button visibility + capsule height (3-line rule). When shown, the attachment glass background
+        // grows UPWARD into a pill (bottom edge stays at textInputFrame.maxY): + at the bottom slot, AI at the top.
+        var isAIButtonVisible = false
+        var attachmentPillHeight: CGFloat = 40.0
+        if self.isAIEnabled, let node = self.richTextInputNode {
+            let threeLineHeight = self.threeLineFieldHeight(forWidth: baseWidth, node: node, metrics: metrics, bottomInset: bottomInset, textFieldInsets: textFieldInsets)
+            if textInputHeight >= threeLineHeight - 0.5 {
+                isAIButtonVisible = true
+                attachmentPillHeight = threeLineHeight
+            }
         }
-        
+
+        let attachmentButtonFrame = CGRect(origin: CGPoint(x: attachmentButtonX, y: textInputFrame.maxY - attachmentPillHeight), size: CGSize(width: 40.0, height: attachmentPillHeight))
+        attachmentButtonX += 40.0 + 6.0
+        self.attachmentButtonBackground.update(size: attachmentButtonFrame.size, cornerRadius: 40.0 * 0.5, isDark: interfaceState.theme.overallDarkAppearance, tintColor: defaultGlassTintColor, isInteractive: true, transition: ComponentTransition(transition))
+
+        transition.updateFrame(layer: self.attachmentButtonBackground.layer, frame: attachmentButtonFrame)
+        // + tap target + disabled overlay + icon are pinned to the BOTTOM 40x40 slot of the capsule.
+        transition.updateFrame(layer: self.attachmentButton.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: attachmentButtonFrame.height - 40.0), size: CGSize(width: 40.0, height: 40.0)))
+        transition.updateFrame(node: self.attachmentButtonDisabledNode, frame: CGRect(origin: CGPoint(x: attachmentButtonFrame.minX, y: attachmentButtonFrame.maxY - 40.0), size: CGSize(width: 40.0, height: 40.0)))
+
+        if let image = self.attachmentButtonIcon.image {
+            let iconCenter = CGPoint(x: 20.0, y: attachmentButtonFrame.height - 20.0)
+            let transition = ComponentTransition(transition)
+            transition.setPosition(view: self.attachmentButtonIcon, position: iconCenter)
+            transition.setBounds(view: self.attachmentButtonIcon, bounds: CGRect(origin: CGPoint(), size: image.size))
+        }
+
+        // AI button in the TOP 40x40 slot of the capsule (fades in with the 3-line rule).
+        if self.isAIEnabled {
+            let aiButton: (button: HighlightTrackingButton, icon: UIImageView)
+            if let current = self.attachmentAIButton {
+                aiButton = current
+            } else {
+                aiButton = (HighlightTrackingButton(), GlassBackgroundView.ContentImageView())
+                self.attachmentAIButton = aiButton
+                aiButton.button.highligthedChanged = { [weak self] highlighted in
+                    guard let self, let aiButton = self.attachmentAIButton else {
+                        return
+                    }
+                    if highlighted {
+                        aiButton.icon.alpha = 0.6
+                    } else {
+                        let transition: ContainedViewLayoutTransition = .animated(duration: 0.25, curve: .easeInOut)
+                        transition.updateAlpha(layer: aiButton.icon.layer, alpha: 1.0)
+                    }
+                }
+                aiButton.button.addTarget(self, action: #selector(self.aiButtonPressed), for: .touchUpInside)
+                aiButton.button.addSubview(aiButton.icon)
+                aiButton.icon.image = UIImage(bundleImageName: "Chat/Input/Text/InputAIIcon")?.withRenderingMode(.alwaysTemplate)
+                self.attachmentButtonBackground.contentView.addSubview(aiButton.icon)
+                self.attachmentButtonBackground.contentView.addSubview(aiButton.button)
+            }
+            aiButton.icon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+            let aiSlot = CGRect(origin: CGPoint(), size: CGSize(width: 40.0, height: 40.0))
+            transition.updateFrame(view: aiButton.button, frame: aiSlot)
+            if let image = aiButton.icon.image {
+                transition.updateFrame(view: aiButton.icon, frame: image.size.centered(in: aiSlot))
+            }
+            // Collapsed (pillHeight == 40): the AI slot coincides with the + slot, so it must NOT intercept + taps.
+            aiButton.button.isUserInteractionEnabled = isAIButtonVisible
+            ComponentTransition(transition).setAlpha(view: aiButton.button, alpha: isAIButtonVisible ? 1.0 : 0.0)
+            ComponentTransition(transition).setAlpha(view: aiButton.icon, alpha: isAIButtonVisible ? 1.0 : 0.0)
+        } else if let aiButton = self.attachmentAIButton {
+            self.attachmentAIButton = nil
+            aiButton.button.removeFromSuperview()
+            aiButton.icon.removeFromSuperview()
+        }
+
         if let context = self.context, let interfaceState = self.presentationInterfaceState, let editMessageState = interfaceState.editMessageState, let updatedMediaReference = editMessageState.mediaReference {
             let attachmentImageNode: TransformImageNode
             if let current = self.attachmentImageNode {
@@ -3454,7 +3509,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
             
             let attachmentImageSize = CGSize(width: 26.0, height: 26.0)
-            let attachmentImageFrame = CGRect(origin: CGPoint(x: attachmentButtonFrame.minX + floorToScreenPixels((40.0 - attachmentImageSize.width) * 0.5), y: attachmentButtonFrame.minY + floorToScreenPixels((attachmentButtonFrame.height - attachmentImageSize.height) * 0.5)), size: attachmentImageSize)
+            let attachmentImageFrame = CGRect(origin: CGPoint(x: attachmentButtonFrame.minX + floorToScreenPixels((40.0 - attachmentImageSize.width) * 0.5), y: attachmentButtonFrame.maxY - 40.0 + floorToScreenPixels((40.0 - attachmentImageSize.height) * 0.5)), size: attachmentImageSize)
             attachmentImageNode.frame = attachmentImageFrame
             
             let hasSpoiler: Bool = false
@@ -3663,111 +3718,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         
         let isExpandInputEnabled = self.enableRichTextInput
-        // The expand button occupies the same slot as the AI button; when it is shown, hide the AI button.
-        if self.isAIEnabled && !isExpandInputEnabled {
-            let aiButton: (button: HighlightTrackingButton, icon: UIImageView)
-            if let current = self.aiButton {
-                aiButton = current
-            } else {
-                aiButton = (HighlightTrackingButton(), GlassBackgroundView.ContentImageView())
-                self.aiButton = aiButton
-                aiButton.button.highligthedChanged = { [weak self] highlighted in
-                    guard let self, let aiButton = self.aiButton else {
-                        return
-                    }
-                    if highlighted {
-                        aiButton.icon.alpha = 0.6
-                    } else {
-                        let transition: ContainedViewLayoutTransition = .animated(duration: 0.25, curve: .easeInOut)
-                        transition.updateAlpha(layer: aiButton.icon.layer, alpha: 1.0)
-                    }
-                }
-                aiButton.button.addTarget(self, action: #selector(self.aiButtonPressed), for: .touchUpInside)
-                aiButton.button.addSubview(aiButton.icon)
-                aiButton.icon.image = UIImage(bundleImageName: "Chat/Input/Text/InputAIIcon")?.withRenderingMode(.alwaysTemplate)
-                self.textInputContainerBackgroundView.contentView.addSubview(aiButton.icon)
-                self.textInputContainerBackgroundView.contentView.addSubview(aiButton.button)
-            }
-            aiButton.icon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
-            if let image = aiButton.icon.image {
-                let aiButtonSize = CGSize(width: 40.0, height: 40.0)
-                let aiButtonFrame = CGRect(origin: CGPoint(x: textInputContainerBackgroundFrame.width - aiButtonSize.width - 3.0, y: textInputNodeClippingContainerFrame.minY), size: aiButtonSize)
-                transition.updateFrame(view: aiButton.button, frame: aiButtonFrame)
-                transition.updateFrame(view: aiButton.icon, frame: image.size.centered(in: aiButtonFrame))
-            }
-            let isWidePanel = width >= 500.0
-            let isTallPanel = actualTextFieldFrame.height >= 70.0
-            var inputText = ""
-            if let attributedText = self.richTextInputNode?.attributedText {
-                inputText = attributedText.string.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            let inputHasText = !inputText.isEmpty
-
-            let cornerAlpha: CGFloat = (!isWidePanel && isTallPanel && inputHasText) ? 1.0 : 0.0
-            self.heightDependentAiButtonAlpha = (!isWidePanel && isTallPanel) ? 1.0 : 0.0
-            ComponentTransition(transition).setAlpha(view: aiButton.button, alpha: cornerAlpha)
-            ComponentTransition(transition).setAlpha(view: aiButton.icon, alpha: cornerAlpha)
-
-            let inlineAiButton: (button: HighlightTrackingButton, icon: UIImageView)
-            if let current = self.inlineAiButton {
-                inlineAiButton = current
-            } else {
-                inlineAiButton = (HighlightTrackingButton(), GlassBackgroundView.ContentImageView())
-                self.inlineAiButton = inlineAiButton
-                inlineAiButton.button.highligthedChanged = { [weak self] highlighted in
-                    guard let self, let inlineAiButton = self.inlineAiButton else {
-                        return
-                    }
-                    if highlighted {
-                        inlineAiButton.icon.alpha = 0.6
-                    } else {
-                        let transition: ContainedViewLayoutTransition = .animated(duration: 0.25, curve: .easeInOut)
-                        transition.updateAlpha(layer: inlineAiButton.icon.layer, alpha: 1.0)
-                    }
-                }
-                inlineAiButton.button.addTarget(self, action: #selector(self.aiButtonPressed), for: .touchUpInside)
-                inlineAiButton.button.addSubview(inlineAiButton.icon)
-                inlineAiButton.icon.image = UIImage(bundleImageName: "Chat/Input/Text/InputAIIcon")?.withRenderingMode(.alwaysTemplate)
-                self.textInputContainerBackgroundView.contentView.addSubview(inlineAiButton.icon)
-                self.textInputContainerBackgroundView.contentView.addSubview(inlineAiButton.button)
-            }
-            inlineAiButton.icon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
-            let inlineAiButtonSize = CGSize(width: 40.0, height: 40.0)
-            let inlineAiButtonFrame = CGRect(origin: CGPoint(x: nextButtonTopRight.x - inlineAiButtonSize.width + 1.0, y: nextButtonTopRight.y + floor((minimalInputHeight - inlineAiButtonSize.height) / 2.0) - 2.0), size: inlineAiButtonSize)
-            transition.updateFrame(view: inlineAiButton.button, frame: inlineAiButtonFrame)
-            if let image = inlineAiButton.icon.image {
-                transition.updateFrame(view: inlineAiButton.icon, frame: image.size.centered(in: inlineAiButtonFrame))
-            }
-            self.inlineAiButtonAlpha = isWidePanel ? 1.0 : 0.0
-            let inlineAlpha: CGFloat = isWidePanel && inputText.count >= self.aiButtonMinTextLength ? 1.0 : 0.0
-            ComponentTransition(transition).setAlpha(view: inlineAiButton.button, alpha: inlineAlpha)
-            ComponentTransition(transition).setAlpha(view: inlineAiButton.icon, alpha: inlineAlpha)
-        } else {
-            if let aiButton = self.aiButton {
-                self.aiButton = nil
-                let aiButtonView = aiButton.button
-                let aiButtonIconView = aiButton.icon
-                transition.updateAlpha(layer: aiButton.button.layer, alpha: 0.0, completion: { [weak aiButtonView] _ in
-                    aiButtonView?.removeFromSuperview()
-                })
-                transition.updateAlpha(layer: aiButton.icon.layer, alpha: 0.0, completion: { [weak aiButtonIconView] _ in
-                    aiButtonIconView?.removeFromSuperview()
-                })
-                self.heightDependentAiButtonAlpha = 0.0
-            }
-
-            if let inlineAiButton = self.inlineAiButton {
-                self.inlineAiButton = nil
-                let inlineButtonView = inlineAiButton.button
-                let inlineIconView = inlineAiButton.icon
-                transition.updateAlpha(layer: inlineAiButton.button.layer, alpha: 0.0, completion: { [weak inlineButtonView] _ in
-                    inlineButtonView?.removeFromSuperview()
-                })
-                transition.updateAlpha(layer: inlineAiButton.icon.layer, alpha: 0.0, completion: { [weak inlineIconView] _ in
-                    inlineIconView?.removeFromSuperview()
-                })
-            }
-        }
 
         if isExpandInputEnabled {
             let expandButton: (button: HighlightTrackingButton, icon: UIImageView)
@@ -3908,6 +3858,21 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     @objc private func aiButtonPressed() {
         self.interfaceInteraction?.openAICompose()
+    }
+
+    /// The field's glass-background height (text region, excluding any accessory panel) at exactly 3 lines —
+    /// the capsule height when the AI button is shown. Measured for real via the active input node
+    /// (`measuredTextFieldHeight`) and cached per (width, fontSize); recomputed only when either changes.
+    private func threeLineFieldHeight(forWidth width: CGFloat, node: ChatRichTextInputNode, metrics: LayoutMetrics, bottomInset: CGFloat, textFieldInsets: UIEdgeInsets) -> CGFloat {
+        let baseFontSize: CGFloat = 17.0   // the field is pinned to 17 (see calclulateTextFieldMinHeight)
+        if let cache = self.threeLineHeightCache, cache.width == width, cache.baseFontSize == baseFontSize {
+            return cache.value
+        }
+        // ceil + panelHeight mirror calculateTextFieldMetrics' `ceil(measuredHeight)` and panelHeight(textFieldHeight:).
+        let threeLineTextHeight = ceil(type(of: node).measuredTextFieldHeight(forWidth: width, lineCount: 3))
+        let value = self.panelHeight(textFieldHeight: threeLineTextHeight, metrics: metrics, bottomInset: bottomInset) - textFieldInsets.top
+        self.threeLineHeightCache = ThreeLineHeightCacheEntry(width: width, baseFontSize: baseFontSize, value: value)
+        return value
     }
 
     /// Maps the app theme to the rich-text composer backend's theme colors (see the composer-theme spec).
@@ -4539,25 +4504,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        if let aiButton = self.aiButton {
-            let transition: ContainedViewLayoutTransition = .immediate
-            var inputText = ""
-            if let attributedText = self.richTextInputNode?.attributedText {
-                inputText = attributedText.string.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            let inputHasText = !inputText.isEmpty
-
-            let cornerAlpha: CGFloat = inputHasText ? self.heightDependentAiButtonAlpha : 0.0
-            ComponentTransition(transition).setAlpha(view: aiButton.button, alpha: cornerAlpha)
-            ComponentTransition(transition).setAlpha(view: aiButton.icon, alpha: cornerAlpha)
-
-            if let inlineAiButton = self.inlineAiButton {
-                let inlineAlpha: CGFloat = self.inlineAiButtonAlpha > 0.0 && inputText.count >= self.aiButtonMinTextLength ? 1.0 : 0.0
-                ComponentTransition(transition).setAlpha(view: inlineAiButton.button, alpha: inlineAlpha)
-                ComponentTransition(transition).setAlpha(view: inlineAiButton.icon, alpha: inlineAlpha)
-            }
-        }
-
         if let expandButton = self.expandButton {
             let transition: ContainedViewLayoutTransition = .immediate
             var inputText = ""
@@ -5765,12 +5711,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         for (_, button) in self.accessoryItemButtons {
             if let result = button.hitTest(self.view.convert(point, to: button), with: event) {
-                return result
-            }
-        }
-
-        if let inlineAiButton = self.inlineAiButton, !inlineAiButton.button.alpha.isZero {
-            if let result = inlineAiButton.button.hitTest(self.view.convert(point, to: inlineAiButton.button), with: event) {
                 return result
             }
         }
