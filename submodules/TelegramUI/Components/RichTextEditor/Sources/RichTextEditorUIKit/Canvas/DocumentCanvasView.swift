@@ -349,6 +349,11 @@ final class DocumentCanvasView: UIView {
     /// appear to pop in "from nothing" with no visible cursor (device-log-verified). Set BEFORE `begin(...)`
     /// (so the caret is already solid when the loupe captures it) and cleared on drag end.
     var loupeDragActive = false
+    /// True when the current long-press `.began` was consumed as the follow-up tap of a double-/triple-tap
+    /// (see `handleLoupeBegan`) rather than starting a loupe cursor-drag. While set, the long-press `.changed`
+    /// / `.ended` handlers no-op (no `setCaret`, no loupe teardown) so the word/paragraph selection they made
+    /// survives the rest of the gesture. Reset when the gesture ends.
+    var loupeConsumedAsMultiTap = false
     /// The steady caret's normal accent, saved while a loupe drag recolors it to the desaturated "shadow" gray
     /// (the snapped landing caret is the gray shadow; the gliding `transientCaretView` is the accent). Restored
     /// on drag end.
@@ -360,6 +365,9 @@ final class DocumentCanvasView: UIView {
     var selectionDragGrabOffset: CGSize = .zero
     var draggingTableKnob: TableRangeEnd?
     var selectionHandlePan: UIPanGestureRecognizer?
+    // The loupe / move-cursor long-press. Held so `gestureRecognizerShouldBegin` can fail it on a touch that
+    // lands on an active selection handle (letting the handle pan grab the knob instead) — see that method.
+    var loupeLongPress: LocationAdaptiveLongPressGestureRecognizer?
     // True while an interactive selection-handle drag is in flight. While set, the per-touch-move selection
     // setters (`setSelectionHead`/`setSelectionAnchor`) SKIP the `inputDelegate` selection bracket; one
     // bracket fires when the drag ends (`endCoalescedSelectionDrag`). Driving the keyboard's autocorrect/

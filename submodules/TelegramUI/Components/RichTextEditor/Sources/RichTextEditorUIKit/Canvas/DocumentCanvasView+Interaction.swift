@@ -21,6 +21,11 @@ extension DocumentCanvasView {
                     ? DocumentCanvasView.loupeDelayNearCursor
                     : DocumentCanvasView.loupeDelayFarFromCursor
             }
+            // Delegate = self so `gestureRecognizerShouldBegin` is consulted for the long-press (same path the
+            // handle pan uses) — it fails the long-press on a touch that lands on an active selection handle,
+            // so the handle pan can grab the knob instead of the loupe collapsing the selection.
+            longPress.delegate = self
+            loupeLongPress = longPress
             [tap, longPress].forEach { addGestureRecognizer($0) }
             // Arbitration with the enclosing UIScrollView's pan is intentionally gate-only (see
             // gestureRecognizerShouldBegin) pending on-device verification — do NOT add require(toFail:) or
@@ -157,6 +162,37 @@ extension DocumentCanvasView {
         }
     }
 
+    /// The long-press `.began` multi-tap check, split out with an injected timestamp so it's unit-testable.
+    /// The loupe's near-cursor delay (`loupeDelayNearCursor`) is so short that the follow-up tap of a
+    /// double-/triple-tap lands on the just-placed caret and fires THIS long-press instead of completing as a
+    /// tap — which is why double-tap-to-select-a-word became nearly impossible. When the press repeats a
+    /// recent tap (the same window/slop test as `handleTap`, sharing `tapCount`/`lastTapTime`), consume it AS
+    /// that tap: escalate to a word (or paragraph, 3rd+) selection + menu and return `true` so the caller
+    /// suppresses the loupe cursor-drag. Otherwise, record a lone NEAR-cursor press as a fresh tap #1 (so the
+    /// NEXT tap escalates even when the first one was itself a loupe) and return `false` to run the normal loupe.
+    func handleLoupeBegan(at point: CGPoint, time now: TimeInterval) -> Bool {
+        let p = closestGlobalPosition(to: point)
+        if now - lastTapTime < Self.multiTapWindow,
+           hypot(point.x - lastTapLocation.x, point.y - lastTapLocation.y) < Self.multiTapSlop {
+            tapCount += 1
+            lastTapTime = now
+            lastTapLocation = point
+            ensureFirstResponder()
+            if tapCount >= 3 { selectParagraph(at: p) } else { selectWord(at: p) }
+            presentEditMenu()
+            return true
+        }
+        // A lone loupe that grabbed NEAR the caret stands in for a 1st tap, so a rapid follow-up escalates to
+        // a word even when the first tap was itself a loupe. A deliberate FAR long-press is not a tap — leave
+        // the multi-tap state untouched so it can't be mistaken for the start of a double-tap.
+        if isPointNearCursor(point) {
+            tapCount = 1
+            lastTapTime = now
+            lastTapLocation = point
+        }
+        return false
+    }
+
     /// Testable core of the single-tap handler (`point` in canvas coordinates).
     func performSingleTap(at point: CGPoint) {
         let wasMenuVisible = editMenuVisible               // capture before the system auto-dismisses on touch-down
@@ -249,6 +285,14 @@ extension DocumentCanvasView {
         let p = closestGlobalPosition(to: point)
         switch g.state {
         case .began:
+            // A double-/triple-tap's follow-up tap can fire this near-instant loupe instead of completing as a
+            // tap (the near-cursor delay is tiny). If so, consume it as the multi-tap it is — select word/
+            // paragraph + present the menu — and skip the loupe cursor-drag for the rest of this gesture.
+            if handleLoupeBegan(at: point, time: Date().timeIntervalSinceReferenceDate) {
+                loupeConsumedAsMultiTap = true
+                return
+            }
+            loupeConsumedAsMultiTap = false
             dismissEditMenu()
             // Mark the loupe drag active BEFORE `setCaret` so the caret it renders is already SOLID (see
             // `loupeDragActive` / `updateCaretView`) by the time `begin(...)` below captures it as the
@@ -286,6 +330,7 @@ extension DocumentCanvasView {
                 transientCaretView.show(animated: true)
             }
         case .changed:
+            if loupeConsumedAsMultiTap { return }   // consumed as a double-tap → keep the word selection, ignore drag
             setCaret(global: p)
             if #available(iOS 17.0, *) {
                 // Keep the borrowed system cursor tracking (grow anchor) but NEAR-INVISIBLE (its native blink
@@ -302,6 +347,10 @@ extension DocumentCanvasView {
                                    trackingCaret: caret != .zero)
             }
         case .ended, .cancelled, .failed:
+            if loupeConsumedAsMultiTap {   // consumed as a double-tap → nothing to tear down; keep the selection + menu
+                loupeConsumedAsMultiTap = false
+                return
+            }
             if let accent = loupeSavedCaretAccent {   // restore the caret's accent (was recolored gray for the drag)
                 caretView.accentColor = accent
                 loupeSavedCaretAccent = nil
@@ -374,11 +423,24 @@ extension DocumentCanvasView {
 @available(iOS 13.0, *)
 extension DocumentCanvasView: UIGestureRecognizerDelegate {
     override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        // The loupe / move-cursor long-press must NOT begin on an active selection handle: it fires on the
+        // stationary hold, and the handle pan only begins once the finger MOVES, so without this gate the
+        // long-press wins the race, `setCaret`s the caret at the touch (collapsing the selection), and the
+        // handles vanish before they can be grabbed. Failing it here lets the handle pan own that touch.
+        if g === loupeLongPress { return shouldBeginCursorLongPress(at: g.location(in: self)) }
         guard g === selectionHandlePan else { return true }   // only gate our handle pan; everything else passes
         return isSelectionDragTouch(g.location(in: self))
     }
 
     // MARK: - Gesture predicates
+
+    /// Whether the loupe / move-cursor long-press should be allowed to begin at `point`. It yields to an
+    /// active selection handle (an "active item") so the handle can be grabbed — everywhere else (including a
+    /// collapsed caret, where there are no handles) it proceeds. Uses the same handle hit-region as the
+    /// handle-pan gate, so "on a handle" is defined identically for both recognizers.
+    func shouldBeginCursorLongPress(at point: CGPoint) -> Bool {
+        return !isSelectionDragTouch(point)
+    }
 
     /// True when a touch should begin a selection-handle / table-knob DRAG rather than a scroll. Shared by
     /// the canvas handle-pan gate (returns this) and the inner table scroll gate (begins only when this is

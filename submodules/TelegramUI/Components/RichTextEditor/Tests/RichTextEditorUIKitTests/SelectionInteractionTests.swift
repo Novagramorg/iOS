@@ -153,6 +153,51 @@ final class SelectionInteractionTests: XCTestCase {
         XCTAssertFalse(handle.point(inside: CGPoint(x: local.midX, y: local.maxY + tol + 5), with: nil), "beyond tolerance")
     }
 
+    // MARK: - The move-cursor long-press yields to an active selection handle
+
+    func test_cursorLongPress_isBlocked_onAnActiveSelectionHandle_soTheHandleCanBeGrabbed() {
+        // With a ranged selection the two handle lollipops show. Pressing one to drag it must NOT let the
+        // loupe / move-cursor long-press begin — otherwise it fires on the stationary hold (before the handle
+        // pan can move), collapses the selection via setCaret, and the handles vanish before they can be
+        // grabbed. So the long-press gate fails on a touch that lands on a handle (an "active item").
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        v.anchor = v.boxes[0].textStart
+        v.setSelectionHead(global: v.boxes[0].textStart + 5)
+
+        let startCaret = v.caretRect(for: DocumentTextPosition(v.selFrom))
+        let endCaret = v.caretRect(for: DocumentTextPosition(v.selTo))
+        XCTAssertFalse(v.shouldBeginCursorLongPress(at: CGPoint(x: startCaret.midX, y: startCaret.midY)),
+                       "the long-press must not begin on the START handle — the handle pan owns that touch")
+        XCTAssertFalse(v.shouldBeginCursorLongPress(at: CGPoint(x: endCaret.midX, y: endCaret.midY)),
+                       "the long-press must not begin on the END handle")
+    }
+
+    func test_cursorLongPress_stillBegins_awayFromTheHandles_whileASelectionIsActive() {
+        // Only a touch ON a handle blocks the long-press; a long-press elsewhere in the document still moves
+        // the cursor (standard iOS: it collapses the selection at the pressed point).
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        v.anchor = v.boxes[0].textStart
+        v.setSelectionHead(global: v.boxes[0].textStart + 5)
+
+        let endCaret = v.caretRect(for: DocumentTextPosition(v.selTo))
+        let farPoint = CGPoint(x: 300, y: endCaret.midY)   // far to the right of both endpoints
+        XCTAssertTrue(v.shouldBeginCursorLongPress(at: farPoint),
+                      "away from both handles the move-cursor long-press proceeds normally")
+    }
+
+    func test_cursorLongPress_alwaysBegins_whenSelectionIsCollapsed() {
+        // No ranged selection ⇒ no handles ⇒ nothing to protect; grabbing the caret with a long-press must
+        // still work even directly on the caret.
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        v.setCaret(global: v.boxes[0].textStart + 2)
+        let caret = v.caretRect(for: DocumentTextPosition(v.head))
+        XCTAssertTrue(v.shouldBeginCursorLongPress(at: CGPoint(x: caret.midX, y: caret.midY)),
+                      "with a collapsed selection the long-press begins even on the caret (grab-the-cursor)")
+    }
+
     // MARK: - Outer scroll yields to a selection-handle grip
 
     func test_gripYieldingScrollView_yieldsOnlyNearASelectionGrip() {
