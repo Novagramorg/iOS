@@ -16364,7 +16364,7 @@ Error: %8$@";
 "SocksProxySetup.QrCode.TgLink" = "tg:// link";
 "SocksProxySetup.QrCode.TMeLink" = "t.me link";
 
-"WebBrowser.OpenLinksInfo" = "Open links inside Telegram instead of your default browser for more privacy.";
+"WebBrowser.OpenLinksInfo" = "Open links inside Novagram instead of your default browser for more privacy.";
 "WebBrowser.Exceptions.OpenInApp" = "OPEN IN-APP";
 "WebBrowser.Exceptions.DontOpenInApp" = "DON'T OPEN IN-APP";
 "WebBrowser.Exceptions.InAppInfo" = "These sites will still be opened in-app.";
