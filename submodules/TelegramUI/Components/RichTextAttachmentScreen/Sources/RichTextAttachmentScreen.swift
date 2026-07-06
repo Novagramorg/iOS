@@ -1055,6 +1055,7 @@ final class RichTextAttachmentScreenComponent: Component {
                                 
                                 let currentContent = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
                                 let currentPage = instantPage(from: currentContent)
+                                let _ = currentPage
                                 
                                 /*if !self.editor.selectedText().isEmpty {
                                     let initialText = ComposedRichMessage.rich(instantPage: currentPage)
