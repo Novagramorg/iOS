@@ -255,6 +255,7 @@ public struct ChatInputContent: Equatable {
             case .table: return false
             case .pullQuote: return false
             case let .blockQuote(bq):
+                if !bq.author.isEmpty { return false }
                 // FLAT-ONLY rule: expressible only when the quote is non-collapsed AND every child block is
                 // a plain body paragraph with no list membership (the message-entity blockquote can represent
                 // exactly one level of flat-text quote).
@@ -292,12 +293,31 @@ extension ChatInputContent: Codable {
 /// Mirrors `InstantPage.blockQuote`; the `collapsed` flag maps 1:1 to the wire field.
 /// `collapsed == true` is the folded (hidden) state (one " " placeholder on the flat axis);
 /// `collapsed == false` is the visible expanded state (inner content on the flat axis).
-public struct ChatInputBlockQuote: Equatable, Codable {
+public struct ChatInputBlockQuote: Equatable {
     public var content: ChatInputContent
     public var collapsed: Bool
-    public init(content: ChatInputContent, collapsed: Bool) {
+    /// Optional attribution ("author") line. `[]` = empty. Off the flat axis (never in plainText). Per-node.
+    public var author: [ChatInputRun]
+    public init(content: ChatInputContent, collapsed: Bool, author: [ChatInputRun] = []) {
         self.content = content
         self.collapsed = collapsed
+        self.author = author
+    }
+}
+
+extension ChatInputBlockQuote: Codable {
+    private enum CodingKeys: String, CodingKey { case content, collapsed, author }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.content = try c.decode(ChatInputContent.self, forKey: .content)
+        self.collapsed = try c.decode(Bool.self, forKey: .collapsed)
+        self.author = try c.decodeIfPresent([ChatInputRun].self, forKey: .author) ?? []
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(content, forKey: .content)
+        try c.encode(collapsed, forKey: .collapsed)
+        try c.encode(author, forKey: .author)
     }
 }
 
@@ -468,10 +488,26 @@ public struct ChatInputCode: Equatable, Codable {
     public var text: String { runs.map(\.text).joined() }
 }
 
-public struct ChatInputPullQuote: Equatable, Codable {
+public struct ChatInputPullQuote: Equatable {
     public var runs: [ChatInputRun]
-    public init(runs: [ChatInputRun] = []) { self.runs = runs }
+    /// Optional attribution ("author") line. `[]` = empty. Off the flat axis (never in plainText).
+    public var author: [ChatInputRun]
+    public init(runs: [ChatInputRun] = [], author: [ChatInputRun] = []) { self.runs = runs; self.author = author }
     public var text: String { runs.map(\.text).joined() }
+}
+
+extension ChatInputPullQuote: Codable {
+    private enum CodingKeys: String, CodingKey { case runs, author }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.runs = try c.decode([ChatInputRun].self, forKey: .runs)
+        self.author = try c.decodeIfPresent([ChatInputRun].self, forKey: .author) ?? []
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(runs, forKey: .runs)
+        try c.encode(author, forKey: .author)
+    }
 }
 
 // MARK: - Structural value types (Document-parity)

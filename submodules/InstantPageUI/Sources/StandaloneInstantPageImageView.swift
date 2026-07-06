@@ -89,7 +89,8 @@ public final class StandaloneInstantPageImageView: UIView {
             imageTintColor: nil,
             overlayPanelColor: .white,
             separatorColor: UIColor(rgb: 0xe2e2e2),
-            secondaryControlColor: .black
+            secondaryControlColor: .black,
+            quoteAccentColor: .black
         )
     }
 }

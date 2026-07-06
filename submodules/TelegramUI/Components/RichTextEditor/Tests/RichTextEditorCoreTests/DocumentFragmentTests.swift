@@ -125,6 +125,77 @@ final class DocumentFragmentTests: XCTestCase {
         XCTAssertNil(d.topLevelTextLocus(globalCaret: 1))
     }
 
+    // MARK: - Author forwarding (regeneratingIDs / extractFragment must not silently drop a quote's author)
+
+    func test_regeneratingTopLevelIDs_preservesPullQuoteAuthor() {
+        let pq = PullQuote(id: BlockID("pq"), runs: [TextRun(text: "abcd")], author: [TextRun(text: "Ada")])
+        let regen = Document(blocks: [.pullQuote(pq)]).regeneratingTopLevelIDs()
+        guard case .pullQuote(let r) = regen.blocks[0] else { return XCTFail() }
+        XCTAssertNotEqual(r.id, pq.id)
+        XCTAssertEqual(r.author.map(\.text).joined(), "Ada")
+    }
+
+    func test_regeneratingTopLevelIDs_preservesBlockQuoteAuthor() {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi")]))],
+                            collapsed: false,
+                            author: [TextRun(text: "Grace")])
+        let regen = Document(blocks: [.blockQuote(bq)]).regeneratingTopLevelIDs()
+        guard case .blockQuote(let r) = regen.blocks[0] else { return XCTFail() }
+        XCTAssertNotEqual(r.id, bq.id)
+        XCTAssertEqual(r.author.map(\.text).joined(), "Grace")
+    }
+
+    func test_extract_blockQuote_fullyCovered_preservesAuthor() {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi")]))],
+                            collapsed: false,
+                            author: [TextRun(text: "Grace")])
+        let d = Document(blocks: [.blockQuote(bq)])
+        let size = DocumentTree.documentSize(d)
+        let f = d.extractFragment(globalFrom: 0, globalTo: size)
+        guard case .blockQuote(let got) = f.blocks[0] else { return XCTFail("extracted block is not a block quote") }
+        XCTAssertEqual(got.author.map(\.text).joined(), "Grace")
+    }
+
+    func test_extract_pullQuote_fullTextCapture_preservesAuthor() {
+        // Whole pull TEXT captured (the author sits off the flat text axis) → author carries over.
+        let pq = PullQuote(id: BlockID("pq"), runs: [TextRun(text: "abcd")], author: [TextRun(text: "Ada")])
+        let d = Document(blocks: [.pullQuote(pq)])
+        let f = d.extractFragment(globalFrom: 2, globalTo: 6)   // pull text is at global [2, 6) (container open 0, pullPara open 1)
+        guard case .pullQuote(let got) = f.blocks[0] else { return XCTFail("no pull quote captured") }
+        XCTAssertEqual(got.text, "abcd")
+        XCTAssertEqual(got.author.map(\.text).joined(), "Ada")
+    }
+
+    func test_extract_pullQuote_partialTextCapture_dropsAuthor() {
+        // A partial pull-text copy carries no author — it's off the flat text axis being sliced.
+        let pq = PullQuote(id: BlockID("pq"), runs: [TextRun(text: "abcd")], author: [TextRun(text: "Ada")])
+        let d = Document(blocks: [.pullQuote(pq)])
+        let f = d.extractFragment(globalFrom: 3, globalTo: 5)   // partial: "bc" only (pull text at [2,6))
+        guard case .pullQuote(let got) = f.blocks[0] else { return XCTFail("no pull quote captured") }
+        XCTAssertEqual(got.text, "bc")
+        XCTAssertEqual(got.author, [])
+    }
+
+    func test_extract_pullQuote_positionAxisIsCursorPlus2_forFullAndPartialCapture() {
+        // Regression: after Task 2 a pull quote maps to a `.blockQuote` container [pullPara, authorPara],
+        // so its pull text starts at cursor + 2 (container open + pullPara open), NOT the shared cursor + 1.
+        // For a lone pull quote that global range is [2, 6): container open 0, pullPara open 1, text 2..6.
+        let pq = PullQuote(id: BlockID("pq"), runs: [TextRun(text: "abcd")], author: [TextRun(text: "Ann")])
+        let d = Document(blocks: [.pullQuote(pq)])
+        // (1) full text captured ⇒ author carried.
+        let full = d.extractFragment(globalFrom: 2, globalTo: 6)
+        guard case .pullQuote(let gotFull) = full.blocks[0] else { return XCTFail("full: no pull quote captured") }
+        XCTAssertEqual(gotFull.text, "abcd")
+        XCTAssertEqual(gotFull.author.map(\.text).joined(), "Ann")
+        // (2) partial text captured ⇒ no author.
+        let partial = d.extractFragment(globalFrom: 3, globalTo: 5)
+        guard case .pullQuote(let gotPartial) = partial.blocks[0] else { return XCTFail("partial: no pull quote captured") }
+        XCTAssertEqual(gotPartial.text, "bc")
+        XCTAssertEqual(gotPartial.author, [])
+    }
+
     // MARK: - Task 3: insertingFragment tests
 
     func code(_ id: String, _ t: String) -> Block { .code(CodeBlock(id: BlockID(id), runs: [TextRun(text: t)])) }
@@ -319,5 +390,29 @@ final class DocumentFragmentTests: XCTestCase {
         guard case .paragraph(let last) = r.document.blocks[bulletBIndex] else { return XCTFail() }
         XCTAssertEqual(last.text, "b")
         XCTAssertEqual(r.caret, r.document.globalTextStart(ofBlockAt: bulletBIndex) + last.utf16Count)
+    }
+
+    // MARK: - Pull-quote paste caret (a pull quote's first-text offset is cursor + 2, not + 1)
+
+    // CASE 7 — paste a pull quote at the END of "abc" (the empty host tail is dropped, like the bullet-list
+    // CASE 6 above) → the caret must land at the TRUE end of the pasted pull TEXT, not one UTF-16 unit short.
+    // A pull quote is a `.blockQuote(children: [pullTextPara, authorPara])` container (`DocumentTree.node(for:)`),
+    // so its pull text is nested one level deeper than a plain paragraph/code block's text.
+    func test_insert_pullQuoteAtParagraphEnd_caretAtTrueEndOfPastedPullText() {
+        let host = doc(para("h", "abc"))
+        let pq = PullQuote(id: BlockID("pq"), runs: [TextRun(text: "wisdom")], author: [TextRun(text: "Ada")])
+        let frag = Document(blocks: [.pullQuote(pq)])
+        let r = host.insertingFragment(frag, atGlobal: endOfFirstParagraph(host))!
+        XCTAssertEqual(r.document.blocks.count, 2, "the empty host tail must be dropped, leaving [abc, pullQuote]")
+        guard case .pullQuote(let pasted) = r.document.blocks[1] else { return XCTFail("expected a pasted pull quote") }
+        XCTAssertEqual(pasted.text, "wisdom")
+        // The true end of the pull text = its globalTextStart (container-open + pullPara-open = +2) + its length.
+        let expectedCaret = r.document.globalTextStart(ofBlockAt: 1) + pasted.utf16Count
+        XCTAssertEqual(r.caret, expectedCaret)
+        // Pin the absolute value too, so a regression in `globalTextStart` itself can't cancel out against
+        // the relative assertion above: host "abc" is nodeSize 5 (open@0, text@1..4, close@4); the pull
+        // quote's container opens @5, its pull-text paragraph opens @6, so the pull text itself starts @7;
+        // "wisdom" is 6 UTF-16 units → true end-of-text caret is 13.
+        XCTAssertEqual(r.caret, 13)
     }
 }

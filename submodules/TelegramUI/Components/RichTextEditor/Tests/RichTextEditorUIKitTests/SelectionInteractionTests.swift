@@ -153,6 +153,181 @@ final class SelectionInteractionTests: XCTestCase {
         XCTAssertFalse(handle.point(inside: CGPoint(x: local.midX, y: local.maxY + tol + 5), with: nil), "beyond tolerance")
     }
 
+    // MARK: - The move-cursor long-press yields to an active selection handle
+
+    func test_cursorLongPress_isBlocked_onAnActiveSelectionHandle_soTheHandleCanBeGrabbed() {
+        // With a ranged selection the two handle lollipops show. Pressing one to drag it must NOT let the
+        // loupe / move-cursor long-press begin — otherwise it fires on the stationary hold (before the handle
+        // pan can move), collapses the selection via setCaret, and the handles vanish before they can be
+        // grabbed. So the long-press gate fails on a touch that lands on a handle (an "active item").
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        v.anchor = v.boxes[0].textStart
+        v.setSelectionHead(global: v.boxes[0].textStart + 5)
+
+        let startCaret = v.caretRect(for: DocumentTextPosition(v.selFrom))
+        let endCaret = v.caretRect(for: DocumentTextPosition(v.selTo))
+        XCTAssertFalse(v.shouldBeginCursorLongPress(at: CGPoint(x: startCaret.midX, y: startCaret.midY)),
+                       "the long-press must not begin on the START handle — the handle pan owns that touch")
+        XCTAssertFalse(v.shouldBeginCursorLongPress(at: CGPoint(x: endCaret.midX, y: endCaret.midY)),
+                       "the long-press must not begin on the END handle")
+    }
+
+    func test_cursorLongPress_stillBegins_awayFromTheHandles_whileASelectionIsActive() {
+        // Only a touch ON a handle blocks the long-press; a long-press elsewhere in the document still moves
+        // the cursor (standard iOS: it collapses the selection at the pressed point).
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        v.anchor = v.boxes[0].textStart
+        v.setSelectionHead(global: v.boxes[0].textStart + 5)
+
+        let endCaret = v.caretRect(for: DocumentTextPosition(v.selTo))
+        let farPoint = CGPoint(x: 300, y: endCaret.midY)   // far to the right of both endpoints
+        XCTAssertTrue(v.shouldBeginCursorLongPress(at: farPoint),
+                      "away from both handles the move-cursor long-press proceeds normally")
+    }
+
+    func test_cursorLongPress_alwaysBegins_whenSelectionIsCollapsed() {
+        // No ranged selection ⇒ no handles ⇒ nothing to protect; grabbing the caret with a long-press must
+        // still work even directly on the caret.
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        v.setCaret(global: v.boxes[0].textStart + 2)
+        let caret = v.caretRect(for: DocumentTextPosition(v.head))
+        XCTAssertTrue(v.shouldBeginCursorLongPress(at: CGPoint(x: caret.midX, y: caret.midY)),
+                      "with a collapsed selection the long-press begins even on the caret (grab-the-cursor)")
+    }
+
+    // MARK: - Long-press loupe drag reports the selection ONCE (at the final position), not per frame
+
+    func test_setCaret_withReportSuppressed_defersHostReport_untilTheDragEnds() {
+        // A long-press loupe cursor drag moves the caret every frame, but the host must be told the selection
+        // ONCE at the final position (the spacebar-trackpad model) — NOT continuously. Mid-drag the caret is
+        // set with `reportSelectionChange: false`, which still moves the caret + brackets the input delegate
+        // (the OS stays in sync) but suppresses `onSelectionChange` (the host report). The terminal setter
+        // reports exactly once.
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        var reportCount = 0
+        v.onSelectionChange = { reportCount += 1 }
+
+        // Per-frame drag moves: caret advances, host is NOT told.
+        v.setCaret(global: v.boxes[0].textStart + 1, reportSelectionChange: false)
+        v.setCaret(global: v.boxes[0].textStart + 2, reportSelectionChange: false)
+        v.setCaret(global: v.boxes[0].textStart + 3, reportSelectionChange: false)
+        XCTAssertEqual(reportCount, 0, "a mid-drag caret move does not report the selection to the host")
+        XCTAssertEqual(v.head, v.boxes[0].textStart + 3, "the caret still moves each frame (just silently)")
+
+        // The drag's terminal setter (default: reports) fires exactly one host report at the final position.
+        v.setCaret(global: v.boxes[0].textStart + 3)
+        XCTAssertEqual(reportCount, 1, "the final caret position is reported to the host exactly once")
+    }
+
+    func test_loupeDrag_coalescesInputDelegate_soKeyboardSuggestionsDoNotChurn() {
+        // The keyboard recomputes its autocorrect/candidate bar on every `selectionDidChange` — so a per-frame
+        // input-delegate bracket during the cursor drag makes the suggestions visibly JUMP. The drag coalesces
+        // those brackets (`beginCoalescedSelectionDrag` + `setCaret(reportSelectionChange:false)` skipping the
+        // bracket while coalescing) and fires exactly ONE at the end (`endCoalescedSelectionDrag`).
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        let spy = SelectionDelegateSpy()
+        v.inputDelegate = spy
+
+        v.beginCoalescedSelectionDrag()
+        v.setCaret(global: v.boxes[0].textStart + 1, reportSelectionChange: false)
+        v.setCaret(global: v.boxes[0].textStart + 2, reportSelectionChange: false)
+        v.setCaret(global: v.boxes[0].textStart + 3, reportSelectionChange: false)
+        XCTAssertEqual(spy.didChangeCount, 0,
+                       "no per-frame selectionDidChange during the drag → the keyboard suggestion bar doesn't churn")
+
+        v.endCoalescedSelectionDrag()
+        XCTAssertEqual(spy.didChangeCount, 1, "the keyboard is told the final selection exactly once, at the end")
+    }
+
+    // MARK: - Dismiss the keyboard's pending autocorrect on a selection/cursor-move
+
+    func test_dropPendingAutocorrection_notifiesKeyboardOfAJiggle_thenRestoresTheRealSelection() {
+        // The keyboard drops its pending autocorrect when it sees the selection change to a DIFFERENT range and
+        // back (the legacy `dropAutocorrectioniOS16` trick — a single selectionDidChange for the real selection
+        // isn't enough, as `applySelection` already sends one). `dropPendingAutocorrection` performs that jiggle
+        // at the input-delegate level, leaving the real selection untouched.
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        v.setCaret(global: v.boxes[0].textStart + 5)   // caret inside "world"
+        let realHead = v.head
+        let spy = SelectionDelegateSpy()
+        v.inputDelegate = spy
+        spy.reset()
+
+        v.dropPendingAutocorrection()
+
+        XCTAssertEqual(v.head, realHead, "the real caret is restored after the jiggle")
+        XCTAssertEqual(v.anchor, realHead, "the real anchor is restored after the jiggle")
+        XCTAssertTrue(spy.headSequence.contains { $0 != realHead },
+                      "the keyboard saw an intermediate (fake) selection — the signal that drops the pending autocorrect")
+        XCTAssertEqual(spy.headSequence.last, realHead, "the final notification restores the real selection")
+    }
+
+    func test_dropPendingAutocorrection_isNoOp_whileComposingMarkedText() {
+        // While an IME composition / inline prediction is active the keyboard owns the marked range; a jiggle
+        // there would fight it. `dropPendingAutocorrection` no-ops when marked text is present.
+        let v = canvasWithInteraction()
+        _ = v.becomeFirstResponder()
+        v.setCaret(global: v.boxes[0].textStart + 2)
+        v.setMarkedText("ab", selectedRange: NSRange(location: 2, length: 0))
+        let spy = SelectionDelegateSpy()
+        v.inputDelegate = spy
+        spy.reset()
+
+        v.dropPendingAutocorrection()
+        XCTAssertEqual(spy.didChangeCount, 0, "no keyboard jiggle while marked text (composition/prediction) is active")
+    }
+
+    func test_selectAll_blocksTheKeyboardsAutocorrectCommit_soTypedTextIsKept() {
+        // The primary case: ⌘A / Select-All must DISMISS a pending correction, not accept it. Device-log-verified
+        // mechanism: the keyboard commits via a text change (`replace`/`insertText`) fired SYNCHRONOUSLY in
+        // response to Select-All's own `selectionDidChange` (the selection leaving the word). `applySelection`
+        // holds `isDroppingPendingAutocorrection` across that bracket so the commit no-ops — text kept. This spy
+        // mimics the keyboard by attempting an `insertText` on that bracket.
+        let v = canvasWithInteraction()   // "Hello world"
+        _ = v.becomeFirstResponder()
+        v.setCaret(global: v.boxes[0].textStart + 5)
+        let textBefore = paragraphText(v)
+        let spy = KeyboardCommitSpy(canvas: v)
+        v.inputDelegate = spy
+
+        v.selectAllText()
+
+        XCTAssertTrue(spy.didAttemptCommit, "precondition: the keyboard-spy tried to commit during Select-All's bracket")
+        XCTAssertEqual(paragraphText(v), textBefore,
+                       "Select-All blocks the keyboard's autocorrect-commit — typed text kept (dismissed, not accepted)")
+        XCTAssertNotEqual(v.selFrom, v.selTo, "Select-All still produced a range")
+    }
+
+    func test_dropPendingAutocorrection_blocksTheKeyboardsCommitAttempt_soTextIsUnchanged() {
+        // The jiggle provokes the keyboard to COMMIT its pending autocorrection (a text change) synchronously.
+        // To DISMISS (not accept), that commit must be BLOCKED. This spy mimics the keyboard by attempting an
+        // `insertText` on the first selectionDidChange during the jiggle; the block must make it a no-op, so the
+        // document text is unchanged. (Without the block the CMD+A "accepts instead of dismisses" bug returns.)
+        let v = canvasWithInteraction()   // one paragraph: "Hello world"
+        _ = v.becomeFirstResponder()
+        v.setCaret(global: v.boxes[0].textStart + 5)
+        let textBefore = paragraphText(v)
+        let spy = KeyboardCommitSpy(canvas: v)
+        v.inputDelegate = spy
+
+        v.dropPendingAutocorrection()
+
+        XCTAssertTrue(spy.didAttemptCommit, "precondition: the spy tried to commit during the jiggle")
+        XCTAssertEqual(paragraphText(v), textBefore,
+                       "the keyboard's autocorrect-commit is blocked during the dismiss jiggle — text unchanged")
+    }
+
+    private func paragraphText(_ v: DocumentCanvasView) -> String {
+        if case .paragraph(let p)? = v.currentBlocks().first { return p.text }
+        return ""
+    }
+
     // MARK: - Outer scroll yields to a selection-handle grip
 
     func test_gripYieldingScrollView_yieldsOnlyNearASelectionGrip() {
@@ -366,5 +541,45 @@ final class SelectionInteractionTests: XCTestCase {
         XCTAssertEqual(scroll.contentOffset.y, beforeY, accuracy: 0.5, "no scroll when the handle is mid-viewport")
         v.stopDragAutoScroll()
     }
+}
+
+/// Records `selectionDidChange` calls so a test can assert (a) the input-delegate bracket is coalesced during a
+/// caret drag (fired once at the end, not per frame) and (b) the autocorrect-dismiss "jiggle" notifies the
+/// keyboard of an intermediate selection before restoring the real one. `headSequence` captures the canvas's
+/// `head` at each callback. The iOS-18.4 `conversationContext(_:didChange:)` requirement is stubbed under
+/// `@available` so the class conforms on the current SDK.
+private final class SelectionDelegateSpy: NSObject, UITextInputDelegate {
+    var didChangeCount = 0
+    var headSequence: [Int] = []
+    func selectionWillChange(_ textInput: (any UITextInput)?) {}
+    func selectionDidChange(_ textInput: (any UITextInput)?) {
+        didChangeCount += 1
+        if let canvas = textInput as? DocumentCanvasView { headSequence.append(canvas.head) }
+    }
+    func textWillChange(_ textInput: (any UITextInput)?) {}
+    func textDidChange(_ textInput: (any UITextInput)?) {}
+    @available(iOS 18.4, *)
+    func conversationContext(_ context: UIConversationContext?, didChange textInput: (any UITextInput)?) {}
+    func reset() { didChangeCount = 0; headSequence = [] }
+}
+
+/// Mimics the keyboard committing its pending autocorrection during the dismiss "jiggle": on the first
+/// selectionDidChange it attempts an `insertText` (a text change), exactly as the keyboard does. The editor's
+/// `isDroppingPendingAutocorrection` block must make that a no-op, so the text is unchanged (dismissed, not
+/// accepted).
+private final class KeyboardCommitSpy: NSObject, UITextInputDelegate {
+    private weak var canvas: DocumentCanvasView?
+    private(set) var didAttemptCommit = false
+    init(canvas: DocumentCanvasView) { self.canvas = canvas }
+    func selectionWillChange(_ textInput: (any UITextInput)?) {}
+    func selectionDidChange(_ textInput: (any UITextInput)?) {
+        guard !didAttemptCommit, let canvas else { return }
+        didAttemptCommit = true
+        canvas.insertText("CORRECTED")   // the keyboard's commit — must be blocked during the jiggle
+    }
+    func textWillChange(_ textInput: (any UITextInput)?) {}
+    func textDidChange(_ textInput: (any UITextInput)?) {}
+    @available(iOS 18.4, *)
+    func conversationContext(_ context: UIConversationContext?, didChange textInput: (any UITextInput)?) {}
 }
 #endif

@@ -20,6 +20,9 @@ public struct RichTextEditorTheme {
     /// Accent color. Drives link-text foreground, the blockquote bar + fill, the caret, and the selection
     /// highlight (these render sites are wired to read this across the theme feature's tasks).
     public var accent: UIColor
+    /// The "shadow" caret drawn during a long-press magnifier (loupe) drag: it marks the snapped real-caret
+    /// position while the accent-colored gliding cursor follows the finger. Render-only; defaults to a light gray.
+    public var shadowCursor: UIColor
     /// Table grid lines.
     public var tableBorder: UIColor
     /// Table header-row background fill.
@@ -34,6 +37,14 @@ public struct RichTextEditorTheme {
     public var markedTextUnderline: UIColor
     /// Spoiler particle ("dust") color. (Was hardcoded `.secondaryLabel`.)
     public var spoilerDust: UIColor
+    /// Quote AUTHOR (attribution) line text color — pull-quote and block-quote author runs. Render-only,
+    /// like `primaryText`/`secondaryText` (see `QuoteAuthorSupport.swift`: injected as the runs' default
+    /// foreground on render, stripped back to nil on read-back). Defaults to `secondaryText` until a host
+    /// sets a distinct value, so there is no visual change out of the box.
+    public var quoteAuthorText: UIColor
+    /// Quote AUTHOR (attribution) line placeholder ("Add author") color. Defaults to `placeholder` until a
+    /// host sets a distinct value.
+    public var quoteAuthorPlaceholder: UIColor
 
     public init(
         primaryText: UIColor,
@@ -47,7 +58,10 @@ public struct RichTextEditorTheme {
         inlineCodeBackground: UIColor = .systemGray5,
         markedTextUnderline: UIColor = .label,
         spoilerDust: UIColor = .secondaryLabel,
-        containerPlaceholder: UIColor = .placeholderText
+        containerPlaceholder: UIColor = .placeholderText,
+        shadowCursor: UIColor = UIColor(white: 0.7, alpha: 1.0),
+        quoteAuthorText: UIColor? = nil,
+        quoteAuthorPlaceholder: UIColor? = nil
     ) {
         self.primaryText = primaryText
         self.secondaryText = secondaryText
@@ -61,6 +75,9 @@ public struct RichTextEditorTheme {
         self.markedTextUnderline = markedTextUnderline
         self.spoilerDust = spoilerDust
         self.containerPlaceholder = containerPlaceholder
+        self.shadowCursor = shadowCursor
+        self.quoteAuthorText = quoteAuthorText ?? secondaryText
+        self.quoteAuthorPlaceholder = quoteAuthorPlaceholder ?? placeholder
     }
 
     /// Reproduces the editor's prior hardcoded colors exactly (see the design doc's site inventory).

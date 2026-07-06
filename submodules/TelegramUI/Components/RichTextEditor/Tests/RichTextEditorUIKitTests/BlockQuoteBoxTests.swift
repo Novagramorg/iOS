@@ -46,8 +46,8 @@ final class BlockQuoteBoxTests: XCTestCase {
         guard case .blockQuote(let out) = box.currentBlock() else { return XCTFail() }
         XCTAssertEqual(out.children.count, 1)
         XCTAssertFalse(out.collapsed)
-        // one leaf region (the child paragraph)
-        XCTAssertEqual(box.leafRegions().count, 1)
+        // two leaf regions: the child paragraph + the (empty) author region, always present (Task 4)
+        XCTAssertEqual(box.leafRegions().count, 2)
     }
     func test_blockQuoteBox_collapsed_isAtom() {
         let bq = BlockQuote(id: BlockID("q"), children: [
@@ -65,8 +65,8 @@ final class BlockQuoteBoxTests: XCTestCase {
             .paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi")]))], collapsed: false)
         let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), quoteStyle: .default,
                                 pullQuoteStyle: .default, expandImage: nil, width: 320)
-        XCTAssertGreaterThan(box.nodeSize, 3)               // container (Σ+2)
-        XCTAssertEqual(box.leafRegions().count, 1)          // child on the axis
+        XCTAssertGreaterThan(box.nodeSize, 3)               // container (Σchildren + authorLength + 4)
+        XCTAssertEqual(box.leafRegions().count, 2)          // child + the (empty) author region, both on the axis
     }
     // MARK: - Caret relocation on collapse (Finding 2)
 
@@ -352,5 +352,175 @@ final class BlockQuoteBoxTests: XCTestCase {
         XCTAssertEqual(c.head, c.boxes[0].textStart + 1, "caret sits after the typed character")
     }
 
+    // MARK: - Author region (Task 4)
+
+    func test_blockQuote_nodeSize_includesAuthorRegion() {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "ab")]))],
+                            collapsed: false, author: [TextRun(text: "X")])
+        let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), width: 320)
+        XCTAssertEqual(box.nodeSize, 9)  // child para (4) + author (1+2) + container 2
+    }
+
+    func test_blockQuote_leafRegions_appendAuthorLast() {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "ab")]))],
+                            collapsed: false, author: [TextRun(text: "X")])
+        let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), width: 320)
+        box.nodeStart = 5
+        box.frame = CGRect(x: 0, y: 0, width: 320, height: box.height)
+        box.recompute()
+        let regions = box.leafRegions()
+        XCTAssertEqual(regions.last?.ref, .quoteAuthor(BlockID("q")))
+        XCTAssertEqual(regions.last?.globalStart, 5 + 1 + 4)  // nodeStart + 1 + child para size (4)
+        XCTAssertEqual(regions.last?.length, 1)
+    }
+
+    func test_blockQuote_currentBlock_roundTripsAuthor_boldStripped() {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "ab")]))],
+                            collapsed: false, author: [TextRun(text: "Ada")])
+        let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), width: 320)
+        guard case let .blockQuote(out) = box.currentBlock() else { return XCTFail("expected blockQuote") }
+        XCTAssertEqual(out.author.map(\.text).joined(), "Ada")
+        XCTAssertTrue(out.author.allSatisfy { $0.attributes.bold == false })
+        XCTAssertEqual(out.children.count, 1)  // author is NOT counted as a model child
+    }
+
+    // MARK: - authorSpacing (adjustable content→author gap)
+
+    /// `QuoteStyle.authorSpacing` controls the vertical gap between the quote's child content and the
+    /// author line. Non-default value → the author sits that many points below the child stack.
+    func test_blockQuote_authorSpacing_adjustable() {
+        var style = QuoteStyle.default
+        style.authorSpacing = 10
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi")]))],
+                            collapsed: false, author: [TextRun(text: "Ada")])
+        let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), quoteStyle: style, width: 320)
+        box.frame = CGRect(x: 0, y: 0, width: 320, height: box.height)
+        box.recompute()
+        let authorY = box.leafRegions().last!.canvasOrigin.y
+        let gap = authorY - (box.frame.minY + box.topInset + box.children.contentHeight)
+        XCTAssertEqual(gap, 10, accuracy: 0.5)
+    }
+
+    /// Default `QuoteStyle` (`authorSpacing == 1`) — a 1pt gap between the quote's child content and
+    /// the author line.
+    func test_blockQuote_authorSpacing_defaultIsOne() {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "hi")]))],
+                            collapsed: false, author: [TextRun(text: "Ada")])
+        let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), quoteStyle: .default, width: 320)
+        box.frame = CGRect(x: 0, y: 0, width: 320, height: box.height)
+        box.recompute()
+        let authorY = box.leafRegions().last!.canvasOrigin.y
+        let gap = authorY - (box.frame.minY + box.topInset + box.children.contentHeight)
+        XCTAssertEqual(gap, 1, accuracy: 0.5)
+    }
+
+    // MARK: - Dedicated author theme colors (quoteAuthorText / quoteAuthorPlaceholder)
+
+    // Reconstructed via the SAME `UIColor(red:green:blue:alpha:)` initializer `RGBAColor.uiColor` uses, so the
+    // render round-trip is bit-exact (mirrors the `RGBAColor(red:1,green:0,blue:0)` precedent in MapperTests).
+    private static let distinctAuthorColor = UIColor(red: 1, green: 0, blue: 0, alpha: 1)
+    private static let distinctPlaceholderColor = UIColor(red: 0, green: 0, blue: 1, alpha: 1)
+
+    private func distinctAuthorTheme() -> RichTextEditorTheme {
+        RichTextEditorTheme(
+            primaryText: .black, secondaryText: .black, placeholder: .placeholderText,
+            accent: .link, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .gray,
+            quoteAuthorText: Self.distinctAuthorColor, quoteAuthorPlaceholder: Self.distinctPlaceholderColor)
+    }
+
+    private func bqWithAuthor(_ author: [TextRun]) -> BlockQuoteBox {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "ab")]))],
+                            collapsed: false, author: author)
+        return BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(theme: distinctAuthorTheme()), width: 320)
+    }
+
+    /// The author RENDER layout's foreground is the theme's dedicated `quoteAuthorText`, not `secondaryText`.
+    func test_blockQuote_authorRenderForeground_usesQuoteAuthorTextTheme() {
+        let box = bqWithAuthor([TextRun(text: "Ada")])
+        let color = box.authorLayout.attributedString.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        XCTAssertEqual(color?.rgba, Self.distinctAuthorColor.rgba)
+    }
+
+    /// The color is render-only: `currentBlock()` read-back author runs carry NO foreground even under a
+    /// theme with a distinct `quoteAuthorText` — proves no model pollution.
+    func test_blockQuote_currentBlock_author_stripsForeground_evenWithDistinctTheme() {
+        let box = bqWithAuthor([TextRun(text: "Ada")])
+        guard case let .blockQuote(out) = box.currentBlock() else { return XCTFail("expected blockQuote") }
+        XCTAssertEqual(out.author.map(\.text).joined(), "Ada")
+        XCTAssertTrue(out.author.allSatisfy { $0.attributes.foreground == nil }, "author color must not persist into the model")
+        XCTAssertTrue(out.author.allSatisfy { $0.attributes.bold == false }, "ambient bold still stripped")
+    }
+
+    /// Regression guard: the `.default` theme (no distinct author color set) still renders the author in
+    /// `secondaryText` and still strips cleanly on read-back — unchanged from before this feature.
+    func test_blockQuote_defaultTheme_authorForeground_matchesSecondaryText_andStripsClean() {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "ab")]))],
+                            collapsed: false, author: [TextRun(text: "Ada")])
+        let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), width: 320)
+        let color = box.authorLayout.attributedString.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        XCTAssertEqual(color?.rgba, RichTextEditorTheme.default.secondaryText.rgba)
+        guard case let .blockQuote(out) = box.currentBlock() else { return XCTFail("expected blockQuote") }
+        XCTAssertTrue(out.author.allSatisfy { $0.attributes.foreground == nil })
+    }
+
+    /// The empty-author FIRST-CHAR typing attributes also carry the dedicated author color.
+    func test_blockQuote_authorTypingAttributes_useQuoteAuthorTextTheme() {
+        let box = bqWithAuthor([])
+        let color = box.authorTypingAttributes()[.foregroundColor] as? UIColor
+        XCTAssertEqual(color?.rgba, Self.distinctAuthorColor.rgba)
+    }
+
+    // MARK: - Author conditional on content (Task 2)
+
+    private func bqBox(_ children: [Block], author: [TextRun] = []) -> BlockQuoteBox {
+        let bq = BlockQuote(id: BlockID("q"), children: children, collapsed: false, author: author)
+        let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), width: 320)
+        box.frame = CGRect(x: 0, y: 0, width: 320, height: box.height); box.recompute()
+        return box
+    }
+
+    func test_blockQuote_author_hiddenWhenBodyBlankAndAuthorEmpty() {
+        let box = bqBox([.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: []))])
+        XCTAssertFalse(box.shouldShowAuthor)
+        XCTAssertEqual(box.leafRegions().last?.ref, .paragraph(BlockID("p")))   // NO trailing author region
+        XCTAssertEqual(box.nodeSize, box.children.boxes.reduce(0) { $0 + $1.nodeSize } + 2)
+    }
+
+    func test_blockQuote_author_shownWhenBodyHasText() {
+        let box = bqBox([.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "ab")]))])
+        XCTAssertTrue(box.shouldShowAuthor)
+        XCTAssertEqual(box.leafRegions().last?.ref, .quoteAuthor(BlockID("q")))
+        XCTAssertEqual(box.nodeSize, box.children.boxes.reduce(0) { $0 + $1.nodeSize } + box.authorLength + 4)
+    }
+
+    func test_blockQuote_author_shownWhenBodyHasEmptySubQuote() {
+        let inner = Block.blockQuote(BlockQuote(id: BlockID("inner"),
+            children: [.paragraph(ParagraphBlock(id: BlockID("ip"), style: .body, runs: []))], collapsed: false, author: []))
+        let box = bqBox([inner])
+        XCTAssertTrue(box.shouldShowAuthor, "an empty sub-quote is structural content → author shown")
+    }
+
+    /// Regression: unlike a pull-quote author (always bold + italic, see `PullQuoteBoxTests`), a block-quote
+    /// author stays BOLD-ONLY — the rendered font must NOT carry `.traitItalic`, and the read-back
+    /// `currentBlock().author` carries neither bold nor italic (both render-only where applicable).
+    func test_blockQuote_authorRender_isBoldNotItalic() {
+        let bq = BlockQuote(id: BlockID("q"),
+                            children: [.paragraph(ParagraphBlock(id: BlockID("p"), style: .body, runs: [TextRun(text: "ab")]))],
+                            collapsed: false, author: [TextRun(text: "Ada")])
+        let box = BlockQuoteBox(blockQuote: bq, mapper: AttributedStringMapper(), width: 320)
+        let font = box.authorLayout.attributedString.attribute(.font, at: 0, effectiveRange: nil) as! UIFont
+        let traits = font.fontDescriptor.symbolicTraits
+        XCTAssertTrue(traits.contains(.traitBold))
+        XCTAssertFalse(traits.contains(.traitItalic))
+        guard case let .blockQuote(out) = box.currentBlock() else { return XCTFail("expected blockQuote") }
+        XCTAssertTrue(out.author.allSatisfy { $0.attributes.bold == false && $0.attributes.italic == false })
+    }
 }
 #endif

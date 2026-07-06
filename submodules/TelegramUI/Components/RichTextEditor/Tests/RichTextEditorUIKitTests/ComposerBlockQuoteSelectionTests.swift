@@ -90,6 +90,34 @@ final class ComposerBlockQuoteSelectionTests: XCTestCase {
                        "ab(2)+\\n(1)+collapsed(1)+\\n(1)+ef(2) = 7 flat chars")
     }
 
+    // MARK: - Author region is excluded from the flat composer axis (Task 5)
+
+    /// A block quote WITH an author line must contribute only its body to the composer flat axis
+    /// ("ab\ncd\nef" = 8) — the author ("Ada") is off-axis, exactly like a media caption.
+    func test_composerFlatRange_excludesBlockQuoteAuthor() {
+        let c = canvas([
+            para("a", "ab"),
+            .blockQuote(BlockQuote(id: BlockID("q"), children: [para("c", "cd")],
+                                   collapsed: false, author: [TextRun(text: "Ada")])),
+            para("e", "ef")
+        ])
+        c.selectAllText()
+        XCTAssertEqual(c.composerSelectedRange.length, 8,
+                       "the block-quote author must contribute nothing to the composer flat axis")
+    }
+
+    /// A pull quote WITH an author line likewise contributes only its pull text ("ab\ncd\nef" = 8).
+    func test_composerFlatRange_excludesPullQuoteAuthor() {
+        let c = canvas([
+            para("a", "ab"),
+            .pullQuote(PullQuote(id: BlockID("pq"), runs: [TextRun(text: "cd")], author: [TextRun(text: "Ada")])),
+            para("e", "ef")
+        ])
+        c.selectAllText()
+        XCTAssertEqual(c.composerSelectedRange.length, 8,
+                       "the pull-quote author must contribute nothing to the composer flat axis")
+    }
+
     // MARK: - Nested (expanded inside expanded)
 
     /// outer[para "a", inner[para "b"]] → flat "a\\nb" (total 3).

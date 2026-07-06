@@ -195,6 +195,52 @@ final class CanvasSelectionMenuTests: XCTestCase {
         XCTAssertEqual(v.selFrom, r.globalStart)
         XCTAssertEqual(v.selTo, r.globalStart + r.length)
     }
+    // MARK: Double-tap still selects a word even when the follow-up tap fires the near-cursor loupe.
+    // The proximity-adaptive loupe delay is tiny (loupeDelayNearCursor) right on the just-placed caret, so the
+    // 2nd tap of a double-tap fires the long-press instead of completing as a tap. `handleLoupeBegan` detects
+    // the rapid repeat and escalates to a word/paragraph selection + menu (returning true so the caller
+    // suppresses the loupe cursor-drag), reusing the same window/slop/tapCount state as `handleTap`.
+    func test_loupeBegan_asDoubleTap_selectsWord_andReportsConsumed() {
+        let v = canvas()
+        _ = v.becomeFirstResponder()
+        let r = region(v, "h")
+        let p = tapPoint(v, r, offset: 2)                       // inside "Hello"
+        v.handleTap(at: p, time: 100)                           // 1st tap → caret (stamps multi-tap state)
+        let consumed = v.handleLoupeBegan(at: p, time: 100.1)   // 2nd "tap" arrives as a loupe .began
+        XCTAssertTrue(consumed, "the repeat tap is consumed as a multi-tap so the loupe cursor-drag is suppressed")
+        XCTAssertEqual(v.selFrom, r.globalStart, "double-tap selects the word 'Hello'")
+        XCTAssertEqual(v.selTo, r.globalStart + 5)
+    }
+    func test_loupeBegan_thirdRepeat_selectsParagraph() {
+        let v = canvas()
+        _ = v.becomeFirstResponder()
+        let r = region(v, "h")
+        let p = tapPoint(v, r, offset: 4)
+        v.handleTap(at: p, time: 100)                           // caret
+        XCTAssertTrue(v.handleLoupeBegan(at: p, time: 100.1))   // → word
+        XCTAssertTrue(v.handleLoupeBegan(at: p, time: 100.2))   // → whole paragraph
+        XCTAssertEqual(v.selFrom, r.globalStart)
+        XCTAssertEqual(v.selTo, r.globalStart + r.length)
+    }
+    func test_loupeBegan_lonePress_isNotConsumed() {
+        // No recent tap ⇒ a genuine long-press ⇒ NOT a multi-tap ⇒ run the normal loupe (returns false).
+        let v = canvas()
+        _ = v.becomeFirstResponder()
+        let r = region(v, "h")
+        v.setCaret(global: r.globalStart)                       // caret far from the press point
+        let consumed = v.handleLoupeBegan(at: tapPoint(v, r, offset: 9), time: 500)
+        XCTAssertFalse(consumed, "a lone long-press is a normal loupe, not a double-tap")
+    }
+    func test_loupeBegan_slowSecondPress_isNotConsumed() {
+        let v = canvas()
+        _ = v.becomeFirstResponder()
+        let r = region(v, "h")
+        let p = tapPoint(v, r, offset: 2)
+        v.handleTap(at: p, time: 100)
+        let consumed = v.handleLoupeBegan(at: p, time: 100 + DocumentCanvasView.multiTapWindow + 0.5)
+        XCTAssertFalse(consumed, "past the multi-tap window a press is a normal loupe, not a double-tap")
+    }
+
     func test_selectAllText_selectsRenderableBounds() {
         let v = canvas()
         v.selectAllText()

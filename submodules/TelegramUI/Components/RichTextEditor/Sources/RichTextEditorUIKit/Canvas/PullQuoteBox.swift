@@ -30,6 +30,13 @@ final class PullQuoteBox {
     var topInset: CGFloat
     var bottomInset: CGFloat
 
+    /// The author (attribution) line's own TextKit layout. Rendered as a bold+ITALIC `.caption` style — unlike
+    /// a block quote's bold-only author — bold, italic, and the text color are all ambient (forced here via
+    /// `quoteAuthorRenderRuns`, stripped on read-back). Centered like the pull text.
+    let authorLayout: BlockLayoutEngine
+    /// The author renders centered (matching the pull text / V2 renderer's isPull caption alignment).
+    private static let authorParagraph = ParagraphAttributes(alignment: .center)
+
     init(pullQuote: PullQuote, mapper: AttributedStringMapper, pullQuoteStyle: PullQuoteStyle = .default, width: CGFloat) {
         self.id = pullQuote.id
         self.mapper = mapper
@@ -40,10 +47,45 @@ final class PullQuoteBox {
         self.layout = makeBlockLayout(
             attributedString: mapper.attributedString(for: ParagraphBlock(id: pullQuote.id, style: .pullQuote, runs: pullQuote.runs)),
             width: max(width - pullQuoteStyle.horizontalPadding - pullQuoteStyle.horizontalPadding, 1))
+        self.authorLayout = makeBlockLayout(
+            attributedString: mapper.attributedString(for: ParagraphBlock(
+                id: pullQuote.id, style: .caption, paragraph: PullQuoteBox.authorParagraph,
+                runs: quoteAuthorRenderRuns(pullQuote.author, textColor: mapper.theme.quoteAuthorText.rgba, italic: true))),
+            width: max(width - pullQuoteStyle.horizontalPadding - pullQuoteStyle.horizontalPadding, 1))
     }
 
     var length: Int { layout.length }
     var textOrigin: CGPoint { CGPoint(x: frame.minX + leftInset, y: frame.minY + topInset) }
+
+    var authorLength: Int { authorLayout.length }
+    /// The author line sits below the pull text, inside the same horizontal padding.
+    var authorOrigin: CGPoint { CGPoint(x: frame.minX + leftInset, y: textOrigin.y + max(layout.boundingHeight, emptyLineHeight) + pullQuoteStyle.authorSpacing) }
+
+    private var authorEmptyLineHeight: CGFloat {
+        guard authorLayout.length == 0 else { return 0 }
+        let font = mapper.styleSheet.font(for: .caption, attributes: .plain)
+        let mult = mapper.styleSheet.paragraphStyle(for: .caption, attributes: PullQuoteBox.authorParagraph,
+                                                    list: nil, baseWritingDirection: mapper.baseWritingDirection).lineHeightMultiple
+        return font.lineHeight * (mult > 0 ? mult : 1)
+    }
+    private var authorPlaceholderTextWidth: CGFloat {
+        // Placeholder measured in the BOLD+ITALIC caption font (matches the rendered author weight/style).
+        let font = mapper.styleSheet.font(for: .caption, attributes: CharacterAttributes(bold: true, italic: true))
+        return (quoteAuthorPlaceholderText as NSString).size(withAttributes: [.font: font]).width
+    }
+    private var authorEmptyLineIndent: CGFloat {
+        guard authorLength == 0 else { return 0 }
+        let containerWidth = max(layoutWidth - leftInset - rightInset, 1)
+        return max((containerWidth - authorPlaceholderTextWidth) / 2, 0) // centered placeholder's leading edge
+    }
+    /// Bold caption typing attributes (centered) for the FIRST char typed into an empty author line.
+    func authorTypingAttributes() -> [NSAttributedString.Key: Any] {
+        var ca = CharacterAttributes(); ca.bold = true; ca.italic = true; ca.foreground = mapper.theme.quoteAuthorText.rgba
+        var attrs = mapper.attributes(for: ca, style: .caption)
+        attrs[.paragraphStyle] = mapper.styleSheet.paragraphStyle(for: .caption, attributes: PullQuoteBox.authorParagraph,
+                                                                  list: nil, baseWritingDirection: mapper.baseWritingDirection)
+        return attrs
+    }
 
     /// Placeholder text for an empty pull quote, or nil when non-empty or placeholder string is empty.
     var placeholderText: String? {
@@ -61,6 +103,16 @@ final class PullQuoteBox {
         }
         return layout.selectionRects(start: 0, end: length).map(\.width).max() ?? 0
     }
+
+    /// Widest laid-out line of the AUTHOR line (or the "Add author" placeholder when empty).
+    private var authorContentWidth: CGFloat {
+        guard shouldShowAuthor else { return 0 }
+        if authorLength == 0 { return authorPlaceholderTextWidth }
+        return authorLayout.selectionRects(start: 0, end: authorLength).map(\.width).max() ?? 0
+    }
+    /// The content-hugging width for the PILL: the WIDER of the pull text (`contentWidth`) and the author line,
+    /// so a long author — or the "Add author" placeholder — under a short quote isn't clipped by the pill.
+    var pillContentWidth: CGFloat { max(contentWidth, authorContentWidth) }
 
     private var emptyLineHeight: CGFloat {
         guard layout.length == 0 else { return 0 }
@@ -98,29 +150,64 @@ final class PullQuoteBox {
 extension PullQuoteBox: CanvasBlock {
     var rendersAsBlockView: Bool { true }
     var nodeStart: Int { get { globalStart } set { globalStart = newValue } }
-    var nodeSize: Int { length + 2 }
+    /// The author line is shown only when the quote has content — the author itself has text, OR the pull
+    /// text is non-empty. A fresh/empty pull quote hides the author region entirely (no placeholder, no
+    /// reserved height, no position tokens, no caret target).
+    var shouldShowAuthor: Bool { authorLength > 0 || length > 0 }
+    var nodeSize: Int { shouldShowAuthor ? (length + authorLength + 6) : (length + 4) }
     var textLayout: BlockLayoutEngine { layout }
-    var textStart: Int { globalStart }
+    var textStart: Int { nodeStart + 1 }
     var textLength: Int { length }
     var textRef: TextNodeRef { .pullQuote(id) }
-    var height: CGFloat { max(layout.boundingHeight, emptyLineHeight) + topInset + bottomInset }
+    var height: CGFloat {
+        shouldShowAuthor
+            ? quoteOnlyHeight + pullQuoteStyle.authorSpacing + max(authorLayout.boundingHeight, authorEmptyLineHeight)
+            : quoteOnlyHeight
+    }
+    /// The box's height AS IF there were no author line — mirrors `height` minus the author + gap terms.
+    /// Used to bracket the pull-quote corner marks around the QUOTE TEXT only (the pill background still
+    /// spans the full `height`, author included).
+    var quoteOnlyHeight: CGFloat {
+        topInset + max(layout.boundingHeight, emptyLineHeight) + bottomInset
+    }
     func measuredHeight(forWidth width: CGFloat) -> CGFloat {
-        max(layout.boundingHeight(forWidth: max(width - leftInset - rightInset, 1)), emptyLineHeight) + topInset + bottomInset
+        let inner = max(width - leftInset - rightInset, 1)
+        let base = max(layout.boundingHeight(forWidth: inner), emptyLineHeight) + topInset + bottomInset
+        guard shouldShowAuthor else { return base }
+        return base + pullQuoteStyle.authorSpacing + max(authorLayout.boundingHeight(forWidth: inner), authorEmptyLineHeight)
     }
     func setWidth(_ width: CGFloat) {
         layoutWidth = width
-        layout.setWidth(max(width - leftInset - rightInset, 1))
+        let inner = max(width - leftInset - rightInset, 1)
+        layout.setWidth(inner)
+        authorLayout.setWidth(inner)
     }
     func currentBlock() -> Block {
-        .pullQuote(PullQuote(id: id, runs: mapper.runs(from: layout.attributedString, style: .pullQuote)))
+        .pullQuote(PullQuote(id: id,
+                             runs: mapper.runs(from: layout.attributedString, style: .pullQuote),
+                             author: quoteAuthorStripAmbientStyle(mapper.runs(from: authorLayout.attributedString, style: .caption),
+                                                                  textColor: mapper.theme.quoteAuthorText.rgba, italic: true)))
     }
     func closestPosition(toCanvasPoint point: CGPoint) -> Int {
-        textStart + layout.closestOffset(toPoint: CGPoint(x: point.x - textOrigin.x, y: point.y - textOrigin.y))
+        // A tap at/below the author line's top routes into the author region (so the author — including
+        // its empty "Add author" placeholder — is directly tappable); otherwise into the pull text. Only
+        // when the author is shown; a hidden author has no area to tap.
+        if shouldShowAuthor, point.y >= authorOrigin.y {
+            return (nodeStart + length + 3)
+                + authorLayout.closestOffset(toPoint: CGPoint(x: point.x - authorOrigin.x, y: point.y - authorOrigin.y))
+        }
+        return textStart + layout.closestOffset(toPoint: CGPoint(x: point.x - textOrigin.x, y: point.y - textOrigin.y))
     }
     func leafRegions() -> [LeafTextRegion] {
-        [LeafTextRegion(layout: layout, globalStart: globalStart, length: length,
-                        ref: .pullQuote(id), canvasOrigin: textOrigin,
-                        emptyLineLeadingIndent: emptyLinePlaceholderIndent, emptyLineHeight: emptyLineHeight)]
+        var regions = [LeafTextRegion(layout: layout, globalStart: nodeStart + 1, length: length,
+                                      ref: .pullQuote(id), canvasOrigin: textOrigin,
+                                      emptyLineLeadingIndent: emptyLinePlaceholderIndent, emptyLineHeight: emptyLineHeight)]
+        if shouldShowAuthor {
+            regions.append(LeafTextRegion(layout: authorLayout, globalStart: nodeStart + length + 3, length: authorLength,
+                                          ref: .quoteAuthor(id), canvasOrigin: authorOrigin,
+                                          emptyLineLeadingIndent: authorEmptyLineIndent, emptyLineHeight: authorEmptyLineHeight))
+        }
+        return regions
     }
     func draw(in ctx: CGContext, imageProvider: (String) -> UIImage?) {
         // The pill background + corner marks are added by later tasks via the decorations layer.
@@ -133,6 +220,17 @@ extension PullQuoteBox: CanvasBlock {
                               width: max(frame.width - leftInset - rightInset, 1), height: frame.height - topInset - bottomInset)
             NSAttributedString(string: ph, attributes: [.font: font, .foregroundColor: mapper.theme.containerPlaceholder,
                                                         .paragraphStyle: ps]).draw(in: rect)
+        }
+        if shouldShowAuthor {
+            authorLayout.drawText(in: ctx, at: authorOrigin)
+            if authorLength == 0 {
+                let font = mapper.styleSheet.font(for: .caption, attributes: CharacterAttributes(bold: true, italic: true))
+                let ps = NSMutableParagraphStyle(); ps.alignment = .center
+                let rect = CGRect(x: frame.minX + leftInset, y: authorOrigin.y,
+                                  width: max(frame.width - leftInset - rightInset, 1), height: authorEmptyLineHeight)
+                NSAttributedString(string: quoteAuthorPlaceholderText,
+                                   attributes: [.font: font, .foregroundColor: mapper.theme.quoteAuthorPlaceholder, .paragraphStyle: ps]).draw(in: rect)
+            }
         }
     }
 }

@@ -180,7 +180,10 @@ extension DocumentCanvasView {
     /// image/gap) — guarded BEFORE `editing { }` so a no-op registers no undo entry. Caret lands in the
     /// first header cell.
     func insertTable(rows: Int, columns: Int) {
-        guard !boxes.isEmpty, !isInsideTable(head),
+        // `!isInsideBlockQuote(head)` is load-bearing: a caret inside a quote has no degenerate-container-safe
+        // resolveBox, so `resolveBox(at: head)` below mis-resolves to the FOLLOWING top-level block and the table
+        // would be inserted there. Tables aren't supported inside quotes (v1) → no-op, like the in-table guard.
+        guard !boxes.isEmpty, !isInsideTable(head), !isInsideBlockQuote(head),
               let resolved = resolveBox(at: head), resolved.box is BlockBox else { return }
         editing {
             if selFrom != selTo { applySelectionReplace(globalFrom: selFrom, globalTo: selTo, text: "") }

@@ -40,5 +40,39 @@ final class RichTextEditorThemeTests: XCTestCase {
         XCTAssertEqual(t.markedTextUnderline, .label)
         XCTAssertEqual(t.spoilerDust, .secondaryLabel)
     }
+
+    // MARK: - quoteAuthorText / quoteAuthorPlaceholder (dedicated author-line colors)
+
+    // Omitting the two new params defaults them to the existing shared colors, so there is no visual
+    // regression until a host sets distinct values.
+    func test_quoteAuthorColors_defaultToSharedColors() {
+        let t = RichTextEditorTheme(
+            primaryText: .black, secondaryText: .green, placeholder: .blue,
+            accent: .link, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .gray
+        )
+        XCTAssertEqual(t.quoteAuthorText, .green)      // == secondaryText
+        XCTAssertEqual(t.quoteAuthorPlaceholder, .blue) // == placeholder
+    }
+
+    // `.default` itself must also fall back (it uses the un-parameterized init).
+    func test_default_quoteAuthorColors_matchSharedDefaults() {
+        let d = RichTextEditorTheme.default
+        XCTAssertEqual(d.quoteAuthorText, d.secondaryText)
+        XCTAssertEqual(d.quoteAuthorPlaceholder, d.placeholder)
+    }
+
+    // A host can set the two new fields independently of the shared colors.
+    func test_quoteAuthorColors_canBeSetDistinctly() {
+        let t = RichTextEditorTheme(
+            primaryText: .black, secondaryText: .green, placeholder: .blue,
+            accent: .link, tableBorder: .gray, tableHeaderBackground: .gray, codeBackground: .gray,
+            quoteAuthorText: .red, quoteAuthorPlaceholder: .purple
+        )
+        XCTAssertEqual(t.quoteAuthorText, .red)
+        XCTAssertEqual(t.quoteAuthorPlaceholder, .purple)
+        // Sanity: the shared colors are untouched.
+        XCTAssertEqual(t.secondaryText, .green)
+        XCTAssertEqual(t.placeholder, .blue)
+    }
 }
 #endif

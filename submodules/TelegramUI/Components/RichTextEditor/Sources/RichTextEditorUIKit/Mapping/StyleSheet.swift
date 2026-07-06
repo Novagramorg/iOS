@@ -75,9 +75,9 @@ public struct StyleSheet {
         case .heading1: return 24
         case .heading2: return 21
         case .heading3: return 19
-        case .heading4: return 17
+        case .heading4: return 18
         case .heading5: return 17
-        case .heading6: return 17
+        case .heading6: return 16
         case .body: return bodyBaseSize
         case .caption: return 15
         case .pullQuote: return 15   // pull quotes read at 15pt (like block quotes), not the ambient body size
@@ -109,7 +109,7 @@ public struct StyleSheet {
         let bold = attributes.bold
         // Pull quotes force italic render — the italic is ambient (render-only), stripped on read-back.
         let italic = attributes.italic || style == .pullQuote
-        let serif = style == .heading1 || style == .heading2 || style == .heading3
+        let serif = style == .heading1 || style == .heading2 || style == .heading3 || style == .heading4 || style == .heading5 || style == .heading6
         return FontResolver.font(family: attributes.fontFamily, size: size, bold: bold, italic: italic, serif: serif)
     }
 

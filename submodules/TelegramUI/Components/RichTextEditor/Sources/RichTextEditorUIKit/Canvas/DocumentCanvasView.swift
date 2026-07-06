@@ -178,6 +178,14 @@ final class DocumentCanvasView: UIView {
     var canPasteMedia: (() -> Bool)?
     var onPasteMedia: (() -> Bool)?
 
+    /// A HARDWARE-keyboard Return (plain or ⌘) routes here before the editor inserts a newline, so a host
+    /// (the chat composer) can send-on-Enter / send-on-⌘-Enter. Mirrors the legacy `ChatInputTextViewImpl`'s
+    /// `shouldReturn`. Return `true` to have the editor insert a newline (the default when unset — standalone
+    /// editors like the article composer and Demo just add a line); `false` means the host consumed the Return
+    /// (e.g. sent the message) and the editor does nothing. The SOFTWARE keyboard's Return never triggers a
+    /// keyCommand, so it always inserts a newline (there's a separate send button) — matching the legacy input.
+    var onHardwareReturn: ((UIKeyModifierFlags) -> Bool)?
+
     /// Interior content margins — interactable padding around the document, ADDED to the built-in
     /// `pageMargin`. Unlike the host's scroll insets (covered by chrome/keyboard, content scrolls under),
     /// these are PART of the content: the text lays out inset by them (so it wraps narrower and is offset
@@ -315,6 +323,41 @@ final class DocumentCanvasView: UIView {
         get { loupeSessionStorage as? UITextLoupeSession }
         set { loupeSessionStorage = newValue }
     }
+    /// SPIKE (loupe grow-from-cursor): a `UITextSelectionDisplayInteraction` (iOS 17+) installed solely to borrow
+    /// its system `cursorView` for the loupe's `fromSelectionWidgetView`. Kept DEACTIVATED except during a loupe
+    /// drag. Untyped storage for the same availability reason as `loupeSessionStorage`. INSTRUMENTED — evaluate
+    /// the leaked-chrome logs before deciding whether this can stay.
+    private var selectionDisplayInteractionStorage: AnyObject?
+    @available(iOS 17.0, *)
+    var selectionDisplayInteraction: UITextSelectionDisplayInteraction? {
+        get { selectionDisplayInteractionStorage as? UITextSelectionDisplayInteraction }
+        set { selectionDisplayInteractionStorage = newValue }
+    }
+    /// SPIKE: a stable container the borrowed interaction hosts its selection chrome in (via the delegate). It is
+    /// NOT tracked in `blockViews`, so the block-view reload loop never removes it, and it is created lazily on the
+    /// first loupe drag. All the interaction's chrome (cursor / lollipops / accessory) lands here so we can hide it.
+    lazy var selectionChromeContainer: UIView = {
+        let v = UIView()
+        v.isUserInteractionEnabled = false
+        v.clipsToBounds = false
+        addSubview(v)
+        return v
+    }()
+    /// True for the duration of a long-press magnifier (loupe) drag. While set, `updateCaretView` keeps the
+    /// steady caret SOLID (no blink, full alpha) so the loupe lifts off from / magnifies a crisp caret — a
+    /// blinking caret is invisible for the part of each cycle its opacity dips toward 0, which made the loupe
+    /// appear to pop in "from nothing" with no visible cursor (device-log-verified). Set BEFORE `begin(...)`
+    /// (so the caret is already solid when the loupe captures it) and cleared on drag end.
+    var loupeDragActive = false
+    /// True when the current long-press `.began` was consumed as the follow-up tap of a double-/triple-tap
+    /// (see `handleLoupeBegan`) rather than starting a loupe cursor-drag. While set, the long-press `.changed`
+    /// / `.ended` handlers no-op (no `setCaret`, no loupe teardown) so the word/paragraph selection they made
+    /// survives the rest of the gesture. Reset when the gesture ends.
+    var loupeConsumedAsMultiTap = false
+    /// The steady caret's normal accent, saved while a loupe drag recolors it to the desaturated "shadow" gray
+    /// (the snapped landing caret is the gray shadow; the gliding `transientCaretView` is the accent). Restored
+    /// on drag end.
+    var loupeSavedCaretAccent: UIColor?
     var draggingEndpoint: SelectionEndpoint?
     // The (caret-center − initial-touch) offset captured when a selection-handle drag begins, so the dragged
     // endpoint keeps its starting offset from the finger instead of snapping to the line under the touch (the
@@ -322,6 +365,9 @@ final class DocumentCanvasView: UIView {
     var selectionDragGrabOffset: CGSize = .zero
     var draggingTableKnob: TableRangeEnd?
     var selectionHandlePan: UIPanGestureRecognizer?
+    // The loupe / move-cursor long-press. Held so `gestureRecognizerShouldBegin` can fail it on a touch that
+    // lands on an active selection handle (letting the handle pan grab the knob instead) — see that method.
+    var loupeLongPress: LocationAdaptiveLongPressGestureRecognizer?
     // True while an interactive selection-handle drag is in flight. While set, the per-touch-move selection
     // setters (`setSelectionHead`/`setSelectionAnchor`) SKIP the `inputDelegate` selection bracket; one
     // bracket fires when the drag ends (`endCoalescedSelectionDrag`). Driving the keyboard's autocorrect/
@@ -330,6 +376,12 @@ final class DocumentCanvasView: UIView {
     // while dragging a handle. The `selectedTextRange` getter stays live, so the OS reads the correct value
     // if it queries during the drag; only the proactive candidate recompute is deferred to the gesture end.
     var coalescingSelectionNotifications = false
+    // True only for the duration of `dropPendingAutocorrection`'s synchronous selection "jiggle". While set,
+    // the text-mutation entry points (`insertText` / `replace` / `deleteBackward` / `setMarkedText`) no-op:
+    // the jiggle provokes the keyboard to COMMIT its pending autocorrection (a text change), and blocking that
+    // change is what DISMISSES the correction instead of accepting it — the legacy `isPreservingText` role
+    // (`shouldChangeTextIn` → false). Without it the correction lands and CMD+A "accepts" instead of dismisses.
+    var isDroppingPendingAutocorrection = false
     // Auto-scroll state while dragging a text-selection handle near an edge: vertically against the host
     // document scroll view, and/or horizontally within a scrollable table the head is in. One display link
     // drives both axes.
@@ -532,10 +584,43 @@ final class DocumentCanvasView: UIView {
 
     override var keyCommands: [UIKeyCommand]? {
         [UIKeyCommand(input: "\t", modifierFlags: [], action: #selector(handleTabKey)),
-         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey))]
+         UIKeyCommand(input: "\t", modifierFlags: .shift, action: #selector(handleShiftTabKey)),
+         // HARDWARE Return (plain + ⌘) routes to the host's return handler (send-on-Enter / ⌘-Enter) before
+         // the editor inserts a newline — mirrors the legacy ChatInputTextViewImpl's own \r keyCommands. As the
+         // first responder these take precedence over the app-level empty-action \r shortcut (which only
+         // supplied the "Send Message" discoverability title). The SOFTWARE keyboard's Return doesn't fire
+         // keyCommands, so it still inserts a newline via insertText.
+         UIKeyCommand(input: "\r", modifierFlags: [], action: #selector(handleReturnKey(_:))),
+         UIKeyCommand(input: "\r", modifierFlags: .command, action: #selector(handleReturnKey(_:))),
+         // Formatting shortcuts owned by the editor. The app-level ones (ChatControllerKeyShortcuts) mutate
+         // the LEGACY ChatTextInputState (NSAttributedString), which the native editor doesn't use — so ⌘B
+         // etc. silently no-op'd once the editor became the composer. The editor is the first responder, so
+         // these keyCommands take precedence over KeyShortcutsController's (which sits higher in the chain),
+         // fixing BOTH the chat composer and the attachment/article editor (both embed this view). Inputs +
+         // modifiers match the app-level shortcuts.
+         UIKeyCommand(input: "B", modifierFlags: .command, action: #selector(keyToggleBold)),
+         UIKeyCommand(input: "I", modifierFlags: .command, action: #selector(keyToggleItalic)),
+         UIKeyCommand(input: "U", modifierFlags: .command, action: #selector(keyToggleUnderline)),
+         UIKeyCommand(input: "X", modifierFlags: [.command, .shift], action: #selector(keyToggleStrikethrough)),
+         UIKeyCommand(input: "M", modifierFlags: [.command, .shift], action: #selector(keyToggleMonospace))]
     }
-    @objc private func handleTabKey() { moveToCell(forward: true) }
+    @objc private func handleTabKey() {
+        // Inside a table cell → cell nav; otherwise a quote-aware Tab (body → author end, author → out).
+        if isInsideTable(head) { moveToCell(forward: true); return }
+        handleQuoteTabForward()
+    }
     @objc private func handleShiftTabKey() { moveToCell(forward: false) }
+    @objc private func handleReturnKey(_ command: UIKeyCommand) { performHardwareReturn(command.modifierFlags) }
+    /// Ask the host first (send-on-Enter etc.). true (or no host) → insert a newline like a normal Return;
+    /// false → the host consumed it (sent the message), so the editor does nothing.
+    func performHardwareReturn(_ modifierFlags: UIKeyModifierFlags) {
+        if onHardwareReturn?(modifierFlags) ?? true { insertText("\n") }
+    }
+    @objc private func keyToggleBold() { toggleBold() }
+    @objc private func keyToggleItalic() { toggleItalic() }
+    @objc private func keyToggleUnderline() { toggleUnderline() }
+    @objc private func keyToggleStrikethrough() { toggleStrikethrough() }
+    @objc private func keyToggleMonospace() { toggleInlineCode() }
 
     /// Applies a theme: updates the mapper (text/link colors used on the next reload) and pushes the accent
     /// color to the persistent caret/selection/blockquote views. The caller reloads content afterward so the
@@ -1166,6 +1251,18 @@ final class DocumentCanvasView: UIView {
 
     /// Sets a collapsed caret (clears the drag anchor).
     func setCaret(global pos: Int) {
+        setCaret(global: pos, reportSelectionChange: true)
+    }
+
+    /// Sets a collapsed caret (clears the drag anchor). `reportSelectionChange` gates the host-facing selection
+    /// report (`onSelectionChange`): pass `false` for the per-frame moves of an interactive caret drag (the
+    /// long-press magnifier loupe) so the host is told ONCE at the drag's final position instead of on every
+    /// frame — the same "report once at the end" model the floating cursor (spacebar-trackpad) uses. The
+    /// own-drawn visuals + table-cell scroll-follow still update every call. The OS input-delegate bracket
+    /// obeys `coalescingSelectionNotifications` (like `setSelectionHead`): during a coalesced caret drag it is
+    /// skipped per frame — otherwise the keyboard's autocorrect/candidate bar recomputes and visibly JUMPS on
+    /// every move — and `endCoalescedSelectionDrag` fires exactly one bracket for the final caret at the end.
+    func setCaret(global pos: Int, reportSelectionChange: Bool) {
         var target = pos
         if let g = finalizeMarkedText() {            // a dismissed prediction shifts later positions left
             if pos >= g.to { target = pos - (g.to - g.from) }
@@ -1174,11 +1271,12 @@ final class DocumentCanvasView: UIView {
         target = clampGlobal(target)
         clearStructuralSelections()
         dismissEditMenuForSelectionOrTextChange()   // the caret moved → close any open menu (native UITextView)
-        textInputDelegate?.selectionWillChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionWillChange(self) }
         anchor = target; head = target
-        textInputDelegate?.selectionDidChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionDidChange(self) }
         setNeedsDisplay(); refreshSelectionUI()
         scrollCaretIntoViewIfNeeded()
+        guard reportSelectionChange else { return }
         onSelectionChange?()   // tap is harmless (caret already visible → no-op); covers non-tap movers —
                                // Backspace-at-cell-start / Tab cell-nav — that can land the caret off-screen
     }
@@ -1288,6 +1386,18 @@ final class DocumentCanvasView: UIView {
             hostOverlay(caretView, at: placement)
             caretView.freezeSolid()
             caretView.alpha = 0.4
+            lastCaretContainer = placement.container
+            lastCaretFrame = placement.frame
+            return
+        }
+        // During a long-press magnifier (loupe) drag, draw the spacebar-style two-cursor visual: OUR own accent
+        // caret is the "landing" at the snapped position, while the desaturated `transientCaretView` glides at the
+        // finger (the borrowed system cursor is near-invisible — grow anchor only). Solid, no blink.
+        if loupeDragActive {
+            guard isFirstResponder, let placement = caretHostPlacement(forGlobal: head) else { return hideCaretView() }
+            hostOverlay(caretView, at: placement)
+            caretView.alpha = 1
+            caretView.freezeSolid()
             lastCaretContainer = placement.container
             lastCaretFrame = placement.frame
             return

@@ -13,6 +13,7 @@ import TranslateUI
 import TooltipComponent
 import Markdown
 import PlainButtonComponent
+import TextFieldComponent
 
 private let languageRecognizer = NLLanguageRecognizer()
 
@@ -54,7 +55,7 @@ func localizedLanguageName(strings: PresentationStrings, language: String, kind:
 final class TextProcessingTranslateContentComponent: Component {
     enum Mode: Equatable {
         case translate(ignoredLanguages: [String])
-        case stylize
+        case stylize(isComposeWithAI: Bool, appliedPrompt: String?)
         case fix
         case preview(from: ComposedRichMessage?, to: ComposedRichMessage?, authorPeer: EnginePeer?, userCount: Int, isRequesting: Bool)
     }
@@ -63,6 +64,7 @@ final class TextProcessingTranslateContentComponent: Component {
         fileprivate(set) var sourceLanguage: String?
         fileprivate(set) var sectionHeader: AnyComponentWithIdentity<Empty>?
         fileprivate(set) var sectionFooter: AnyComponentWithIdentity<Empty>?
+        fileprivate(set) var promptText: String = ""
         
         fileprivate(set) var result: (language: String, text: ComposedRichMessage?, textCorrectionRanges: [Range<Int>])? = nil {
             didSet {
@@ -72,6 +74,7 @@ final class TextProcessingTranslateContentComponent: Component {
             }
         }
         var resultUpdated: (((language: String, text: ComposedRichMessage?, textCorrectionRanges: [Range<Int>])?) -> Void)?
+        var promptTextUpdated: (() -> Void)?
         
         fileprivate(set) var emojify: Bool = false
         fileprivate(set) var isSourceTextExpanded: Bool = false
@@ -180,6 +183,9 @@ final class TextProcessingTranslateContentComponent: Component {
         private let styleSelection = ComponentView<Empty>()
         private let styleSelectionContainer: UIView
         private let targetText = ComponentView<Empty>()
+        private var promptSeparatorLayer: SimpleLayer?
+        private var promptField: ComponentView<Empty>?
+        private var promptFieldState = TextFieldComponent.ExternalState()
         private let separatorLayer: SimpleLayer
         
         private var styleTooltip: (dimView: UIView, tooltip: ComponentView<Empty>)?
@@ -209,7 +215,7 @@ final class TextProcessingTranslateContentComponent: Component {
             self.processDisposable?.dispose()
         }
         
-        private func beginTranslationIfNecessary(reset: Bool) {
+        private func beginTranslationIfNecessary(reset: Bool, force: Bool) {
             guard let component = self.component else {
                 return
             }
@@ -222,14 +228,24 @@ final class TextProcessingTranslateContentComponent: Component {
                 }
             }
             
-            if let result = component.externalState.result, result.text == nil, self.processDisposable == nil {
+            if let result = component.externalState.result, (result.text == nil || force), self.processDisposable == nil {
                 let mappedMode: TelegramComposeAIMessageMode?
                 
                 switch component.mode {
                 case .translate:
                     mappedMode = .translate(toLanguage: result.language, emojify: component.externalState.emojify, style: component.externalState.style)
                 case .stylize:
-                    if !component.externalState.emojify && component.externalState.style == .neutral {
+                    if case let .stylize(isComposeWithAI, appliedPrompt) = component.mode, isComposeWithAI {
+                        if let appliedPrompt, !appliedPrompt.isEmpty {
+                            mappedMode = .generate(prompt: appliedPrompt)
+                            component.externalState.isProcessing = true
+                            if !self.isUpdating {
+                                self.state?.updated(transition: .spring(duration: 0.4))
+                            }
+                        } else {
+                            mappedMode = nil
+                        }
+                    } else if !component.externalState.emojify && component.externalState.style == .neutral {
                         mappedMode = nil
                         component.externalState.isProcessing = false
                         component.externalState.result = (result.language, component.inputText, [])
@@ -280,12 +296,21 @@ final class TextProcessingTranslateContentComponent: Component {
                 styleSelectionView.scrollToStart()
             }
         }
+        
+        func refreshResult() {
+            if let processDisposable = self.processDisposable {
+                self.processDisposable = nil
+                processDisposable.dispose()
+            }
+            self.beginTranslationIfNecessary(reset: false, force: true)
+        }
 
         func update(component: TextProcessingTranslateContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
                 self.isUpdating = false
             }
+            let previousComponent = self.component
             
             if component.externalState.sourceLanguage == nil {
                 let plainText: String
@@ -347,14 +372,31 @@ final class TextProcessingTranslateContentComponent: Component {
                     }
                     
                     component.externalState.result = (toLanguage, nil, [])
-                    self.beginTranslationIfNecessary(reset: false)
-                case .stylize:
-                    component.externalState.result = ("", component.inputText, [])
+                    self.beginTranslationIfNecessary(reset: false, force: false)
+                case let .stylize(isComposeWithAI, _):
+                    if isComposeWithAI {
+                        component.externalState.result = ("", nil, [])
+                    } else {
+                        component.externalState.result = ("", component.inputText, [])
+                    }
                 case .fix:
                     component.externalState.result = ("", nil, [])
-                    self.beginTranslationIfNecessary(reset: false)
+                    self.beginTranslationIfNecessary(reset: false, force: false)
                 case .preview:
                     component.externalState.result = ("", component.inputText, [])
+                }
+            }
+            if case let .stylize(isComposeWithAI, appliedPrompt) = component.mode, isComposeWithAI, let appliedPrompt, !appliedPrompt.isEmpty {
+                var beginGenerating = false
+                if let previousComponent, case let .stylize(previousIsComposeWithAI, previousAppliedPrompt) = previousComponent.mode, previousIsComposeWithAI {
+                    if previousAppliedPrompt != appliedPrompt {
+                        beginGenerating = true
+                    }
+                } else {
+                    beginGenerating = true
+                }
+                if beginGenerating {
+                    self.beginTranslationIfNecessary(reset: false, force: false)
                 }
             }
             
@@ -381,11 +423,15 @@ final class TextProcessingTranslateContentComponent: Component {
                 }
             case .stylize, .fix:
                 fromFormat = component.strings.TextProcessing_OriginalBadge
-                if case .stylize = component.mode {
-                    if component.externalState.style == .neutral {
-                        toFormat = component.strings.TextProcessing_OriginalStyleBadge
-                    } else {
+                if case let .stylize(isComposeWithAI, _) = component.mode {
+                    if isComposeWithAI {
                         toFormat = component.strings.TextProcessing_ResultBadge
+                    } else {
+                        if component.externalState.style == .neutral {
+                            toFormat = component.strings.TextProcessing_OriginalStyleBadge
+                        } else {
+                            toFormat = component.strings.TextProcessing_ResultBadge
+                        }
                     }
                 } else {
                     toFormat = component.strings.TextProcessing_ResultBadge
@@ -415,7 +461,7 @@ final class TextProcessingTranslateContentComponent: Component {
                 toTextMeasurementString = to
             }
             
-            if case .stylize = component.mode {
+            if case let .stylize(isComposeWithAI, _) = component.mode, !isComposeWithAI {
                 if case .style = component.externalState.style, let style = component.styles.first(where: { $0.id == component.externalState.style }), let authorPeer = style.authorPeer {
                     let footerText: String
                     if let addressName = authorPeer.addressName {
@@ -525,8 +571,7 @@ final class TextProcessingTranslateContentComponent: Component {
                 )))
             }
             
-            contentHeight += topInset
-            if case .stylize = component.mode {
+            if case let .stylize(isComposeWithAI, _) = component.mode {
                 let styleSelectionSize = self.styleSelection.update(
                     transition: transition,
                     component: AnyComponent(TextProcessingStyleSelectionComponent(
@@ -544,7 +589,7 @@ final class TextProcessingTranslateContentComponent: Component {
                                 
                                 if let result = component.externalState.result {
                                     component.externalState.result = (result.language, nil, [])
-                                    self.beginTranslationIfNecessary(reset: true)
+                                    self.beginTranslationIfNecessary(reset: true, force: false)
                                     if !self.isUpdating {
                                         self.state?.updated(transition: .spring(duration: 0.4))
                                     }
@@ -567,8 +612,14 @@ final class TextProcessingTranslateContentComponent: Component {
                     environment: {},
                     containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 46.0)
                 )
-                let styleSelectionFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: styleSelectionSize)
-                contentHeight += styleSelectionSize.height
+                var styleSelectionFrame = CGRect(origin: CGPoint(x: sideInset, y: topInset + contentHeight), size: styleSelectionSize)
+                
+                let displayStyleSelection = !isComposeWithAI
+                if displayStyleSelection {
+                    contentHeight += topInset + styleSelectionSize.height
+                } else {
+                    styleSelectionFrame.origin.y -= styleSelectionSize.height
+                }
                 
                 if let styleSelectionView = self.styleSelection.view {
                     if styleSelectionView.superview == nil {
@@ -577,8 +628,10 @@ final class TextProcessingTranslateContentComponent: Component {
                         self.addSubview(self.styleSelectionContainer)
                     }
                     transition.setFrame(view: styleSelectionView, frame: styleSelectionFrame)
+                    transition.setAlpha(view: styleSelectionView, alpha: displayStyleSelection ? 1.0 : 0.0)
                 }
             } else {
+                contentHeight += topInset
                 let sourceTextSize = self.sourceText.update(
                     transition: transition,
                     component: AnyComponent(TextProcessingTextAreaComponent(
@@ -631,6 +684,13 @@ final class TextProcessingTranslateContentComponent: Component {
                 isTranslate = false
             }
             
+            var displayEmojify = false
+            if isTranslate {
+                displayEmojify = true
+            } else if case let .stylize(isComposeWithAI, _) = component.mode, !isComposeWithAI {
+                displayEmojify = true
+            }
+            
             let targetTextSize = self.targetText.update(
                 transition: transition,
                 component: AnyComponent(TextProcessingTextAreaComponent(
@@ -655,7 +715,7 @@ final class TextProcessingTranslateContentComponent: Component {
                                 if !self.isUpdating {
                                     self.state?.updated(transition: .spring(duration: 0.4))
                                 }
-                                self.beginTranslationIfNecessary(reset: true)
+                                self.beginTranslationIfNecessary(reset: true, force: false)
                             }
                         })
                     } : nil,
@@ -666,7 +726,7 @@ final class TextProcessingTranslateContentComponent: Component {
                         }
                         component.copyAction?()
                     } : nil,
-                    emojify: (isTranslate || component.mode == .stylize) ? (
+                    emojify: displayEmojify ? (
                         component.externalState.emojify,
                         { [weak self] in
                             guard let self, let component = self.component else {
@@ -674,7 +734,7 @@ final class TextProcessingTranslateContentComponent: Component {
                             }
                             component.externalState.emojify = !component.externalState.emojify
                             
-                            self.beginTranslationIfNecessary(reset: true)
+                            self.beginTranslationIfNecessary(reset: true, force: false)
                             if !self.isUpdating {
                                 self.state?.updated(transition: .spring(duration: 0.4))
                             }
@@ -690,22 +750,116 @@ final class TextProcessingTranslateContentComponent: Component {
                 containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: availableSize.height)
             )
             
+            var displayTargetText = true
+            if case let .stylize(isComposeWithAI, appliedPrompt) = component.mode {
+                if !(!isComposeWithAI || appliedPrompt != nil) {
+                    displayTargetText = false
+                }
+            }
+            
+            if case let .stylize(isComposeWithAI, _) = component.mode, isComposeWithAI {
+                let promptField: ComponentView<Empty>
+                var promptFieldTransition = transition
+                if let current = self.promptField {
+                    promptField = current
+                } else{
+                    promptField = ComponentView()
+                    self.promptField = promptField
+                    promptFieldTransition = promptFieldTransition.withAnimation(.none)
+                }
+                
+                //TODO:localize
+                let promptFieldSize = promptField.update(
+                    transition: promptFieldTransition,
+                    component: AnyComponent(TextFieldComponent(
+                        context: component.context,
+                        theme: component.theme,
+                        strings: component.strings,
+                        externalState: self.promptFieldState,
+                        fontSize: 17.0,
+                        textColor: component.theme.list.itemPrimaryTextColor,
+                        accentColor: component.theme.list.itemAccentColor,
+                        insets: UIEdgeInsets(top: topInset, left: 0.0, bottom: bottomInset, right: 0.0),
+                        hideKeyboard: false,
+                        customInputView: nil,
+                        placeholder: NSAttributedString(string: "Generate text, formulas, or tables...", font: Font.regular(17.0), textColor: component.theme.list.itemPlaceholderTextColor),
+                        placeholderVerticalOffset: 3.0,
+                        resetText: nil,
+                        isOneLineWhenUnfocused: false,
+                        characterLimit: 1000,
+                        enableInlineAnimations: true,
+                        emptyLineHandling: .allowed,
+                        formatMenuAvailability: .none,
+                        lockedFormatAction: {},
+                        present: { _ in },
+                        paste: { _ in },
+                        returnKeyAction: {
+                        }
+                    )),
+                    environment: {},
+                    containerSize: CGSize(width: availableSize.width - sideInset * 2.0, height: 1000.0)
+                )
+                let promptFieldFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: promptFieldSize)
+                if let promptFieldView = promptField.view {
+                    promptField.parentState = state
+                    if promptFieldView.superview == nil {
+                        promptFieldView.alpha = 0.0
+                        self.addSubview(promptFieldView)
+                        self.promptFieldState.updated = { [weak self] in
+                            guard let self, let component = self.component else {
+                                return
+                            }
+                            component.externalState.promptText = self.promptFieldState.text.string
+                            component.externalState.promptTextUpdated?()
+                        }
+                    }
+                    promptFieldTransition.setFrame(view: promptFieldView, frame: promptFieldFrame)
+                    transition.setAlpha(view: promptFieldView, alpha: 1.0)
+                }
+                contentHeight += promptFieldSize.height + 2.0
+                if displayTargetText {
+                    contentHeight -= 14.0
+                }
+            } else {
+                if let promptField = self.promptField {
+                    self.promptField = nil
+                    self.promptFieldState = TextFieldComponent.ExternalState()
+                    if let promptFieldView = promptField.view {
+                        transition.setAlpha(view: promptFieldView, alpha: 0.0, completion: { [weak promptFieldView] _ in
+                            promptFieldView?.removeFromSuperview()
+                        })
+                    }
+                }
+            }
+            
             transition.setFrame(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight + floorToScreenPixels((blockSpacing - UIScreenPixel) * 0.5) - 1.0), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel)))
             self.separatorLayer.backgroundColor = component.theme.list.itemBlocksSeparatorColor.cgColor
+            transition.setAlpha(layer: self.separatorLayer, alpha: displayTargetText ? 1.0 : 0.0)
             
-            contentHeight += blockSpacing
-            let targetTextFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: targetTextSize)
-            contentHeight += targetTextSize.height
+            let targetTextFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight + blockSpacing), size: targetTextSize)
+            if displayTargetText {
+                contentHeight += blockSpacing
+                contentHeight += targetTextSize.height
+            }
+            
+            var targetTextAlpha: CGFloat = 1.0
+            if case let .stylize(isComposeWithAI, _) = component.mode, isComposeWithAI, component.externalState.isProcessing {
+                targetTextAlpha = 0.5
+            }
             
             if let targetTextView = self.targetText.view {
                 if targetTextView.superview == nil {
                     self.targetText.parentState = state
+                    targetTextView.layer.allowsGroupOpacity = true
                     self.addSubview(targetTextView)
                 }
                 transition.setFrame(view: targetTextView, frame: targetTextFrame)
+                transition.setAlpha(view: targetTextView, alpha: displayTargetText ? targetTextAlpha : 0.0)
             }
 
-            contentHeight += bottomInset
+            if displayTargetText {
+                contentHeight += bottomInset
+            }
             
             let size = CGSize(width: availableSize.width, height: contentHeight)
             

@@ -393,6 +393,66 @@ stray selection); full SwiftPM suite green (Core 102 + UIKit; incl. `TransientCa
 `FloatingCursorTests`) and the full Bazel app build is green. (Per the module convention, the per-phase
 design spec/plan are not retained in-tree; this note is the in-tree record.)
 
+**Loupe grow-from-cursor + gliding shadow caret (added 2026-07-06, runtime-verified, squashed to master, `feature/richtext-loupe-grow-cursor`).**
+The long-press magnifier (`UITextLoupeSession`) now **animates from the caret** and drags with the floating-cursor
+visual. **This is the ONE scoped exception to "no `UITextSelectionDisplayInteraction`":** the loupe's grow
+animation IGNORES a bare/own caret view passed as `fromSelectionWidgetView` — device-verified, a bare `UIView`,
+a frozen-solid one, AND even a `UITextCursorView`-conforming view all fail (the loupe grows at the *touch*, not
+the widget). It only honors a real system `cursorView`, which is owned by a `UITextSelectionDisplayInteraction`.
+So `handleLongPress` **creates a FRESH interaction per drag and tears it down on release** (`removeInteraction`),
+borrowing `interaction.cursorView` as the widget. **Per-drag lifecycle is load-bearing:** a PERSISTENT interaction
+goes stale against the canvas's view virtualization and crashes with a use-after-free in
+`-[UITextSelectionDisplayInteraction setActivated:]` (`objc_retain` on a freed selection view) on a SUBSEQUENT
+drag after intervening edits (device-log-verified). Its injected chrome (cursor / lollipops / accessory, ~26
+views) is corralled in a dedicated `selectionChromeContainer` (returned from the `selectionContainerViewBelowText`
+delegate) that the block-view reload loop never frees, and `removeInteraction` clears it on release — no
+orphaned-lollipop leak.
+
+**Visual during the drag** (the spacebar floating-cursor look): the **accent** `TransientCaretView` glides at the
+raw finger x (unsnapped, `positionLoupeShadow`); OUR own `CaretView` is the desaturated **"shadow"** at the
+snapped real-caret position (`RichTextEditorTheme.shadowCursor`, a light **HSL-lightness** gray — NOT HSB
+`saturation:0`, which whitens a bright accent; recolored for the drag and restored on `.ended` via
+`loupeSavedCaretAccent`); the borrowed system cursor is kept **near-invisible** (`alpha 0.01`, grow anchor only)
+so its native blink can't flicker through. On release the widget is **snapped to the final caret**
+(`setNeedsSelectionUpdate`+`layoutManagedSubviews`) BEFORE `invalidate()`, so the loupe animates OUT onto the
+caret, not the finger (the loupe's `move(to: finger)` had been dragging the widget along). `CaretView`
+**conforms to `UITextCursorView`** (`isBlinking`/`resetBlinkAnimation`) so a future non-interaction path could
+hand it directly, but the loupe still needs the interaction-owned cursor today.
+
+**The drag reports the selection ONCE, at the final position — not per frame (added 2026-07-06).** Both report
+channels are deferred to the drag's end, each by its own "fire once" mechanism:
+- **Host report** (`onSelectionChange` → the composer's `onChange`: interface-state selection commit + re-layout).
+  `handleLongPress` moves the caret each frame with `setCaret(global:reportSelectionChange:false)`, which
+  SUPPRESSES `onSelectionChange`. It fires once on the terminal state: `.ended` re-runs the default `setCaret`
+  (reports); `.cancelled`/`.failed` call `onSelectionChange?()` directly so the host isn't left stale.
+- **OS input-delegate bracket** (`selectionWillChange/DidChange` → the keyboard's autocorrect/candidate bar).
+  Left un-coalesced, a per-frame bracket makes the **keyboard suggestions visibly JUMP** on every move. The drag
+  reuses the selection-handle-drag coalescing: `.began` calls `beginCoalescedSelectionDrag()`, `setCaret` now
+  skips the bracket while `coalescingSelectionNotifications` is set (mirroring `setSelectionHead`), and the
+  terminal `endCoalescedSelectionDrag()` fires exactly ONE bracket for the final caret. (The `selectedTextRange`
+  getter stays live throughout; the keyboard only recomputes on a bracket.)
+
+This is the same "report once at the end" model the floating cursor (spacebar-trackpad, `moveFloatingCaret` +
+`endFloatingCursor`) uses for the host report, and it's the ONE loupe caret-move exception to the repo-wide
+*"any caret-moving op must fire `onSelectionChange`"* invariant. NOTE the loupe goes further than the floating
+cursor, which still brackets the input delegate per frame (its keyboard shows no suggestion bar during the
+trackpad gesture, so it doesn't churn visibly). Trade-off: the outer-document scroll-follow (bundled into the
+composer's `onSelectionChange` closure) is likewise deferred to the drag's end — negligible in the compact
+composer; a dedicated per-drag auto-scroll driver (like the floating cursor's) is the follow-up if a tall
+full-page editor needs edge auto-scroll during a loupe drag. Guarded by
+`SelectionInteractionTests.test_setCaret_withReportSuppressed_defersHostReport_untilTheDragEnds` (host) +
+`…test_loupeDrag_coalescesInputDelegate_soKeyboardSuggestionsDoNotChurn` (keyboard).
+
+**Proximity-adaptive long-press delay** (`LocationAdaptiveLongPressGestureRecognizer` — sets `minimumPressDuration`
+per-touch in `touchesBegan` before `super`): near-instant (`loupeDelayNearCursor`) when the touch starts within
+`loupeNearCursorRadius` of the caret ("grab the cursor"), longer (`loupeDelayFarFromCursor`) otherwise. A literal
+`0` is unusable — tap and long-press share touches, so `0` fires the loupe on every quick tap.
+
+**`inputHitTestSlop` (composer, `RichTextEditorChatInputNode`).** The panel's negative slop (a bigger tap target)
+is now applied by a `hitTest(_:with:)` override on the node, routing a touch in the slop ring around `editorView`
+into the editor's canvas — `ASDisplayNode.hitTest` is forwarded to by `_ASDisplayView` when overridden (with a
+re-entrancy guard, so `super.hitTest` is the standard UIView pass). Build-verified only.
+
 The host action bar (12 icon actions + ContextUI context menus) lives in the separate `RichTextAttachmentScreen`
 module, not this package. Full session handoff: `~/Documents/RichTextEditor/docs/superpowers/handoffs/2026-06-12-richtext-session-handoff.md`.
 
@@ -702,6 +762,88 @@ non-interactive topmost overlay: the field frame (red outline), scroll insets (b
 ring), and per-block frames (orange, indexed), with inset/margin numeric labels. Refreshed from `performLayout` /
 `scrollViewDidScroll`; reads geometry via `bounds` / `debugContentInset` / `canvas`. Compiled out of release entirely.
 
+## TECH DEBT — `resolveBox` degenerate-container misroute (needs generalization; may require re-architecture)
+
+**Status: known-brittle. The current fixes are point-patches, not a design. Generalize this — changing the
+architecture if that's what it takes.**
+
+**Root cause (one bug, many faces).** Position→box resolution has TWO mechanisms that disagree:
+- `activeStack(at:)` / `leafRegion(containingGlobal:)` — **container-aware**: they descend into
+  `BlockQuoteBox.children` / table cells and resolve the real leaf.
+- `resolveBox(at:)` / `box(containingGlobal:)` — **NOT** container-aware: a `BlockQuoteBox`/`TableBlockBox`
+  has a *degenerate* `CanvasBlock` text extent (`textStart == nodeStart`, `textLength == 0`; the real text is
+  in children), so a position **inside** such a container matches no top-level box and the fallback loop
+  returns the **following top-level block** (`pos < nextBox.textStart`). A quote/pull-quote **author** region
+  is the same trap from the other side: it's a *second* leaf region off `activeStack`'s child-descent, so
+  `activeStack`'s own resolveBox-based fallback mis-resolves it too.
+
+So **any code that calls `resolveBox`/`box(containingGlobal:)` with a position that can be container-interior,
+and then ACTS on the result, edits/reads the wrong (following) block.** This produced a whole family of device
+bugs, each fixed individually (see git log ~2026-07-05): in-text/first-line/sibling/mid-text Backspace, the
+object-replacement-range Backspace (`sel=a..b`), Return-in-author, the empty-paragraph-after-atom handler
+(line ~530, twice), `insertTable`/`insertMedia`, `currentState()` toolbar state, and IME
+`isBodyParagraphPosition`.
+
+**How they were patched (the brittle part).** Two ad-hoc moves, applied per call site: (a) swap `resolveBox`
+→ `activeStack`/`leafRegion`; or (b) bolt on a `!isInsideBlockQuote(pos)` / `!isInsideTable(pos)` guard. There
+is **no invariant** preventing the next `resolveBox` consumer from re-introducing the bug — every new call
+site is a fresh landmine, and the guards are easy to forget. `RTEDBG q0705*` instrumentation (now stripped)
+was needed twice because unit tests with a *non-empty* following block hid the misroute (line ~530 only fires
+when the following block is empty).
+
+**The real fix (do this).** Make position resolution container-aware **by construction** so a single resolver
+cannot mis-resolve a container-interior position:
+- Unify on ONE descending resolver (fold `resolveBox`/`box(containingGlobal:)` into the `activeStack` descent,
+  or give containers a non-degenerate `CanvasBlock` extent so the fallback loop can't skip them), and retire
+  the degenerate-`textLength` fallback that returns the following block.
+- Represent the author as a first-class leaf on the child axis (or make `activeStack` descend to it) so it
+  stops being a special-cased "second region."
+- Then delete the scattered `!isInsideBlockQuote`/`!isInsideTable` guards and the `resolveBox`→`activeStack`
+  swaps — they become unnecessary once resolution can't misroute.
+- Guardrail until then: a new `resolveBox`/`box(containingGlobal:)` call site that acts on the result is a
+  code smell — prefer `activeStack`/`leafRegion`, and if you must use `resolveBox`, guard the container cases.
+
+## TECH DEBT — display-only font size is PINNED into runs on read-back (needs a style-inheritance re-think)
+
+**Status: known-brittle. The style-transition font fixes are point-patches. Generalize this.**
+
+**Root cause.** A run's rendered font SIZE is display-derived from the paragraph style (heading1 = 24, body =
+17, table cells = 15 via the `tableCells` mapper variant), NOT stored per-run — EXCEPT that
+`AttributedStringMapper.characterAttributes(from:)` **unconditionally PINS** the rendered size into
+`CharacterAttributes.fontSize` on read-back (`currentParagraph()` / `runs(from:)`). That pin exists so a
+non-default size survives being moved between contexts (the "15pt table-cell round-trip": copy a cell, paste
+elsewhere, keep 15pt). But it means **any run that moves to a paragraph with a DIFFERENT style keeps its old
+size, overriding the new style** — because the pinned `fontSize` beats the style default at layout time. Font
+FAMILY does NOT have this problem (it's deliberately not round-tripped — see the RTL font-family invariant).
+
+**Where it bites (patched ~2026-07-05):**
+- **MERGE across styles is handled centrally in `ParagraphBlock.merging`** (Core): when the two paragraphs'
+  styles differ, the appended (other) runs get their `fontSize` cleared so they inherit the surviving style's
+  size. This covers every merge path at once — `deleteBackward`'s top-level `applyReplace` merge (Backspace at
+  a body paragraph's start into a preceding heading — reached as a RANGE `[prevEnd, thisStart]`, NOT a
+  collapsed caret, so it goes through `applySelectionReplace` → `applyReplace` → `merging`) and
+  `mergeParagraphs`. Same-style merges keep the pin (preserving the 15pt table-cell round-trip).
+- **SPLIT (`insertParagraphBreak`) is still a separate patch**: Return in a heading makes the tail a body
+  paragraph and clears the tail runs' `fontSize` (a split is not a `merging` call, so it needs its own sweep).
+
+**Still ad-hoc on the split side and anywhere else runs cross a style boundary WITHOUT going through
+`merging`** — paste, RTF import, format-menu style change, list/quote wraps, drag are each a fresh place the
+pinned size can leak the wrong value. There is **no invariant** enforcing "a run's size follows its paragraph
+style unless the user explicitly overrode it." (**Lesson:** the merge fix was first written as scattered
+per-call-site patches AND a collapsed-caret-only unit test; both missed that iOS delivers Backspace-at-start as
+a RANGE. Centralizing in `merging` + testing the range form fixed it.)
+
+**The real fix (do this).** Separate *style-derived* size from a *user-explicit* size override:
+- Do NOT pin the style-default size on read-back; only pin a size that DIFFERS from the run's paragraph-style
+  default (mirrors how foreground color is stripped when it equals the style default — see the round-trip
+  invariant). Then a heading run reads back with `fontSize == nil` and inherits whatever paragraph style it
+  lands in; the 15pt cell case is handled by resolving the size against the *cell's* style at pin time (pin
+  only when 15 ≠ the destination style's default), or by carrying the cell size as context, not per-run.
+- Then delete the scattered `fontSize = nil` patches in `insertParagraphBreak` / `mergeParagraphs` — they
+  become unnecessary once size inherits the style by construction.
+- Guardrail until then: any new code path that moves runs into a different-styled paragraph must strip the
+  runs' pinned `fontSize` (or it will render at the wrong size).
+
 ## Load-bearing invariants (compiler-invisible — violating these silently breaks the editor)
 
 - **One flat global `(anchor, head)` range, coordinate-free.** Selection is a single linear range over one
@@ -715,15 +857,18 @@ ring), and per-block frames (orange, indexed), with inset/margin numeric labels.
   first responders. `caretRect`/`closestPosition`/`selectionRects`/`contentSize` derive from **box frames
   over ALL boxes**, never the realized (possibly culled) views, so off-screen view virtualization changes
   no editing/selection/nav/hit-test behavior.
-- **No `UITextSelectionDisplayInteraction`; everything is own-drawn.** The canvas installs none and has
-  **no `draw(_:)` override** — it is a pure container of bounded subviews (a single CALayer/CGContext can't
-  back an arbitrarily tall document; GPU max-texture ~16K px). Caret (`CaretView`), selection wash
-  (`SelectionHighlightView` + per-table `CellSelectionView`), and handles (`SelectionHandleView`) are
-  dedicated on-top layers/views, hosted in a table's scrolling content view for cell endpoints so they
+- **No PERSISTENT `UITextSelectionDisplayInteraction`; everything is own-drawn.** The canvas installs none
+  persistently and has **no `draw(_:)` override** — it is a pure container of bounded subviews (a single
+  CALayer/CGContext can't back an arbitrarily tall document; GPU max-texture ~16K px). Caret (`CaretView`),
+  selection wash (`SelectionHighlightView` + per-table `CellSelectionView`), and handles (`SelectionHandleView`)
+  are dedicated on-top layers/views, hosted in a table's scrolling content view for cell endpoints so they
   **ride horizontal overscroll**. (Un-clamping a table's `contentOffsetX` so the OS selection UI could ride
   the bounce makes the OS text system *fight* the caret — rejected; the clamp stays and we own-draw.)
   `caretRect(for:)` must still report a **real** position even when the visible caret is hidden — it feeds
-  the OS's nav/scroll/loupe/edit-menu.
+  the OS's nav/scroll/loupe/edit-menu. **The ONE scoped exception:** a FRESH interaction is created per
+  long-press loupe drag and torn down on release, borrowed only to hand the loupe a real `cursorView` widget
+  (a bare/own caret is ignored by the grow animation) — per-drag, or it crashes against the view virtualization.
+  See the "Loupe grow-from-cursor" note above.
 - **`caretRect` is OS-facing nav geometry.** Hardware vertical arrows are driven by the OS via
   `position(from:in:direction:)` + the `selectedTextRange` setter — **not** `keyCommands` (arrow
   `keyCommands` never fire here). Vertical-nav results are `snapToRenderable`'d so the caret can't strand
@@ -813,6 +958,32 @@ ring), and per-block frames (orange, indexed), with inset/margin numeric labels.
   **outside** `editing{}` with one undo per composition; a system inline prediction (signalled by
   `setMarkedText` `sel:{0,0}`, ghost trailing) is **dismissed, never committed**, by our finalize
   chokepoints so the keyboard's own accept lands clean.
+- **A deliberate selection/cursor-move DISMISSES the keyboard's pending AUTOCORRECT** (the candidate bar / inline
+  prompt), added 2026-07-06, **device-log-verified** (runtime-confirmed on ⌘A). Distinct from the inline prediction
+  above (which is OUR marked text) — the autocorrect candidate is the keyboard's own state, so the only lever is the
+  input delegate. **Two coupled halves, BOTH held under one `isDroppingPendingAutocorrection` window** (the mechanism
+  was pinned by NSLog instrumentation — the first two cuts guessed wrong; capture, don't hypothesise):
+  - **Block the ACCEPT.** The keyboard COMMITS its pending correction via a `replace(...)` (or `insertText`) fired
+    **SYNCHRONOUSLY in response to the real `selectionDidChange`** of a selection that leaves the word (e.g. ⌘A's
+    range) — NOT in response to any jiggle. So the four text-mutation entry points (`insertText`/`replace`/
+    `deleteBackward`/`setMarkedText`) **no-op while `isDroppingPendingAutocorrection` is set** — the legacy
+    `isPreservingText` → `shouldChangeTextIn` → false role. Without this the commit LANDS and ⌘A "accepts" the
+    correction (bug cut #1: applied "Omw"→"On my way!").
+  - **Trigger the DISMISS.** Blocking the accept alone leaves the keyboard still SHOWING the suggestion (bug cut #2).
+    An extra `autocorrectDismissJiggle()` — a momentary FAKE one-position selection then back, bracketed to the input
+    delegate — run **while still blocked** makes the keyboard DROP the correction (mirrors the legacy
+    `ChatInputTextView.dropAutocorrectioniOS16` jiggle; its provoked commits also no-op).
+
+  `applySelection` (Select-All ⌘A / double-tap word / triple-tap paragraph — the primary case) sets the block, fires
+  its real selection bracket, runs the jiggle, then clears the block (`onSelectionChange` fires AFTER, unblocked).
+  `dropPendingAutocorrection()` (`+MarkedText.swift`) wraps just the block+jiggle for the start of the coalesced
+  **loupe cursor-drag** + **selection-handle drag**; a **no-op while marked text is active** (the keyboard owns that
+  range) or unfocused. The whole thing is low-level (touches only `anchor`/`head`, restored synchronously, + the
+  brackets — never `onSelectionChange`, the menu, or the drawn caret), DISMISSES (discards) rather than accepts, so
+  the typed text is unchanged. Regression-guarded by `SelectionInteractionTests.test_dropPendingAutocorrection_*` +
+  `…test_selectAll_blocksTheKeyboardsAutocorrectCommit_*` (a spy mimics the keyboard's synchronous commit-attempt and
+  asserts it's blocked → text unchanged). NOTE the keyboard-DROP half is keyboard-driven and can't be unit-tested;
+  the drag paths reuse the same primitive but were only runtime-verified for ⌘A.
 - **The undo buffer is a PRIVATE, per-canvas `UndoManager`, NOT the responder-chain `UIResponder.undoManager`**
   (`DocumentCanvasView.effectiveUndoManager = undoManagerOverride ?? ownUndoManager`, the latter a private
   `UndoManager()`). The responder-chain manager is shared app-wide, so other responders' (and the system

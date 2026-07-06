@@ -4,11 +4,13 @@ import RichTextEditorCore
 
 @available(iOS 13.0, *)
 extension DocumentCanvasView {
-    /// The top-level paragraph box containing the caret (`head`), or nil when the caret is inside a table
-    /// cell (there the containing top-level box is a `TableBlockBox`, not a `BlockBox`).
+    /// The paragraph box containing the caret (`head`) — a top-level paragraph OR a block-quote child —
+    /// used for the toolbar's paragraph style / list marker. Nil inside a table cell. Resolves via
+    /// `activeStack` (container-aware), NOT `resolveBox`: a caret inside a quote has no degenerate-safe
+    /// `resolveBox`, so `resolveBox(head)` would mis-resolve to the FOLLOWING block and report its style.
     private func headTopLevelBlock() -> BlockBox? {
-        guard let r = resolveBox(at: head) else { return nil }
-        return r.box as? BlockBox
+        guard !isInsideTable(head) else { return nil }
+        return activeStack(at: head)?.box as? BlockBox
     }
 
     private func currentInlineFormats() -> (bold: Bool, italic: Bool, underline: Bool, strikethrough: Bool, code: Bool) {
@@ -34,8 +36,8 @@ extension DocumentCanvasView {
         return RichTextEditorView.EditorState(
             bold: fmt.bold, italic: fmt.italic, underline: fmt.underline, strikethrough: fmt.strikethrough, code: fmt.code,
             paragraphStyle: topBlock?.style,
-            isCodeBlock: resolveBox(at: head)?.box is CodeBlockBox,
-            isPullQuote: resolveBox(at: head)?.box is PullQuoteBox,
+            isCodeBlock: activeStack(at: head)?.box is CodeBlockBox,
+            isPullQuote: activeStack(at: head)?.box is PullQuoteBox,
             listMarker: topBlock?.listMembership?.marker,
             link: currentLink(),
             // Either endpoint in a table: a selection partially overlapping a table still counts as

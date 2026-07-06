@@ -67,11 +67,11 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
         case let .code(c):
             result.append(.preformatted(text: richText(from: c.runs), language: c.language))
         case let .pullQuote(pq):
-            result.append(.pullQuote(text: richText(from: pq.runs), caption: .empty))
+            result.append(.pullQuote(text: richText(from: pq.runs), caption: authorCaptionRichText(pq.author, italic: true)))
         case let .blockQuote(bq):
             // Recursive structured blockquote: forward the inner content unchanged. `collapsed` maps 1:1.
             result.append(.blockQuote(blocks: instantPageBlocks(from: bq.content, collectingMediaInto: &media),
-                                      caption: .empty, collapsed: bq.collapsed))
+                                      caption: authorCaptionRichText(bq.author), collapsed: bq.collapsed))
         case let .media(m):
             let caption = InstantPageCaption(text: richText(from: m.caption), credit: .empty)
             switch m.kind {
@@ -168,6 +168,18 @@ func richText(from runs: [ChatInputRun]) -> RichText {
     return parts.count == 1 ? parts[0] : .concat(parts)
 }
 
+/// Force bold (and, when `italic` is set — pull quotes only — italic too) on each author run for the
+/// emitted InstantPage caption (both are ambient — not in the model — but must render that way on the
+/// recipient). Empty stays empty (→ `.empty`, no bold/italic wrapper).
+private func authorCaptionRichText(_ author: [ChatInputRun], italic: Bool = false) -> RichText {
+    richText(from: author.map { var r = $0; r.attributes.bold = true; if italic { r.attributes.italic = true }; return r })
+}
+/// Strip the ambient bold (and, when `italic` is set, the ambient italic) from a decoded quote caption so
+/// `author` matches the model (bold/italic-free).
+private func authorRuns(fromCaption rt: RichText, italic: Bool = false) -> [ChatInputRun] {
+    chatInputRuns(fromRichText: rt).map { var r = $0; r.attributes.bold = false; if italic { r.attributes.italic = false }; return r }
+}
+
 // MARK: - Reverse: InstantPage -> ChatInputContent
 
 public func chatInputContent(fromInstantPage page: InstantPage) -> ChatInputContent {
@@ -204,16 +216,18 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             }
         case let .preformatted(rt, language):
             result.append(.code(ChatInputCode(language: language, runs: chatInputRuns(fromRichText: rt))))
-        case let .pullQuote(rt, _):
-            result.append(.pullQuote(ChatInputPullQuote(runs: chatInputRuns(fromRichText: rt))))
-        case let .blockQuote(innerBlocks, _, collapsed):
+        case let .pullQuote(rt, caption):
+            result.append(.pullQuote(ChatInputPullQuote(runs: chatInputRuns(fromRichText: rt),
+                                                        author: authorRuns(fromCaption: caption, italic: true))))
+        case let .blockQuote(innerBlocks, caption, collapsed):
             // Recursive structured blockquote: map back to `ChatInputBlock.blockQuote` with the same `collapsed`
             // flag. Nil (cloud-received wire, no collapsed field) is treated as `false` (visible, non-collapsed).
             // This is the symmetric inverse of the forward `.blockQuote(bq)` arm. Old flat-`.quote` paragraphs
             // and `.collapsedQuote` blocks are no longer produced by the forward (Task 16b removed them).
             result.append(.blockQuote(ChatInputBlockQuote(
                 content: ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: innerBlocks, media: media)),
-                collapsed: collapsed == true)))
+                collapsed: collapsed == true,
+                author: authorRuns(fromCaption: caption))))
         case let .image(id, caption, _, _):
             // Resolve the concrete `Media` from the page's `media` dict; a missing entry (the forward always stores it,
             // so this is defensive against a malformed page) drops the block. `naturalSize`/`displayWidth`/`alignment`

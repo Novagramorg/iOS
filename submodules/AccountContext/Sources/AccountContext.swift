@@ -1351,6 +1351,7 @@ public enum TextProcessingScreenMode {
     case edit(saveRestoreStateId: EnginePeer.Id?, completion: (ComposedRichMessage) -> Void, send: ((ComposedRichMessage) -> Void)?, sendContextActions: TextProcessingScreenSendContextActions?)
     case translate(fromLanguage: String?, applyResult: ((ComposedRichMessage) -> Void)?)
     case preview(style: TelegramComposeAIMessageMode.CloudStyle.Custom, authorPeer: EnginePeer?, initialPreview: AIMessageStylePreview?, isAlreadyAdded: Bool, added: () -> Void)
+    case generate(completion: (ComposedRichMessage) -> Void)
 }
 
 public enum EmojiStatusSelectionControllerMode {

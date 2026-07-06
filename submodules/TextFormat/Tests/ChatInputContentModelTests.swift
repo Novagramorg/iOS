@@ -344,6 +344,31 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertEqual(c.length, (("before\nhello") as NSString).length)
     }
 
+    // MARK: - Quote author line (ChatInputBlockQuote/ChatInputPullQuote.author)
+
+    func test_pullQuote_author_codableRoundTrip_viaAdaptedPostbox() throws {
+        let block = ChatInputBlock.pullQuote(ChatInputPullQuote(runs: [ChatInputRun(text: "q")], author: [ChatInputRun(text: "Jobs")]))
+        let data = try AdaptedPostboxEncoder().encode(block)
+        XCTAssertEqual(try AdaptedPostboxDecoder().decode(ChatInputBlock.self, from: data), block)
+    }
+
+    func test_blockQuote_author_codableRoundTrip_viaAdaptedPostbox() throws {
+        let inner = ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "body")]))])
+        let block = ChatInputBlock.blockQuote(ChatInputBlockQuote(content: inner, collapsed: false, author: [ChatInputRun(text: "Ada")]))
+        let data = try AdaptedPostboxEncoder().encode(block)
+        XCTAssertEqual(try AdaptedPostboxDecoder().decode(ChatInputBlock.self, from: data), block)
+    }
+
+    func test_blockQuote_withAuthor_isNotEntityExpressible_andPlainTextExcludesAuthor() {
+        let inner = ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "body")]))])
+        let withAuthor = ChatInputContent(blocks: [.blockQuote(ChatInputBlockQuote(content: inner, collapsed: false, author: [ChatInputRun(text: "Ada")]))])
+        XCTAssertFalse(withAuthor.isEntityExpressible())            // author → rich path
+        XCTAssertFalse(withAuthor.plainText.contains("Ada"))       // author off the flat axis
+        XCTAssertTrue(withAuthor.plainText.contains("body"))
+        let noAuthor = ChatInputContent(blocks: [.blockQuote(ChatInputBlockQuote(content: inner, collapsed: false, author: []))])
+        XCTAssertTrue(noAuthor.isEntityExpressible())               // empty author → unchanged (entity path)
+    }
+
     /// The old-client text fallback joins paragraph / blockQuote / preformatted text with "\n", skipping empty
     /// pieces (a blockQuote contributes its inner blocks' text, recursively).
     func test_instantPage_plainText() {

@@ -183,12 +183,20 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
 
         // Phase 1 delegate subset: the editor exposes onChange + the two focus transitions. The panel's
         // height/state refresh keys off chatInputTextNodeDidUpdateText (it then reads `attributedText`).
-        // The remaining ChatInputTextNodeDelegate methods (chatInputTextNodeShouldReturn,
-        // chatInputTextNodeDidChangeSelection, chatInputTextNodeBackspaceWhileEmpty, chatInputTextNodeMenu,
-        // chatInputTextNode(shouldChangeTextIn:), chatInputTextNodeShouldCopy/Paste,
-        // chatInputTextNodeShouldRespondToAction/TargetForAction) require new RichTextEditorView callbacks
-        // and are deferred to Phase 2 — the editor handles selection/menu/return/backspace internally, so
-        // omitting them only means the panel doesn't receive those hooks (acceptable for display/layout/editing).
+        // The remaining ChatInputTextNodeDelegate methods (chatInputTextNodeDidChangeSelection,
+        // chatInputTextNodeBackspaceWhileEmpty, chatInputTextNodeMenu, chatInputTextNode(shouldChangeTextIn:),
+        // chatInputTextNodeShouldCopy/Paste, chatInputTextNodeShouldRespondToAction/TargetForAction) require
+        // new RichTextEditorView callbacks and are deferred to Phase 2 — the editor handles selection/menu/
+        // backspace internally, so omitting them only means the panel doesn't receive those hooks.
+
+        // Hardware Return → the panel's send-on-Enter / send-on-⌘-Enter decision (chatInputTextNodeShouldReturn
+        // returns true to insert a newline, false when it sent the message). Without this a hardware Return
+        // just inserted a paragraph break and never sent — the legacy backend wired this via
+        // ChatInputTextViewImpl's own \r keyCommand; the native editor surfaces it as onHardwareReturn.
+        self.editorView.onHardwareReturn = { [weak self] modifierFlags in
+            return self?.storedDelegate?.chatInputTextNodeShouldReturn(modifierFlags: modifierFlags) ?? true
+        }
+
         self.editorView.onChange = { [weak self] in
             guard let self else { return }
             // RichTextEditorView is parent-driven: it does NOT self-layout on a content change (unlike the
@@ -432,6 +440,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         self.checkboxFill = colors.listCheckFillColor
         self.checkboxForeground = colors.listCheckForegroundColor
         self.checkboxBorder = colors.listCheckBorderColor
+        
         self.editorView.theme = RichTextEditorTheme(
             primaryText: colors.primaryText,
             secondaryText: colors.secondaryText,
@@ -440,7 +449,10 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             tableBorder: colors.tableBorder,
             tableHeaderBackground: colors.tableHeaderBackground,
             codeBackground: colors.tableHeaderBackground,  // v1: reuse the subtle panel fill; a dedicated code-bg seam color is a follow-up
-            containerPlaceholder: colors.placeholder.mixedWith(colors.accent, alpha: 0.15).withMultipliedBrightnessBy(colors.primaryText.brightness >= 0.4 ? 1.1 : 0.9).withMultipliedAlpha(0.8)
+            containerPlaceholder: colors.placeholder.mixedWith(colors.accent, alpha: 0.15).withMultipliedBrightnessBy(colors.primaryText.brightness >= 0.4 ? 1.1 : 0.9).withMultipliedAlpha(0.8),
+            shadowCursor: colors.shadowCursor,
+            quoteAuthorText: colors.quoteAuthorText,
+            quoteAuthorPlaceholder: colors.quoteAuthorPlaceholder
         )
     }
 
@@ -558,9 +570,33 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         get { self.editorView.accessibilityHint }
         set { self.editorView.accessibilityHint = newValue }
     }
-    // Stored only; the panel sets a small negative slop (-5pt all sides). Applying it needs a custom
-    // hitTest(_:with:) override — deferred to Phase 2 (the editor's canvas owns hit-testing today).
+    /// Negative insets (the panel sets -5pt all sides) that ENLARGE the editor's tap target: a touch landing in
+    /// the thin margin just outside `editorView` (but inside this wrapper) still focuses/positions the editor,
+    /// instead of falling through to the wrapper. Applied by the `hitTest(_:with:)` override below — mirrors what
+    /// the legacy backend gets for free by forwarding to its inner text node's `ASDisplayNode.hitTestSlop`.
     public var inputHitTestSlop: UIEdgeInsets = .zero
+
+    /// `ASDisplayNode.hitTest` is forwarded to by the backing `_ASDisplayView` when overridden (with a
+    /// re-entrancy guard, so `super.hitTest` below is the standard UIView pass). We special-case ONLY the slop
+    /// ring around `editorView`; taps inside the field, and everywhere else, take the normal path unchanged.
+    override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let slop = self.inputHitTestSlop
+        if slop != .zero, self.editorView.isUserInteractionEnabled, !self.editorView.isHidden, self.editorView.alpha > 0.01 {
+            let frame = self.editorView.frame   // in this wrapper's (self.view) coordinate space, as is `point`
+            // Negative insets expand the rect. Only the ring (expanded AND outside the real frame) is remapped.
+            if frame.inset(by: slop).contains(point) && !frame.contains(point) {
+                // Clamp the probe into the field so `editorView.hitTest` resolves to its canvas (the real
+                // UITextInput). UIKit still delivers the ACTUAL touch, which the canvas maps to the nearest caret.
+                var probe = self.view.convert(point, to: self.editorView)
+                probe.x = min(max(probe.x, self.editorView.bounds.minX), self.editorView.bounds.maxX - 0.5)
+                probe.y = min(max(probe.y, self.editorView.bounds.minY), self.editorView.bounds.maxY - 0.5)
+                if let hit = self.editorView.hitTest(probe, with: event) {
+                    return hit
+                }
+            }
+        }
+        return super.hitTest(point, with: event)
+    }
     public var inputContentOffset: CGPoint { self.editorView.composerContentOffset }
     public func setInputScrollIndicatorInsets(_ insets: UIEdgeInsets) { self.trackedScrollIndicatorInsets = insets }
 

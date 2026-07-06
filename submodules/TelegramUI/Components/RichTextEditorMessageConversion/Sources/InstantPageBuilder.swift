@@ -33,7 +33,7 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             pageBlocks.append(.preformatted(text: richText(from: code.runs), language: code.language))
             index += 1
         case let .pullQuote(pq):
-            pageBlocks.append(.pullQuote(text: richText(from: pq.runs), caption: .empty))
+            pageBlocks.append(.pullQuote(text: richText(from: pq.runs), caption: authorCaption(pq.author, italic: true)))
             index += 1
         case let .media(mediaBlock):
             if let resolved = media[mediaBlock.mediaID] {
@@ -73,11 +73,20 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             // builder; merge child media into the page-level dict so media inside a quote renders correctly.
             let innerPage = buildInstantPage(from: bq.children, media: media)
             for (id, m) in innerPage.media { pageMedia[id] = m }
-            pageBlocks.append(.blockQuote(blocks: innerPage.blocks, caption: .empty, collapsed: bq.collapsed))
+            pageBlocks.append(.blockQuote(blocks: innerPage.blocks, caption: authorCaption(bq.author), collapsed: bq.collapsed))
             index += 1
         }
     }
     return InstantPage(blocks: pageBlocks, media: pageMedia, isComplete: true, rtl: false, url: "", views: nil)
+}
+
+/// Emit a quote author as a bold (and, when `italic` is set — pull quotes only — ALSO italic) InstantPage
+/// caption (both are ambient — not in the model — but must render that way on the recipient). Empty author
+/// -> `.empty` (byte-identical to the prior output). Mirrors `authorCaptionRichText` in
+/// `TelegramCore/Sources/ChatInputContent/ChatInputContentInstantPage.swift` (the composer's already-fixed
+/// forward converter) using THIS module's `richText(from:)`.
+private func authorCaption(_ author: [TextRun], italic: Bool = false) -> RichText {
+    richText(from: author.map { var r = $0; r.attributes.bold = true; if italic { r.attributes.italic = true }; return r })
 }
 
 /// A non-list, non-quote paragraph → a heading or a paragraph block.

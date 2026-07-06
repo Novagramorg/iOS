@@ -114,8 +114,17 @@ class RichTextActionBarComponent: Component {
             let verticalInset: CGFloat = 4.0
             let horizontalInset: CGFloat = 4.0
             
-            let itemSize = CGSize(width: 46.0, height: 36.0)
-            let contentSize = CGSize(width: itemSize.width * CGFloat(component.actions.count), height: itemSize.height)
+            let itemSize = CGSize(width: 40.0, height: 36.0)
+            let intrinsicContentWidth = itemSize.width * CGFloat(component.actions.count)
+            let areaWidth = size.width - horizontalInset * 2.0
+            let minSpacing: CGFloat = 0.0
+            
+            var spacing = minSpacing
+            if intrinsicContentWidth + minSpacing * CGFloat(max(0, component.actions.count - 1)) <= areaWidth {
+                spacing = floorToScreenPixels((areaWidth - intrinsicContentWidth) / CGFloat(max(1, component.actions.count - 1)))
+            }
+            
+            let contentSize = CGSize(width: itemSize.width * CGFloat(component.actions.count) + spacing * CGFloat(max(0, component.actions.count - 1)), height: itemSize.height)
             
             var validIds: [AnyHashable] = []
             for (index, item) in component.actions.enumerated() {
@@ -144,7 +153,7 @@ class RichTextActionBarComponent: Component {
                     containerSize: itemSize
                 )
                 
-                let itemFrame = CGRect(origin: CGPoint(x: CGFloat(index) * itemSize.width, y: 0.0), size: itemSize)
+                let itemFrame = CGRect(origin: CGPoint(x: CGFloat(index) * (itemSize.width + spacing), y: 0.0), size: itemSize)
                 
                 if let itemComponentView = itemView.view {
                     if itemComponentView.superview == nil {

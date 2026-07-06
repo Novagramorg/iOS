@@ -482,4 +482,43 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         ])
         XCTAssertFalse(collapsed.isEntityExpressible(), "collapsed blockQuote → not entity-expressible")
     }
+
+    // 20. Pull-quote author line round-trips with a PLAIN author, and the emitted InstantPage caption is
+    // BOLD+ITALIC-wrapped (so the recipient renders it bold+italic) even though `author` itself carries
+    // neither attribute — both are ambient (forced forward, stripped in reverse), mirroring block-quote bold
+    // but ALSO forcing italic (pull quotes only; see `test_blockQuote_authorRoundTrips_andEmitsBoldCaption`
+    // below for the block-quote bold-only contrast). Identity holds here because the forced attributes
+    // cancel out exactly for a plain input author.
+    func test_pullQuote_authorRoundTrips_andEmitsBoldItalicCaption() {
+        let pq = ChatInputPullQuote(runs: [ChatInputRun(text: "quote")], author: [ChatInputRun(text: "Ada")])
+        assertRoundTrips(ChatInputContent(blocks: [.pullQuote(pq)]), "pull quote with a plain author")
+        // The emitted InstantPage caption is bold+italic-wrapped (so the recipient renders bold+italic).
+        let page = instantPage(from: ChatInputContent(blocks: [.pullQuote(pq)]))
+        guard case let .pullQuote(_, caption)? = page.blocks.first else { return XCTFail("no pullQuote") }
+        guard case let .italic(inner) = caption else { return XCTFail("caption should be italic-wrapped, got \(caption)") }
+        if case .bold = inner {} else { XCTFail("caption should ALSO be bold-wrapped, got \(inner)") }
+    }
+
+    // 21. Block-quote author line round-trips, and the emitted InstantPage caption is bold-wrapped (so the
+    // recipient renders it bold) even though `author` itself carries no bold attribute. Unlike a pull-quote
+    // author (bold+italic, above), a block-quote author stays BOLD-ONLY — the caption must NOT be
+    // italic-wrapped anywhere in the chain.
+    func test_blockQuote_authorRoundTrips_andEmitsBoldCaption() {
+        let inner = ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "body")]))])
+        let bq = ChatInputBlockQuote(content: inner, collapsed: false, author: [ChatInputRun(text: "Jobs")])
+        assertRoundTrips(ChatInputContent(blocks: [.blockQuote(bq)]), "block quote with an author")
+        // The emitted InstantPage caption is bold (so the recipient renders bold) — and NOT italic-wrapped.
+        let page = instantPage(from: ChatInputContent(blocks: [.blockQuote(bq)]))
+        guard case let .blockQuote(_, caption, _)? = page.blocks.first else { return XCTFail("no blockQuote") }
+        guard case let .bold(boldInner) = caption else { return XCTFail("caption should be bold-wrapped, got \(caption)") }
+        if case .italic = boldInner { XCTFail("block-quote author caption must stay bold-only, not italic") }
+    }
+
+    // 22. An empty author still emits a `.empty` caption (unchanged forward output).
+    func test_emptyAuthor_stillEmitsEmptyCaption() {
+        let bq = ChatInputBlockQuote(content: ChatInputContent(blocks: [.paragraph(ChatInputParagraph(style: .body, runs: [ChatInputRun(text: "b")]))]), collapsed: false, author: [])
+        let page = instantPage(from: ChatInputContent(blocks: [.blockQuote(bq)]))
+        guard case let .blockQuote(_, caption, _)? = page.blocks.first else { return XCTFail() }
+        if case .empty = caption {} else { XCTFail("empty author should emit .empty caption") }
+    }
 }

@@ -130,6 +130,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public var canPasteMedia: (() -> Bool)? { didSet { canvas.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { canvas.onPasteMedia = onPasteMedia } }
 
+    /// A HARDWARE-keyboard Return (plain or ⌘) is offered to the host before the editor inserts a newline, so
+    /// a chat composer can implement send-on-Enter / send-on-⌘-Enter. Return `true` to have the editor insert
+    /// a newline (the default when unset); `false` when the host consumed the Return (e.g. sent the message).
+    /// The software keyboard's Return is unaffected (it always inserts a newline).
+    public var onHardwareReturn: ((UIKeyModifierFlags) -> Bool)? { didSet { canvas.onHardwareReturn = onHardwareReturn } }
+
     /// Configure each selection-handle ("knob") view. The closure is invoked once per handle view (start and
     /// end), passing it as a bare `UIView`. Use it to set host-framework properties the editor package can't
     /// reach — e.g. Display's `disablesInteractiveTransitionGestureRecognizer` (the navigation back-swipe a
@@ -417,6 +423,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// `registerMediaViewProvider`. `naturalSize` drives the block's aspect-correct display height.
     public func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun] = []) {
         canvas.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
+    }
+
+    /// Inserts `document`'s blocks at the caret: the caret's block is REPLACED if it's an empty paragraph,
+    /// otherwise the blocks are inserted AFTER it (never splitting it). One undo step; caret at the end.
+    public func insertDocument(_ document: Document) {
+        canvas.insertDocument(document)
     }
 
     /// Registers the closure that turns a media `mediaID` (+ the medium's natural size) into a FRESH

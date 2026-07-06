@@ -20,10 +20,12 @@ public struct PullQuoteStyle: Equatable {
     public var markInset: CGFloat
     /// Minimum pill width (points) — the floor for a short/empty pull quote so the corner marks + placeholder fit.
     public var minWidth: CGFloat
+    /// Vertical gap (points) between the pull text's last line and the author line.
+    public var authorSpacing: CGFloat
 
     public init(horizontalPadding: CGFloat = 30, topInset: CGFloat = 8.0, bottomInset: CGFloat = 8.0,
                 cornerRadius: CGFloat = 6.0, fillAlpha: CGFloat = 0.10,
-                markInset: CGFloat = 6, minWidth: CGFloat = 0) {
+                markInset: CGFloat = 6, minWidth: CGFloat = 0, authorSpacing: CGFloat = 1) {
         self.horizontalPadding = horizontalPadding
         self.topInset = topInset
         self.bottomInset = bottomInset
@@ -31,6 +33,7 @@ public struct PullQuoteStyle: Equatable {
         self.fillAlpha = fillAlpha
         self.markInset = markInset
         self.minWidth = minWidth
+        self.authorSpacing = authorSpacing
     }
 
     public static let `default` = PullQuoteStyle()

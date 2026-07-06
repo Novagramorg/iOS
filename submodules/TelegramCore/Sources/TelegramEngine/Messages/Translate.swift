@@ -783,6 +783,7 @@ public enum TelegramComposeAIMessageMode {
     case translate(toLanguage: String, emojify: Bool, style: StyleReference)
     case stylize(emojify: Bool, style: StyleReference)
     case proofread
+    case generate(prompt: String)
 }
 
 extension TelegramComposeAIMessageMode.CloudStyle {
@@ -879,6 +880,27 @@ func _internal_composeAIMessage(account: Account, text: ComposedRichMessage, mod
         }
     case .proofread:
         flags |= (1 << 0)
+    case let .generate(prompt):
+        flags = 0
+        flags |= (1 << 2)
+        return account.network.request(Api.functions.messages.composeRichMessageWithAI(flags: flags, text: nil, translateToLang: nil, tone: .inputAiComposeToneSingleUse(Api.InputAiComposeTone.Cons_inputAiComposeToneSingleUse(customPrompt: prompt))))
+        |> `catch` { error -> Signal<Api.messages.ComposedRichMessageWithAI, TelegramAIComposeMessageError> in
+            if error.errorDescription == "AICOMPOSE_FLOOD_PREMIUM" {
+                return .fail(.nonPremiumFlood)
+            } else {
+                return .fail(.generic)
+            }
+        }
+        |> mapToSignal { result -> Signal<TelegramAIComposeMessageResult, TelegramAIComposeMessageError> in
+            switch result {
+            case let .composedRichMessageWithAI(composedMessageWithAI):
+                let diffRanges: [Range<Int>] = []
+                return .single(TelegramAIComposeMessageResult(
+                    text: .rich(instantPage: RichTextMessageAttribute(apiRichMessage: composedMessageWithAI.result).instantPage),
+                    diffRanges: diffRanges
+                ))
+            }
+        }
     }
     
     switch text {

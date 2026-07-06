@@ -36,7 +36,7 @@ public enum InstantPageV2StableItemId: Hashable {
 }
 
 public enum InstantPageV2ItemKind: Hashable {
-    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow
+    case text, codeBlock, divider, listMarker, blockQuoteBar, shape, imageOrnament, mediaPlaceholder, table, anchor, formula, slideshow, quoteFrame
 }
 
 // MARK: - Render context
@@ -643,6 +643,10 @@ public final class InstantPageV2View: UIView {
             guard let v = existingView as? InstantPageV2BlockQuoteBarView else { return nil }
             v.update(item: bar, theme: theme)
             return v
+        case let .quoteFrame(frame):
+            guard let v = existingView as? InstantPageV2QuoteFrameView else { return nil }
+            v.update(item: frame, theme: theme)
+            return v
         case let .shape(shape):
             guard let v = existingView as? InstantPageV2ShapeView else { return nil }
             v.update(item: shape, theme: theme)
@@ -715,6 +719,7 @@ public final class InstantPageV2View: UIView {
         case .divider:                 return .positional(.divider, position)
         case .listMarker:              return .positional(.listMarker, position)
         case .blockQuoteBar:           return .positional(.blockQuoteBar, position)
+        case .quoteFrame:              return .positional(.quoteFrame, position)
         case .shape:                   return .positional(.shape, position)
         case .imageOrnament:           return .positional(.imageOrnament, position)
         case .mediaPlaceholder:        return .positional(.mediaPlaceholder, position)
@@ -775,6 +780,8 @@ public final class InstantPageV2View: UIView {
             return InstantPageV2CodeBlockView(item: block, theme: theme)
         case let .blockQuoteBar(bar):
             return InstantPageV2BlockQuoteBarView(item: bar, theme: theme)
+        case let .quoteFrame(frame):
+            return InstantPageV2QuoteFrameView(item: frame, theme: theme)
         case let .shape(shape):
             return InstantPageV2ShapeView(item: shape, theme: theme)
         case let .imageOrnament(ornament):
@@ -1644,6 +1651,36 @@ final class InstantPageV2BlockQuoteBarView: UIView, InstantPageItemView {
     }
 }
 
+// MARK: - Quote frame view (accent bar + accent-tinted rounded fill, for block quotes & code)
+
+final class InstantPageV2QuoteFrameView: UIView, InstantPageItemView {
+    private(set) var item: InstantPageV2QuoteFrameItem
+    var itemFrame: CGRect { return self.item.frame }
+    private let imageView: UIImageView
+
+    init(item: InstantPageV2QuoteFrameItem, theme: InstantPageTheme) {
+        self.item = item
+        self.imageView = UIImageView()
+        super.init(frame: item.frame)
+        self.isUserInteractionEnabled = false
+        self.addSubview(self.imageView)
+        self.update(item: item, theme: theme)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(item: InstantPageV2QuoteFrameItem, theme: InstantPageTheme) {
+        let _ = theme
+        self.item = item
+        self.imageView.image = instantPageV2QuoteFillImage(accent: item.accentColor, barWidth: item.barWidth, cornerRadius: item.cornerRadius, fillAlpha: item.fillAlpha)
+        self.imageView.frame = CGRect(origin: .zero, size: item.frame.size)
+        // RTL: mirror horizontally so the leading bar sits on the trailing (right) edge; the fill is
+        // otherwise symmetric, so the mirror only moves the bar + swaps which corners the arc rounds.
+        self.imageView.transform = item.barOnTrailing ? CGAffineTransform(scaleX: -1.0, y: 1.0) : .identity
+    }
+}
+
 // MARK: - Shape view (for pullQuote line ornaments)
 
 final class InstantPageV2ShapeView: UIView, InstantPageItemView {
@@ -1702,8 +1739,16 @@ final class InstantPageV2ImageOrnamentView: UIView, InstantPageItemView {
 
     func update(item: InstantPageV2ImageOrnamentItem, theme: InstantPageTheme) {
         let _ = theme
+        let previous = self.item
         self.item = item
+        if previous.imageName != item.imageName {
+            self.imageView.image = UIImage(bundleImageName: item.imageName)?.withRenderingMode(.alwaysTemplate)
+        }
         self.imageView.tintColor = item.color
+        // Reset transform before writing frame (frame under a live transform is undefined), then re-apply.
+        self.imageView.transform = .identity
+        self.imageView.frame = CGRect(origin: .zero, size: item.frame.size)
+        self.imageView.transform = item.rotated ? CGAffineTransform(rotationAngle: .pi) : .identity
     }
 }
 
@@ -1904,15 +1949,16 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
     private(set) var item: InstantPageV2CodeBlockItem
     var itemFrame: CGRect { return self.item.frame }
 
-    private let backgroundLayer: CALayer
+    private let backgroundImageView: UIImageView
+    private let languageLabel: UILabel
     let textView: InstantPageV2TextView
 
     init(item: InstantPageV2CodeBlockItem, theme: InstantPageTheme) {
         self.item = item
+        self.backgroundImageView = UIImageView()
+        self.languageLabel = UILabel()
 
-        self.backgroundLayer = CALayer()
-
-        // item.textItem.frame is already in code-block content-area coords (x=17, y=backgroundInset).
+        // item.textItem.frame is already in code-block content-area coords (x=leadingInset, y=verticalInset).
         let innerV2TextItem = InstantPageV2TextItem(
             frame: item.textItem.frame,
             textItem: item.textItem
@@ -1920,9 +1966,10 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
         self.textView = InstantPageV2TextView(item: innerV2TextItem, theme: theme)
 
         super.init(frame: item.frame)
-        self.backgroundColor = .clear                 // structural
-        self.layer.addSublayer(self.backgroundLayer)  // structural
-        self.addSubview(self.textView)                // structural
+        self.backgroundColor = .clear
+        self.addSubview(self.backgroundImageView)
+        self.addSubview(self.languageLabel)
+        self.addSubview(self.textView)
         self.update(item: item, theme: theme)
     }
 
@@ -1931,9 +1978,24 @@ final class InstantPageV2CodeBlockView: UIView, InstantPageItemView {
 
     func update(item: InstantPageV2CodeBlockItem, theme: InstantPageTheme) {
         self.item = item
-        self.backgroundLayer.backgroundColor = item.backgroundColor.cgColor
-        self.backgroundLayer.cornerRadius = item.cornerRadius
-        self.backgroundLayer.frame = CGRect(origin: .zero, size: item.frame.size)
+
+        self.backgroundImageView.image = instantPageV2QuoteFillImage(accent: item.accentColor, barWidth: item.barWidth, cornerRadius: item.cornerRadius, fillAlpha: item.fillAlpha)
+        self.backgroundImageView.frame = CGRect(origin: .zero, size: item.frame.size)
+        self.backgroundImageView.transform = item.barOnTrailing ? CGAffineTransform(scaleX: -1.0, y: 1.0) : .identity
+
+        if let language = item.language, !language.isEmpty {
+            self.languageLabel.isHidden = false
+            self.languageLabel.attributedText = NSAttributedString(string: language, attributes: [
+                .font: UIFont(name: "Menlo", size: 11.0) ?? Font.regular(11.0),
+                .foregroundColor: item.languageLabelColor
+            ])
+            self.languageLabel.sizeToFit()
+            let labelWidth = self.languageLabel.bounds.width
+            let labelHeight = self.languageLabel.bounds.height
+            self.languageLabel.frame = CGRect(x: item.frame.width - 8.0 - labelWidth, y: 2.0, width: labelWidth, height: labelHeight)
+        } else {
+            self.languageLabel.isHidden = true
+        }
 
         let innerV2TextItem = InstantPageV2TextItem(
             frame: item.textItem.frame,

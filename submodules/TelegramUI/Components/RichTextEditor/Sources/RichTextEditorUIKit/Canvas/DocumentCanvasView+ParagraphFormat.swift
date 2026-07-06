@@ -232,6 +232,29 @@ extension DocumentCanvasView {
         return result
     }
 
+    /// The DEEPEST block-quote-OR-pull-quote box whose token span contains `pos`, plus the stack it lives
+    /// in and its index there. Generalizes `enclosingBlockQuote` to also match `PullQuoteBox` — used by the
+    /// Return-in-author-line split, which needs to rebuild either quote kind uniformly. Still descends into
+    /// `BlockQuoteBox.children` (so a caret in a NESTED quote's author resolves to that inner quote, not the
+    /// outer one) and into table cells.
+    func enclosingQuote(at pos: Int) -> (box: CanvasBlock, parentStack: BlockStack, index: Int)? {
+        var result: (CanvasBlock, BlockStack, Int)? = nil
+        func descend(_ stack: BlockStack) {
+            for (i, b) in stack.boxes.enumerated() {
+                if let bq = b as? BlockQuoteBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    result = (bq, stack, i)          // record; a deeper quote inside overwrites it
+                    descend(bq.children)
+                } else if b is PullQuoteBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    result = (b, stack, i)
+                } else if let t = b as? TableBlockBox, pos > b.nodeStart, pos < b.nodeStart + b.nodeSize {
+                    for row in t.cells { for cell in row { descend(cell) } }
+                }
+            }
+        }
+        descend(root)
+        return result
+    }
+
     /// "None": removes exactly one block-quote level around the caret — the deepest enclosing quote's children are
     /// spliced back into its parent stack in place. At level 1 they become top-level blocks. Runs in `editing { }`.
     func unwrapBlockQuoteLevel() {
@@ -256,15 +279,46 @@ extension DocumentCanvasView {
         guard let active = activeStack(at: head), let child = active.box as? BlockBox, child.textLength == 0,
               let (bqBox, parentStack, index) = enclosingBlockQuote(at: head),
               bqBox.children.boxes.last === child else { return false }
+        // A WHOLLY-EMPTY quote (this empty line is its ONLY child) must NOT escape on a single Return — the
+        // quote-escape requires a double Return (\n\n). The first Return falls through to insertParagraphBreak
+        // (adds a second empty line inside the quote); the second Return lands here with ≥2 children and escapes.
+        guard bqBox.children.boxes.count > 1 else { return false }
         editing {
             let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
                                 mapper: mapper, width: effectiveWidth)
-            if bqBox.children.boxes.count == 1 {
-                parentStack.boxes.replaceSubrange(index...index, with: [body])  // wholly-empty quote → body
+            let allEmpty = bqBox.children.boxes.allSatisfy { ($0 as? BlockBox)?.textLength == 0 }
+            if allEmpty {
+                // \n\n in a wholly-empty quote → un-quote the whole (empty) quote to a single body paragraph.
+                parentStack.boxes.replaceSubrange(index...index, with: [body])
             } else {
                 bqBox.children.boxes.removeLast()                                // drop the empty trailing child
                 parentStack.boxes.insert(body, at: index + 1)                   // body after the quote
             }
+            recomputeSpans()
+            let caret = body.leafRegions().first?.globalStart ?? body.nodeStart
+            anchor = caret; head = caret
+        }
+        return true
+    }
+
+    /// Double-return at the BEGINNING of a block quote (\n\n): a caret at the start (local 0) of the quote's
+    /// first content line, with an empty line directly above it — the caret is ON that leading blank line
+    /// (`active.index == 0`) OR at the start of the content right after it (`active.index == 1`), mirroring the
+    /// code/pull `.before` case — exits the quote with an empty body paragraph placed BEFORE it (the leading
+    /// blank line is dropped). Only fires when the quote still has content; a WHOLLY-empty quote is handled by
+    /// `blockQuoteEmptyTrailingChildExit` above (which un-quotes the whole thing), so this never strands an
+    /// empty quote. Checked AFTER the trailing exit so the wholly-empty case takes the un-quote path.
+    func blockQuoteEmptyLeadingChildExit() -> Bool {
+        guard let active = activeStack(at: head), active.local == 0,
+              let (bqBox, parentStack, index) = enclosingBlockQuote(at: head),
+              bqBox.children.boxes.count > 1, active.index <= 1,
+              let first = bqBox.children.boxes.first as? BlockBox, first.textLength == 0,
+              !bqBox.children.boxes.allSatisfy({ ($0 as? BlockBox)?.textLength == 0 }) else { return false }
+        editing {
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            bqBox.children.boxes.removeFirst()             // drop the leading blank line
+            parentStack.boxes.insert(body, at: index)      // body paragraph BEFORE the quote
             recomputeSpans()
             let caret = body.leafRegions().first?.globalStart ?? body.nodeStart
             anchor = caret; head = caret

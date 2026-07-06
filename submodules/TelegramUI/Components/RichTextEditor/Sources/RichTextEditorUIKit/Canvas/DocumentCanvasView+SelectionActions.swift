@@ -96,9 +96,18 @@ extension DocumentCanvasView {
                                  // composition / dismiss a prediction first, else insertText would replace the
                                  // stale marked range instead of the new selection. clampGlobal below re-bounds.
         clearImageSelection()    // word/paragraph/Select-All deselects an atom-selected image
+        // DISMISS any pending autocorrect the user is selecting away from (Select-All ⌘A especially). Two halves,
+        // both needing the block held across them (device-log-verified): (1) the keyboard COMMITS its pending
+        // correction via a `replace(...)` fired SYNCHRONOUSLY in response to the real `selectionDidChange` below —
+        // holding `isDroppingPendingAutocorrection` makes that `replace` no-op, so the typed text is KEPT (not
+        // accepted); (2) an extra fake→real `autocorrectDismissJiggle()` (still blocked) makes the keyboard DROP
+        // the correction so the suggestion CLEARS instead of lingering. onSelectionChange fires AFTER, unblocked.
+        isDroppingPendingAutocorrection = true
         textInputDelegate?.selectionWillChange(self)
         anchor = clampGlobal(from); head = clampGlobal(to)
         textInputDelegate?.selectionDidChange(self)
+        autocorrectDismissJiggle()   // still inside the block — provokes the keyboard to drop the correction
+        isDroppingPendingAutocorrection = false
         setNeedsDisplay(); refreshSelectionUI()
         // A gesture-driven RANGE selection (double-tap word / triple-tap paragraph / Select All) is a
         // caret-moving op and MUST notify the host — exactly as setCaret does. The chat composer tracks the
