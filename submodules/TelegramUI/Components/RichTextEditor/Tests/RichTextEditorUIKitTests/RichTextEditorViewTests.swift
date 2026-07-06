@@ -5,6 +5,15 @@ import UIKit
 import RichTextEditorCore
 
 final class RichTextEditorViewTests: XCTestCase {
+    /// Runs the main runloop until all currently-queued `DispatchQueue.main.async` blocks have executed.
+    /// The coalesced selection-driven `onChange` is dispatched async, so this lets it fire deterministically
+    /// (FIFO: our drain block is enqueued after it).
+    private func drainMainQueue() {
+        let exp = expectation(description: "drain main queue")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1.0)
+    }
+
     // The façade surfaces first-responder transitions so a host can react (show/hide a panel). Each
     // callback fires ONCE on the genuine transition — gaining focus, then losing it — and NOT on a
     // redundant becomeFirstResponder() while already focused (the canvas calls that on every tap).
@@ -165,19 +174,56 @@ final class RichTextEditorViewTests: XCTestCase {
         XCTAssertTrue(fired, "a content edit fires onChange")
     }
 
-    func test_onChange_firesOnSelectionMove() {
+    // A pure selection/caret move notifies the host via the COALESCED path (see
+    // scheduleSelectionDrivenOnChange): the notification is deferred to a single trailing async call so a
+    // transient OS delete-range is never observed synchronously. `scrollCaretIntoView` still runs synchronously.
+    func test_onChange_firesOnSelectionMove_coalescedAsync() {
         let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         editor.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
         editor.layoutIfNeeded()
+        drainMainQueue()   // drain any coalesced notification scheduled during setup
         var fired = false
         editor.onChange = { fired = true }
         editor.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(1), DocumentTextPosition(1))
-        XCTAssertTrue(fired, "a caret/selection move fires onChange")
+        XCTAssertFalse(fired, "a pure selection move does NOT notify the host synchronously (coalesced)")
+        drainMainQueue()
+        XCTAssertTrue(fired, "the coalesced selection notification fires on the next runloop turn")
+    }
+
+    // Backspace "selection flare" guard: the OS drives a backspace as a NON-COLLAPSED `selectedTextRange`
+    // set (the range to delete) immediately followed — same runloop turn — by the delete that collapses it.
+    // Because the selection-driven host notification is coalesced, the host never SYNCHRONOUSLY observes the
+    // transient non-empty selection, and the two synchronous selection changes collapse to ONE trailing call
+    // that reads the settled (collapsed) state. (Without this, a selection-gated toolbar flares into its
+    // "has selection" state and back out on every backspace.)
+    func test_selectionOnChange_isCoalesced_soATransientSelectionIsNotObservedSynchronously() {
+        let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        editor.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
+        editor.layoutIfNeeded()
+        let start = editor.canvas.boxes[0].textStart
+        editor.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(start + 3), DocumentTextPosition(start + 3))
+        drainMainQueue()   // drain the coalesced notification from the caret placement above
+
+        var onChangeCount = 0
+        var observedSelectionDuringBurst = false
+        editor.onChange = {
+            onChangeCount += 1
+            if editor.currentState().hasSelection { observedSelectionDuringBurst = true }
+        }
+        // Simulate the OS backspace burst SYNCHRONOUSLY: set the non-empty delete-range, then collapse it.
+        editor.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(start + 2), DocumentTextPosition(start + 3))   // transient
+        editor.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(start + 2), DocumentTextPosition(start + 2))   // collapsed
+        XCTAssertEqual(onChangeCount, 0, "the transient non-empty selection is not surfaced synchronously")
+
+        drainMainQueue()
+        XCTAssertEqual(onChangeCount, 1, "the two synchronous selection changes coalesce to exactly one host notification")
+        XCTAssertFalse(observedSelectionDuringBurst, "the host never observes hasSelection == true from the transient range")
+        XCTAssertFalse(editor.currentState().hasSelection, "the settled state is a collapsed caret")
     }
 
     func test_onChange_firesOnFormattingToggle() {
         // Render-only formatting changes neither text length nor selection, but routes through editing { },
-        // which fires onSelectionChange → onChange.
+        // which calls notifyContentSizeChanged() unconditionally → the SYNCHRONOUS content-size onChange relay.
         let editor = RichTextEditorView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         editor.document = Document(blocks: [.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
         editor.layoutIfNeeded()

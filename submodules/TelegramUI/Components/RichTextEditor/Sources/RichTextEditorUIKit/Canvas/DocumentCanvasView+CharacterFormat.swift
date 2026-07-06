@@ -92,6 +92,14 @@ extension DocumentCanvasView {
         return all
     }
 
+    func rangeIsSpoiler(_ storage: NSTextStorage, _ range: NSRange) -> Bool {
+        var all = true
+        storage.enumerateAttribute(.rtSpoiler, in: range, options: []) { v, _, stop in
+            if ((v as? Bool) ?? false) == false { all = false; stop.pointee = true }
+        }
+        return all
+    }
+
     /// True when every character-format target lies in a `.quoteAuthor` region — a quote's author line,
     /// whose bold is always-on/ambient (forced at render, stripped on read-back). A bold toggle there would
     /// only un-bold the always-bold author (or dirty the model with an inert edit), so the toggle locks out.
@@ -202,13 +210,7 @@ extension DocumentCanvasView {
     /// `characterFormatTargets`). Additive — it touches no font/colour, so it composes with every other
     /// format. The display-only hide + dust overlay are driven separately by `syncSpoilers`.
     func toggleSpoiler() {
-        applyCharacterToggle(isSet: { storage, range in
-            var all = true
-            storage.enumerateAttribute(.rtSpoiler, in: range, options: []) { v, _, stop in
-                if ((v as? Bool) ?? false) == false { all = false; stop.pointee = true }
-            }
-            return all
-        }, setOn: { storage, range, allOn in
+        applyCharacterToggle(isSet: { s, r in self.rangeIsSpoiler(s, r) }, setOn: { storage, range, allOn in
             if allOn { storage.removeAttribute(.rtSpoiler, range: range) }
             else { storage.addAttribute(.rtSpoiler, value: true, range: range) }
         })
