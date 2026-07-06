@@ -733,6 +733,45 @@ extension DocumentCanvasView {
     /// Inserts a media block (`kind`, with the given `caption`, empty by default) at the caret, splitting the caret's paragraph
     /// if mid-text. The host resolves `mediaID` to a view via the canvas's `mediaViewProvider` (each
     /// occurrence gets its own view, keyed by the new block's `BlockID`). Caret lands in the new caption.
+    /// Inserts `document`'s blocks at the caret. If the caret's top-level block is an empty paragraph (any
+    /// empty `BlockBox`, regardless of style), that block is REPLACED by the inserted blocks; otherwise they
+    /// are inserted AFTER the caret's top-level block (the current block is never split). One undo step; the
+    /// caret lands at the end of the inserted content. A no-op for an empty document. Mirrors `insertMedia`'s
+    /// splice, building boxes with the same `makeBox` factory `setBlocks` uses.
+    func insertDocument(_ document: Document) {
+        let blocks = document.blocks
+        guard !blocks.isEmpty else { return }
+        editing {
+            let newBoxes = blocks.compactMap {
+                makeBox(for: $0, mapper: mapper, quoteStyle: quoteStyle, pullQuoteStyle: pullQuoteStyle,
+                        expandImage: quoteCollapseIcons?.expand, collapseImage: quoteCollapseIcons?.collapse,
+                        horizontalBleed: mediaBlockStyle.horizontalBleed, width: effectiveWidth)
+            }
+            guard !newBoxes.isEmpty else { return }
+            var updated = boxes
+            let firstInserted: Int
+            // Find the TOP-LEVEL block whose structural span contains the caret. This uses `nodeStart`/`nodeSize`
+            // (which cover nested content) rather than `resolveBox`, whose text-span loop mis-resolves a caret
+            // INSIDE a quote/table to the FOLLOWING top-level block — see the note in `insertMedia`.
+            if let index = boxes.firstIndex(where: { head >= $0.nodeStart && head < $0.nodeStart + $0.nodeSize }) {
+                if let p = boxes[index] as? BlockBox, p.textLength == 0 {
+                    updated.replaceSubrange(index...index, with: newBoxes)           // empty paragraph → replace it
+                    firstInserted = index
+                } else {
+                    updated.insert(contentsOf: newBoxes, at: index + 1)              // else insert AFTER the block
+                    firstInserted = index + 1
+                }
+            } else {
+                updated.append(contentsOf: newBoxes)                                 // caret past the last block → append
+                firstInserted = updated.count - newBoxes.count
+            }
+            boxes = updated
+            recomputeSpans()
+            let last = boxes[firstInserted + newBoxes.count - 1]                     // caret at end of inserted content
+            anchor = last.textStart + last.textLength; head = anchor
+        }
+    }
+
     func insertMedia(mediaID: String, naturalSize: CGSize, kind: MediaKind, caption: [TextRun] = []) {
         // `!isInsideBlockQuote(head)` is load-bearing: a caret inside a quote has no degenerate-container-safe
         // resolveBox, so `resolveBox(at: head)` below mis-resolves to the FOLLOWING top-level block and the media

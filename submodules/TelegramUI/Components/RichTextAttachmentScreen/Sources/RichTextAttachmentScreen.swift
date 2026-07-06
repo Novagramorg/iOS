@@ -1115,7 +1115,7 @@ final class RichTextAttachmentScreenComponent: Component {
                                                 let (document, media, emojiFiles) = documentMediaAndEmoji(fromChatInputContent: content)
                                                 self.emojiKeyboard?.seedEmojiFiles(emojiFiles)
                                                 self.attachedMedia.merge(media) { _, new in new }
-                                                self.editor.document = document
+                                                self.editor.insertDocument(document)
                                             }
                                         ),
                                         inputText: .plain(text: "", entities: []),

@@ -425,6 +425,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         canvas.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
     }
 
+    /// Inserts `document`'s blocks at the caret: the caret's block is REPLACED if it's an empty paragraph,
+    /// otherwise the blocks are inserted AFTER it (never splitting it). One undo step; caret at the end.
+    public func insertDocument(_ document: Document) {
+        canvas.insertDocument(document)
+    }
+
     /// Registers the closure that turns a media `mediaID` (+ the medium's natural size) into a FRESH
     /// `RichTextMediaItemView`. Called once per occurrence; the editor owns/positions/resizes/culls it.
     public func registerMediaViewProvider(
