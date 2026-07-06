@@ -53,9 +53,10 @@ private enum FenixEntry: ItemListNodeEntry {
     case showGhostMode(PresentationTheme, String, String, Bool)
     case longPressCameraSelection(PresentationTheme, String, String, Bool)
     case editedHistoryEnabled(PresentationTheme, String, String, Bool)
-    case roundVideoFromGallery(PresentationTheme, String, String, Bool)
-    case forwardHideNames(PresentationTheme, String, String, Bool)
-    case unlimitedPins(PresentationTheme, String, String, Bool)
+    // isNew: true while these features are fresh (NEW pill like sendTranslateConfirm)
+    case roundVideoFromGallery(PresentationTheme, String, String, Bool, Bool)
+    case forwardHideNames(PresentationTheme, String, String, Bool, Bool)
+    case unlimitedPins(PresentationTheme, String, String, Bool, Bool)
     case chatFooter(PresentationTheme, String)
 
     // — Interface Section —
@@ -188,13 +189,13 @@ private enum FenixEntry: ItemListNodeEntry {
         case .chatHeader:                return 0
         case .calls:                     return 1
         case .deletedMessages:           return 2
-        case .showViewFirstMessage:      return 3
-        case .showGhostMode:             return 4
-        case .longPressCameraSelection:  return 5
-        case .editedHistoryEnabled:      return 7
-        case .roundVideoFromGallery:     return 8
-        case .forwardHideNames:          return 9
-        case .chatFooter:                return 6
+        case .showViewFirstMessage:      return 4
+        case .showGhostMode:             return 5
+        case .longPressCameraSelection:  return 6
+        case .editedHistoryEnabled:      return 3
+        case .roundVideoFromGallery:     return 7
+        case .forwardHideNames:          return 8
+        case .chatFooter:                return 9
         // Interface
         case .interfaceHeader:           return 10
         case .hideFolders:               return 11
@@ -209,10 +210,10 @@ private enum FenixEntry: ItemListNodeEntry {
         case .autoTranslate:             return 23
         case .translateToggle:           return 24
         case .translateMessages:         return 25
-        case .sendTranslateConfirm:      return 27
-        case .autoStickerEnabled:        return 28
-        case .heartEffectEnabled:        return 29
-        case .messagingFooter:           return 26
+        case .sendTranslateConfirm:      return 26
+        case .autoStickerEnabled:        return 27
+        case .heartEffectEnabled:        return 28
+        case .messagingFooter:           return 29
         // STT
         case .sttHeader:                 return 30
         case .sttEnabled:                return 31
@@ -286,12 +287,12 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .longPressCameraSelection(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .editedHistoryEnabled(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .editedHistoryEnabled(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
-        case let .roundVideoFromGallery(lhsTheme, lhsTitle, lhsText, lhsValue):
-            if case let .roundVideoFromGallery(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
-        case let .forwardHideNames(lhsTheme, lhsTitle, lhsText, lhsValue):
-            if case let .forwardHideNames(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
-        case let .unlimitedPins(lhsTheme, lhsTitle, lhsText, lhsValue):
-            if case let .unlimitedPins(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
+        case let .roundVideoFromGallery(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .roundVideoFromGallery(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .forwardHideNames(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .forwardHideNames(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .unlimitedPins(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
+            if case let .unlimitedPins(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .chatFooter(lhsTheme, lhsText):
             if case let .chatFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -490,16 +491,22 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "clock.arrow.circlepath", color: .teal), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateEditedHistoryEnabled(val)
             })
-        case let .roundVideoFromGallery(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "video.circle.fill", color: .blue), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+        case let .roundVideoFromGallery(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "video.circle.fill", color: .blue), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateRoundVideoFromGallery(val)
             })
-        case let .forwardHideNames(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrowshape.turn.up.right.circle.fill", color: .green), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+        case let .forwardHideNames(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "arrowshape.turn.up.right.circle.fill", color: .green), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateForwardHideNames(val)
             })
-        case let .unlimitedPins(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "pin.circle.fill", color: .orange), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
+        case let .unlimitedPins(_, title, text, value, isNew):
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "pin.circle.fill", color: .orange), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateUnlimitedPins(val)
             })
         case let .chatFooter(_, text):
@@ -1153,7 +1160,6 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
 
     // ─── ABOUT FENIXPRO ───
     entries.append(.aboutRow(presentationData.theme, l10n.about_rowTitle))
-    entries.append(.novagramBots(presentationData.theme, FenixBotsStrings.rowTitle(langCode: langCode)))
 
     // ─── ACCOUNTS (Fenixuz multi-account) ───
     entries.append(.accountsHeader(l10n.accounts_sectionHeader))
@@ -1164,18 +1170,18 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.hideFolders(presentationData.theme, l10n.settings_interface_hideFolders_title, l10n.settings_interface_hideFolders_subtitle, state.hideFolders))
     entries.append(.showStories(presentationData.theme, l10n.settings_interface_stories_title, l10n.settings_interface_stories_subtitle, state.showStories))
     entries.append(.showMutualContactSymbol(presentationData.theme, l10n.settings_interface_mutualSymbol_title, l10n.settings_interface_mutualSymbol_subtitle, state.showMutualContactSymbol))
-    entries.append(.unlimitedPins(presentationData.theme, l10n.settings_interface_unlimitedPins_title, l10n.settings_interface_unlimitedPins_subtitle, state.unlimitedPins))
+    entries.append(.unlimitedPins(presentationData.theme, l10n.settings_interface_unlimitedPins_title, l10n.settings_interface_unlimitedPins_subtitle, state.unlimitedPins, true))
     entries.append(.interfaceFooter(presentationData.theme, l10n.settings_interface_footer))
 
     // ─── CHAT ───
     entries.append(.chatHeader(l10n.settings_section_chat))
     entries.append(.deletedMessages(presentationData.theme, l10n.settings_chat_deletedMessages_title, l10n.settings_chat_deletedMessages_subtitle, state.showDeletedMessages))
+    entries.append(.editedHistoryEnabled(presentationData.theme, l10n.settings_chat_editedHistory_title, l10n.settings_chat_editedHistory_subtitle, state.editedHistoryEnabled))
     entries.append(.showViewFirstMessage(presentationData.theme, l10n.settings_chat_firstMessage_title, l10n.settings_chat_firstMessage_subtitle, state.showViewFirstMessage))
     entries.append(.showGhostMode(presentationData.theme, l10n.settings_chat_ghost_title, l10n.settings_chat_ghost_subtitle, state.showGhostMode))
     entries.append(.longPressCameraSelection(presentationData.theme, l10n.settings_chat_camera_title, l10n.settings_chat_camera_subtitle, state.longPressCameraSelection))
-    entries.append(.editedHistoryEnabled(presentationData.theme, l10n.settings_chat_editedHistory_title, l10n.settings_chat_editedHistory_subtitle, state.editedHistoryEnabled))
-    entries.append(.roundVideoFromGallery(presentationData.theme, l10n.settings_chat_roundVideoGallery_title, l10n.settings_chat_roundVideoGallery_subtitle, state.roundVideoFromGallery))
-    entries.append(.forwardHideNames(presentationData.theme, l10n.settings_chat_forwardHideNames_title, l10n.settings_chat_forwardHideNames_subtitle, state.forwardHideNames))
+    entries.append(.roundVideoFromGallery(presentationData.theme, l10n.settings_chat_roundVideoGallery_title, l10n.settings_chat_roundVideoGallery_subtitle, state.roundVideoFromGallery, true))
+    entries.append(.forwardHideNames(presentationData.theme, l10n.settings_chat_forwardHideNames_title, l10n.settings_chat_forwardHideNames_subtitle, state.forwardHideNames, true))
     entries.append(.chatFooter(presentationData.theme, l10n.settings_chat_footer))
 
     // ─── MESSAGING ───
