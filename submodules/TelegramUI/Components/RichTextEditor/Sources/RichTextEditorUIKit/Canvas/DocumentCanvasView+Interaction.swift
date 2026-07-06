@@ -68,9 +68,24 @@ extension DocumentCanvasView {
         return self.mapper.theme.shadowCursor
     }
 
-    /// Positions the `transientCaretView` shadow at the raw finger x (unsnapped) on the line of the snapped caret
-    /// position, so it glides continuously under the finger during a loupe drag — the same visual the
-    /// floating-cursor gesture uses (`moveFloatingCaret`'s shadow half, without touching selection).
+    /// Minimum horizontal separation (pt) between the accent gliding cursor (at the finger) and the snapped
+    /// real caret before the gray "shadow" (`caretView`) is shown during a loupe drag. When the two sit on top
+    /// of each other the shadow is redundant clutter, so it only appears once the finger has diverged this far
+    /// (mid-character / between snap points), cueing where the caret will land vs where the finger is.
+    static let loupeShadowMinSeparation: CGFloat = 14
+
+    /// Whether the loupe's gray "shadow" caret should be visible: only when the accent glider (`accentX`, the
+    /// finger x) is at least `loupeShadowMinSeparation` from the snapped caret (`snappedX`) — both in the same
+    /// overlay-container coordinate space. Pure, so it's unit-tested without synthesizing a drag.
+    func loupeShadowShouldShow(accentX: CGFloat, snappedX: CGFloat) -> Bool {
+        return abs(accentX - snappedX) >= Self.loupeShadowMinSeparation
+    }
+
+    /// Positions the accent `transientCaretView` at the raw finger x (unsnapped) on the line of the snapped
+    /// caret, so it glides continuously under the finger during a loupe drag — the same visual the
+    /// floating-cursor gesture uses (`moveFloatingCaret`'s shadow half, without touching selection). The gray
+    /// "shadow" (`caretView`) visibility is NOT set here — `updateCaretView` owns it (see its loupe branch),
+    /// so a layout pass the loupe magnifier forces (which re-runs `updateCaretView`) can't clobber it.
     func positionLoupeShadow(fingerX: CGFloat, snappedGlobal pos: Int) {
         guard var placement = caretHostPlacement(forGlobal: pos) else { return }
         let raw = (placement.container === self) ? fingerX : convert(CGPoint(x: fingerX, y: 0), to: placement.container).x
@@ -301,14 +316,13 @@ extension DocumentCanvasView {
             // `loupeDragActive` / `updateCaretView`) by the time `begin(...)` below captures it as the
             // selection-widget — otherwise the loupe grows from a mid-blink (near-invisible) caret.
             if #available(iOS 17.0, *) { loupeDragActive = true }
-            // Starting a cursor drag dismisses any pending autocorrect for the word being left (the drag then
-            // coalesces the keyboard notifications, so the suggestion would otherwise linger the whole drag).
-            dropPendingAutocorrection()
             // Coalesce the OS input-delegate selection notifications for the whole drag: the per-frame caret
             // moves below skip the `selectionWillChange/DidChange` bracket (see `setCaret`), so the keyboard's
             // autocorrect/candidate bar doesn't recompute + JUMP on every move; `endCoalescedSelectionDrag`
             // (terminal state below) fires exactly one bracket for the final caret.
             beginCoalescedSelectionDrag()
+            // Record the finger x BEFORE `setCaret` (its `updateCaretView` reads it for the shadow-visibility rule).
+            loupeFingerX = point.x
             // Place the caret WITHOUT reporting to the host: a loupe drag reports the selection ONCE at its
             // final position (the terminal state below), not on every frame — the spacebar-trackpad model.
             setCaret(global: p, reportSelectionChange: false)
@@ -345,6 +359,7 @@ extension DocumentCanvasView {
             }
         case .changed:
             if loupeConsumedAsMultiTap { return }   // consumed as a double-tap → keep the word selection, ignore drag
+            loupeFingerX = point.x   // BEFORE setCaret (its updateCaretView reads it for the shadow-visibility rule)
             setCaret(global: p, reportSelectionChange: false)   // move the caret silently; report once on release
             if #available(iOS 17.0, *) {
                 // Keep the borrowed system cursor tracking (grow anchor) but NEAR-INVISIBLE (its native blink
@@ -365,6 +380,7 @@ extension DocumentCanvasView {
                 loupeConsumedAsMultiTap = false
                 return
             }
+            loupeFingerX = nil   // drag over: the final caret (below) is shown, not gated on the last finger x
             if let accent = loupeSavedCaretAccent {   // restore the caret's accent (was recolored gray for the drag)
                 caretView.accentColor = accent
                 loupeSavedCaretAccent = nil
@@ -429,7 +445,6 @@ extension DocumentCanvasView {
                 // (not these setters), so it doesn't coalesce.
                 if let end = draggingEndpoint {
                     captureSelectionDragOffset(endpoint: end, touch: point)
-                    dropPendingAutocorrection()   // dismiss any pending autocorrect before the (coalesced) drag
                     beginCoalescedSelectionDrag()
                 }
             }

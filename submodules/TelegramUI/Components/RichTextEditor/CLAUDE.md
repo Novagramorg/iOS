@@ -419,6 +419,15 @@ caret, not the finger (the loupe's `move(to: finger)` had been dragging the widg
 **conforms to `UITextCursorView`** (`isBlinking`/`resetBlinkAnimation`) so a future non-interaction path could
 hand it directly, but the loupe still needs the interaction-owned cursor today.
 
+**The gray shadow shows only once the accent glider diverges from it by ≥ `loupeShadowMinSeparation` (14pt, added
+2026-07-06).** While the finger sits on top of the snapped caret the shadow is redundant clutter, so `CaretView` is
+hidden until the accent (finger x) and the snapped caret separate (mid-character / between snap points), then it
+appears to cue where the caret will land. `positionLoupeShadow` sets `caretView.isHidden` per frame from the pure
+`loupeShadowShouldShow(accentX:snappedX:)` (both in the shared overlay-container space); `updateCaretView`'s
+`loupeDragActive` branch defaults it VISIBLE each refresh so the terminal `setCaret` (no following
+`positionLoupeShadow`) leaves the final caret shown. Guarded by
+`SelectionInteractionTests.test_loupeShadowShouldShow_onlyBeyondMinSeparation`.
+
 **The drag reports the selection ONCE, at the final position — not per frame (added 2026-07-06).** Both report
 channels are deferred to the drag's end, each by its own "fire once" mechanism:
 - **Host report** (`onSelectionChange` → the composer's `onChange`: interface-state selection commit + re-layout).
@@ -958,32 +967,20 @@ a RANGE. Centralizing in `merging` + testing the range form fixed it.)
   **outside** `editing{}` with one undo per composition; a system inline prediction (signalled by
   `setMarkedText` `sel:{0,0}`, ghost trailing) is **dismissed, never committed**, by our finalize
   chokepoints so the keyboard's own accept lands clean.
-- **A deliberate selection/cursor-move DISMISSES the keyboard's pending AUTOCORRECT** (the candidate bar / inline
-  prompt), added 2026-07-06, **device-log-verified** (runtime-confirmed on ⌘A). Distinct from the inline prediction
-  above (which is OUR marked text) — the autocorrect candidate is the keyboard's own state, so the only lever is the
-  input delegate. **Two coupled halves, BOTH held under one `isDroppingPendingAutocorrection` window** (the mechanism
-  was pinned by NSLog instrumentation — the first two cuts guessed wrong; capture, don't hypothesise):
-  - **Block the ACCEPT.** The keyboard COMMITS its pending correction via a `replace(...)` (or `insertText`) fired
-    **SYNCHRONOUSLY in response to the real `selectionDidChange`** of a selection that leaves the word (e.g. ⌘A's
-    range) — NOT in response to any jiggle. So the four text-mutation entry points (`insertText`/`replace`/
-    `deleteBackward`/`setMarkedText`) **no-op while `isDroppingPendingAutocorrection` is set** — the legacy
-    `isPreservingText` → `shouldChangeTextIn` → false role. Without this the commit LANDS and ⌘A "accepts" the
-    correction (bug cut #1: applied "Omw"→"On my way!").
-  - **Trigger the DISMISS.** Blocking the accept alone leaves the keyboard still SHOWING the suggestion (bug cut #2).
-    An extra `autocorrectDismissJiggle()` — a momentary FAKE one-position selection then back, bracketed to the input
-    delegate — run **while still blocked** makes the keyboard DROP the correction (mirrors the legacy
-    `ChatInputTextView.dropAutocorrectioniOS16` jiggle; its provoked commits also no-op).
-
-  `applySelection` (Select-All ⌘A / double-tap word / triple-tap paragraph — the primary case) sets the block, fires
-  its real selection bracket, runs the jiggle, then clears the block (`onSelectionChange` fires AFTER, unblocked).
-  `dropPendingAutocorrection()` (`+MarkedText.swift`) wraps just the block+jiggle for the start of the coalesced
-  **loupe cursor-drag** + **selection-handle drag**; a **no-op while marked text is active** (the keyboard owns that
-  range) or unfocused. The whole thing is low-level (touches only `anchor`/`head`, restored synchronously, + the
-  brackets — never `onSelectionChange`, the menu, or the drawn caret), DISMISSES (discards) rather than accepts, so
-  the typed text is unchanged. Regression-guarded by `SelectionInteractionTests.test_dropPendingAutocorrection_*` +
-  `…test_selectAll_blocksTheKeyboardsAutocorrectCommit_*` (a spy mimics the keyboard's synchronous commit-attempt and
-  asserts it's blocked → text unchanged). NOTE the keyboard-DROP half is keyboard-driven and can't be unit-tested;
-  the drag paths reuse the same primitive but were only runtime-verified for ⌘A.
+- **A gesture selection fires the OS input-delegate bracket exactly ONCE — no autocorrect "jiggle" (removed
+  2026-07-06).** A short-lived experiment (added then removed the same day) tried to DISMISS the keyboard's pending
+  autocorrect on a deliberate selection/cursor-move (⌘A especially) by bracketing a fake→real selection round-trip
+  (`autocorrectDismissJiggle`) under an `isDroppingPendingAutocorrection` window that no-op'd the four text-mutation
+  entry points. **It was removed because it was the dominant selection-latency cost:** each `selectionDidChange`
+  drives the keyboard's synchronous `updateForChangedSelection` (~25ms on device — the ONE required bracket is
+  already that expensive), and the jiggle added TWO more, so a double-tap word-select went from ~33ms to ~90ms
+  (device-measured with `RTEDBG perf` timing). It was also non-standard — a stock `UITextView` simply lets a pending
+  correction COMMIT when the selection moves. So `applySelection` (word / paragraph / Select-All) now brackets
+  `selectionWillChange/DidChange` **once** around the range set, with no block and no jiggle; a pending correction
+  commits on selection-move like any text view. `dropPendingAutocorrection` / `autocorrectDismissJiggle` /
+  `isDroppingPendingAutocorrection` and the loupe/handle-drag `dropPendingAutocorrection()` calls are all gone.
+  Guarded by `SelectionInteractionTests.test_applySelection_firesASingleSelectionBracket_noAutocorrectJiggle`. (The
+  loupe/handle-drag input-delegate **coalescing** — `beginCoalescedSelectionDrag`, a separate feature — is unaffected.)
 - **The undo buffer is a PRIVATE, per-canvas `UndoManager`, NOT the responder-chain `UIResponder.undoManager`**
   (`DocumentCanvasView.effectiveUndoManager = undoManagerOverride ?? ownUndoManager`, the latter a private
   `UndoManager()`). The responder-chain manager is shared app-wide, so other responders' (and the system

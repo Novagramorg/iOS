@@ -367,7 +367,24 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         let currentContent = self.currentInputContent().content
         if currentContent == content {
             let targetRange = selection.nsRange(in: content)
-            if self.editorView.composerSelectedRange != targetRange {
+            let liveRange = self.editorView.composerSelectedRange
+            // STALE-SELECTION GUARD (the double-tap "flash then deselect" fix).
+            //
+            // The editor reports a selection change to the host ASYNCHRONOUSLY (coalesced to the next runloop
+            // turn, so a backspace's transient delete-range isn't observed). So right after a gesture RANGE
+            // selection (double-tap word / triple-tap paragraph / Select-All), the editor holds the range but
+            // the chat interface state STILL carries the pre-selection caret. The `presentEditMenu()` that
+            // fires immediately after the selection drives a synchronous chat layout pass → this method with
+            // that LAGGING caret as `selection`, which would collapse the just-made range back to a caret
+            // (device-log-verified). The editor's own async notification settles the interface state to the
+            // range a turn later, so this is purely a transient echo.
+            //
+            // A content-equal set that would COLLAPSE the editor's live RANGE to a caret is always that lagging
+            // echo — a real edit changes content (→ the rebuild branch below), and a deliberate caret move goes
+            // through the editor first (so `liveRange` is already that caret). Skip it and keep the live range;
+            // every other move (including the unfocused/programmatic caret set) still applies.
+            let wouldCollapseLiveRange = liveRange.length > 0 && targetRange.length == 0
+            if liveRange != targetRange, !wouldCollapseLiveRange {
                 self.selectedRange = targetRange
             }
             return

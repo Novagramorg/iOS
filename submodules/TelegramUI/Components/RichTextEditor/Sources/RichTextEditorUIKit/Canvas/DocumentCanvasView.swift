@@ -349,6 +349,12 @@ final class DocumentCanvasView: UIView {
     /// appear to pop in "from nothing" with no visible cursor (device-log-verified). Set BEFORE `begin(...)`
     /// (so the caret is already solid when the loupe captures it) and cleared on drag end.
     var loupeDragActive = false
+    /// The current finger x (canvas/self space) during a loupe drag, set by the long-press handler each frame.
+    /// `updateCaretView`'s loupe branch reads it to hide the gray "shadow" (`caretView`) while the accent glider
+    /// at the finger sits within `loupeShadowMinSeparation` of the snapped caret. Owned here (not in
+    /// `positionLoupeShadow`) so a re-run of `updateCaretView` — the loupe magnifier forces layout passes —
+    /// re-applies the rule instead of `freezeSolid` leaving the shadow visible. `nil` when not dragging.
+    var loupeFingerX: CGFloat?
     /// True when the current long-press `.began` was consumed as the follow-up tap of a double-/triple-tap
     /// (see `handleLoupeBegan`) rather than starting a loupe cursor-drag. While set, the long-press `.changed`
     /// / `.ended` handlers no-op (no `setCaret`, no loupe teardown) so the word/paragraph selection they made
@@ -383,12 +389,6 @@ final class DocumentCanvasView: UIView {
     // while dragging a handle. The `selectedTextRange` getter stays live, so the OS reads the correct value
     // if it queries during the drag; only the proactive candidate recompute is deferred to the gesture end.
     var coalescingSelectionNotifications = false
-    // True only for the duration of `dropPendingAutocorrection`'s synchronous selection "jiggle". While set,
-    // the text-mutation entry points (`insertText` / `replace` / `deleteBackward` / `setMarkedText`) no-op:
-    // the jiggle provokes the keyboard to COMMIT its pending autocorrection (a text change), and blocking that
-    // change is what DISMISSES the correction instead of accepting it — the legacy `isPreservingText` role
-    // (`shouldChangeTextIn` → false). Without it the correction lands and CMD+A "accepts" instead of dismisses.
-    var isDroppingPendingAutocorrection = false
     // Auto-scroll state while dragging a text-selection handle near an edge: vertically against the host
     // document scroll view, and/or horizontally within a scrollable table the head is in. One display link
     // drives both axes.
@@ -1404,7 +1404,18 @@ final class DocumentCanvasView: UIView {
             guard isFirstResponder, let placement = caretHostPlacement(forGlobal: head) else { return hideCaretView() }
             hostOverlay(caretView, at: placement)
             caretView.alpha = 1
-            caretView.freezeSolid()
+            caretView.freezeSolid()   // NOTE: sets isHidden=false — so the visibility rule below must run AFTER it.
+            // Show the gray "shadow" (the snapped real caret) only once the accent glider (at the finger,
+            // `loupeFingerX`) has diverged from it by >= `loupeShadowMinSeparation`; coincident, it's redundant
+            // clutter. Applied HERE (the sole owner of `caretView` during a loupe drag) so a re-run — the loupe
+            // magnifier forces layout passes that call this again — re-asserts it instead of leaving it visible.
+            // `nil` finger x (the drag's terminal refresh) → shown, so the final caret is never left hidden.
+            if let fx = loupeFingerX {
+                let accentX = (placement.container === self) ? fx : convert(CGPoint(x: fx, y: 0), to: placement.container).x
+                caretView.isHidden = !loupeShadowShouldShow(accentX: accentX, snappedX: placement.frame.midX)
+            } else {
+                caretView.isHidden = false
+            }
             lastCaretContainer = placement.container
             lastCaretFrame = placement.frame
             return

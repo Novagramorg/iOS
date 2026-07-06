@@ -40,7 +40,6 @@ extension DocumentCanvasView {
     }
 
     func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
-        if isDroppingPendingAutocorrection { return }   // the dismiss jiggle blocks the keyboard's autocorrect-commit
         let text = markedText ?? ""
         // The range being replaced: an existing composition, else the live selection.
         let lo = markedRange?.from ?? selFrom
@@ -91,50 +90,6 @@ extension DocumentCanvasView {
 
     func unmarkText() {
         commitMarkedText()
-    }
-
-    /// Forces the keyboard to abandon any PENDING AUTOCORRECT suggestion (the candidate bar / inline prompt) for
-    /// the current word — WITHOUT accepting it (text unchanged) and WITHOUT disturbing the real selection. Called
-    /// when a selection/cursor-move is initiated (Select-All is the primary case): a deliberate reposition should
-    /// clear a stale correction the user is moving away from.
-    ///
-    /// The autocorrect candidate is the keyboard's own state, not ours; the only lever we have is the input
-    /// delegate. A single `selectionDidChange` for the real selection is NOT enough — `applySelection` already
-    /// sends one and the keyboard keeps the correction (device-observed on Select-All). So we mirror the legacy
-    /// `ChatInputTextView.dropAutocorrectioniOS16` "jiggle": bracket the input delegate around a momentary FAKE
-    /// one-position selection, then bracket again restoring the real selection. That intermediate selection
-    /// provokes the keyboard to COMMIT its pending autocorrection — and the commit arrives as a text change
-    /// (`replace`/`insertText`) SYNCHRONOUSLY during the jiggle. To DISMISS rather than ACCEPT, we set
-    /// `isDroppingPendingAutocorrection` for the jiggle so those text mutations NO-OP (the legacy
-    /// `isPreservingText` → `shouldChangeTextIn` → false role). Without the block the commit lands and the
-    /// correction is accepted — the "CMD+A accepts instead of dismissing" bug.
-    ///
-    /// Deliberately low-level: it touches ONLY `anchor`/`head` (restored synchronously) + the input-delegate
-    /// brackets — never `onSelectionChange`, the edit menu, or the drawn caret — so it can't churn the host or
-    /// flicker the UI. No-op while marked text is active (the keyboard owns that range) or unfocused.
-    func dropPendingAutocorrection() {
-        guard isFirstResponder, markedRange == nil else { return }
-        isDroppingPendingAutocorrection = true            // block the keyboard's commit-attempt (dismiss, don't accept)
-        defer { isDroppingPendingAutocorrection = false }
-        autocorrectDismissJiggle()
-    }
-
-    /// The keyboard-dismiss "jiggle": a momentary FAKE one-position selection then back to the CURRENT
-    /// selection, bracketed to the input delegate. Each `selectionDidChange` makes the keyboard try to COMMIT its
-    /// pending autocorrect — so the caller MUST already hold `isDroppingPendingAutocorrection` (those commits then
-    /// no-op → the correction is dismissed, not accepted), and after the jiggle the keyboard DROPS the correction
-    /// so the suggestion clears instead of lingering. Restores the caller's anchor/head; no-op if the document is
-    /// too small to offer a different position (nothing pending there anyway).
-    func autocorrectDismissJiggle() {
-        let a = anchor, h = head
-        let fake = h > 0 ? clampGlobal(h - 1) : clampGlobal(h + 1)
-        guard fake != h else { return }
-        textInputDelegate?.selectionWillChange(self)
-        anchor = fake; head = fake
-        textInputDelegate?.selectionDidChange(self)
-        textInputDelegate?.selectionWillChange(self)
-        anchor = a; head = h
-        textInputDelegate?.selectionDidChange(self)
     }
 
     /// Commits the active composition: registers ONE undo from the start snapshot and clears marked

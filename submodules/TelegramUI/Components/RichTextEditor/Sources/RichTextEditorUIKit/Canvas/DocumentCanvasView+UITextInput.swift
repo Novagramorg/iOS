@@ -47,7 +47,6 @@ extension DocumentCanvasView: UITextInput {
     }
 
     func replace(_ range: UITextRange, withText text: String) {
-        if isDroppingPendingAutocorrection { return }   // the dismiss jiggle blocks the keyboard's autocorrect-commit
         guard let r = range as? DocumentTextRange else { return }
         let lo = min(r.from.offset, r.to.offset)
         let hi = max(r.from.offset, r.to.offset)
@@ -283,7 +282,6 @@ extension DocumentCanvasView: UIKeyInput {
     var hasText: Bool { documentSize > 0 }
 
     func insertText(_ text: String) {
-        if isDroppingPendingAutocorrection { return }   // the dismiss jiggle blocks the keyboard's autocorrect-commit
         imageObjectDeletePending = nil   // a non-delete edit cancels a pending structural-media delete
         // A committing keystroke while composing: replace the WHOLE marked range with `text`, then
         // finalize the composition as one undo step. (The system delivers a confirming char this way.)
@@ -480,7 +478,6 @@ extension DocumentCanvasView: UIKeyInput {
     }
 
     func deleteBackward() {
-        if isDroppingPendingAutocorrection { return }   // the dismiss jiggle blocks the keyboard's autocorrect-commit
         if markedRange != nil { commitMarkedText() }   // delete acts on committed text, not the composition
         guard !boxes.isEmpty else { return }
         // A tap-selected media block's Backspace: iOS represents the deletion by OVERRIDING the selection

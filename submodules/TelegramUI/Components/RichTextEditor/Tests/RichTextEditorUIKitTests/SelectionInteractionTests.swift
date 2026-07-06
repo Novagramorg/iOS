@@ -217,6 +217,19 @@ final class SelectionInteractionTests: XCTestCase {
                       "a drag from no menu presents on release")
     }
 
+    // MARK: - The loupe gray "shadow" caret shows only once the accent glider diverges from it
+
+    func test_loupeShadowShouldShow_onlyBeyondMinSeparation() {
+        // During a loupe drag the gray "shadow" (the snapped real caret) is hidden while the accent glider (at
+        // the finger) sits on top of it, and appears only once they diverge by >= loupeShadowMinSeparation.
+        let v = canvasWithInteraction()
+        let sep = DocumentCanvasView.loupeShadowMinSeparation
+        XCTAssertFalse(v.loupeShadowShouldShow(accentX: 100, snappedX: 100), "coincident → shadow hidden")
+        XCTAssertFalse(v.loupeShadowShouldShow(accentX: 100 + sep - 0.5, snappedX: 100), "just within the threshold → hidden")
+        XCTAssertTrue(v.loupeShadowShouldShow(accentX: 100 + sep, snappedX: 100), "at the threshold → shown")
+        XCTAssertTrue(v.loupeShadowShouldShow(accentX: 100 - sep - 5, snappedX: 100), "diverged to the left → shown (symmetric)")
+    }
+
     // MARK: - Long-press loupe drag reports the selection ONCE (at the final position), not per frame
 
     func test_setCaret_withReportSuppressed_defersHostReport_untilTheDragEnds() {
@@ -263,88 +276,28 @@ final class SelectionInteractionTests: XCTestCase {
         XCTAssertEqual(spy.didChangeCount, 1, "the keyboard is told the final selection exactly once, at the end")
     }
 
-    // MARK: - Dismiss the keyboard's pending autocorrect on a selection/cursor-move
+    // MARK: - A gesture selection fires ONE input-delegate bracket (no autocorrect jiggle)
 
-    func test_dropPendingAutocorrection_notifiesKeyboardOfAJiggle_thenRestoresTheRealSelection() {
-        // The keyboard drops its pending autocorrect when it sees the selection change to a DIFFERENT range and
-        // back (the legacy `dropAutocorrectioniOS16` trick — a single selectionDidChange for the real selection
-        // isn't enough, as `applySelection` already sends one). `dropPendingAutocorrection` performs that jiggle
-        // at the input-delegate level, leaving the real selection untouched.
-        let v = canvasWithInteraction()
-        _ = v.becomeFirstResponder()
-        v.setCaret(global: v.boxes[0].textStart + 5)   // caret inside "world"
-        let realHead = v.head
-        let spy = SelectionDelegateSpy()
-        v.inputDelegate = spy
-        spy.reset()
-
-        v.dropPendingAutocorrection()
-
-        XCTAssertEqual(v.head, realHead, "the real caret is restored after the jiggle")
-        XCTAssertEqual(v.anchor, realHead, "the real anchor is restored after the jiggle")
-        XCTAssertTrue(spy.headSequence.contains { $0 != realHead },
-                      "the keyboard saw an intermediate (fake) selection — the signal that drops the pending autocorrect")
-        XCTAssertEqual(spy.headSequence.last, realHead, "the final notification restores the real selection")
-    }
-
-    func test_dropPendingAutocorrection_isNoOp_whileComposingMarkedText() {
-        // While an IME composition / inline prediction is active the keyboard owns the marked range; a jiggle
-        // there would fight it. `dropPendingAutocorrection` no-ops when marked text is present.
-        let v = canvasWithInteraction()
-        _ = v.becomeFirstResponder()
-        v.setCaret(global: v.boxes[0].textStart + 2)
-        v.setMarkedText("ab", selectedRange: NSRange(location: 2, length: 0))
-        let spy = SelectionDelegateSpy()
-        v.inputDelegate = spy
-        spy.reset()
-
-        v.dropPendingAutocorrection()
-        XCTAssertEqual(spy.didChangeCount, 0, "no keyboard jiggle while marked text (composition/prediction) is active")
-    }
-
-    func test_selectAll_blocksTheKeyboardsAutocorrectCommit_soTypedTextIsKept() {
-        // The primary case: ⌘A / Select-All must DISMISS a pending correction, not accept it. Device-log-verified
-        // mechanism: the keyboard commits via a text change (`replace`/`insertText`) fired SYNCHRONOUSLY in
-        // response to Select-All's own `selectionDidChange` (the selection leaving the word). `applySelection`
-        // holds `isDroppingPendingAutocorrection` across that bracket so the commit no-ops — text kept. This spy
-        // mimics the keyboard by attempting an `insertText` on that bracket.
+    func test_applySelection_firesASingleSelectionBracket_noAutocorrectJiggle() {
+        // A deliberate word/paragraph/Select-All selection brackets the OS input delegate exactly ONCE. It must
+        // NOT do the old autocorrect-dismiss "jiggle" (a fake→real selection round-trip = two EXTRA brackets):
+        // each `selectionDidChange` drives the keyboard's synchronous `updateForChangedSelection` (~25ms on
+        // device), so the jiggle tripled the double-tap selection latency for a non-standard nicety. Dropped —
+        // a pending correction now just commits on selection-move like a stock UITextView.
         let v = canvasWithInteraction()   // "Hello world"
         _ = v.becomeFirstResponder()
-        v.setCaret(global: v.boxes[0].textStart + 5)
-        let textBefore = paragraphText(v)
-        let spy = KeyboardCommitSpy(canvas: v)
+        v.setCaret(global: v.boxes[0].textStart + 2)
+        let spy = SelectionDelegateSpy()
         v.inputDelegate = spy
+        spy.reset()
 
+        v.selectWord(at: v.boxes[0].textStart + 2)
+        XCTAssertEqual(spy.didChangeCount, 1, "a word selection fires exactly one selectionDidChange (no jiggle)")
+        XCTAssertNotEqual(v.selFrom, v.selTo, "the word is selected")
+
+        spy.reset()
         v.selectAllText()
-
-        XCTAssertTrue(spy.didAttemptCommit, "precondition: the keyboard-spy tried to commit during Select-All's bracket")
-        XCTAssertEqual(paragraphText(v), textBefore,
-                       "Select-All blocks the keyboard's autocorrect-commit — typed text kept (dismissed, not accepted)")
-        XCTAssertNotEqual(v.selFrom, v.selTo, "Select-All still produced a range")
-    }
-
-    func test_dropPendingAutocorrection_blocksTheKeyboardsCommitAttempt_soTextIsUnchanged() {
-        // The jiggle provokes the keyboard to COMMIT its pending autocorrection (a text change) synchronously.
-        // To DISMISS (not accept), that commit must be BLOCKED. This spy mimics the keyboard by attempting an
-        // `insertText` on the first selectionDidChange during the jiggle; the block must make it a no-op, so the
-        // document text is unchanged. (Without the block the CMD+A "accepts instead of dismisses" bug returns.)
-        let v = canvasWithInteraction()   // one paragraph: "Hello world"
-        _ = v.becomeFirstResponder()
-        v.setCaret(global: v.boxes[0].textStart + 5)
-        let textBefore = paragraphText(v)
-        let spy = KeyboardCommitSpy(canvas: v)
-        v.inputDelegate = spy
-
-        v.dropPendingAutocorrection()
-
-        XCTAssertTrue(spy.didAttemptCommit, "precondition: the spy tried to commit during the jiggle")
-        XCTAssertEqual(paragraphText(v), textBefore,
-                       "the keyboard's autocorrect-commit is blocked during the dismiss jiggle — text unchanged")
-    }
-
-    private func paragraphText(_ v: DocumentCanvasView) -> String {
-        if case .paragraph(let p)? = v.currentBlocks().first { return p.text }
-        return ""
+        XCTAssertEqual(spy.didChangeCount, 1, "Select-All also fires exactly one selectionDidChange (no jiggle)")
     }
 
     // MARK: - Outer scroll yields to a selection-handle grip
@@ -580,25 +533,5 @@ private final class SelectionDelegateSpy: NSObject, UITextInputDelegate {
     @available(iOS 18.4, *)
     func conversationContext(_ context: UIConversationContext?, didChange textInput: (any UITextInput)?) {}
     func reset() { didChangeCount = 0; headSequence = [] }
-}
-
-/// Mimics the keyboard committing its pending autocorrection during the dismiss "jiggle": on the first
-/// selectionDidChange it attempts an `insertText` (a text change), exactly as the keyboard does. The editor's
-/// `isDroppingPendingAutocorrection` block must make that a no-op, so the text is unchanged (dismissed, not
-/// accepted).
-private final class KeyboardCommitSpy: NSObject, UITextInputDelegate {
-    private weak var canvas: DocumentCanvasView?
-    private(set) var didAttemptCommit = false
-    init(canvas: DocumentCanvasView) { self.canvas = canvas }
-    func selectionWillChange(_ textInput: (any UITextInput)?) {}
-    func selectionDidChange(_ textInput: (any UITextInput)?) {
-        guard !didAttemptCommit, let canvas else { return }
-        didAttemptCommit = true
-        canvas.insertText("CORRECTED")   // the keyboard's commit — must be blocked during the jiggle
-    }
-    func textWillChange(_ textInput: (any UITextInput)?) {}
-    func textDidChange(_ textInput: (any UITextInput)?) {}
-    @available(iOS 18.4, *)
-    func conversationContext(_ context: UIConversationContext?, didChange textInput: (any UITextInput)?) {}
 }
 #endif
