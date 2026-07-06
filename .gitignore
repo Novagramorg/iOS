@@ -111,3 +111,7 @@ fenixuz-privacy-fullpage.png
 # NovagramProxy — paid Webshare proxy credentials, never commit (fork is public)
 submodules/Fenixuz/AutoProxy/Resources/russia_proxies.txt
 submodules/Fenixuz/AutoProxy/Resources/*_proxies.txt
+
+# Fenixuz: real App Store credentials live only on this machine
+build-system/appstore-configuration.json
+build-system/appcenter-configuration.json
