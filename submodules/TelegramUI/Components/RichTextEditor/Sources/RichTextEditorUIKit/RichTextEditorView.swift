@@ -311,6 +311,21 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         max(canvas.measuredContentHeight(forWidth: width, contentMargins: contentMargins), minimumContentHeight)
     }
 
+    /// Measures the content height `lineCount` body paragraphs would occupy at `width`, using a THROWAWAY probe
+    /// view the caller configures via `configure` (host layout knobs — page margin, block inset, metrics). Pure:
+    /// it never touches any live editor. Routes through the real layout (`height(forWidth:)`), so the result
+    /// equals what a live editor with the same config + content reports. Used by the chat composer to size the
+    /// 3-line AI-button trigger. `lineCount` floors at 1.
+    public static func measuredContentHeight(forWidth width: CGFloat, lineCount: Int, configure: (RichTextEditorView) -> Void) -> CGFloat {
+        let probe = RichTextEditorView()
+        configure(probe)
+        let count = max(1, lineCount)
+        probe.document = Document(blocks: (0..<count).map { _ in
+            Block.paragraph(ParagraphBlock(id: .generate(), style: .body, runs: [TextRun(text: "A")]))
+        })
+        return probe.height(forWidth: width)
+    }
+
     /// Test accessor: the current bottom content inset.
     var bottomContentInsetForTesting: CGFloat { scrollView.contentInset.bottom }
     /// Test accessor: the current vertical scroll indicator insets (asserted decoupled from the content inset).
