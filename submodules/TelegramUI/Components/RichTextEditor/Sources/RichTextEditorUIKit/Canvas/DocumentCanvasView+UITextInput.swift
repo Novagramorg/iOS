@@ -380,6 +380,12 @@ extension DocumentCanvasView: UIKeyInput {
                 // Double-return at the BEGINNING → body paragraph BEFORE the quote (the leading blank line is
                 // dropped). Checked after the trailing exit so a wholly-empty quote takes the un-quote path.
                 _ = ()
+            } else if selFrom == selTo, let active = activeStack(at: head),
+                      headerCellDoubleReturnExitsAbove(active) {
+                // Double-return on the START of a header cell's second block (empty first block) EXITS the
+                // table to a body paragraph ABOVE it. Header rows only; body cells + trailing/non-leading
+                // blanks fall through to the normal in-cell split.
+                exitHeaderCellToBodyParagraphBefore(active)
             } else {
                 insertParagraphBreak()
             }

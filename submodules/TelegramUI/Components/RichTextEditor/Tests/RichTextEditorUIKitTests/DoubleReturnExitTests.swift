@@ -331,5 +331,201 @@ final class DoubleReturnExitTests: XCTestCase {
         guard case let .code(cb) = canvas.boxes[0].currentBlock() else { return XCTFail("expected .code") }
         XCTAssertEqual(cb.text, "a\n\n\nb", "another newline is inserted (no exit)")
     }
+
+    // MARK: Table header-cell double-return (exit ABOVE the table)
+
+    /// A single-column table: header row (row 0) whose cell holds `headerText` (empty → one empty
+    /// paragraph), plus a body row "body". Optionally preceded by a top-level paragraph `lead`.
+    private func headerTableCanvas(headerText: String, lead: String? = nil) -> DocumentCanvasView {
+        let c = DocumentCanvasView()
+        var blocks: [Block] = []
+        if let lead {
+            blocks.append(.paragraph(ParagraphBlock(id: BlockID("lead"), style: .body,
+                                                    runs: lead.isEmpty ? [] : [TextRun(text: lead)])))
+        }
+        let headerCell = Cell(id: BlockID("h0"), blocks: [
+            .paragraph(ParagraphBlock(id: BlockID("h0p"), runs: headerText.isEmpty ? [] : [TextRun(text: headerText)]))
+        ])
+        let bodyCell = Cell(id: BlockID("b0"), blocks: [
+            .paragraph(ParagraphBlock(id: BlockID("b0p"), runs: [TextRun(text: "body")]))
+        ])
+        blocks.append(.table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [headerCell]),
+                   Row(id: BlockID("r1"), isHeader: false, cells: [bodyCell])])))
+        c.setBlocks(blocks, width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 500); c.layoutIfNeeded()
+        return c
+    }
+
+    private func table(in c: DocumentCanvasView) -> TableBlockBox {
+        c.boxes.first { $0 is TableBlockBox } as! TableBlockBox
+    }
+
+    /// (block count, first paragraph text) of cell (row,col), read back from the live model.
+    private func cellInfo(_ c: DocumentCanvasView, _ row: Int, _ col: Int) -> (blocks: Int, firstText: String) {
+        guard case .table(let model) = table(in: c).currentBlock() else { return (0, "") }
+        let cell = model.rows[row].cells[col]
+        let texts = cell.blocks.compactMap { if case .paragraph(let p) = $0 { return p.text } else { return nil } }
+        return (cell.blocks.count, texts.first ?? "")
+    }
+
+    func test_headerCell_emptyCell_doubleReturn_exitsAboveTable() {
+        // Empty header cell; the table is the document's FIRST block (covers the "insert at index 0" case).
+        let c = headerTableCanvas(headerText: "")
+        c.setCaret(global: table(in: c).cellTextStart(row: 0, column: 0)!)
+        c.insertText("\n")   // [""] -> ["", ""], caret on the empty second block
+        c.insertText("\n")   // leading-blank double-return -> exit ABOVE the table
+        XCTAssertEqual(c.boxes.count, 2, "a body paragraph was inserted before the table")
+        XCTAssertEqual(style(c.boxes[0]), .body, "the new block is a body paragraph")
+        XCTAssertTrue(c.boxes[1] is TableBlockBox, "the table follows it")
+        XCTAssertEqual(c.head, c.boxes[0].textStart, "caret lands in the new body paragraph")
+        XCTAssertEqual(cellInfo(c, 0, 0).blocks, 1, "the header cell keeps a single (empty) block")
+    }
+
+    func test_headerCell_contentAtStart_doubleReturn_exitsAbove_keepsContentAndInsertsBeforeTable() {
+        // "Intro" paragraph, then a table whose header cell is "Name". Caret at the START of "Name".
+        let c = headerTableCanvas(headerText: "Name", lead: "Intro")
+        let region = c.allLeafRegions().first { $0.ref == .paragraph(BlockID("h0p")) }!
+        c.setCaret(global: region.globalStart)   // start of "Name"
+        c.insertText("\n")   // ["", "Name"] in the cell, caret at start of "Name"
+        c.insertText("\n")   // leading-blank double-return -> exit above
+        // Order becomes: [ "Intro", body(""), table ].
+        XCTAssertEqual(c.boxes.count, 3)
+        XCTAssertEqual(style(c.boxes[0]), .body)
+        guard case .paragraph(let intro) = c.boxes[0].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(intro.text, "Intro", "the preceding paragraph is untouched")
+        XCTAssertEqual(style(c.boxes[1]), .body, "the new empty body paragraph sits between it and the table")
+        guard case .paragraph(let inserted) = c.boxes[1].currentBlock() else { return XCTFail() }
+        XCTAssertEqual(inserted.text, "")
+        XCTAssertTrue(c.boxes[2] is TableBlockBox)
+        XCTAssertEqual(c.head, c.boxes[1].textStart, "caret in the inserted paragraph")
+        XCTAssertEqual(cellInfo(c, 0, 0).firstText, "Name", "the header cell keeps its content")
+        XCTAssertEqual(cellInfo(c, 0, 0).blocks, 1, "the leading blank is dropped")
+    }
+
+    func test_headerCell_directLeadingBlankState_singleReturnAtStartOfSecondBlock_exitsAbove() {
+        // Directly build a header cell already in the ["", "Name"] state; a single Return at the start
+        // of "Name" exits (the pure trigger, independent of the first-Return flow).
+        let c = DocumentCanvasView()
+        let headerCell = Cell(id: BlockID("h0"), blocks: [
+            .paragraph(ParagraphBlock(id: BlockID("h0p0"), runs: [])),               // empty first block
+            .paragraph(ParagraphBlock(id: BlockID("h0p1"), runs: [TextRun(text: "Name")])),
+        ])
+        c.setBlocks([.table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [headerCell])]))], width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 500); c.layoutIfNeeded()
+        let region = c.allLeafRegions().first { $0.ref == .paragraph(BlockID("h0p1")) }!
+        c.setCaret(global: region.globalStart)   // local 0 of "Name"
+        c.insertText("\n")
+        XCTAssertEqual(c.boxes.count, 2)
+        XCTAssertEqual(style(c.boxes[0]), .body)
+        XCTAssertTrue(c.boxes[1] is TableBlockBox)
+        XCTAssertEqual(cellInfo(c, 0, 0).firstText, "Name")
+        XCTAssertEqual(cellInfo(c, 0, 0).blocks, 1)
+    }
+
+    func test_headerCell_singleReturnInEmptyCell_doesNotExit() {
+        let c = headerTableCanvas(headerText: "")
+        c.setCaret(global: table(in: c).cellTextStart(row: 0, column: 0)!)
+        c.insertText("\n")   // ONE Return only
+        XCTAssertEqual(c.boxes.count, 1, "no exit on a single Return — the table stays the only block")
+        XCTAssertTrue(c.boxes[0] is TableBlockBox)
+        XCTAssertEqual(cellInfo(c, 0, 0).blocks, 2, "a leading blank line was added inside the cell")
+    }
+
+    func test_headerCell_trailingBlank_doubleReturn_doesNotExit() {
+        // Caret at the END of "Name": the blank goes BELOW the content, so the previous block is not
+        // empty and the exit must NOT fire.
+        let c = headerTableCanvas(headerText: "Name")
+        let region = c.allLeafRegions().first { $0.ref == .paragraph(BlockID("h0p")) }!
+        c.setCaret(global: region.globalStart + 4)   // end of "Name"
+        c.insertText("\n")   // ["Name", ""]
+        c.insertText("\n")   // previous block is "Name" (not empty) -> normal split, no exit
+        XCTAssertEqual(c.boxes.count, 1, "the table is still the only top-level block")
+        XCTAssertTrue(c.boxes[0] is TableBlockBox)
+        XCTAssertEqual(cellInfo(c, 0, 0).blocks, 3, "the cell grew by two trailing blank lines")
+    }
+
+    func test_bodyCell_doubleReturn_doesNotExit() {
+        // Same gesture in the row-1 (body) cell -> normal in-cell split, table intact.
+        let c = headerTableCanvas(headerText: "H")
+        let region = c.allLeafRegions().first { $0.ref == .paragraph(BlockID("b0p")) }!
+        c.setCaret(global: region.globalStart)   // start of "body"
+        c.insertText("\n")
+        c.insertText("\n")
+        XCTAssertEqual(c.boxes.count, 1, "no top-level paragraph is inserted for a body cell")
+        XCTAssertTrue(c.boxes[0] is TableBlockBox)
+        XCTAssertEqual(cellInfo(c, 1, 0).blocks, 3, "the body cell split in place into \"\", \"\", \"body\"")
+    }
+
+    func test_headerCell_multiColumn_secondColumnCell_doubleReturn_exitsAbove() {
+        // A 2-column header row; caret in the SECOND column's header cell. The predicate keys on the
+        // cell-LOCAL index, so a non-first column exits too.
+        let c = DocumentCanvasView()
+        let h0 = Cell(id: BlockID("h0"), blocks: [.paragraph(ParagraphBlock(id: BlockID("h0p"), runs: [TextRun(text: "A")]))])
+        let h1 = Cell(id: BlockID("h1"), blocks: [.paragraph(ParagraphBlock(id: BlockID("h1p"), runs: [TextRun(text: "B")]))])
+        c.setBlocks([.table(TableBlock(id: BlockID("t"),
+            columns: [ColumnSpec(width: 120), ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [h0, h1])]))], width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 500); c.layoutIfNeeded()
+        let region = c.allLeafRegions().first { $0.ref == .paragraph(BlockID("h1p")) }!
+        c.setCaret(global: region.globalStart)   // start of "B" in the second column
+        c.insertText("\n")   // ["", "B"] in that cell
+        c.insertText("\n")   // exit above
+        XCTAssertEqual(c.boxes.count, 2)
+        XCTAssertEqual(style(c.boxes[0]), .body)
+        XCTAssertTrue(c.boxes[1] is TableBlockBox)
+        XCTAssertEqual(c.head, c.boxes[0].textStart, "caret in the new body paragraph")
+        XCTAssertEqual(cellInfo(c, 0, 1).firstText, "B", "the second-column header cell keeps its content")
+        XCTAssertEqual(cellInfo(c, 0, 0).firstText, "A", "the first-column header cell is untouched")
+    }
+
+    func test_headerCell_exit_undo_revertsCellAndTopLevelInOneStep() {
+        // Build the header cell already in the pre-exit ["", "Name"] state so a SINGLE Return IS the exit
+        // (one `editing { }` edit). One undo must revert BOTH the cell-block removal and the top-level
+        // body-paragraph insert together, landing back in ["", "Name"].
+        let c = DocumentCanvasView()
+        let headerCell = Cell(id: BlockID("h0"), blocks: [
+            .paragraph(ParagraphBlock(id: BlockID("h0p0"), runs: [])),
+            .paragraph(ParagraphBlock(id: BlockID("h0p1"), runs: [TextRun(text: "Name")])),
+        ])
+        c.setBlocks([.table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [headerCell])]))], width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 500); c.layoutIfNeeded()
+        let um = UndoManager(); um.groupsByEvent = true   // matches production + the sibling undo tests
+        c.undoManagerOverride = um
+        let region = c.allLeafRegions().first { $0.ref == .paragraph(BlockID("h0p1")) }!
+        c.setCaret(global: region.globalStart)   // local 0 of "Name"
+        c.insertText("\n")                        // the single exit edit
+        XCTAssertEqual(c.boxes.count, 2, "sanity: the exit fired")
+        XCTAssertEqual(cellInfo(c, 0, 0).blocks, 1, "sanity: the cell keeps just \"Name\"")
+        c.effectiveUndoManager!.undo()
+        XCTAssertEqual(c.boxes.count, 1, "one undo reverts both the top-level insert and the cell mutation")
+        XCTAssertTrue(c.boxes[0] is TableBlockBox, "the table is the only block again")
+        guard case .table(let model) = table(in: c).currentBlock() else { return XCTFail("expected a table") }
+        let restoredTexts = model.rows[0].cells[0].blocks.compactMap { block -> String? in
+            if case .paragraph(let p) = block { return p.text } else { return nil }
+        }
+        XCTAssertEqual(restoredTexts, ["", "Name"], "the cell's exact pre-exit content [\"\", \"Name\"] is restored")
+    }
+
+    func test_headerCell_midContentSecondBlock_return_doesNotExit() {
+        // Header cell already ["", "Name"], but the caret is MID-content of the second block (not local 0)
+        // -> the local == 0 guard blocks the exit; Return splits "Name".
+        let c = DocumentCanvasView()
+        let headerCell = Cell(id: BlockID("h0"), blocks: [
+            .paragraph(ParagraphBlock(id: BlockID("h0p0"), runs: [])),
+            .paragraph(ParagraphBlock(id: BlockID("h0p1"), runs: [TextRun(text: "Name")])),
+        ])
+        c.setBlocks([.table(TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 120)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [headerCell])]))], width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 500); c.layoutIfNeeded()
+        let region = c.allLeafRegions().first { $0.ref == .paragraph(BlockID("h0p1")) }!
+        c.setCaret(global: region.globalStart + 2)   // "Na|me"
+        c.insertText("\n")
+        XCTAssertEqual(c.boxes.count, 1, "no exit from a mid-content caret")
+        XCTAssertTrue(c.boxes[0] is TableBlockBox)
+        XCTAssertEqual(cellInfo(c, 0, 0).blocks, 3, "the cell now holds \"\", \"Na\", \"me\"")
+    }
 }
 #endif

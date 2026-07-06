@@ -591,6 +591,45 @@ extension DocumentCanvasView {
         }
     }
 
+    // MARK: - Table header-cell double-return (exit ABOVE the table)
+
+    /// True when Return should EXIT a header (first-row) table cell to a new body paragraph ABOVE the
+    /// table: a collapsed caret at the START of the cell's SECOND block, whose FIRST block is an empty
+    /// paragraph (the leading-blank case). The table analog of the code block's "two newlines at the
+    /// beginning exits before". Header rows only; a trailing blank (previous block non-empty), a
+    /// non-leading blank, or a body-row cell falls through to the normal in-cell split. The `activeTable()`
+    /// guard also confirms the caret is in a table, so this can't misfire on a top-level paragraph.
+    func headerCellDoubleReturnExitsAbove(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) -> Bool {
+        guard active.box is BlockBox, active.index == 1, active.local == 0,
+              let first = active.stack.boxes.first as? BlockBox, first.textLength == 0 else { return false }
+        guard let table = activeTable(), table.box.isHeaderRow(table.row) else { return false }
+        return true
+    }
+
+    /// Exits a header cell's leading-blank double-return: drops the empty first block from the cell and
+    /// inserts an empty body paragraph immediately BEFORE the table (caret there). Mirrors
+    /// `exitCodeBlockToBodyParagraphBefore`. Wraps itself in `editing { }`.
+    func exitHeaderCellToBodyParagraphBefore(_ active: (stack: BlockStack, box: CanvasBlock, local: Int, index: Int)) {
+        guard let table = activeTable() else { return }
+        editing {
+            // Drop the empty leading block from the cell (active.index == 1 ⇒ index 0 is that empty block;
+            // the cell keeps its remaining ≥1 block). The table box itself is unchanged, so its top-level
+            // index in `boxes` — and the `active.stack` cell reference — stay valid.
+            var cellBoxes = active.stack.boxes
+            cellBoxes.remove(at: 0)
+            active.stack.boxes = cellBoxes
+            // Insert an empty body paragraph immediately before the table (17pt canvas mapper, not the
+            // cell's 15pt variant).
+            let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
+                                mapper: mapper, width: effectiveWidth)
+            var nb = boxes
+            nb.insert(body, at: table.index)
+            boxes = nb
+            recomputeSpans()
+            anchor = body.textStart; head = body.textStart
+        }
+    }
+
     /// Splits the caret's paragraph at the caret, within whatever `BlockStack` owns the caret (root
     /// or a cell). Deletes any selection first (bounded if it touches a table). Caret → new block start.
     func insertParagraphBreak() {
