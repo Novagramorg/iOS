@@ -2085,7 +2085,7 @@ extension ChatControllerImpl {
             }
         }, updateForwardOptionsState: { [weak self] f in
             if let strongSelf = self {
-                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardOptionsState(f($0.forwardOptionsState ?? ChatInterfaceForwardOptionsState(hideNames: false, hideCaptions: false, unhideNamesOnCaptionChange: false))) }) })
+                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardOptionsState(f($0.forwardOptionsState ?? ChatInterfaceForwardOptionsState(hideNames: UserDefaults(suiteName: "pro_messager")?.bool(forKey: "forward_hide_names") ?? false, hideCaptions: false, unhideNamesOnCaptionChange: false))) }) })
             }
         }, presentForwardOptions: { [weak self] sourceView in
             guard let self else {

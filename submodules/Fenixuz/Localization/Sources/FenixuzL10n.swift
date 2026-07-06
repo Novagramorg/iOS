@@ -382,6 +382,21 @@ public struct FenixuzL10n {
         pick(en: "Camera picker", uz: "Kamerani tanlash", ru: "Выбор камеры")
     }
 
+    public var settings_chat_forwardHideNames_title: String {
+        pick(en: "Forward Without Name", uz: "Imzosiz forward", ru: "Пересылка без имени")
+    }
+    public var settings_chat_forwardHideNames_subtitle: String {
+        pick(en: "Hide the sender's name by default when forwarding", uz: "Forward qilganda yuboruvchi ismi standart berkitiladi", ru: "Скрывать имя отправителя при пересылке по умолчанию")
+    }
+    public var settings_interface_unlimitedPins_title: String {
+        pick(en: "Unlimited Pins", uz: "Cheksiz pin", ru: "Безлимитные закрепы")
+    }
+    public var settings_interface_unlimitedPins_subtitle: String {
+        pick(en: "Pin more than 5 chats — extra pins stay on this device", uz: "5 tadan ortiq chatni pin qilish — ortiqchasi shu qurilmada saqlanadi", ru: "Закрепляйте больше 5 чатов — сверх лимита остаются на этом устройстве")
+    }
+    public var profile_idCopied: String {
+        pick(en: "ID copied", uz: "ID nusxalandi", ru: "ID скопирован")
+    }
     public var settings_chat_roundVideoGallery_title: String {
         pick(en: "Round video from gallery", uz: "Galereyadan dumaloq video", ru: "Круглое видео из галереи")
     }

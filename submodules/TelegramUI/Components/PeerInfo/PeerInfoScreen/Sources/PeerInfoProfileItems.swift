@@ -16,6 +16,8 @@ import WebUI
 import AvatarNode
 import PeerNameColorItem
 import BoostLevelIconComponent
+import UndoUI
+import FenixuzLocalization
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
@@ -187,6 +189,15 @@ func infoItems(
             )
         }
         
+        // Fenixuz: raw Telegram ID with tap-to-copy (handy for admins and bot setups)
+        let fenixIdText = "\(user.id.id._internalGetInt64Value())"
+        items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 9100, label: "ID", text: fenixIdText, textColor: .accent, action: { _, _ in
+            UIPasteboard.general.string = fenixIdText
+            interaction.getController()?.present(UndoOverlayController(presentationData: presentationData, content: .copy(text: FenixuzL10n(presentationData.strings).profile_idCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+        }, requestLayout: { animated in
+            interaction.requestLayout(animated)
+        }))
+
         if let cachedData = data.cachedData as? CachedUserData {
             if let birthday = cachedData.birthday {
                 var hasBirthdayToday = false
@@ -540,6 +551,15 @@ func infoItems(
         let ItemBalance = 9
         let ItemEdit = 10
         let ItemPeerPersonalChannel = 11
+
+        // Fenixuz: channel/group ID with tap-to-copy (Bot API -100 format)
+        let fenixChannelIdText = "-100\(channel.id.id._internalGetInt64Value())"
+        items[currentPeerInfoSection]!.append(PeerInfoScreenLabeledValueItem(id: 100, label: "ID", text: fenixChannelIdText, textColor: .accent, action: { _, _ in
+            UIPasteboard.general.string = fenixChannelIdText
+            interaction.getController()?.present(UndoOverlayController(presentationData: presentationData, content: .copy(text: FenixuzL10n(presentationData.strings).profile_idCopied), elevatedLayout: false, animateInAsReplacement: false, action: { _ in return false }), in: .current)
+        }, requestLayout: { animated in
+            interaction.requestLayout(animated)
+        }))
         
         if let _ = data.threadData {
             let mainUsername: String

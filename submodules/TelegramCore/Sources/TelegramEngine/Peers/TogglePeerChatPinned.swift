@@ -41,11 +41,16 @@ func _internal_toggleItemPinned(postbox: Postbox, accountPeerId: PeerId, locatio
                 additionalCount = 1
             }
             
-            let limitCount: Int
+            var limitCount: Int
             if case .root = groupId {
                 limitCount = Int(userLimitsConfiguration.maxPinnedChatCount)
             } else {
                 limitCount = Int(userLimitsConfiguration.maxArchivedPinnedChatCount)
+            }
+            // Fenixuz: unlimited pins — upstream swallows pin-sync server errors, so pins above
+            // the server limit simply stay local to this device
+            if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "unlimited_pins") ?? false {
+                limitCount = 1000
             }
             
             let count = sameKind.count + additionalCount
