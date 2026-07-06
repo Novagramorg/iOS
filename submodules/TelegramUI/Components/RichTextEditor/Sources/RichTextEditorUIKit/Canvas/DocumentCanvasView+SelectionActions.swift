@@ -47,6 +47,16 @@ extension DocumentCanvasView {
         return (menuVisible || justDismissed) ? .dismiss : .present
     }
 
+    /// Whether a finished loupe long-press should (re)present the edit menu on `.ended`. A quick tap near the
+    /// caret is caught as a loupe (0.05s near-cursor delay), so the loupe must match the tap's toggle semantics:
+    /// a STATIONARY press (`caretMoved == false`) on an ALREADY-OPEN menu (`menuWasVisibleAtBegan`) is a
+    /// tap-like toggle-OFF — suppress the re-present so the menu doesn't flicker (disappear-then-reappear). A
+    /// press that began with no menu, or an actual cursor DRAG, presents normally (long-press → menu / menu at
+    /// the new caret). Pure so it's unit-tested without synthesizing a gesture. (memory: menu-toggle-is-visual)
+    func loupeShouldPresentMenuOnEnd(menuWasVisibleAtBegan: Bool, caretMoved: Bool) -> Bool {
+        return !menuWasVisibleAtBegan || caretMoved
+    }
+
     /// Which selection endpoint a drag should move, by global-offset proximity. nil when collapsed.
     enum SelectionEndpoint: Equatable { case anchor, head }
 

@@ -354,6 +354,13 @@ final class DocumentCanvasView: UIView {
     /// / `.ended` handlers no-op (no `setCaret`, no loupe teardown) so the word/paragraph selection they made
     /// survives the rest of the gesture. Reset when the gesture ends.
     var loupeConsumedAsMultiTap = false
+    /// Whether the edit menu was already showing when the current loupe long-press began, and the caret's global
+    /// position at that moment — captured in `.began` so `.ended` can tell a STATIONARY press on an open menu
+    /// (a tap-like toggle-off — suppress the re-present, else the menu flickers disappear-then-reappear) from a
+    /// real cursor drag (present at the new position). A quick tap near the caret is caught as a loupe (the
+    /// near-cursor press delay is 0.05s), so the loupe must match the tap path's menu-toggle semantics.
+    var loupeMenuWasVisibleAtBegan = false
+    var loupeHeadAtBegan = 0
     /// The steady caret's normal accent, saved while a loupe drag recolors it to the desaturated "shadow" gray
     /// (the snapped landing caret is the gray shadow; the gliding `transientCaretView` is the accent). Restored
     /// on drag end.

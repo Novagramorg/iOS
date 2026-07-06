@@ -198,6 +198,25 @@ final class SelectionInteractionTests: XCTestCase {
                       "with a collapsed selection the long-press begins even on the caret (grab-the-cursor)")
     }
 
+    // MARK: - Loupe end does not re-present (flicker) an already-open menu on a stationary press
+
+    func test_loupeEnd_suppressesRepresent_forAStationaryPressOnAnAlreadyOpenMenu() {
+        // A quick tap near the caret is caught as a loupe (0.05s near-cursor delay). If the menu is already open,
+        // the loupe dismisses it on .began; re-presenting on .ended is the disappear-then-reappear flicker. A
+        // stationary press (caret didn't move) on an open menu is a tap-like toggle-off → do NOT re-present.
+        let v = canvasWithInteraction()
+        XCTAssertFalse(v.loupeShouldPresentMenuOnEnd(menuWasVisibleAtBegan: true, caretMoved: false),
+                       "stationary press on an already-open menu → toggle off, no re-present (no flicker)")
+        // A press that began with no menu is a normal long-press → present the menu on release.
+        XCTAssertTrue(v.loupeShouldPresentMenuOnEnd(menuWasVisibleAtBegan: false, caretMoved: false),
+                      "long-press with no menu open → present on release")
+        // A real cursor DRAG presents at the new caret even if the menu was open (native behavior).
+        XCTAssertTrue(v.loupeShouldPresentMenuOnEnd(menuWasVisibleAtBegan: true, caretMoved: true),
+                      "a drag re-presents at the new caret position")
+        XCTAssertTrue(v.loupeShouldPresentMenuOnEnd(menuWasVisibleAtBegan: false, caretMoved: true),
+                      "a drag from no menu presents on release")
+    }
+
     // MARK: - Long-press loupe drag reports the selection ONCE (at the final position), not per frame
 
     func test_setCaret_withReportSuppressed_defersHostReport_untilTheDragEnds() {

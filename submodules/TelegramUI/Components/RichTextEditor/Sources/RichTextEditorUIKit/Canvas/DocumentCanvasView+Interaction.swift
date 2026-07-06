@@ -293,6 +293,9 @@ extension DocumentCanvasView {
                 return
             }
             loupeConsumedAsMultiTap = false
+            // Capture whether the menu was open (BEFORE we dismiss it) so `.ended` can suppress a re-present for
+            // a stationary press on an already-open menu (a tap-like toggle-off) instead of flickering it.
+            loupeMenuWasVisibleAtBegan = editMenuVisible
             dismissEditMenu()
             // Mark the loupe drag active BEFORE `setCaret` so the caret it renders is already SOLID (see
             // `loupeDragActive` / `updateCaretView`) by the time `begin(...)` below captures it as the
@@ -309,6 +312,7 @@ extension DocumentCanvasView {
             // Place the caret WITHOUT reporting to the host: a loupe drag reports the selection ONCE at its
             // final position (the terminal state below), not on every frame — the spacebar-trackpad model.
             setCaret(global: p, reportSelectionChange: false)
+            loupeHeadAtBegan = head   // to detect a stationary press vs a real drag on `.ended`
             // The magnifier loupe is iOS 17+; below it, the long-press still places the caret + (on release)
             // presents the menu — just without the magnifier.
             // `setCaret` above has already positioned + shown our own `caretView` at `p`; pass it as the
@@ -389,7 +393,13 @@ extension DocumentCanvasView {
             // the last-dragged caret), so fire exactly ONE bracket to sync the keyboard. No-op if not coalescing.
             endCoalescedSelectionDrag()
             if g.state == .ended {
-                presentEditMenu()   // setCaret above already reported the final caret to the host (once)
+                // Present the menu on release — EXCEPT for a stationary press on an already-open menu, which is a
+                // tap-like toggle-off: re-presenting it there is the disappear-then-reappear flicker (a quick tap
+                // near the caret is caught as a loupe). A real drag, or a press with no menu open, presents.
+                if loupeShouldPresentMenuOnEnd(menuWasVisibleAtBegan: loupeMenuWasVisibleAtBegan,
+                                               caretMoved: head != loupeHeadAtBegan) {
+                    presentEditMenu()   // setCaret above already reported the final caret to the host (once)
+                }
             } else {
                 // .cancelled/.failed take no setCaret path — refresh so the caret blinks again, and report the
                 // final (last-dragged) caret to the host ONCE so its selection isn't left stale after the drag.
