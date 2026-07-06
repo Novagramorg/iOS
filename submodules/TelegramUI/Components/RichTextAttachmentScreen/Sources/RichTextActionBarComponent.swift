@@ -43,18 +43,24 @@ class RichTextActionBarComponent: Component {
     }
     
     let theme: PresentationTheme
+    let actionsId: AnyHashable
     let actions: [Action]
     
     init(
         theme: PresentationTheme,
+        actionsId: AnyHashable,
         actions: [Action]
     ) {
         self.theme = theme
+        self.actionsId = actionsId
         self.actions = actions
     }
     
     static func ==(lhs: RichTextActionBarComponent, rhs: RichTextActionBarComponent) -> Bool {
         if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.actionsId != rhs.actionsId {
             return false
         }
         if lhs.actions != rhs.actions {
@@ -107,6 +113,7 @@ class RichTextActionBarComponent: Component {
         }
         
         func update(component: RichTextActionBarComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            let previousComponent = self.component
             self.component = component
             
             let size = CGSize(width: availableSize.width, height: 44.0)
@@ -126,7 +133,27 @@ class RichTextActionBarComponent: Component {
             
             let contentSize = CGSize(width: itemSize.width * CGFloat(component.actions.count) + spacing * CGFloat(max(0, component.actions.count - 1)), height: itemSize.height)
             
+            let delayIncrement: Double = 0.02
+            
+            var animateIn = false
+            if let previousComponent, component.actionsId != previousComponent.actionsId {
+                animateIn = true
+                var nextDelay: Double = 0.0
+                for item in previousComponent.actions {
+                    if let itemView = self.itemViews[item.id]?.view {
+                        transition.setAlpha(view: itemView, alpha: 0.0, delay: nextDelay, completion: { [weak itemView] _ in
+                            itemView?.removeFromSuperview()
+                        })
+                        transition.setScale(view: itemView, scale: 0.001, delay: nextDelay)
+                    }
+                    
+                    nextDelay += delayIncrement
+                }
+                self.itemViews.removeAll()
+            }
+            
             var validIds: [AnyHashable] = []
+            var nextAppearDelay: Double = delayIncrement * 2.0
             for (index, item) in component.actions.enumerated() {
                 validIds.append(item.id)
                 
@@ -160,7 +187,14 @@ class RichTextActionBarComponent: Component {
                         self.scrollView.addSubview(itemComponentView)
                     }
                     itemTransition.setFrame(view: itemComponentView, frame: itemFrame)
+                    
+                    if animateIn {
+                        transition.animateAlpha(view: itemComponentView, from: 0.0, to: 1.0, delay: nextAppearDelay)
+                        transition.animateScale(view: itemComponentView, from: 0.001, to: 1.0, delay: nextAppearDelay)
+                    }
                 }
+                
+                nextAppearDelay += delayIncrement
             }
             var removeIds: [AnyHashable] = []
             for (id, itemView) in self.itemViews {
