@@ -265,7 +265,13 @@ public final class AccountContextImpl: AccountContext {
     private var audioTranscriptionTrialDisposable: Disposable?
     public private(set) var audioTranscriptionTrial: AudioTranscription.TrialState
     
-    public private(set) var isPremium: Bool
+    private var _isPremium: Bool = false
+    public var isPremium: Bool {
+        return self._isPremium
+    }
+    public var isRealPremium: Bool {
+        return self._isPremium
+    }
     
     private var isFrozenDisposable: Disposable?
     public private(set) var isFrozen: Bool
@@ -283,7 +289,7 @@ public final class AccountContextImpl: AccountContext {
         self.userLimits = EngineConfiguration.UserLimits(UserLimitsConfiguration.defaultValue)
         self.peerNameColors = PeerNameColors.with(availableReplyColors: availableReplyColors, availableProfileColors: availableProfileColors)
         self.audioTranscriptionTrial = AudioTranscription.TrialState.defaultValue
-        self.isPremium = false
+        self._isPremium = false
         self.isFrozen = false
         
         self.downloadedMediaStoreManager = DownloadedMediaStoreManagerImpl(postbox: account.postbox, accountManager: sharedContext.accountManager)
@@ -438,19 +444,28 @@ public final class AccountContextImpl: AccountContext {
         })
         
         self.userLimitsConfigurationDisposable = (self.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.Peer(id: account.peerId))
-        |> mapToSignal { peer -> Signal<(Bool, EngineConfiguration.UserLimits), NoError> in
+        |> mapToSignal { peer -> Signal<(Bool, EngineConfiguration.UserLimits, String?), NoError> in
             let isPremium = peer?.isPremium ?? false
+            var phone: String? = nil
+            if case let .user(user) = peer {
+                phone = user.phone
+            }
             return self.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.UserLimits(isPremium: isPremium))
             |> map { userLimits in
-                return (isPremium, userLimits)
+                return (isPremium, userLimits, phone)
             }
         }
-        |> deliverOnMainQueue).startStrict(next: { [weak self] isPremium, userLimits in
+        |> deliverOnMainQueue).startStrict(next: { [weak self] isPremium, userLimits, myPhone in
             guard let self = self else {
                 return
             }
-            self.isPremium = isPremium
+            self._isPremium = isPremium
             self.userLimits = userLimits
+            
+            // O'z telefon raqamimizni saqlash (Foreign User Block uchun)
+            if let phone = myPhone, !phone.isEmpty {
+                UserDefaults(suiteName: "pro_messager")?.set(phone, forKey: "my_phone_number")
+            }
         })
         
         self.peerNameColorsConfigurationDisposable = (combineLatest(
@@ -605,6 +620,10 @@ public final class AccountContextImpl: AccountContext {
     }
     
     public func applyMaxReadIndex(for location: ChatLocation, contextHolder: Atomic<ChatLocationContextHolder?>, messageIndex: MessageIndex) {
+        if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false {
+            return
+        }
+        
         switch location {
         case .peer:
             let _ = self.engine.messages.applyMaxReadIndexInteractively(index: messageIndex).start()

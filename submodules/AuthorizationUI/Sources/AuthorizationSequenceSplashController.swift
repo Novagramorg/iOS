@@ -9,6 +9,7 @@ import TelegramPresentationData
 import LegacyComponents
 import SolidRoundedButtonNode
 import RMIntro
+import FenixuzBrand
 
 public final class AuthorizationSequenceSplashController: ViewController {
     private var controllerNode: AuthorizationSequenceSplashControllerNode {
@@ -70,9 +71,12 @@ public final class AuthorizationSequenceSplashController: ViewController {
             })
         })
         
-        self.controller = RMIntroViewController(backgroundColor: theme.list.plainBackgroundColor, primaryColor: theme.list.itemPrimaryTextColor, buttonColor: theme.intro.startButtonColor, accentColor: theme.list.itemAccentColor, regularDotColor: theme.intro.dotColor, highlightedDotColor: theme.list.itemAccentColor, suggestedLocalizationSignal: localizationSignal)
-        
-        self.startButton = SolidRoundedButtonNode(title: "Start Messaging", theme: SolidRoundedButtonTheme(theme: theme), glass: false, height: 50.0, cornerRadius: 50.0 * 0.5, isShimmering: true)
+        // Fenixuz: brand emerald (#10B981/#059669) Telegram blue o'rniga.
+        let fenixuzPrimary = FenixuzBrandColors.primary
+        self.controller = RMIntroViewController(backgroundColor: theme.list.plainBackgroundColor, primaryColor: theme.list.itemPrimaryTextColor, buttonColor: fenixuzPrimary, accentColor: fenixuzPrimary, regularDotColor: theme.intro.dotColor, highlightedDotColor: fenixuzPrimary, suggestedLocalizationSignal: localizationSignal)
+
+        let fenixuzButtonTheme = SolidRoundedButtonTheme(backgroundColor: fenixuzPrimary, foregroundColor: .white)
+        self.startButton = SolidRoundedButtonNode(title: "Start Messaging", theme: fenixuzButtonTheme, glass: false, height: 50.0, cornerRadius: 50.0 * 0.5, isShimmering: true)
         self.startButton.accessibilityIdentifier = "Auth.Welcome.StartButton"
 
         super.init(navigationBarPresentationData: nil)

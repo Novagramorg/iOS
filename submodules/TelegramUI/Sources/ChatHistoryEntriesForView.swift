@@ -12,6 +12,7 @@ import TextFormat
 import Markdown
 import Display
 import TelegramStringFormatting
+import FenixuzForeignUserBlock
 
 struct ChatHistoryEntriesForViewState {
     private var messageStableIdToLocalId: [UInt32: Int64] = [:]
@@ -106,6 +107,16 @@ func chatHistoryEntriesForView(
         }
     }
     
+    // MARK: - Boshqa davlat raqamlariga cheklov (Foreign User Block)
+    let blockForeignUsers = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
+    if blockForeignUsers, let foreignPeer = chatPeer as? TelegramUser, foreignPeer.botInfo == nil {
+        // O'z foydalanuvchimizning telefon raqamini olish
+        let myPhone = UserDefaults(suiteName: "pro_messager")?.string(forKey: "my_phone_number")
+        if isForeignUser(peer: foreignPeer, myPhone: myPhone) {
+            return ([], currentState)
+        }
+    }
+    
     var joinMessage: Message?
     if (associatedData.subject?.isService ?? false) {
         
@@ -152,6 +163,27 @@ func chatHistoryEntriesForView(
         
         if pendingRemovedMessages.contains(message.id) {
             continue
+        }
+        
+        let showDeletedMessages = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_deleted_messages") ?? false
+        if !showDeletedMessages && message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+            continue
+        }
+        
+        let blockApkFiles = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_apk_files") ?? false
+        if blockApkFiles {
+            var hasApk = false
+            for media in message.media {
+                if let file = media as? TelegramMediaFile {
+                    if file.mimeType == "application/vnd.android.package-archive" || file.fileName?.lowercased().hasSuffix(".apk") == true {
+                        hasApk = true
+                        break
+                    }
+                }
+            }
+            if hasApk {
+                continue
+            }
         }
         
         if case let .replyThread(replyThreadMessage) = location, replyThreadMessage.isForumPost {

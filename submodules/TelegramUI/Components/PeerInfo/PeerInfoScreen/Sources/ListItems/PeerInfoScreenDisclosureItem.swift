@@ -50,17 +50,19 @@ final class PeerInfoScreenDisclosureItem: PeerInfoScreenItem {
     let additionalBadgeLabel: String?
     let additionalBadgeIcon: UIImage?
     let text: String
+    let titleColor: UIColor?
     let icon: UIImage?
     let iconSignal: Signal<UIImage?, NoError>?
     let hasArrow: Bool
     let action: (() -> Void)?
-    
-    init(id: AnyHashable, label: Label = .none, additionalBadgeLabel: String? = nil, additionalBadgeIcon: UIImage? = nil, text: String, icon: UIImage? = nil, iconSignal: Signal<UIImage?, NoError>? = nil, hasArrow: Bool = true, action: (() -> Void)?) {
+
+    init(id: AnyHashable, label: Label = .none, additionalBadgeLabel: String? = nil, additionalBadgeIcon: UIImage? = nil, text: String, titleColor: UIColor? = nil, icon: UIImage? = nil, iconSignal: Signal<UIImage?, NoError>? = nil, hasArrow: Bool = true, action: (() -> Void)?) {
         self.id = id
         self.label = label
         self.additionalBadgeLabel = additionalBadgeLabel
         self.additionalBadgeIcon = additionalBadgeIcon
         self.text = text
+        self.titleColor = titleColor
         self.icon = icon
         self.iconSignal = iconSignal
         self.hasArrow = hasArrow
@@ -161,7 +163,7 @@ private final class PeerInfoScreenDisclosureItemNode: PeerInfoScreenItemNode {
         
         self.bottomSeparatorNode.backgroundColor = presentationData.theme.list.itemBlocksSeparatorColor
         
-        let textColorValue: UIColor = presentationData.theme.list.itemPrimaryTextColor
+        let textColorValue: UIColor = item.titleColor ?? presentationData.theme.list.itemPrimaryTextColor
         let labelColorValue: UIColor
         let labelFont: UIFont
         if case let .semitransparentBadge(_, color) = item.label {

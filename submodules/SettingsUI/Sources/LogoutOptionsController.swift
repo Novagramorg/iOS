@@ -139,20 +139,21 @@ public func logoutOptionsController(context: AccountContext, navigationControlle
         |> take(1)
         |> deliverOnMainQueue
         ).start(next: { accountAndPeer, accountsAndPeers in
-            var maximumAvailableAccounts: Int = 3
+            // Fenixuz: use the fork-wide account limit instead of the upstream 3/4 premium gate.
+            var maximumAvailableAccounts: Int = maximumNumberOfAccounts
             if accountAndPeer?.1.isPremium == true && !context.account.testingEnvironment {
-                maximumAvailableAccounts = 4
+                maximumAvailableAccounts = maximumPremiumNumberOfAccounts
             }
             var count: Int = 1
             for (accountContext, peer, _) in accountsAndPeers {
                 if !accountContext.account.testingEnvironment {
                     if peer.isPremium {
-                        maximumAvailableAccounts = 4
+                        maximumAvailableAccounts = maximumPremiumNumberOfAccounts
                     }
                     count += 1
                 }
             }
-            
+
             if count >= maximumAvailableAccounts {
                 var replaceImpl: ((ViewController) -> Void)?
                 let controller = PremiumLimitScreen(context: context, subject: .accounts, count: Int32(count), action: {

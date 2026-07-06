@@ -1,6 +1,7 @@
 #! /bin/sh
 
 set -ex
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 
 set -e
 

@@ -38,6 +38,7 @@ import EntityKeyboard
 import TelegramStringFormatting
 import ForumCreateTopicScreen
 import AnimationUI
+import FenixuzChatLock
 import ChatTitleView
 import PeerInfoUI
 import ComponentDisplayAdapters
@@ -62,6 +63,7 @@ import GlobalControlPanelsContext
 import AlertComponent
 import AlertHeaderComponent
 import AvatarComponent
+import FenixuzSecretVault
 
 private final class ContextControllerContentSourceImpl: ContextControllerContentSource {
     let controller: ViewController
@@ -98,6 +100,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     public let context: AccountContext
     private let controlsHistoryPreload: Bool
     private let hideNetworkActivityStatus: Bool
+    // Fenixuz Secret Vault
+    fileprivate let fenixIsVaultList: Bool
+    private var fenixVaultGesturesAttached = false
+    private var fenixVaultChangedObserver: NSObjectProtocol?
     
     private let animationCache: AnimationCache
     private let animationRenderer: MultiAnimationRenderer
@@ -245,10 +251,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         }
     }
     
-    public init(context: AccountContext, location: ChatListControllerLocation, controlsHistoryPreload: Bool, hideNetworkActivityStatus: Bool = false, previewing: Bool = false, enableDebugActions: Bool) {
+    public init(context: AccountContext, location: ChatListControllerLocation, controlsHistoryPreload: Bool, hideNetworkActivityStatus: Bool = false, previewing: Bool = false, enableDebugActions: Bool, fenixIsVaultList: Bool = false) {
         self.context = context
         self.controlsHistoryPreload = controlsHistoryPreload
         self.hideNetworkActivityStatus = hideNetworkActivityStatus
+        self.fenixIsVaultList = fenixIsVaultList
         
         self.location = location
         self.previewing = previewing
@@ -281,6 +288,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         )
                 
         super.init(context: context, navigationBarPresentationData: nil)
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(self.proMessagerSettingsChanged), name: NSNotification.Name("FenixSettingsChanged"), object: nil)
         
         self.accessoryPanelContainer = ASDisplayNode()
         
@@ -789,6 +798,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     deinit {
+        NotificationCenter.default.removeObserver(self)
+        if let fenixVaultChangedObserver = self.fenixVaultChangedObserver {
+            NotificationCenter.default.removeObserver(fenixVaultChangedObserver)
+        }
         self.openMessageFromSearchDisposable.dispose()
         self.badgeDisposable?.dispose()
         self.badgeIconDisposable?.dispose()
@@ -1928,6 +1941,11 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         let source: ContextContentSource
                         if let location = location {
                             source = .location(ChatListContextLocationContentSource(controller: strongSelf, location: location))
+                        } else if ChatPincodeManager.shared.isLocked(peer.peerId) {
+                            // Fenixuz: locked chat — suppress the message preview on long-press so the
+                            // pincode can't be bypassed by peeking. The context menu items still work.
+                            let anchor = node.view.convert(CGPoint(x: node.bounds.width / 2.0, y: node.bounds.height / 2.0), to: nil)
+                            source = .location(ChatListContextLocationContentSource(controller: strongSelf, location: anchor))
                         } else {
                             let chatController = strongSelf.context.sharedContext.makeChatController(context: strongSelf.context, chatLocation: .peer(id: peer.peerId), subject: nil, botStart: nil, mode: .standard(.previewing), params: nil)
                             chatController.customNavigationController = strongSelf.navigationController as? NavigationController
@@ -2013,6 +2031,10 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                 let contextContentSource: ContextContentSource
                 if peer.id.namespace == Namespaces.Peer.SecretChat, let node = node.subnodes?.first as? ContextExtractedContentContainingNode {
                     contextContentSource = .extracted(ChatListHeaderBarContextExtractedContentSource(controller: strongSelf, sourceNode: node, sourceView: nil, keepInPlace: false))
+                } else if ChatPincodeManager.shared.isLocked(peer.id) {
+                    // Fenixuz: locked chat — no message preview on long-press (privacy); menu still works.
+                    let anchor = node.view.convert(CGPoint(x: node.bounds.width / 2.0, y: node.bounds.height / 2.0), to: nil)
+                    contextContentSource = .location(ChatListContextLocationContentSource(controller: strongSelf, location: anchor))
                 } else {
                     var subject: ChatControllerSubject?
                     if case let .search(messageId) = source, let id = messageId {
@@ -2315,12 +2337,23 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         Queue.mainQueue().after(1.0) {
             self.context.prefetchManager?.prepareNextGreetingSticker()
         }
+        
+        // Fenixuz Secret Vault: the vault screen shows only hidden chats.
+        if self.fenixIsVaultList {
+            self.chatListDisplayNode.mainContainerNode.currentItemNode.updateState { state in
+                var state = state
+                state.fenixVaultMode = true
+                return state
+            }
+        }
     }
     
     public static var sharedPreviousPowerSavingEnabled: Bool?
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+
+        self.fenixSetupSecretVaultIfNeeded()
                 
         if self.powerSavingMonitoringDisposable == nil {
             self.powerSavingMonitoringDisposable = (self.context.sharedContext.automaticMediaDownloadSettings
@@ -2421,13 +2454,14 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             return
         }
         
-        #if true && DEBUG
+        #if false && DEBUG
         DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 1.0, execute: { [weak self] in
             guard let strongSelf = self else {
                 return
             }
             let count = ChatControllerCount.with({ $0 })
-            if count > 1 {
+            // Threshold is 2 because the AI tab keeps one ChatController permanently alive
+            if count > 2 {
                 strongSelf.present(textAlertController(context: strongSelf.context, title: "", text: "ChatControllerCount \(count)", actions: [TextAlertAction(type: .defaultAction, title: "OK", action: {})]), in: .window(.root))
             }
         })
@@ -3928,6 +3962,12 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     private var initializedFilters = false
+    
+    @objc private func proMessagerSettingsChanged() {
+        self.reloadFilters()
+        self.chatListDisplayNode.requestNavigationBarLayout(transition: ComponentTransition(animation: .curve(duration: 0.4, curve: .spring)))
+    }
+    
     private func reloadFilters(firstUpdate: (() -> Void)? = nil) {
         let filterItems = chatListFilterItems(context: self.context)
         var notifiedFirstUpdate = false
@@ -3944,7 +3984,16 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             let isPremium = peerView.peers[peerView.peerId]?.isPremium
             strongSelf.isPremium = isPremium ?? false
             
-            let (_, items) = countAndFilterItems
+            var (_, items) = countAndFilterItems
+            
+            let hideFolders = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "hide_folders") ?? false
+            if hideFolders {
+                items = items.filter { item in
+                    if case .allChats = item.0 { return true }
+                    return false
+                }
+            }
+            
             var filterItems: [ChatListFilterTabEntry] = []
             
             for (filter, unreadCount, hasUnmutedUnread) in items {
@@ -4852,6 +4901,13 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     override public func toolbarActionSelected(action: ToolbarActionOption) {
         let peerIds = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.selectedPeerIds
         let threadIds = self.chatListDisplayNode.effectiveContainerNode.currentItemNode.currentState.selectedThreadIds
+        if case .extra = action {
+            if !peerIds.isEmpty {
+                self.donePressed()
+                self.fenixSetChatsVaulted(!self.fenixIsVaultList, peerIds: Array(peerIds))
+            }
+            return
+        }
         if case .left = action {
             let signal: Signal<Never, NoError>
             var completion: (() -> Void)?
@@ -6074,6 +6130,139 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             })
         })
     }
+
+    // MARK: - Fenixuz Secret Vault
+
+    func fenixSetupSecretVaultIfNeeded() {
+        // Rebuild the entries pipeline whenever the vaulted set changes (applies to
+        // both the main list — hide/show — and the vault screen — unhide).
+        if self.fenixVaultChangedObserver == nil {
+            self.fenixVaultChangedObserver = NotificationCenter.default.addObserver(forName: .fenixSecretVaultChanged, object: nil, queue: .main) { [weak self] _ in
+                guard let self else {
+                    return
+                }
+                self.chatListDisplayNode.mainContainerNode.currentItemNode.updateState { state in
+                    var state = state
+                    state.fenixVaultRevision += 1
+                    return state
+                }
+            }
+        }
+
+        // The title entry point only lives on the main chat list.
+        guard !self.fenixIsVaultList else {
+            return
+        }
+        if !self.fenixVaultGesturesAttached, let titleView = self.findTitleView() {
+            self.fenixVaultGesturesAttached = true
+            titleView.isUserInteractionEnabled = true
+
+            let tapRecognizer = SecretVaultRevealGestureRecognizer(onReveal: { [weak self] in
+                self?.fenixOpenSecretVault()
+            })
+            titleView.addGestureRecognizer(tapRecognizer)
+
+            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(self.fenixVaultLongPress(_:)))
+            titleView.addGestureRecognizer(longPress)
+        }
+    }
+
+    @objc private func fenixVaultLongPress(_ recognizer: UILongPressGestureRecognizer) {
+        if recognizer.state == .began {
+            self.fenixOpenSecretVault()
+        }
+    }
+
+    private func fenixOpenSecretVault() {
+        guard SecretVaultManager.shared.isEnabled else {
+            return
+        }
+        let metadata = ChatPincodeManager.shared.getVaultMetadata()
+        let pincodeController = ChatPincodeViewController(
+            mode: .verify(
+                passwordType: metadata.passwordType,
+                biometricEnabled: metadata.biometricEnabled,
+                onVerify: { code in
+                    return ChatPincodeManager.shared.verifyVault(code)
+                },
+                onSuccess: { [weak self] in
+                    self?.fenixPresentVaultList()
+                },
+                onForgot: { [weak self] in
+                    // Forgot the vault PIN — recover via device owner (Face ID / passcode).
+                    SecretVaultBiometric.authenticateDeviceOwner(reason: SecretVaultStrings.recoveryReason) { success in
+                        guard success, let self else {
+                            return
+                        }
+                        self.view.window?.rootViewController?.dismiss(animated: true, completion: { [weak self] in
+                            self?.fenixPresentVaultList()
+                        })
+                    }
+                }
+            ),
+            presentationData: self.presentationData
+        )
+        let navController = UINavigationController(rootViewController: pincodeController)
+        navController.setNavigationBarHidden(true, animated: false)
+        navController.modalPresentationStyle = .fullScreen
+        self.view.window?.rootViewController?.present(navController, animated: true)
+    }
+
+    private func fenixPresentVaultList() {
+        let vaultController = ChatListControllerImpl(context: self.context, location: .chatList(groupId: .root), controlsHistoryPreload: false, enableDebugActions: false, fenixIsVaultList: true)
+        vaultController.title = SecretVaultStrings.screenTitle
+        (self.navigationController as? NavigationController)?.pushViewController(vaultController)
+    }
+
+    func fenixSetChatsVaulted(_ vaulted: Bool, peerIds: [PeerId]) {
+        guard !peerIds.isEmpty else {
+            return
+        }
+        let engine = self.context.engine
+        let node = self.chatListDisplayNode.mainContainerNode.currentItemNode
+        node.setCurrentRemovingItemId(ChatListNodeState.ItemId(peerId: peerIds[0], threadId: nil))
+
+        if vaulted {
+            SecretVaultManager.shared.addToVault(peerIds)
+        } else {
+            SecretVaultManager.shared.removeFromVault(peerIds)
+        }
+        // Mute hidden chats so no push notification leaks them; unmute on unhide.
+        for peerId in peerIds {
+            let _ = engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: vaulted ? Int32.max : 0).startStandalone()
+        }
+
+        node.setCurrentRemovingItemId(nil)
+
+        let action: (UndoOverlayAction) -> Bool = { [weak self] value in
+            guard let strongSelf = self else {
+                return false
+            }
+            if value == .undo {
+                if vaulted {
+                    SecretVaultManager.shared.removeFromVault(peerIds)
+                } else {
+                    SecretVaultManager.shared.addToVault(peerIds)
+                }
+                for peerId in peerIds {
+                    let _ = strongSelf.context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: vaulted ? 0 : Int32.max).startStandalone()
+                }
+                return true
+            }
+            return false
+        }
+
+        self.forEachController({ controller in
+            if let controller = controller as? UndoOverlayController {
+                controller.dismissWithCommitActionAndReplacementAnimation()
+            }
+            return true
+        })
+
+        let text = vaulted ? SecretVaultStrings.movedToVault(count: peerIds.count) : SecretVaultStrings.removedFromVault(count: peerIds.count)
+        let controller = UndoOverlayController(presentationData: self.context.sharedContext.currentPresentationData.with { $0 }, content: .info(title: nil, text: text, timeout: 5.0, customUndoText: SecretVaultStrings.undo), elevatedLayout: false, animateInAsReplacement: true, action: action)
+        self.present(controller, in: .current)
+    }
     
     private func schedulePeerChatRemoval(peer: EngineRenderedPeer, type: InteractiveMessagesDeletionType, deleteGloballyIfPossible: Bool, completion: @escaping () -> Void) {
         guard let chatPeer = peer.peers[peer.peerId] else {
@@ -6714,6 +6903,7 @@ private final class ChatListLocationContext {
     var rightButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     var proxyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     var storyButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
+    var ghostModeButton: AnyComponentWithIdentity<NavigationButtonComponentEnvironment>?
     
     var rightButtons: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] {
         var result: [AnyComponentWithIdentity<NavigationButtonComponentEnvironment>] = []
@@ -6722,6 +6912,9 @@ private final class ChatListLocationContext {
         }
         if let storyButton = self.storyButton {
             result.append(storyButton)
+        }
+        if let ghostModeButton = self.ghostModeButton {
+            result.append(ghostModeButton)
         }
         if let proxyButton = self.proxyButton {
             result.append(proxyButton)
@@ -6737,6 +6930,7 @@ private final class ChatListLocationContext {
     let ready = Promise<Bool>()
     
     private var stateDisposable: Disposable?
+    private var ghostModeObserver: NSObjectProtocol?
     
     init(
         context: AccountContext,
@@ -6750,6 +6944,12 @@ private final class ChatListLocationContext {
         self.context = context
         self.location = location
         self.parentController = parentController
+        
+        self.ghostModeObserver = NotificationCenter.default.addObserver(forName: NSNotification.Name("FenixSettingsChanged"), object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.updateGhostModeButton()
+            self.parentController?.requestLayout(transition: .animated(duration: 0.2, curve: .spring))
+        }
         
         let hasProxy = context.sharedContext.accountManager.sharedData(keys: [SharedDataKeys.proxySettings])
         |> map { sharedData -> (Bool, Bool) in
@@ -7010,7 +7210,8 @@ private final class ChatListLocationContext {
                             }
                         }
                     }
-                    toolbar = Toolbar(leftAction: leftAction, rightAction: ToolbarAction(title: presentationData.strings.Common_Delete, isEnabled: options.delete), middleAction: displayArchive ? ToolbarAction(title: presentationData.strings.ChatList_ArchiveAction, isEnabled: archiveEnabled) : nil)
+                    let fenixVaultExtra: ToolbarAction? = SecretVaultManager.shared.isEnabled ? ToolbarAction(title: (parentController.fenixIsVaultList ? SecretVaultStrings.removeFromVaultAction : SecretVaultStrings.hideAction), isEnabled: !peerIds.isEmpty) : nil
+                    toolbar = Toolbar(leftAction: leftAction, rightAction: ToolbarAction(title: presentationData.strings.Common_Delete, isEnabled: options.delete), middleAction: displayArchive ? ToolbarAction(title: presentationData.strings.ChatList_ArchiveAction, isEnabled: archiveEnabled) : nil, extraAction: fenixVaultExtra)
                 } else if case .forum = strongSelf.location {
                     let leftAction: ToolbarAction
                     switch options.read {
@@ -7069,6 +7270,9 @@ private final class ChatListLocationContext {
     deinit {
         self.titleDisposable?.dispose()
         self.stateDisposable?.dispose()
+        if let ghostModeObserver = self.ghostModeObserver {
+            NotificationCenter.default.removeObserver(ghostModeObserver)
+        }
     }
     
     private func updateChatList(
@@ -7198,6 +7402,9 @@ private final class ChatListLocationContext {
                                 return
                             }
                             
+                            // Fenixuz: light haptic on story camera button tap.
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
                             if let componentView = parentController.chatListHeaderView(), let storyPeerListView = componentView.storyPeerListView(), storyPeerListView.isLiveStreaming {
                                 parentController.displayContinueLiveStream()
                             } else {
@@ -7208,6 +7415,8 @@ private final class ChatListLocationContext {
                 } else {
                     self.storyButton = nil
                 }
+                
+                self.updateGhostModeButton()
             } else {
                 let parentController = self.parentController
                 self.rightButton = AnyComponentWithIdentity(id: "more", component: AnyComponent(NavigationButtonComponent(
@@ -7425,6 +7634,34 @@ private final class ChatListLocationContext {
             ChatListControllerImpl.openMoreMenu(context: self.context, peerId: peerId, sourceController: parentController, isViewingAsTopics: true, sourceView: sourceView, gesture: nil)
         case .savedMessagesChats:
             break
+        }
+    }
+    
+    func updateGhostModeButton() {
+        if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "show_ghost_mode_button") ?? false {
+            let isGhostModeActive = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false
+            // Ghost mode = read messages without sending read receipts. Custom Fenixuz ghost
+            // glyph (bundled template asset) — the toggle state is shown by tint colour:
+            //   Active   (Ghost ON)  -> accent colour  (theme.list.itemAccentColor)
+            //   Inactive (Ghost OFF) -> normal control grey (panelControlColor)
+            let buttonId = isGhostModeActive ? "ghostMode-on" : "ghostMode-off"
+            // Ghost ON  → purple filled PDF rendered original (multicolor, no tint).
+            // Ghost OFF → thin outline PDF rendered as template, tinted panelControlColor (grey).
+            let ghostContent: NavigationButtonComponent.Content = isGhostModeActive
+                ? .iconOriginal(imageName: "Contact List/FenixGhostActive")
+                : .iconTinted(imageName: "Contact List/FenixGhostInactive", accent: false)
+            self.ghostModeButton = AnyComponentWithIdentity(id: buttonId, component: AnyComponent(NavigationButtonComponent(
+                content: ghostContent,
+                pressed: { [weak self] _ in
+                    guard let self, let parentController = self.parentController else { return }
+                    let current = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "is_ghost_mode_active") ?? false
+                    UserDefaults(suiteName: "pro_messager")?.set(!current, forKey: "is_ghost_mode_active")
+                    self.updateGhostModeButton()
+                    parentController.requestLayout(transition: .animated(duration: 0.2, curve: .spring))
+                }
+            )))
+        } else {
+            self.ghostModeButton = nil
         }
     }
 }

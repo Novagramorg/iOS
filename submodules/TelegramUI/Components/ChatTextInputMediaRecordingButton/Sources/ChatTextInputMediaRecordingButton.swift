@@ -195,6 +195,7 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
     public var switchMode: () -> Void = { }
     public var updateLocked: (Bool) -> Void = { _ in }
     public var updateCancelTranslation: () -> Void = { }
+    public var presentCameraSelection: (Bool) -> Void = { _ in }
     
     private var modeTimeoutTimer: SwiftSignalKit.Timer?
     
@@ -531,6 +532,10 @@ public final class ChatTextInputMediaRecordingButton: TGModernConversationInputM
     }
     
     public func micButtonInteractionRequestedLockedAction() {
+    }
+    
+    public func micButtonInteractionPresentCameraSelection() {
+        self.presentCameraSelection(self.mode == .video)
     }
     
     public func micButtonInteractionStopped() {

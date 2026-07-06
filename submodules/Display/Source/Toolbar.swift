@@ -22,10 +22,14 @@ public struct Toolbar: Equatable {
     public let leftAction: ToolbarAction?
     public let rightAction: ToolbarAction?
     public let middleAction: ToolbarAction?
+    // Fenixuz Secret Vault: optional 4th bulk action ("Hide to Vault"). Defaults to
+    // nil so every existing Toolbar call site is unaffected.
+    public let extraAction: ToolbarAction?
     
-    public init(leftAction: ToolbarAction?, rightAction: ToolbarAction?, middleAction: ToolbarAction?) {
+    public init(leftAction: ToolbarAction?, rightAction: ToolbarAction?, middleAction: ToolbarAction?, extraAction: ToolbarAction? = nil) {
         self.leftAction = leftAction
         self.rightAction = rightAction
         self.middleAction = middleAction
+        self.extraAction = extraAction
     }
 }

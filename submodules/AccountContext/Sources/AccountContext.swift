@@ -615,6 +615,7 @@ public final class NavigateToChatControllerParams {
     public let forceOpenChat: Bool
     public let customChatNavigationStack: [EnginePeer.Id]?
     public let skipAgeVerification: Bool
+    public let isSecretRead: Bool
     
     public init(
         navigationController: NavigationController,
@@ -649,7 +650,8 @@ public final class NavigateToChatControllerParams {
         chatListCompletion: @escaping (ChatListController) -> Void = { _ in },
         forceOpenChat: Bool = false,
         customChatNavigationStack: [EnginePeer.Id]? = nil,
-        skipAgeVerification: Bool = false
+        skipAgeVerification: Bool = false,
+        isSecretRead: Bool = false
     ) {
         self.navigationController = navigationController
         self.chatController = chatController
@@ -684,6 +686,7 @@ public final class NavigateToChatControllerParams {
         self.forceOpenChat = forceOpenChat
         self.customChatNavigationStack = customChatNavigationStack
         self.skipAgeVerification = skipAgeVerification
+        self.isSecretRead = isSecretRead
     }
     
     public func withSkipAgeVerification(_ skipAgeVerification: Bool) -> NavigateToChatControllerParams {
@@ -720,7 +723,8 @@ public final class NavigateToChatControllerParams {
             chatListCompletion: self.chatListCompletion,
             forceOpenChat: self.forceOpenChat,
             customChatNavigationStack: self.customChatNavigationStack,
-            skipAgeVerification: skipAgeVerification
+            skipAgeVerification: skipAgeVerification,
+            isSecretRead: self.isSecretRead
         )
     }
 }
@@ -1377,6 +1381,12 @@ public protocol SharedAccountContext: AnyObject {
     
     var activeAccountContexts: Signal<(primary: AccountContext?, accounts: [(AccountRecordId, AccountContext, Int32)], currentAuth: UnauthorizedAccount?), NoError> { get }
     var activeAccountsWithInfo: Signal<(primary: AccountRecordId?, accounts: [AccountWithInfo]), NoError> { get }
+
+    // Fenixuz: user-controlled pinned (no-sleep) accounts — up to 5 live simultaneously.
+    var fenixuzPinnedAccountsSignal: Signal<Set<Int64>, NoError> { get }
+    func fenixuzLoadPinnedAccounts() -> Set<Int64>
+    func fenixuzSavePinnedAccounts(_ pinned: Set<Int64>)
+    @discardableResult func fenixuzTogglePinnedAccount(recordId: AccountRecordId, primaryRecordId: AccountRecordId?) -> Bool
         
     var presentGlobalController: (ViewController, Any?) -> Void { get }
     var presentCrossfadeController: () -> Void { get }
@@ -1713,6 +1723,7 @@ public protocol AccountContext: AnyObject {
     var availableMessageEffects: Signal<AvailableMessageEffects?, NoError> { get }
     
     var isPremium: Bool { get }
+    var isRealPremium: Bool { get }
     var isFrozen: Bool { get }
     var userLimits: EngineConfiguration.UserLimits { get }
     var peerNameColors: PeerNameColors { get }

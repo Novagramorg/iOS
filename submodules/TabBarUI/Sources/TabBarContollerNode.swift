@@ -227,6 +227,7 @@ final class TabBarControllerNode: ASDisplayNode {
         if self.tabBarView.view == nil {
             tabBarTransition = .immediate
         }
+        
         let tabBarSize = self.tabBarView.update(
             transition: tabBarTransition,
             component: AnyComponent(TabBarComponent(
@@ -265,9 +266,10 @@ final class TabBarControllerNode: ASDisplayNode {
                         }
                     )
                 },
-                search: self.currentController?.tabBarSearchState.flatMap { tabBarSearchState in
+                search: {
+                    let searchState = self.currentController?.tabBarSearchState ?? ViewController.TabBarSearchState(isActive: false)
                     return TabBarComponent.Search(
-                        isActive: tabBarSearchState.isActive,
+                        isActive: searchState.isActive,
                         activate: { [weak self] in
                             guard let self else {
                                 return
@@ -281,7 +283,7 @@ final class TabBarControllerNode: ASDisplayNode {
                             self.deactivateSearch()
                         }
                     )
-                },
+                }(),
                 selectedId: selectedId,
                 outerInsets: UIEdgeInsets(top: 0.0, left: sideInset, bottom: tabBarBottomInset, right: sideInset)
             )),
@@ -333,10 +335,11 @@ final class TabBarControllerNode: ASDisplayNode {
                             background: .panel
                         )
                     },
-                    centralItem: toolbarData.middleAction.flatMap { value in
-                        return GlassControlPanelComponent.Item(
-                            items: [GlassControlGroupComponent.Item(
-                                id: "right_" + value.title,
+                    centralItem: {
+                        var groupItems: [GlassControlGroupComponent.Item] = []
+                        if let value = toolbarData.middleAction {
+                            groupItems.append(GlassControlGroupComponent.Item(
+                                id: "middle_" + value.title,
                                 content: .text(value.title),
                                 action: value.isEnabled ? { [weak self] in
                                     guard let self else {
@@ -344,10 +347,26 @@ final class TabBarControllerNode: ASDisplayNode {
                                     }
                                     self.toolbarActionSelected(.middle)
                                 } : nil
-                            )],
-                            background: .panel
-                        )
-                    },
+                            ))
+                        }
+                        // Fenixuz Secret Vault: bulk "Hide" grouped next to Archive in the centre.
+                        if let value = toolbarData.extraAction {
+                            groupItems.append(GlassControlGroupComponent.Item(
+                                id: "extra_" + value.title,
+                                content: .text(value.title),
+                                action: value.isEnabled ? { [weak self] in
+                                    guard let self else {
+                                        return
+                                    }
+                                    self.toolbarActionSelected(.extra)
+                                } : nil
+                            ))
+                        }
+                        if groupItems.isEmpty {
+                            return nil
+                        }
+                        return GlassControlPanelComponent.Item(items: groupItems, background: .panel)
+                    }(),
                     rightItem: toolbarData.rightAction.flatMap { value in
                         return GlassControlPanelComponent.Item(
                             items: [GlassControlGroupComponent.Item(

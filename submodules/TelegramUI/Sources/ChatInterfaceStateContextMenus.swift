@@ -37,6 +37,7 @@ import ChatMessageItemView
 import ChatMessageBubbleItemNode
 import AdsInfoScreen
 import AdsReportScreen
+import FenixuzEditedHistory
  
 private struct MessageContextMenuData {
     let starStatus: Bool?
@@ -947,7 +948,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     
     return dataSignal
     |> deliverOnMainQueue
-    |> map { data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer -> ContextController.Items in
+    |> map { (data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer: EnginePeer?) -> ContextController.Items in
         let isPremium = accountPeer?.isPremium ?? false
 
         var actions: [ContextMenuItem] = []
@@ -1192,8 +1193,43 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             actions.append(.action(ContextMenuActionItem(text: sendGiftTitle, icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Gift"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
-                let _ = controllerInteraction.sendGift(message.id.peerId)
+                // FENIX-HOOK #38 — sovg'a yuborishdan oldin tasdiq dialogi
+                let fenixSendConfirm38 = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "send_confirm_enabled") ?? false
+                guard fenixSendConfirm38 else {
+                    let _ = controllerInteraction.sendGift(message.id.peerId)
+                    f(.dismissWithoutContent)
+                    return
+                }
                 f(.dismissWithoutContent)
+                let fenixTitle38: String
+                let fenixText38: String
+                let fenixSend38: String
+                let fenixCancel38: String
+                switch chatPresentationInterfaceState.strings.primaryComponent.languageCode {
+                case "uz":
+                    fenixTitle38 = "Yuborishni tasdiqlang"
+                    fenixText38 = "Sovg'a yubormoqchimisiz?"
+                    fenixSend38 = "Yuborish"
+                    fenixCancel38 = "Bekor qilish"
+                case "ru":
+                    fenixTitle38 = "Подтвердите отправку"
+                    fenixText38 = "Отправить подарок?"
+                    fenixSend38 = "Отправить"
+                    fenixCancel38 = "Отмена"
+                default:
+                    fenixTitle38 = "Confirm sending"
+                    fenixText38 = "Send this gift?"
+                    fenixSend38 = "Send"
+                    fenixCancel38 = "Cancel"
+                }
+                let fenixAlert38 = textAlertController(context: context, title: fenixTitle38, text: fenixText38, actions: [
+                    TextAlertAction(type: .defaultAction, title: fenixSend38, action: {
+                        let _ = controllerInteraction.sendGift(message.id.peerId)
+                    }),
+                    TextAlertAction(type: .genericAction, title: fenixCancel38, action: {})
+                ])
+                controllerInteraction.presentController(fenixAlert38, nil)
+                // END FENIX-HOOK #38
             })))
         }
         
@@ -1211,6 +1247,18 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         completed()
                     })
                 })
+            })))
+        }
+        
+        // Fenixuz: edited history action — only shown when user has enabled it in Settings.
+        let editedHistoryEnabled = UserDefaults(suiteName: "pro_messager")?.object(forKey: "edited_history_enabled") as? Bool ?? true
+        if editedHistoryEnabled, let _ = messages[0].attributes.first(where: { $0 is EditedMessageHistoryAttribute }) {
+            actions.append(.action(ContextMenuActionItem(text: "History", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Timer"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                let controller = EditedMessageHistoryController(context: context, message: messages[0])
+                controllerInteraction.navigationController()?.pushViewController(controller)
+                f(.dismissWithoutContent)
             })))
         }
         
@@ -1408,7 +1456,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     showTranslateIfTopical = true
                 }
                 
-                var (canTranslate, _) = canTranslateText(context: context, text: messageText, showTranslate: translationSettings.showTranslate, showTranslateIfTopical: showTranslateIfTopical, ignoredLanguages: translationSettings.ignoredLanguages)
+                let showProTranslate = UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_translate_messages") as? Bool ?? true
+                var (canTranslate, _) = canTranslateText(context: context, text: messageText, showTranslate: translationSettings.showTranslate || showProTranslate, showTranslateIfTopical: showTranslateIfTopical, ignoredLanguages: translationSettings.ignoredLanguages)
                 if let peerId = chatPresentationInterfaceState.chatLocation.peerId, peerId.namespace == Namespaces.Peer.SecretChat {
                     canTranslate = false
                 }

@@ -279,10 +279,8 @@ private func chatListFilterPresetListControllerEntries(presentationData: Present
     
     entries.append(.addItem(text: presentationData.strings.ChatListFilterList_CreateFolder, isEditing: state.isEditing))
     
-    var effectiveDisplayTags: Bool?
-    if isPremium {
-        effectiveDisplayTags = displayTags
-    }
+    // Fenixuz: unlock folder tags for everyone (rendering is client-side, no Premium gate).
+    let effectiveDisplayTags: Bool? = displayTags
     
     if !filters.isEmpty || suggestedFilters.isEmpty {
         var folderCount = 0

@@ -28,6 +28,11 @@ public final class NavigationButtonComponent: Component {
         case text(title: String, isBold: Bool)
         case more
         case icon(imageName: String)
+        case systemIcon(name: String)
+        case iconTinted(imageName: String, accent: Bool)
+        // Fenixuz: renders a bundle PDF asset in original (untinted) colours.
+        // Used for the ghost-ON state where the purple+dark-eyes fill must be preserved.
+        case iconOriginal(imageName: String)
         case proxy(status: ChatTitleProxyStatus)
     }
     
@@ -96,6 +101,14 @@ public final class NavigationButtonComponent: Component {
         }
         
         @objc private func pressed() {
+            // Fenixuz: light haptic for Fenixuz-added icon button types (iconOriginal, iconTinted, systemIcon).
+            switch self.component?.content {
+            case .iconOriginal, .iconTinted, .systemIcon:
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+            default:
+                break
+            }
             self.component?.pressed(self)
         }
         
@@ -111,9 +124,12 @@ public final class NavigationButtonComponent: Component {
             
             var textString: NSAttributedString?
             var imageName: String?
+            var systemIconName: String?
+            var iconAccent: Bool = false
+            var iconOriginal: Bool = false
             var proxyStatus: ChatTitleProxyStatus?
             var isMore: Bool = false
-            
+
             switch component.content {
             case let .text(title, isBold):
                 if title == "___done" {
@@ -125,6 +141,15 @@ public final class NavigationButtonComponent: Component {
                 isMore = true
             case let .icon(imageNameValue):
                 imageName = imageNameValue
+            case let .systemIcon(name):
+                systemIconName = name
+            case let .iconTinted(imageNameValue, accent):
+                imageName = imageNameValue
+                iconAccent = accent
+            case let .iconOriginal(imageNameValue):
+                // Fenixuz: render asset with .alwaysOriginal so multicolor PDFs keep their colours.
+                imageName = imageNameValue
+                iconOriginal = true
             case let .proxy(status):
                 proxyStatus = status
             }
@@ -153,7 +178,7 @@ public final class NavigationButtonComponent: Component {
                 textView.removeFromSuperview()
             }
             
-            if let imageName = imageName {
+            if imageName != nil || systemIconName != nil {
                 let iconView: UIImageView
                 if let current = self.iconView {
                     iconView = current
@@ -163,14 +188,39 @@ public final class NavigationButtonComponent: Component {
                     self.iconView = iconView
                     self.addSubview(iconView)
                 }
-                if self.iconImageName != imageName || themeUpdated {
-                    self.iconImageName = imageName
-                    iconView.image = generateTintedImage(image: UIImage(bundleImageName: imageName), color: theme.chat.inputPanel.panelControlColor)
+                // Accent tint marks an "active" toggle state (e.g. ghost mode ON); otherwise the
+                // normal nav-bar control colour.
+                let iconTintColor = iconAccent ? theme.list.itemAccentColor : theme.chat.inputPanel.panelControlColor
+                // Cache key distinguishes bundle assets / SF Symbols / accent state / original flag so toggling re-renders.
+                let cacheKey: String
+                if iconOriginal {
+                    cacheKey = (imageName ?? "") + ":original"
+                } else {
+                    cacheKey = (imageName ?? ("sys:" + (systemIconName ?? ""))) + (iconAccent ? ":accent" : "")
                 }
-                
-                if let iconSize = iconView.image?.size {
+                if self.iconImageName != cacheKey || themeUpdated {
+                    self.iconImageName = cacheKey
+                    if iconOriginal, let imageName = imageName {
+                        // Fenixuz: preserve multicolor PDF colours (ghost-ON purple fill).
+                        iconView.image = UIImage(bundleImageName: imageName)?.withRenderingMode(.alwaysOriginal)
+                    } else if let imageName = imageName {
+                        iconView.image = generateTintedImage(image: UIImage(bundleImageName: imageName), color: iconTintColor)
+                    } else if let systemIconName = systemIconName {
+                        let config = UIImage.SymbolConfiguration(pointSize: 20.0, weight: .medium)
+                        iconView.image = UIImage(systemName: systemIconName, withConfiguration: config)?.withTintColor(iconTintColor, renderingMode: .alwaysOriginal)
+                    }
+                }
+
+                if var iconSize = iconView.image?.size {
                     size.width = 44.0
-                    
+                    // Fenixuz: clamp oversized PDF assets (e.g. FenixGhostActive/Inactive vector PDFs
+                    // have a large native artboard). Only scale DOWN; small PNG icons are unaffected.
+                    let maxIconDimension: CGFloat = 28.0
+                    if max(iconSize.width, iconSize.height) > maxIconDimension {
+                        let scale = maxIconDimension / max(iconSize.width, iconSize.height)
+                        iconSize = CGSize(width: floor(iconSize.width * scale), height: floor(iconSize.height * scale))
+                    }
+                    iconView.contentMode = .scaleAspectFit
                     iconView.frame = CGRect(origin: CGPoint(x: floor((size.width - iconSize.width) / 2.0), y: floor((availableSize.height - iconSize.height) / 2.0)), size: iconSize)
                 }
             } else if let iconView = self.iconView {

@@ -1,6 +1,7 @@
 #! /bin/sh
 
 set -ex
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 
 ARCH="$1"
 BUILD_DIR=$(echo "$(cd "$(dirname "$2")"; pwd -P)/$(basename "$2")")

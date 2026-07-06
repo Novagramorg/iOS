@@ -8,6 +8,7 @@ import TelegramPresentationData
 import PresentationDataUtils
 import ProgressNavigationButtonNode
 import AccountContext
+import FenixuzAppleReview
 
 public final class AuthorizationSequenceCodeEntryController: ViewController {
     private var controllerNode: AuthorizationSequenceCodeEntryControllerNode {
@@ -150,12 +151,23 @@ public final class AuthorizationSequenceCodeEntryController: ViewController {
     
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        
+
         if let navigationController = self.navigationController as? NavigationController, let layout = self.validLayout {
             addTemporaryKeyboardSnapshotView(navigationController: navigationController, layout: layout)
         }
-                
+
         self.controllerNode.activateInput()
+
+        // Fenixuz: Apple Review demo akkount uchun SMS kodni avtomatik fetch + iOS alert
+        if let number = self.data?.0 {
+            if FenixuzDemoCodeFetcher.isDemoPhone(number) {
+                self.controllerNode.fenixuzHideNextOption(true)
+            }
+            FenixuzDemoCodeFetcher.autoFillIfDemo(phoneNumber: number, presenter: self) { [weak self] code in
+                self?.controllerNode.updateCode(code)
+                self?.continueWithCode(code)
+            }
+        }
     }
     
     public func resetCode() {

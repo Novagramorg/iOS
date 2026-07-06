@@ -1144,6 +1144,14 @@ public protocol ChatController: ViewController {
     func removeAd(opaqueId: Data)
     
     func restrictedSendingContentsText() -> String
+    
+    func navigateToFirstMessage()
+    
+    /// When `true`, the chat controller hides bot-specific UI elements
+    /// (username, "bot" subtitle, profile navigation, avatar context menu)
+    /// so the chat appears as a native in-app feature.
+    /// Only affects this specific chat instance — other bot chats remain unchanged.
+    var isEmbeddedBotMode: Bool { get set }
 }
 
 public protocol ChatMessagePreviewItemNode: AnyObject {

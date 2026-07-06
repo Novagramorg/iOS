@@ -1654,7 +1654,9 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
             if let controller = self.controller, let storySubscriptions = controller.orderedStorySubscriptions, shouldDisplayStoriesInChatListHeader(storySubscriptions: storySubscriptions, isHidden: controller.location == .chatList(groupId: .archive)) {
                 effectiveStorySubscriptions = controller.orderedStorySubscriptions
             } else {
-                effectiveStorySubscriptions = EngineStorySubscriptions(accountItem: nil, items: [], hasMoreToken: nil)
+                // Pass nil (not empty) so ChatListHeaderComponent shows the normal title
+                // without the StoryPeerListComponent occupying blank space
+                effectiveStorySubscriptions = nil
             }
         }
         
@@ -2447,6 +2449,9 @@ final class ChatListControllerNode: ASDisplayNode, ASGestureRecognizerDelegate {
 }
 
 func shouldDisplayStoriesInChatListHeader(storySubscriptions: EngineStorySubscriptions, isHidden: Bool) -> Bool {
+    if UserDefaults(suiteName: "pro_messager")?.object(forKey: "show_stories") as? Bool == false {
+        return false
+    }
     if !storySubscriptions.items.isEmpty {
         return true
     }

@@ -49,6 +49,19 @@ swift_library(
         "-warnings-as-errors",
     ],
     deps = [
+        # AI tab hidden from UI — uncomment to re-enable
+        # "//submodules/Fenixuz/AIChatbot:FenixuzAIChatbot",
+        # Vazifalar (Tasks) tab hidden from UI (owner request) — uncomment to re-enable
+        # "//submodules/Fenixuz/Tasks:FenixuzTasks",
+        "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
+        "//submodules/Fenixuz/ForeignUserBlock:FenixuzForeignUserBlock",
+        "//submodules/Fenixuz/EditedHistory:FenixuzEditedHistory",
+        "//submodules/Fenixuz/Tips:FenixuzTips",
+        "//submodules/Fenixuz/UpdateCheck:FenixuzUpdateCheck",
+        "//submodules/Fenixuz/UnreadReminder:FenixuzUnreadReminder",
+        "//submodules/Fenixuz/ProMessager:FenixuzProMessager",
+        "//submodules/Fenixuz/Analytics:FenixuzAnalytics",
+        "//submodules/Fenixuz/AutoProxy:FenixuzAutoProxy",
         "//third-party/recaptcha:RecaptchaEnterprise",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/SSignalKit/SSignalKit:SSignalKit",

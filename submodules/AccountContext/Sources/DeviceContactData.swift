@@ -208,7 +208,7 @@ private let phonebookUsernamePrefix = "https://t.me/" + phonebookUsernamePathPre
 
 public extension DeviceContactUrlData {
     convenience init(appProfile: EnginePeer.Id) {
-        self.init(label: "Telegram", value: "\(phonebookUsernamePrefix)\(appProfile.id._internalGetInt64Value())")
+        self.init(label: "Novagram", value: "\(phonebookUsernamePrefix)\(appProfile.id._internalGetInt64Value())")
     }
 }
 

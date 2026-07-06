@@ -243,6 +243,8 @@ private var declaredEncodables: Void = {
     declareEncodable(TelegramMediaLiveStream.self, f: { TelegramMediaLiveStream(decoder: $0) })
     declareEncodable(ScheduledRepeatAttribute.self, f: { ScheduledRepeatAttribute(decoder: $0) })
     declareEncodable(SummarizationMessageAttribute.self, f: { SummarizationMessageAttribute(decoder: $0) })
+    declareEncodable(EditedMessageHistoryAttribute.self, f: { EditedMessageHistoryAttribute(decoder: $0) })
+    declareEncodable(DeletedMessageAttribute.self, f: { _ in DeletedMessageAttribute() })
     declareEncodable(GuestChatMessageAttribute.self, f: { GuestChatMessageAttribute(decoder: $0) })
     return
 }()

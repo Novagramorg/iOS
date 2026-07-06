@@ -3892,6 +3892,9 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
     @objc func tapGesture(_ recognizer: UITapGestureRecognizer) {
         if recognizer.state == .ended {
             if case .standard(.previewing) = self.chatPresentationInterfaceState.mode {
+                if self.controller?.ignorePreviewTap == true {
+                    return
+                }
                 self.controller?.animateFromPreviewing()
             } else {
                 self.dismissInput(view: self.view, location: recognizer.location(in: self.contentContainerNode.view))
@@ -4678,7 +4681,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
     
-    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, completion: @escaping () -> Void = {}) {
+    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, overrideText: NSAttributedString? = nil, completion: @escaping () -> Void = {}) {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
             return
         }
@@ -4713,10 +4716,116 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             
             let effectiveInputText: NSAttributedString
             
-            if effectivePresentationInterfaceState.interfaceState.editMessage != nil && effectivePresentationInterfaceState.interfaceState.postSuggestionState != nil {
+            if let overrideText = overrideText {
+                effectiveInputText = overrideText
+            } else if effectivePresentationInterfaceState.interfaceState.editMessage != nil && effectivePresentationInterfaceState.interfaceState.postSuggestionState != nil {
                 effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.effectiveInputState.inputText)
             } else {
                 effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.composeInputState.inputText)
+            }
+            
+            // PRO MESSAGER: shared translate settings (used by #37 confirm and #31 auto-translate below)
+            let proAutoTranslateEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_translate_enabled") ?? false
+            let proTranslateLang = UserDefaults(suiteName: "pro_messager")?.string(forKey: "auto_translate_lang") ?? ""
+            let currentInputText = effectiveInputText
+            let hasTranslateAttr = currentInputText.length > 0 && currentInputText.attribute(NSAttributedString.Key("pro_translated"), at: 0, effectiveRange: nil) != nil
+
+            // FENIX-HOOK #37: Send-Translate 2-tap confirm
+            // Feature: agar translate_confirm_enabled yoqilgan bo'lsa, yuborishdan oldin tasdiq so'raydi.
+            // Mavjud #31 auto-translate hook'dan OLDIN tekshiriladi — agar confirm yo'q bo'lsa, #31 ishlaydi.
+            let proTranslateConfirmEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "translate_confirm_enabled") ?? false
+            if overrideText == nil && proTranslateConfirmEnabled && !proTranslateLang.isEmpty && currentInputText.length > 0 && !hasTranslateAttr {
+                if let controller = self.controller {
+                    let langCode = self.chatPresentationInterfaceState.strings.primaryComponent.languageCode
+                    let alertTitle: String
+                    let translateAction: String
+                    let sendOriginalAction: String
+                    switch langCode {
+                    case "uz":
+                        alertTitle = "Xabarni tarjima qilib yuborasizmi?"
+                        translateAction = "Tarjima qilib yuborish"
+                        sendOriginalAction = "Original yuborish"
+                    case "ru":
+                        alertTitle = "Отправить сообщение с переводом?"
+                        translateAction = "Перевести и отправить"
+                        sendOriginalAction = "Отправить оригинал"
+                    default:
+                        alertTitle = "Send with translation?"
+                        translateAction = "Translate & Send"
+                        sendOriginalAction = "Send Original"
+                    }
+                    // Input maydonini tozalab, foydalanuvchi UI ni ko'rmaydi (original text saqlangan)
+                    if let textInputPanelNode = self.textInputPanelNode {
+                        textInputPanelNode.updateInputTextState(ChatTextInputState(inputText: NSAttributedString()))
+                    }
+                    controller.present(textAlertController(context: self.context, title: nil, text: alertTitle, actions: [
+                        TextAlertAction(type: .genericAction, title: sendOriginalAction, action: { [weak self] in
+                            guard let self else { return }
+                            // Original matnni pro_translated attr bilan yuborish (qayta confirm oldini oladi)
+                            let fallbackAttrString = NSMutableAttributedString(attributedString: currentInputText)
+                            fallbackAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: fallbackAttrString.length))
+                            self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
+                        }),
+                        TextAlertAction(type: .defaultAction, title: translateAction, action: { [weak self] in
+                            guard let self else { return }
+                            let engine = self.context.engine
+                            let _ = (engine.messages.translate(text: currentInputText.string, toLang: proTranslateLang, entities: [])
+                            |> deliverOnMainQueue).start(next: { [weak self] translatedStr in
+                                guard let self else { return }
+                                if let translatedStr = translatedStr, !translatedStr.0.isEmpty {
+                                    let translatedAttrString = NSMutableAttributedString(string: translatedStr.0)
+                                    if currentInputText.length > 0 {
+                                        let attrs = currentInputText.attributes(at: currentInputText.length - 1, effectiveRange: nil)
+                                        translatedAttrString.addAttributes(attrs, range: NSRange(location: 0, length: translatedAttrString.length))
+                                    }
+                                    translatedAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: translatedAttrString.length))
+                                    self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: translatedAttrString, completion: completion)
+                                } else {
+                                    let fallbackAttrString = NSMutableAttributedString(attributedString: currentInputText)
+                                    fallbackAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: fallbackAttrString.length))
+                                    self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
+                                }
+                            }, error: { [weak self] _ in
+                                guard let self else { return }
+                                let fallbackAttrString = NSMutableAttributedString(attributedString: currentInputText)
+                                fallbackAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: fallbackAttrString.length))
+                                self.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
+                            })
+                        }),
+                    ]), in: .window(.root))
+                }
+                return
+            }
+            // END FENIX-HOOK #37
+
+            // PRO MESSAGER: Automatic Translation (settings declared above, shared with #37)
+            if overrideText == nil && proAutoTranslateEnabled && !proTranslateLang.isEmpty && currentInputText.length > 0 && !hasTranslateAttr {
+                if let textInputPanelNode = self.textInputPanelNode {
+                    textInputPanelNode.updateInputTextState(ChatTextInputState(inputText: NSAttributedString()))
+                }
+                
+                let engine = self.context.engine
+                let _ = (engine.messages.translate(text: currentInputText.string, toLang: proTranslateLang, entities: [])
+                |> deliverOnMainQueue).start(next: { [weak self] translatedStr in
+                    if let translatedStr = translatedStr, !translatedStr.0.isEmpty {
+                        let translatedAttrString = NSMutableAttributedString(string: translatedStr.0)
+                        if currentInputText.length > 0 {
+                            let attrs = currentInputText.attributes(at: currentInputText.length - 1, effectiveRange: nil)
+                            translatedAttrString.addAttributes(attrs, range: NSRange(location: 0, length: translatedAttrString.length))
+                        }
+                        translatedAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: translatedAttrString.length))
+                        self?.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: translatedAttrString, completion: completion)
+                    } else {
+                        let fallbackAttrString = NSMutableAttributedString(attributedString: currentInputText)
+                        fallbackAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: fallbackAttrString.length))
+                        self?.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
+                    }
+                }, error: { [weak self] _ in
+                    let fallbackAttrString = NSMutableAttributedString(attributedString: currentInputText)
+                    fallbackAttrString.addAttribute(NSAttributedString.Key("pro_translated"), value: true, range: NSRange(location: 0, length: fallbackAttrString.length))
+                    self?.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, overrideText: fallbackAttrString, completion: completion)
+                })
+                return
             }
             
             let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
@@ -4875,15 +4984,50 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     messages.append(.message(text: "", attributes: attributes, inlineStickers: inlineStickers, mediaReference: nil, threadId: self.chatLocation.threadId, replyToMessageId: self.chatPresentationInterfaceState.interfaceState.replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: richBubbleUpEmojiOrStickersets))
                     mediaReference = nil
                 } else {
-                    for text in breakChatInputText(trimChatInputText(inputText)) {
-                        if text.length != 0 {
+                    for originalText in breakChatInputText(trimChatInputText(inputText)) {
+                        if originalText.length != 0 {
+                            // PRO MESSAGER: Automatic Text Adder
+                            let proAutoEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_text_enabled") ?? false
+                            let rawAutoContent = UserDefaults(suiteName: "pro_messager")?.string(forKey: "auto_text_content") ?? ""
+                            let proAutoContent = rawAutoContent.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                            let text: NSAttributedString
+                            if proAutoEnabled && !proAutoContent.isEmpty {
+                                let newMText = NSMutableAttributedString(attributedString: originalText)
+                                let attrs = originalText.length > 0 ? originalText.attributes(at: originalText.length - 1, effectiveRange: nil) : [:]
+                                newMText.append(NSAttributedString(string: " " + proAutoContent, attributes: attrs))
+                                text = newMText
+                            } else {
+                                text = originalText
+                            }
+
                             var attributes: [MessageAttribute] = []
-                            let entities: [MessageTextEntity]
+                            var entities: [MessageTextEntity]
                             if case let .customChatContents(customChatContents) = self.chatPresentationInterfaceState.subject, case .businessLinkSetup = customChatContents.kind {
                                 entities = generateChatInputTextEntities(text, generateLinks: false)
                             } else {
                                 entities = generateTextEntities(text.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(text, maxAnimatedEmojisInText: 0))
                             }
+
+                            // PRO MESSAGER: Apply default text style to outgoing messages
+                            let proTextStyle = UserDefaults(suiteName: "pro_messager")?.string(forKey: "text_style") ?? "none"
+                            let textLength = (text.string as NSString).length
+                            if textLength > 0, proTextStyle != "none" {
+                                let entityType: MessageTextEntityType?
+                                switch proTextStyle {
+                                case "bold":          entityType = .Bold
+                                case "italic":        entityType = .Italic
+                                case "monospace":     entityType = .Code
+                                case "strikethrough": entityType = .Strikethrough
+                                case "underline":     entityType = .Underline
+                                case "spoiler":       entityType = .Spoiler
+                                default:              entityType = nil
+                                }
+                                if let entityType = entityType {
+                                    entities.append(MessageTextEntity(range: 0 ..< textLength, type: entityType))
+                                }
+                            }
+
                             if !entities.isEmpty {
                                 attributes.append(TextEntitiesMessageAttribute(entities: entities))
                             }
@@ -4954,6 +5098,25 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     return attributes
                 }
             }
+
+            // FENIX-HOOK #34 — heart effect auto-attach START
+            // When the heart toggle is on and the user did NOT explicitly pick an effect,
+            // attach the cached ❤️ message-effect id to the outgoing text message.
+            if !messages.isEmpty, messageEffect == nil, case .message = messages[0],
+               self.chatLocation.peerId?.namespace == Namespaces.Peer.CloudUser,
+               (UserDefaults(suiteName: "pro_messager")?.bool(forKey: "heart_effect_enabled") ?? false) {
+                let fenixHeartId = UserDefaults(suiteName: "pro_messager")?.integer(forKey: "fenix_heart_effect_id") ?? 0
+                if fenixHeartId != 0 {
+                    messages[0] = messages[0].withUpdatedAttributes { attributes in
+                        var attributes = attributes
+                        if attributes.first(where: { $0 is EffectMessageAttribute }) == nil {
+                            attributes.append(EffectMessageAttribute(id: Int64(fenixHeartId)))
+                        }
+                        return attributes
+                    }
+                }
+            }
+            // FENIX-HOOK #34 — heart effect auto-attach END
             
             if !messages.isEmpty || postEmptyMessages || self.chatPresentationInterfaceState.interfaceState.forwardMessageIds != nil {
                 if let forwardMessageIds = self.chatPresentationInterfaceState.interfaceState.forwardMessageIds {
@@ -5030,6 +5193,34 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     }, usedCorrelationId)
                     completion()
                     
+                    // FENIX-HOOK #30 — auto sticker send START
+                    // After all text messages are enqueued, append the saved sticker if feature is on.
+                    // Only fires when there is at least one .message in the outgoing array (text send),
+                    // not for forward-only sends. Checked via first-element shape.
+                    let fenixAutoStickerOn = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "auto_sticker_enabled") ?? false
+                    if fenixAutoStickerOn,
+                       !messages.isEmpty,
+                       case .message = messages[0],
+                       let fenixStickerB64 = UserDefaults(suiteName: "pro_messager")?.string(forKey: "auto_sticker_data"),
+                       let fenixStickerRaw = Data(base64Encoded: fenixStickerB64),
+                       let fenixStickerFile = PostboxDecoder(buffer: MemoryBuffer(data: fenixStickerRaw)).decodeRootObject() as? TelegramMediaFile {
+                        let fenixStickerRef = FileMediaReference.standalone(media: fenixStickerFile).abstract
+                        let fenixStickerMsg = EnqueueMessage.message(
+                            text: "",
+                            attributes: [],
+                            inlineStickers: [:],
+                            mediaReference: fenixStickerRef,
+                            threadId: self.chatLocation.threadId,
+                            replyToMessageId: nil,
+                            replyToStoryId: nil,
+                            localGroupingKey: nil,
+                            correlationId: nil,
+                            bubbleUpEmojiOrStickersets: []
+                        )
+                        messages.append(fenixStickerMsg)
+                    }
+                    // FENIX-HOOK #30 — auto sticker send END
+
                     self.sendMessages(messages, silentPosting, scheduleTime, repeatPeriod, messages.count > 1, postpone)
                 }
                 
@@ -5512,3 +5703,5 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
 }
+// BAZEL BUST 1772178492
+// BAZEL BUST 1772179256

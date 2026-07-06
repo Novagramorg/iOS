@@ -6,6 +6,7 @@ public enum ToolbarActionOption {
     case left
     case right
     case middle
+    case extra
 }
 
 public final class ToolbarTheme {

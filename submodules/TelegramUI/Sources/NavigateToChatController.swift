@@ -20,9 +20,72 @@ import SavedMessagesScreen
 import WallpaperGalleryScreen
 import ChatMessageNotificationItem
 import FaceScanScreen
+import FenixuzChatLock
+
+/// Temporarily set to a peerId after successful pincode verification so the
+/// recursive navigateToChatControllerImpl call bypasses the lock gate.
+private var chatPincodeBypassPeerId: PeerId? = nil
 
 public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParams) {
+    // MARK: - Per-chat pincode protection
     if case let .peer(peer) = params.chatLocation {
+        let targetPeerId = peer.id
+        let isBypassed = chatPincodeBypassPeerId == targetPeerId
+        if ChatPincodeManager.shared.isLocked(targetPeerId) && !isBypassed {
+            let presentationData = params.context.sharedContext.currentPresentationData.with { $0 }
+            // Fenixuz #46: weak holder so the "Forgot pincode?" recovery flow can present the
+            // master verify screen on top of this lock screen without creating a retain cycle.
+            weak var weakLockNav: UINavigationController?
+            let pincodeVC = ChatPincodeViewController(
+                mode: .verify(passwordType: ChatPincodeManager.shared.getMetadata(for: targetPeerId).passwordType, biometricEnabled: ChatPincodeManager.shared.getMetadata(for: targetPeerId).biometricEnabled, onVerify: { code in
+                    ChatPincodeManager.shared.verify(code, for: targetPeerId)
+                }, onSuccess: {
+                    // Set bypass BEFORE re-calling so the next invocation skips the gate
+                    chatPincodeBypassPeerId = targetPeerId
+                    navigateToChatControllerImpl(params)
+                    // Clear bypass immediately after (pincode check is synchronous)
+                    chatPincodeBypassPeerId = nil
+                }, onForgot: ChatPincodeManager.shared.isMasterEnabled() ? {
+                    // Fenixuz #46: "Forgot pincode?" — verify the MASTER pincode to drop this chat's lock.
+                    let masterMeta = ChatPincodeManager.shared.getMasterMetadata()
+                    let masterVC = ChatPincodeViewController(
+                        mode: .verify(passwordType: masterMeta.passwordType, biometricEnabled: masterMeta.biometricEnabled, onVerify: { code in
+                            ChatPincodeManager.shared.verifyMaster(code)
+                        }, onSuccess: {
+                            // Master verified — recover this chat: remove its lock, dismiss the lock UI, then open it.
+                            ChatPincodeManager.shared.removePincode(for: targetPeerId)
+                            weakLockNav?.dismiss(animated: true) {
+                                chatPincodeBypassPeerId = targetPeerId
+                                navigateToChatControllerImpl(params)
+                                chatPincodeBypassPeerId = nil
+                            }
+                        }),
+                        presentationData: presentationData,
+                        isMasterRecovery: true
+                    )
+                    let masterNav = UINavigationController(rootViewController: masterVC)
+                    masterNav.setNavigationBarHidden(true, animated: false)
+                    masterNav.modalPresentationStyle = .fullScreen
+                    weakLockNav?.present(masterNav, animated: true)
+                } : nil),
+                presentationData: presentationData
+            )
+            let navVC = UINavigationController(rootViewController: pincodeVC)
+            navVC.setNavigationBarHidden(true, animated: false)
+            navVC.modalPresentationStyle = .fullScreen
+            weakLockNav = navVC
+            if let topVC = params.navigationController.viewControllers.last as? ViewController {
+                topVC.present(navVC, animated: true)
+            } else {
+                params.navigationController.present(navVC, animated: true)
+            }
+            return
+        }
+    }
+
+    
+    if case let .peer(peer) = params.chatLocation {
+
         let _ = params.context.engine.peers.ensurePeerIsLocallyAvailable(peer: peer).startStandalone()
     }
     
@@ -207,6 +270,7 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
                     }
                     
                     controller.purposefulAction = params.purposefulAction
+                    controller.isSecretRead = params.isSecretRead
                     if let activateInput = params.activateInput {
                         if case let .replyThread(replyThread) = params.chatLocation, (replyThread.isForumPost || replyThread.isMonoforumPost) {
                         } else {
@@ -256,7 +320,7 @@ public func navigateToChatControllerImpl(_ params: NavigateToChatControllerParam
                     }
                 }
             } else {
-                controller = ChatControllerImpl(context: params.context, chatLocation: params.chatLocation.asChatLocation, chatLocationContextHolder: params.chatLocationContextHolder, subject: params.subject, botStart: params.botStart, attachBotStart: params.attachBotStart, botAppStart: params.botAppStart, peekData: params.peekData, chatListFilter: params.chatListFilter, chatNavigationStack: params.chatNavigationStack, customChatNavigationStack: params.customChatNavigationStack, initialTextInputState: params.updateTextInputState)
+                controller = ChatControllerImpl(context: params.context, chatLocation: params.chatLocation.asChatLocation, chatLocationContextHolder: params.chatLocationContextHolder, subject: params.subject, botStart: params.botStart, attachBotStart: params.attachBotStart, botAppStart: params.botAppStart, peekData: params.peekData, chatListFilter: params.chatListFilter, chatNavigationStack: params.chatNavigationStack, customChatNavigationStack: params.customChatNavigationStack, initialTextInputState: params.updateTextInputState, isSecretRead: params.isSecretRead)
                 
                 if let botAppStart = params.botAppStart, case let .peer(peer) = params.chatLocation {
                     Queue.mainQueue().after(0.1) {

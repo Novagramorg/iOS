@@ -219,5 +219,9 @@ public func stringForMessageTimestampStatus(accountPeerId: EnginePeer.Id, messag
         }
     }
     
+    if message.attributes.contains(where: { $0 is DeletedMessageAttribute }) {
+        dateText = "🗑 Removed" + dateText
+    }
+    
     return dateText
 }
