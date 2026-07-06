@@ -376,6 +376,12 @@ final class DocumentCanvasView: UIView {
     // while dragging a handle. The `selectedTextRange` getter stays live, so the OS reads the correct value
     // if it queries during the drag; only the proactive candidate recompute is deferred to the gesture end.
     var coalescingSelectionNotifications = false
+    // True only for the duration of `dropPendingAutocorrection`'s synchronous selection "jiggle". While set,
+    // the text-mutation entry points (`insertText` / `replace` / `deleteBackward` / `setMarkedText`) no-op:
+    // the jiggle provokes the keyboard to COMMIT its pending autocorrection (a text change), and blocking that
+    // change is what DISMISSES the correction instead of accepting it — the legacy `isPreservingText` role
+    // (`shouldChangeTextIn` → false). Without it the correction lands and CMD+A "accepts" instead of dismisses.
+    var isDroppingPendingAutocorrection = false
     // Auto-scroll state while dragging a text-selection handle near an edge: vertically against the host
     // document scroll view, and/or horizontally within a scrollable table the head is in. One display link
     // drives both axes.
@@ -1245,6 +1251,18 @@ final class DocumentCanvasView: UIView {
 
     /// Sets a collapsed caret (clears the drag anchor).
     func setCaret(global pos: Int) {
+        setCaret(global: pos, reportSelectionChange: true)
+    }
+
+    /// Sets a collapsed caret (clears the drag anchor). `reportSelectionChange` gates the host-facing selection
+    /// report (`onSelectionChange`): pass `false` for the per-frame moves of an interactive caret drag (the
+    /// long-press magnifier loupe) so the host is told ONCE at the drag's final position instead of on every
+    /// frame — the same "report once at the end" model the floating cursor (spacebar-trackpad) uses. The
+    /// own-drawn visuals + table-cell scroll-follow still update every call. The OS input-delegate bracket
+    /// obeys `coalescingSelectionNotifications` (like `setSelectionHead`): during a coalesced caret drag it is
+    /// skipped per frame — otherwise the keyboard's autocorrect/candidate bar recomputes and visibly JUMPS on
+    /// every move — and `endCoalescedSelectionDrag` fires exactly one bracket for the final caret at the end.
+    func setCaret(global pos: Int, reportSelectionChange: Bool) {
         var target = pos
         if let g = finalizeMarkedText() {            // a dismissed prediction shifts later positions left
             if pos >= g.to { target = pos - (g.to - g.from) }
@@ -1253,11 +1271,12 @@ final class DocumentCanvasView: UIView {
         target = clampGlobal(target)
         clearStructuralSelections()
         dismissEditMenuForSelectionOrTextChange()   // the caret moved → close any open menu (native UITextView)
-        textInputDelegate?.selectionWillChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionWillChange(self) }
         anchor = target; head = target
-        textInputDelegate?.selectionDidChange(self)
+        if !coalescingSelectionNotifications { textInputDelegate?.selectionDidChange(self) }
         setNeedsDisplay(); refreshSelectionUI()
         scrollCaretIntoViewIfNeeded()
+        guard reportSelectionChange else { return }
         onSelectionChange?()   // tap is harmless (caret already visible → no-op); covers non-tap movers —
                                // Backspace-at-cell-start / Tab cell-nav — that can land the caret off-screen
     }

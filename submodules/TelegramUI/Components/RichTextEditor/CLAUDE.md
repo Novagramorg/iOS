@@ -419,6 +419,30 @@ caret, not the finger (the loupe's `move(to: finger)` had been dragging the widg
 **conforms to `UITextCursorView`** (`isBlinking`/`resetBlinkAnimation`) so a future non-interaction path could
 hand it directly, but the loupe still needs the interaction-owned cursor today.
 
+**The drag reports the selection ONCE, at the final position — not per frame (added 2026-07-06).** Both report
+channels are deferred to the drag's end, each by its own "fire once" mechanism:
+- **Host report** (`onSelectionChange` → the composer's `onChange`: interface-state selection commit + re-layout).
+  `handleLongPress` moves the caret each frame with `setCaret(global:reportSelectionChange:false)`, which
+  SUPPRESSES `onSelectionChange`. It fires once on the terminal state: `.ended` re-runs the default `setCaret`
+  (reports); `.cancelled`/`.failed` call `onSelectionChange?()` directly so the host isn't left stale.
+- **OS input-delegate bracket** (`selectionWillChange/DidChange` → the keyboard's autocorrect/candidate bar).
+  Left un-coalesced, a per-frame bracket makes the **keyboard suggestions visibly JUMP** on every move. The drag
+  reuses the selection-handle-drag coalescing: `.began` calls `beginCoalescedSelectionDrag()`, `setCaret` now
+  skips the bracket while `coalescingSelectionNotifications` is set (mirroring `setSelectionHead`), and the
+  terminal `endCoalescedSelectionDrag()` fires exactly ONE bracket for the final caret. (The `selectedTextRange`
+  getter stays live throughout; the keyboard only recomputes on a bracket.)
+
+This is the same "report once at the end" model the floating cursor (spacebar-trackpad, `moveFloatingCaret` +
+`endFloatingCursor`) uses for the host report, and it's the ONE loupe caret-move exception to the repo-wide
+*"any caret-moving op must fire `onSelectionChange`"* invariant. NOTE the loupe goes further than the floating
+cursor, which still brackets the input delegate per frame (its keyboard shows no suggestion bar during the
+trackpad gesture, so it doesn't churn visibly). Trade-off: the outer-document scroll-follow (bundled into the
+composer's `onSelectionChange` closure) is likewise deferred to the drag's end — negligible in the compact
+composer; a dedicated per-drag auto-scroll driver (like the floating cursor's) is the follow-up if a tall
+full-page editor needs edge auto-scroll during a loupe drag. Guarded by
+`SelectionInteractionTests.test_setCaret_withReportSuppressed_defersHostReport_untilTheDragEnds` (host) +
+`…test_loupeDrag_coalescesInputDelegate_soKeyboardSuggestionsDoNotChurn` (keyboard).
+
 **Proximity-adaptive long-press delay** (`LocationAdaptiveLongPressGestureRecognizer` — sets `minimumPressDuration`
 per-touch in `touchesBegan` before `super`): near-instant (`loupeDelayNearCursor`) when the touch starts within
 `loupeNearCursorRadius` of the caret ("grab the cursor"), longer (`loupeDelayFarFromCursor`) otherwise. A literal
@@ -934,6 +958,32 @@ a RANGE. Centralizing in `merging` + testing the range form fixed it.)
   **outside** `editing{}` with one undo per composition; a system inline prediction (signalled by
   `setMarkedText` `sel:{0,0}`, ghost trailing) is **dismissed, never committed**, by our finalize
   chokepoints so the keyboard's own accept lands clean.
+- **A deliberate selection/cursor-move DISMISSES the keyboard's pending AUTOCORRECT** (the candidate bar / inline
+  prompt), added 2026-07-06, **device-log-verified** (runtime-confirmed on ⌘A). Distinct from the inline prediction
+  above (which is OUR marked text) — the autocorrect candidate is the keyboard's own state, so the only lever is the
+  input delegate. **Two coupled halves, BOTH held under one `isDroppingPendingAutocorrection` window** (the mechanism
+  was pinned by NSLog instrumentation — the first two cuts guessed wrong; capture, don't hypothesise):
+  - **Block the ACCEPT.** The keyboard COMMITS its pending correction via a `replace(...)` (or `insertText`) fired
+    **SYNCHRONOUSLY in response to the real `selectionDidChange`** of a selection that leaves the word (e.g. ⌘A's
+    range) — NOT in response to any jiggle. So the four text-mutation entry points (`insertText`/`replace`/
+    `deleteBackward`/`setMarkedText`) **no-op while `isDroppingPendingAutocorrection` is set** — the legacy
+    `isPreservingText` → `shouldChangeTextIn` → false role. Without this the commit LANDS and ⌘A "accepts" the
+    correction (bug cut #1: applied "Omw"→"On my way!").
+  - **Trigger the DISMISS.** Blocking the accept alone leaves the keyboard still SHOWING the suggestion (bug cut #2).
+    An extra `autocorrectDismissJiggle()` — a momentary FAKE one-position selection then back, bracketed to the input
+    delegate — run **while still blocked** makes the keyboard DROP the correction (mirrors the legacy
+    `ChatInputTextView.dropAutocorrectioniOS16` jiggle; its provoked commits also no-op).
+
+  `applySelection` (Select-All ⌘A / double-tap word / triple-tap paragraph — the primary case) sets the block, fires
+  its real selection bracket, runs the jiggle, then clears the block (`onSelectionChange` fires AFTER, unblocked).
+  `dropPendingAutocorrection()` (`+MarkedText.swift`) wraps just the block+jiggle for the start of the coalesced
+  **loupe cursor-drag** + **selection-handle drag**; a **no-op while marked text is active** (the keyboard owns that
+  range) or unfocused. The whole thing is low-level (touches only `anchor`/`head`, restored synchronously, + the
+  brackets — never `onSelectionChange`, the menu, or the drawn caret), DISMISSES (discards) rather than accepts, so
+  the typed text is unchanged. Regression-guarded by `SelectionInteractionTests.test_dropPendingAutocorrection_*` +
+  `…test_selectAll_blocksTheKeyboardsAutocorrectCommit_*` (a spy mimics the keyboard's synchronous commit-attempt and
+  asserts it's blocked → text unchanged). NOTE the keyboard-DROP half is keyboard-driven and can't be unit-tested;
+  the drag paths reuse the same primitive but were only runtime-verified for ⌘A.
 - **The undo buffer is a PRIVATE, per-canvas `UndoManager`, NOT the responder-chain `UIResponder.undoManager`**
   (`DocumentCanvasView.effectiveUndoManager = undoManagerOverride ?? ownUndoManager`, the latter a private
   `UndoManager()`). The responder-chain manager is shared app-wide, so other responders' (and the system

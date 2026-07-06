@@ -298,7 +298,17 @@ extension DocumentCanvasView {
             // `loupeDragActive` / `updateCaretView`) by the time `begin(...)` below captures it as the
             // selection-widget — otherwise the loupe grows from a mid-blink (near-invisible) caret.
             if #available(iOS 17.0, *) { loupeDragActive = true }
-            setCaret(global: p)
+            // Starting a cursor drag dismisses any pending autocorrect for the word being left (the drag then
+            // coalesces the keyboard notifications, so the suggestion would otherwise linger the whole drag).
+            dropPendingAutocorrection()
+            // Coalesce the OS input-delegate selection notifications for the whole drag: the per-frame caret
+            // moves below skip the `selectionWillChange/DidChange` bracket (see `setCaret`), so the keyboard's
+            // autocorrect/candidate bar doesn't recompute + JUMP on every move; `endCoalescedSelectionDrag`
+            // (terminal state below) fires exactly one bracket for the final caret.
+            beginCoalescedSelectionDrag()
+            // Place the caret WITHOUT reporting to the host: a loupe drag reports the selection ONCE at its
+            // final position (the terminal state below), not on every frame — the spacebar-trackpad model.
+            setCaret(global: p, reportSelectionChange: false)
             // The magnifier loupe is iOS 17+; below it, the long-press still places the caret + (on release)
             // presents the menu — just without the magnifier.
             // `setCaret` above has already positioned + shown our own `caretView` at `p`; pass it as the
@@ -331,7 +341,7 @@ extension DocumentCanvasView {
             }
         case .changed:
             if loupeConsumedAsMultiTap { return }   // consumed as a double-tap → keep the word selection, ignore drag
-            setCaret(global: p)
+            setCaret(global: p, reportSelectionChange: false)   // move the caret silently; report once on release
             if #available(iOS 17.0, *) {
                 // Keep the borrowed system cursor tracking (grow anchor) but NEAR-INVISIBLE (its native blink
                 // would flicker through otherwise); our TransientCaretView is the visible cursor.
@@ -374,8 +384,18 @@ extension DocumentCanvasView {
                 }
             }
             loupeDragActive = false   // resume the steady caret's blink
-            if g.state == .ended { presentEditMenu() }   // setCaret already done above
-            else { updateCaretView() }   // .cancelled/.failed take no setCaret path — refresh so the caret blinks again
+            // The drag coalesced the OS input-delegate brackets (keyboard suggestions didn't churn per frame);
+            // now the final caret is settled (`.ended` re-ran `setCaret` above; `.cancelled`/`.failed` sit at
+            // the last-dragged caret), so fire exactly ONE bracket to sync the keyboard. No-op if not coalescing.
+            endCoalescedSelectionDrag()
+            if g.state == .ended {
+                presentEditMenu()   // setCaret above already reported the final caret to the host (once)
+            } else {
+                // .cancelled/.failed take no setCaret path — refresh so the caret blinks again, and report the
+                // final (last-dragged) caret to the host ONCE so its selection isn't left stale after the drag.
+                updateCaretView()
+                onSelectionChange?()
+            }
         default:
             break
         }
@@ -397,7 +417,11 @@ extension DocumentCanvasView {
                 // one bracket fires on `.ended` (the keyboard's autocorrect/candidate work is meaningless
                 // mid-drag and pegs the CPU on every frame). The table-knob path uses structural selection
                 // (not these setters), so it doesn't coalesce.
-                if let end = draggingEndpoint { captureSelectionDragOffset(endpoint: end, touch: point); beginCoalescedSelectionDrag() }
+                if let end = draggingEndpoint {
+                    captureSelectionDragOffset(endpoint: end, touch: point)
+                    dropPendingAutocorrection()   // dismiss any pending autocorrect before the (coalesced) drag
+                    beginCoalescedSelectionDrag()
+                }
             }
         case .changed:
             if let end = draggingTableKnob {
