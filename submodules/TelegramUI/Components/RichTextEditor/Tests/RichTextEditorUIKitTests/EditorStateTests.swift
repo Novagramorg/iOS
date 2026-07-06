@@ -104,5 +104,34 @@ final class EditorStateTests: XCTestCase {
         e.canvas.selectedTextRange = DocumentTextRange(pos, pos)
         XCTAssertTrue(e.currentState().bold, "a collapsed caret inside a bold run reports bold (inherited typing format)")
     }
+
+    func test_currentState_spoilerOverSelection() {
+        let e = editor([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Hello")]))])
+        let lo = e.canvas.boxes[0].textStart, hi = lo + 5
+        e.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(lo), DocumentTextPosition(hi))
+        XCTAssertFalse(e.currentState().spoiler, "plain text is not a spoiler")
+        e.toggleSpoiler()
+        e.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(lo), DocumentTextPosition(hi))
+        XCTAssertTrue(e.currentState().spoiler, "after toggling spoiler over the selection, state.spoiler is true")
+    }
+
+    func test_currentState_spoilerNonUniformSelection_isFalse() {
+        var spoilerAttr = CharacterAttributes(); spoilerAttr.spoiler = true
+        let e = editor([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [
+            TextRun(text: "AB", attributes: spoilerAttr),
+            TextRun(text: "cd"),
+        ]))])
+        let lo = e.canvas.boxes[0].textStart, hi = lo + 4
+        e.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(lo), DocumentTextPosition(hi))
+        XCTAssertFalse(e.currentState().spoiler, "a partly-spoilered selection is not uniformly a spoiler")
+    }
+
+    func test_currentState_spoilerAtCaretInSpoilerRun() {
+        var spoilerAttr = CharacterAttributes(); spoilerAttr.spoiler = true
+        let e = editor([.paragraph(ParagraphBlock(id: BlockID("p"), runs: [TextRun(text: "Secret", attributes: spoilerAttr)]))])
+        let pos = DocumentTextPosition(e.canvas.boxes[0].textStart + 3)   // collapsed caret inside the spoiler run
+        e.canvas.selectedTextRange = DocumentTextRange(pos, pos)
+        XCTAssertTrue(e.currentState().spoiler, "a collapsed caret inside a spoiler run reports spoiler (inherited typing format)")
+    }
 }
 #endif

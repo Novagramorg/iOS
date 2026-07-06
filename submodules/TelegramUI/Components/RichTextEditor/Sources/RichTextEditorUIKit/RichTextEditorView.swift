@@ -163,6 +163,9 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         public let underline: Bool
         public let strikethrough: Bool
         public let code: Bool
+        /// True when the caret's inherited format / the whole selection carries the spoiler marker
+        /// (`.rtSpoiler` / `CharacterAttributes.spoiler`). Drives a host toolbar's Spoiler check-state.
+        public let spoiler: Bool
         public let paragraphStyle: ParagraphStyleName?
         /// True when the caret/selection is inside a first-class code block (`Block.code` / `CodeBlockBox`).
         /// Distinct from `code` (the inline-monospace character format). `paragraphStyle` is nil in a code block.
@@ -204,7 +207,18 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         canvas.onContentSizeChange = { [weak self] in self?.onChange?() }   // pure relay; the host re-lays-out via update()
         // The OS moves the caret via arrows through the canvas's selectedTextRange setter, which can land
         // it off-screen (e.g. arrowing up out of a tall image to the block above). Scroll it back into view.
-        canvas.onSelectionChange = { [weak self] in self?.scrollCaretIntoView(); self?.onChange?() }
+        // `scrollCaretIntoView` stays SYNCHRONOUS (arrow-key scroll-follow must settle before the setter
+        // returns — see its doc-comment). The HOST notification, however, is coalesced (see below): the OS
+        // drives a backspace/replace as a non-collapsed `selectedTextRange` set immediately followed — same
+        // runloop turn — by the delete that collapses it, i.e. two synchronous selection changes. Fired
+        // synchronously, a host reading `currentState().hasSelection` would observe the transient non-empty
+        // range and flare a selection-gated toolbar into its "has selection" state and back out. Coalescing
+        // to one trailing async call lets the host see only the settled selection. Content-size changes still
+        // relay synchronously (above), so typed text lays out immediately.
+        canvas.onSelectionChange = { [weak self] in
+            self?.scrollCaretIntoView()
+            self?.scheduleSelectionDrivenOnChange()
+        }
         // Surface first-responder transitions (the canvas is the actual first responder) to the host.
         canvas.onBecameFirstResponder = { [weak self] in self?.onBecameFirstResponder?() }
         canvas.onResignedFirstResponder = { [weak self] in self?.onResignedFirstResponder?() }
@@ -501,6 +515,25 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         let visible = scrollView.bounds.inset(by: scrollView.adjustedContentInset)
         guard !visible.contains(target) else { return }   // already visible → no scroll (kills churn + race)
         scrollView.scrollRectToVisible(target, animated: animated)
+    }
+
+    private var isSelectionOnChangeScheduled = false
+
+    /// Coalesce the HOST `onChange` for SELECTION changes to a single trailing call per runloop turn.
+    /// A backspace/replace arrives as an OS-driven non-collapsed `selectedTextRange` set followed — in the
+    /// same runloop turn — by the delete that collapses it (and the delete's own content-size `onChange`,
+    /// which relays SYNCHRONOUSLY and reports the settled state). Dispatched async, this fires AFTER both, so
+    /// the host observes only the settled selection instead of the transient non-empty range → no toolbar
+    /// "selection flare". The `scheduled` flag collapses N synchronous selection changes into one call.
+    /// Content edits are unaffected (their notification is the synchronous content-size relay).
+    private func scheduleSelectionDrivenOnChange() {
+        if isSelectionOnChangeScheduled { return }
+        isSelectionOnChangeScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isSelectionOnChangeScheduled = false
+            self.onChange?()
+        }
     }
 
     public func scrollViewDidScroll(_ scrollView: UIScrollView) {

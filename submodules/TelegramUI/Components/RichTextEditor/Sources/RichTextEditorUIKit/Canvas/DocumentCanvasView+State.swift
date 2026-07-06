@@ -13,7 +13,7 @@ extension DocumentCanvasView {
         return activeStack(at: head)?.box as? BlockBox
     }
 
-    private func currentInlineFormats() -> (bold: Bool, italic: Bool, underline: Bool, strikethrough: Bool, code: Bool) {
+    private func currentInlineFormats() -> (bold: Bool, italic: Bool, underline: Bool, strikethrough: Bool, code: Bool, spoiler: Bool) {
         let targets = characterFormatTargets()
         if !targets.isEmpty {
             return (
@@ -21,13 +21,14 @@ extension DocumentCanvasView {
                 italic: targets.allSatisfy { rangeIsItalic($0.storage, $0.range) },
                 underline: targets.allSatisfy { rangeIsUnderline($0.storage, $0.range) },
                 strikethrough: targets.allSatisfy { rangeIsStrikethrough($0.storage, $0.range) },
-                code: targets.allSatisfy { rangeIsInlineCode($0.storage, $0.range) }
+                code: targets.allSatisfy { rangeIsInlineCode($0.storage, $0.range) },
+                spoiler: targets.allSatisfy { rangeIsSpoiler($0.storage, $0.range) }
             )
         }
         // Collapsed caret: the format the next typed character would inherit.
-        guard let (region, local) = leafRegion(containingGlobal: head) else { return (false, false, false, false, false) }
+        guard let (region, local) = leafRegion(containingGlobal: head) else { return (false, false, false, false, false, false) }
         let ca = mapper.characterAttributes(from: typingAttributeDict(region: region, atLocal: local))
-        return (ca.bold, ca.italic, ca.underline, ca.strikethrough, ca.inlineCode)
+        return (ca.bold, ca.italic, ca.underline, ca.strikethrough, ca.inlineCode, ca.spoiler)
     }
 
     func currentState() -> RichTextEditorView.EditorState {
@@ -35,6 +36,7 @@ extension DocumentCanvasView {
         let fmt = currentInlineFormats()
         return RichTextEditorView.EditorState(
             bold: fmt.bold, italic: fmt.italic, underline: fmt.underline, strikethrough: fmt.strikethrough, code: fmt.code,
+            spoiler: fmt.spoiler,
             paragraphStyle: topBlock?.style,
             isCodeBlock: activeStack(at: head)?.box is CodeBlockBox,
             isPullQuote: activeStack(at: head)?.box is PullQuoteBox,
