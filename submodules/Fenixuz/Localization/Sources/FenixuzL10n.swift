@@ -841,11 +841,11 @@ public struct FenixuzL10n {
     // MARK: - About FenixPro (Settings → FenixPro → About)
 
     public var about_rowTitle: String {
-        pick(en: "About NovagramPro", uz: "NovagramPro haqida", ru: "О NovagramPro")
+        pick(en: "About Novagram", uz: "Novagram haqida", ru: "О Novagram")
     }
 
     public var about_screenTitle: String {
-        pick(en: "About NovagramPro", uz: "NovagramPro haqida", ru: "О NovagramPro")
+        pick(en: "About Novagram", uz: "Novagram haqida", ru: "О Novagram")
     }
 
     public var about_introHeader: String {
@@ -854,9 +854,9 @@ public struct FenixuzL10n {
 
     public var about_introBody: String {
         pick(
-            en: "NovagramPro is Telegram with a set of extra tools built on top. Everything below is included — no subscription, no paywall. Each feature can be turned on or off in NovagramPro settings.",
-            uz: "NovagramPro — bu ustiga qo'shimcha vositalar qo'shilgan Telegram. Quyidagilarning barchasi bepul — obuna ham, to'lov ham yo'q. Har bir imkoniyatni NovagramPro sozlamalarida yoqish yoki o'chirish mumkin.",
-            ru: "NovagramPro — это Telegram с набором дополнительных инструментов. Всё перечисленное ниже бесплатно — без подписки и без платного доступа. Каждую функцию можно включить или выключить в настройках NovagramPro."
+            en: "Novagram is Telegram with a set of extra tools built on top. Everything below is included — no subscription, no paywall. Each feature can be turned on or off in Novagram Settings.",
+            uz: "Novagram — bu ustiga qo'shimcha vositalar qo'shilgan Telegram. Quyidagilarning barchasi bepul — obuna ham, to'lov ham yo'q. Har bir imkoniyatni Novagram sozlamalarida yoqish yoki o'chirish mumkin.",
+            ru: "Novagram — это Telegram с набором дополнительных инструментов. Всё перечисленное ниже бесплатно — без подписки и без платного доступа. Каждую функцию можно включить или выключить в настройках Novagram."
         )
     }
 
@@ -957,9 +957,9 @@ public struct FenixuzL10n {
 
     public var about_footer: String {
         pick(
-            en: "NovagramPro is built on top of Telegram. All your chats, contacts and data stay in your regular Telegram account.",
-            uz: "NovagramPro Telegram asosida qurilgan. Barcha chatlaringiz, kontaktlaringiz va ma'lumotlaringiz oddiy Telegram accountingizda qoladi.",
-            ru: "NovagramPro построен на основе Telegram. Все ваши чаты, контакты и данные остаются в вашем обычном аккаунте Telegram."
+            en: "Novagram is built on top of Telegram. All your chats, contacts and data stay in your regular Telegram account.",
+            uz: "Novagram Telegram asosida qurilgan. Barcha chatlaringiz, kontaktlaringiz va ma'lumotlaringiz oddiy Telegram accountingizda qoladi.",
+            ru: "Novagram построен на основе Telegram. Все ваши чаты, контакты и данные остаются в вашем обычном аккаунте Telegram."
         )
     }
 }

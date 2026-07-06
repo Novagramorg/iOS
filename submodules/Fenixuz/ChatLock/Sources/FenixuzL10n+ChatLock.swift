@@ -129,10 +129,10 @@ public enum FenixuzChatLockStrings {
 
     // MARK: - Context-menu titles (localized — fixes the previously hardcoded Uzbek)
     public static var menuSet: String {
-        localized(en: "🔒 Set Pincode", uz: "🔒 Pincode qo'yish", ru: "🔒 Установить пин-код")
+        localized(en: "Set Pincode", uz: "Pincode qo'yish", ru: "Установить пин-код")
     }
     public static var menuRemove: String {
-        localized(en: "🔓 Remove Pincode", uz: "🔓 Pincode o'chirish", ru: "🔓 Удалить пин-код")
+        localized(en: "Remove Pincode", uz: "Pincode o'chirish", ru: "Удалить пин-код")
     }
 
     // MARK: - Master reset (device-owner recovery when the master pincode itself is forgotten)

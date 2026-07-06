@@ -806,6 +806,8 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 | `TelegramUI/BUILD` + `AppDelegate.swift` (2026-06-27) | +1 dep, +1 import, +6-line launch hook | start FenixuzAnalytics once shared context ready (device + account counting) |
 | `PeerInfoScreen/{BUILD, PeerInfoScreen.swift, PeerInfoSettingsItems.swift, PeerInfoScreenSettingsActions.swift}` (2026-06-27) | +1 dep, +1 enum case, +2 imports, +1 row, +1 action case | "Analytics" Settings row → FenixuzAnalyticsController |
 | `PeerInfoScreen/{PeerInfoScreen.swift, PeerInfoSettingsItems.swift, PeerInfoScreenSettingsActions.swift}` (2026-07-06) | +1 enum case `.novagramBots`, +1 row under NovagramPro (id 2), +1 action case | "Novagram Bots" Settings row → fenixBotsController (surface Bots directly in Settings for faster discovery; reuses FenixuzProMessager, no new dep) |
+| `PeerInfoScreen/PeerInfoSettingsItems.swift` (2026-07-06) | 1 string literal | Settings row renamed "NovagramPro" → "Novagram Settings" (the Pro name read as a paid tier) |
+| `ChatListUI/Sources/ChatContextMenus.swift` (2026-07-06) | 1 line in ChatLock item | pincode context-menu icon Pin/Unpin → "Chat/Context Menu/Lock" (emoji stripped from titles in FenixuzL10n+ChatLock — icon+emoji double was wrong) |
 | `Telegram/Telegram-iOS/PrivacyInfo.xcprivacy` (2026-06-27) | +1 purpose string | declare anonymous Device ID collection for Analytics (Tracking=false → no ATT) |
 | `TelegramUI/BUILD` + `AppDelegate.swift` (2026-07-04) | +1 dep, +1 import, +9-line launch hook | start FenixuzAutoProxy at launch (re-apply/self-heal NovagramProxy when the toggle is on) |
 | `AuthorizationUI/BUILD` + `AuthorizationSequencePhoneEntryController.swift` (2026-07-04) | +1 dep, +1 import, +~30 lines | login-screen "NovagramProxy" nav button — enable proxy before login in blocked countries |
@@ -1941,7 +1943,7 @@ case analytics
 import FenixuzAnalytics
 ```
 
-**Settings rows — add right after the "NovagramPro" row in the `.proMessager` section:**
+**Settings rows — add right after the "Novagram Settings" (ex-"NovagramPro") row in the `.proMessager` section:**
 
 ```swift
 items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Analytics", icon: fenixuzSettingsIcon(systemName: "chart.bar.fill", color: .lightBlue), action: {

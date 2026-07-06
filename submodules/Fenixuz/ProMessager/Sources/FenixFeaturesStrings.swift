@@ -84,9 +84,9 @@ enum FenixFeaturesStrings {
 
     static func settingsLinksTip(langCode: String) -> String {
         switch langCode {
-        case "uz": return "NovagramPro sahifasiga havolani nusxalash va ulashish imkonini beradi"
-        case "ru": return "Позволяет копировать и делиться ссылкой на страницу NovagramPro"
-        default:   return "Lets you copy and share a link to the NovagramPro page"
+        case "uz": return "Novagram Settings sahifasiga havolani nusxalash va ulashish imkonini beradi"
+        case "ru": return "Позволяет копировать и делиться ссылкой на страницу Novagram Settings"
+        default:   return "Lets you copy and share a link to the Novagram Settings page"
         }
     }
 
@@ -109,9 +109,9 @@ enum FenixFeaturesStrings {
     // Feature #40: share NovagramPro settings link
     static func shareNovagramProLinkTitle(langCode: String) -> String {
         switch langCode {
-        case "uz": return "NovagramPro havolasini ulashish"
-        case "ru": return "Поделиться ссылкой NovagramPro"
-        default:   return "Share NovagramPro link"
+        case "uz": return "Novagram Settings havolasini ulashish"
+        case "ru": return "Поделиться ссылкой Novagram Settings"
+        default:   return "Share Novagram Settings link"
         }
     }
 

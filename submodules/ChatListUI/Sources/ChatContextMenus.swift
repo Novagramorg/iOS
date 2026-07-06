@@ -489,7 +489,7 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                                 if !isSavedMessages && ChatPincodeManager.shared.isMasterEnabled() {
                                     let isLocked = ChatPincodeManager.shared.isLocked(peerId)
                                     let pincodeTitle = isLocked ? FenixuzChatLockStrings.menuRemove : FenixuzChatLockStrings.menuSet
-                                    let pincodeIconName = isLocked ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"
+                                    let pincodeIconName = "Chat/Context Menu/Lock"
                                     items.append(.action(ContextMenuActionItem(text: pincodeTitle, icon: { theme in
                                         generateTintedImage(image: UIImage(bundleImageName: pincodeIconName), color: theme.contextMenu.primaryColor)
                                     }, action: { _, f in

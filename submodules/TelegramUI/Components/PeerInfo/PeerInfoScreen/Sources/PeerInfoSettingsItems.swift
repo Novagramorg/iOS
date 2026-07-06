@@ -239,7 +239,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
 
     // Fenixuz Settings Item — gold title + gold flame icon so the brand row stands out in Settings.
     let fenixuzGold: UIColor = presentationData.theme.overallDarkAppearance ? UIColor(rgb: 0xFFCC33) : UIColor(rgb: 0xC8951A)
-    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "NovagramPro", titleColor: fenixuzGold, icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold), action: {
+    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "Novagram Settings", titleColor: fenixuzGold, icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold), action: {
         interaction.openSettings(.proMessager)
     }))
     items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 2, text: "Novagram Bots", icon: fenixuzSettingsIcon(systemName: "bolt.circle.fill", color: .teal), action: {
