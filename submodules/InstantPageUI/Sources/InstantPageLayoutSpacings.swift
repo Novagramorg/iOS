@@ -122,6 +122,8 @@ func spacingBetweenBlocks(upper: InstantPageBlock?, lower: InstantPageBlock?, fi
                         return 6.0
                     case .table:
                         return 10.0
+                    case .blockQuote, .pullQuote, .preformatted:
+                        return 10.0
                     case .image, .video, .collage, .slideshow:
                         if fitToWidth {
                             return 0.0

@@ -318,6 +318,14 @@ final class RichTextAttachmentScreenComponent: Component {
         /// screen's surface is `list.plainBackgroundColor`.
         private static func mapEditorTheme(_ theme: PresentationTheme) -> RichTextEditorTheme {
             let codeFill = theme.list.itemAccentColor.withMultipliedAlpha(0.1)
+            
+            let shadowCursorColor: UIColor
+            if theme.overallDarkAppearance {
+                shadowCursorColor = UIColor(white: 1.0, alpha: 0.4)
+            } else {
+                shadowCursorColor = UIColor(white: 0.0, alpha: 0.3)
+            }
+            
             return RichTextEditorTheme(
                 primaryText: theme.list.itemPrimaryTextColor,
                 secondaryText: theme.list.itemSecondaryTextColor,
@@ -331,7 +339,7 @@ final class RichTextAttachmentScreenComponent: Component {
                 markedTextUnderline: theme.list.itemPrimaryTextColor,
                 spoilerDust: theme.list.itemSecondaryTextColor,
                 containerPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9),
-                // Same source as secondaryText/placeholder above — no visual change until a distinct value is set.
+                shadowCursor: shadowCursorColor,
                 quoteAuthorText: theme.list.itemAccentColor,
                 quoteAuthorPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9)
             )
@@ -822,41 +830,84 @@ final class RichTextAttachmentScreenComponent: Component {
                                 guard let self, let component = self.component, let environment = self.environment else {
                                     return
                                 }
+                                guard let controller = environment.controller() as? RichTextAttachmentScreen else {
+                                    return
+                                }
                                 
                                 let currentContent = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
                                 let currentPage = instantPage(from: currentContent)
                                 
-                                let textProcessingScreen = await component.context.sharedContext.makeTextProcessingScreen(
-                                    context: component.context,
-                                    theme: environment.theme,
-                                    mode: .edit(
-                                        saveRestoreStateId: nil,
-                                        completion: { [weak self] result in
-                                            guard let self else {
-                                                return
+                                if !self.editor.selectedText().isEmpty {
+                                    let initialText = ComposedRichMessage.rich(instantPage: currentPage)
+                                    let textProcessingScreen = await component.context.sharedContext.makeTextProcessingScreen(
+                                        context: component.context,
+                                        theme: environment.theme,
+                                        mode: .edit(
+                                            saveRestoreStateId: nil,
+                                            completion: { [weak self] result in
+                                                guard let self else {
+                                                    return
+                                                }
+                                                let content: ChatInputContent
+                                                switch result {
+                                                case let .rich(instantPage):
+                                                    content = chatInputContent(fromInstantPage: instantPage)
+                                                case let .plain(text, entities):
+                                                    content = chatInputContent(from: chatInputStateStringWithAppliedEntities(text, entities: entities))
+                                                case .empty:
+                                                    return
+                                                }
+                                                let (document, media, emojiFiles) = documentMediaAndEmoji(fromChatInputContent: content)
+                                                self.emojiKeyboard?.seedEmojiFiles(emojiFiles)
+                                                self.attachedMedia.merge(media) { _, new in new }
+                                                self.editor.document = document
+                                            },
+                                            send: nil,
+                                            sendContextActions: nil
+                                        ),
+                                        inputText: initialText,
+                                        copyResult: nil,
+                                        translateChat: nil
+                                    )
+                                    if let parentController = controller.parentController() {
+                                        parentController.push(textProcessingScreen)
+                                    } else {
+                                        controller.push(textProcessingScreen)
+                                    }
+                                } else {
+                                    let textProcessingScreen = await component.context.sharedContext.makeTextProcessingScreen(
+                                        context: component.context,
+                                        theme: environment.theme,
+                                        mode: .generate(
+                                            completion: { [weak self] result in
+                                                guard let self else {
+                                                    return
+                                                }
+                                                let content: ChatInputContent
+                                                switch result {
+                                                case let .rich(instantPage):
+                                                    content = chatInputContent(fromInstantPage: instantPage)
+                                                case let .plain(text, entities):
+                                                    content = chatInputContent(from: chatInputStateStringWithAppliedEntities(text, entities: entities))
+                                                case .empty:
+                                                    return
+                                                }
+                                                let (document, media, emojiFiles) = documentMediaAndEmoji(fromChatInputContent: content)
+                                                self.emojiKeyboard?.seedEmojiFiles(emojiFiles)
+                                                self.attachedMedia.merge(media) { _, new in new }
+                                                self.editor.document = document
                                             }
-                                            let content: ChatInputContent
-                                            switch result {
-                                            case let .rich(instantPage):
-                                                content = chatInputContent(fromInstantPage: instantPage)
-                                            case let .plain(text, entities):
-                                                content = chatInputContent(from: chatInputStateStringWithAppliedEntities(text, entities: entities))
-                                            case .empty:
-                                                return
-                                            }
-                                            let (document, media, emojiFiles) = documentMediaAndEmoji(fromChatInputContent: content)
-                                            self.emojiKeyboard?.seedEmojiFiles(emojiFiles)
-                                            self.attachedMedia.merge(media) { _, new in new }
-                                            self.editor.document = document
-                                        },
-                                        send: nil,
-                                        sendContextActions: nil
-                                    ),
-                                    inputText: ComposedRichMessage.rich(instantPage: currentPage),
-                                    copyResult: nil,
-                                    translateChat: nil
-                                )
-                                environment.controller()?.push(textProcessingScreen)
+                                        ),
+                                        inputText: .plain(text: "", entities: []),
+                                        copyResult: nil,
+                                        translateChat: nil
+                                    )
+                                    if let parentController = controller.parentController() {
+                                        parentController.push(textProcessingScreen)
+                                    } else {
+                                        controller.push(textProcessingScreen)
+                                    }
+                                }
                             }
                         })
                     ], minWidth: 44.0)

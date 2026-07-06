@@ -26,6 +26,7 @@ import TelegramUIPreferences
 import ChatSendMessageActionUI
 import ContextUI
 import EmojiStatusComponent
+import TextFieldComponent
 
 final class TextProcessingContentComponent: Component {
     typealias EnvironmentType = ViewControllerComponentContainer.Environment
@@ -34,6 +35,9 @@ final class TextProcessingContentComponent: Component {
         fileprivate(set) var isProcessing: Bool = false
         fileprivate(set) var nonPremiumFloodTriggered: Bool = false
         fileprivate(set) var result: ComposedRichMessage?
+        fileprivate(set) var promptText: String = ""
+        
+        fileprivate(set) var refreshResult: (() -> Void)?
         
         init() {
         }
@@ -48,6 +52,7 @@ final class TextProcessingContentComponent: Component {
     let initialEditState: TextProcessingScreen.EditState?
     let ignoredTranslationLanguages: [String]
     let shouldDisplayStyleNotice: Bool
+    let appliedPromptText: String?
     let copyCurrentResult: (() -> Void)?
     let translateChat: ((String) -> Void)?
     let displayLanguageSelectionMenu: (UIView, String, TelegramComposeAIMessageMode.StyleId, Bool,  @escaping (String, TelegramComposeAIMessageMode.StyleReference) -> Void) -> Void
@@ -67,6 +72,7 @@ final class TextProcessingContentComponent: Component {
         initialEditState: TextProcessingScreen.EditState?,
         ignoredTranslationLanguages: [String],
         shouldDisplayStyleNotice: Bool,
+        appliedPromptText: String?,
         copyCurrentResult: (() -> Void)?,
         translateChat: ((String) -> Void)?,
         displayLanguageSelectionMenu: @escaping (UIView, String, TelegramComposeAIMessageMode.StyleId, Bool, @escaping (String, TelegramComposeAIMessageMode.StyleReference) -> Void) -> Void,
@@ -85,6 +91,7 @@ final class TextProcessingContentComponent: Component {
         self.initialEditState = initialEditState
         self.ignoredTranslationLanguages = ignoredTranslationLanguages
         self.shouldDisplayStyleNotice = shouldDisplayStyleNotice
+        self.appliedPromptText = appliedPromptText
         self.copyCurrentResult = copyCurrentResult
         self.translateChat = translateChat
         self.displayLanguageSelectionMenu = displayLanguageSelectionMenu
@@ -97,6 +104,9 @@ final class TextProcessingContentComponent: Component {
 
     static func ==(lhs: TextProcessingContentComponent, rhs: TextProcessingContentComponent) -> Bool {
         if lhs.styles != rhs.styles {
+            return false
+        }
+        if lhs.appliedPromptText != rhs.appliedPromptText {
             return false
         }
         return true
@@ -113,7 +123,8 @@ final class TextProcessingContentComponent: Component {
         private var environment: ViewControllerComponentContainer.Environment?
         private weak var state: EmptyComponentState?
         private var isUpdating: Bool = false
-        
+        private var previousEnvironment: ViewControllerComponentContainer.Environment?
+
         private let modeTabs = ComponentView<Empty>()
         private let actionsSection = ComponentView<Empty>()
         
@@ -121,7 +132,7 @@ final class TextProcessingContentComponent: Component {
         private var previewTitle: ComponentView<Empty>?
         private var previewDescription: ComponentView<Empty>?
         
-        private let currentContentBackground: UIImageView
+        private let currentContentBackground = ComponentView<Empty>()
         private let currentContentContainer: UIView
         private var currentContentHeader: (id: AnyHashable, view: ComponentView<Empty>)?
         private var currentContentFooter: (id: AnyHashable, view: ComponentView<Empty>)?
@@ -139,13 +150,11 @@ final class TextProcessingContentComponent: Component {
         private var currentStylePreviewDisposable: Disposable?
         
         override init(frame: CGRect) {
-            self.currentContentBackground = UIImageView()
             self.currentContentContainer = UIView()
             self.currentContentContainer.clipsToBounds = true
             
             super.init(frame: frame)
             
-            self.addSubview(self.currentContentBackground)
             self.addSubview(self.currentContentContainer)
             
             self.translateState.resultUpdated = { [weak self] _ in
@@ -158,6 +167,9 @@ final class TextProcessingContentComponent: Component {
                 self?.externalStatesUpdated()
             }
             self.stylizeState.resultUpdated = { [weak self] _ in
+                self?.externalStatesUpdated()
+            }
+            self.stylizeState.promptTextUpdated = { [weak self] in
                 self?.externalStatesUpdated()
             }
             self.stylizeState.isProcessingUpdated = { [weak self] _ in
@@ -194,12 +206,15 @@ final class TextProcessingContentComponent: Component {
             case .translate:
                 component.externalState.isProcessing = self.translateState.isProcessing
                 component.externalState.result = self.translateState.result?.text
+                component.externalState.promptText = ""
             case .stylize:
                 component.externalState.isProcessing = self.stylizeState.isProcessing
                 component.externalState.result = self.stylizeState.result?.text
+                component.externalState.promptText = self.stylizeState.promptText
             case .fix:
                 component.externalState.isProcessing = self.fixState.isProcessing
                 component.externalState.result = self.fixState.result?.text
+                component.externalState.promptText = ""
             }
             
             component.externalState.nonPremiumFloodTriggered = self.translateState.nonPremiumFloodTriggered || self.stylizeState.nonPremiumFloodTriggered || self.fixState.nonPremiumFloodTriggered
@@ -462,6 +477,79 @@ final class TextProcessingContentComponent: Component {
             })
         }
 
+        private func firstResponderTextFieldView(in view: UIView) -> TextFieldComponent.View? {
+            if let candidate = view as? TextFieldComponent.View, candidate.inputTextView.isFirstResponder {
+                return candidate
+            }
+            for subview in view.subviews {
+                if let found = self.firstResponderTextFieldView(in: subview) {
+                    return found
+                }
+            }
+            return nil
+        }
+
+        private func recenterCaret(hintView: UIView, transition: ComponentTransition) {
+            var fieldView: TextFieldComponent.View?
+            var ancestor: UIView? = hintView
+            while let current = ancestor {
+                if let candidate = current as? TextFieldComponent.View {
+                    fieldView = candidate
+                    break
+                }
+                ancestor = current.superview
+            }
+            guard let fieldView else {
+                return
+            }
+            let inputTextView = fieldView.inputTextView
+            let caretPosition = inputTextView.selectedTextRange?.end ?? inputTextView.endOfDocument
+            let caretRect = inputTextView.caretRect(for: caretPosition)
+            if caretRect.isNull || caretRect.isInfinite {
+                return
+            }
+
+            var scrollAncestor: UIView? = self.superview
+            var scrollView: UIScrollView?
+            while let current = scrollAncestor {
+                if let candidate = current as? UIScrollView {
+                    scrollView = candidate
+                    break
+                }
+                scrollAncestor = current.superview
+            }
+            guard let scrollView, let environment = self.environment else {
+                return
+            }
+
+            let caretInScroll = inputTextView.convert(caretRect, to: scrollView)
+
+            // ResizableSheetComponent bottom action button (52pt) + gap above it (8pt).
+            let bottomActionAreaHeight: CGFloat = 60.0
+            let caretTopInset: CGFloat = 24.0
+            let caretBottomInset: CGFloat = 24.0
+            let visibleTop = scrollView.bounds.minY + caretTopInset
+            let visibleBottom = scrollView.bounds.maxY - environment.inputHeight - bottomActionAreaHeight - caretBottomInset
+
+            let previousBounds = scrollView.bounds
+            var newBounds = previousBounds
+            if caretInScroll.maxY > visibleBottom {
+                newBounds.origin.y += (caretInScroll.maxY - visibleBottom)
+            } else if caretInScroll.minY < visibleTop {
+                newBounds.origin.y -= (visibleTop - caretInScroll.minY)
+            }
+            let maxOriginY = max(0.0, scrollView.contentSize.height - scrollView.bounds.height)
+            newBounds.origin.y = min(max(0.0, newBounds.origin.y), maxOriginY)
+
+            if newBounds != previousBounds {
+                scrollView.bounds = newBounds
+                if !transition.animation.isImmediate {
+                    let offsetY = previousBounds.origin.y - newBounds.origin.y
+                    transition.animateBoundsOrigin(view: scrollView, from: CGPoint(x: 0.0, y: offsetY), to: CGPoint(), additive: true)
+                }
+            }
+        }
+
         func update(component: TextProcessingContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<ViewControllerComponentContainer.Environment>, transition: ComponentTransition) -> CGSize {
             self.isUpdating = true
             defer {
@@ -474,7 +562,10 @@ final class TextProcessingContentComponent: Component {
             let theme = environment.theme.withModalBlocksBackground()
             
             let isFirstTime = self.component == nil
-            
+
+            let previousEnvironment = self.previousEnvironment
+            self.previousEnvironment = environment
+
             self.component = component
             self.environment = environment
             self.state = state
@@ -482,7 +573,7 @@ final class TextProcessingContentComponent: Component {
             if isFirstTime {
                 self.stylizeState.displayStyleTooltip = component.shouldDisplayStyleNotice
                 switch component.mode {
-                case .edit:
+                case .edit, .generate:
                     self.currentMode = .stylize
                 case let .preview(_, _, initialPreview, _, _):
                     self.currentMode = .stylize
@@ -706,6 +797,8 @@ final class TextProcessingContentComponent: Component {
                 }
                 contentHeight += modeTabsSize.height
                 contentHeight += 24.0
+            case .generate:
+                break
             case .translate, .preview:
                 break
             }
@@ -769,6 +862,17 @@ final class TextProcessingContentComponent: Component {
                     }
                 }
                 
+                let mappedMode: TextProcessingTranslateContentComponent.Mode
+                if isPreview {
+                    mappedMode = .preview(from: fromText, to: toText, authorPeer: authorPeer, userCount: userCount, isRequesting: isRequestingPreview)
+                } else {
+                    if case .generate = component.mode {
+                        mappedMode = .stylize(isComposeWithAI: true, appliedPrompt: component.appliedPromptText)
+                    } else {
+                        mappedMode = .stylize(isComposeWithAI: false, appliedPrompt: nil)
+                    }
+                }
+                
                 contentExternalState = self.stylizeState
                 contentComponent = AnyComponent(TextProcessingTranslateContentComponent(
                     context: component.context,
@@ -777,7 +881,7 @@ final class TextProcessingContentComponent: Component {
                     styles: component.styles,
                     externalState: self.stylizeState,
                     inputText: inputText,
-                    mode: isPreview ? .preview(from: fromText, to: toText, authorPeer: authorPeer, userCount: userCount, isRequesting: isRequestingPreview) : .stylize,
+                    mode: mappedMode,
                     copyAction: component.copyCurrentResult,
                     displayLanguageSelectionMenu: component.displayLanguageSelectionMenu,
                     createStyle: { [weak self] in
@@ -995,11 +1099,22 @@ final class TextProcessingContentComponent: Component {
             let contentFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: contentSize)
             transition.setFrame(view: self.currentContentContainer, frame: contentFrame)
             
-            if self.currentContentBackground.image == nil {
-                self.currentContentBackground.image = generateStretchableFilledCircleImage(diameter: 60.0, color: .white)?.withRenderingMode(.alwaysTemplate)
+            let _ = self.currentContentBackground.update(
+                transition: transition,
+                component: AnyComponent(FilledRoundedRectangleComponent(
+                    color: theme.list.itemBlocksBackgroundColor,
+                    cornerRadius: .value(30.0),
+                    smoothCorners: true
+                )),
+                environment: {},
+                containerSize: contentFrame.size
+            )
+            if let currentContentBackgroundView = self.currentContentBackground.view {
+                if currentContentBackgroundView.superview == nil {
+                    self.insertSubview(currentContentBackgroundView, at: 0)
+                }
+                transition.setFrame(view: currentContentBackgroundView, frame: contentFrame)
             }
-            self.currentContentBackground.tintColor = theme.list.itemBlocksBackgroundColor
-            transition.setFrame(view: self.currentContentBackground, frame: contentFrame)
             contentHeight += contentSize.height
             
             if let sectionFooter = contentExternalState.sectionFooter {
@@ -1127,6 +1242,37 @@ final class TextProcessingContentComponent: Component {
             }
             
             contentHeight += 106.0
+            
+            component.externalState.refreshResult = { [weak self] in
+                guard let self, case .stylize = self.currentMode else {
+                    return
+                }
+                guard let contentComponentView = self.currentContent?.view.view as? TextProcessingTranslateContentComponent.View else {
+                    return
+                }
+                contentComponentView.refreshResult()
+            }
+
+            if let hint = transition.userData(TextFieldComponent.AnimationHint.self), let hintView = hint.view {
+                switch hint.kind {
+                case .textChanged:
+                    self.recenterCaret(hintView: hintView, transition: transition)
+                default:
+                    break
+                }
+            }
+            if let previousEnvironment {
+                if (environment.inputHeight == 0.0) != (previousEnvironment.inputHeight == 0.0) {
+                    if let editingFieldView = self.firstResponderTextFieldView(in: self) {
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            self.recenterCaret(hintView: editingFieldView, transition: transition)
+                        }
+                    }
+                }
+            }
 
             return CGSize(width: availableSize.width, height: contentHeight)
         }
@@ -1214,6 +1360,8 @@ private final class TextProcessingSheetComponent: Component {
         
         private var customToastData: (timer: Foundation.Timer, text: String)?
         private var customToast: ComponentView<Empty>?
+        
+        private var appliedPromptText: String?
 
         private var component: TextProcessingSheetComponent?
         private var environment: ViewControllerComponentContainer.Environment?
@@ -1386,7 +1534,8 @@ private final class TextProcessingSheetComponent: Component {
             }
 
             let performMainAction: () -> Void
-            var performSendAction: ((ComposedRichMessage) -> Void)?
+            var performSecondaryAction: ((ComposedRichMessage) -> Bool)?
+            var secondaryActionIcon: ActionButtonsComponent.SecondaryActionIcon = .send
             var hasLongPressActions = false
             let isMainActionEnabled: Bool
             let actionButtonTitle: String
@@ -1416,7 +1565,10 @@ private final class TextProcessingSheetComponent: Component {
                 switch component.mode {
                 case let .edit(_, completion, send, sendContextActions):
                     actionButtonTitle = environmentValue.strings.TextProcessing_ActionApply
-                    performSendAction = send
+                    performSecondaryAction = { data in
+                        send?(data)
+                        return true
+                    }
                     isMainActionEnabled = !self.contentExternalState.isProcessing
                     hasLongPressActions = sendContextActions != nil
                     performMainAction = { [weak self] in
@@ -1476,6 +1628,54 @@ private final class TextProcessingSheetComponent: Component {
                             })
                         }
                     }
+                case .generate:
+                    //TODO:localize
+                    if let _ = self.contentExternalState.result {
+                        actionButtonTitle = "Add to Page"
+                        isMainActionEnabled = true
+                        secondaryActionIcon = .refresh
+                    } else {
+                        actionButtonTitle = "Generate"
+                        isMainActionEnabled = !self.contentExternalState.isProcessing && !self.contentExternalState.promptText.isEmpty
+                    }
+                    performMainAction = { [weak self] in
+                        guard let self, let component = self.component else {
+                            return
+                        }
+                        
+                        self.endEditing(true)
+                        
+                        if let result = self.contentExternalState.result {
+                            if case let .generate(completion) = component.mode {
+                                completion(result)
+                                dismiss(true)
+                            }
+                        } else {
+                            guard !self.contentExternalState.promptText.isEmpty else {
+                                return
+                            }
+                            self.appliedPromptText = self.contentExternalState.promptText
+                            
+                            if !self.isUpdating {
+                                self.state?.updated(transition: .spring(duration: 0.4))
+                            }
+                        }
+                    }
+                    if self.contentExternalState.result != nil && !self.contentExternalState.isProcessing && !self.contentExternalState.promptText.isEmpty {
+                        performSecondaryAction = { [weak self] _ in
+                            guard let self else {
+                                return false
+                            }
+                            guard !self.contentExternalState.promptText.isEmpty else {
+                                return false
+                            }
+                            self.appliedPromptText = self.contentExternalState.promptText
+                            self.state?.updated(transition: .immediate)
+                            self.contentExternalState.refreshResult?()
+                            
+                            return false
+                        }
+                    }
                 }
             }
             let copyCurrentResult = component.copyCurrentResult
@@ -1499,6 +1699,10 @@ private final class TextProcessingSheetComponent: Component {
             case .preview:
                 titleString = ""
                 displayInfoButton = false
+            case .generate:
+                //TODO:localize
+                titleString = "Create with AI"
+                displayInfoButton = false
             }
             
 
@@ -1515,6 +1719,7 @@ private final class TextProcessingSheetComponent: Component {
                         initialEditState: component.initialEditState,
                         ignoredTranslationLanguages: component.ignoredTranslationLanguages,
                         shouldDisplayStyleNotice: component.shouldDisplayStyleNotice,
+                        appliedPromptText: self.appliedPromptText,
                         copyCurrentResult: component.copyCurrentResult != nil ? {
                             copyCurrentResultImpl()
                         } : nil,
@@ -1661,18 +1866,20 @@ private final class TextProcessingSheetComponent: Component {
                             actionTitle: actionButtonTitle,
                             actionButtonShowsIncreaseLimit: actionButtonShowsIncreaseLimit,
                             action: isMainActionEnabled ? performMainAction : nil,
-                            sendAction: performSendAction.flatMap { [weak self] performSendAction in
+                            sendAction: performSecondaryAction.flatMap { [weak self] performSecondaryAction in
                                 return {
                                     guard let self else {
                                         return
                                     }
                                     if let result = self.contentExternalState.result {
-                                        performSendAction(result)
-                                        dismiss(true)
+                                        if performSecondaryAction(result) {
+                                            dismiss(true)
+                                        }
                                     }
                                 }
                             },
-                            longPressSendAction: (performSendAction != nil && hasLongPressActions) ? { [weak self] sourceView in
+                            secondaryActionIcon: (performSecondaryAction != nil || secondaryActionIcon == .refresh) ? secondaryActionIcon : nil,
+                            longPressSendAction: (performSecondaryAction != nil && hasLongPressActions) ? { [weak self] sourceView in
                                 guard let self else {
                                     return
                                 }
@@ -1689,7 +1896,7 @@ private final class TextProcessingSheetComponent: Component {
                         theme: theme,
                         statusBarHeight: environmentValue.statusBarHeight,
                         safeInsets: environmentValue.safeInsets,
-                        inputHeight: 0.0,
+                        inputHeight: environmentValue.inputHeight,
                         metrics: environmentValue.metrics,
                         deviceMetrics: environmentValue.deviceMetrics,
                         isDisplaying: environmentValue.isVisible,
@@ -2282,12 +2489,18 @@ private final class TitleComponent: Component {
 }
 
 private final class ActionButtonsComponent: Component {
+    enum SecondaryActionIcon {
+        case send
+        case refresh
+    }
+    
     let theme: PresentationTheme
     let strings: PresentationStrings
     let actionTitle: String
     let actionButtonShowsIncreaseLimit: Bool
     let action: (() -> Void)?
     let sendAction: (() -> Void)?
+    let secondaryActionIcon: SecondaryActionIcon?
     let longPressSendAction: ((UIView) -> Void)?
     
     init(
@@ -2297,6 +2510,7 @@ private final class ActionButtonsComponent: Component {
         actionButtonShowsIncreaseLimit: Bool,
         action: (() -> Void)?,
         sendAction: (() -> Void)?,
+        secondaryActionIcon: SecondaryActionIcon?,
         longPressSendAction: ((UIView) -> Void)?
     ) {
         self.theme = theme
@@ -2305,6 +2519,7 @@ private final class ActionButtonsComponent: Component {
         self.actionButtonShowsIncreaseLimit = actionButtonShowsIncreaseLimit
         self.action = action
         self.sendAction = sendAction
+        self.secondaryActionIcon = secondaryActionIcon
         self.longPressSendAction = longPressSendAction
     }
     
@@ -2325,6 +2540,9 @@ private final class ActionButtonsComponent: Component {
             return false
         }
         if (lhs.sendAction == nil) != (rhs.sendAction == nil) {
+            return false
+        }
+        if lhs.secondaryActionIcon != rhs.secondaryActionIcon {
             return false
         }
         if (lhs.longPressSendAction == nil) != (rhs.longPressSendAction == nil) {
@@ -2357,7 +2575,7 @@ private final class ActionButtonsComponent: Component {
             
             let spacing: CGFloat = 10.0
             var actionButtonWidth: CGFloat = availableSize.width
-            if component.sendAction != nil {
+            if component.secondaryActionIcon != nil {
                 actionButtonWidth -= 52.0 + spacing
             }
             
@@ -2421,12 +2639,13 @@ private final class ActionButtonsComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
                         component: AnyComponent(TransformContents(content: AnyComponent(BundleIconComponent(
-                            name: "TextProcessing/SendIcon",
-                            tintColor: component.theme.list.itemCheckColors.foregroundColor
-                        )), translation: CGPoint(x: -2.0, y: 0.0)))
+                            name: component.secondaryActionIcon == .refresh ? "Instant View/Settings/Reload" : "TextProcessing/SendIcon",
+                            tintColor: component.theme.list.itemCheckColors.foregroundColor,
+                            scaleFactor: component.secondaryActionIcon == .refresh ? 1.5 : 1.0
+                        )), translation: CGPoint(x: component.secondaryActionIcon == .refresh ? 0.0 : -2.0, y: 0.0)))
                     ),
                     contentInsets: UIEdgeInsets(),
-                    isEnabled: component.action != nil,
+                    isEnabled: component.sendAction != nil,
                     displaysProgress: false,
                     action: { [weak self] in
                         guard let self, let component = self.component else {
@@ -2455,8 +2674,8 @@ private final class ActionButtonsComponent: Component {
             transition.setBounds(view: self.extractedContainerView, bounds: CGRect(origin: CGPoint(), size: sendButtonFrame.size))
             transition.setPosition(view: self.extractedContainerView.contentView, position: CGPoint(x: sendButtonFrame.width * 0.5, y: sendButtonFrame.height * 0.5))
             transition.setBounds(view: self.extractedContainerView.contentView, bounds: CGRect(origin: CGPoint(), size: sendButtonFrame.size))
-            transition.setAlpha(view: self.extractedContainerView, alpha: component.sendAction != nil ? 1.0 : 0.0)
-            transition.setScale(view: self.extractedContainerView, scale: component.sendAction != nil ? 1.0 : 0.001)
+            transition.setAlpha(view: self.extractedContainerView, alpha: component.secondaryActionIcon != nil ? 1.0 : 0.0)
+            transition.setScale(view: self.extractedContainerView, scale: component.secondaryActionIcon != nil ? 1.0 : 0.001)
 
             return CGSize(width: availableSize.width, height: actionButtonSize.height)
         }

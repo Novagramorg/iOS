@@ -267,7 +267,7 @@ private final class AttachButtonComponent: CombinedComponent {
             case .richText:
                 //TODO:localize
                 name = "Article"
-                imageName = "Chat/Attach Menu/Todo"
+                imageName = "Chat/Attach Menu/Article"
             }
 
             let tintColor: UIColor
