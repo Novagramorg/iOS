@@ -242,6 +242,9 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 0, text: "NovagramPro", titleColor: fenixuzGold, icon: fenixuzSettingsIcon(systemName: "flame.fill", color: .gold), action: {
         interaction.openSettings(.proMessager)
     }))
+    items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 2, text: "Novagram Bots", icon: fenixuzSettingsIcon(systemName: "bolt.circle.fill", color: .teal), action: {
+        interaction.openSettings(.novagramBots)
+    }))
     items[.proMessager]!.append(PeerInfoScreenDisclosureItem(id: 1, text: "Analytics", icon: fenixuzSettingsIcon(systemName: "chart.bar.fill", color: .lightBlue), action: {
         interaction.openSettings(.analytics)
     }))

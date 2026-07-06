@@ -160,6 +160,7 @@ enum PeerInfoSettingsSection {
     case devices
     case chatFolders
     case proMessager
+    case novagramBots
     case fenixAccounts
     case analytics
     case notificationsAndSounds
