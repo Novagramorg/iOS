@@ -107,6 +107,20 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         super.init()
     }
 
+    /// The compact-composer layout knobs that affect measured text height. Applied to the live editor in
+    /// `didLoad` AND to the throwaway probe in `measuredTextFieldHeight`, so the probe's height matches the
+    /// live field's. (Height-irrelevant knobs — placeholders, theme, quote style — are NOT included.)
+    private static func applyComposerLayoutMetrics(to editor: RichTextEditorView) {
+        editor.contentPageMargin = 0.0
+        editor.minimumContentHeight = 0.0
+        editor.blockVerticalInset = 0.0
+        editor.textLayoutMetrics = TextLayoutMetrics(
+            bodyLineHeightMultiple: 1.0,       // line spacing (1.0 = natural/tight; 1.10 = document)
+            bodyParagraphSpacingBefore: 0,     // gap above each paragraph
+            bodyParagraphSpacingAfter: 0       // inter-paragraph gap (Enter-separated lines)
+        )
+    }
+
     public override func didLoad() {
         super.didLoad()
         // Model A: this node is the wrapper (the panel frames `asNode` to fill the clipping container);
@@ -114,22 +128,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // views — exactly as the legacy impl keeps `textInputNodeImpl` a subnode of the wrapper.
         self.view.addSubview(self.editorView)
 
-        // Compact-composer layout: the editor's document-editor defaults (a 16pt built-in page margin on each
-        // side and a 44pt content-height floor) are wrong for a chat composer. The panel owns horizontal
-        // insets (via the frame width + `textContainerInset` → `contentMargins`, which reserve the
-        // accessory/send-button area) and the minimum field height, so zero both out — otherwise the field is
-        // too tall (44pt floor vs the legacy ~text-height) and has an unexpected side inset.
-        self.editorView.contentPageMargin = 0.0
-        self.editorView.minimumContentHeight = 0.0
-        // Zero the document inter-paragraph vertical gap (8pt each side): a lone composer paragraph should
-        // hug its text height (~one line), not carry the document gap. The panel's own field padding
-        // (textInputViewInternalInsets) provides the visual top/bottom breathing room.
-        self.editorView.blockVerticalInset = 0.0
-        self.editorView.textLayoutMetrics = TextLayoutMetrics(
-              bodyLineHeightMultiple: 1.0,       // line spacing (1.0 = natural/tight; 1.10 = document)
-              bodyParagraphSpacingBefore: 0,     // gap above each paragraph
-              bodyParagraphSpacingAfter: 0       // inter-paragraph gap (Enter-separated lines)
-        )
+        // Compact-composer layout knobs — shared with the 3-line measurement probe so the two cannot drift.
+        RichTextEditorChatInputNode.applyComposerLayoutMetrics(to: self.editorView)
         // Suppress the editor's built-in placeholders ("Type something…" / list hints): the chat input panel
         // draws its own placeholder ("Message", etc.), so the editor's would double up.
         self.editorView.placeholders = RichTextEditorPlaceholders(body: "", listEnd: "", listOutdent: "", pullQuote: "Type a quote here", blockQuote: "Type a quote here", codeBlock: "Type code here")
@@ -492,6 +492,11 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     public func textHeightForWidth(_ width: CGFloat, rightInset: CGFloat) -> CGFloat {
         self.trackedRightInset = rightInset
         return self.editorView.height(forWidth: width, contentMargins: self.trackedContentMargins)
+    }
+    public static func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat {
+        return RichTextEditorView.measuredContentHeight(forWidth: width, lineCount: lineCount, configure: { editor in
+            RichTextEditorChatInputNode.applyComposerLayoutMetrics(to: editor)
+        })
     }
     public func layoutInputField() {
         _ = self.editorView.update(size: self.editorView.bounds.size, insets: self.trackedInsets, contentMargins: self.trackedContentMargins, scrollIndicatorInsets: self.trackedScrollIndicatorInsets)

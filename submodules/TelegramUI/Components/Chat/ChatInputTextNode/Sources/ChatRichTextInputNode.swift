@@ -213,6 +213,11 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// Measure the editor's content height for a width (mirrors the child's signature).
     func textHeightForWidth(_ width: CGFloat, rightInset: CGFloat) -> CGFloat
 
+    /// Measures the field's content height for `lineCount` body lines (used to size the 3-line AI-button
+    /// trigger). Static + side-effect-free: builds a throwaway probe, never touches the live editor. `lineCount`
+    /// floors at 1.
+    static func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat
+
     /// Lay out the editor's content for a size.
     func updateLayout(size: CGSize)
 
@@ -852,6 +857,20 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     func textHeightForWidth(_ width: CGFloat, rightInset: CGFloat) -> CGFloat {
         return self.textInputNodeImpl.textHeightForWidth(width, rightInset: rightInset)
+    }
+
+    static func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat {
+        let count = max(1, lineCount)
+        let text = Array(repeating: "A", count: count).joined(separator: "\n")
+        let attributed = NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: 17.0)])
+        let storage = NSTextStorage(attributedString: attributed)
+        let layoutManager = NSLayoutManager()
+        let container = NSTextContainer(size: CGSize(width: max(1.0, width), height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0.0
+        storage.addLayoutManager(layoutManager)
+        layoutManager.addTextContainer(container)
+        layoutManager.ensureLayout(for: container)
+        return ceil(layoutManager.usedRect(for: container).height)
     }
 
     func updateLayout(size: CGSize) {
