@@ -30,7 +30,9 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
     while i < content.blocks.count {
         switch content.blocks[i] {
         case let .paragraph(p):
-            if let list = p.list, case .body = p.style {
+            if let latex = standaloneFormulaLatex(from: p) {
+                result.append(.formula(latex: latex))
+            } else if let list = p.list, case .body = p.style {
                 // Coalesce a maximal run of consecutive BODY-styled list paragraphs with the SAME marker into one
                 // `.list`. (Adjacent paragraphs with different markers — a bullet list followed by an ordered list —
                 // stay separate `.list` blocks.) `InstantPageListItem` has no indent-level field, so the per-paragraph
@@ -145,17 +147,21 @@ func richText(from runs: [ChatInputRun]) -> RichText {
     let parts = runs.map { run -> RichText in
         var rt: RichText
         // The entity becomes the leaf/innermost (customEmoji is itself the leaf carrying the run text as alt).
-        switch run.attributes.entity {
-        case let .customEmoji(fileId, _, _):
-            rt = .textCustomEmoji(fileId: fileId, alt: run.text)
-        case let .mention(peerId):
-            rt = .textMentionName(text: .plain(run.text), peerId: peerId.toInt64())
-        case let .url(url):
-            rt = .url(text: .plain(run.text), url: url, webpageId: nil)
-        case let .date(date):
-            rt = .textDate(text: .plain(run.text), date: date, format: nil)
-        case nil:
-            rt = .plain(run.text)
+        if let formula = run.attributes.formula {
+            rt = .formula(latex: formula)
+        } else {
+            switch run.attributes.entity {
+            case let .customEmoji(fileId, _, _):
+                rt = .textCustomEmoji(fileId: fileId, alt: run.text)
+            case let .mention(peerId):
+                rt = .textMentionName(text: .plain(run.text), peerId: peerId.toInt64())
+            case let .url(url):
+                rt = .url(text: .plain(run.text), url: url, webpageId: nil)
+            case let .date(date):
+                rt = .textDate(text: .plain(run.text), date: date, format: nil)
+            case nil:
+                rt = .plain(run.text)
+            }
         }
         if run.attributes.bold { rt = .bold(rt) }
         if run.attributes.italic { rt = .italic(rt) }
@@ -228,6 +234,12 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
                 content: ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: innerBlocks, media: media)),
                 collapsed: collapsed == true,
                 author: authorRuns(fromCaption: caption))))
+        case let .formula(latex):
+            var attributes = ChatInputInlineAttributes()
+            attributes.formula = latex
+            result.append(.paragraph(ChatInputParagraph(style: .body, runs: [
+                ChatInputRun(text: latex, attributes: attributes)
+            ])))
         case let .image(id, caption, _, _):
             // Resolve the concrete `Media` from the page's `media` dict; a missing entry (the forward always stores it,
             // so this is defensive against a malformed page) drops the block. `naturalSize`/`displayWidth`/`alignment`
@@ -309,6 +321,9 @@ func chatInputRun(fromSinglePart rt: RichText, attributes: ChatInputInlineAttrib
     switch rt {
     case let .plain(s):
         return ChatInputRun(text: s, attributes: attributes)
+    case let .formula(latex):
+        attributes.formula = latex
+        return ChatInputRun(text: latex, attributes: attributes)
     case let .textCustomEmoji(fileId, alt):
         // `enableAnimation` is canonicalized to `true` (and `file` to nil): `RichText.textCustomEmoji` carries
         // neither. This MATCHES the production `.textEntities` draft path — `MessageTextEntityType.CustomEmoji` has
@@ -350,4 +365,14 @@ func chatInputRun(fromSinglePart rt: RichText, attributes: ChatInputInlineAttrib
         // Defensive for wire-only RichText cases that the forward never produces.
         return ChatInputRun(text: rt.plainText, attributes: attributes)
     }
+}
+
+private func standaloneFormulaLatex(from paragraph: ChatInputParagraph) -> String? {
+    guard paragraph.style == .body, paragraph.list == nil, paragraph.runs.count == 1 else {
+        return nil
+    }
+    guard let latex = paragraph.runs[0].attributes.formula, !latex.isEmpty else {
+        return nil
+    }
+    return latex
 }

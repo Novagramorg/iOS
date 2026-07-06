@@ -17,6 +17,18 @@ final class ComposerSelectionMappingTests: XCTestCase {
         c.layoutIfNeeded()
         return c
     }
+    private func makeFormulaCanvas(_ blocks: [Block]) -> DocumentCanvasView {
+        let c = DocumentCanvasView()
+        c.mapper.formulaRenderer = { context in
+            let size = CGSize(width: max(12.0, CGFloat((context.latex as NSString).length) * 4.0), height: 14.0)
+            let image = UIGraphicsImageRenderer(size: size).image { _ in }
+            return RichTextFormulaRenderResult(image: image, size: size, ascent: 10.0, descent: 4.0)
+        }
+        c.setBlocks(blocks, width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+        c.layoutIfNeeded()
+        return c
+    }
     private func para(_ s: String) -> Block {
         .paragraph(ParagraphBlock(id: BlockID.generate(), runs: s.isEmpty ? [] : [TextRun(text: s)]))
     }
@@ -82,6 +94,15 @@ final class ComposerSelectionMappingTests: XCTestCase {
     private func emojiPara(_ pre: String, _ alt: String, _ post: String) -> Block {
         .paragraph(ParagraphBlock(id: BlockID.generate(),
                                   runs: [TextRun(text: pre), emojiRun(alt), TextRun(text: post)]))
+    }
+    private func formulaRun(_ latex: String) -> TextRun {
+        var a = CharacterAttributes.plain
+        a.formula = latex
+        return TextRun(text: "\u{FFFC}", attributes: a)
+    }
+    private func formulaPara(_ pre: String, _ latex: String, _ post: String) -> Block {
+        .paragraph(ParagraphBlock(id: BlockID.generate(),
+                                  runs: [TextRun(text: pre), formulaRun(latex), TextRun(text: post)]))
     }
 
     func test_get_customEmoji_countsAltStringLength() {
@@ -171,6 +192,25 @@ final class ComposerSelectionMappingTests: XCTestCase {
         c.composerSelectedRange = NSRange(location: 2, length: 0)
         XCTAssertTrue(c.head == base + 1 || c.head == base + 2,
                       "mid-alt-string flat offset must snap to before/after the emoji, got offset \(c.head - base)")
+    }
+
+    func test_get_formula_countsLatexLength() {
+        let c = makeFormulaCanvas([formulaPara("a", "x^2", "b")])
+        let base = c.boxes[0].textStart
+        c.anchor = base + 1; c.head = base + 1
+        XCTAssertEqual(c.composerSelectedRange, NSRange(location: 1, length: 0), "before formula = flat 1")
+        c.anchor = base + 2; c.head = base + 2
+        XCTAssertEqual(c.composerSelectedRange, NSRange(location: 4, length: 0), "after formula = flat 4")
+        c.anchor = base + 3; c.head = base + 3
+        XCTAssertEqual(c.composerSelectedRange, NSRange(location: 5, length: 0), "end = flat 5")
+    }
+
+    func test_formula_setMidLatexString_snapsToFormulaBoundary() {
+        let c = makeFormulaCanvas([formulaPara("a", "x^2", "b")])
+        let base = c.boxes[0].textStart
+        c.composerSelectedRange = NSRange(location: 2, length: 0)
+        XCTAssertTrue(c.head == base + 1 || c.head == base + 2,
+                      "mid-LaTeX flat offset must snap to before/after the formula atom, got offset \(c.head - base)")
     }
 }
 #endif

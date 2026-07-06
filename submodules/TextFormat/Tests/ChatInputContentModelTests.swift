@@ -153,12 +153,14 @@ final class ChatInputContentModelTests: XCTestCase {
         var bold = ChatInputInlineAttributes(); bold.bold = true
         var emoji = ChatInputInlineAttributes(); emoji.entity = .customEmoji(fileId: 42, file: nil, enableAnimation: true)
         var mention = ChatInputInlineAttributes(); mention.entity = .mention(EnginePeer.Id(7))
+        var formula = ChatInputInlineAttributes(); formula.formula = "e^{I\\pi}=-1"
 
         let bodyParagraph = ChatInputParagraph(style: .body, runs: [
             ChatInputRun(text: "plain"),
             ChatInputRun(text: "strong", attributes: bold),
             ChatInputRun(text: "\u{FFFC}", attributes: emoji),
             ChatInputRun(text: "@me", attributes: mention),
+            ChatInputRun(text: "e^{I\\pi}=-1", attributes: formula),
         ])
         let heading1 = ChatInputParagraph(style: .heading1, runs: [ChatInputRun(text: "first line")])
         let heading2 = ChatInputParagraph(style: .heading2, runs: [ChatInputRun(text: "second line")])
@@ -274,6 +276,19 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertTrue(plain.isEntityExpressible())
         XCTAssertTrue(bq.isEntityExpressible())  // flat non-collapsed single-paragraph blockQuote → expressible
         XCTAssertTrue(code.isEntityExpressible())
+    }
+
+    func test_isEntityExpressible_formula_false() {
+        var formula = ChatInputInlineAttributes()
+        formula.formula = "x^2+y^2=z^2"
+        let content = ChatInputContent(blocks: [
+            .paragraph(ChatInputParagraph(style: .body, runs: [
+                ChatInputRun(text: "x^2+y^2=z^2", attributes: formula)
+            ]))
+        ])
+
+        XCTAssertFalse(content.isEntityExpressible())
+        XCTAssertFalse(content.isEntityExpressible(options: [.quotesRequireRichContent]))
     }
 
     /// With `.quotesRequireRichContent`, a non-collapsed flat single-paragraph `.blockQuote` is no longer

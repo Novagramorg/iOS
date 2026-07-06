@@ -55,6 +55,9 @@ final class DocumentCanvasView: UIView {
     /// Returns a FRESH checkbox view for a checklist marker (host-side `CheckNode`). `nil` when unset —
     /// the editor falls back to the Unicode glyph marker. The canvas hosts/positions/animates the view.
     var checklistMarkerViewProvider: ((_ checked: Bool, _ size: CGSize) -> (UIView & RichTextChecklistMarkerView)?)?
+    /// Host hook for editing a formula atom. The editor supplies current LaTeX and a replacement callback;
+    /// the host owns presentation and formula rendering dependencies.
+    var formulaEditRequested: ((_ latex: String, _ completion: @escaping (String) -> Void) -> Void)?
     /// Hosted emoji views, keyed by `EmojiRef.instanceID` so edits/undo reuse (not recreate) them.
     /// Plain `internal` (NOT `private(set)`): the reconciler in `DocumentCanvasView+Emoji.swift` mutates it.
     var emojiViews: [String: HostedEmoji] = [:]
@@ -657,7 +660,8 @@ final class DocumentCanvasView: UIView {
         s.quoteBottomInset = q.bottomInset
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
-                                             baseWritingDirection: self.mapper.baseWritingDirection)
+                                             baseWritingDirection: self.mapper.baseWritingDirection,
+                                             formulaRenderer: self.mapper.formulaRenderer)
         self.blockquoteUnderlay.barWidth = q.barWidth
         self.blockquoteUnderlay.cornerRadius = q.cornerRadius
         self.blockquoteUnderlay.fillAlpha = q.fillAlpha
@@ -695,7 +699,8 @@ final class DocumentCanvasView: UIView {
         s.bodyParagraphSpacingAfter = m.bodyParagraphSpacingAfter
         self.mapper = AttributedStringMapper(styleSheet: s, emojiScale: self.mapper.emojiScale,
                                              theme: self.mapper.theme,
-                                             baseWritingDirection: self.mapper.baseWritingDirection)
+                                             baseWritingDirection: self.mapper.baseWritingDirection,
+                                             formulaRenderer: self.mapper.formulaRenderer)
     }
 
     /// Builds a box per block (paragraph, image, or table). Tables become `TableBlockBox`es whose

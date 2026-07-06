@@ -18,6 +18,9 @@ extension NSAttributedString.Key {
     /// font TextKit substitutes for Arabic/Hebrew/CJK regardless of user intent. Render-only (the `rtInlineCode`
     /// precedent); read back to `CharacterAttributes.bold`, never persisted to the Core model.
     static let rtBold = NSAttributedString.Key("RTBold")
+    /// Marks a formula run. With a host renderer the visible storage is one `U+FFFC` attachment; without
+    /// one it falls back to raw LaTeX text. In both cases read-back restores `CharacterAttributes.formula`.
+    static let rtFormula = NSAttributedString.Key("RTFormula")
 }
 
 /// Converts between the Core model and `NSAttributedString` for one paragraph block.
@@ -33,13 +36,19 @@ public struct AttributedStringMapper {
     /// Base writing direction baked into every paragraph style this mapper builds. `.natural` (default)
     /// lets TextKit auto-detect per paragraph; the whole-document override sets `.leftToRight`/`.rightToLeft`.
     public var baseWritingDirection: NSWritingDirection
+    /// Host-provided formula renderer. `nil` (or returning nil for invalid LaTeX) makes formula runs
+    /// display as raw LaTeX while preserving semantic metadata.
+    public var formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)?
+
     public init(styleSheet: StyleSheet = .default, emojiScale: CGFloat = 1.0,
                 theme: RichTextEditorTheme = .default,
-                baseWritingDirection: NSWritingDirection = .natural) {
+                baseWritingDirection: NSWritingDirection = .natural,
+                formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)? = nil) {
         self.styleSheet = styleSheet
         self.emojiScale = emojiScale
         self.theme = theme
         self.baseWritingDirection = baseWritingDirection
+        self.formulaRenderer = formulaRenderer
     }
 
     /// A copy of this mapper that renders table-cell content (a smaller body/quote base size, see
@@ -48,7 +57,7 @@ public struct AttributedStringMapper {
     /// via their source box's `mapper`).
     public func tableCellVariant() -> AttributedStringMapper {
         AttributedStringMapper(styleSheet: .tableCells, emojiScale: emojiScale, theme: theme,
-                               baseWritingDirection: baseWritingDirection)
+                               baseWritingDirection: baseWritingDirection, formulaRenderer: formulaRenderer)
     }
 
     /// A copy that renders body/pull-quote content at `size` base points, PRESERVING this mapper's
@@ -58,7 +67,7 @@ public struct AttributedStringMapper {
         var s = styleSheet
         s.bodyBaseSize = size
         return AttributedStringMapper(styleSheet: s, emojiScale: emojiScale, theme: theme,
-                                      baseWritingDirection: baseWritingDirection)
+                                      baseWritingDirection: baseWritingDirection, formulaRenderer: formulaRenderer)
     }
 
     /// Points to enlarge a rendered inline emoji beyond its glyph box, per paragraph style (decoupled from
@@ -66,6 +75,34 @@ public struct AttributedStringMapper {
     /// read small at their bare glyph box, so they get +4pt; other styles use their glyph box as-is.
     public func emojiRenderBoost(for style: ParagraphStyleName) -> CGFloat {
         return style == .body ? 4.0 : 0.0
+    }
+
+    func formulaAttachment(latex: String, attributes: [NSAttributedString.Key: Any]) -> FormulaTextAttachment? {
+        guard let formulaRenderer else {
+            return nil
+        }
+        let font = (attributes[.font] as? UIFont) ?? UIFont.preferredFont(forTextStyle: .body)
+        let textColor = (attributes[.foregroundColor] as? UIColor) ?? theme.primaryText
+        guard let result = formulaRenderer(RichTextFormulaRenderContext(
+            latex: latex,
+            fontSize: font.pointSize,
+            textColor: textColor
+        )) else {
+            return nil
+        }
+        return FormulaTextAttachment(latex: latex, renderResult: result)
+    }
+
+    func attributedFormulaString(latex: String, attributes baseAttributes: [NSAttributedString.Key: Any]) -> NSAttributedString {
+        var attrs = baseAttributes
+        attrs[.rtFormula] = latex
+        attrs.removeValue(forKey: .attachment)
+        if let attachment = formulaAttachment(latex: latex, attributes: attrs) {
+            attrs[.attachment] = attachment
+            return NSAttributedString(string: "\u{FFFC}", attributes: attrs)
+        } else {
+            return NSAttributedString(string: latex, attributes: attrs)
+        }
     }
 
     public func attributes(for ca: CharacterAttributes, style: ParagraphStyleName) -> [NSAttributedString.Key: Any] {
@@ -78,6 +115,11 @@ public struct AttributedStringMapper {
         }
         var dict: [NSAttributedString.Key: Any] = [:]
         dict[.font] = styleSheet.font(for: style, attributes: ca)
+        if let formula = ca.formula {
+            dict[.rtFormula] = formula
+            dict[.foregroundColor] = ca.foreground?.uiColor ?? (style == .caption ? theme.secondaryText : theme.primaryText)
+            return dict
+        }
         if ca.bold { dict[.rtBold] = true }   // user-intent marker (read back as CharacterAttributes.bold)
         // Un-colored runs render in the theme's per-style default (secondary for captions, else primary).
         // This default is stripped back to nil on read-back (characterAttributes(from:style:)), so it never
@@ -128,6 +170,10 @@ public struct AttributedStringMapper {
     public func characterAttributes(from dict: [NSAttributedString.Key: Any], style: ParagraphStyleName = .body,
                                     text: String? = nil) -> CharacterAttributes {
         var ca = CharacterAttributes()
+        if let att = dict[.attachment] as? FormulaTextAttachment {
+            ca.formula = att.latex
+            return ca
+        }
         if let att = dict[.attachment] as? EmojiTextAttachment {
             ca.emoji = att.ref   // emoji-only; never leak the spacer font/etc. into the model
             return ca
@@ -180,6 +226,9 @@ public struct AttributedStringMapper {
         if let b = dict[.baselineOffset] as? Double { ca.baselineOffset = b }
         else if let b = dict[.baselineOffset] as? CGFloat { ca.baselineOffset = Double(b) }
         if (dict[.rtSpoiler] as? Bool) == true { ca.spoiler = true }
+        if let formula = dict[.rtFormula] as? String {
+            ca.formula = text ?? formula
+        }
         return ca
     }
 
@@ -191,7 +240,11 @@ public struct AttributedStringMapper {
         for run in block.runs {
             var attrs = attributes(for: run.attributes, style: block.style)
             attrs[.paragraphStyle] = paragraphStyle
-            result.append(NSAttributedString(string: run.text, attributes: attrs))
+            if let formula = run.attributes.formula {
+                result.append(attributedFormulaString(latex: formula.isEmpty ? run.text : formula, attributes: attrs))
+            } else {
+                result.append(NSAttributedString(string: run.text, attributes: attrs))
+            }
         }
         return result
     }

@@ -67,6 +67,9 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
         case .table:
             return true
         case let .paragraph(paragraph):
+            if runsContainFormula(paragraph.runs) {
+                return true
+            }
             if paragraph.list != nil {
                 return true
             }
@@ -83,15 +86,27 @@ func documentNeedsRichLayout(_ blocks: [Block], forSendPreview: Bool = false) ->
         case .media:
             // normalizedBlocks already dropped unresolvable media, so any surviving .media block forces rich layout.
             return true
-        case .code:
+        case let .code(code):
             // A code block is entity-expressible (.Pre) and does NOT force the rich path — it round-trips
             // through the normal text+entities builder (buildEntityMessage).
+            if runsContainFormula(code.runs) {
+                return true
+            }
             break
         case .pullQuote:
             // A pull quote has no entity equivalent → always forces the rich path.
             return true
         case .blockQuote:
             // A block quote has no entity form → always forces the rich path.
+            return true
+        }
+    }
+    return false
+}
+
+private func runsContainFormula(_ runs: [TextRun]) -> Bool {
+    for run in runs {
+        if run.attributes.formula != nil {
             return true
         }
     }

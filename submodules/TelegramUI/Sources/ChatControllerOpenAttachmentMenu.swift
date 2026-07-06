@@ -877,6 +877,12 @@ extension ChatControllerImpl {
                                 return
                             }
                             self.presentRichTextAttachmentMenu(completion: completion)
+                        },
+                        presentFormulaEditor: { [weak self] initialValue, completion in
+                            guard let self else {
+                                return
+                            }
+                            self.presentFormulaEditor(initialValue: initialValue, completion: completion)
                         }
                     )
                     completion(controller, controller.mediaPickerContext)
@@ -947,6 +953,15 @@ extension ChatControllerImpl {
                 completion(.location(mapReference.media))
             }
         })
+    }
+
+    func presentFormulaEditor(initialValue: String?, completion: @escaping (String) -> Void) {
+        let controller = FormulaEditorScreen(
+            context: self.context,
+            initialValue: initialValue,
+            completion: completion
+        )
+        self.present(controller, in: .window(.root))
     }
 
     func presentEditingAttachmentMenu(editMediaOptions: MessageMediaEditingOptions?, editMediaReference: AnyMediaReference?) {

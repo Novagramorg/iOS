@@ -4637,6 +4637,12 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     return
                 }
                 self.controller?.presentRichTextAttachmentMenu(completion: completion)
+            },
+            presentFormulaEditor: { [weak self] initialValue, completion in
+                guard let self else {
+                    return
+                }
+                self.controller?.presentFormulaEditor(initialValue: initialValue, completion: completion)
             }
         )
         editorScreen.navigationPresentation = .modal

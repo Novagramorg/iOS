@@ -16428,3 +16428,6 @@ Error: %8$@";
 "Notification.CommunityRemovedBot" = "The bot was removed from a community";
 
 "AvatarEditor.SetCommunityPhoto" = "Set as Community Photo";
+
+"Premium.RichText" = "Rich Formatting";
+"Premium.RichTextInfo" = "Add headers, tables, lists, and inline media to messages.";

@@ -230,6 +230,9 @@ private func chatInputRuns(
         if case .customEmoji? = attributes.entity, let altText = run.attributes.emoji?.altText, !altText.isEmpty {
             return ChatInputRun(text: altText, attributes: attributes)
         }
+        if let formula = run.attributes.formula {
+            return ChatInputRun(text: formula, attributes: attributes)
+        }
         return ChatInputRun(text: run.text, attributes: attributes)
     }
 }
@@ -261,6 +264,7 @@ private func chatInputInlineAttributes(
         strikethrough: attributes.strikethrough,
         underline: attributes.underline,
         spoiler: attributes.spoiler,
+        formula: attributes.formula,
         entity: entity
     )
 }
@@ -438,6 +442,9 @@ private func runs(
             attributes.emoji = emoji
             return TextRun(text: "\u{FFFC}", attributes: attributes)
         }
+        if attributes.formula != nil {
+            return TextRun(text: "\u{FFFC}", attributes: attributes)
+        }
         return TextRun(text: run.text, attributes: attributes)
     }
 }
@@ -453,6 +460,7 @@ private func characterAttributes(
     result.strikethrough = attributes.strikethrough
     result.underline = attributes.underline
     result.spoiler = attributes.spoiler
+    result.formula = attributes.formula
     // The entity slot is mutually exclusive — emoji lands in `emoji`, mention/date/url in the shared `link`
     // field as a `tg://` marker (mention/date) or the raw URL, symmetric with the forward classifier.
     if let entity = attributes.entity {

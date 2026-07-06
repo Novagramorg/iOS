@@ -12,7 +12,10 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
         let block = blocks[index]
         switch block {
         case let .paragraph(paragraph):
-            if paragraph.list != nil {
+            if let latex = standaloneFormulaLatex(from: paragraph) {
+                pageBlocks.append(.formula(latex: latex))
+                index += 1
+            } else if paragraph.list != nil {
                 var run: [ParagraphBlock] = []
                 while index < blocks.count, case let .paragraph(next) = blocks[index], next.list != nil {
                     run.append(next)
@@ -91,6 +94,9 @@ private func authorCaption(_ author: [TextRun], italic: Bool = false) -> RichTex
 
 /// A non-list, non-quote paragraph → a heading or a paragraph block.
 private func headingOrParagraphBlock(_ paragraph: ParagraphBlock) -> InstantPageBlock {
+    if let latex = standaloneFormulaLatex(from: paragraph) {
+        return .formula(latex: latex)
+    }
     let text = richText(from: paragraph.runs)
     switch paragraph.style {
     case .heading1:
@@ -199,4 +205,14 @@ private func cellRichText(_ cell: Cell) -> RichText {
         joined.append(text)
     }
     return .concat(joined)
+}
+
+private func standaloneFormulaLatex(from paragraph: ParagraphBlock) -> String? {
+    guard paragraph.style == .body, paragraph.list == nil, paragraph.runs.count == 1 else {
+        return nil
+    }
+    guard let latex = paragraph.runs[0].attributes.formula, !latex.isEmpty else {
+        return nil
+    }
+    return latex
 }
