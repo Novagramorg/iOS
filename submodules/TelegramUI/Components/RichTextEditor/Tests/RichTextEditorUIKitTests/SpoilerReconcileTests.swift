@@ -93,6 +93,48 @@ final class SpoilerReconcileTests: XCTestCase {
         XCTAssertTrue(dust?.isHidden ?? false)
     }
 
+    /// A two-paragraph canvas with the spoiler in the SECOND paragraph, caret parked in the first (so the
+    /// spoiler stays hidden), and the single dust view realized.
+    private func canvasWithSpoilerBelow() -> DocumentCanvasView {
+        let c = DocumentCanvasView()
+        c.setBlocks([
+            .paragraph(ParagraphBlock(id: BlockID("p1"), runs: [TextRun(text: "top line")])),
+            .paragraph(ParagraphBlock(id: BlockID("p2"), runs: [TextRun(text: "open secret end")])),
+        ], width: 320)
+        c.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+        c.layoutIfNeeded()
+        c.simulateParentLayout()
+        let p2start = c.boxes[1].textStart
+        c.anchor = p2start + 5; c.head = p2start + 11    // "secret"
+        c.toggleSpoiler()
+        c.anchor = c.boxes[0].textStart; c.head = c.boxes[0].textStart   // caret in p1 → spoiler hidden
+        c.layoutIfNeeded()
+        c.simulateParentLayout()
+        return c
+    }
+
+    /// Regression: typing in a paragraph ABOVE a spoiler shifts the spoiler region's absolute globalStart,
+    /// which must NOT churn the pooled dust view (the "spoiler resets/recreated when I type above it" bug).
+    /// The dust identity must be anchored to the spoiler's own (untouched) text region, not its document offset.
+    func test_typingAboveSpoiler_reusesSameDustView() {
+        let c = canvasWithSpoilerBelow()
+        XCTAssertEqual(c.spoilerDustCountForTesting, 1)
+        let dustBefore = c.firstSpoilerDustForTesting
+        XCTAssertNotNil(dustBefore)
+
+        // Type at the END of the first paragraph (above the spoiler). This shifts p2's globalStart by 1.
+        c.anchor = c.boxes[0].textStart + 8; c.head = c.anchor      // end of "top line"
+        c.insertText("X")
+        c.layoutIfNeeded()
+        c.simulateParentLayout()
+
+        XCTAssertTrue(c.spoilerRunsForTesting.count == 1 && c.spoilerRunsForTesting[0].hidden,
+                      "the spoiler is still present and hidden after typing above it")
+        XCTAssertEqual(c.spoilerDustCountForTesting, 1, "still exactly one dust view")
+        XCTAssertTrue(c.firstSpoilerDustForTesting === dustBefore,
+                      "the SAME pooled dust view is reused, not dissolved-and-recreated")
+    }
+
     func test_setBlocks_tearsDownDust() {
         let c = canvasWithSpoiler()
         XCTAssertEqual(c.spoilerDustCountForTesting, 1)

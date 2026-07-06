@@ -2,10 +2,14 @@
 import UIKit
 import RichTextEditorCore
 
-/// Identity of one contiguous spoiler run, stable across reconcile passes within a layout (so its pooled
-/// dust view keeps animating). An edit that shifts positions changes the key → the dust restarts (accepted).
+/// Identity of one contiguous spoiler run, anchored to its owning text REGION (the layout-engine instance,
+/// which is 1:1 with a paragraph / caption / table cell) + the run's index within that region — NOT the
+/// spoiler's absolute document offset. So editing content ABOVE the spoiler (which shifts its `globalStart`
+/// but leaves its region's layout instance untouched) keeps the key stable and the pooled dust view keeps
+/// animating instead of dissolving-and-recreating. The key only changes when the region's own box is rebuilt
+/// (a structural edit to that paragraph, or a full reload), which legitimately restarts the dust.
 @available(iOS 13.0, *)
-struct SpoilerKey: Hashable { let regionStart: Int; let runIndex: Int }
+struct SpoilerKey: Hashable { let region: ObjectIdentifier; let runIndex: Int }
 
 /// One spoiler run found in the laid-out document (recomputed each `syncSpoilers`).
 @available(iOS 13.0, *)
@@ -77,7 +81,7 @@ extension DocumentCanvasView {
                     .map { $0.offsetBy(dx: region.canvasOrigin.x, dy: region.canvasOrigin.y).insetBy(dx: 1, dy: 1) }
                 let words = spoilerWordRects(in: region, localRange: range)
                 result.append(SpoilerRun(
-                    key: SpoilerKey(regionStart: region.globalStart, runIndex: runIndex),
+                    key: SpoilerKey(region: ObjectIdentifier(region.layout), runIndex: runIndex),
                     regionStart: region.globalStart,
                     globalRange: gStart..<gEnd,
                     canvasLineRects: line,

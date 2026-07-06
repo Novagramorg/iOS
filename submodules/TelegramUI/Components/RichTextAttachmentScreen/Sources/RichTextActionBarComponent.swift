@@ -79,12 +79,18 @@ class RichTextActionBarComponent: Component {
         }
     }
     
+    private final class ItemView {
+        let item = ComponentView<Empty>()
+        let selectionBackground = ComponentView<Empty>()
+    }
+    
     final class View: UIView {
         private let backgroundContainer: GlassBackgroundContainerView
         private let backgroundView: GlassBackgroundView
         private let scrollView: ScrollView
+        private let selectionBackroundContainer: UIView
         
-        private var itemViews: [AnyHashable: ComponentView<Empty>] = [:]
+        private var itemViews: [AnyHashable: ItemView] = [:]
         
         private var component: RichTextActionBarComponent?
         
@@ -100,12 +106,16 @@ class RichTextActionBarComponent: Component {
             self.scrollView.showsHorizontalScrollIndicator = false
             self.scrollView.clipsToBounds = true
             
+            self.selectionBackroundContainer = UIView()
+            
             super.init(frame: frame)
             
             self.disablesInteractiveTransitionGestureRecognizer = true
             
             self.addSubview(self.backgroundContainer)
             self.backgroundView.contentView.addSubview(self.scrollView)
+            
+            self.scrollView.addSubview(self.selectionBackroundContainer)
         }
         
         required init?(coder: NSCoder) {
@@ -134,17 +144,28 @@ class RichTextActionBarComponent: Component {
             let contentSize = CGSize(width: itemSize.width * CGFloat(component.actions.count) + spacing * CGFloat(max(0, component.actions.count - 1)), height: itemSize.height)
             
             let delayIncrement: Double = 0.02
+            let maxAnimateBlur: CGFloat = "".isEmpty ? 0.0 : 1.0
             
             var animateIn = false
             if let previousComponent, component.actionsId != previousComponent.actionsId {
                 animateIn = true
                 var nextDelay: Double = 0.0
                 for item in previousComponent.actions {
-                    if let itemView = self.itemViews[item.id]?.view {
-                        transition.setAlpha(view: itemView, alpha: 0.0, delay: nextDelay, completion: { [weak itemView] _ in
-                            itemView?.removeFromSuperview()
-                        })
-                        transition.setScale(view: itemView, scale: 0.001, delay: nextDelay)
+                    if let itemView = self.itemViews[item.id] {
+                        if let itemComponentView = itemView.item.view {
+                            transition.setAlpha(view: itemComponentView, alpha: 0.0, delay: nextDelay, completion: { [weak itemComponentView] _ in
+                                itemComponentView?.removeFromSuperview()
+                            })
+                            transition.setScale(view: itemComponentView, scale: 0.001, delay: nextDelay)
+                            if maxAnimateBlur != 0.0 {
+                                transition.setBlur(layer: itemComponentView.layer, radius: maxAnimateBlur)
+                            }
+                        }
+                        if let itemSelectionBackgroundView = itemView.selectionBackground.view {
+                            transition.setAlpha(view: itemSelectionBackgroundView, alpha: 0.0, delay: nextDelay, completion: { [weak itemSelectionBackgroundView] _ in
+                                itemSelectionBackgroundView?.removeFromSuperview()
+                            })
+                        }
                     }
                     
                     nextDelay += delayIncrement
@@ -157,17 +178,17 @@ class RichTextActionBarComponent: Component {
             for (index, item) in component.actions.enumerated() {
                 validIds.append(item.id)
                 
-                let itemView: ComponentView<Empty>
+                let itemView: ItemView
                 var itemTransition: ComponentTransition = .immediate
                 if let current = self.itemViews[item.id] {
                     itemView = current
                 } else {
                     itemTransition = itemTransition.withAnimation(.none)
-                    itemView = ComponentView()
+                    itemView = ItemView()
                     self.itemViews[item.id] = itemView
                 }
                 
-                let _ = itemView.update(
+                let _ = itemView.item.update(
                     transition: itemTransition,
                     component: AnyComponent(ActionItemComponent(
                         theme: component.theme,
@@ -180,9 +201,37 @@ class RichTextActionBarComponent: Component {
                     containerSize: itemSize
                 )
                 
+                let _ = itemView.selectionBackground.update(
+                    transition: transition,
+                    component: AnyComponent(FilledRoundedRectangleComponent(
+                        color: component.theme.list.itemCheckColors.fillColor,
+                        cornerRadius: .minEdge,
+                        smoothCorners: false
+                    )),
+                    environment: {},
+                    containerSize: itemSize
+                )
+                
                 let itemFrame = CGRect(origin: CGPoint(x: CGFloat(index) * (itemSize.width + spacing), y: 0.0), size: itemSize)
                 
-                if let itemComponentView = itemView.view {
+                var selectionFrame = itemFrame
+                if index + 1 < component.actions.count, component.actions[index + 1].isSelected {
+                    let nextItemFrame = CGRect(origin: CGPoint(x: CGFloat(index + 1) * (itemSize.width + spacing), y: 0.0), size: itemSize)
+                    selectionFrame = itemFrame.union(CGRect(origin: nextItemFrame.origin, size: CGSize(width: nextItemFrame.width - 4.0, height: nextItemFrame.height)))
+                }
+                
+                if let itemSelectionBackgroundView = itemView.selectionBackground.view {
+                    if itemSelectionBackgroundView.superview == nil {
+                        self.selectionBackroundContainer.addSubview(itemSelectionBackgroundView)
+                    }
+                    itemTransition.setFrame(view: itemSelectionBackgroundView, frame: selectionFrame)
+                    itemSelectionBackgroundView.isHidden = !item.isSelected
+                    
+                    if animateIn {
+                        transition.animateAlpha(view: itemSelectionBackgroundView, from: 0.0, to: 1.0, delay: nextAppearDelay)
+                    }
+                }
+                if let itemComponentView = itemView.item.view {
                     if itemComponentView.superview == nil {
                         self.scrollView.addSubview(itemComponentView)
                     }
@@ -191,6 +240,9 @@ class RichTextActionBarComponent: Component {
                     if animateIn {
                         transition.animateAlpha(view: itemComponentView, from: 0.0, to: 1.0, delay: nextAppearDelay)
                         transition.animateScale(view: itemComponentView, from: 0.001, to: 1.0, delay: nextAppearDelay)
+                        if maxAnimateBlur != 0.0 {
+                            transition.animateBlur(layer: itemComponentView.layer, fromRadius: maxAnimateBlur, toRadius: 0.0)
+                        }
                     }
                 }
                 
@@ -199,7 +251,8 @@ class RichTextActionBarComponent: Component {
             var removeIds: [AnyHashable] = []
             for (id, itemView) in self.itemViews {
                 if !validIds.contains(id) {
-                    itemView.view?.removeFromSuperview()
+                    itemView.item.view?.removeFromSuperview()
+                    itemView.selectionBackground.view?.removeFromSuperview()
                     removeIds.append(id)
                 }
             }
@@ -273,7 +326,6 @@ class ActionItemComponent: Component {
     
     final class View: UIView {
         private let icon = ComponentView<Empty>()
-        private var selectionBackground: ComponentView<Empty>?
         
         private var component: ActionItemComponent?
         
@@ -301,36 +353,6 @@ class ActionItemComponent: Component {
                 foregroundColor = component.theme.list.itemCheckColors.foregroundColor
             } else {
                 foregroundColor = component.theme.chat.inputPanel.panelControlColor.withMultipliedAlpha(component.action != nil ? 1.0 : 0.4)
-            }
-            
-            if component.isSelected {
-                let selectionBackground: ComponentView<Empty>
-                if let current = self.selectionBackground {
-                    selectionBackground = current
-                } else {
-                    selectionBackground = ComponentView()
-                    self.selectionBackground = selectionBackground
-                }
-                let _ = selectionBackground.update(
-                    transition: transition,
-                    component: AnyComponent(FilledRoundedRectangleComponent(
-                        color: component.theme.list.itemCheckColors.fillColor,
-                        cornerRadius: .minEdge,
-                        smoothCorners: false
-                    )),
-                    environment: {},
-                    containerSize: availableSize
-                )
-                if let selectionBackgroundView = selectionBackground.view {
-                    if selectionBackgroundView.superview == nil {
-                        selectionBackgroundView.isUserInteractionEnabled = false
-                        self.insertSubview(selectionBackgroundView, at: 0)
-                    }
-                    selectionBackgroundView.frame = CGRect(origin: CGPoint(), size: availableSize)
-                }
-            } else if let selectionBackground = self.selectionBackground {
-                self.selectionBackground = nil
-                selectionBackground.view?.removeFromSuperview()
             }
             
             let iconSize = self.icon.update(
