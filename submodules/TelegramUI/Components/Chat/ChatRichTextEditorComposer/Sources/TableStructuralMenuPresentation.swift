@@ -23,16 +23,25 @@ public func presentTableStructuralMenu(
     anchor.isUserInteractionEnabled = false
     anchorView.addSubview(anchor)
 
-    let items: [ContextMenuItem] = request.actions.map { action in
+    var items: [ContextMenuItem] = []
+    if let alignment = request.alignment {
+        let _ = alignment
+        items.append(.custom(TableStructuralMenuAlignmentItem(action: { horizontal, vertical in
+            
+        }), false))
+        
+        if !request.actions.isEmpty {
+            items.append(.separator)
+        }
+    }
+    items.append(contentsOf: request.actions.map { action in
         .action(ContextMenuActionItem(
             text: tableStructuralMenuTitle(action.kind),
             textColor: tableStructuralMenuIsDestructive(action.kind) ? .destructive : .primary,
             icon: { _ in nil },
             action: { _, f in f(.default); action.perform() }
         ))
-    }
-    // NOTE: request.alignment (column selections) is intentionally NOT rendered yet — it will become a
-    // .custom segmented ContextMenu item. The descriptor already carries options + `select` for that.
+    })
 
     let controller = makeContextController(
         presentationData: presentationData,
