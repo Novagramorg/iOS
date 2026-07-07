@@ -303,6 +303,42 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         assertRoundTrips(ChatInputContent(blocks: [.media(videoMedia)]), "video medium with no caption")
     }
 
+    // The InstantPage image/video block carries no size, so on the reverse the natural size (aspect) must be
+    // recovered from the resolved `Media` itself — an image's largest representation, a video file's `.Video`
+    // attribute — mirroring the size the editor computes at insertion. Without this a Document → InstantPage →
+    // Document round-trip loses the aspect and the editor falls back to a 16:9 default (the reported "video item
+    // size doesn't survive serialization" bug). Audio stays `.zero` (a fixed-height row; naturalSize is ignored).
+    func test_media_recoversNaturalSizeFromMedia() {
+        let image = TelegramMediaImage(
+            imageId: MediaId(namespace: 1, id: 3003),
+            representations: [TelegramMediaImageRepresentation(
+                dimensions: PixelDimensions(width: 800, height: 600), resource: EmptyMediaResource(),
+                progressiveSizes: [], immediateThumbnailData: nil)],
+            immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let imageBack = chatInputContent(fromInstantPage: instantPage(from: ChatInputContent(blocks: [
+            .media(ChatInputMedia(media: image, kind: .image,
+                                  naturalSize: ChatInputSize(width: 800, height: 600),
+                                  displayWidth: nil, alignment: .center, caption: []))])))
+        guard case .media(let mi)? = imageBack.blocks.first else { return XCTFail("expected .media(image)") }
+        XCTAssertEqual(mi.naturalSize, ChatInputSize(width: 800, height: 600),
+                       "image natural size recovered from its largest representation")
+
+        let file = TelegramMediaFile(
+            fileId: MediaId(namespace: 1, id: 4004), partialReference: nil, resource: EmptyMediaResource(),
+            previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "video/mp4",
+            size: nil,
+            attributes: [.Video(duration: 3, size: PixelDimensions(width: 1920, height: 1080), flags: [],
+                                preloadSize: nil, coverTime: nil, videoCodec: nil)],
+            alternativeRepresentations: [])
+        let videoBack = chatInputContent(fromInstantPage: instantPage(from: ChatInputContent(blocks: [
+            .media(ChatInputMedia(media: file, kind: .video,
+                                  naturalSize: ChatInputSize(width: 1920, height: 1080),
+                                  displayWidth: nil, alignment: .center, caption: []))])))
+        guard case .media(let mv)? = videoBack.blocks.first else { return XCTFail("expected .media(video)") }
+        XCTAssertEqual(mv.naturalSize, ChatInputSize(width: 1920, height: 1080),
+                       "video natural size recovered from the .Video attribute")
+    }
+
     // Bonus: a mixed document combining several block kinds.
     // Uses the new canonical `.blockQuote` form (which round-trips 1:1); quote paragraphs and `.collapsedQuote`
     // still forward correctly but normalize to `.blockQuote` on the reverse, so those inputs cannot use assertRoundTrips.

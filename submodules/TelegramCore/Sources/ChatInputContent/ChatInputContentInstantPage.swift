@@ -192,6 +192,27 @@ public func chatInputContent(fromInstantPage page: InstantPage) -> ChatInputCont
     return ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: page.blocks, media: page.media))
 }
 
+/// Recover a media block's natural size (aspect) from the resolved `Media`. The InstantPage image/video block
+/// carries no size field, so the dimensions live only on the `Media` itself — an image's largest representation
+/// (`.last`, the convention), or a video/image file's `.Video`/`.ImageSize` attribute (`TelegramMediaFile.dimensions`).
+/// This mirrors the size the editor derives at insertion (`RichTextAttachmentScreen`), so a
+/// `Document → InstantPage → Document` round-trip preserves the aspect instead of collapsing to the editor's 16:9
+/// fallback (`MediaBlockBox.imageDisplaySize`). Falls back to `.zero` when the media carries no dimensions.
+private func chatInputNaturalSize(fromMedia media: Media) -> ChatInputSize {
+    let dimensions: PixelDimensions?
+    if let image = media as? TelegramMediaImage {
+        dimensions = image.representations.last?.dimensions
+    } else if let file = media as? TelegramMediaFile {
+        dimensions = file.dimensions
+    } else {
+        dimensions = nil
+    }
+    guard let dimensions else {
+        return ChatInputSize(width: 0.0, height: 0.0)
+    }
+    return ChatInputSize(width: Double(dimensions.width), height: Double(dimensions.height))
+}
+
 func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [MediaId: Media] = [:]) -> [ChatInputBlock] {
     var result: [ChatInputBlock] = []
     for block in blocks {
@@ -242,18 +263,19 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             ])))
         case let .image(id, caption, _, _):
             // Resolve the concrete `Media` from the page's `media` dict; a missing entry (the forward always stores it,
-            // so this is defensive against a malformed page) drops the block. `naturalSize`/`displayWidth`/`alignment`
-            // are NOT representable in the InstantPage image block, so the reverse restores fixed DEFAULTS — natural
-            // size `.zero`, `displayWidth: nil`, `alignment: .center` (the editor's `ChatInputMedia` default). The
-            // round-trip is therefore identity only for media built with those defaults (a documented canonicalization,
-            // matching the customEmoji/collapsed-quote/list-level pattern; pinned by the media tests).
+            // so this is defensive against a malformed page) drops the block. The InstantPage image block carries no
+            // size, so `naturalSize` is recovered from the `Media` itself (`chatInputNaturalSize(fromMedia:)`) — the
+            // dimensions the editor also derives at insertion, so the aspect survives the round-trip. `displayWidth`
+            // (a user resize) and `alignment` are genuinely not representable, so they canonicalize to `nil` / `.center`
+            // (the editor's `ChatInputMedia` default; a documented limitation, pinned by the media tests).
             if let media = media[id] {
-                result.append(.media(ChatInputMedia(media: media, kind: .image, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+                result.append(.media(ChatInputMedia(media: media, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: media), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .video(id, caption, _, _):
-            // Same default restoration as `.image` (see above) for the non-representable size/width/alignment fields.
+            // Same as `.image` (see above): `naturalSize` recovered from the file's `.Video`/`.ImageSize` dimensions,
+            // `displayWidth`/`alignment` canonicalized to the defaults.
             if let media = media[id] {
-                result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+                result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: media), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .audio(id, caption):
             // Resolve the concrete `TelegramMediaFile` from the page `media` dict (the forward always stores it).
