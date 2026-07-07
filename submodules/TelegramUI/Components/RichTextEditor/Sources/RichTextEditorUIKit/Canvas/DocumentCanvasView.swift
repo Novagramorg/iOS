@@ -973,7 +973,13 @@ final class DocumentCanvasView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        layoutContent()
+        // Skip a zero-width UIKit layout pass before the canvas is framed: laying out at width 0 builds the
+        // media/overlay views at a 0×0 rect (and binds their fetch), redone the instant the real frame lands.
+        // The parent (`RichTextEditorView.performLayout`) sets a non-zero canvas frame before calling
+        // `layoutContent()` directly, so the real (framed) layout path is unaffected.
+        if bounds.width > 0 {
+            layoutContent()
+        }
     }
 
     /// Lays out the document content + overlays against `bounds`. The parent
@@ -1036,6 +1042,15 @@ final class DocumentCanvasView: UIView {
     /// Stateless content height the document would have at canvas `width` — the measure analogue of
     /// `intrinsicContentSize.height` (same `contentMargins` + content-width derivation). Never mutates
     /// the live layout (no box `setWidth`, no frame/overlay/caret change).
+    ///
+    /// FRAMING DEPENDENCY (future enhancement): this reads each box's `topInset`/`bottomInset`
+    /// (`BlockStack.measuredHeight` → `BlockBox.measuredHeight`), which are set only by a LAYOUT pass
+    /// (`BlockStack.layout` via `facingInset`, run from `layoutContent`). So an editor that has NOT been
+    /// framed/laid-out yet measures too tall — each box keeps its default `BlockBox.defaultVerticalInset`
+    /// (8pt) rather than the host's configured inset (the composer's 0). Callers therefore measure a FRAMED
+    /// editor (the live composer field is on-screen; the `measuredContentHeight` static probe sets a non-zero
+    /// `probe.frame` before seeding). The robust fix (deferred) is to make the measure framing-independent —
+    /// compute the facing insets here (mirroring `layout`) instead of reading the stored, layout-set values.
     func measuredContentHeight(forWidth width: CGFloat, contentMargins explicitMargins: UIEdgeInsets? = nil) -> CGFloat {
         // The measure must be PURE: a host sizing its field by this value (the chat composer) may call it
         // BEFORE the matching `update(...)` has pushed the real `contentMargins` onto the live canvas (a draft

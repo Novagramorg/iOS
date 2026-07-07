@@ -240,13 +240,25 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
             var blocks = newValue.blocks
             if blocks.isEmpty { blocks = [.paragraph(ParagraphBlock(id: BlockID.generate()))] }
             canvas.reload(blocks, width: bounds.width)
-            performLayout(size: bounds.size)   // explicit parent-driven layout for the content swap (no self-schedule)
+            // Only lay out when the view is framed. `reload` already applied the model and fired
+            // `onContentSizeChange`, so an UNFRAMED set (draft restore / attachment init before the first
+            // layout pass) defers to the host's next framed `update(...)`. A zero-width `performLayout` would
+            // only build the media/overlay views at a 0×0 rect (and bind their fetch) and redo it the instant
+            // the real frame lands — matching every other setter here, which gate on `bounds.width > 0`.
+            if bounds.width > 0.0 {
+                performLayout(size: bounds.size)   // explicit parent-driven layout for the content swap (no self-schedule)
+            }
         }
     }
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        performLayout(size: bounds.size)
+        // Skip a zero-width UIKit layout pass (the view is in the hierarchy but not yet framed): it can't lay
+        // text out and would only build the media/overlay views at a 0×0 rect, redone the instant the real
+        // frame arrives. The host's framed `update(...)` drives the real layout. Matches the `document` setter.
+        if bounds.width > 0.0 {
+            performLayout(size: bounds.size)
+        }
     }
 
     /// Parent-driven layout. Lays the document out at `size.width`, applies `insets` to the internal scroll
@@ -329,6 +341,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// `lineCount` floors at 1.
     public static func measuredContentHeight(forWidth width: CGFloat, lineCount: Int, contentMargins: UIEdgeInsets = .zero, configure: (RichTextEditorView) -> Void) -> CGFloat {
         let probe = RichTextEditorView()
+        probe.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: 100.0))
         configure(probe)
         let count = max(1, lineCount)
         probe.document = Document(blocks: (0..<count).map { _ in
