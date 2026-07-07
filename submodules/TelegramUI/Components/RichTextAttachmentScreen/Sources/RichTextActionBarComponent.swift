@@ -13,13 +13,15 @@ class RichTextActionBarComponent: Component {
         let action: ((UIView) -> Void)?
         let isSelected: Bool
         let flipHorizontally: Bool
+        let showsPremiumBadge: Bool
 
-        init(id: AnyHashable, icon: String, action: ((UIView) -> Void)?, isSelected: Bool, flipHorizontally: Bool = false) {
+        init(id: AnyHashable, icon: String, action: ((UIView) -> Void)?, isSelected: Bool, flipHorizontally: Bool = false, showsPremiumBadge: Bool = false) {
             self.id = id
             self.icon = icon
             self.action = action
             self.isSelected = isSelected
             self.flipHorizontally = flipHorizontally
+            self.showsPremiumBadge = showsPremiumBadge
         }
 
         static func ==(lhs: Action, rhs: Action) -> Bool {
@@ -36,6 +38,9 @@ class RichTextActionBarComponent: Component {
                 return false
             }
             if lhs.flipHorizontally != rhs.flipHorizontally {
+                return false
+            }
+            if lhs.showsPremiumBadge != rhs.showsPremiumBadge {
                 return false
             }
             return true
@@ -195,7 +200,8 @@ class RichTextActionBarComponent: Component {
                         icon: item.icon,
                         action: item.action,
                         isSelected: item.isSelected,
-                        flipHorizontally: item.flipHorizontally
+                        flipHorizontally: item.flipHorizontally,
+                        showsPremiumBadge: item.showsPremiumBadge
                     )),
                     environment: {},
                     containerSize: itemSize
@@ -290,19 +296,22 @@ class ActionItemComponent: Component {
     let action: ((UIView) -> Void)?
     let isSelected: Bool
     let flipHorizontally: Bool
+    let showsPremiumBadge: Bool
 
     init(
         theme: PresentationTheme,
         icon: String,
         action: ((UIView) -> Void)?,
         isSelected: Bool,
-        flipHorizontally: Bool = false
+        flipHorizontally: Bool = false,
+        showsPremiumBadge: Bool = false
     ) {
         self.theme = theme
         self.icon = icon
         self.action = action
         self.isSelected = isSelected
         self.flipHorizontally = flipHorizontally
+        self.showsPremiumBadge = showsPremiumBadge
     }
 
     static func ==(lhs: ActionItemComponent, rhs: ActionItemComponent) -> Bool {
@@ -321,11 +330,15 @@ class ActionItemComponent: Component {
         if lhs.flipHorizontally != rhs.flipHorizontally {
             return false
         }
+        if lhs.showsPremiumBadge != rhs.showsPremiumBadge {
+            return false
+        }
         return true
     }
     
     final class View: UIView {
         private let icon = ComponentView<Empty>()
+        private let badge = ComponentView<Empty>()
         
         private var component: ActionItemComponent?
         
@@ -345,6 +358,33 @@ class ActionItemComponent: Component {
             }
         }
         
+        private func generateIconImage(name: String, showsPremiumBadge: Bool) -> UIImage? {
+            guard let baseImage = UIImage(bundleImageName: name) else {
+                return nil
+            }
+            guard showsPremiumBadge, let starMaskImage = UIImage(bundleImageName: "RichText/PremiumStarMask") else {
+                return baseImage.withRenderingMode(.alwaysTemplate)
+            }
+
+            let imagePadding: CGFloat = 3.0
+            let baseImageSize = baseImage.size
+            let imageSize = CGSize(width: baseImageSize.width + imagePadding * 2.0, height: baseImageSize.height + imagePadding * 2.0)
+            UIGraphicsBeginImageContextWithOptions(imageSize, false, baseImage.scale)
+
+            let imageFrame = CGRect(origin: CGPoint(x: imagePadding, y: imagePadding), size: baseImageSize)
+            baseImage.draw(in: imageFrame)
+
+            let badgeOffset = CGPoint(x: 1.0 + UIScreenPixel, y: -5.0)
+            let maskOffset = CGPoint(x: badgeOffset.x + 2.0 - UIScreenPixel, y: badgeOffset.y + 2.0 - UIScreenPixel)
+            let maskFrame = CGRect(origin: CGPoint(x: imagePadding + baseImageSize.width - starMaskImage.size.width + maskOffset.x, y: imagePadding + baseImageSize.height - starMaskImage.size.height + maskOffset.y), size: starMaskImage.size)
+            starMaskImage.draw(in: maskFrame, blendMode: .destinationOut, alpha: 1.0)
+
+            let resultImage = UIGraphicsGetImageFromCurrentImageContext()
+            UIGraphicsEndImageContext()
+
+            return resultImage?.withRenderingMode(.alwaysTemplate)
+        }
+
         func update(component: ActionItemComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
             self.component = component
             
@@ -355,11 +395,13 @@ class ActionItemComponent: Component {
                 foregroundColor = component.theme.chat.inputPanel.panelControlColor.withMultipliedAlpha(component.action != nil ? 1.0 : 0.4)
             }
             
+            let iconImage = self.generateIconImage(name: component.icon, showsPremiumBadge: component.showsPremiumBadge)
             let iconSize = self.icon.update(
                 transition: transition,
-                component: AnyComponent(BundleIconComponent(
-                    name: component.icon,
+                component: AnyComponent(Image(
+                    image: iconImage,
                     tintColor: foregroundColor,
+                    size: iconImage?.size ?? .zero,
                     flipHorizontally: component.flipHorizontally
                 )),
                 environment: {},
@@ -367,6 +409,7 @@ class ActionItemComponent: Component {
             )
             let iconFrame = iconSize.centered(in: CGRect(origin: CGPoint(), size: availableSize))
             if let iconView = self.icon.view {
+                iconView.isHidden = false
                 if iconView.superview == nil {
                     iconView.isUserInteractionEnabled = false
                     self.addSubview(iconView)
@@ -374,6 +417,30 @@ class ActionItemComponent: Component {
                 transition.setFrame(view: iconView, frame: iconFrame)
             }
             
+            if component.showsPremiumBadge {
+                let badgeSize = self.badge.update(
+                    transition: transition,
+                    component: AnyComponent(BundleIconComponent(
+                        name: "RichText/PremiumStar",
+                        tintColor: nil
+                    )),
+                    environment: {},
+                    containerSize: availableSize
+                )
+                let badgeOffset = CGPoint(x: -2.0 + UIScreenPixel, y: -8.0)
+                let badgeFrame = CGRect(origin: CGPoint(x: iconFrame.maxX - badgeSize.width + badgeOffset.x, y: iconFrame.maxY - badgeSize.height + badgeOffset.y), size: badgeSize)
+                if let badgeView = self.badge.view {
+                    badgeView.isHidden = false
+                    if badgeView.superview == nil {
+                        badgeView.isUserInteractionEnabled = false
+                        self.addSubview(badgeView)
+                    }
+                    transition.setFrame(view: badgeView, frame: badgeFrame)
+                }
+            } else if let badgeView = self.badge.view {
+                badgeView.isHidden = true
+            }
+
             return availableSize
         }
     }

@@ -320,6 +320,18 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     private let regularDeviceToken = Promise<Data?>(nil)
     
     private var recaptchaClientsBySiteKey: [String: Promise<RecaptchaClient>] = [:]
+
+    private func setupShakeDebugAction(context: AuthorizedApplicationContext) {
+        self.mainWindow.motionShake = { [weak context] in
+            guard let context = context else {
+                return
+            }
+            let controller = revealOptionsAnimationTuningController(sharedContext: context.context.sharedContext, modal: true)
+            if let parentController = context.rootController.viewControllers.last as? ViewController {
+                parentController.push(controller)
+            }
+        }
+    }
         
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         precondition(!testIsLaunched)
@@ -1345,6 +1357,7 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
 
                     self.mainWindow.debugAction = nil
                     self.mainWindow.viewController = context.rootController
+                    self.setupShakeDebugAction(context: context)
                     
                     if firstTime {
                         let layer = context.rootController.view.layer

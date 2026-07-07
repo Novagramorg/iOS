@@ -113,6 +113,128 @@ public func attributedString(from content: ChatInputContent) -> NSAttributedStri
     return result
 }
 
+/// Chat input content -> a sendable attributed string that keeps message-entity formatting, but flattens
+/// rich-only layout so it can be sent on the normal text/entities path.
+public func entityPreservingFallbackAttributedString(
+    from content: ChatInputContent,
+    preserveCustomEmoji: (Int64, TelegramMediaFile?) -> Bool
+) -> NSAttributedString {
+    let result = NSMutableAttributedString()
+    let marker = true as NSNumber
+    var isFirst = true
+
+    func appendSeparatorIfNeeded() {
+        if !isFirst {
+            result.append(NSAttributedString(string: "\n"))
+        }
+        isFirst = false
+    }
+
+    func attributedRuns(_ runs: [ChatInputRun], preserveInlineAttributes: Bool = true) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+
+        for run in runs {
+            let piece = NSMutableAttributedString(string: run.attributes.formula ?? run.text)
+            let range = NSRange(location: 0, length: piece.length)
+            if range.length == 0 {
+                continue
+            }
+
+            if preserveInlineAttributes {
+                let attributes = run.attributes
+                if attributes.bold {
+                    piece.addAttribute(ChatTextInputAttributes.bold, value: marker, range: range)
+                }
+                if attributes.italic {
+                    piece.addAttribute(ChatTextInputAttributes.italic, value: marker, range: range)
+                }
+                if attributes.monospace {
+                    piece.addAttribute(ChatTextInputAttributes.monospace, value: marker, range: range)
+                }
+                if attributes.strikethrough {
+                    piece.addAttribute(ChatTextInputAttributes.strikethrough, value: marker, range: range)
+                }
+                if attributes.underline {
+                    piece.addAttribute(ChatTextInputAttributes.underline, value: marker, range: range)
+                }
+                if attributes.spoiler {
+                    piece.addAttribute(ChatTextInputAttributes.spoiler, value: marker, range: range)
+                }
+                switch attributes.entity {
+                case let .mention(peerId):
+                    piece.addAttribute(ChatTextInputAttributes.textMention, value: ChatTextInputTextMentionAttribute(peerId: peerId), range: range)
+                case let .url(url):
+                    piece.addAttribute(ChatTextInputAttributes.textUrl, value: ChatTextInputTextUrlAttribute(url: url), range: range)
+                case let .date(timestamp):
+                    piece.addAttribute(ChatTextInputAttributes.date, value: ChatTextInputTextDateAttribute(date: timestamp), range: range)
+                case let .customEmoji(fileId, file, enableAnimation):
+                    if preserveCustomEmoji(fileId, file) {
+                        piece.addAttribute(ChatTextInputAttributes.customEmoji, value: ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: file, enableAnimation: enableAnimation), range: range)
+                    }
+                case nil:
+                    break
+                }
+            }
+
+            result.append(piece)
+        }
+
+        return result
+    }
+
+    func appendParagraph(_ paragraph: NSAttributedString, blockAttribute: ChatTextInputTextQuoteAttribute?) {
+        if paragraph.length == 0 {
+            return
+        }
+        appendSeparatorIfNeeded()
+        let start = result.length
+        result.append(paragraph)
+        if let blockAttribute {
+            result.addAttribute(ChatTextInputAttributes.block, value: blockAttribute, range: NSRange(location: start, length: paragraph.length))
+        }
+    }
+
+    func appendRuns(_ runs: [ChatInputRun], blockAttribute: ChatTextInputTextQuoteAttribute? = nil) {
+        appendParagraph(attributedRuns(runs), blockAttribute: blockAttribute)
+    }
+
+    func appendContent(_ content: ChatInputContent, inheritedBlockAttribute: ChatTextInputTextQuoteAttribute?) {
+        for block in content.blocks {
+            switch block {
+            case let .paragraph(paragraph):
+                appendRuns(paragraph.runs, blockAttribute: inheritedBlockAttribute)
+            case let .code(code):
+                let blockAttribute = inheritedBlockAttribute ?? ChatTextInputTextQuoteAttribute(kind: .code(language: code.language), isCollapsed: false)
+                appendParagraph(attributedRuns(code.runs, preserveInlineAttributes: inheritedBlockAttribute != nil), blockAttribute: blockAttribute)
+            case let .pullQuote(pullQuote):
+                let quoteAttribute = inheritedBlockAttribute ?? ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: false)
+                appendRuns(pullQuote.runs, blockAttribute: quoteAttribute)
+                appendRuns(pullQuote.author, blockAttribute: inheritedBlockAttribute)
+            case let .blockQuote(blockQuote):
+                let quoteAttribute = inheritedBlockAttribute ?? ChatTextInputTextQuoteAttribute(kind: .quote, isCollapsed: blockQuote.collapsed)
+                appendContent(blockQuote.content, inheritedBlockAttribute: quoteAttribute)
+                appendRuns(blockQuote.author, blockAttribute: inheritedBlockAttribute)
+            case let .media(media):
+                appendRuns(media.caption, blockAttribute: inheritedBlockAttribute)
+            case let .table(table):
+                for row in table.rows {
+                    let rowText = NSMutableAttributedString()
+                    for i in 0 ..< row.cells.count {
+                        if i != 0 {
+                            rowText.append(NSAttributedString(string: "\t"))
+                        }
+                        rowText.append(attributedRuns(row.cells[i].runs))
+                    }
+                    appendParagraph(rowText, blockAttribute: inheritedBlockAttribute)
+                }
+            }
+        }
+    }
+
+    appendContent(content, inheritedBlockAttribute: nil)
+    return result
+}
+
 /// NSAttributedString → ChatInputContent (two-pass: carve `.block`/code regions via `codeBlockRanges`,
 /// fill gaps with paragraphs, consuming one separator "\n" per boundary — mirrors
 /// `ComposerDocumentBridge.document(from:)`).

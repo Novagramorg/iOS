@@ -19,6 +19,7 @@ swift_library(
         "//submodules/AccountContext",
         "//submodules/AttachmentUI",
         "//submodules/TelegramPresentationData",
+        "//submodules/PresentationDataUtils",
         "//submodules/TelegramUIPreferences",
         "//submodules/TelegramUI/Components/GlassBarButtonComponent",
         "//submodules/TelegramUI/Components/EdgeEffect",
@@ -42,6 +43,7 @@ swift_library(
         "//submodules/CheckNode",
         "//submodules/TelegramUI/Components/GlassControls",
         "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
+        "//submodules/UndoUI",
     ],
     visibility = [
         "//visibility:public",
