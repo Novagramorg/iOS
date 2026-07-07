@@ -34,3 +34,9 @@ public enum MediaAlignment: String, Codable, Equatable, CaseIterable {
 public enum DocumentLayoutDirection: String, Codable, Equatable, CaseIterable {
     case auto, leftToRight, rightToLeft
 }
+
+/// Vertical alignment of a table cell's content within its row height. Core-native (Core is
+/// TelegramCore-free); the round-trip maps it to TelegramCore's `TableVerticalAlignment`.
+public enum VerticalAlignment: String, Codable, CaseIterable {
+    case top, middle, bottom
+}

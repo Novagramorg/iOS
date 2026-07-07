@@ -17,8 +17,8 @@ public final class TableStructuralMenuRequest {
     /// Add/Delete actions, already adapted to the table state (header row → no Add-Above/Delete;
     /// all-columns range → no Delete Column). Ordered for display.
     public let actions: [Action]
-    /// Column selections only (nil for rows): the alignment choices + a callback. The host renders this
-    /// as a custom segmented control (deferred); the data is carried now.
+    /// The alignment control for the selected cells (present for both row and column selections): the
+    /// data is carried now, the host renders it as a custom control (deferred).
     public let alignment: Alignment?
 
     public init(view: UIView?, sourceRect: CGRect, actions: [Action], alignment: Alignment?) {
@@ -45,15 +45,17 @@ public final class TableStructuralMenuRequest {
         case addRowAbove, addRowBelow, deleteRow
     }
 
-    /// Column alignment (host renders a custom segmented control). `select` applies + clears the selection.
+    /// The alignment control for the selected cells: the uniform current value per axis (nil = the selected
+    /// cells disagree, "mixed"), and `apply` to set one or both axes on all selected cells (a nil argument
+    /// leaves that axis unchanged). Present for both row and column selections.
     public struct Alignment {
-        public let options: [TextAlignment]
-        public let current: TextAlignment?
-        public let select: (TextAlignment) -> Void
-        public init(options: [TextAlignment], current: TextAlignment?, select: @escaping (TextAlignment) -> Void) {
-            self.options = options
-            self.current = current
-            self.select = select
+        public let horizontal: TextAlignment?
+        public let vertical: VerticalAlignment?
+        public let apply: (TextAlignment?, VerticalAlignment?) -> Void
+        public init(horizontal: TextAlignment?, vertical: VerticalAlignment?, apply: @escaping (TextAlignment?, VerticalAlignment?) -> Void) {
+            self.horizontal = horizontal
+            self.vertical = vertical
+            self.apply = apply
         }
     }
 }

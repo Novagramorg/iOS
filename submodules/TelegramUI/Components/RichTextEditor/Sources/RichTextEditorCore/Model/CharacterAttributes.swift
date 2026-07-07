@@ -65,7 +65,7 @@ public struct CharacterAttributes: Codable, Equatable {
 
     // Custom decode so documents written before a field existed still load (synthesized Codable
     // throws on a missing key). Each boolean defaults false, each optional to nil. Encoding stays
-    // synthesized via the declared CodingKeys. Mirrors the `ColumnSpec.alignment` precedent.
+    // synthesized via the declared CodingKeys.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         bold = try c.decodeIfPresent(Bool.self, forKey: .bold) ?? false

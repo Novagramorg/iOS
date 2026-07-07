@@ -131,8 +131,8 @@ enum RTFConversion {
             if row.isHeader { out += "\\trhdr" }
             for edge in edges { out += "\\cellx\(edge)" }
             out += " "
-            for (colIndex, cell) in row.cells.enumerated() {
-                let align = colIndex < table.columns.count ? alignmentRTF(table.columns[colIndex].alignment) : "\\ql"
+            for cell in row.cells {
+                let align = alignmentRTF(cell.horizontalAlignment)
                 // Flatten the cell's paragraph runs (join paragraphs with \line); header cells force bold.
                 var cellRuns: [TextRun] = []
                 var wroteParagraph = false

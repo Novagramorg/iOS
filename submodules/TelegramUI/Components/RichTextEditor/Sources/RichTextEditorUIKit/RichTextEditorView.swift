@@ -401,7 +401,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func copyCurrentTable() { canvas.copyCurrentTable() }
     /// Replaces the caret's current table with body paragraphs (one per row, cells space-joined), one undo step. No-op outside a table.
     public func convertCurrentTableToText() { canvas.convertCurrentTableToText() }
-    public func setTableColumnAlignment(_ alignment: TextAlignment) { canvas.setTableColumnAlignment(alignment) }
+    /// Sets horizontal/vertical alignment on every cell of the current structural table selection (row-range
+    /// or column-range), falling back to the caret's single cell when there is no structural selection.
+    public func setSelectionHorizontalAlignment(_ alignment: TextAlignment) { canvas.setSelectionHorizontalAlignment(alignment) }
+    public func setSelectionVerticalAlignment(_ alignment: VerticalAlignment) { canvas.setSelectionVerticalAlignment(alignment) }
 
     /// Inserts an empty `rows`×`cols` table (row 0 a header) at the caret. No-op unless the caret is in
     /// a top-level paragraph.

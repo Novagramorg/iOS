@@ -133,40 +133,49 @@ extension CanvasTableCommandTests {
 }
 
 extension CanvasTableCommandTests {
-    private func columnAlignment(_ v: DocumentCanvasView, _ col: Int) -> TextAlignment? {
+    private func cellAlignment(_ v: DocumentCanvasView, row: Int, col: Int) -> TextAlignment? {
         guard case .table(let out) = v.currentBlocks().first(where: { if case .table = $0 { return true } else { return false } }) else { return nil }
-        return out.columns[col].alignment
+        return out.rows[row].cells[col].horizontalAlignment
+    }
+    private func cellVerticalAlignment(_ v: DocumentCanvasView, row: Int, col: Int) -> VerticalAlignment? {
+        guard case .table(let out) = v.currentBlocks().first(where: { if case .table = $0 { return true } else { return false } }) else { return nil }
+        return out.rows[row].cells[col].verticalAlignment
     }
 
-    func test_setColumnAlignment_collapsed_appliesToCaretColumn() {
+    /// Collapsed caret, no structural selection → the setter falls back to the caret's single cell (Task 4:
+    /// `selectedCellCoords`'s `activeTable()` branch), NOT the whole column or row.
+    func test_setSelectionHorizontalAlignment_collapsed_appliesToCaretCellOnly() {
         let v = canvas()
         caret(v, row: 1, col: 1)
-        v.setTableColumnAlignment(.center)
+        v.setSelectionHorizontalAlignment(.right)
         v.layoutIfNeeded()
-        XCTAssertEqual(columnAlignment(v, 1), .center)
-        XCTAssertEqual(columnAlignment(v, 0), .left, "other column unchanged")
+        XCTAssertEqual(cellAlignment(v, row: 1, col: 1), .right)
+        XCTAssertEqual(cellAlignment(v, row: 1, col: 0), .center, "other column unchanged")
+        XCTAssertEqual(cellAlignment(v, row: 0, col: 1), .center, "other row (same column) unchanged")
     }
 
-    func test_setColumnAlignment_spansSelectedColumns() {
+    /// A row structural selection applies vertical alignment to every cell in the range; an un-selected row
+    /// is untouched.
+    func test_setSelectionVerticalAlignment_spansSelectedRow() {
         let v = canvas()
-        // Selection from cell (1,0) to cell (1,1) → spans columns 0 and 1.
-        let from = table(v).cellTextStart(row: 1, column: 0)!
-        let to = table(v).cellTextStart(row: 1, column: 1)!
-        v.selectedTextRange = DocumentTextRange(DocumentTextPosition(from), DocumentTextPosition(to))
-        v.setTableColumnAlignment(.right)
+        caret(v, row: 1, col: 0)
+        v.selectTableRows(1...1)
+        v.setSelectionVerticalAlignment(.bottom)
         v.layoutIfNeeded()
-        XCTAssertEqual(columnAlignment(v, 0), .right)
-        XCTAssertEqual(columnAlignment(v, 1), .right)
+        XCTAssertEqual(cellVerticalAlignment(v, row: 1, col: 0), .bottom)
+        XCTAssertEqual(cellVerticalAlignment(v, row: 1, col: 1), .bottom)
+        XCTAssertEqual(cellVerticalAlignment(v, row: 0, col: 0), .top, "the un-selected row is untouched")
+        XCTAssertEqual(cellVerticalAlignment(v, row: 0, col: 1), .top, "the un-selected row is untouched")
     }
 
-    func test_setColumnAlignment_isUndoable() {
+    func test_setSelectionHorizontalAlignment_isUndoable() {
         let v = canvas()
         let um = UndoManager(); um.groupsByEvent = false; v.undoManagerOverride = um
         caret(v, row: 1, col: 1)
-        um.beginUndoGrouping(); v.setTableColumnAlignment(.center); um.endUndoGrouping()
-        XCTAssertEqual(columnAlignment(v, 1), .center)
+        um.beginUndoGrouping(); v.setSelectionHorizontalAlignment(.right); um.endUndoGrouping()
+        XCTAssertEqual(cellAlignment(v, row: 1, col: 1), .right)
         um.undo(); v.layoutIfNeeded()
-        XCTAssertEqual(columnAlignment(v, 1), .left, "undo restores alignment")
+        XCTAssertEqual(cellAlignment(v, row: 1, col: 1), .center, "undo restores alignment")
     }
 }
 #endif

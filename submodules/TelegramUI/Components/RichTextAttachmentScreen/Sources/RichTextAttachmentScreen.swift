@@ -961,12 +961,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             })))
                             items.append(.action(ContextMenuActionItem(text: "Delete Column", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTableColumn()
-                            })))
-                            for (title, alignment) in [("Align Left", TextAlignment.left), ("Align Center", .center), ("Align Right", .right)] {
-                                items.append(.action(ContextMenuActionItem(text: title, icon: { _ in nil }, action: { [weak self] _, f in
-                                    f(.default); self?.editor.setTableColumnAlignment(alignment)
-                                })))
-                            }*/
+                            })))*/
                             items.append(.action(ContextMenuActionItem(text: "Delete Table", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTable()
                             })))

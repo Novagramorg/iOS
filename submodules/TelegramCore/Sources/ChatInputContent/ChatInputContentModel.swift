@@ -629,7 +629,7 @@ public enum ChatInputMediaAlignment: Int32, Equatable, Codable {
     }
 }
 
-/// Per-column text alignment for a table. Mirrors the editor `TextAlignment` (markdown delimiter-row colons).
+/// Per-cell text alignment for a table cell. Mirrors the editor `TextAlignment` (markdown delimiter-row colons).
 public enum ChatInputTextAlignment: Int32, Equatable, Codable {
     case left = 0
     case center = 1
@@ -645,6 +645,31 @@ public enum ChatInputTextAlignment: Int32, Equatable, Codable {
         let value = try container.decode(Int32.self, forKey: .raw)
         guard let v = ChatInputTextAlignment(rawValue: value) else {
             throw DecodingError.dataCorruptedError(forKey: .raw, in: container, debugDescription: "Unknown ChatInputTextAlignment \(value)")
+        }
+        self = v
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(self.rawValue, forKey: .raw)
+    }
+}
+
+/// Per-cell vertical alignment for a table. Mirrors the editor's cell vertical-alignment setting.
+public enum ChatInputTableVerticalAlignment: Int32, Equatable, Codable {
+    case top = 0
+    case middle = 1
+    case bottom = 2
+
+    private enum CodingKeys: String, CodingKey {
+        case raw
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let value = try container.decode(Int32.self, forKey: .raw)
+        guard let v = ChatInputTableVerticalAlignment(rawValue: value) else {
+            throw DecodingError.dataCorruptedError(forKey: .raw, in: container, debugDescription: "Unknown ChatInputTableVerticalAlignment \(value)")
         }
         self = v
     }
@@ -790,23 +815,34 @@ extension ChatInputMedia: Codable {
     }
 }
 
-/// A table column: width + per-column alignment. Synthesized `Codable` (alignment is Postbox-safe).
+/// A table column: width only (alignment is per-cell — see `ChatInputTableCell`).
 public struct ChatInputColumnSpec: Equatable, Codable {
     public var width: Double
-    public var alignment: ChatInputTextAlignment
-    public init(width: Double, alignment: ChatInputTextAlignment = .left) {
+    public init(width: Double) {
         self.width = width
-        self.alignment = alignment
     }
 }
 
-/// A table cell — INLINE-ONLY (a flat run list; no nested blocks). Synthesized `Codable`.
+/// A table cell — INLINE-ONLY (a flat run list; no nested blocks). Per-cell H+V alignment.
 public struct ChatInputTableCell: Equatable, Codable {
     public var runs: [ChatInputRun]
     public var background: ChatInputColor?
-    public init(runs: [ChatInputRun] = [], background: ChatInputColor? = nil) {
+    public var horizontalAlignment: ChatInputTextAlignment
+    public var verticalAlignment: ChatInputTableVerticalAlignment
+    public init(runs: [ChatInputRun] = [], background: ChatInputColor? = nil,
+                horizontalAlignment: ChatInputTextAlignment = .center, verticalAlignment: ChatInputTableVerticalAlignment = .top) {
         self.runs = runs
         self.background = background
+        self.horizontalAlignment = horizontalAlignment
+        self.verticalAlignment = verticalAlignment
+    }
+    private enum CodingKeys: String, CodingKey { case runs, background, horizontalAlignment, verticalAlignment }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        runs = try c.decodeIfPresent([ChatInputRun].self, forKey: .runs) ?? []
+        background = try c.decodeIfPresent(ChatInputColor.self, forKey: .background)
+        horizontalAlignment = try c.decodeIfPresent(ChatInputTextAlignment.self, forKey: .horizontalAlignment) ?? .center
+        verticalAlignment = try c.decodeIfPresent(ChatInputTableVerticalAlignment.self, forKey: .verticalAlignment) ?? .top
     }
 }
 

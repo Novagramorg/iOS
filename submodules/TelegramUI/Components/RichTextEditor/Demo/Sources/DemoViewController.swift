@@ -224,9 +224,9 @@ final class DemoViewController: UIViewController, PHPickerViewControllerDelegate
             UIAction(title: "Insert Column Left") { [weak self] _ in self?.editor.insertTableColumnLeft() },
             UIAction(title: "Insert Column Right") { [weak self] _ in self?.editor.insertTableColumnRight() },
             UIAction(title: "Delete Column") { [weak self] _ in self?.editor.deleteTableColumn() },
-            UIAction(title: "Align Column Left") { [weak self] _ in self?.editor.setTableColumnAlignment(.left) },
-            UIAction(title: "Align Column Center") { [weak self] _ in self?.editor.setTableColumnAlignment(.center) },
-            UIAction(title: "Align Column Right") { [weak self] _ in self?.editor.setTableColumnAlignment(.right) },
+            UIAction(title: "Align Column Left") { [weak self] _ in self?.editor.setSelectionHorizontalAlignment(.left) },
+            UIAction(title: "Align Column Center") { [weak self] _ in self?.editor.setSelectionHorizontalAlignment(.center) },
+            UIAction(title: "Align Column Right") { [weak self] _ in self?.editor.setSelectionHorizontalAlignment(.right) },
         ])
     }
 

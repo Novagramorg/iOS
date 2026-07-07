@@ -299,15 +299,18 @@ extension RichTextEditorViewTests {
         XCTAssertEqual((e.canvas.boxes.first as! TableBlockBox).rowCount, 3)
     }
 
-    func test_facadeSetColumnAlignment_delegatesToCanvas() {
+    func test_facadeSetSelectionAlignment_delegatesToCanvas() {
         let e = editorWithTable()
         let t = e.canvas.boxes.first as! TableBlockBox
         let pos = t.cellTextStart(row: 1, column: 1)!
         e.canvas.selectedTextRange = DocumentTextRange(DocumentTextPosition(pos), DocumentTextPosition(pos))
-        e.setTableColumnAlignment(.center)
+        e.setSelectionHorizontalAlignment(.right)
         e.layoutIfNeeded()
         guard case .table(let out) = e.document.blocks.first(where: { if case .table = $0 { return true } else { return false } }) else { return XCTFail() }
-        XCTAssertEqual(out.columns[1].alignment, .center)
+        // No structural selection → falls back to the caret's single cell (1,1); other cells untouched.
+        XCTAssertEqual(out.rows[1].cells[1].horizontalAlignment, .right)
+        XCTAssertEqual(out.rows[1].cells[0].horizontalAlignment, .center, "other column unchanged")
+        XCTAssertEqual(out.rows[0].cells[1].horizontalAlignment, .center, "other row unchanged")
     }
 
     func test_facadeDeleteTable_onlyBlock_leavesEmptyParagraph() {

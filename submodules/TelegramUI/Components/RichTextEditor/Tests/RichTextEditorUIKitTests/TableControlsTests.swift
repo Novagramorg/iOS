@@ -139,7 +139,25 @@ final class TableControlsTests: XCTestCase {
         let kinds = actionKinds(req)
         XCTAssertEqual(kinds.filter { $0 == .addColumnLeft || $0 == .addColumnRight }.count, 2)
         XCTAssertTrue(kinds.contains(.deleteColumn))
-        XCTAssertEqual(req?.alignment?.options, [.left, .center, .right])
+        XCTAssertNotNil(req?.alignment)
+    }
+
+    func test_structuralMenuRequest_carriesHVAlignment_forColumnAndRow() {
+        let v = canvasWithTable(); let t = table(v)
+        v.head = t.cellTextStart(row: 1, column: 1)!; v.anchor = v.head
+        v.selectTableColumn(1)
+        let colReq = v.tableStructuralMenuRequest()
+        XCTAssertNotNil(colReq?.alignment, "column selection carries alignment")
+        colReq?.alignment?.apply(.right, .bottom)
+        guard case .table(let afterCol) = v.boxes.first(where: { $0 is TableBlockBox })!.currentBlock() else { return XCTFail() }
+        XCTAssertEqual(afterCol.rows[1].cells[1].horizontalAlignment, .right)
+        XCTAssertEqual(afterCol.rows[1].cells[1].verticalAlignment, .bottom)
+
+        v.selectTableRow(1)
+        let rowReq = v.tableStructuralMenuRequest()
+        XCTAssertNotNil(rowReq?.alignment, "row selection ALSO carries alignment now")
+        // horizontal is uniform across the just-set row? cell (1,1) is .right, others .center → mixed → nil.
+        XCTAssertNil(rowReq?.alignment?.horizontal, "mixed horizontal across the row reports nil")
     }
 
     func test_rowMenu_headerOmitsDeleteAndAddAbove() {
@@ -490,11 +508,14 @@ final class TableControlsTests: XCTestCase {
         let v = canvasWithTable(); let t = table(v)
         v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
         v.selectTableColumns(0...1)
-        v.setTableColumnAlignment(.right)
+        v.setSelectionHorizontalAlignment(.right)
         guard case .table(let tb) = v.boxes[1].currentBlock() else { return XCTFail() }
-        XCTAssertEqual(tb.columns[0].alignment, .right)
-        XCTAssertEqual(tb.columns[1].alignment, .right)
-        XCTAssertEqual(tb.columns[2].alignment, .left, "the un-selected column is untouched")
+        XCTAssertEqual(tb.rows[0].cells[0].horizontalAlignment, .right)
+        XCTAssertEqual(tb.rows[1].cells[0].horizontalAlignment, .right)
+        XCTAssertEqual(tb.rows[0].cells[1].horizontalAlignment, .right)
+        XCTAssertEqual(tb.rows[1].cells[1].horizontalAlignment, .right)
+        XCTAssertEqual(tb.rows[0].cells[2].horizontalAlignment, .center, "the un-selected column is untouched")
+        XCTAssertEqual(tb.rows[1].cells[2].horizontalAlignment, .center, "the un-selected column is untouched")
     }
 
     func test_menu_hidesDeleteWhenAllColumns() {

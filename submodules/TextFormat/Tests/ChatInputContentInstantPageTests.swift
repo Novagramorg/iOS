@@ -238,28 +238,30 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         ]), "bullet list item with a bold run")
     }
 
-    // 13. A 2x2 table (header row, per-column alignment, default width, nil-background cells) round-trips
-    //     identically — built to match exactly what the reverse produces for the non-representable fields
-    //     (column width = 0.0, cell background = nil; table title / vertical-alignment / colspan / rowspan dropped).
+    // 13. A 2x2 table (header row, default column width, nil-background cells, and — per cell — non-default
+    //     horizontal + vertical alignment) round-trips identically — built to match exactly what the reverse
+    //     produces for the non-representable fields (column width = 0.0, cell background = nil; table title /
+    //     colspan / rowspan dropped). Alignment is purely per-cell (columns carry only `width`), so every cell's
+    //     H+V alignment — header or body — SURVIVES the round-trip independently, with no column-level coupling.
     func test_table() {
         var bold = ChatInputInlineAttributes(); bold.bold = true
         let table = ChatInputTable(
             columns: [
-                ChatInputColumnSpec(width: 0.0, alignment: .left),
-                ChatInputColumnSpec(width: 0.0, alignment: .center)
+                ChatInputColumnSpec(width: 0.0),
+                ChatInputColumnSpec(width: 0.0)
             ],
             rows: [
                 ChatInputTableRow(height: nil, isHeader: true, cells: [
-                    ChatInputTableCell(runs: [ChatInputRun(text: "H1")], background: nil),
-                    ChatInputTableCell(runs: [ChatInputRun(text: "H2")], background: nil)
+                    ChatInputTableCell(runs: [ChatInputRun(text: "H1")], background: nil, horizontalAlignment: .left, verticalAlignment: .middle),
+                    ChatInputTableCell(runs: [ChatInputRun(text: "H2")], background: nil, horizontalAlignment: .center, verticalAlignment: .bottom)
                 ]),
                 ChatInputTableRow(height: nil, isHeader: false, cells: [
-                    ChatInputTableCell(runs: [ChatInputRun(text: "a", attributes: bold)], background: nil),
-                    ChatInputTableCell(runs: [ChatInputRun(text: "b")], background: nil)
+                    ChatInputTableCell(runs: [ChatInputRun(text: "a", attributes: bold)], background: nil, horizontalAlignment: .right, verticalAlignment: .top),
+                    ChatInputTableCell(runs: [ChatInputRun(text: "b")], background: nil, horizontalAlignment: .left, verticalAlignment: .bottom)
                 ])
             ]
         )
-        assertRoundTrips(ChatInputContent(blocks: [.table(table)]), "2x2 table with header row + per-column alignment")
+        assertRoundTrips(ChatInputContent(blocks: [.table(table)]), "2x2 table with header row + per-cell H+V alignment")
     }
 
     // 14. An image medium and a video medium round-trip identically — built with the default

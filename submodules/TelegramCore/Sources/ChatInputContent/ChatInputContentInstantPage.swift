@@ -110,26 +110,31 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 }
             }
         case let .table(t):
-            // `naturalSize`/`displayWidth`/`alignment` of media and `width`/`vertical-alignment`/`colspan`/`rowspan`/
-            // cell-background of a table are NOT representable in the InstantPage projection (see the reverse for the
-            // documented defaults the round-trip restores). Forward each cell's per-column alignment (the editor's
+            // `naturalSize`/`displayWidth`/`alignment` of media and `width`/`colspan`/`rowspan`/cell-background
+            // of a table are NOT representable in the InstantPage projection (see the reverse for the documented
+            // defaults the round-trip restores). Forward each cell's own per-cell H+V alignment (the editor's
             // `justified` has no InstantPage equivalent → CANONICALIZED to `.left`), header flag, and runs.
             let rows = t.rows.map { row -> InstantPageTableRow in
-                let cells = row.cells.enumerated().map { (columnIndex, cell) -> InstantPageTableCell in
+                let cells = row.cells.map { cell -> InstantPageTableCell in
                     let alignment: TableHorizontalAlignment
-                    if columnIndex < t.columns.count {
-                        switch t.columns[columnIndex].alignment {
-                        case .left, .justified:
-                            alignment = .left
-                        case .center:
-                            alignment = .center
-                        case .right:
-                            alignment = .right
-                        }
-                    } else {
+                    switch cell.horizontalAlignment {
+                    case .left, .justified:
                         alignment = .left
+                    case .center:
+                        alignment = .center
+                    case .right:
+                        alignment = .right
                     }
-                    return InstantPageTableCell(text: richText(from: cell.runs), header: row.isHeader, alignment: alignment, verticalAlignment: .top, colspan: 1, rowspan: 1)
+                    let vAlignment: TableVerticalAlignment
+                    switch cell.verticalAlignment {
+                    case .top:
+                        vAlignment = .top
+                    case .middle:
+                        vAlignment = .middle
+                    case .bottom:
+                        vAlignment = .bottom
+                    }
+                    return InstantPageTableCell(text: richText(from: cell.runs), header: row.isHeader, alignment: alignment, verticalAlignment: vAlignment, colspan: 1, rowspan: 1)
                 }
                 return InstantPageTableRow(cells: cells)
             }
@@ -292,28 +297,32 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             let map = TelegramMediaMap(latitude: latitude, longitude: longitude, heading: nil, accuracyRadius: nil, venue: nil)
             result.append(.media(ChatInputMedia(media: map, kind: .location, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
         case let .table(_, rows, _, _):
-            // Rebuild the `ChatInputTable`. Columns are inferred from the first row's cell count, each column's
-            // alignment taken from that cell's alignment (the forward stamps every cell in a column with the column's
-            // alignment); column `width` is NOT representable in InstantPage cells → restored as the DEFAULT `0.0`. The
-            // table `title`, per-cell `verticalAlignment`/`colspan`/`rowspan`, and cell `background` are likewise not in
-            // the editor model → dropped/fixed (title unused; background `nil`). Identity therefore holds for a table
-            // whose columns use width `0.0` and whose cells use `background: nil` (the values the reverse yields).
+            // Rebuild the `ChatInputTable`. Columns are inferred from the first row's cell count; column
+            // `width` is NOT representable in InstantPage cells → restored as the DEFAULT `0.0`. The table
+            // `title`, per-cell `colspan`/`rowspan`, and cell `background` are likewise not in the editor
+            // model → dropped/fixed (title unused; background `nil`). Per-cell H+V alignment DOES round-trip
+            // (restored onto each `ChatInputTableCell` below). Identity therefore holds for a table whose
+            // columns use width `0.0` and whose cells use `background: nil` (the values the reverse yields).
             var columns: [ChatInputColumnSpec] = []
             if let firstRow = rows.first {
-                columns = firstRow.cells.map { cell in
+                columns = firstRow.cells.map { _ in ChatInputColumnSpec(width: 0.0) }
+            }
+            let outRows = rows.map { row -> ChatInputTableRow in
+                let isHeader = row.cells.first?.header ?? false
+                let cells = row.cells.map { cell -> ChatInputTableCell in
                     let alignment: ChatInputTextAlignment
                     switch cell.alignment {
                     case .left: alignment = .left
                     case .center: alignment = .center
                     case .right: alignment = .right
                     }
-                    return ChatInputColumnSpec(width: 0.0, alignment: alignment)
-                }
-            }
-            let outRows = rows.map { row -> ChatInputTableRow in
-                let isHeader = row.cells.first?.header ?? false
-                let cells = row.cells.map { cell in
-                    ChatInputTableCell(runs: chatInputRuns(fromRichText: cell.text ?? .empty), background: nil)
+                    let vAlignment: ChatInputTableVerticalAlignment
+                    switch cell.verticalAlignment {
+                    case .top: vAlignment = .top
+                    case .middle: vAlignment = .middle
+                    case .bottom: vAlignment = .bottom
+                    }
+                    return ChatInputTableCell(runs: chatInputRuns(fromRichText: cell.text ?? .empty), background: nil, horizontalAlignment: alignment, verticalAlignment: vAlignment)
                 }
                 return ChatInputTableRow(height: nil, isHeader: isHeader, cells: cells)
             }

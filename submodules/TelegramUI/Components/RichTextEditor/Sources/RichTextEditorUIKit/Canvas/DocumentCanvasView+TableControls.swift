@@ -284,6 +284,21 @@ extension DocumentCanvasView {
         { [weak self] in guard let self else { return }; run(self); self.clearTableSelection() }
     }
 
+    /// The alignment descriptor for the current structural selection: per-axis uniform value (nil if the
+    /// selected cells disagree) + an `apply` that sets the chosen axes on the selection.
+    private func structuralAlignmentDescriptor() -> TableStructuralMenuRequest.Alignment? {
+        guard let a = activeTable() else { return nil }
+        guard case .table(let t) = a.box.currentBlock() else { return nil }
+        let coords = selectedCellCoords(in: a.box).filter { t.rows.indices.contains($0.row) && t.rows[$0.row].cells.indices.contains($0.column) }
+        guard !coords.isEmpty else { return nil }
+        let hs = Set(coords.map { t.rows[$0.row].cells[$0.column].horizontalAlignment })
+        let vs = Set(coords.map { t.rows[$0.row].cells[$0.column].verticalAlignment })
+        return TableStructuralMenuRequest.Alignment(
+            horizontal: hs.count == 1 ? hs.first : nil,
+            vertical: vs.count == 1 ? vs.first : nil,
+            apply: { [weak self] h, v in self?.setSelectionAlignment(horizontal: h, vertical: v) })
+    }
+
     /// The structural row/column menu, described for the host to present its own menu. nil when there is
     /// no structural selection. `view`/`sourceRect` anchor to the active handle, in canvas coordinates.
     func tableStructuralMenuRequest() -> TableStructuralMenuRequest? {
@@ -300,11 +315,7 @@ extension DocumentCanvasView {
             if !coversAll {
                 actions.append(.init(kind: .deleteColumn, perform: structuralPerform { $0.deleteTableColumn() }))
             }
-            let current = a.box.columns.indices.contains(range.lowerBound) ? a.box.columns[range.lowerBound].alignment : nil
-            let alignment = TableStructuralMenuRequest.Alignment(
-                options: [.left, .center, .right],
-                current: current,
-                select: { [weak self] al in guard let self else { return }; self.setTableColumnAlignment(al); self.clearTableSelection() })
+            let alignment = structuralAlignmentDescriptor()
             return TableStructuralMenuRequest(view: self, sourceRect: sourceRect, actions: actions, alignment: alignment)
         case .rows(let range):
             let includesHeader = range.contains { a.box.isHeaderRow($0) }
@@ -317,7 +328,7 @@ extension DocumentCanvasView {
             if hasBodyRow {                             // at least one deletable (non-header) row
                 actions.append(.init(kind: .deleteRow, perform: structuralPerform { $0.deleteTableRow() }))
             }
-            return TableStructuralMenuRequest(view: self, sourceRect: sourceRect, actions: actions, alignment: nil)
+            return TableStructuralMenuRequest(view: self, sourceRect: sourceRect, actions: actions, alignment: structuralAlignmentDescriptor())
         }
     }
 

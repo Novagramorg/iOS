@@ -74,7 +74,7 @@ extension DocumentCanvasView {
         editing {
             guard case .table(let table) = a.box.currentBlock() else { return }
             let range = structuralColumnRange() ?? (a.col...a.col)
-            let new = table.insertingColumn(at: range.lowerBound, width: defaultNewColumnWidth(table), alignment: .left)
+            let new = table.insertingColumn(at: range.lowerBound, width: defaultNewColumnWidth(table))
             replaceTable(at: a.index, with: new, caretRow: a.row, caretCol: range.lowerBound)
         }
     }
@@ -85,7 +85,7 @@ extension DocumentCanvasView {
             guard case .table(let table) = a.box.currentBlock() else { return }
             let range = structuralColumnRange() ?? (a.col...a.col)
             let at = range.upperBound + 1
-            let new = table.insertingColumn(at: at, width: defaultNewColumnWidth(table), alignment: .left)
+            let new = table.insertingColumn(at: at, width: defaultNewColumnWidth(table))
             replaceTable(at: a.index, with: new, caretRow: a.row, caretCol: at)
         }
     }
@@ -192,21 +192,39 @@ extension DocumentCanvasView {
         }
     }
 
-    /// The inclusive column range the current selection spans within `box`, or nil if an endpoint
-    /// isn't in this table (then the caller falls back to the caret's column).
-    private func selectedColumnRange(in box: TableBlockBox) -> ClosedRange<Int>? {
-        guard let lo = box.cellLocation(containing: selFrom),
-              let hi = box.cellLocation(containing: selTo) else { return nil }
-        return min(lo.column, hi.column)...max(lo.column, hi.column)
+    /// The cells covered by the current structural selection (a row-range's cells, or a column-range's cells),
+    /// as (row, column) coords in `box`. Falls back to the caret's single cell when no structural selection.
+    func selectedCellCoords(in box: TableBlockBox) -> [(row: Int, column: Int)] {
+        let rowCount = box.rowCount, colCount = box.columnCount
+        if let rows = structuralRowRange() {
+            return rows.filter { (0..<rowCount).contains($0) }.flatMap { r in (0..<colCount).map { (r, $0) } }
+        }
+        if let cols = structuralColumnRange() {
+            return cols.filter { (0..<colCount).contains($0) }.flatMap { c in (0..<rowCount).map { ($0, c) } }
+        }
+        if let a = activeTable(), a.box.id == box.id { return [(a.row, a.col)] }
+        return []
     }
 
-    func setTableColumnAlignment(_ alignment: TextAlignment) {
-        guard let a = activeTable() else { return }
+    func setSelectionHorizontalAlignment(_ alignment: TextAlignment) {
+        setSelectionAlignment(horizontal: alignment, vertical: nil)
+    }
+    func setSelectionVerticalAlignment(_ alignment: VerticalAlignment) {
+        setSelectionAlignment(horizontal: nil, vertical: alignment)
+    }
+
+    /// Sets horizontal and/or vertical alignment on every cell of the current structural selection. A nil axis
+    /// is left unchanged (partial apply — the "mixed" case). One undo step; preserves the structural selection.
+    /// Internal (NOT private): the descriptor builder in `+TableControls.swift` calls it, and Swift `private`
+    /// is file-scoped.
+    func setSelectionAlignment(horizontal: TextAlignment?, vertical: VerticalAlignment?) {
+        guard let a = activeTable(), horizontal != nil || vertical != nil else { return }
         editing {
-            guard case .table(let table) = a.box.currentBlock() else { return }
-            let cols = structuralColumnRange() ?? selectedColumnRange(in: a.box) ?? (a.col...a.col)
-            var t = table
-            for c in cols where t.columns.indices.contains(c) { t = t.settingColumnAlignment(alignment, at: c) }
+            guard case .table(var t) = a.box.currentBlock() else { return }
+            for (r, c) in selectedCellCoords(in: a.box) where t.rows.indices.contains(r) && t.rows[r].cells.indices.contains(c) {
+                if let h = horizontal { t.rows[r].cells[c].horizontalAlignment = h }
+                if let v = vertical { t.rows[r].cells[c].verticalAlignment = v }
+            }
             replaceTable(at: a.index, with: t, caretRow: a.row, caretCol: a.col)
         }
     }

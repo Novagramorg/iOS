@@ -5,6 +5,7 @@ import ContextUI
 import TelegramPresentationData
 import RichTextEditorCore
 import RichTextEditorUIKit
+import TelegramCore
 
 /// Presents the editor's table row/column structural menu as a Telegram `ContextController`, anchored to
 /// the tapped handle described by `request`. Shared by both editor hosts (the chat composer and the
@@ -25,11 +26,13 @@ public func presentTableStructuralMenu(
 
     var items: [ContextMenuItem] = []
     if let alignment = request.alignment {
-        let _ = alignment
-        items.append(.custom(TableStructuralMenuAlignmentItem(action: { horizontal, vertical in
-            
-        }), false))
-        
+        items.append(.custom(TableStructuralMenuAlignmentItem(
+            initialHorizontal: alignment.horizontal.map(tableHAlign(fromCore:)),
+            initialVertical: alignment.vertical.map(tableVAlign(fromCore:)),
+            action: { h, v in
+                alignment.apply(h.map(coreHAlign(from:)), v.map(coreVAlign(from:)))
+            }), false))
+
         if !request.actions.isEmpty {
             items.append(.separator)
         }
@@ -69,6 +72,19 @@ private func tableStructuralMenuIsDestructive(_ kind: TableStructuralMenuRequest
     case .deleteColumn, .deleteRow: return true
     default: return false
     }
+}
+
+private func tableHAlign(fromCore a: TextAlignment) -> TableHorizontalAlignment {
+    switch a { case .left, .natural, .justified: return .left; case .center: return .center; case .right: return .right }
+}
+private func coreHAlign(from a: TableHorizontalAlignment) -> TextAlignment {
+    switch a { case .left: return .left; case .center: return .center; case .right: return .right }
+}
+private func tableVAlign(fromCore a: VerticalAlignment) -> TableVerticalAlignment {
+    switch a { case .top: return .top; case .middle: return .middle; case .bottom: return .bottom }
+}
+private func coreVAlign(from a: TableVerticalAlignment) -> VerticalAlignment {
+    switch a { case .top: return .top; case .middle: return .middle; case .bottom: return .bottom }
 }
 
 /// Anchors a `ContextController` to a sub-rect view (the transient handle anchor). Mirrors the attachment

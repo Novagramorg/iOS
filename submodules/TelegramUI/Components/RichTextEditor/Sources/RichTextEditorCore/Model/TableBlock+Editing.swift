@@ -43,10 +43,10 @@ extension TableBlock {
         return t
     }
 
-    public func insertingColumn(at index: Int, width: Double, alignment: TextAlignment) -> TableBlock {
+    public func insertingColumn(at index: Int, width: Double) -> TableBlock {
         var t = self
         let ci = min(max(index, 0), t.columns.count)
-        t.columns.insert(ColumnSpec(width: width, alignment: alignment), at: ci)
+        t.columns.insert(ColumnSpec(width: width), at: ci)
         for r in t.rows.indices {
             let i = min(max(index, 0), t.rows[r].cells.count)
             t.rows[r].cells.insert(TableBlock.emptyCell(), at: i)
@@ -82,13 +82,6 @@ extension TableBlock {
             guard t.columns.count > 1 else { break }
             t = t.removingColumn(at: i)
         }
-        return t
-    }
-
-    public func settingColumnAlignment(_ alignment: TextAlignment, at index: Int) -> TableBlock {
-        guard columns.indices.contains(index) else { return self }
-        var t = self
-        t.columns[index].alignment = alignment
         return t
     }
 }
