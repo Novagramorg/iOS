@@ -4871,7 +4871,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
 
             if requiresPremiumRichContent && !sendWithoutFormatting {
                 if let controller = self.controller {
-                    controller.present(textAlertController(context: self.context, title: "Send Without Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
+                    controller.present(textAlertController(context: self.context, title: "Remove Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
                         TextAlertAction(type: .defaultAction, title: "Subscribe to Premium", action: { [weak self] in
                             guard let self else {
                                 return

@@ -323,11 +323,11 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
             return
         }
         if !componentView.isSendRichFormattingLocked {
-            self.donePressed()
+            self.complete(withoutFormatting: false)
             return
         }
 
-        let controller = textAlertController(context: self.context, title: "Send Without Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
+        let controller = textAlertController(context: self.context, title: "Remove Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
             TextAlertAction(type: .defaultAction, title: "Subscribe to Premium", action: { [weak self] in
                 guard let self else {
                     return
@@ -340,7 +340,7 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
                 }
             }),
             TextAlertAction(type: .genericAction, title: "Send Without Formatting", action: { [weak self] in
-                self?.donePressedWithoutFormatting()
+                self?.complete(withoutFormatting: true)
             }),
             TextAlertAction(type: .genericAction, title: "Cancel", action: {
             })
@@ -348,12 +348,12 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         self.present(controller, in: .window(.root))
     }
 
-    fileprivate func donePressedWithoutFormatting() {
+    fileprivate func complete(withoutFormatting: Bool) {
         guard let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
             self.dismiss()
             return
         }
-        self.sendMessage(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles, true)
+        self.sendMessage(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles, withoutFormatting)
         self.dismiss()
     }
 
