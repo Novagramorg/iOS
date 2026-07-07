@@ -488,10 +488,14 @@ extension DocumentCanvasView: UIGestureRecognizerDelegate {
 
     /// Whether the loupe / move-cursor long-press should be allowed to begin at `point`. It yields to an
     /// active selection handle (an "active item") so the handle can be grabbed — everywhere else (including a
-    /// collapsed caret, where there are no handles) it proceeds. Uses the same handle hit-region as the
-    /// handle-pan gate, so "on a handle" is defined identically for both recognizers.
+    /// collapsed caret, where there are no handles) it proceeds. Shares `isSelectionDragTouch`'s hit-region for
+    /// selection handles + table resize knobs, and ALSO prohibits pickup on a table's structural GRIPS (the row
+    /// ⋮ / column ••• handles): a stationary hold on a grip must let the grip TAP select the row/column, not move
+    /// the caret. The grips are TAP targets (not drag targets), so they're excluded here rather than added to
+    /// `isSelectionDragTouch` — which also gates the handle PAN and scroll-yield, where a grip must not begin a
+    /// (spurious) text-selection drag.
     func shouldBeginCursorLongPress(at point: CGPoint) -> Bool {
-        return !isSelectionDragTouch(point)
+        return !isSelectionDragTouch(point) && tableHandle(at: point) == nil
     }
 
     /// True when a touch should begin a selection-handle / table-knob DRAG rather than a scroll. Shared by

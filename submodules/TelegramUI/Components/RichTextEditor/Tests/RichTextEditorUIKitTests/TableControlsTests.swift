@@ -42,6 +42,25 @@ final class TableControlsTests: XCTestCase {
         XCTAssertTrue(v.tableHandles().isEmpty)
     }
 
+    // A stationary hold on a table's structural grip must NOT begin the loupe / move-cursor pickup — the grip TAP
+    // selects the row/column instead. (Table grips join selection handles + resize knobs in the prohibited zone.)
+    func test_cursorLongPress_prohibitedOnRowAndColumnGrips() {
+        let v = canvasWithTable()
+        let t = table(v)
+        v.anchor = t.cellTextStart(row: 1, column: 1)!; v.head = v.anchor   // collapsed caret in a cell → grips show
+        let handles = v.tableHandles()
+        let rowGrip = handles.first { $0.kind == .rows(1...1) }!.rect
+        let colGrip = handles.first { $0.kind == .columns(1...1) }!.rect
+        XCTAssertFalse(v.shouldBeginCursorLongPress(at: CGPoint(x: rowGrip.midX, y: rowGrip.midY)),
+                       "a hold on the row grip does not pick up the cursor")
+        XCTAssertFalse(v.shouldBeginCursorLongPress(at: CGPoint(x: colGrip.midX, y: colGrip.midY)),
+                       "a hold on the column grip does not pick up the cursor")
+        // Away from any grip (inside the cell), the pickup still proceeds.
+        let cell = t.cellRect(row: 1, column: 1)!
+        XCTAssertTrue(v.shouldBeginCursorLongPress(at: CGPoint(x: cell.midX, y: cell.midY)),
+                      "a hold inside the cell still picks up the cursor")
+    }
+
     func test_columnHandle_staysWithinTableFrame_soTrailingTableHandleIsntClipped() {
         let v = canvasWithTable()   // [paragraph, table] — the table is the LAST block
         let t = table(v)
