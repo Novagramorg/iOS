@@ -53,10 +53,10 @@ extension DocumentCanvasView {
         return out
     }
 
-    /// The handle hit by `point` (with its center, for anchoring the menu), or nil.
-    func tableHandle(at point: CGPoint) -> (kind: TableStructuralSelection, center: CGPoint)? {
+    /// The handle hit by `point`, or nil.
+    func tableHandle(at point: CGPoint) -> TableStructuralSelection? {
         for h in tableHandles() where h.rect.contains(point) {
-            return (h.kind, CGPoint(x: h.rect.midX, y: h.rect.midY))
+            return h.kind
         }
         return nil
     }
@@ -103,7 +103,7 @@ extension DocumentCanvasView {
     /// row/column is already the structural selection. nil if the point isn't on a handle.
     func tableHandleTap(at point: CGPoint) -> TableHandleTap? {
         guard let hit = tableHandle(at: point) else { return nil }
-        return tableSelection?.kind == hit.kind ? .menu : .select(hit.kind)
+        return tableSelection?.kind == hit ? .menu : .select(hit)
     }
 
     /// Selects the row range `range` (single-row tap → `r...r`); parks the caret in the range's first

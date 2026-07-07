@@ -150,8 +150,8 @@ extension DocumentCanvasView {
     /// columns (via the existing `deleteTableRow`/`deleteTableColumn`, which read the structural range).
     /// When the selection covers EVERY row or EVERY column — which would empty the table — it removes the
     /// whole table block instead, replacing it IN PLACE with an empty body paragraph (caret there). The
-    /// structural selection is cleared afterward (mirrors the handle menu's `structuralAction`). No-op-safe
-    /// when there is no live structural selection.
+    /// structural selection is cleared afterward (mirrors the structural menu's run-then-clear-selection
+    /// behavior). No-op-safe when there is no live structural selection.
     func deleteTableStructuralSelection() {
         guard let sel = tableSelection, let a = activeTable(), a.box.id == sel.table else {
             clearTableSelection(); return
