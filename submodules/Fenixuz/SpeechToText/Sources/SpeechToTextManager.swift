@@ -107,13 +107,13 @@ public final class SpeechToTextManager {
                 case .authorized:
                     self.startRecordingEngine()
                 case .denied:
-                    self.onError?("Ovozni aniqlash ruxsati berilmagan. Sozlamalardan yoqing.")
+                    self.onError?(SpeechToTextStrings.permissionDenied)
                     self.onStop?()
                 case .restricted:
-                    self.onError?("Bu qurilmada ovozni aniqlash cheklangan.")
+                    self.onError?(SpeechToTextStrings.restricted)
                     self.onStop?()
                 case .notDetermined:
-                    self.onError?("Ovozni aniqlash ruxsati kutilmoqda.")
+                    self.onError?(SpeechToTextStrings.notDetermined)
                     self.onStop?()
                 @unknown default:
                     self.onStop?()
@@ -130,12 +130,12 @@ public final class SpeechToTextManager {
         guard let speechRecognizer = self.speechRecognizer else {
             // Apple has no speech recogniser for this language at all (e.g. Uzbek).
             let langName = SpeechToTextManager.languageName(for: self.requestedLocaleId)
-            self.onError?("«\(langName)» tili ovozdan-matnga aylantirishni qo'llab-quvvatlamaydi. Sozlamalar → Novagram → Ovoz tili dan qo'llab-quvvatlanadigan til (masalan, Ruscha) tanlang.")
+            self.onError?(SpeechToTextStrings.languageUnsupported(langName: langName))
             self.onStop?()
             return
         }
         guard speechRecognizer.isAvailable else {
-            self.onError?("Ovozdan-matnga xizmati hozir mavjud emas. Internet aloqasini tekshirib, qayta urinib ko'ring.")
+            self.onError?(SpeechToTextStrings.serviceUnavailable)
             self.onStop?()
             return
         }
@@ -143,7 +143,7 @@ public final class SpeechToTextManager {
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
 
         guard let recognitionRequest = recognitionRequest else {
-            self.onError?("Ovozni aniqlash so'rovini yaratib bo'lmadi.")
+            self.onError?(SpeechToTextStrings.requestCreateFailed)
             self.onStop?()
             return
         }
@@ -161,7 +161,7 @@ public final class SpeechToTextManager {
             let recordingFormat = inputNode.outputFormat(forBus: 0)
 
             guard recordingFormat.sampleRate > 0 && recordingFormat.channelCount > 0 else {
-                self.onError?("Audio format noto'g'ri: sampleRate=\(recordingFormat.sampleRate), channels=\(recordingFormat.channelCount)")
+                self.onError?(SpeechToTextStrings.audioFormatInvalid(sampleRate: recordingFormat.sampleRate, channels: recordingFormat.channelCount))
                 self.onStop?()
                 return
             }
@@ -176,7 +176,7 @@ public final class SpeechToTextManager {
             do {
                 try self.audioEngine.start()
             } catch {
-                self.onError?("Audio engine ishga tushmadi: \(error.localizedDescription)")
+                self.onError?(SpeechToTextStrings.audioEngineFailed(description: error.localizedDescription))
                 self.onStop?()
                 return
             }
@@ -210,7 +210,7 @@ public final class SpeechToTextManager {
                     // 301 = Request was cancelled
                     let ignoredCodes: Set<Int> = [7, 1110, 216, 209, 301]
                     if !ignoredCodes.contains(nsError.code) {
-                        self.onError?("Xato \(nsError.code): \(error.localizedDescription)")
+                        self.onError?(SpeechToTextStrings.recognitionError(code: nsError.code, description: error.localizedDescription))
                     }
                     self.cleanupRecording()
                 }
@@ -342,12 +342,12 @@ public final class SpeechToTextManager {
 
     private func startVoskRecording() {
         guard let modelName = VoskLanguage.modelName(for: self.requestedLocaleId) else {
-            self.onError?("Ovoz tili modeli topilmadi.")
+            self.onError?(SpeechToTextStrings.voskModelNotFound)
             self.onStop?()
             return
         }
         guard VoskModelManager.isModelReady(modelName) else {
-            self.onError?("«O'zbekcha» modeli hali yuklanmoqda. Internetga ulanib, bir oz kutib qayta urinib ko'ring.")
+            self.onError?(SpeechToTextStrings.voskModelLoading)
             self.onStop?()
             self.ensureVoskModel(for: self.requestedLocaleId)
             return
@@ -363,7 +363,7 @@ public final class SpeechToTextManager {
                 recognizer = try VoskSpeechRecognizer(modelPath: modelPath)
             } catch {
                 DispatchQueue.main.async {
-                    self.onError?("Ovoz aniqlovchini ishga tushirib bo'lmadi.")
+                    self.onError?(SpeechToTextStrings.voskRecognizerFailed)
                     self.onStop?()
                 }
                 return
@@ -384,7 +384,7 @@ public final class SpeechToTextManager {
             let recordingFormat = inputNode.outputFormat(forBus: 0)
 
             guard recordingFormat.sampleRate > 0 && recordingFormat.channelCount > 0 else {
-                self.onError?("Audio format noto'g'ri: sampleRate=\(recordingFormat.sampleRate), channels=\(recordingFormat.channelCount)")
+                self.onError?(SpeechToTextStrings.audioFormatInvalid(sampleRate: recordingFormat.sampleRate, channels: recordingFormat.channelCount))
                 self.onStop?()
                 return
             }
@@ -392,7 +392,7 @@ public final class SpeechToTextManager {
             // Vosk's Uzbek model is trained at 16 kHz mono — convert the mic input to match.
             guard let outFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: true),
                   let converter = AVAudioConverter(from: recordingFormat, to: outFormat) else {
-                self.onError?("Audio konversiyani sozlab bo'lmadi.")
+                self.onError?(SpeechToTextStrings.audioConversionFailed)
                 self.onStop?()
                 return
             }
@@ -409,7 +409,7 @@ public final class SpeechToTextManager {
             do {
                 try self.audioEngine.start()
             } catch {
-                self.onError?("Audio engine ishga tushmadi: \(error.localizedDescription)")
+                self.onError?(SpeechToTextStrings.audioEngineFailed(description: error.localizedDescription))
                 self.onStop?()
             }
         }

@@ -19,6 +19,59 @@ import Contacts
 // iOS Contacts pre-update are silently treated as having consented (upgrade
 // path; no nag dialog on first launch after update).
 
+// Local string namespace for the contacts-consent dialog. No PresentationData is
+// available here (static UIAlertController path), so the UI language is resolved
+// from Locale.current.languageCode (same pattern as the SecretVault module).
+private enum FenixuzContactsConsentStrings {
+    private static func localized(en: String, uz: String, ru: String) -> String {
+        switch Locale.current.languageCode {
+        case "uz": return uz
+        case "ru": return ru
+        default:   return en
+        }
+    }
+
+    static var title: String {
+        localized(
+            en: "Sync Your Contacts?",
+            uz: "Kontaktlaringiz sinxronlansinmi?",
+            ru: "Синхронизировать контакты?"
+        )
+    }
+
+    static var messageBody: String {
+        localized(
+            en: "Novagram will upload your phone contacts to Telegram servers so you can find friends who already use the app. Your contacts are transmitted encrypted and you can disable Contact Sync anytime in Settings → Privacy and Security → Data Settings.\n\nBy tapping Continue, you agree to our Privacy Policy:",
+            uz: "Novagram ilovadan foydalanayotgan do'stlaringizni topishingiz uchun telefon kontaktlaringizni Telegram serverlariga yuklaydi. Kontaktlaringiz shifrlangan holda uzatiladi va istalgan vaqtda Sozlamalar → Maxfiylik va xavfsizlik → Ma'lumotlar sozlamalari bo'limidan Kontakt sinxronizatsiyasini o'chirib qo'yishingiz mumkin.\n\nDavom etish tugmasini bosish orqali siz Maxfiylik siyosatimizga rozilik bildirasiz:",
+            ru: "Novagram загрузит контакты вашего телефона на серверы Telegram, чтобы вы могли найти друзей, которые уже пользуются приложением. Ваши контакты передаются в зашифрованном виде, и вы можете отключить синхронизацию контактов в любой момент в Настройки → Конфиденциальность и безопасность → Настройки данных.\n\nНажимая «Продолжить», вы соглашаетесь с нашей Политикой конфиденциальности:"
+        )
+    }
+
+    static var dontAllow: String {
+        localized(
+            en: "Don't Allow",
+            uz: "Ruxsat bermayman",
+            ru: "Не разрешать"
+        )
+    }
+
+    static var privacyPolicy: String {
+        localized(
+            en: "Privacy Policy",
+            uz: "Maxfiylik siyosati",
+            ru: "Политика конфиденциальности"
+        )
+    }
+
+    static var proceed: String {
+        localized(
+            en: "Continue",
+            uz: "Davom etish",
+            ru: "Продолжить"
+        )
+    }
+}
+
 public enum FenixuzContactsConsent {
     private static let consentKey = "Fenixuz.ContactsConsent.v1"
     private static let privacyPolicyURL = "https://fenixuz.uz/privacy.html"
@@ -86,21 +139,16 @@ public enum FenixuzContactsConsent {
             return
         }
 
-        let title = "Sync Your Contacts?"
-        let message = """
-        Novagram will upload your phone contacts to Telegram servers so you can find friends who already use the app. Your contacts are transmitted encrypted and you can disable Contact Sync anytime in Settings → Privacy and Security → Data Settings.
-
-        By tapping Continue, you agree to our Privacy Policy:
-        \(privacyPolicyURL)
-        """
+        let title = FenixuzContactsConsentStrings.title
+        let message = "\(FenixuzContactsConsentStrings.messageBody)\n\(privacyPolicyURL)"
 
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
 
-        alert.addAction(UIAlertAction(title: "Don't Allow", style: .cancel) { _ in
+        alert.addAction(UIAlertAction(title: FenixuzContactsConsentStrings.dontAllow, style: .cancel) { _ in
             onDecline()
         })
 
-        alert.addAction(UIAlertAction(title: "Privacy Policy", style: .default) { _ in
+        alert.addAction(UIAlertAction(title: FenixuzContactsConsentStrings.privacyPolicy, style: .default) { _ in
             if let url = URL(string: privacyPolicyURL) {
                 UIApplication.shared.open(url, options: [:], completionHandler: nil)
             }
@@ -108,7 +156,7 @@ public enum FenixuzContactsConsent {
             presentConsentAlert(onAccept: onAccept, onDecline: onDecline)
         })
 
-        alert.addAction(UIAlertAction(title: "Continue", style: .default) { _ in
+        alert.addAction(UIAlertAction(title: FenixuzContactsConsentStrings.proceed, style: .default) { _ in
             onAccept()
         })
 

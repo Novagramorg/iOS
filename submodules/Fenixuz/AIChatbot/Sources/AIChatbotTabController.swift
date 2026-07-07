@@ -57,7 +57,7 @@ private final class AIEmptyStateView: UIView {
         self.spinner.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(self.spinner)
 
-        self.retryButton.setTitle("Qayta urinib ko'rish", for: .normal)
+        self.retryButton.setTitle(AIChatbotStrings.retryButton, for: .normal)
         self.retryButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
         self.retryButton.tintColor = theme.list.itemAccentColor
         self.retryButton.translatesAutoresizingMaskIntoConstraints = false
@@ -92,19 +92,19 @@ private final class AIEmptyStateView: UIView {
     func update(mode: Mode) {
         switch mode {
         case .loading:
-            self.titleLabel.text = "AI Asistent"
-            self.subtitleLabel.text = "Tayyorlanmoqda…"
+            self.titleLabel.text = AIChatbotStrings.loadingTitle
+            self.subtitleLabel.text = AIChatbotStrings.loadingSubtitle
             self.spinner.startAnimating()
             self.spinner.isHidden = false
             self.retryButton.isHidden = true
         case .notAvailable:
-            self.titleLabel.text = "AI hozircha mavjud emas"
-            self.subtitleLabel.text = "AI asistent serverda topilmadi.\nKeyinroq qayta urinib ko'ring."
+            self.titleLabel.text = AIChatbotStrings.notAvailableTitle
+            self.subtitleLabel.text = AIChatbotStrings.notAvailableSubtitle
             self.spinner.stopAnimating()
             self.spinner.isHidden = true
             self.retryButton.isHidden = false
         case let .error(message):
-            self.titleLabel.text = "Xatolik"
+            self.titleLabel.text = AIChatbotStrings.errorTitle
             self.subtitleLabel.text = message
             self.spinner.stopAnimating()
             self.spinner.isHidden = true

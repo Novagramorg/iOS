@@ -64,6 +64,7 @@ import AlertComponent
 import AlertHeaderComponent
 import AvatarComponent
 import FenixuzSecretVault
+import FenixuzForeignUserBlock
 
 private final class ContextControllerContentSourceImpl: ContextControllerContentSource {
     let controller: ViewController
@@ -4004,8 +4005,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                         } else {
                             filterItems.append(.all(unreadCount: 0))
                         }
-                    case let .filter(id, title, _, _):
-                        filterItems.append(.filter(id: id, text: title, unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread)))
+                    case let .filter(id, title, emoticon, _):
+                        filterItems.append(.filter(id: id, text: FenixFolderStyle.resolveTabTitle(title, emoticon: emoticon), unread: ChatListFilterTabEntryUnreadCount(value: unreadCount, hasUnmuted: hasUnmutedUnread)))
                 }
             }
             

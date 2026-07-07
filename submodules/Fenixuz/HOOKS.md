@@ -282,25 +282,32 @@ The `prewarmIfDemo` call is a no-op for any non-demo number, so real users are u
 
 ## 📌 TelegramUI module
 
-### `submodules/TelegramUI/Sources/ChatHistoryListNode.swift` (2026-06-27)
+### `submodules/TelegramUI/Sources/ChatHistoryListNode.swift` (2026-06-27, reactive gate 2026-07-07)
 
-**Inside `init(...)` — at the `var adMessages:` declaration block (around line 828)**. Find:
+**Hook A — top import block (after `import Postbox`, ~line 38)**. Add:
+
+```swift
+import FenixuzProMessager
+```
+
+**Hook B — inside `init(...)`, the `var adMessages:` declaration block (~line 828)**. Leave the plain condition (no one-shot Bool read) and add a comment:
 
 ```swift
 var adMessages: Signal<(interPostInterval: Int32?, messages: [Message], startDelay: Int32?, betweenDelay: Int32?), NoError>
+// Fenixuz: fenix_show_ads — NovagramPro Ads toggle. The gate is applied reactively below.
 if case .bubbles = mode, let adMessagesContext {
 ```
 
-Replace with:
+**Hook C — right after the `} else { adMessages = .single((nil, [], nil, nil)) }` block that finishes building the ad source (~line 921), before `let clientId = Atomic<Int32>(...)`**. Add:
 
 ```swift
-var adMessages: Signal<(interPostInterval: Int32?, messages: [Message], startDelay: Int32?, betweenDelay: Int32?), NoError>
-// Fenixuz: fenix_show_ads — NovagramPro Ads toggle. Default true = sponsored messages shown.
-let fenixShowAds = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_show_ads") as? Bool ?? true
-if fenixShowAds, case .bubbles = mode, let adMessagesContext {
+        // Fenixuz: reactively suppress ads when the toggle is off; re-reads live on FenixShowAdsChanged.
+        adMessages = FenixShowAdsGate.gate(empty: (nil, [], nil, nil), source: adMessages)
 ```
 
-Reason: `ChatHistoryListNode.init` is the single chokepoint that decides whether `adMessagesContext.state` (the sponsored-message stream) is wired into the list or replaced by an empty signal. Adding `fenixShowAds,` as the first condition in the `if` sends execution to the existing `else { adMessages = .single((nil, [], nil, nil)) }` branch whenever the user has turned ads off, suppressing all sponsored messages with zero change to downstream logic. The key is read from UserDefaults at node-init time — the user must re-open a channel chat for the change to take effect (no live reactive update, matching the simplicity of the toggle). Feature #6: NovagramPro Ads Easter-egg section.
+Reason: `ChatHistoryListNode.init` builds the ad source (`adMessagesContext.state`, or empty for CloudUser / non-bubbles). `FenixShowAdsGate.gate` (in `FenixuzProMessager`, file `FenixShowAdsGate.swift`) wraps that source so it emits an empty tuple while `fenix_show_ads` is off and mirrors the real source while on. The gate is driven by `FenixShowAdsGate.enabledSignal`, which re-reads the UserDefaults key on every `.fenixShowAdsChanged` notification — posted by `FenixSettingsController.updateShowAds`. Result: flipping the toggle takes effect **live** in already-open chats (no reopen needed), replacing the previous one-shot init-time read. Feature #6: NovagramPro Ads Easter-egg section. The `fakeAds` experimental path is untouched. Real Telegram sponsored messages remain server-gated to the official api_id and cannot flow to this fork — this toggle only controls the visibility wiring.
+
+BUILD: `//submodules/Fenixuz/ProMessager:FenixuzProMessager` is already a dep of `//submodules/TelegramUI` (added 2026-06-27, see below).
 
 ---
 
@@ -808,14 +815,18 @@ Consumers that previously checked `if product.isSubscription` or used `product.p
 | `PeerInfoScreen/{PeerInfoScreen.swift, PeerInfoSettingsItems.swift, PeerInfoScreenSettingsActions.swift}` (2026-07-06) | +1 enum case `.novagramBots`, +1 row under NovagramPro (id 2), +1 action case | "Novagram Bots" Settings row → fenixBotsController (surface Bots directly in Settings for faster discovery; reuses FenixuzProMessager, no new dep) |
 | `PeerInfoScreen/PeerInfoSettingsItems.swift` (2026-07-06) | 1 string literal | Settings row renamed "NovagramPro" → "Novagram Settings" (the Pro name read as a paid tier) |
 | `ChatListUI/Sources/ChatContextMenus.swift` (2026-07-06) | 1 line in ChatLock item | pincode context-menu icon Pin/Unpin → "Chat/Context Menu/Lock" (emoji stripped from titles in FenixuzL10n+ChatLock — icon+emoji double was wrong) |
-| `TelegramUI/Sources/ChatControllerForwardMessages.swift` + `TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift` (2026-07-06) | 3 expressions | "Forward Without Name": native hide-sender-name forward option defaults ON when `pro_messager/forward_hide_names` is set (NovagramPro toggle, default OFF) |
+| `TelegramUI/Sources/ChatInterfaceStateContextMenus.swift` + `TelegramUI/Sources/ChatControllerForwardMessages.swift` + `TelegramUI/Sources/Chat/ChatControllerLoadDisplayNode.swift` + `TelegramUI/BUILD` (2026-07-07) | +1 import, +1 dep, +1 context item, +1 one-shot consume local, 3 expressions | "Forward Without Name" (revised): the `pro_messager/forward_hide_names` toggle (NovagramPro, default OFF) no longer force-hides names on every forward — it now EXPOSES a per-message long-press context item "Forward without name" (FenixuzL10n.context_forwardWithoutName). Tapping it sets one-shot `pro_messager/forward_hide_names_once`, which the forward-destination sites consume-and-reset (OR'd with `!hasNotOwnMessages`, own-messages-always-hide preserved). LoadDisplayNode fallback reverted to upstream `hideNames: false`. |
 | `TelegramCore/Sources/TelegramEngine/Peers/TogglePeerChatPinned.swift` (2026-07-06) | let→var, +4 lines | "Unlimited Pins": client pin limit → 1000 when `pro_messager/unlimited_pins` is set; upstream swallows pin-sync server errors, extra pins stay device-local (NovagramPro toggle, default OFF) |
 | `PeerInfoScreen/Sources/PeerInfoProfileItems.swift` (2026-07-06) | +2 imports, +2 rows | "ID" row with tap-to-copy in user profiles (raw id) and channels/groups (`-100…` Bot API format); toast via UndoUI, string `profile_idCopied` |
 | `Telegram/Telegram-iOS/PrivacyInfo.xcprivacy` (2026-06-27) | +1 purpose string | declare anonymous Device ID collection for Analytics (Tracking=false → no ATT) |
 | `TelegramUI/BUILD` + `AppDelegate.swift` (2026-07-04) | +1 dep, +1 import, +9-line launch hook | start FenixuzAutoProxy at launch (re-apply/self-heal NovagramProxy when the toggle is on) |
+| `AppDelegate.swift` (2026-07-07) | +1 import, +14-line launch hook | start FenixAutoAcceptManager global monitor on the active account (Feature #45 proactive auto-accept; FenixuzProMessager already a dep) |
 | `AuthorizationUI/BUILD` + `AuthorizationSequencePhoneEntryController.swift` (2026-07-04) | +1 dep, +1 import, +~30 lines | login-screen "NovagramProxy" nav button — enable proxy before login in blocked countries |
+| `TelegramCore/Sources/SyncCore/SyncCore_EditedMessageHistoryAttribute.swift` (fork-ADDED file; media v2 2026-07-07) | whole file (~115 lines) | `EditedMessageHistoryEntry` + `EditedMessageHistoryAttribute` — stores previous versions of edited messages; v2 adds `media: [Media]` (backward-compatible decode) |
+| `TelegramCore/Sources/State/AccountStateManagementUtils.swift` (`.EditMessage`, ~line 4599; updated 2026-07-07) | ~28-line capture block | append previous text+entities+media to `EditedMessageHistoryAttribute` when text OR media changed (webpage previews excluded) |
+| `TelegramCore/Sources/Account/AccountManager.swift` (line ~246) | +1 line | `declareEncodable(EditedMessageHistoryAttribute.self, ...)` Postbox type registration |
 
-**Total Telegram-owned files modified: 22** (6 BUILD + 14 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
+**Total Telegram-owned files modified: 24** (6 BUILD + 16 Swift + 1 Objective-C + 1 sqlcipher). All Fenixuz logic itself lives in:
 - `submodules/Fenixuz/AppleReview/` — demo-code fetcher + iOS alert
 - `submodules/Fenixuz/AppStoreIAP/` — Apple 3.1.1 IAP gate (May 2026 rejection fix)
 - `submodules/Fenixuz/Brand/` — central colour palette
@@ -886,6 +897,28 @@ NotificationCenter observer, and the button is appended in `rightButtons`.
   from an owner-supplied image into
   `submodules/TelegramUI/Images.xcassets/Contact List/FenixGhostIcon.imageset` (RGB black + source
   alpha, template-rendering-intent).
+
+## 📌 Folder display style — Feature #21 (2026-07-07)
+
+### `submodules/ChatListUI/Sources/ChatListController.swift` — filter-tab title style
+
+The "Folder display style" setting (Icons / Text / Automatic, `pro_messager` key
+`fenix_folder_display_style`) drives how chat-list filter TABS render. Two minimal hooks:
+
+- **Import:** `import FenixuzForeignUserBlock` added next to the other Fenixuz imports
+  (after `import FenixuzSecretVault`). `FenixuzForeignUserBlock` was already a `ChatListUI` BUILD
+  dep, so no BUILD change was needed.
+- **`reloadFilters()` tab build (~line 4008):** the `.filter` case now exposes the folder
+  `emoticon` and routes the title through `FenixFolderStyle.resolveTabTitle(title, emoticon:)`
+  instead of passing `title` directly. For style `"icon"` (and a non-empty emoticon) the helper
+  returns a `ChatFolderTitle` whose text is the emoticon (renders the folder emoji as the tab);
+  `"text"`/`"auto"`/no-emoticon keep the upstream text title.
+
+Helper lives in the Fenixuz module: `submodules/Fenixuz/ForeignUserBlock/Sources/ChatList_FenixFolderStyleHelper.swift`
+(Fenixuz-owned, auto-globbed). Live refresh reuses the existing `FenixSettingsChanged`
+NotificationCenter observer (`ChatListController.proMessagerSettingsChanged` → `reloadFilters()`):
+`FenixSettingsController.openFolderStyle` now posts `FenixSettingsChanged` after persisting the
+style, so switching Icons/Text/Automatic rebuilds the tabs immediately.
 
 ### `submodules/TelegramUI/Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift`
 
@@ -2059,6 +2092,14 @@ Reason: `chatLocation.peerId`, `context`, and `presentationInterfaceState.render
 
 **No new BUILD dep for TelegramUI** — `FenixuzProMessager` is already a direct dep of `TelegramUI/BUILD` (added for ApplicationContext.swift / OpenResolvedUrl.swift hooks).
 
+### 2026-07-07 — made auto-accept proactive (launch scan + 60 s poll) instead of open-chat-only
+
+The original implementation only fired from `viewDidAppear`, so requests for chats the admin never opened were never approved. Reworked `FenixAutoAcceptManager` (Fenixuz module — no upstream change there) to add `startGlobalMonitor(context:)` / `stopGlobalMonitor()` which scan the chat list, filter to admin channels/groups, read each peer's `CachedChannelData/CachedGroupData.inviteRequestsPending`, and only call `updateAll(.approve)` when pending > 0. Fast path now resolves a nil peer via `engine.data` and also gates on pending count; the per-peer debounce dropped from 300 s → 15 s so newly-arrived requests aren't suppressed.
+
+**New upstream hook — `submodules/TelegramUI/Sources/AppDelegate.swift`:** `+1 import (`import FenixuzProMessager`) +14-line launch block` right after the FenixuzAutoProxy start block. It takes `sharedContextPromise |> take(1)`, then observes `sharedContext.activeAccountContexts` and calls `FenixAutoAcceptManager.startGlobalMonitor(context: primary)` (or `stopGlobalMonitor()` when no account is active). Applied via Python (not Edit) to keep the diff minimal. `FenixuzProMessager` is already a `TelegramUI/BUILD` dep — no BUILD change.
+
+**Settings toggle — `submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift` (Fenixuz module):** the `updateAutoAccept` handler now calls `startGlobalMonitor(context:)` on ON and `stopGlobalMonitor()` on OFF so enabling triggers an instant scan.
+
 ---
 
 ## 📌 2026-07-03 — chat-lock: fix persistence + enforce lock on long-press preview
@@ -2161,3 +2202,40 @@ New `FenixSection.secretVault` section: `secretVaultEnabled` toggle + `secretVau
 **Fork-only files (pure Fenixuz, no upstream conflict):**
 - `submodules/Fenixuz/ProMessager/Sources/FenixSettingsController.swift` — `roundVideoFromGallery` toggle (enum case, section, stableId 8, equality, item builder, state field/init/equality, entries.append, arguments decl/init/assign/closure) mirroring `editedHistoryEnabled`. UserDefaults key `round_video_from_gallery`, default ON.
 - `submodules/Fenixuz/Localization/Sources/FenixuzL10n.swift` — `cameraPicker_gallery`, `settings_chat_roundVideoGallery_title`, `settings_chat_roundVideoGallery_subtitle`.
+
+---
+
+## 📌 Edited history — full media capture (2026-07-07)
+
+The edited-message history (long-press → History, gated by `pro_messager/edited_history_enabled`) now preserves the previous MEDIA of an edited message, not only the text.
+
+### `submodules/TelegramCore/Sources/SyncCore/SyncCore_EditedMessageHistoryAttribute.swift` (fork-ADDED file)
+
+Schema v2: `EditedMessageHistoryEntry` gained `public let media: [Media]` (default `[]` in `init`).
+- Postbox encode: `encoder.encodeGenericObjectArray(self.media.map { $0 as PostboxCoding }, forKey: "media")` (same pattern as `SyncCore_InstantPage.swift`).
+- Postbox decode: `decoder.decodeObjectArrayForKey("media").compactMap { $0 as? Media }` — missing key returns `[]`, so attributes stored before v2 keep loading (text-only). NO migration needed.
+- Codable path intentionally drops media (`self.media = []` in `init(from:)`); persistence only ever goes through PostboxCoding.
+- `associatedMediaIds` now also returns `entry.media` ids (best-effort render-time resolution).
+- Equatable compares media by `map { $0.id }`.
+
+### `submodules/TelegramCore/Sources/State/AccountStateManagementUtils.swift` — `.EditMessage` handler (~line 4599)
+
+Fork-owned capture block (predates this doc; documented now). 2026-07-07 rework:
+- History entry is now created when **text OR media changed** (previously text-only; media-only edits captured nothing).
+- Entry carries `media: fenixPreviousMedia` = `previousMessage.media` with `TelegramMediaWebpage` filtered out — webpage-preview loading also arrives as `EditMessage` and must not create fake history entries.
+- Entry timestamp = previous version's `EditedMessageAttribute.date` if present, else `previousMessage.timestamp` (distinct timestamps make the History page sort stable).
+- Upstream translation-carryover branch (`previousMessage.text == message.text`) left untouched above the block; debug `print()` lines removed.
+- Idempotent: re-delivered identical edits compare equal (same text, same media ids) → no duplicate entries.
+
+On upstream merge conflict: keep the upstream translation/factcheck code, re-insert the `// Fenixuz: capture the previous version` block between the translation `if` and the `FactCheckMessageAttribute` block.
+
+### `submodules/TelegramCore/Sources/Account/AccountManager.swift` (line ~246, pre-existing)
+
+`declareEncodable(EditedMessageHistoryAttribute.self, f: { EditedMessageHistoryAttribute(decoder: $0) })` — required Postbox type registration for the attribute.
+
+### Fork-only files (no upstream conflict)
+
+- `submodules/Fenixuz/EditedHistory/Sources/EditedMessageHistoryController.swift` — entry node now renders the previous media: photo/video thumbnail via `chatMessagePhoto` / `chatMessageVideo` (`.standalone` reference — cloud media re-fetches on demand), play-icon overlay for videos, filename+size text row for documents, generic "Media" row otherwise.
+- `submodules/Fenixuz/EditedHistory/Sources/EditedHistoryStrings.swift` — NEW, module-local en/uz/ru strings ("File"/"Fayl"/"Файл", "Media"/"Media"/"Медиа").
+- `submodules/Fenixuz/EditedHistory/BUILD` — +1 dep `//submodules/PhotoResources:PhotoResources`.
+

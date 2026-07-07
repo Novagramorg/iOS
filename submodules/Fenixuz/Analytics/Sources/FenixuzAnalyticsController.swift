@@ -251,12 +251,13 @@ private final class StatChipNode: ASDisplayNode {
     // Positions the value, caption and info hint inside a fixed-height chip and refreshes the
     // shadow path for the current bounds.
     func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) {
-        let horizontalInset: CGFloat = 12.0
+        let horizontalInset: CGFloat = 16.0
         let availableWidth = size.width - horizontalInset * 2.0
 
-        // Shrink the number a step at a time so long counts still fit the chip.
+        // Shrink the number a step at a time so long counts still fit (rarely triggers now that
+        // each row spans the full width).
         var valueSize = self.valueNode.updateLayout(CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
-        for fontSize in [28.0, 24.0] as [CGFloat] where valueSize.width > availableWidth {
+        for fontSize in [30.0, 26.0] as [CGFloat] where valueSize.width > availableWidth {
             let color = formatCount(self.value) == nil ? self.theme.list.itemSecondaryTextColor : self.theme.list.itemPrimaryTextColor
             self.valueNode.attributedText = NSAttributedString(string: self.valueNode.attributedText?.string ?? "—", font: Font.with(size: fontSize, design: .round, weight: .bold), textColor: color)
             valueSize = self.valueNode.updateLayout(CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
@@ -271,13 +272,12 @@ private final class StatChipNode: ASDisplayNode {
         let contentHeight = valueSize.height + valueToCaptionGap + captionRowHeight
         var y = floor((size.height - contentHeight) / 2.0)
 
-        transition.updateFrame(node: self.valueNode, frame: CGRect(x: floor((size.width - valueSize.width) / 2.0), y: y, width: valueSize.width, height: valueSize.height))
+        // Left-aligned list-row layout: number on top, caption + info hint beneath it.
+        transition.updateFrame(node: self.valueNode, frame: CGRect(x: horizontalInset, y: y, width: valueSize.width, height: valueSize.height))
         y += valueSize.height + valueToCaptionGap
 
-        let captionGroupWidth = captionSize.width + captionToInfoGap + infoSide
-        let captionGroupX = floor((size.width - captionGroupWidth) / 2.0)
-        transition.updateFrame(node: self.captionNode, frame: CGRect(x: captionGroupX, y: y + floor((captionRowHeight - captionSize.height) / 2.0), width: captionSize.width, height: captionSize.height))
-        transition.updateFrame(node: self.infoIconNode, frame: CGRect(x: captionGroupX + captionSize.width + captionToInfoGap, y: y + floor((captionRowHeight - infoSide) / 2.0), width: infoSide, height: infoSide))
+        transition.updateFrame(node: self.captionNode, frame: CGRect(x: horizontalInset, y: y + floor((captionRowHeight - captionSize.height) / 2.0), width: captionSize.width, height: captionSize.height))
+        transition.updateFrame(node: self.infoIconNode, frame: CGRect(x: horizontalInset + captionSize.width + captionToInfoGap, y: y + floor((captionRowHeight - infoSide) / 2.0), width: infoSide, height: infoSide))
 
         if !self.theme.overallDarkAppearance {
             self.layer.shadowPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: self.cornerRadius).cgPath
@@ -376,7 +376,7 @@ private final class FenixuzAnalyticsControllerNode: ASDisplayNode {
         let duckSize: CGFloat = 140.0
         let afterDuck: CGFloat = 14.0
         let afterSubtitle: CGFloat = 24.0
-        let chipHeight: CGFloat = 88.0
+        let chipHeight: CGFloat = 84.0
         let chipGap: CGFloat = 12.0
 
         var y = navigationBarHeight + topPadding
@@ -388,13 +388,15 @@ private final class FenixuzAnalyticsControllerNode: ASDisplayNode {
         transition.updateFrame(node: self.subtitleNode, frame: CGRect(x: floor((layout.size.width - subtitleSize.width) / 2.0), y: y, width: subtitleSize.width, height: subtitleSize.height))
         y += subtitleSize.height + afterSubtitle
 
-        let leftChipWidth = floor((rowWidth - chipGap) / 2.0)
-        let rightChipWidth = rowWidth - chipGap - leftChipWidth
-        let usersFrame = CGRect(x: rowX, y: y, width: leftChipWidth, height: chipHeight)
-        let accountsFrame = CGRect(x: rowX + leftChipWidth + chipGap, y: y, width: rightChipWidth, height: chipHeight)
+        // Full-width stacked list rows: each stat gets the entire row width so long counts
+        // (e.g. "1 050 009") are never squeezed / clipped on small-screen devices.
+        let usersFrame = CGRect(x: rowX, y: y, width: rowWidth, height: chipHeight)
         transition.updateFrame(node: self.usersChip, frame: usersFrame)
-        transition.updateFrame(node: self.accountsChip, frame: accountsFrame)
         self.usersChip.updateLayout(size: usersFrame.size, transition: transition)
+        y += chipHeight + chipGap
+
+        let accountsFrame = CGRect(x: rowX, y: y, width: rowWidth, height: chipHeight)
+        transition.updateFrame(node: self.accountsChip, frame: accountsFrame)
         self.accountsChip.updateLayout(size: accountsFrame.size, transition: transition)
     }
 }

@@ -92,7 +92,6 @@ private enum FenixEntry: ItemListNodeEntry {
     case protectionHeader(String)
     case blockForeignUsers(PresentationTheme, String, String, Bool)
     case enableNovagramProxy(PresentationTheme, String, String, Bool)
-    case blockApkFiles(PresentationTheme, String, String, Bool)
     // Feature #46: Chat Lock master toggle — enables per-chat lock + sets the master pincode
     case chatLockMasterEnabled(PresentationTheme, String, String, Bool, Bool)
     case autoDownloadDisabled(PresentationTheme, String, String, Bool, Bool)
@@ -112,6 +111,9 @@ private enum FenixEntry: ItemListNodeEntry {
     case chatLockInfo(PresentationTheme, String)
     case chatLockFooter(PresentationTheme, String)
     case secretVaultEnabled(PresentationTheme, String, String, Bool, Bool)
+    // Biometric (Face ID / Touch ID) unlock toggle — only shown when a vault PIN exists
+    // and the device has biometrics enrolled. Params: theme, title, iconName, value.
+    case secretVaultBiometric(PresentationTheme, String, String, Bool)
     case secretVaultFooter(PresentationTheme, String)
 
     // — Unread Message Reminder Section (Xabar eslatmasi) —
@@ -164,13 +166,13 @@ private enum FenixEntry: ItemListNodeEntry {
             return FenixSection.messaging.rawValue
         case .sttHeader, .sttEnabled, .sttLanguage, .voiceTranslate:
             return FenixSection.stt.rawValue
-        case .protectionHeader, .blockForeignUsers, .enableNovagramProxy, .blockApkFiles, .chatLockMasterEnabled, .autoDownloadDisabled, .sendConfirmEnabled, .protectionFooter:
+        case .protectionHeader, .blockForeignUsers, .enableNovagramProxy, .chatLockMasterEnabled, .autoDownloadDisabled, .sendConfirmEnabled, .protectionFooter:
             return FenixSection.protection.rawValue
         case .appearanceHeader, .whiteThemeAccent, .appearanceFooter:
             return FenixSection.appearance.rawValue
         case .chatLockHeader, .chatLockInfo, .chatLockFooter:
             return FenixSection.chatLock.rawValue
-        case .secretVaultEnabled, .secretVaultFooter:
+        case .secretVaultEnabled, .secretVaultBiometric, .secretVaultFooter:
             return FenixSection.secretVault.rawValue
         case .reminderHeader, .reminderEnabled, .reminderTime, .reminderSound, .reminderFooter:
             return FenixSection.reminder.rawValue
@@ -222,7 +224,6 @@ private enum FenixEntry: ItemListNodeEntry {
         // Protection
         case .protectionHeader:          return 40
         case .blockForeignUsers:         return 41
-        case .blockApkFiles:             return 42
         case .chatLockMasterEnabled:     return 43
         case .autoDownloadDisabled:      return 44
         case .sendConfirmEnabled:        return 45
@@ -237,7 +238,8 @@ private enum FenixEntry: ItemListNodeEntry {
         case .chatLockInfo:              return 61
         case .chatLockFooter:            return 62
         case .secretVaultEnabled:        return 63
-        case .secretVaultFooter:         return 64
+        case .secretVaultBiometric:      return 64
+        case .secretVaultFooter:         return 65
         // Unread Message Reminder (Xabar eslatmasi)
         case .reminderHeader:            return 70
         case .reminderEnabled:           return 71
@@ -345,8 +347,6 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .blockForeignUsers(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .enableNovagramProxy(lhsTheme, lhsTitle, lhsText, lhsValue):
             if case let .enableNovagramProxy(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
-        case let .blockApkFiles(lhsTheme, lhsTitle, lhsText, lhsValue):
-            if case let .blockApkFiles(rhsTheme, rhsTitle, rhsText, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue { return true } else { return false }
         case let .chatLockMasterEnabled(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
             if case let .chatLockMasterEnabled(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
         case let .autoDownloadDisabled(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
@@ -372,6 +372,8 @@ private enum FenixEntry: ItemListNodeEntry {
             if case let .chatLockFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
         case let .secretVaultEnabled(lhsTheme, lhsTitle, lhsText, lhsValue, lhsIsNew):
             if case let .secretVaultEnabled(rhsTheme, rhsTitle, rhsText, rhsValue, rhsIsNew) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsText == rhsText, lhsValue == rhsValue, lhsIsNew == rhsIsNew { return true } else { return false }
+        case let .secretVaultBiometric(lhsTheme, lhsTitle, lhsIcon, lhsValue):
+            if case let .secretVaultBiometric(rhsTheme, rhsTitle, rhsIcon, rhsValue) = rhs, lhsTheme === rhsTheme, lhsTitle == rhsTitle, lhsIcon == rhsIcon, lhsValue == rhsValue { return true } else { return false }
         case let .secretVaultFooter(lhsTheme, lhsText):
             if case let .secretVaultFooter(rhsTheme, rhsText) = rhs, lhsTheme === rhsTheme, lhsText == rhsText { return true } else { return false }
 
@@ -612,10 +614,6 @@ private enum FenixEntry: ItemListNodeEntry {
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "lock.shield", color: .green), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateEnableNovagramProxy(val)
             })
-        case let .blockApkFiles(_, title, text, value):
-            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "doc.fill.badge.ellipsis", color: .red), title: title, text: text, value: value, sectionId: self.section, style: .blocks, updated: { val in
-                arguments.updateBlockApkFiles(val)
-            })
         case let .chatLockMasterEnabled(_, title, text, value, isNew):
             // Feature #46: Chat Lock master toggle — on turns the feature on and sets the master pincode
             let langCode = presentationData.strings.primaryComponent.languageCode
@@ -700,6 +698,10 @@ private enum FenixEntry: ItemListNodeEntry {
             let badge: AnyComponent<Empty>? = isNew ? AnyComponent(FenixNewBadgeComponent(langCode: langCode)) : nil
             return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: "eye.slash.fill", color: .purple), title: title, text: text, titleBadgeComponent: badge, value: value, sectionId: self.section, style: .blocks, updated: { val in
                 arguments.updateSecretVault(val)
+            })
+        case let .secretVaultBiometric(_, title, iconName, value):
+            return ItemListSwitchItem(presentationData: presentationData, icon: fenixuzSettingsIcon(systemName: iconName, color: .purple), title: title, value: value, sectionId: self.section, style: .blocks, updated: { val in
+                arguments.updateSecretVaultBiometric(val)
             })
         case let .secretVaultFooter(_, text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -900,10 +902,11 @@ private struct FenixSettingsState: Equatable {
     var sttLanguage: String
     var blockForeignUsers: Bool
     var enableNovagramProxy: Bool
-    var blockApkFiles: Bool
     // Feature #46: Chat Lock master toggle — mirrors ChatPincodeManager.isMasterEnabled()
     var chatLockMasterEnabled: Bool
     var secretVaultEnabled: Bool
+    // Vault biometric unlock opt-in — mirrors ChatPincodeManager.getVaultMetadata().biometricEnabled
+    var secretVaultBiometricEnabled: Bool
     var whiteThemeAccentEnabled: Bool
     var voiceTranslateEnabled: Bool
     var autoDownloadDisabled: Bool
@@ -950,10 +953,10 @@ private struct FenixSettingsState: Equatable {
         self.sttLanguage = UserDefaults(suiteName: "pro_messager")?.string(forKey: "stt_language") ?? "en-US"
         self.blockForeignUsers = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_foreign_users") ?? false
         self.enableNovagramProxy = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "novagram_proxy_enabled") ?? false
-        self.blockApkFiles = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "block_apk_files") ?? false
         // Feature #46: read live from the keychain-backed manager (its own store, not UserDefaults)
         self.chatLockMasterEnabled = ChatPincodeManager.shared.isMasterEnabled()
         self.secretVaultEnabled = ChatPincodeManager.shared.isVaultEnabled()
+        self.secretVaultBiometricEnabled = ChatPincodeManager.shared.getVaultMetadata().biometricEnabled
         // Default off — user opts in explicitly (light theme stays stock until they toggle it)
         self.whiteThemeAccentEnabled = UserDefaults(suiteName: "pro_messager")?.bool(forKey: "white_theme_accent_enabled") ?? false
         // Default off — voice translate is an opt-in power-user feature
@@ -1034,13 +1037,13 @@ private struct FenixSettingsState: Equatable {
         if lhs.enableNovagramProxy != rhs.enableNovagramProxy {
             return false
         }
-        if lhs.blockApkFiles != rhs.blockApkFiles {
-            return false
-        }
         if lhs.chatLockMasterEnabled != rhs.chatLockMasterEnabled {
             return false
         }
         if lhs.secretVaultEnabled != rhs.secretVaultEnabled {
+            return false
+        }
+        if lhs.secretVaultBiometricEnabled != rhs.secretVaultBiometricEnabled {
             return false
         }
         if lhs.sttEnabled != rhs.sttEnabled {
@@ -1228,7 +1231,6 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     // ─── PROTECTION ───
     entries.append(.protectionHeader(l10n.settings_section_protection))
     entries.append(.blockForeignUsers(presentationData.theme, l10n.settings_protection_foreign_title, l10n.settings_protection_foreign_subtitle, state.blockForeignUsers))
-    entries.append(.blockApkFiles(presentationData.theme, l10n.settings_protection_apk_title, l10n.settings_protection_apk_subtitle, state.blockApkFiles))
     // Feature #46: Chat Lock master toggle — value tracks the keychain-backed master pincode
     entries.append(.chatLockMasterEnabled(presentationData.theme, FenixChatLockStrings.toggleTitle(langCode: langCode), FenixChatLockStrings.toggleSubtitle(langCode: langCode), state.chatLockMasterEnabled, true))
     entries.append(.autoDownloadDisabled(presentationData.theme, FenixAutoDownloadStrings.title(langCode: langCode), FenixAutoDownloadStrings.subtitle(langCode: langCode), state.autoDownloadDisabled, false))
@@ -1256,7 +1258,14 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     entries.append(.chatLockInfo(presentationData.theme, FenixChatLockStrings.infoBody(langCode: langCode)))
     entries.append(.chatLockFooter(presentationData.theme, FenixChatLockStrings.footer(langCode: langCode)))
     entries.append(.secretVaultEnabled(presentationData.theme, SecretVaultStrings.settingsTitle, SecretVaultStrings.settingsSubtitle, state.secretVaultEnabled, true))
-    entries.append(.secretVaultFooter(presentationData.theme, SecretVaultStrings.settingsFooter))
+    // Biometric unlock row: only when a vault PIN exists AND the device has biometrics enrolled.
+    if state.secretVaultEnabled, let biometricKind = SecretVaultBiometric.availableType() {
+        let isFaceID = biometricKind == .faceID
+        entries.append(.secretVaultBiometric(presentationData.theme, SecretVaultStrings.biometricToggleTitle(faceID: isFaceID), isFaceID ? "faceid" : "touchid", state.secretVaultBiometricEnabled))
+        entries.append(.secretVaultFooter(presentationData.theme, SecretVaultStrings.biometricFooter))
+    } else {
+        entries.append(.secretVaultFooter(presentationData.theme, SecretVaultStrings.settingsFooter))
+    }
 
     // ─── UNREAD MESSAGE REMINDER (Xabar eslatmasi) ───
     // isNew: hardcoded true — set to false here when this feature is no longer new.
@@ -1273,12 +1282,10 @@ private func fenixSettingsEntries(presentationData: PresentationData, state: Fen
     let folderStyleLabel = FenixFeaturesStrings.folderStyleLabel(state.folderStyle, langCode: langCode)
     entries.append(.folderStyle(presentationData.theme, FenixFeaturesStrings.folderStyleTitle(langCode: langCode), folderStyleLabel, false))
     entries.append(.channelHistoryButton(presentationData.theme, FenixFeaturesStrings.channelHistoryTitle(langCode: langCode), FenixFeaturesStrings.channelHistoryTip(langCode: langCode), state.channelHistoryEnabled, true))
-    entries.append(.settingsLinks(presentationData.theme, FenixFeaturesStrings.settingsLinksTitle(langCode: langCode), FenixFeaturesStrings.settingsLinksTip(langCode: langCode), state.settingsLinksEnabled, true))
     entries.append(.autoAcceptRequests(presentationData.theme, FenixFeaturesStrings.autoAcceptTitle(langCode: langCode), FenixFeaturesStrings.autoAcceptTip(langCode: langCode), state.autoAcceptEnabled, true))
-    // Feature #40 (part b): share row — only visible when the settings links toggle is enabled
-    if state.settingsLinksEnabled {
-        entries.append(.shareNovagramProLink(presentationData.theme, FenixFeaturesStrings.shareNovagramProLinkTitle(langCode: langCode)))
-    }
+    // Feature #40: always-visible "Share Novagram Settings link" button. The toggle was removed —
+    // sharing a link needs no on/off switch, and deep-link handling (OpenResolvedUrl) is independent of it.
+    entries.append(.shareNovagramProLink(presentationData.theme, FenixFeaturesStrings.shareNovagramProLinkTitle(langCode: langCode)))
     entries.append(.featuresFooter(presentationData.theme, FenixFeaturesStrings.footer(langCode: langCode)))
 
     // ─── ADS (hidden Easter-egg, revealed by 15-second long-press) ───
@@ -1318,9 +1325,9 @@ private final class FenixSettingsArguments {
     let openSttLanguageSettings: () -> Void
     let updateBlockForeignUsers: (Bool) -> Void
     let updateEnableNovagramProxy: (Bool) -> Void
-    let updateBlockApkFiles: (Bool) -> Void
     let updateChatLockMaster: (Bool) -> Void
     let updateSecretVault: (Bool) -> Void
+    let updateSecretVaultBiometric: (Bool) -> Void
     let updateWhiteThemeAccent: (Bool) -> Void
     let updateVoiceTranslate: (Bool) -> Void
     let updateAutoDownloadDisabled: (Bool) -> Void
@@ -1341,7 +1348,7 @@ private final class FenixSettingsArguments {
     // Ads section (Feature #6 — hidden Easter-egg)
     let updateShowAds: (Bool) -> Void
 
-    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateBlockApkFiles: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void) {
+    init(openAccounts: @escaping () -> Void, openAbout: @escaping () -> Void, openNovagramBots: @escaping () -> Void, openCalls: @escaping () -> Void, updateShowDeletedMessages: @escaping (Bool) -> Void, updateHideFolders: @escaping (Bool) -> Void, updateShowStories: @escaping (Bool) -> Void, updateShowMutualContactSymbol: @escaping (Bool) -> Void, updateShowGhostMode: @escaping (Bool) -> Void, updateShowViewFirstMessage: @escaping (Bool) -> Void, updateLongPressCameraSelection: @escaping (Bool) -> Void, updateEditedHistoryEnabled: @escaping (Bool) -> Void, updateRoundVideoFromGallery: @escaping (Bool) -> Void, updateForwardHideNames: @escaping (Bool) -> Void, updateUnlimitedPins: @escaping (Bool) -> Void, updateTranslateMessages: @escaping (Bool) -> Void, openTranslationSettings: @escaping () -> Void, openTextStyleSettings: @escaping () -> Void, openAutoTextSettings: @escaping () -> Void, openAutoTranslateSettings: @escaping () -> Void, updateSttEnabled: @escaping (Bool) -> Void, openSttLanguageSettings: @escaping () -> Void, updateBlockForeignUsers: @escaping (Bool) -> Void, updateEnableNovagramProxy: @escaping (Bool) -> Void, updateChatLockMaster: @escaping (Bool) -> Void, updateSecretVault: @escaping (Bool) -> Void, updateSecretVaultBiometric: @escaping (Bool) -> Void, updateWhiteThemeAccent: @escaping (Bool) -> Void, updateVoiceTranslate: @escaping (Bool) -> Void, updateAutoDownloadDisabled: @escaping (Bool) -> Void, updateSendTranslateConfirm: @escaping (Bool) -> Void, updateSendConfirmEnabled: @escaping (Bool) -> Void, updateAutoStickerEnabled: @escaping (Bool) -> Void, updateHeartEffectEnabled: @escaping (Bool) -> Void, updateReminderEnabled: @escaping (Bool) -> Void, openReminderTimeSettings: @escaping () -> Void, openReminderSoundSettings: @escaping () -> Void, addRecommendedFolders: @escaping () -> Void, openFolderStyle: @escaping () -> Void, updateChannelHistory: @escaping (Bool) -> Void, updateSettingsLinks: @escaping (Bool) -> Void, shareNovagramProLink: @escaping () -> Void, updateAutoAccept: @escaping (Bool) -> Void, updateShowAds: @escaping (Bool) -> Void) {
         self.openAccounts = openAccounts
         self.openAbout = openAbout
         self.openNovagramBots = openNovagramBots
@@ -1366,9 +1373,9 @@ private final class FenixSettingsArguments {
         self.openSttLanguageSettings = openSttLanguageSettings
         self.updateBlockForeignUsers = updateBlockForeignUsers
         self.updateEnableNovagramProxy = updateEnableNovagramProxy
-        self.updateBlockApkFiles = updateBlockApkFiles
         self.updateChatLockMaster = updateChatLockMaster
         self.updateSecretVault = updateSecretVault
+        self.updateSecretVaultBiometric = updateSecretVaultBiometric
         self.updateWhiteThemeAccent = updateWhiteThemeAccent
         self.updateVoiceTranslate = updateVoiceTranslate
         self.updateAutoDownloadDisabled = updateAutoDownloadDisabled
@@ -1417,6 +1424,7 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         updateState { state in
             var state = state
             state.secretVaultEnabled = ChatPincodeManager.shared.isVaultEnabled()
+            state.secretVaultBiometricEnabled = ChatPincodeManager.shared.getVaultMetadata().biometricEnabled
             return state
         }
     }
@@ -1588,13 +1596,6 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
             state.enableNovagramProxy = value
             return state
         }
-    }, updateBlockApkFiles: { value in
-        UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "block_apk_files")
-        updateState { state in
-            var state = state
-            state.blockApkFiles = value
-            return state
-        }
     }, updateChatLockMaster: { value in
         // Feature #46: Chat Lock master toggle.
         // Optimistically reflect the user's intent so the switch animates immediately; the true
@@ -1652,7 +1653,7 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
                 ChatPincodeManager.shared.verifyVault(code)
             }, onSuccess: {
                 for peerId in SecretVaultManager.shared.vaultedPeerIds() {
-                    let _ = context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: 0).startStandalone()
+                    _ = context.engine.peers.updatePeerMuteSetting(peerId: peerId, threadId: nil, muteInterval: 0).startStandalone()
                 }
                 SecretVaultManager.shared.clearVault()
                 ChatPincodeManager.shared.removeVault()
@@ -1663,6 +1664,30 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         navVC.setNavigationBarHidden(true, animated: false)
         navVC.modalPresentationStyle = .fullScreen
         presentPincodeControllerImpl?(navVC)
+    }, updateSecretVaultBiometric: { value in
+        // Persist the vault biometric flag. Turning it ON runs a one-time biometric
+        // confirmation so the user proves it works; on cancel/failure we revert the
+        // switch. The PIN/text entry stays the fallback at vault-open time, so a
+        // biometric failure can never lock the user out of the vault.
+        if value {
+            SecretVaultBiometric.authenticateBiometricsOnly(reason: SecretVaultStrings.biometricReason) { success in
+                if success {
+                    ChatPincodeManager.shared.setVaultBiometricEnabled(true)
+                }
+                updateState { state in
+                    var state = state
+                    state.secretVaultBiometricEnabled = success
+                    return state
+                }
+            }
+        } else {
+            ChatPincodeManager.shared.setVaultBiometricEnabled(false)
+            updateState { state in
+                var state = state
+                state.secretVaultBiometricEnabled = false
+                return state
+            }
+        }
     }, updateWhiteThemeAccent: { value in
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "white_theme_accent_enabled")
         // Apply (or revert) the brand emerald accent on the light builtin themes.
@@ -1752,22 +1777,27 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let l10n = FenixuzL10n(presentationData.strings)
         let actionSheet = ActionSheetController(presentationData: presentationData)
-        var items: [ActionSheetItem] = []
-        for minutes in FenixuzUnreadReminderSettings.minuteOptions {
-            items.append(ActionSheetButtonItem(title: l10n.settings_reminder_minutesLabel(minutes), action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
-                UserDefaults(suiteName: "pro_messager")?.set(minutes, forKey: "unread_reminder_minutes")
-                updateState { state in
-                    var state = state
-                    state.reminderMinutes = minutes
-                    return state
-                }
-            }))
-        }
+        var selectedMinutes = stateValue.with { $0.reminderMinutes }
+        let pickerItem = FenixReminderMinutePickerItem(
+            initialMinutes: selectedMinutes,
+            titleForRow: { minutes in l10n.settings_reminder_minutesLabel(minutes) },
+            updated: { minutes in
+                selectedMinutes = minutes
+            }
+        )
         actionSheet.setItemGroups([
-            ActionSheetItemGroup(items: items),
+            ActionSheetItemGroup(items: [pickerItem]),
             ActionSheetItemGroup(items: [
-                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
+                ActionSheetButtonItem(title: presentationData.strings.Common_Done, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                    UserDefaults(suiteName: "pro_messager")?.set(selectedMinutes, forKey: "unread_reminder_minutes")
+                    updateState { state in
+                        var state = state
+                        state.reminderMinutes = selectedMinutes
+                        return state
+                    }
+                }),
+                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .default, action: { [weak actionSheet] in
                     actionSheet?.dismissAnimated()
                 })
             ])
@@ -1777,26 +1807,42 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         let l10n = FenixuzL10n(presentationData.strings)
         let actionSheet = ActionSheetController(presentationData: presentationData)
-        var items: [ActionSheetItem] = []
-        for soundKey in ["default", "none"] {
-            items.append(ActionSheetButtonItem(title: l10n.settings_reminder_soundName(soundKey), action: { [weak actionSheet] in
-                actionSheet?.dismissAnimated()
-                UserDefaults(suiteName: "pro_messager")?.set(soundKey, forKey: "unread_reminder_sound")
-                updateState { state in
-                    var state = state
-                    state.reminderSound = soundKey
-                    return state
-                }
-            }))
+        var selectedSound = stateValue.with { $0.reminderSound }
+
+        // Rebuilt on every tap so the checkmark follows the selection without
+        // dismissing the sheet — tapping a row previews the tone and persists it.
+        func makeGroups() -> [ActionSheetItemGroup] {
+            var soundItems: [ActionSheetItem] = []
+            for soundKey in FenixuzUnreadReminderSettings.soundOptions {
+                let key = soundKey
+                soundItems.append(ActionSheetCheckboxItem(
+                    title: l10n.settings_reminder_soundName(key),
+                    label: "",
+                    value: selectedSound == key,
+                    action: { [weak actionSheet] _ in
+                        selectedSound = key
+                        FenixReminderSoundPreview.shared.play(key: key)
+                        UserDefaults(suiteName: "pro_messager")?.set(key, forKey: "unread_reminder_sound")
+                        updateState { state in
+                            var state = state
+                            state.reminderSound = key
+                            return state
+                        }
+                        actionSheet?.setItemGroups(makeGroups())
+                    }
+                ))
+            }
+            return [
+                ActionSheetItemGroup(items: soundItems),
+                ActionSheetItemGroup(items: [
+                    ActionSheetButtonItem(title: presentationData.strings.Common_Done, color: .accent, font: .bold, action: { [weak actionSheet] in
+                        actionSheet?.dismissAnimated()
+                    })
+                ])
+            ]
         }
-        actionSheet.setItemGroups([
-            ActionSheetItemGroup(items: items),
-            ActionSheetItemGroup(items: [
-                ActionSheetButtonItem(title: presentationData.strings.Common_Cancel, color: .accent, font: .bold, action: { [weak actionSheet] in
-                    actionSheet?.dismissAnimated()
-                })
-            ])
-        ])
+
+        actionSheet.setItemGroups(makeGroups())
         presentControllerImpl?(actionSheet)
     }, addRecommendedFolders: {
         // Feature #19: add recommended folders; show a brief confirmation alert on success.
@@ -1832,6 +1878,9 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
                     state.folderStyle = key
                     return state
                 }
+                // Feature #21: rebuild the chat-list filter tabs live so the new
+                // style applies immediately (observed in ChatListController).
+                NotificationCenter.default.post(name: NSNotification.Name("FenixSettingsChanged"), object: nil)
             }))
         }
         actionSheet.setItemGroups([
@@ -1869,17 +1918,26 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         )
         presentControllerImpl?(shareController)
     }, updateAutoAccept: { value in
-        // Feature #45: auto-accept requests — scaffold (behavior in later phase)
+        // Feature #45: auto-accept join requests for admin channels/groups.
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "fenix_autoaccept_global")
+        // Start/stop the proactive monitor immediately so enabling it triggers an instant scan
+        // rather than waiting for the next chat open or app relaunch.
+        if value {
+            FenixAutoAcceptManager.startGlobalMonitor(context: context)
+        } else {
+            FenixAutoAcceptManager.stopGlobalMonitor()
+        }
         updateState { state in
             var state = state
             state.autoAcceptEnabled = value
             return state
         }
     }, updateShowAds: { value in
-        // Feature #6: Ads toggle — writes the key that ChatHistoryListNode reads on init.
+        // Feature #6: Ads toggle — writes the key that ChatHistoryListNode reads.
         // true (default) = sponsored messages shown; false = suppressed.
         UserDefaults(suiteName: "pro_messager")?.set(value, forKey: "fenix_show_ads")
+        // Reactive: notify open chats so the ads gate re-reads live (no reopen needed).
+        NotificationCenter.default.post(name: .fenixShowAdsChanged, object: nil)
         updateState { state in
             var state = state
             state.showAds = value

@@ -240,6 +240,14 @@ public final class ChatPincodeManager {
         return self.readMetadata(account: self.vaultAccount) ?? .defaultLegacy
     }
 
+    /// Update only the vault biometric flag without touching the stored credential.
+    /// Mirrors setBiometricEnabled(_:for:) but targets the reserved vault account.
+    public func setVaultBiometricEnabled(_ enabled: Bool) {
+        var meta = self.readMetadata(account: self.vaultAccount) ?? .defaultLegacy
+        meta.biometricEnabled = enabled
+        self.writeMetadata(meta, account: self.vaultAccount)
+    }
+
     /// Remove the vault credential (turns the Secret Vault feature off). Leaves the
     /// vaulted-peer set untouched — the caller decides whether to also clear it.
     public func removeVault() {
@@ -285,7 +293,7 @@ public final class ChatPincodeManager {
         let updateQuery = self.basePasswordQuery(account: account)
         let updateAttributes: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         if SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary) == errSecSuccess {
             self.deleteFallbackPassword(account: account)
@@ -341,7 +349,7 @@ public final class ChatPincodeManager {
         let updateQuery = self.baseMetadataQuery(account: account)
         let updateAttributes: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         if SecItemUpdate(updateQuery as CFDictionary, updateAttributes as CFDictionary) == errSecSuccess {
             self.deleteFallbackMetadata(account: account)

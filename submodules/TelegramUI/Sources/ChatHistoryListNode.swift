@@ -36,6 +36,7 @@ import TextFormat
 import ChatNewThreadInfoItem
 import PhoneNumberFormat
 import Postbox
+import FenixuzProMessager
 
 struct ChatTopVisibleMessageRange: Equatable {
     var lowerBound: MessageIndex
@@ -825,9 +826,8 @@ public final class ChatHistoryListNodeImpl: ListViewImpl, ChatHistoryNode, ChatH
 
         self.adMessagesContext = adMessagesContext
         var adMessages: Signal<(interPostInterval: Int32?, messages: [Message], startDelay: Int32?, betweenDelay: Int32?), NoError>
-        // Fenixuz: fenix_show_ads — NovagramPro Ads toggle. Default true = sponsored messages shown.
-        let fenixShowAds = UserDefaults(suiteName: "pro_messager")?.object(forKey: "fenix_show_ads") as? Bool ?? true
-        if fenixShowAds, case .bubbles = mode, let adMessagesContext {
+        // Fenixuz: fenix_show_ads — NovagramPro Ads toggle. The gate is applied reactively below.
+        if case .bubbles = mode, let adMessagesContext {
             let peerId = adMessagesContext.peerId
             if peerId.namespace == Namespaces.Peer.CloudUser {
                 adMessages = .single((nil, [], nil, nil))
@@ -919,6 +919,8 @@ public final class ChatHistoryListNodeImpl: ListViewImpl, ChatHistoryNode, ChatH
         } else {
             adMessages = .single((nil, [], nil, nil))
         }
+        // Fenixuz: reactively suppress ads when the toggle is off; re-reads live on FenixShowAdsChanged.
+        adMessages = FenixShowAdsGate.gate(empty: (nil, [], nil, nil), source: adMessages)
 
         let clientId = Atomic<Int32>(value: nextClientId)
         self.clientId = clientId

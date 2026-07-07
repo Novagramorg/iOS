@@ -19,6 +19,22 @@ public enum FenixuzUnreadReminderSettings {
     // Selectable minute thresholds shown in the picker.
     public static let minuteOptions: [Int] = [1, 5, 10, 30, 60]
 
+    // Selectable reminder tones shown in the sound picker. "default" and "none"
+    // are handled specially; every other key maps to a bundled .caf via fileName(for:).
+    public static let soundOptions: [String] = ["default", "chime", "glass", "bell", "note", "tritone", "none"]
+
+    /// Bundled .caf filename for a sound key, or nil for the special "default"/"none" keys
+    /// (which do not correspond to a bundled file). Used both for notification playback
+    /// (UNNotificationSound(named:)) and for in-app preview.
+    public static func fileName(for key: String) -> String? {
+        switch key {
+        case "default", "none":
+            return nil
+        default:
+            return soundOptions.contains(key) ? "\(key).caf" : nil
+        }
+    }
+
     private static var defaults: UserDefaults? {
         UserDefaults(suiteName: suiteName)
     }

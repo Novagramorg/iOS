@@ -4594,14 +4594,22 @@ func replayFinalState(
                                 updatedAttributes.append(translation)
                             }
                         }
-                    } else {
-                        print("EDIT HISTORY: text changed from \(previousMessage.text) to \(message.text)")
-                        // Capture the previous state of the message
+                    }
+                    
+                    // Fenixuz: capture the previous version (text + media) for the edited-history viewer.
+                    // Webpage previews are excluded from the media comparison because preview
+                    // loading/updating is also delivered as EditMessage and is not a user edit.
+                    let fenixPreviousMedia = previousMessage.media.filter { !($0 is TelegramMediaWebpage) }
+                    let fenixUpdatedMedia = message.media.filter { !($0 is TelegramMediaWebpage) }
+                    let fenixMediaChanged = fenixPreviousMedia.map { $0.id } != fenixUpdatedMedia.map { $0.id }
+                    if previousMessage.text != message.text || fenixMediaChanged {
                         let previousEntities = previousMessage.textEntitiesAttribute?.entities ?? []
+                        let previousVersionTimestamp = (previousMessage.attributes.first(where: { $0 is EditedMessageAttribute }) as? EditedMessageAttribute)?.date ?? previousMessage.timestamp
                         let historyEntry = EditedMessageHistoryEntry(
-                            timestamp: previousMessage.timestamp,
+                            timestamp: previousVersionTimestamp,
                             text: previousMessage.text,
-                            entities: previousEntities
+                            entities: previousEntities,
+                            media: fenixPreviousMedia
                         )
                         
                         var updatedHistory = [historyEntry]
@@ -4610,10 +4618,8 @@ func replayFinalState(
                             updatedHistory.insert(contentsOf: previousHistoryAttribute.history, at: 0)
                         }
                         
-                        // we must carry over the original attribute from previously parsed edit instances inside updatedAttributes because message.attributes has it overwritten? Let's check updatedAttributes before removing.
                         updatedAttributes.removeAll(where: { $0 is EditedMessageHistoryAttribute })
                         updatedAttributes.append(EditedMessageHistoryAttribute(history: updatedHistory))
-                        print("EDIT HISTORY: updatedHistory count is \(updatedHistory.count)")
                     }
                     
                     if let previousFactCheckAttribute = previousMessage.attributes.first(where: { $0 is FactCheckMessageAttribute }) as? FactCheckMessageAttribute, let updatedFactCheckAttribute = message.attributes.first(where: { $0 is FactCheckMessageAttribute }) as? FactCheckMessageAttribute {

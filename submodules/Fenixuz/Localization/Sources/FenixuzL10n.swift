@@ -343,11 +343,21 @@ public struct FenixuzL10n {
         }
     }
 
-    // Sound-option display name. Key is one of "default" / "none".
+    // Sound-option display name. Key is one of the FenixuzUnreadReminderSettings.soundOptions.
     public func settings_reminder_soundName(_ key: String) -> String {
         switch key {
         case "none":
             return pick(en: "None", uz: "Yo'q", ru: "Нет")
+        case "chime":
+            return pick(en: "Chime", uz: "Jarang", ru: "Перезвон")
+        case "glass":
+            return pick(en: "Glass", uz: "Shisha", ru: "Стекло")
+        case "bell":
+            return pick(en: "Bell", uz: "Qo'ng'iroq", ru: "Колокол")
+        case "note":
+            return pick(en: "Note", uz: "Nota", ru: "Нота")
+        case "tritone":
+            return pick(en: "Tri-tone", uz: "Uch ohang", ru: "Три-тон")
         default:
             return pick(en: "Default notification sound", uz: "Bildirishnoma ovozi", ru: "Звук уведомления по умолчанию")
         }
@@ -386,7 +396,10 @@ public struct FenixuzL10n {
         pick(en: "Forward Without Name", uz: "Imzosiz forward", ru: "Пересылка без имени")
     }
     public var settings_chat_forwardHideNames_subtitle: String {
-        pick(en: "Hide the sender's name by default when forwarding", uz: "Forward qilganda yuboruvchi ismi standart berkitiladi", ru: "Скрывать имя отправителя при пересылке по умолчанию")
+        pick(en: "Adds a “Forward without name” item to the message menu", uz: "Xabar menyusiga \"Imzosiz forward qilish\" tugmasini qo'shadi", ru: "Добавляет пункт «Переслать без имени» в меню сообщения")
+    }
+    public var context_forwardWithoutName: String {
+        pick(en: "Forward without name", uz: "Imzosiz forward qilish", ru: "Переслать без имени")
     }
     public var settings_interface_unlimitedPins_title: String {
         pick(en: "Unlimited Pins", uz: "Cheksiz pin", ru: "Безлимитные закрепы")
@@ -481,18 +494,6 @@ public struct FenixuzL10n {
             en: "Automatically block messages from numbers in other countries",
             uz: "Boshqa davlat raqamlaridan kelgan xabarlarni avtomatik bloklash",
             ru: "Автоматически блокировать сообщения с зарубежных номеров"
-        )
-    }
-
-    public var settings_protection_apk_title: String {
-        pick(en: "Block APK files", uz: "APK fayllarni bloklash", ru: "Блокировать APK-файлы")
-    }
-
-    public var settings_protection_apk_subtitle: String {
-        pick(
-            en: "Hide .apk files in chats (Android packages)",
-            uz: "Chatlarda .apk fayllarni yashirish (Android dasturlari)",
-            ru: "Скрывать .apk-файлы в чатах (Android-пакеты)"
         )
     }
 

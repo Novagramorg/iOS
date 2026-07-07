@@ -4,6 +4,7 @@ import Display
 import TelegramCore
 import FenixuzAnalytics
 import FenixuzAutoProxy
+import FenixuzProMessager
 import UserNotifications
 import Intents
 import Postbox
@@ -1215,6 +1216,25 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         |> take(1)
         |> deliverOnMainQueue).start(next: { sharedApplicationContext in
             FenixuzAutoProxyManager.shared.start(sharedContext: sharedApplicationContext.sharedContext)
+        })
+
+        // Fenixuz Auto-Accept — Feature #45. When an authorized account is active, run the
+        // proactive monitor that approves pending join requests for admin channels/groups
+        // (gated on the "fenix_autoaccept_global" toggle).
+        _ = (self.sharedContextPromise.get()
+        |> take(1)
+        |> deliverOnMainQueue).start(next: { sharedApplicationContext in
+            _ = (sharedApplicationContext.sharedContext.activeAccountContexts
+            |> map { primary, _, _ -> AccountContext? in
+                return primary
+            }
+            |> deliverOnMainQueue).start(next: { primary in
+                if let primary = primary {
+                    FenixAutoAcceptManager.startGlobalMonitor(context: primary)
+                } else {
+                    FenixAutoAcceptManager.stopGlobalMonitor()
+                }
+            })
         })
 
         self.context.set(self.sharedContextPromise.get()

@@ -46,7 +46,13 @@ public final class SecretVaultManager {
         self.lock.unlock()
         let value = ChatPincodeManager.shared.isVaultEnabled()
         self.lock.lock()
-        self.cachedEnabled = value
+        // Only memoize a positive result. A false read can happen transiently when the
+        // keychain is unreadable (device locked while the chat-list pipeline refreshes in
+        // the background); caching it would keep the vault disabled for the whole process
+        // lifetime and leak vaulted chats into the main list until relaunch.
+        if value {
+            self.cachedEnabled = true
+        }
         self.lock.unlock()
         return value
     }

@@ -162,7 +162,9 @@ private enum AutoTranslateEntry: ItemListNodeEntry {
             return ItemListSectionHeaderItem(presentationData: presentationData, text: title, sectionId: self.section)
 
         case let .language(_, theme, name, code, isSelected, isDownloaded):
-            return ItemListDisclosureItem(presentationData: presentationData, title: name, label: isDownloaded ? (isSelected ? "✅ Tanlangan" : "✅") : "Yuklash", labelStyle: isSelected ? .badge(theme.list.itemAccentColor) : .detailText, sectionId: self.section, style: .blocks, action: {
+            let langCode = presentationData.strings.primaryComponent.languageCode
+            let label = isDownloaded ? (isSelected ? FenixTranslateStrings.selectedLabel(langCode: langCode) : "✅") : FenixTranslateStrings.downloadLabel(langCode: langCode)
+            return ItemListDisclosureItem(presentationData: presentationData, title: name, label: label, labelStyle: isSelected ? .badge(theme.list.itemAccentColor) : .detailText, sectionId: self.section, style: .blocks, action: {
                 if isDownloaded {
                     args.updateLang(code)
                 } else {
@@ -208,36 +210,23 @@ private final class AutoTranslateArguments {
 
 private func autoTranslateEntries(presentationData: PresentationData, state: AutoTranslateState) -> [AutoTranslateEntry] {
     var entries: [AutoTranslateEntry] = []
+    let langCode = presentationData.strings.primaryComponent.languageCode
 
-    entries.append(.infoText(presentationData.theme,
-        "Bu funksiya yoqilganda o'zingiz tanlagan til kodi orqali barcha yuborayotgan xabarlaringiz avtomatik ravishda shu tilga tarjima qilinadi."))
+    entries.append(.infoText(presentationData.theme, FenixTranslateStrings.autoInfo(langCode: langCode)))
 
     entries.append(.enableToggle(presentationData.theme,
-        "Avtomatik tarjima qilish",
-        "Barcha chiqayotgan xabarlarni tarjima qilib yuborish",
+        FenixTranslateStrings.autoToggleTitle(langCode: langCode),
+        FenixTranslateStrings.autoToggleSubtitle(langCode: langCode),
         state.isEnabled))
 
-    entries.append(.languagesHeader(presentationData.theme, "TARJIMA TILLARI (YUKLAB OLISH VA TANLASH)"))
+    entries.append(.languagesHeader(presentationData.theme, FenixTranslateStrings.autoLanguagesHeader(langCode: langCode)))
 
-    let languages = [
-        ("Ingliz tili", "en"),
-        ("Rus tili", "ru"),
-        ("O'zbek tili", "uz"),
-        ("Turk tili", "tr"),
-        ("Nemis tili", "de"),
-        ("Fransuz tili", "fr"),
-        ("Ispan tili", "es"),
-        ("Ital yan tili", "it"),
-        ("Arab tili", "ar"),
-        ("Xitoy tili", "zh"),
-        ("Yapon tili", "ja"),
-        ("Koreys tili", "ko")
-    ]
+    let languageCodes = ["en", "ru", "uz", "tr", "de", "fr", "es", "it", "ar", "zh", "ja", "ko"]
 
-    for (index, lang) in languages.enumerated() {
-        let isSelected = state.lang == lang.1
-        let isDownloaded = state.downloadedLanguages.contains(lang.1)
-        entries.append(.language(Int32(index), presentationData.theme, lang.0, lang.1, isSelected, isDownloaded))
+    for (index, code) in languageCodes.enumerated() {
+        let isSelected = state.lang == code
+        let isDownloaded = state.downloadedLanguages.contains(code)
+        entries.append(.language(Int32(index), presentationData.theme, FenixTranslateStrings.languageName(code: code, langCode: langCode), code, isSelected, isDownloaded))
     }
 
     return entries
@@ -283,7 +272,7 @@ public func fenixTranslateAutoController(context: AccountContext, onEnabledSelec
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
-            title: .text("Avtomatik tarjima qilish"),
+            title: .text(FenixTranslateStrings.autoTitle(langCode: presentationData.strings.primaryComponent.languageCode)),
             leftNavigationButton: nil,
             rightNavigationButton: nil,
             backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)

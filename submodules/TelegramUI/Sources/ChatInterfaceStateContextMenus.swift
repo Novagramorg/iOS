@@ -38,6 +38,7 @@ import ChatMessageBubbleItemNode
 import AdsInfoScreen
 import AdsReportScreen
 import FenixuzEditedHistory
+import FenixuzLocalization
  
 private struct MessageContextMenuData {
     let starStatus: Bool?
@@ -1950,6 +1951,15 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                     interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message])
                     f(.dismissWithoutContent)
                 })))
+                if UserDefaults(suiteName: "pro_messager")?.bool(forKey: "forward_hide_names") == true {
+                    actions.append(.action(ContextMenuActionItem(text: FenixuzL10n(chatPresentationInterfaceState.strings).context_forwardWithoutName, icon: { theme in
+                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Forward"), color: theme.actionSheet.primaryTextColor)
+                    }, action: { _, f in
+                        UserDefaults(suiteName: "pro_messager")?.set(true, forKey: "forward_hide_names_once")
+                        interfaceInteraction.forwardMessages(selectAll || isImage ? messages : [message])
+                        f(.dismissWithoutContent)
+                    })))
+                }
             }
         }
         

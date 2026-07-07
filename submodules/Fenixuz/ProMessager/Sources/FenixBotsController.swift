@@ -58,9 +58,11 @@ private func fenixBotIcon(systemName: String, hexColor: String) -> UIImage? {
 // MARK: - Arguments
 
 private final class FenixBotsArguments {
+    let context: AccountContext
     let openBot: (String) -> Void
 
-    init(openBot: @escaping (String) -> Void) {
+    init(context: AccountContext, openBot: @escaping (String) -> Void) {
+        self.context = context
         self.openBot = openBot
     }
 }
@@ -70,13 +72,13 @@ private final class FenixBotsArguments {
 private enum FenixBotsEntry: ItemListNodeEntry {
     // Section header for each bot category
     case categoryHeader(Int, String)
-    // Individual bot row: (categoryIndex, botIndex, bot model, theme)
-    case botRow(Int, Int, NovagramBot, PresentationTheme)
+    // Individual bot row: (categoryIndex, botIndex, bot model, theme, resolved Telegram peer for its real avatar)
+    case botRow(Int, Int, NovagramBot, PresentationTheme, EnginePeer?)
 
     var section: ItemListSectionId {
         switch self {
         case let .categoryHeader(catIndex, _): return ItemListSectionId(Int32(catIndex))
-        case let .botRow(catIndex, _, _, _):   return ItemListSectionId(Int32(catIndex))
+        case let .botRow(catIndex, _, _, _, _): return ItemListSectionId(Int32(catIndex))
         }
     }
 
@@ -84,8 +86,8 @@ private enum FenixBotsEntry: ItemListNodeEntry {
         // Category headers: catIndex * 1000 (e.g. 0, 1000, 2000, 3000)
         // Bot rows: catIndex * 1000 + 1 + botIndex (always < next header stableId)
         switch self {
-        case let .categoryHeader(catIndex, _):      return Int32(catIndex * 1000)
-        case let .botRow(catIndex, botIndex, _, _): return Int32(catIndex * 1000 + 1 + botIndex)
+        case let .categoryHeader(catIndex, _):         return Int32(catIndex * 1000)
+        case let .botRow(catIndex, botIndex, _, _, _): return Int32(catIndex * 1000 + 1 + botIndex)
         }
     }
 
@@ -95,12 +97,13 @@ private enum FenixBotsEntry: ItemListNodeEntry {
             if case let .categoryHeader(rhsCat, rhsTitle) = rhs,
                lhsCat == rhsCat, lhsTitle == rhsTitle { return true }
             return false
-        case let .botRow(lhsCat, lhsIdx, lhsBot, lhsTheme):
-            if case let .botRow(rhsCat, rhsIdx, rhsBot, rhsTheme) = rhs,
+        case let .botRow(lhsCat, lhsIdx, lhsBot, lhsTheme, lhsPeer):
+            if case let .botRow(rhsCat, rhsIdx, rhsBot, rhsTheme, rhsPeer) = rhs,
                lhsCat == rhsCat,
                lhsIdx == rhsIdx,
                lhsBot.username == rhsBot.username,
-               lhsTheme === rhsTheme { return true }
+               lhsTheme === rhsTheme,
+               lhsPeer?.id == rhsPeer?.id { return true }
             return false
         }
     }
@@ -118,11 +121,16 @@ private enum FenixBotsEntry: ItemListNodeEntry {
                 text: title,
                 sectionId: self.section
             )
-        case let .botRow(_, _, bot, _):
+        case let .botRow(_, _, bot, _, peer):
             let langCode = presentationData.strings.primaryComponent.languageCode
+            // Real avatar takes over via iconPeer once resolved; until then (or if the
+            // bot has no profile photo) the brand-color icon is the visible fallback.
+            // Pattern mirrors FenixAccountsController.swift's live/suspended avatar rows.
             return ItemListDisclosureItem(
                 presentationData: presentationData,
-                icon: fenixBotIcon(systemName: bot.icon, hexColor: bot.color),
+                icon: peer == nil ? fenixBotIcon(systemName: bot.icon, hexColor: bot.color) : nil,
+                context: args.context,
+                iconPeer: peer,
                 title: bot.name,
                 label: bot.help.localized(langCode: langCode),
                 labelStyle: .multilineDetailText,
@@ -140,17 +148,62 @@ private enum FenixBotsEntry: ItemListNodeEntry {
 
 private func fenixBotsEntries(
     presentationData: PresentationData,
-    categories: [NovagramBotCategory]
+    categories: [NovagramBotCategory],
+    avatarPeers: [String: EnginePeer]
 ) -> [FenixBotsEntry] {
     let langCode = presentationData.strings.primaryComponent.languageCode
     var entries: [FenixBotsEntry] = []
     for (catIndex, category) in categories.enumerated() {
         entries.append(.categoryHeader(catIndex, category.title.localized(langCode: langCode)))
         for (botIndex, bot) in category.bots.enumerated() {
-            entries.append(.botRow(catIndex, botIndex, bot, presentationData.theme))
+            entries.append(.botRow(catIndex, botIndex, bot, presentationData.theme, avatarPeers[bot.username]))
         }
     }
     return entries.sorted()
+}
+
+// MARK: - Avatar resolution
+
+/// Resolves every unique bot @username to its EnginePeer once, keeping only the
+/// peers that actually have a profile photo (peer.smallProfileImage != nil).
+/// Bots with no set avatar, or usernames that fail to resolve, are simply absent
+/// from the returned map so their rows keep the brand-icon fallback (fenixBotIcon).
+/// Reuses the resolvePeerByName pattern from openBot(_:) below.
+private func resolveBotAvatarPeers(
+    context: AccountContext,
+    categories: [NovagramBotCategory]
+) -> Signal<[String: EnginePeer], NoError> {
+    var usernames = Set<String>()
+    for category in categories {
+        for bot in category.bots {
+            usernames.insert(bot.username)
+        }
+    }
+    guard !usernames.isEmpty else {
+        return .single([:])
+    }
+
+    let perBotSignals: [Signal<(String, EnginePeer?), NoError>] = usernames.map { username in
+        context.engine.peers.resolvePeerByName(name: username, referrer: nil)
+        |> mapToSignal { result -> Signal<EnginePeer?, NoError> in
+            switch result {
+            case let .result(peer): return .single(peer)
+            case .progress:         return .complete()
+            }
+        }
+        |> map { (username, $0) }
+    }
+
+    return combineLatest(perBotSignals)
+    |> map { pairs -> [String: EnginePeer] in
+        var result: [String: EnginePeer] = [:]
+        for (username, peer) in pairs {
+            if let peer, peer.smallProfileImage != nil {
+                result[username] = peer
+            }
+        }
+        return result
+    }
 }
 
 // MARK: - Public factory
@@ -166,7 +219,7 @@ public func fenixBotsController(context: AccountContext) -> ViewController {
 
     let openBotDisposable = MetaDisposable()
 
-    let arguments = FenixBotsArguments(openBot: { username in
+    let arguments = FenixBotsArguments(context: context, openBot: { username in
         // Resolve the bot peer by @username, then push its chat controller.
         // Pattern: context.engine.peers.resolvePeerByName — reused from
         // submodules/Fenixuz/AIChatbot/Sources/AIChatbotTabController.swift:190
@@ -191,9 +244,17 @@ public func fenixBotsController(context: AccountContext) -> ViewController {
         }))
     })
 
-    let signal = context.sharedContext.presentationData
+    // Avatars are resolved once in the background; the list renders immediately with
+    // brand-icon fallbacks (empty map) and swaps in real avatars when this resolves.
+    let avatarPeersSignal: Signal<[String: EnginePeer], NoError> = .single([:])
+    |> then(resolveBotAvatarPeers(context: context, categories: categories))
+
+    let signal = combineLatest(
+        context.sharedContext.presentationData,
+        avatarPeersSignal
+    )
     |> deliverOnMainQueue
-    |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, avatarPeers -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let langCode = presentationData.strings.primaryComponent.languageCode
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
@@ -206,7 +267,8 @@ public func fenixBotsController(context: AccountContext) -> ViewController {
             presentationData: ItemListPresentationData(presentationData),
             entries: fenixBotsEntries(
                 presentationData: presentationData,
-                categories: categories
+                categories: categories,
+                avatarPeers: avatarPeers
             ),
             style: .blocks
         )

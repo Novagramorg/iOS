@@ -6,6 +6,12 @@ swift_library(
     srcs = glob([
         "Sources/**/*.swift",
     ]),
+    # Bundled reminder tones. Attaching them as `data` to the swift_library makes
+    # rules_apple flatten each .caf to the app bundle root, which is where
+    # UNNotificationSound(named:) resolves them from (Bundle.main).
+    data = glob([
+        "Sounds/*.caf",
+    ]),
     copts = [
         "-warnings-as-errors",
     ],

@@ -96,6 +96,32 @@ public enum SecretVaultStrings {
         )
     }
 
+    // MARK: - Biometric unlock toggle
+
+    /// Toggle title, adapted to the device's biometric hardware.
+    public static func biometricToggleTitle(faceID: Bool) -> String {
+        if faceID {
+            return localized(en: "Unlock with Face ID", uz: "Face ID bilan ochish", ru: "Открывать с Face ID")
+        }
+        return localized(en: "Unlock with Touch ID", uz: "Touch ID bilan ochish", ru: "Открывать с Touch ID")
+    }
+
+    public static var biometricFooter: String {
+        localized(
+            en: "Use Face ID or Touch ID to open the vault. Your PIN still works if biometrics fail.",
+            uz: "Seyfni ochish uchun Face ID yoki Touch ID'dan foydalaning. Biometrika ishlamasa, PIN baribir ishlaydi.",
+            ru: "Используйте Face ID или Touch ID для открытия хранилища. Если биометрия не сработает, PIN по-прежнему доступен."
+        )
+    }
+
+    public static var biometricReason: String {
+        localized(
+            en: "Confirm to unlock the Secret Vault with biometrics",
+            uz: "Maxfiy seyfni biometrika bilan ochishni tasdiqlang",
+            ru: "Подтвердите разблокировку секретного хранилища по биометрии"
+        )
+    }
+
     // MARK: - Disable confirmation
 
     public static var disableConfirmTitle: String {

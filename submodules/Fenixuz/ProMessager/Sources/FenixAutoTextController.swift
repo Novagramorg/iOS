@@ -15,6 +15,58 @@ private let kSuiteName   = "pro_messager"
 private let kEnabled     = "auto_text_enabled"
 private let kContent     = "auto_text_content"
 
+// MARK: - Localized strings
+
+private enum FenixAutoTextStrings {
+    static func info(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Bu funksiya yoqilganda, siz yozgan xabarning oxiriga avtomatik ravishda qo'shimcha matn qo'shiladi.\n\nMasalan: Siz \"Salom\" deb yozsangiz va qo'shimcha matn \"(Pro)\" bo'lsa, xabar \"Salom (Pro)\" sifatida yuboriladi."
+        case "ru": return "Когда эта функция включена, к концу каждого отправляемого сообщения автоматически добавляется дополнительный текст.\n\nНапример: если вы напишете «Привет», а дополнительный текст — «(Pro)», сообщение будет отправлено как «Привет (Pro)»."
+        default:   return "When this feature is enabled, extra text is automatically appended to the end of every message you send.\n\nFor example: if you type \"Hello\" and the extra text is \"(Pro)\", the message is sent as \"Hello (Pro)\"."
+        }
+    }
+
+    static func toggleTitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Avtomatik qo'shimcha"
+        case "ru": return "Автодобавление"
+        default:   return "Auto-append"
+        }
+    }
+
+    static func toggleSubtitle(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Har bir xabar yuborishda qo'shimcha matn qo'shish"
+        case "ru": return "Добавлять дополнительный текст при отправке каждого сообщения"
+        default:   return "Append extra text on every message send"
+        }
+    }
+
+    static func inputHeader(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "QO'SHIMCHA MATN"
+        case "ru": return "ДОПОЛНИТЕЛЬНЫЙ ТЕКСТ"
+        default:   return "EXTRA TEXT"
+        }
+    }
+
+    static func inputPlaceholder(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Qo'shimcha matnni kiriting..."
+        case "ru": return "Введите дополнительный текст..."
+        default:   return "Enter the extra text..."
+        }
+    }
+
+    static func inputHint(langCode: String) -> String {
+        switch langCode {
+        case "uz": return "Xabar yuborilganda shu matn avtomatik qo'shiladi. O'zgarishlar darhol saqlanadi."
+        case "ru": return "Этот текст автоматически добавляется при отправке сообщения. Изменения сохраняются сразу."
+        default:   return "This text is automatically appended when a message is sent. Changes are saved immediately."
+        }
+    }
+}
+
 // MARK: - Section
 
 private enum AutoTextSection: Int32 {
@@ -50,7 +102,7 @@ private enum AutoTextEntry: ItemListNodeEntry {
         }
     }
 
-    static func ==(lhs: AutoTextEntry, rhs: AutoTextEntry) -> Bool {
+    static func == (lhs: AutoTextEntry, rhs: AutoTextEntry) -> Bool {
         switch (lhs, rhs) {
         case let (.infoText(lt, la), .infoText(rt, ra)):
             return lt === rt && la == ra
@@ -67,7 +119,7 @@ private enum AutoTextEntry: ItemListNodeEntry {
         }
     }
 
-    static func <(lhs: AutoTextEntry, rhs: AutoTextEntry) -> Bool {
+    static func < (lhs: AutoTextEntry, rhs: AutoTextEntry) -> Bool {
         return lhs.stableId < rhs.stableId
     }
 
@@ -137,23 +189,22 @@ private final class AutoTextArguments {
 
 private func autoTextEntries(presentationData: PresentationData, state: AutoTextState) -> [AutoTextEntry] {
     var entries: [AutoTextEntry] = []
+    let langCode = presentationData.strings.primaryComponent.languageCode
 
-    entries.append(.infoText(presentationData.theme,
-        "Bu funksiya yoqilganda, siz yozgan xabarning oxiriga avtomatik ravishda qo'shimcha matn qo'shiladi.\n\nMasalan: Siz \"Salom\" deb yozsangiz va qo'shimcha matn \"(Pro)\" bo'lsa, xabar \"Salom (Pro)\" sifatida yuboriladi."))
+    entries.append(.infoText(presentationData.theme, FenixAutoTextStrings.info(langCode: langCode)))
 
     entries.append(.enableToggle(presentationData.theme,
-        "Avtomatik qo'shimcha",
-        "Har bir xabar yuborishda qo'shimcha matn qo'shish",
+        FenixAutoTextStrings.toggleTitle(langCode: langCode),
+        FenixAutoTextStrings.toggleSubtitle(langCode: langCode),
         state.isEnabled))
 
-    entries.append(.textInputHeader(presentationData.theme, "QO'SHIMCHA MATN"))
+    entries.append(.textInputHeader(presentationData.theme, FenixAutoTextStrings.inputHeader(langCode: langCode)))
 
     entries.append(.textInput(presentationData.theme,
-        "Qo'simcha matnni kiriting...",
+        FenixAutoTextStrings.inputPlaceholder(langCode: langCode),
         state.content))
 
-    entries.append(.inputHint(presentationData.theme,
-        "Xabar yuborilganda shu matn avtomatik qo'shiladi. O'zgarishlar darhol saqlanadi."))
+    entries.append(.inputHint(presentationData.theme, FenixAutoTextStrings.inputHint(langCode: langCode)))
 
     return entries
 }
@@ -190,7 +241,7 @@ public func fenixAutoTextController(context: AccountContext, onEnabledSelected: 
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
-            title: .text("Avtomatik qo'shimcha"),
+            title: .text(FenixAutoTextStrings.toggleTitle(langCode: presentationData.strings.primaryComponent.languageCode)),
             leftNavigationButton: nil,
             rightNavigationButton: nil,
             backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)

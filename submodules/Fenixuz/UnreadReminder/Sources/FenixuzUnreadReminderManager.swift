@@ -187,13 +187,19 @@ public final class FenixuzUnreadReminderManager {
     }
 
     private func notificationSound() -> UNNotificationSound? {
-        switch FenixuzUnreadReminderSettings.sound {
+        let key = FenixuzUnreadReminderSettings.sound
+        switch key {
         case "none":
             return nil
         case "default":
             return .default
         default:
-            return .default
+            // A named tone must be a file bundled at the app root. If the key has no
+            // bundled file (unknown/legacy value) fall back to the system default.
+            guard let fileName = FenixuzUnreadReminderSettings.fileName(for: key) else {
+                return .default
+            }
+            return UNNotificationSound(named: UNNotificationSoundName(rawValue: fileName))
         }
     }
 

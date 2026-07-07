@@ -20,6 +20,7 @@ swift_library(
         "//submodules/AppBundle:AppBundle",
         "//submodules/ContextUI:ContextUI",
         "//submodules/Markdown:Markdown",
+        "//submodules/PhotoResources:PhotoResources",
     ],
     visibility = [
         "//visibility:public",

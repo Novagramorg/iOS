@@ -56,6 +56,7 @@ swift_library(
         "//submodules/Fenixuz/ChatLock:FenixuzChatLock",
         "//submodules/Fenixuz/ForeignUserBlock:FenixuzForeignUserBlock",
         "//submodules/Fenixuz/EditedHistory:FenixuzEditedHistory",
+        "//submodules/Fenixuz/Localization:FenixuzLocalization",
         "//submodules/Fenixuz/Tips:FenixuzTips",
         "//submodules/Fenixuz/UpdateCheck:FenixuzUpdateCheck",
         "//submodules/Fenixuz/UnreadReminder:FenixuzUnreadReminder",
