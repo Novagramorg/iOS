@@ -7,6 +7,10 @@ import RichTextEditorCore
 import RichTextEditorUIKit
 import TelegramCore
 import AsyncDisplayKit
+import ComponentFlow
+import PlainButtonComponent
+import BundleIconComponent
+import MultilineTextComponent
 
 final class TableStructuralMenuAlignmentItem: ContextMenuCustomItem {
     let initialHorizontal: TableHorizontalAlignment?
@@ -25,86 +29,6 @@ final class TableStructuralMenuAlignmentItem: ContextMenuCustomItem {
     }
 }
 
-private let regularFont = Font.regular(15.0)
-private let selectedFont = Font.semibold(15.0)
-
-private let alignmentMenuHorizontalValues: [TableHorizontalAlignment] = [.left, .center, .right]
-private let alignmentMenuHorizontalTitles = ["Left", "Center", "Right"]
-private let alignmentMenuVerticalValues: [TableVerticalAlignment] = [.top, .middle, .bottom]
-private let alignmentMenuVerticalTitles = ["Top", "Middle", "Bottom"]
-
-/// One tap target inside a segmented row: a persistent background, a transient touch-highlight overlay
-/// (mirrors `BrowserFontSizeContextMenuItemNode`'s button convention), and a centered title whose color/weight
-/// reflects whether this segment is the row's current selection.
-private final class AlignmentSegmentButtonNode: ASDisplayNode {
-    private let backgroundNode: ASDisplayNode
-    private let highlightedBackgroundNode: ASDisplayNode
-    private let textNode: ImmediateTextNode
-    private let buttonNode: HighlightTrackingButtonNode
-
-    var pressed: (() -> Void)?
-
-    init(accessibilityLabel: String) {
-        self.backgroundNode = ASDisplayNode()
-        self.backgroundNode.isAccessibilityElement = false
-
-        self.highlightedBackgroundNode = ASDisplayNode()
-        self.highlightedBackgroundNode.isAccessibilityElement = false
-        self.highlightedBackgroundNode.alpha = 0.0
-
-        self.textNode = ImmediateTextNode()
-        self.textNode.isAccessibilityElement = false
-        self.textNode.isUserInteractionEnabled = false
-        self.textNode.displaysAsynchronously = false
-        self.textNode.textAlignment = .center
-
-        self.buttonNode = HighlightTrackingButtonNode()
-        self.buttonNode.isAccessibilityElement = true
-        self.buttonNode.accessibilityLabel = accessibilityLabel
-        self.buttonNode.accessibilityTraits = [.button]
-
-        super.init()
-
-        self.addSubnode(self.backgroundNode)
-        self.addSubnode(self.highlightedBackgroundNode)
-        self.addSubnode(self.textNode)
-        self.addSubnode(self.buttonNode)
-
-        self.buttonNode.highligthedChanged = { [weak self] highlighted in
-            guard let self else {
-                return
-            }
-            if highlighted {
-                self.highlightedBackgroundNode.alpha = 1.0
-            } else {
-                self.highlightedBackgroundNode.alpha = 0.0
-                self.highlightedBackgroundNode.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.3)
-            }
-        }
-        self.buttonNode.addTarget(self, action: #selector(self.buttonPressed), forControlEvents: .touchUpInside)
-    }
-
-    @objc private func buttonPressed() {
-        self.pressed?()
-    }
-
-    func update(title: String, isSelected: Bool, backgroundColor: UIColor, highlightedBackgroundColor: UIColor, normalTextColor: UIColor, selectedTextColor: UIColor) {
-        self.backgroundNode.backgroundColor = backgroundColor
-        self.highlightedBackgroundNode.backgroundColor = highlightedBackgroundColor
-        self.textNode.attributedText = NSAttributedString(string: title, font: isSelected ? selectedFont : regularFont, textColor: isSelected ? selectedTextColor : normalTextColor)
-        self.buttonNode.accessibilityTraits = isSelected ? [.button, .selected] : [.button]
-    }
-
-    func updateLayout(size: CGSize) {
-        self.backgroundNode.frame = CGRect(origin: CGPoint(), size: size)
-        self.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(), size: size)
-        self.buttonNode.frame = CGRect(origin: CGPoint(), size: size)
-
-        let textSize = self.textNode.updateLayout(size)
-        self.textNode.frame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - textSize.width) / 2.0), y: floorToScreenPixels((size.height - textSize.height) / 2.0)), size: textSize)
-    }
-}
-
 /// Renders the per-cell alignment control as two rows of three segmented buttons (H: Left/Center/Right,
 /// V: Top/Middle/Bottom), modeled on `BrowserFontSizeContextMenuItemNode` (background + touch-highlight overlay
 /// + separators per button, `updateTheme` re-applying colors, `updateLayout` returning a fixed-height control).
@@ -118,14 +42,14 @@ private final class TableStructuralMenuAlignmentItemNode: ASDisplayNode, Context
 
     let needsPadding: Bool = false
 
+    private let title = ComponentView<Empty>()
     private var currentHorizontal: TableHorizontalAlignment?
     private var currentVertical: TableVerticalAlignment?
 
-    private let horizontalButtons: [AlignmentSegmentButtonNode]
-    private let verticalButtons: [AlignmentSegmentButtonNode]
-    private let rowSeparatorNode: ASDisplayNode
-    private let horizontalDividerNodes: [ASDisplayNode]
-    private let verticalDividerNodes: [ASDisplayNode]
+    private let horizontalItems: [ComponentView<Empty>]
+    private let verticalItems: [ComponentView<Empty>]
+    private let horizontalSelection = UIImageView()
+    private let verticalSelection = UIImageView()
 
     private var validLayout: (constrainedWidth: CGFloat, constrainedHeight: CGFloat, resultSize: CGSize)?
 
@@ -134,58 +58,16 @@ private final class TableStructuralMenuAlignmentItemNode: ASDisplayNode, Context
         self.item = item
         self.currentHorizontal = item.initialHorizontal
         self.currentVertical = item.initialVertical
-
-        self.horizontalButtons = alignmentMenuHorizontalTitles.map { AlignmentSegmentButtonNode(accessibilityLabel: $0) }
-        self.verticalButtons = alignmentMenuVerticalTitles.map { AlignmentSegmentButtonNode(accessibilityLabel: $0) }
-
-        self.rowSeparatorNode = ASDisplayNode()
-        self.rowSeparatorNode.isAccessibilityElement = false
-
-        self.horizontalDividerNodes = (0 ..< 2).map { _ in
-            let node = ASDisplayNode()
-            node.isAccessibilityElement = false
-            return node
-        }
-        self.verticalDividerNodes = (0 ..< 2).map { _ in
-            let node = ASDisplayNode()
-            node.isAccessibilityElement = false
-            return node
-        }
+        
+        self.horizontalItems = (0 ..< 3).map { _ in ComponentView() }
+        self.verticalItems = (0 ..< 3).map { _ in ComponentView() }
 
         super.init()
 
         self.isUserInteractionEnabled = true
-
-        self.horizontalButtons.forEach(self.addSubnode(_:))
-        self.verticalButtons.forEach(self.addSubnode(_:))
-        self.addSubnode(self.rowSeparatorNode)
-        self.horizontalDividerNodes.forEach(self.addSubnode(_:))
-        self.verticalDividerNodes.forEach(self.addSubnode(_:))
-
-        for (index, button) in self.horizontalButtons.enumerated() {
-            let value = alignmentMenuHorizontalValues[index]
-            button.pressed = { [weak self] in
-                guard let self else {
-                    return
-                }
-                self.currentHorizontal = value
-                self.item.action(value, nil)
-                self.applyStyles()
-            }
-        }
-        for (index, button) in self.verticalButtons.enumerated() {
-            let value = alignmentMenuVerticalValues[index]
-            button.pressed = { [weak self] in
-                guard let self else {
-                    return
-                }
-                self.currentVertical = value
-                self.item.action(nil, value)
-                self.applyStyles()
-            }
-        }
-
-        self.applyStyles()
+        
+        self.view.addSubview(self.horizontalSelection)
+        self.view.addSubview(self.verticalSelection)
     }
 
     override func didLoad() {
@@ -194,79 +76,161 @@ private final class TableStructuralMenuAlignmentItemNode: ASDisplayNode, Context
 
     func updateTheme(presentationData: PresentationData) {
         self.presentationData = presentationData
-        self.applyStyles()
         if let validLayout = self.validLayout {
             let (_, apply) = self.updateLayout(constrainedWidth: validLayout.constrainedWidth, constrainedHeight: validLayout.constrainedHeight)
             apply(validLayout.resultSize, .immediate)
         }
     }
 
-    private func applyStyles() {
-        let theme = self.presentationData.theme
-
-        self.rowSeparatorNode.backgroundColor = theme.contextMenu.itemSeparatorColor
-        self.horizontalDividerNodes.forEach { $0.backgroundColor = theme.contextMenu.itemSeparatorColor }
-        self.verticalDividerNodes.forEach { $0.backgroundColor = theme.contextMenu.itemSeparatorColor }
-
-        for (index, button) in self.horizontalButtons.enumerated() {
-            let isSelected = self.currentHorizontal == alignmentMenuHorizontalValues[index]
-            button.update(
-                title: alignmentMenuHorizontalTitles[index],
-                isSelected: isSelected,
-                backgroundColor: theme.contextMenu.itemBackgroundColor,
-                highlightedBackgroundColor: theme.contextMenu.itemHighlightedBackgroundColor,
-                normalTextColor: theme.contextMenu.primaryColor,
-                selectedTextColor: theme.list.itemAccentColor
-            )
-        }
-        for (index, button) in self.verticalButtons.enumerated() {
-            let isSelected = self.currentVertical == alignmentMenuVerticalValues[index]
-            button.update(
-                title: alignmentMenuVerticalTitles[index],
-                isSelected: isSelected,
-                backgroundColor: theme.contextMenu.itemBackgroundColor,
-                highlightedBackgroundColor: theme.contextMenu.itemHighlightedBackgroundColor,
-                normalTextColor: theme.contextMenu.primaryColor,
-                selectedTextColor: theme.list.itemAccentColor
-            )
-        }
-    }
-
     func updateLayout(constrainedWidth: CGFloat, constrainedHeight: CGFloat) -> (CGSize, (CGSize, ContainedViewLayoutTransition) -> Void) {
-        let rowHeight: CGFloat = 44.0
-        let totalHeight = rowHeight * 2.0 + UIScreenPixel
-        let size = CGSize(width: constrainedWidth, height: totalHeight)
+        let size = CGSize(width: constrainedWidth, height: 68.0)
 
         return (size, { size, transition in
             self.validLayout = (constrainedWidth, constrainedHeight, size)
-
-            let buttonWidth = floorToScreenPixels(size.width / 3.0)
-
-            func frame(forIndex index: Int, y: CGFloat, height: CGFloat) -> CGRect {
-                let x = index == 2 ? buttonWidth * 2.0 : buttonWidth * CGFloat(index)
-                let width = index == 2 ? size.width - x : buttonWidth
-                return CGRect(origin: CGPoint(x: x, y: y), size: CGSize(width: width, height: height))
+            
+            //TODO:localize
+            let titleSize = self.title.update(
+                transition: .immediate,
+                component: AnyComponent(MultilineTextComponent(
+                    text: .plain(NSAttributedString(string: "Alignment", font: Font.regular(13.0), textColor: self.presentationData.theme.contextMenu.secondaryColor))
+                )),
+                environment: {},
+                containerSize: CGSize(width: 1000.0, height: 100.0)
+            )
+            let titleFrame = CGRect(origin: CGPoint(x: floorToScreenPixels((size.width - titleSize.width) * 0.5), y: 11.0), size: titleSize)
+            if let titleView = self.title.view {
+                if titleView.superview == nil {
+                    self.view.addSubview(titleView)
+                }
+                titleView.frame = titleFrame
             }
 
-            for (index, button) in self.horizontalButtons.enumerated() {
-                let buttonFrame = frame(forIndex: index, y: 0.0, height: rowHeight)
-                transition.updateFrame(node: button, frame: buttonFrame)
-                button.updateLayout(size: buttonFrame.size)
+            let spacing: CGFloat = 2.0
+            let itemSize = CGSize(width: 34.0, height: 34.0)
+            
+            enum ItemKind {
+                case left
+                case right
+                case hcenter
+                case top
+                case bottom
+                case vcenter
+                
+                var icon: String {
+                    switch self {
+                    case .left:
+                        return "Chat/Context Menu/AlignLeft"
+                    case .right:
+                        return "Chat/Context Menu/AlignRight"
+                    case .hcenter:
+                        return "Chat/Context Menu/AlignHCenter"
+                    case .top:
+                        return "Chat/Context Menu/AlignTop"
+                    case .bottom:
+                        return "Chat/Context Menu/AlignBottom"
+                    case .vcenter:
+                        return "Chat/Context Menu/AlignVCenter"
+                    }
+                }
             }
-            for (index, divider) in self.horizontalDividerNodes.enumerated() {
-                transition.updateFrame(node: divider, frame: CGRect(origin: CGPoint(x: buttonWidth * CGFloat(index + 1), y: 0.0), size: CGSize(width: UIScreenPixel, height: rowHeight)))
-            }
-
-            transition.updateFrame(node: self.rowSeparatorNode, frame: CGRect(origin: CGPoint(x: 0.0, y: rowHeight), size: CGSize(width: size.width, height: UIScreenPixel)))
-
-            let secondRowY = rowHeight + UIScreenPixel
-            for (index, button) in self.verticalButtons.enumerated() {
-                let buttonFrame = frame(forIndex: index, y: secondRowY, height: rowHeight)
-                transition.updateFrame(node: button, frame: buttonFrame)
-                button.updateLayout(size: buttonFrame.size)
-            }
-            for (index, divider) in self.verticalDividerNodes.enumerated() {
-                transition.updateFrame(node: divider, frame: CGRect(origin: CGPoint(x: buttonWidth * CGFloat(index + 1), y: secondRowY), size: CGSize(width: UIScreenPixel, height: rowHeight)))
+            
+            let hItems: [ItemKind] = [
+                .left, .hcenter, .right
+            ]
+            let vItems: [ItemKind] = [
+                .top, .vcenter, .bottom
+            ]
+            
+            for itemSet in 0 ..< 2 {
+                let items = itemSet == 0 ? self.horizontalItems : self.verticalItems
+                let itemKinds = itemSet == 0 ? hItems : vItems
+                let baseX: CGFloat = itemSet == 0 ? 10.0 : (size.width - 10.0 - CGFloat(items.count) * itemSize.width - CGFloat(items.count - 1) * spacing)
+                let selectionView = itemSet == 0 ? self.horizontalSelection : self.verticalSelection
+                
+                var selectionFrame: CGRect?
+                
+                for i in 0 ..< items.count {
+                    let item = items[i]
+                    let itemKind = itemKinds[i]
+                    
+                    let isSelected: Bool
+                    switch itemKind {
+                    case .left:
+                        isSelected = self.currentHorizontal == .left
+                    case .right:
+                        isSelected = self.currentHorizontal == .right
+                    case .hcenter:
+                        isSelected = self.currentHorizontal == .center
+                    case .top:
+                        isSelected = self.currentVertical == .top
+                    case .bottom:
+                        isSelected = self.currentVertical == .bottom
+                    case .vcenter:
+                        isSelected = self.currentVertical == .middle
+                    }
+                    
+                    let _ = item.update(
+                        transition: .immediate,
+                        component: AnyComponent(PlainButtonComponent(
+                            content: AnyComponent(BundleIconComponent(
+                                name: itemKind.icon,
+                                tintColor: self.presentationData.theme.contextMenu.primaryColor,
+                            )),
+                            minSize: itemSize,
+                            action: { [weak self] in
+                                guard let self else {
+                                    return
+                                }
+                                switch itemKind {
+                                case .left:
+                                    self.currentHorizontal = .left
+                                    self.item.action(.left, nil)
+                                case .right:
+                                    self.currentHorizontal = .right
+                                    self.item.action(.right, nil)
+                                case .hcenter:
+                                    self.currentHorizontal = .center
+                                    self.item.action(.center, nil)
+                                case .top:
+                                    self.currentVertical = .top
+                                    self.item.action(nil, .top)
+                                case .bottom:
+                                    self.currentVertical = .bottom
+                                    self.item.action(nil, .bottom)
+                                case .vcenter:
+                                    self.currentVertical = .middle
+                                    self.item.action(nil, .middle)
+                                }
+                                
+                                if let validLayout = self.validLayout {
+                                    let (_, apply) = self.updateLayout(constrainedWidth: validLayout.constrainedWidth, constrainedHeight: validLayout.constrainedHeight)
+                                    apply(validLayout.resultSize, .animated(duration: 0.4, curve: .spring))
+                                }
+                            }
+                        )),
+                        environment: {},
+                        containerSize: itemSize
+                    )
+                    
+                    let itemFrame = CGRect(origin: CGPoint(x: baseX + CGFloat(i) * (itemSize.width + spacing), y: 34.0), size: itemSize)
+                    if let itemView = item.view {
+                        if itemView.superview == nil {
+                            self.view.addSubview(itemView)
+                        }
+                        itemView.frame = itemFrame
+                    }
+                    if selectionFrame == nil || isSelected {
+                        selectionFrame = itemFrame
+                    }
+                }
+                
+                if let selectionFrame {
+                    transition.updateFrame(view: selectionView, frame: selectionFrame)
+                    if selectionView.image == nil {
+                        selectionView.image = generateStretchableFilledCircleImage(radius: 8.0, color: .white)?.withRenderingMode(.alwaysTemplate)
+                    }
+                    selectionView.tintColor = self.presentationData.theme.contextMenu.itemHighlightedBackgroundColor
+                }
             }
         })
     }

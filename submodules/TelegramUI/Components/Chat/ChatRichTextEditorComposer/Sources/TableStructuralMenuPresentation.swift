@@ -38,10 +38,13 @@ public func presentTableStructuralMenu(
         }
     }
     items.append(contentsOf: request.actions.map { action in
-        .action(ContextMenuActionItem(
-            text: tableStructuralMenuTitle(action.kind),
+        let (title, icon) = tableStructuralMenuTitleAndIcon(action.kind)
+        return .action(ContextMenuActionItem(
+            text: title,
             textColor: tableStructuralMenuIsDestructive(action.kind) ? .destructive : .primary,
-            icon: { _ in nil },
+            icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: icon), color: tableStructuralMenuIsDestructive(action.kind) ? theme.contextMenu.destructiveColor : theme.contextMenu.primaryColor)
+            },
             action: { _, f in f(.default); action.perform() }
         ))
     })
@@ -56,14 +59,14 @@ public func presentTableStructuralMenu(
     present(controller)
 }
 
-private func tableStructuralMenuTitle(_ kind: TableStructuralMenuRequest.Kind) -> String {
+private func tableStructuralMenuTitleAndIcon(_ kind: TableStructuralMenuRequest.Kind) -> (title: String, icon: String) {
     switch kind {
-    case .addColumnLeft: return "Add Column Left"
-    case .addColumnRight: return "Add Column Right"
-    case .deleteColumn: return "Delete Column"
-    case .addRowAbove: return "Add Row Above"
-    case .addRowBelow: return "Add Row Below"
-    case .deleteRow: return "Delete Row"
+    case .addColumnLeft: return ("Add Column Left", "Chat/Context Menu/CellAddLeft")
+    case .addColumnRight: return ("Add Column Right", "Chat/Context Menu/CellAddRight")
+    case .deleteColumn: return ("Delete Column", "Chat/Context Menu/CellDelete")
+    case .addRowAbove: return ("Add Row Above", "Chat/Context Menu/CellAddTop")
+    case .addRowBelow: return ("Add Row Below", "Chat/Context Menu/CellAddBottom")
+    case .deleteRow: return ("Delete Row", "Chat/Context Menu/CellDelete")
     }
 }
 
