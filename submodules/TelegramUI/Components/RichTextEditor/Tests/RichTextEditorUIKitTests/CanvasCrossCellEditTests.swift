@@ -207,16 +207,22 @@ final class CanvasCrossCellEditTests: XCTestCase {
         XCTAssertEqual(v.anchor, v.head, "selection collapses — not stuck")
     }
 
-    // Finding 1 (delete variant): delete over empty cells collapses the caret, cells survive.
-    func test_emptyCellsCrossSelection_delete_collapses() {
+    // A selection covering the table's WHOLE content (here: both — i.e. every — cell of a 1×2 table), on
+    // delete, REMOVES the table — resetting to a single empty body paragraph, exactly like Select-All →
+    // Backspace. (Empty cells are covered too: a range ending at the last empty cell's start spans its
+    // zero-length content.) Only an empty-text DELETE triggers this; type-over still lands the char in the
+    // first cell (see `test_emptyCellsCrossSelection_typeOver_landsInFirstCell_andCollapses`).
+    func test_emptyCellsCrossSelection_delete_removesTable() {
         let v = canvasEmptyCells()
         let cellA = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("ap")) }!
         let cellB = v.allLeafRegions().first { $0.ref == .paragraph(BlockID("bp")) }!
-        v.anchor = cellA.globalStart; v.head = cellB.globalStart
+        v.anchor = cellA.globalStart; v.head = cellB.globalStart   // covers every cell of the table
         v.deleteBackward()
-        XCTAssertEqual(v.anchor, v.head, "selection collapses on delete over empty cells")
-        XCTAssertEqual(cellInfo(v, 0, 0)?.blocks, 1)
-        XCTAssertEqual(cellInfo(v, 0, 1)?.blocks, 1)
+        v.layoutIfNeeded()
+        XCTAssertEqual(v.anchor, v.head, "selection collapses to a caret")
+        XCTAssertNil(v.boxes.first { $0 is TableBlockBox }, "deleting every cell removes the table")
+        XCTAssertEqual(v.boxes.count, 1, "collapses to one empty paragraph")
+        XCTAssertEqual(v.boxes[0].textLength, 0)
     }
 
     // Minor fix: when the FIRST covered region's start cell is empty, type-over lands in selFrom's

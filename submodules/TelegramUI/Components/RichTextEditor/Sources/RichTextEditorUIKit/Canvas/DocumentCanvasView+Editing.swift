@@ -322,10 +322,12 @@ extension DocumentCanvasView {
         // the text. Without this the cross-block merge/clear paths keep the FIRST block's style/container: an
         // empty heading stays a heading, a leading quote survives. Detected as the range spanning from the first
         // renderable text position to the last.
-        // (Endpoints inside a table are a cross-CELL selection — an all-empty table can make a partial cell
-        // range look whole because empty cells collapse the positions; that must keep its cell-collapse
-        // behavior, not nuke the table.)
-        if text.isEmpty, !isInsideTable(globalFrom), !isInsideTable(globalTo),
+        // Skip the reset ONLY for a PARTIAL selection within a single table (a cross-cell delete keeps its
+        // per-cell clear behavior — clear the covered cells, keep the table). A genuine whole-document Select-All
+        // still resets: whether it covers a paragraph before/after the table, OR covers the ENTIRE content of a
+        // lone/all-table document (which the old `!isInsideTable` guard — and its first cut — wrongly skipped
+        // because a Select-All endpoint lands inside a cell).
+        if text.isEmpty, !isPartialSelectionWithinOneTable(globalFrom, globalTo),
            min(globalFrom, globalTo) <= snapToRenderable(0, forward: true),
            max(globalFrom, globalTo) >= snapToRenderable(documentSizeValue, forward: false) {
             let body = BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body, runs: []),
@@ -918,10 +920,34 @@ extension DocumentCanvasView {
 
     /// True if `pos` is inside a table (its owning top-level box is a `TableBlockBox`).
     func isInsideTable(_ pos: Int) -> Bool {
-        for box in boxes where box is TableBlockBox {
-            for r in box.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return true }
+        return owningTable(pos) != nil
+    }
+
+    /// The `TableBlockBox` whose leaf regions contain `pos`, or nil if `pos` is not inside any table.
+    func owningTable(_ pos: Int) -> TableBlockBox? {
+        for box in boxes {
+            guard let table = box as? TableBlockBox else { continue }
+            for r in table.leafRegions() where pos >= r.globalStart && pos <= r.globalStart + r.length { return table }
         }
-        return false
+        return nil
+    }
+
+    /// True when `[a, b]` is a PARTIAL selection within a SINGLE table — both endpoints in the same table AND the
+    /// range does NOT cover the table's entire content (first leaf region → last leaf region). The Select-All →
+    /// empty-paragraph reset skips this case so a partial cross-cell delete keeps its per-cell clear behavior
+    /// (clear the covered cells, keep the table). A selection that covers the table's WHOLE content — a genuine
+    /// Select-All of a lone/all-table document — is NOT partial, so it resets to an empty paragraph like any other
+    /// whole-document select; likewise a selection that also covers non-table content (owningTable == nil at an
+    /// endpoint) is not "within one table" and resets.
+    func isPartialSelectionWithinOneTable(_ a: Int, _ b: Int) -> Bool {
+        let lo = clampGlobal(min(a, b)), hi = clampGlobal(max(a, b))
+        guard let ta = owningTable(lo), let tb = owningTable(hi), ta === tb else { return false }
+        let regions = ta.leafRegions()
+        if let first = regions.first, let last = regions.last,
+           lo <= first.globalStart, hi >= last.globalStart + last.length {
+            return false   // covers the table's whole content → a full-table select, let it reset
+        }
+        return true
     }
 
     /// True if `pos` is inside a block-quote container (its owning top-level box is a `BlockQuoteBox`).

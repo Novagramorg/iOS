@@ -97,8 +97,17 @@ extension DocumentCanvasView {
 
     /// Select the whole document, bounded to renderable start/end (so the trailing caret is renderable).
     func selectAllText() {
-        applySelection(from: (beginningOfDocument as? DocumentTextPosition)?.offset ?? 0,
-                       to: (endOfDocument as? DocumentTextPosition)?.offset ?? documentSize)
+        let from = (beginningOfDocument as? DocumentTextPosition)?.offset ?? 0
+        let to = (endOfDocument as? DocumentTextPosition)?.offset ?? documentSize
+        // If the RENDERABLE bounds collapse to a single caret, the whole document is one degenerate cell — a lone
+        // 1×1 EMPTY table (its single empty cell is the only renderable position). Select the full STRUCTURAL
+        // range instead, so Select-All is a real range Backspace can act on (→ the whole-document reset removes
+        // the table). Without this, ⌘A yields a caret and Backspace just does an in-cell delete, leaving the table.
+        if from == to, documentSize > 0, boxes.contains(where: { $0 is TableBlockBox }) {
+            applySelection(from: 0, to: documentSize)
+            return
+        }
+        applySelection(from: from, to: to)
     }
 
     private func applySelection(from: Int, to: Int) {
