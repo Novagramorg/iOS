@@ -250,12 +250,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     private var attachmentAIButton: (button: HighlightTrackingButton, icon: UIImageView)?
     private struct ThreeLineHeightCacheEntry { let width: CGFloat; let baseFontSize: CGFloat; let value: CGFloat }
     private var threeLineHeightCache: ThreeLineHeightCacheEntry?
-    private let aiButtonMinTextLength: Int = 50
 
     private var expandButton: (button: HighlightTrackingButton, icon: UIImageView)?
     private var heightDependentExpandButtonAlpha: CGFloat = 0.0
-    private var inlineExpandButtonAlpha: CGFloat = 0.0
-    private var inlineExpandButton: (button: HighlightTrackingButton, icon: UIImageView)?
 
     public let menuButton: HighlightTrackingButtonNode
     private let menuButtonBackgroundView: GlassBackgroundView
@@ -1306,18 +1303,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 break
             }
         }
-        // The expand button (rich text input) shares the inline AI button's slot, so reserve the same accessory width for either.
-        let isExpandInputEnabled = self.enableRichTextInput
-        if isExpandInputEnabled && width >= 500.0 {
-            if firstButton {
-                firstButton = false
-                accessoryButtonsWidth += self.accessoryButtonInset
-            } else {
-                accessoryButtonsWidth += self.accessoryButtonSpacing
-            }
-            accessoryButtonsWidth += 32.0
-        }
-        
         var textFieldMinHeight: CGFloat = 35.0
         var textInputViewRealInsets = UIEdgeInsets()
         if let presentationInterfaceState = self.presentationInterfaceState {
@@ -3750,7 +3735,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 transition.updateFrame(view: expandButton.button, frame: expandButtonFrame)
                 transition.updateFrame(view: expandButton.icon, frame: image.size.centered(in: expandButtonFrame))
             }
-            let isWidePanel = width >= 500.0
+            // The expand button always sits in the top-right corner, above the send button — never inline with the
+            // text row. It appears whenever the field is tall enough (multi-line) to have room above the send
+            // button, on all panel widths.
             let isTallPanel = actualTextFieldFrame.height >= 70.0
             var inputText = ""
             if let attributedText = self.richTextInputNode?.attributedText {
@@ -3758,45 +3745,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
             let inputHasText = !inputText.isEmpty
 
-            let cornerAlpha: CGFloat = (!isWidePanel && isTallPanel && inputHasText) ? 1.0 : 0.0
-            self.heightDependentExpandButtonAlpha = (!isWidePanel && isTallPanel) ? 1.0 : 0.0
+            let cornerAlpha: CGFloat = (isTallPanel && inputHasText) ? 1.0 : 0.0
+            self.heightDependentExpandButtonAlpha = isTallPanel ? 1.0 : 0.0
             ComponentTransition(transition).setAlpha(view: expandButton.button, alpha: cornerAlpha)
             ComponentTransition(transition).setAlpha(view: expandButton.icon, alpha: cornerAlpha)
-
-            let inlineExpandButton: (button: HighlightTrackingButton, icon: UIImageView)
-            if let current = self.inlineExpandButton {
-                inlineExpandButton = current
-            } else {
-                inlineExpandButton = (HighlightTrackingButton(), GlassBackgroundView.ContentImageView())
-                self.inlineExpandButton = inlineExpandButton
-                inlineExpandButton.button.highligthedChanged = { [weak self] highlighted in
-                    guard let self, let inlineExpandButton = self.inlineExpandButton else {
-                        return
-                    }
-                    if highlighted {
-                        inlineExpandButton.icon.alpha = 0.6
-                    } else {
-                        let transition: ContainedViewLayoutTransition = .animated(duration: 0.25, curve: .easeInOut)
-                        transition.updateAlpha(layer: inlineExpandButton.icon.layer, alpha: 1.0)
-                    }
-                }
-                inlineExpandButton.button.addTarget(self, action: #selector(self.openExpandedInputButtonPressed), for: .touchUpInside)
-                inlineExpandButton.button.addSubview(inlineExpandButton.icon)
-                inlineExpandButton.icon.image = UIImage(bundleImageName: "Chat/Context Menu/Expand")?.withRenderingMode(.alwaysTemplate)
-                self.textInputContainerBackgroundView.contentView.addSubview(inlineExpandButton.icon)
-                self.textInputContainerBackgroundView.contentView.addSubview(inlineExpandButton.button)
-            }
-            inlineExpandButton.icon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
-            let inlineExpandButtonSize = CGSize(width: 40.0, height: 40.0)
-            let inlineExpandButtonFrame = CGRect(origin: CGPoint(x: nextButtonTopRight.x - inlineExpandButtonSize.width + 1.0, y: nextButtonTopRight.y + floor((minimalInputHeight - inlineExpandButtonSize.height) / 2.0) - 2.0), size: inlineExpandButtonSize)
-            transition.updateFrame(view: inlineExpandButton.button, frame: inlineExpandButtonFrame)
-            if let image = inlineExpandButton.icon.image {
-                transition.updateFrame(view: inlineExpandButton.icon, frame: image.size.centered(in: inlineExpandButtonFrame))
-            }
-            self.inlineExpandButtonAlpha = isWidePanel ? 1.0 : 0.0
-            let inlineAlpha: CGFloat = isWidePanel && inputText.count >= self.aiButtonMinTextLength ? 1.0 : 0.0
-            ComponentTransition(transition).setAlpha(view: inlineExpandButton.button, alpha: inlineAlpha)
-            ComponentTransition(transition).setAlpha(view: inlineExpandButton.icon, alpha: inlineAlpha)
         } else {
             if let expandButton = self.expandButton {
                 self.expandButton = nil
@@ -3809,18 +3761,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                     expandButtonIconView?.removeFromSuperview()
                 })
                 self.heightDependentExpandButtonAlpha = 0.0
-            }
-
-            if let inlineExpandButton = self.inlineExpandButton {
-                self.inlineExpandButton = nil
-                let inlineButtonView = inlineExpandButton.button
-                let inlineIconView = inlineExpandButton.icon
-                transition.updateAlpha(layer: inlineExpandButton.button.layer, alpha: 0.0, completion: { [weak inlineButtonView] _ in
-                    inlineButtonView?.removeFromSuperview()
-                })
-                transition.updateAlpha(layer: inlineExpandButton.icon.layer, alpha: 0.0, completion: { [weak inlineIconView] _ in
-                    inlineIconView?.removeFromSuperview()
-                })
             }
         }
 
@@ -4515,12 +4455,6 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             let cornerAlpha: CGFloat = inputHasText ? self.heightDependentExpandButtonAlpha : 0.0
             ComponentTransition(transition).setAlpha(view: expandButton.button, alpha: cornerAlpha)
             ComponentTransition(transition).setAlpha(view: expandButton.icon, alpha: cornerAlpha)
-
-            if let inlineExpandButton = self.inlineExpandButton {
-                let inlineAlpha: CGFloat = self.inlineExpandButtonAlpha > 0.0 && inputText.count >= self.aiButtonMinTextLength ? 1.0 : 0.0
-                ComponentTransition(transition).setAlpha(view: inlineExpandButton.button, alpha: inlineAlpha)
-                ComponentTransition(transition).setAlpha(view: inlineExpandButton.icon, alpha: inlineAlpha)
-            }
         }
 
         self.updateTextHeight(animated: animated)
