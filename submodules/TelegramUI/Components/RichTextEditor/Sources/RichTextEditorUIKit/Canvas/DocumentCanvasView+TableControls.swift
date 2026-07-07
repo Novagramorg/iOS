@@ -33,7 +33,15 @@ extension DocumentCanvasView {
         if let top = a.box.cellRect(row: rowRange.lowerBound, column: 0),
            let bot = a.box.cellRect(row: rowRange.upperBound, column: 0) {
             let y = top.minY - b
-            out.append((CGRect(x: 1, y: y, width: 17, height: bot.maxY + b - y), .rows(rowRange)))
+            // The row grip sits in the LEFT gutter, its right edge tucking `gripTuck` under the table's left
+            // border, so it's ALWAYS drawn to the LEFT of the table — even with a zero page margin (the chat
+            // composer), where it draws into the field's left padding rather than over the first column. Anchored
+            // to the table's (unscrolled) left edge, this is x==1 for the full-page editor's 16pt page margin
+            // (unchanged) and negative for the composer. (Was a fixed x:1, which assumed a page-margin gutter and
+            // landed inside the table when there was none.)
+            let gripWidth: CGFloat = 17, gripTuck: CGFloat = 2
+            let x = a.box.frame.minX + gripTuck - gripWidth
+            out.append((CGRect(x: x, y: y, width: gripWidth, height: bot.maxY + b - y), .rows(rowRange)))
         }
         if let lo = a.box.cellRect(row: 0, column: colRange.lowerBound),
            let hi = a.box.cellRect(row: 0, column: colRange.upperBound) {
@@ -204,9 +212,12 @@ extension DocumentCanvasView {
     func drawTableChrome(in ctx: CGContext) {
         guard let a = activeTable() else { drawTableChromeLayers(in: ctx); return }
         ctx.saveGState()
-        // Clip to the table's visible horizontal band (full height). Start at x=0 so the left-gutter row
-        // handle (drawn at x:1) stays visible; the right edge clips chrome for scrolled-off columns.
-        ctx.clip(to: CGRect(x: 0, y: 0, width: a.box.blockViewFrame.maxX, height: bounds.height))
+        // Clip to the table's visible horizontal band (full height). Extend LEFT past x=0 so the left-gutter row
+        // grip stays visible even when it sits at a NEGATIVE x — the composer's zero page margin draws it into
+        // the field's left padding (the canvas/scroll/editor are all clipsToBounds=false, so the field's own
+        // background is the real left bound). The right edge still clips chrome for scrolled-off columns.
+        let leftGutter: CGFloat = 30
+        ctx.clip(to: CGRect(x: -leftGutter, y: 0, width: a.box.blockViewFrame.maxX + leftGutter, height: bounds.height))
         drawTableChromeLayers(in: ctx)
         ctx.restoreGState()
     }

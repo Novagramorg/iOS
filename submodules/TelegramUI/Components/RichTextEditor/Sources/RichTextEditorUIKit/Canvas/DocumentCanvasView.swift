@@ -1003,7 +1003,14 @@ final class DocumentCanvasView: UIView {
         syncSpoilers()
         selectionHighlight.frame = bounds
         bringSubviewToFront(selectionHighlight)   // above emoji
-        blockChromeOverlay.frame = bounds
+        // Extend the chrome overlay LEFT of x=0 so the row grip — which sits at a NEGATIVE x when the page
+        // margin is zero (the composer draws it into the field's left padding) — isn't clipped by the overlay's
+        // own draw context. A view's `draw(_:)` is ALWAYS bounded by its frame (the graphics context is the
+        // frame), independent of `clipsToBounds`, so widening the frame is the only way to paint there. The
+        // matching `bounds.origin` shift keeps it drawing in canvas coordinates (see BlockChromeOverlay).
+        let chromeLeftExtension: CGFloat = 40
+        blockChromeOverlay.frame = CGRect(x: -chromeLeftExtension, y: 0, width: bounds.width + chromeLeftExtension, height: bounds.height)
+        blockChromeOverlay.bounds.origin = CGPoint(x: -chromeLeftExtension, y: 0)
         bringSubviewToFront(blockChromeOverlay)    // chrome stays above the selection wash
         blockChromeOverlay.setNeedsDisplay()
         updateCaretView()              // frames/geometry may have changed (re-flow, table relayout); idempotent.

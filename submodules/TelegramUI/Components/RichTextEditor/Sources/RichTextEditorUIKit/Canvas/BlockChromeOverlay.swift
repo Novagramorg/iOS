@@ -3,7 +3,10 @@ import UIKit
 
 /// A topmost, non-interactive overlay that draws table structural chrome (selection outline, row/column
 /// handles, resize knobs) ABOVE the block-view subviews — which would otherwise hide canvas-drawn chrome.
-/// Its bounds equal the canvas's, so it draws in canvas coordinates with no translate.
+/// The canvas sizes its frame to extend LEFT of x=0 (with a matching `bounds.origin` shift) so it still draws
+/// in canvas coordinates, but its draw context can paint the row grip at a negative x — the composer's zero
+/// page margin puts the grip in the field's left padding. (A `draw(_:)` is always clipped to the frame, so the
+/// wider frame is what un-clips it, not `clipsToBounds`.)
 ///
 /// The canvas installs no `UITextSelectionDisplayInteraction` (it draws its own caret/wash/handles), so no OS
 /// selection chrome competes for z-order here. The app's own caret/handle views sit above this overlay, which

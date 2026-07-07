@@ -318,13 +318,18 @@ final class BlockViewTests: XCTestCase {
         XCTAssertNotNil(image.cgImage)
     }
 
-    func test_chromeOverlay_isTopmostAndCanvasSized() {
+    func test_chromeOverlay_isTopmostAndExtendsLeftForGrip() {
         let v = tableCanvas()
         let overlay = v.subviews.compactMap { $0 as? BlockChromeOverlay }.first
         XCTAssertNotNil(overlay, "the canvas owns a chrome overlay")
         XCTAssertEqual(v.subviews.last as? BlockChromeOverlay, overlay, "overlay is the topmost subview")
-        XCTAssertEqual(overlay?.frame, v.bounds)
-        XCTAssertFalse(overlay?.isUserInteractionEnabled ?? true, "overlay never takes touches")
+        // Covers the canvas and EXTENDS LEFT of x=0 so the row grip can draw in the left gutter / field padding
+        // (a draw(_:) is bounded by the frame). bounds.origin matches frame.origin → still draws in canvas coords.
+        XCTAssertLessThan(overlay!.frame.minX, 0, "overlay extends left of the canvas for the row grip")
+        XCTAssertEqual(overlay!.frame.maxX, v.bounds.maxX, accuracy: 0.5, "overlay still covers the canvas to the right")
+        XCTAssertEqual(overlay!.frame.height, v.bounds.height, accuracy: 0.5)
+        XCTAssertEqual(overlay!.bounds.origin, overlay!.frame.origin, "bounds.origin matches frame.origin → draws in canvas coordinates")
+        XCTAssertFalse(overlay!.isUserInteractionEnabled, "overlay never takes touches")
     }
 
     func test_paragraphCanvas_rendersNonBlank_viaSubviews() {
