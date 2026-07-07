@@ -957,7 +957,7 @@ final class RichTextAttachmentScreenComponent: Component {
                         
                         items.append(.action(ContextMenuActionItem(text: "Heading", icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading"), color: theme.contextMenu.primaryColor)
-                        }, additionalLeftIcon: { _ in
+                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
                             return UIImage(bundleImageName: "Premium/ContextStar")
                         }, action: { [weak self] c, _ in
                             guard let self, let environment = self.environment else {
