@@ -284,6 +284,49 @@ extension DocumentCanvasView {
         { [weak self] _ in guard let self else { return }; run(self); self.clearTableSelection() }
     }
 
+    /// The closure form of `structuralAction`: run a structural command, then clear the selection.
+    private func structuralPerform(_ run: @escaping (DocumentCanvasView) -> Void) -> () -> Void {
+        { [weak self] in guard let self else { return }; run(self); self.clearTableSelection() }
+    }
+
+    /// The structural row/column menu, described for the host to present its own menu (replaces the
+    /// `UIMenu`-building `structuralMenu()`). nil when there is no structural selection. `view`/`sourceRect`
+    /// anchor to the active handle, in canvas coordinates. Same state adaptation as `structuralMenu()`.
+    func tableStructuralMenuRequest() -> TableStructuralMenuRequest? {
+        guard let sel = tableSelection, let a = activeTable(), a.box.id == sel.table else { return nil }
+        let sourceRect = tableHandles().first { $0.kind == sel.kind }?.rect ?? .zero
+        switch sel.kind {
+        case .columns(let range):
+            var actions: [TableStructuralMenuRequest.Action] = [
+                .init(kind: .addColumnLeft, perform: structuralPerform { $0.insertTableColumnLeft() }),
+                .init(kind: .addColumnRight, perform: structuralPerform { $0.insertTableColumnRight() }),
+            ]
+            // Hide Delete when the range covers every column (deleting all would empty the table).
+            let coversAll = range.lowerBound == 0 && range.upperBound == a.box.columnCount - 1
+            if !coversAll {
+                actions.append(.init(kind: .deleteColumn, perform: structuralPerform { $0.deleteTableColumn() }))
+            }
+            let current = a.box.columns.indices.contains(range.lowerBound) ? a.box.columns[range.lowerBound].alignment : nil
+            let alignment = TableStructuralMenuRequest.Alignment(
+                options: [.left, .center, .right],
+                current: current,
+                select: { [weak self] al in guard let self else { return }; self.setTableColumnAlignment(al); self.clearTableSelection() })
+            return TableStructuralMenuRequest(view: self, sourceRect: sourceRect, actions: actions, alignment: alignment)
+        case .rows(let range):
+            let includesHeader = range.contains { a.box.isHeaderRow($0) }
+            let hasBodyRow = range.contains { a.box.cells.indices.contains($0) && !a.box.isHeaderRow($0) }
+            var actions: [TableStructuralMenuRequest.Action] = []
+            if !includesHeader {                       // can't insert above the header
+                actions.append(.init(kind: .addRowAbove, perform: structuralPerform { $0.insertTableRowAbove() }))
+            }
+            actions.append(.init(kind: .addRowBelow, perform: structuralPerform { $0.insertTableRowBelow() }))
+            if hasBodyRow {                             // at least one deletable (non-header) row
+                actions.append(.init(kind: .deleteRow, perform: structuralPerform { $0.deleteTableRow() }))
+            }
+            return TableStructuralMenuRequest(view: self, sourceRect: sourceRect, actions: actions, alignment: nil)
+        }
+    }
+
     /// The Add/Delete/Align menu for the current `tableSelection`, adapted to the table state
     /// (header row → no Delete/Add-Above; single-column → no Delete Column). Each action runs the
     /// existing Phase 3c command then clears the selection. nil if there is no structural selection.

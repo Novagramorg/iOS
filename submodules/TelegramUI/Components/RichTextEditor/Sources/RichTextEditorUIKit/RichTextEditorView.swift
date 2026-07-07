@@ -155,6 +155,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         set { canvas.hostContextMenuItemsProvider = newValue }
     }
 
+    /// The editor's table row/column structural menu, handed to the host to present its own menu (a
+    /// ContextController) anchored to the tapped handle. Fired when the user taps an already-selected table
+    /// handle. The editor builds WHAT the menu contains; the host owns presentation. Unset ⇒ no menu.
+    public var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)? {
+        get { canvas.onRequestTableStructuralMenu }
+        set { canvas.onRequestTableStructuralMenu = newValue }
+    }
+
     /// A read-only snapshot of the editor at the current selection — drives a host toolbar's per-action
     /// availability + selected state. Pure: never mutates or fires `onChange`.
     public struct EditorState: Equatable {

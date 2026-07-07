@@ -292,6 +292,9 @@ final class DocumentCanvasView: UIView {
     /// and only for a non-collapsed selection. nil ⇒ the editor's default menu. (iOS 13–15 keeps its built-in
     /// items — see DocumentCanvasView+EditMenu; UIMenuItem cannot carry a closure.)
     var hostContextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?
+    /// Host hook for the table row/column structural menu. Fired from the `.menu` handle-tap case with a
+    /// framework-agnostic description; the host presents its own ContextController. nil ⇒ no menu shown.
+    var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)?
     /// Whether the edit menu is currently presented (tracked via UIEditMenuInteractionDelegate), so a tap
     /// on the caret/selection can TOGGLE the menu instead of re-presenting it (the close-then-reopen flicker).
     var editMenuVisible = false
