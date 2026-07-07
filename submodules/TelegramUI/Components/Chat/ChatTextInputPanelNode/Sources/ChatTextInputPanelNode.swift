@@ -1142,6 +1142,13 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         }
         richTextInputNode.canPasteMedia = { [weak self] in self?.handlePastedMedia(perform: false) ?? false }
         richTextInputNode.onPasteMedia = { [weak self] in self?.handlePastedMedia(perform: true) ?? false }
+        richTextInputNode.onRequestTableStructuralMenu = { [weak self] request in
+            guard let self, let context = self.context else { return }
+            let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+            presentTableStructuralMenu(request, presentationData: presentationData) { [weak self] controller in
+                self?.interfaceInteraction?.presentGlobalOverlayController(controller, nil)
+            }
+        }
         // Report "typing…" chat activity on a genuine text edit. The legacy backend gets this from
         // `chatInputTextNode(shouldChangeTextIn:)`; the native editor never calls that delegate, so it fires
         // this hook instead (and gates out caret moves / programmatic content sets — see the node).
