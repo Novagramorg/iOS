@@ -493,8 +493,10 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         self.trackedRightInset = rightInset
         return self.editorView.height(forWidth: width, contentMargins: self.trackedContentMargins)
     }
-    public static func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat {
-        return RichTextEditorView.measuredContentHeight(forWidth: width, lineCount: lineCount, configure: { editor in
+    public func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat {
+        // Measure the probe with THIS composer's live content margins (the same value the live `textHeightForWidth`
+        // passes), so the probe's vertical inset matches the real field and the 3-line size is exact.
+        return RichTextEditorView.measuredContentHeight(forWidth: width, lineCount: lineCount, contentMargins: self.trackedContentMargins, configure: { editor in
             RichTextEditorChatInputNode.applyComposerLayoutMetrics(to: editor)
         })
     }

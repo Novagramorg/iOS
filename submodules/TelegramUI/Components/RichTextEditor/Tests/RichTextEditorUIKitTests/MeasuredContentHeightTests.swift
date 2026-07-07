@@ -42,5 +42,30 @@ final class MeasuredContentHeightTests: XCTestCase {
         let h1 = RichTextEditorView.measuredContentHeight(forWidth: width, lineCount: 1, configure: composerConfigure)
         XCTAssertEqual(h0, h1, accuracy: 0.5)
     }
+
+    func test_measuredContentHeight_addsVerticalContentMargins() {
+        let width: CGFloat = 240.0
+        let bare = RichTextEditorView.measuredContentHeight(forWidth: width, lineCount: 3, configure: composerConfigure)
+        let margins = UIEdgeInsets(top: 4.5, left: 0.0, bottom: 4.5, right: 0.0)
+        let margined = RichTextEditorView.measuredContentHeight(forWidth: width, lineCount: 3, contentMargins: margins, configure: composerConfigure)
+        // The vertical content inset is added to the height (mirroring the live textHeightForWidth), so the probe
+        // equals the real field height. A horizontal-only margin would not change a short (non-wrapping) probe.
+        XCTAssertEqual(margined, bare + margins.top + margins.bottom, accuracy: 0.5)
+    }
+
+    func test_measuredContentHeight_withMargins_matchesLiveEditor() {
+        let width: CGFloat = 240.0
+        let margins = UIEdgeInsets(top: 4.5, left: 0.0, bottom: 4.5, right: 0.0)
+        let e = RichTextEditorView()
+        composerConfigure(e)
+        e.document = Document(blocks: (0..<3).map { _ in
+            Block.paragraph(ParagraphBlock(id: .generate(), style: .body, runs: [TextRun(text: "A")]))
+        })
+        // The probe must equal what the live editor reports when measured with the SAME margins — this is the
+        // property the chat composer relies on (probe == live textHeightForWidth at 3 lines).
+        let expected = e.height(forWidth: width, contentMargins: margins)
+        let measured = RichTextEditorView.measuredContentHeight(forWidth: width, lineCount: 3, contentMargins: margins, configure: composerConfigure)
+        XCTAssertEqual(measured, expected, accuracy: 0.5)
+    }
 }
 #endif

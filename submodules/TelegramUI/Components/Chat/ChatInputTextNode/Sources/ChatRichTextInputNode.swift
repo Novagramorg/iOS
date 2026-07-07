@@ -214,9 +214,11 @@ public protocol ChatRichTextInputNode: AnyObject {
     func textHeightForWidth(_ width: CGFloat, rightInset: CGFloat) -> CGFloat
 
     /// Measures the field's content height for `lineCount` body lines (used to size the 3-line AI-button
-    /// trigger). Static + side-effect-free: builds a throwaway probe, never touches the live editor. `lineCount`
-    /// floors at 1.
-    static func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat
+    /// trigger). Side-effect-free: builds a throwaway probe, never touches the live editor — but it is an
+    /// INSTANCE method because it must measure with this node's live content inset (rich: `trackedContentMargins`;
+    /// legacy: the text view's `textContainerInset`), the same inset the live `textHeightForWidth` adds, so the
+    /// 3-line size matches the real field exactly. `lineCount` floors at 1.
+    func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat
 
     /// Lay out the editor's content for a size.
     func updateLayout(size: CGSize)
@@ -859,7 +861,7 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
         return self.textInputNodeImpl.textHeightForWidth(width, rightInset: rightInset)
     }
 
-    static func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat {
+    func measuredTextFieldHeight(forWidth width: CGFloat, lineCount: Int) -> CGFloat {
         let count = max(1, lineCount)
         let text = Array(repeating: "A", count: count).joined(separator: "\n")
         let attributed = NSAttributedString(string: text, attributes: [.font: UIFont.systemFont(ofSize: 17.0)])
@@ -870,7 +872,10 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
         storage.addLayoutManager(layoutManager)
         layoutManager.addTextContainer(container)
         layoutManager.ensureLayout(for: container)
-        return ceil(layoutManager.usedRect(for: container).height)
+        // Add the same vertical container inset the live `textHeightForWidth` adds (ChatInputTextView), so the
+        // probe matches the real field height.
+        let inset = self.textInputNodeImpl.textView.textContainerInset
+        return ceil(layoutManager.usedRect(for: container).height + inset.top + inset.bottom)
     }
 
     func updateLayout(size: CGSize) {

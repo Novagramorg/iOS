@@ -3869,7 +3869,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return cache.value
         }
         // ceil + panelHeight mirror calculateTextFieldMetrics' `ceil(measuredHeight)` and panelHeight(textFieldHeight:).
-        let threeLineTextHeight = ceil(type(of: node).measuredTextFieldHeight(forWidth: width, lineCount: 3))
+        let threeLineTextHeight = ceil(node.measuredTextFieldHeight(forWidth: width, lineCount: 3))
         let value = self.panelHeight(textFieldHeight: threeLineTextHeight, metrics: metrics, bottomInset: bottomInset) - textFieldInsets.top
         self.threeLineHeightCache = ThreeLineHeightCacheEntry(width: width, baseFontSize: baseFontSize, value: value)
         return value
