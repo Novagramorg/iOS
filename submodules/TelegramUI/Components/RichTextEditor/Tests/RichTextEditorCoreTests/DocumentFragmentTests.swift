@@ -8,6 +8,49 @@ final class DocumentFragmentTests: XCTestCase {
     }
     func doc(_ blocks: Block...) -> Document { Document(blocks: blocks) }
 
+    // Pasting a copied table must NOT reuse the source table's BlockIDs — block views are keyed by BlockID,
+    // so a duplicate-ID paste steals the original's view and the original table disappears. `regeneratingIDs`
+    // (used by every paste via `insertingFragment`) must therefore recurse into tables: table + rows + cells +
+    // nested blocks all get fresh IDs. (It previously fell through `default` and passed tables through unchanged.)
+    func test_regeneratingTopLevelIDs_regeneratesTableAndNestedIDs() {
+        let table = TableBlock(id: BlockID("t"), columns: [ColumnSpec(width: 90)],
+            rows: [Row(id: BlockID("r0"), isHeader: true, cells: [Cell(id: BlockID("a"), blocks: [para("ap", "x")])])])
+        let regen = Document(blocks: [.table(table)]).regeneratingTopLevelIDs()
+        guard case .table(let t2) = regen.blocks[0] else { return XCTFail("still a table") }
+        XCTAssertNotEqual(t2.id, BlockID("t"), "table id regenerated")
+        XCTAssertNotEqual(t2.rows[0].id, BlockID("r0"), "row id regenerated")
+        XCTAssertNotEqual(t2.rows[0].cells[0].id, BlockID("a"), "cell id regenerated")
+        guard case .paragraph(let p) = t2.rows[0].cells[0].blocks[0] else { return XCTFail("cell keeps its paragraph") }
+        XCTAssertNotEqual(p.id, BlockID("ap"), "nested paragraph id regenerated")
+        // Structure/content preserved.
+        XCTAssertTrue(t2.rows[0].isHeader)
+        XCTAssertEqual(p.text, "x")
+    }
+
+    func test_regeneratingTopLevelIDs_regeneratesMediaBlockID_keepsContentKey() {
+        let media = MediaBlock(id: BlockID("m"), mediaID: "content-key", naturalSize: Size2D(width: 100, height: 100))
+        let regen = Document(blocks: [.media(media)]).regeneratingTopLevelIDs()
+        guard case .media(let m2) = regen.blocks[0] else { return XCTFail("still media") }
+        XCTAssertNotEqual(m2.id, BlockID("m"), "media block id regenerated")
+        XCTAssertEqual(m2.mediaID, "content-key", "content key (mediaID) preserved — it is not a block id")
+    }
+
+    func test_tableFlattenedText_rowPerLine_cellsSpaceJoined() {
+        let table = TableBlock(id: BlockID("t"),
+            columns: [ColumnSpec(width: 90), ColumnSpec(width: 90)],
+            rows: [
+                Row(id: BlockID("r0"), cells: [
+                    Cell(id: BlockID("a"), blocks: [para("ap", "a")]),
+                    Cell(id: BlockID("b"), blocks: [para("bp", "b")]),
+                ]),
+                Row(id: BlockID("r1"), cells: [
+                    Cell(id: BlockID("c"), blocks: [para("cp", "c")]),
+                    Cell(id: BlockID("d"), blocks: [para("dp", "")]),   // empty cell contributes ""
+                ]),
+            ])
+        XCTAssertEqual(tableFlattenedText(table), ["a b", "c "])
+    }
+
     // Two paragraphs "Hello"(text 1..6) and "World"(text 8..13) on the axis:
     //   p0: open@0, text@1..6 ("Hello"), close@6   -> size 7
     //   p1: open@7, text@8..13 ("World"), close@13 -> size 7

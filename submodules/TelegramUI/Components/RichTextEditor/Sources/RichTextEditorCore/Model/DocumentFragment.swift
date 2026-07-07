@@ -12,7 +12,10 @@ public func isInlineMergeable(_ block: Block) -> Bool {
     }
 }
 
-/// Recursively regenerates fresh `BlockID`s for a list of blocks (for paste collision avoidance).
+/// Recursively regenerates fresh `BlockID`s for a list of blocks (for paste collision avoidance). Block views
+/// are keyed by `BlockID`, so a paste that reuses an existing block's id steals its view and the original block
+/// disappears. The switch is EXHAUSTIVE (no `default`) on purpose: a new `Block` case must decide how its ids
+/// regenerate rather than silently falling through and reintroducing that bug.
 private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
     blocks.map { block in
         switch block {
@@ -25,8 +28,20 @@ private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
             return .pullQuote(PullQuote(id: .generate(), runs: pq.runs, author: pq.author))
         case .blockQuote(let bq):
             return .blockQuote(BlockQuote(id: .generate(), children: regeneratingIDs(bq.children), collapsed: bq.collapsed, author: bq.author))
-        default:
-            return block
+        case .table(let t):
+            // Regenerate the table AND its nested row/cell/inner-block IDs — a pasted "Copy Table" carries the
+            // source table's IDs verbatim, and block views are keyed by BlockID, so a duplicate-ID paste would
+            // steal the original table's view and make the original disappear.
+            return .table(TableBlock(id: .generate(), columns: t.columns, rows: t.rows.map { row in
+                Row(id: .generate(), height: row.height, isHeader: row.isHeader, cells: row.cells.map { cell in
+                    Cell(id: .generate(), blocks: regeneratingIDs(cell.blocks), background: cell.background)
+                })
+            }))
+        case .media(let m):
+            // Regenerate the block id only; `mediaID` is the host's content key (may legitimately repeat across
+            // blocks), and the caption is inline `[TextRun]` with no nested BlockID.
+            return .media(MediaBlock(id: .generate(), mediaID: m.mediaID, kind: m.kind, naturalSize: m.naturalSize,
+                                     displayWidth: m.displayWidth, alignment: m.alignment, caption: m.caption))
         }
     }
 }
@@ -136,6 +151,15 @@ public func blockPlainText(_ block: Block) -> String {
     case .pullQuote(let pq): return pq.text
     case .blockQuote(let bq): return bq.children.map(blockPlainText).joined(separator: "\n")
     default: return ""
+    }
+}
+
+/// Flattens a table to plain-text lines — ONE line per row, the row's cells joined by " " (each cell's blocks
+/// also joined by " "). Used by "Copy Table" (the plain-text rep) and "Convert to Text" (each row → a body
+/// paragraph).
+public func tableFlattenedText(_ table: TableBlock) -> [String] {
+    return table.rows.map { row in
+        row.cells.map { cell in cell.blocks.map(blockPlainText).joined(separator: " ") }.joined(separator: " ")
     }
 }
 

@@ -109,6 +109,43 @@ extension DocumentCanvasView {
         }
     }
 
+    /// Copies the caret's current table to the pasteboard as if it were a document containing ONLY that table:
+    /// the app fragment (JSON — pastes back as a real table), an RTF table, and a plain-text flatten (one line
+    /// per row, cells space-joined). No-op when the caret isn't in a table.
+    func copyCurrentTable() {
+        guard let a = activeTable() else { return }
+        let model = currentBlocks()
+        guard model.indices.contains(a.index), case .table(let table) = model[a.index] else { return }
+        let document = Document(blocks: [.table(table)])
+        let plain = tableFlattenedText(table).joined(separator: "\n")
+        pasteboard.setItems([RichTextEditorClipboard.pasteboardItem(for: document, plain: plain)], options: [:])
+    }
+
+    /// Replaces the caret's current table IN PLACE with body paragraphs — one per row, the row's cells joined
+    /// by " " (see `tableFlattenedText`). One undo step; the caret lands at the start of the first paragraph.
+    /// No-op when the caret isn't in a table.
+    func convertCurrentTableToText() {
+        guard let a = activeTable() else { return }
+        let model = currentBlocks()
+        guard model.indices.contains(a.index), case .table(let table) = model[a.index] else { return }
+        editing {
+            var replacement: [CanvasBlock] = tableFlattenedText(table).map { line in
+                BlockBox(paragraph: ParagraphBlock(id: BlockID.generate(), style: .body,
+                                                   runs: line.isEmpty ? [] : [TextRun(text: line)]),
+                         mapper: mapper, width: effectiveWidth)
+            }
+            if replacement.isEmpty {
+                replacement = [BlockBox(paragraph: ParagraphBlock(id: BlockID.generate()), mapper: mapper, width: effectiveWidth)]
+            }
+            var nb = boxes
+            nb.replaceSubrange(a.index...a.index, with: replacement)
+            boxes = nb
+            recomputeSpans()
+            let caret = snapToRenderable(boxes[a.index].textStart, forward: true)
+            anchor = caret; head = caret
+        }
+    }
+
     /// Backspace with a table structural (row/column) selection active. Deletes the selected rows or
     /// columns (via the existing `deleteTableRow`/`deleteTableColumn`, which read the structural range).
     /// When the selection covers EVERY row or EVERY column — which would empty the table — it removes the

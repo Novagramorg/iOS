@@ -933,13 +933,15 @@ final class RichTextAttachmentScreenComponent: Component {
                         guard let self else { return }
                         var items: [ContextMenuItem] = []
                         if self.editor.currentState().isInTable {
-                            items.append(.action(ContextMenuActionItem(text: "Insert Row Above", icon: { _ in nil }, action: { [weak self] _, f in
-                                f(.default); self?.editor.insertTableRowAbove()
+                            items.append(.action(ContextMenuActionItem(text: "Copy Table", icon: { _ in nil }, action: { [weak self] _, f in
+                                f(.default)
+                                self?.editor.copyCurrentTable()
                             })))
-                            items.append(.action(ContextMenuActionItem(text: "Insert Row Below", icon: { _ in nil }, action: { [weak self] _, f in
-                                f(.default); self?.editor.insertTableRowBelow()
+                            items.append(.action(ContextMenuActionItem(text: "Convert to Text", icon: { _ in nil }, action: { [weak self] _, f in
+                                f(.default)
+                                self?.editor.convertCurrentTableToText()
                             })))
-                            items.append(.action(ContextMenuActionItem(text: "Delete Row", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
+                            /*items.append(.action(ContextMenuActionItem(text: "Delete Row", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTableRow()
                             })))
                             items.append(.action(ContextMenuActionItem(text: "Insert Column Left", icon: { _ in nil }, action: { [weak self] _, f in
@@ -955,14 +957,12 @@ final class RichTextAttachmentScreenComponent: Component {
                                 items.append(.action(ContextMenuActionItem(text: title, icon: { _ in nil }, action: { [weak self] _, f in
                                     f(.default); self?.editor.setTableColumnAlignment(alignment)
                                 })))
-                            }
+                            }*/
                             items.append(.action(ContextMenuActionItem(text: "Delete Table", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTable()
                             })))
                         } else {
-                            items.append(.action(ContextMenuActionItem(text: "Insert Table", icon: { _ in nil }, action: { [weak self] _, f in
-                                f(.default); self?.editor.insertTable(rows: 2, cols: 2)
-                            })))
+                            self.editor.insertTable(rows: 2, cols: 2)
                         }
                         self.presentActionMenu(from: sourceView, items: items)
                     },

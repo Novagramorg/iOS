@@ -376,6 +376,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func deleteTableColumn() { canvas.deleteTableColumn() }
     /// Deletes the table the caret is in (no-op otherwise).
     public func deleteTable() { canvas.deleteTable() }
+    /// Copies the caret's current table to the pasteboard (app fragment + RTF table + plain-text flatten). No-op outside a table.
+    public func copyCurrentTable() { canvas.copyCurrentTable() }
+    /// Replaces the caret's current table with body paragraphs (one per row, cells space-joined), one undo step. No-op outside a table.
+    public func convertCurrentTableToText() { canvas.convertCurrentTableToText() }
     public func setTableColumnAlignment(_ alignment: TextAlignment) { canvas.setTableColumnAlignment(alignment) }
 
     /// Inserts an empty `rows`×`cols` table (row 0 a header) at the caret. No-op unless the caret is in
