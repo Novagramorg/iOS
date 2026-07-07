@@ -124,15 +124,10 @@ final class TableControlsTests: XCTestCase {
         XCTAssertNotEqual(v.caretRect(for: DocumentTextPosition(v.head)), .zero) // caret returns
     }
 
-    // MARK: - structuralMenu tests (Task 3)
+    // MARK: - tableStructuralMenuRequest tests
 
-    func actionTitles(_ menu: UIMenu?) -> [String] {
-        guard let menu else { return [] }
-        return menu.children.flatMap { el -> [String] in
-            if let a = el as? UIAction { return [a.title] }
-            if let m = el as? UIMenu { return actionTitles(m) }
-            return []
-        }
+    func actionKinds(_ req: TableStructuralMenuRequest?) -> [TableStructuralMenuRequest.Kind] {
+        req?.actions.map { $0.kind } ?? []
     }
 
     func test_columnMenu_hasAddDeleteAlign() {
@@ -140,10 +135,29 @@ final class TableControlsTests: XCTestCase {
         let t = table(v)
         v.head = t.cellTextStart(row: 1, column: 0)!; v.anchor = v.head
         v.selectTableColumn(1)
-        let titles = actionTitles(v.structuralMenu())
-        XCTAssertEqual(titles.filter { $0.hasPrefix("Add Column") }.count, 2)
-        XCTAssertTrue(titles.contains("Delete Column"))
-        XCTAssertTrue(titles.contains("Left") && titles.contains("Center") && titles.contains("Right"))
+        let req = v.tableStructuralMenuRequest()
+        let kinds = actionKinds(req)
+        XCTAssertEqual(kinds.filter { $0 == .addColumnLeft || $0 == .addColumnRight }.count, 2)
+        XCTAssertTrue(kinds.contains(.deleteColumn))
+        XCTAssertNotNil(req?.alignment)
+    }
+
+    func test_structuralMenuRequest_carriesHVAlignment_forColumnAndRow() {
+        let v = canvasWithTable(); let t = table(v)
+        v.head = t.cellTextStart(row: 1, column: 1)!; v.anchor = v.head
+        v.selectTableColumn(1)
+        let colReq = v.tableStructuralMenuRequest()
+        XCTAssertNotNil(colReq?.alignment, "column selection carries alignment")
+        colReq?.alignment?.apply(.right, .bottom)
+        guard case .table(let afterCol) = v.boxes.first(where: { $0 is TableBlockBox })!.currentBlock() else { return XCTFail() }
+        XCTAssertEqual(afterCol.rows[1].cells[1].horizontalAlignment, .right)
+        XCTAssertEqual(afterCol.rows[1].cells[1].verticalAlignment, .bottom)
+
+        v.selectTableRow(1)
+        let rowReq = v.tableStructuralMenuRequest()
+        XCTAssertNotNil(rowReq?.alignment, "row selection ALSO carries alignment now")
+        // horizontal is uniform across the just-set row? cell (1,1) is .right, others .center → mixed → nil.
+        XCTAssertNil(rowReq?.alignment?.horizontal, "mixed horizontal across the row reports nil")
     }
 
     func test_rowMenu_headerOmitsDeleteAndAddAbove() {
@@ -151,10 +165,10 @@ final class TableControlsTests: XCTestCase {
         let t = table(v)
         v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
         v.selectTableRow(0)                       // header row
-        let titles = actionTitles(v.structuralMenu())
-        XCTAssertFalse(titles.contains("Delete Row"))
-        XCTAssertFalse(titles.contains("Add Row Above"))
-        XCTAssertTrue(titles.contains("Add Row Below"))
+        let kinds = actionKinds(v.tableStructuralMenuRequest())
+        XCTAssertFalse(kinds.contains(.deleteRow))
+        XCTAssertFalse(kinds.contains(.addRowAbove))
+        XCTAssertTrue(kinds.contains(.addRowBelow))
     }
 
     func test_rowMenu_bodyHasAllRowActions() {
@@ -162,8 +176,8 @@ final class TableControlsTests: XCTestCase {
         let t = table(v)
         v.head = t.cellTextStart(row: 1, column: 0)!; v.anchor = v.head
         v.selectTableRow(1)
-        let titles = actionTitles(v.structuralMenu())
-        XCTAssertTrue(titles.contains("Add Row Above") && titles.contains("Add Row Below") && titles.contains("Delete Row"))
+        let kinds = actionKinds(v.tableStructuralMenuRequest())
+        XCTAssertTrue(kinds.contains(.addRowAbove) && kinds.contains(.addRowBelow) && kinds.contains(.deleteRow))
     }
 
     func test_columnMenu_singleColumnOmitsDelete() {
@@ -175,7 +189,7 @@ final class TableControlsTests: XCTestCase {
         let t = v.boxes[0] as! TableBlockBox
         v.head = t.cellTextStart(row: 1, column: 0)!; v.anchor = v.head
         v.selectTableColumn(0)
-        XCTAssertFalse(actionTitles(v.structuralMenu()).contains("Delete Column"))
+        XCTAssertFalse(actionKinds(v.tableStructuralMenuRequest()).contains(.deleteColumn))
     }
 
     // MARK: - Tap handle tests (Task 4)
@@ -196,6 +210,35 @@ final class TableControlsTests: XCTestCase {
         let rowHandle = v.tableHandles().first { $0.kind == .rows(1...1) }!.rect
         v.performSingleTap(at: CGPoint(x: rowHandle.midX, y: rowHandle.midY))
         XCTAssertEqual(v.tableSelection?.kind, .rows(1...1))
+    }
+
+    func test_tapSelectedColumnHandle_firesStructuralMenuRequest() {
+        let v = canvasWithTable()
+        let t = table(v)
+        v.anchor = t.cellTextStart(row: 1, column: 2)!; v.head = v.anchor
+        v.selectTableColumn(2)                                   // 1st: select column 2
+        var received: TableStructuralMenuRequest?
+        v.onRequestTableStructuralMenu = { received = $0 }
+        let colHandle = v.tableHandles().first { $0.kind == .columns(2...2) }!.rect
+        v.performSingleTap(at: CGPoint(x: colHandle.midX, y: colHandle.midY))   // 2nd: tap selected handle → menu
+        XCTAssertNotNil(received)
+        XCTAssertTrue(received?.view === v)
+        XCTAssertEqual(received?.sourceRect, colHandle)
+        XCTAssertTrue((received?.actions.map { $0.kind } ?? []).contains(.deleteColumn))
+    }
+
+    // A table resize-KNOB drag that extends a row/column STRUCTURAL selection must, on release, ask the host
+    // to present the structural menu — NOT the system edit menu (`editMenuInteraction(_:menuFor:)` no longer
+    // has a `tableSelection` branch, so falling through to `presentEditMenu()` shows the wrong menu).
+    func test_knobDragEnd_firesStructuralMenuRequest_notSystemMenu() {
+        let v = canvasWithTable(); let t = table(v)
+        v.anchor = t.cellTextStart(row: 1, column: 1)!; v.head = v.anchor
+        v.selectTableColumn(1)                                   // active structural selection (as after a knob extend)
+        var received: TableStructuralMenuRequest?
+        v.onRequestTableStructuralMenu = { received = $0 }
+        v.presentMenuAfterSelectionDrag(tableKnob: true)        // the drag-end decision, knob case
+        XCTAssertNotNil(received)
+        XCTAssertTrue((received?.actions.map { $0.kind } ?? []).contains(.addColumnLeft))
     }
 
     // MARK: - Draw helpers (Task 5)
@@ -465,30 +508,32 @@ final class TableControlsTests: XCTestCase {
         let v = canvasWithTable(); let t = table(v)
         v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
         v.selectTableColumns(0...1)
-        v.setTableColumnAlignment(.right)
+        v.setSelectionHorizontalAlignment(.right)
         guard case .table(let tb) = v.boxes[1].currentBlock() else { return XCTFail() }
-        XCTAssertEqual(tb.columns[0].alignment, .right)
-        XCTAssertEqual(tb.columns[1].alignment, .right)
-        XCTAssertEqual(tb.columns[2].alignment, .left, "the un-selected column is untouched")
+        XCTAssertEqual(tb.rows[0].cells[0].horizontalAlignment, .right)
+        XCTAssertEqual(tb.rows[1].cells[0].horizontalAlignment, .right)
+        XCTAssertEqual(tb.rows[0].cells[1].horizontalAlignment, .right)
+        XCTAssertEqual(tb.rows[1].cells[1].horizontalAlignment, .right)
+        XCTAssertEqual(tb.rows[0].cells[2].horizontalAlignment, .center, "the un-selected column is untouched")
+        XCTAssertEqual(tb.rows[1].cells[2].horizontalAlignment, .center, "the un-selected column is untouched")
     }
 
-    func test_menu_pluralizes_andHidesDeleteWhenAllColumns() {
+    func test_menu_hidesDeleteWhenAllColumns() {
         let v = canvasWithTable(); let t = table(v)
         v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
-        v.selectTableColumns(0...1)                                   // multi → plural
-        XCTAssertTrue(actionTitles(v.structuralMenu()).contains("Delete Columns"))
+        v.selectTableColumns(0...1)                                   // multi-column, not all → delete shown
+        XCTAssertTrue(actionKinds(v.tableStructuralMenuRequest()).contains(.deleteColumn))
         v.selectTableColumns(0...2)                                   // all 3 columns → no delete
-        XCTAssertFalse(actionTitles(v.structuralMenu()).contains("Delete Column"))
-        XCTAssertFalse(actionTitles(v.structuralMenu()).contains("Delete Columns"))
+        XCTAssertFalse(actionKinds(v.tableStructuralMenuRequest()).contains(.deleteColumn))
     }
 
     func test_menu_rowRangeIncludingHeader_hidesAddAbove_keepsDeleteRows() {
         let v = canvasWithTable(); let t = table(v)
         v.head = t.cellTextStart(row: 0, column: 0)!; v.anchor = v.head
         v.selectTableRows(0...1)                                       // header + body row
-        let titles = actionTitles(v.structuralMenu())
-        XCTAssertFalse(titles.contains("Add Row Above"))              // range includes the header
-        XCTAssertTrue(titles.contains("Delete Rows"))                // body row(s) deletable → shown, plural
+        let kinds = actionKinds(v.tableStructuralMenuRequest())
+        XCTAssertFalse(kinds.contains(.addRowAbove))                  // range includes the header
+        XCTAssertTrue(kinds.contains(.deleteRow))                     // body row(s) deletable → shown
     }
 
     // MARK: - drag to extend (Task 5)

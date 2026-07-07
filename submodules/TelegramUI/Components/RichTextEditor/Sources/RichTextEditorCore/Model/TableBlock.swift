@@ -2,36 +2,37 @@ import Foundation
 
 public struct ColumnSpec: Codable, Equatable {
     public var width: Double
-    /// Per-column text alignment (markdown's delimiter-row colons). Applied as a render override to
-    /// every cell in the column; never stored on the cells themselves.
-    public var alignment: TextAlignment
-
-    public init(width: Double, alignment: TextAlignment = .left) {
-        self.width = width
-        self.alignment = alignment
-    }
-
-    private enum CodingKeys: String, CodingKey { case width, alignment }
-
-    // Custom decode so documents written before `alignment` existed still load (synthesized Codable
-    // would throw on the missing key). Encoding stays synthesized via the declared CodingKeys.
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        width = try c.decode(Double.self, forKey: .width)
-        alignment = try c.decodeIfPresent(TextAlignment.self, forKey: .alignment) ?? .left
-    }
+    public init(width: Double) { self.width = width }
 }
 
-/// A table cell. In v1 cells contain paragraph and media blocks (no nested tables).
+/// A table cell. In v1 cells contain paragraph and media blocks (no nested tables). `horizontalAlignment`
+/// / `verticalAlignment` are per-cell render overrides applied to the cell's paragraphs (not stored on them).
 public struct Cell: Codable, Equatable {
     public var id: BlockID
     public var blocks: [Block]
     public var background: RGBAColor?
+    public var horizontalAlignment: TextAlignment
+    public var verticalAlignment: VerticalAlignment
 
-    public init(id: BlockID, blocks: [Block] = [], background: RGBAColor? = nil) {
+    public init(id: BlockID, blocks: [Block] = [], background: RGBAColor? = nil,
+                horizontalAlignment: TextAlignment = .center, verticalAlignment: VerticalAlignment = .top) {
         self.id = id
         self.blocks = blocks
         self.background = background
+        self.horizontalAlignment = horizontalAlignment
+        self.verticalAlignment = verticalAlignment
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, blocks, background, horizontalAlignment, verticalAlignment }
+
+    // Custom decode so cells written before the alignment fields existed still load (defaults applied).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(BlockID.self, forKey: .id)
+        blocks = try c.decodeIfPresent([Block].self, forKey: .blocks) ?? []
+        background = try c.decodeIfPresent(RGBAColor.self, forKey: .background)
+        horizontalAlignment = try c.decodeIfPresent(TextAlignment.self, forKey: .horizontalAlignment) ?? .center
+        verticalAlignment = try c.decodeIfPresent(VerticalAlignment.self, forKey: .verticalAlignment) ?? .top
     }
 }
 

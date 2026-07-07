@@ -94,7 +94,7 @@ final class TableBlockBoxTests: XCTestCase {
 extension TableBlockBoxTests {
     private func headerTable() -> TableBlock {
         TableBlock(id: BlockID("t"),
-                   columns: [ColumnSpec(width: 120), ColumnSpec(width: 120, alignment: .center)],
+                   columns: [ColumnSpec(width: 120), ColumnSpec(width: 120)],
                    rows: [
                        Row(id: BlockID("r0"), isHeader: true, cells: [cell("a", "Name"), cell("b", "Role")]),
                        Row(id: BlockID("r1"), cells: [cell("c", "Ada"), cell("d", "Eng")]),
@@ -149,17 +149,28 @@ extension TableBlockBoxTests {
         XCTAssertFalse(p.runs.first?.attributes.bold ?? true)
     }
 
-    func test_columnAlignment_rendersAndRoundTripsClean() {
+    // Alignment is now a PER-CELL render override (`Cell.horizontalAlignment`), not a per-column one:
+    // each cell renders (and round-trips) its own alignment, independent of its column or its neighbors.
+    func test_cellAlignment_rendersAndRoundTripsClean() {
         let v = DocumentCanvasView()
-        v.setBlocks([.table(headerTable())], width: 320)
+        var c10 = cell("c", "Ada")  // row 1, column 0
+        c10.horizontalAlignment = .left
+        var c11 = cell("d", "Eng")  // row 1, column 1
+        c11.horizontalAlignment = .center
+        let table = TableBlock(id: BlockID("t"),
+                               columns: [ColumnSpec(width: 120), ColumnSpec(width: 120)],
+                               rows: [
+                                   Row(id: BlockID("r0"), cells: [cell("a", "Name"), cell("b", "Role")]),
+                                   Row(id: BlockID("r1"), cells: [c10, c11]),
+                               ])
+        v.setBlocks([.table(table)], width: 320)
         v.frame = CGRect(x: 0, y: 0, width: 320, height: 400); v.layoutIfNeeded()
         let t = box(v)
-        XCTAssertEqual(cellAlignment(t, 1, 1), .center, "column 1 renders centered")
-        XCTAssertEqual(cellAlignment(t, 1, 0), .left, "column 0 stays left")
+        XCTAssertEqual(cellAlignment(t, 1, 1), .center, "cell (1,1) renders centered per its own alignment")
+        XCTAssertEqual(cellAlignment(t, 1, 0), .left, "cell (1,0) renders left per its own alignment")
         guard case .table(let out) = v.currentBlocks()[0] else { return XCTFail("expected table") }
-        XCTAssertEqual(out.columns[1].alignment, .center, "alignment lives in ColumnSpec")
-        guard case .paragraph(let p) = out.rows[1].cells[1].blocks[0] else { return XCTFail() }
-        XCTAssertEqual(p.paragraph.alignment, .natural, "the cell's own alignment is untouched (default natural)")
+        XCTAssertEqual(out.rows[1].cells[1].horizontalAlignment, .center, "cell (1,1) alignment round-trips")
+        XCTAssertEqual(out.rows[1].cells[0].horizontalAlignment, .left, "cell (1,0) alignment round-trips")
     }
 
     // A table whose columns all scale to >= minColumnWidth fits: scale-to-fit, no overflow (today's behavior).

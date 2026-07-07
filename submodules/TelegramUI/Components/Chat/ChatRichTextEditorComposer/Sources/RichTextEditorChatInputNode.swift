@@ -559,6 +559,11 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         set { self.editorView.contextMenuItemsProvider = newValue }
     }
 
+    public var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)? {
+        get { self.editorView.onRequestTableStructuralMenu }
+        set { self.editorView.onRequestTableStructuralMenu = newValue }
+    }
+
     public var canPasteMedia: (() -> Bool)? { didSet { self.editorView.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { self.editorView.onPasteMedia = onPasteMedia } }
 

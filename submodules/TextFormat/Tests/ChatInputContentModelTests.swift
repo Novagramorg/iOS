@@ -189,7 +189,7 @@ final class ChatInputContentModelTests: XCTestCase {
     // MARK: - Structural (Document-parity) Codable round-trip
 
     /// The full Document-parity block set — a heading, two list paragraphs (bullet then ordered), a table (2
-    /// columns with alignments, a header row + a body row, inline-text cells, one cell with a background), and a
+    /// columns, a header row + a body row, inline-text cells, one cell with a background), and a
     /// media block (a real `TelegramMediaImage` carried as a Postbox object blob) — round-trips losslessly through
     /// the REAL persistence path (`AdaptedPostbox*coder`), NOT JSON. This guards the new raw enums' keyed-rawValue
     /// Codable (no `singleValueContainer`) and the `Media`-blob encode/decode.
@@ -208,8 +208,8 @@ final class ChatInputContentModelTests: XCTestCase {
 
         let table = ChatInputTable(
             columns: [
-                ChatInputColumnSpec(width: 100.0, alignment: .left),
-                ChatInputColumnSpec(width: 200.0, alignment: .right),
+                ChatInputColumnSpec(width: 100.0),
+                ChatInputColumnSpec(width: 200.0),
             ],
             rows: [
                 ChatInputTableRow(height: 30.0, isHeader: true, cells: [
@@ -251,6 +251,25 @@ final class ChatInputContentModelTests: XCTestCase {
         let data = try AdaptedPostboxEncoder().encode(content)
         let decoded = try AdaptedPostboxDecoder().decode(ChatInputContent.self, from: data)
         XCTAssertEqual(decoded, content)
+    }
+
+    // MARK: - Per-cell H+V alignment (ChatInputTableCell)
+
+    func testTableCellAlignmentRoundTrips() throws {
+        var cell = ChatInputTableCell(runs: [ChatInputRun(text: "X")])
+        cell.horizontalAlignment = .right
+        cell.verticalAlignment = .bottom
+        let data = try JSONEncoder().encode(cell)
+        let back = try JSONDecoder().decode(ChatInputTableCell.self, from: data)
+        XCTAssertEqual(back.horizontalAlignment, .right)
+        XCTAssertEqual(back.verticalAlignment, .bottom)
+    }
+
+    func testLegacyTableCellDecodesToAlignmentDefaults() throws {
+        let json = #"{"runs":[]}"#.data(using: .utf8)!
+        let cell = try JSONDecoder().decode(ChatInputTableCell.self, from: json)
+        XCTAssertEqual(cell.horizontalAlignment, .center)
+        XCTAssertEqual(cell.verticalAlignment, .top)
     }
 
     /// Heading / list-paragraph / table / media blocks are NOT entity-expressible (they require the structured

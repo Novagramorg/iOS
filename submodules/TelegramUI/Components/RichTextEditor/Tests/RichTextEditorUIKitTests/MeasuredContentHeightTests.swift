@@ -13,6 +13,11 @@ final class MeasuredContentHeightTests: XCTestCase {
 
     private func liveHeight(lineCount: Int, width: CGFloat) -> CGFloat {
         let e = RichTextEditorView()
+        // Frame the reference editor exactly like the probe (and the real composer field on screen): the
+        // content-height measure reads each box's laid-out top/bottom inset (set by the layout pass, which only
+        // runs when framed), so an UNFRAMED editor measures too tall (default 8pt insets instead of the
+        // composer's 0). This mirrors `RichTextEditorView.measuredContentHeight`'s probe framing.
+        e.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: 100.0))
         composerConfigure(e)
         e.document = Document(blocks: (0..<lineCount).map { _ in
             Block.paragraph(ParagraphBlock(id: .generate(), style: .body, runs: [TextRun(text: "A")]))
@@ -57,6 +62,7 @@ final class MeasuredContentHeightTests: XCTestCase {
         let width: CGFloat = 240.0
         let margins = UIEdgeInsets(top: 4.5, left: 0.0, bottom: 4.5, right: 0.0)
         let e = RichTextEditorView()
+        e.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: 100.0))   // framed like the real composer field (see liveHeight)
         composerConfigure(e)
         e.document = Document(blocks: (0..<3).map { _ in
             Block.paragraph(ParagraphBlock(id: .generate(), style: .body, runs: [TextRun(text: "A")]))

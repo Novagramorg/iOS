@@ -14,6 +14,8 @@ final class TableBlockBox: CanvasBlock {
     var rowMinHeights: [CGFloat]
     var cellIDs: [[BlockID]]
     var cellBackgrounds: [[RGBAColor?]]
+    var cellHAlign: [[TextAlignment]]
+    var cellVAlign: [[VerticalAlignment]]
     var cells: [[BlockStack]]
     let mapper: AttributedStringMapper
 
@@ -59,6 +61,8 @@ final class TableBlockBox: CanvasBlock {
         rowMinHeights = table.rows.map { CGFloat($0.height ?? 0) }
         cellIDs = table.rows.map { $0.cells.map { $0.id } }
         cellBackgrounds = table.rows.map { $0.cells.map { $0.background } }
+        cellHAlign = table.rows.map { $0.cells.map { $0.horizontalAlignment } }
+        cellVAlign = table.rows.map { $0.cells.map { $0.verticalAlignment } }
         // Cells render at a smaller base font than the document body (15 vs 17). Derive a cell-scoped
         // mapper once and store it as this table's `mapper`; every cell box built here, in `appendRow`,
         // and in split/merge replacements (which inherit their source box's `mapper`) shares it.
@@ -186,7 +190,8 @@ final class TableBlockBox: CanvasBlock {
             for (c, stack) in row.enumerated() {
                 var blocks = stack.boxes.map { $0.currentBlock() }
                 if r == 0 { blocks = blocks.map { TableBlockBox.strippingBold($0) } }
-                outCells.append(Cell(id: cellIDs[r][c], blocks: blocks, background: cellBackgrounds[r][c]))
+                outCells.append(Cell(id: cellIDs[r][c], blocks: blocks, background: cellBackgrounds[r][c],
+                                     horizontalAlignment: cellHAlign[r][c], verticalAlignment: cellVAlign[r][c]))
             }
             rows.append(Row(id: rowIDs[r], height: rowMinHeights[r] > 0 ? Double(rowMinHeights[r]) : nil,
                             isHeader: rowIsHeader[r], cells: outCells))
@@ -194,12 +199,12 @@ final class TableBlockBox: CanvasBlock {
         return .table(TableBlock(id: id, columns: columns, rows: rows))
     }
 
-    /// Re-applies the render-only overrides to every cell's display layout: per-column alignment and,
+    /// Re-applies the render-only overrides to every cell's display layout: per-cell alignment and,
     /// for the first row (r == 0, the header), bold. Idempotent; called at build and on each recompute so it survives edits.
     private func applyRenderOverrides() {
         for (r, row) in cells.enumerated() {
             for (c, stack) in row.enumerated() {
-                let alignment = columns.indices.contains(c) ? columns[c].alignment : .left
+                let alignment = cellHAlign[r][c]
                 for box in stack.boxes {
                     (box as? BlockBox)?.applyDisplayOverride(alignment: alignment, forceBold: r == 0, mapper: mapper)
                 }
@@ -229,7 +234,13 @@ final class TableBlockBox: CanvasBlock {
             for (c, stack) in row.enumerated() {
                 pos += 1                               // cell open token
                 let cw = columnWidths[c]
-                let contentOrigin = CGPoint(x: x + TableBlockBox.cellPadding, y: y + TableBlockBox.cellVerticalPadding)
+                // Vertical alignment: offset content within the row's free vertical space (mirrors the V2
+                // renderer, InstantPageV2Layout.layoutTable). `.top` (default) → offset 0, byte-identical to before.
+                let contentH = stack.measuredHeight(forWidth: cellContentWidth(c))
+                let free = max(0, (rowHeights[r] - TableBlockBox.cellVerticalPadding * 2) - contentH)
+                let vFactor: CGFloat = { switch cellVAlign[r][c] { case .top: return 0; case .middle: return 0.5; case .bottom: return 1 } }()
+                let contentOrigin = CGPoint(x: x + TableBlockBox.cellPadding,
+                                            y: y + TableBlockBox.cellVerticalPadding + free * vFactor)
                 _ = stack.recompute(baseOffset: pos - 1)   // cell content begins at (cell open) → baseOffset
                 _ = stack.layout(origin: contentOrigin, width: cellContentWidth(c))
                 pos += stackTokens(stack)
@@ -347,6 +358,8 @@ final class TableBlockBox: CanvasBlock {
             ids.append(BlockID.generate()); bgs.append(nil)
         }
         cells.append(rowStacks); cellIDs.append(ids); cellBackgrounds.append(bgs)
+        cellHAlign.append(Array(repeating: .center, count: n))
+        cellVAlign.append(Array(repeating: .top, count: n))
         rowIDs.append(BlockID.generate()); rowIsHeader.append(false); rowMinHeights.append(0)
     }
 

@@ -163,12 +163,23 @@ private func chatInputColor(fromColor color: RGBAColor) -> ChatInputColor {
     return ChatInputColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
 }
 
+private func chatInputTableVerticalAlignment(fromCore alignment: VerticalAlignment) -> ChatInputTableVerticalAlignment {
+    switch alignment {
+    case .top:
+        return .top
+    case .middle:
+        return .middle
+    case .bottom:
+        return .bottom
+    }
+}
+
 private func chatInputTable(
     fromTable table: TableBlock,
     resolveEmoji: (EmojiRef) -> (fileId: Int64, file: TelegramMediaFile?)?
 ) -> ChatInputTable {
     let columns = table.columns.map { column in
-        ChatInputColumnSpec(width: column.width, alignment: chatInputTextAlignment(fromAlignment: column.alignment))
+        ChatInputColumnSpec(width: column.width)
     }
     let rows = table.rows.map { row -> ChatInputTableRow in
         let cells = row.cells.map { cell -> ChatInputTableCell in
@@ -177,7 +188,9 @@ private func chatInputTable(
             // media/table/code — contributes its text only, ignoring structure the cell can't carry).
             ChatInputTableCell(
                 runs: chatInputRuns(fromRuns: cellRuns(fromBlocks: cell.blocks), resolveEmoji: resolveEmoji),
-                background: cell.background.map(chatInputColor(fromColor:))
+                background: cell.background.map(chatInputColor(fromColor:)),
+                horizontalAlignment: chatInputTextAlignment(fromAlignment: cell.horizontalAlignment),
+                verticalAlignment: chatInputTableVerticalAlignment(fromCore: cell.verticalAlignment)
             )
         }
         return ChatInputTableRow(height: row.height, isHeader: row.isHeader, cells: cells)
@@ -401,12 +414,23 @@ private func color(fromChatInputColor color: ChatInputColor) -> RGBAColor {
     return RGBAColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
 }
 
+private func verticalAlignment(fromChatInput alignment: ChatInputTableVerticalAlignment) -> VerticalAlignment {
+    switch alignment {
+    case .top:
+        return .top
+    case .middle:
+        return .middle
+    case .bottom:
+        return .bottom
+    }
+}
+
 private func tableBlock(
     fromChatInputTable table: ChatInputTable,
     registerEmoji: (Int64, TelegramMediaFile?) -> EmojiRef
 ) -> TableBlock {
     let columns = table.columns.map { column in
-        ColumnSpec(width: column.width, alignment: textAlignment(fromChatInputAlignment: column.alignment))
+        ColumnSpec(width: column.width)
     }
     let rows = table.rows.map { row -> Row in
         let cells = row.cells.map { cell -> Cell in
@@ -419,7 +443,9 @@ private func tableBlock(
                     style: .body,
                     runs: runs(fromChatInputRuns: cell.runs, registerEmoji: registerEmoji)
                 ))],
-                background: cell.background.map(color(fromChatInputColor:))
+                background: cell.background.map(color(fromChatInputColor:)),
+                horizontalAlignment: textAlignment(fromChatInputAlignment: cell.horizontalAlignment),
+                verticalAlignment: verticalAlignment(fromChatInput: cell.verticalAlignment)
             )
         }
         return Row(id: BlockID.generate(), height: row.height, isHeader: row.isHeader, cells: cells)

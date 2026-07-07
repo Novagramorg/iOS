@@ -676,6 +676,15 @@ final class RichTextAttachmentScreenComponent: Component {
                     handle.disablesInteractiveModalDismiss = true
                     handle.disablesInteractiveKeyboardGestureRecognizer = true
                 }
+                // Table row/column structural menu: the editor hands us a framework-agnostic descriptor; we
+                // present it as a ContextController anchored to the tapped handle (in the editor's canvas).
+                editor.onRequestTableStructuralMenu = { [weak self] request in
+                    guard let self, let component = self.component else { return }
+                    let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                    presentTableStructuralMenu(request, presentationData: presentationData) { [weak self] controller in
+                        self?.environment?.controller()?.presentInGlobalOverlay(controller)
+                    }
+                }
                 editor.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
                 editor.disablesInteractiveModalDismiss = true
                 editor.disablesInteractiveKeyboardGestureRecognizer = true
@@ -1224,12 +1233,7 @@ final class RichTextAttachmentScreenComponent: Component {
                             })))
                             items.append(.action(ContextMenuActionItem(text: "Delete Column", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTableColumn()
-                            })))
-                            for (title, alignment) in [("Align Left", TextAlignment.left), ("Align Center", .center), ("Align Right", .right)] {
-                                items.append(.action(ContextMenuActionItem(text: title, icon: { _ in nil }, action: { [weak self] _, f in
-                                    f(.default); self?.editor.setTableColumnAlignment(alignment)
-                                })))
-                            }*/
+                            })))*/
                             items.append(.action(ContextMenuActionItem(text: "Delete Table", textColor: .destructive, icon: { _ in nil }, action: { [weak self] _, f in
                                 f(.default); self?.editor.deleteTable()
                             })))

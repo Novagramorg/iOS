@@ -276,6 +276,10 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// forwarded to the editor's menu. No-op on the legacy backend (it uses the `chatInputTextNodeMenu` delegate).
     var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])? { get set }
 
+    /// Fired when the native editor wants its table row/column structural menu presented; the PANEL presents it
+    /// as a ContextController. No-op on the legacy backend (it has no tables).
+    var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)? { get set }
+
     /// Pasting media (image/gif/video/sticker) is a host concern. The PANEL sets these so the native editor
     /// can delegate a media paste back to the chat send flow. `canPasteMedia` gates whether the editor offers
     /// Paste for the current pasteboard; `onPasteMedia` performs the routing (returns whether it consumed it).
@@ -939,6 +943,9 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     // The legacy backend builds its menu via ChatTextInputPanelNode.chatInputTextNodeMenu; this hook is unused.
     var contextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?
+
+    // The legacy backend has no tables; this hook is never fired.
+    var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)?
 
     // The legacy path routes media via `chatInputTextNodeShouldPaste`; these hooks are never read.
     public var canPasteMedia: (() -> Bool)?

@@ -155,6 +155,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         set { canvas.hostContextMenuItemsProvider = newValue }
     }
 
+    /// The editor's table row/column structural menu, handed to the host to present its own menu (a
+    /// ContextController) anchored to the tapped handle. Fired when the user taps an already-selected table
+    /// handle. The editor builds WHAT the menu contains; the host owns presentation. Unset ⇒ no menu.
+    public var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)? {
+        get { canvas.onRequestTableStructuralMenu }
+        set { canvas.onRequestTableStructuralMenu = newValue }
+    }
+
     /// A read-only snapshot of the editor at the current selection — drives a host toolbar's per-action
     /// availability + selected state. Pure: never mutates or fires `onChange`.
     public struct EditorState: Equatable {
@@ -232,13 +240,25 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
             var blocks = newValue.blocks
             if blocks.isEmpty { blocks = [.paragraph(ParagraphBlock(id: BlockID.generate()))] }
             canvas.reload(blocks, width: bounds.width)
-            performLayout(size: bounds.size)   // explicit parent-driven layout for the content swap (no self-schedule)
+            // Only lay out when the view is framed. `reload` already applied the model and fired
+            // `onContentSizeChange`, so an UNFRAMED set (draft restore / attachment init before the first
+            // layout pass) defers to the host's next framed `update(...)`. A zero-width `performLayout` would
+            // only build the media/overlay views at a 0×0 rect (and bind their fetch) and redo it the instant
+            // the real frame lands — matching every other setter here, which gate on `bounds.width > 0`.
+            if bounds.width > 0.0 {
+                performLayout(size: bounds.size)   // explicit parent-driven layout for the content swap (no self-schedule)
+            }
         }
     }
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        performLayout(size: bounds.size)
+        // Skip a zero-width UIKit layout pass (the view is in the hierarchy but not yet framed): it can't lay
+        // text out and would only build the media/overlay views at a 0×0 rect, redone the instant the real
+        // frame arrives. The host's framed `update(...)` drives the real layout. Matches the `document` setter.
+        if bounds.width > 0.0 {
+            performLayout(size: bounds.size)
+        }
     }
 
     /// Parent-driven layout. Lays the document out at `size.width`, applies `insets` to the internal scroll
@@ -321,6 +341,7 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     /// `lineCount` floors at 1.
     public static func measuredContentHeight(forWidth width: CGFloat, lineCount: Int, contentMargins: UIEdgeInsets = .zero, configure: (RichTextEditorView) -> Void) -> CGFloat {
         let probe = RichTextEditorView()
+        probe.frame = CGRect(origin: CGPoint(), size: CGSize(width: width, height: 100.0))
         configure(probe)
         let count = max(1, lineCount)
         probe.document = Document(blocks: (0..<count).map { _ in
@@ -380,7 +401,10 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
     public func copyCurrentTable() { canvas.copyCurrentTable() }
     /// Replaces the caret's current table with body paragraphs (one per row, cells space-joined), one undo step. No-op outside a table.
     public func convertCurrentTableToText() { canvas.convertCurrentTableToText() }
-    public func setTableColumnAlignment(_ alignment: TextAlignment) { canvas.setTableColumnAlignment(alignment) }
+    /// Sets horizontal/vertical alignment on every cell of the current structural table selection (row-range
+    /// or column-range), falling back to the caret's single cell when there is no structural selection.
+    public func setSelectionHorizontalAlignment(_ alignment: TextAlignment) { canvas.setSelectionHorizontalAlignment(alignment) }
+    public func setSelectionVerticalAlignment(_ alignment: VerticalAlignment) { canvas.setSelectionVerticalAlignment(alignment) }
 
     /// Inserts an empty `rows`×`cols` table (row 0 a header) at the caret. No-op unless the caret is in
     /// a top-level paragraph.

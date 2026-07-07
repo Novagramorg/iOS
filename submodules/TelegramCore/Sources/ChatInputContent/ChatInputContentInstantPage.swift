@@ -110,26 +110,31 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 }
             }
         case let .table(t):
-            // `naturalSize`/`displayWidth`/`alignment` of media and `width`/`vertical-alignment`/`colspan`/`rowspan`/
-            // cell-background of a table are NOT representable in the InstantPage projection (see the reverse for the
-            // documented defaults the round-trip restores). Forward each cell's per-column alignment (the editor's
+            // `naturalSize`/`displayWidth`/`alignment` of media and `width`/`colspan`/`rowspan`/cell-background
+            // of a table are NOT representable in the InstantPage projection (see the reverse for the documented
+            // defaults the round-trip restores). Forward each cell's own per-cell H+V alignment (the editor's
             // `justified` has no InstantPage equivalent → CANONICALIZED to `.left`), header flag, and runs.
             let rows = t.rows.map { row -> InstantPageTableRow in
-                let cells = row.cells.enumerated().map { (columnIndex, cell) -> InstantPageTableCell in
+                let cells = row.cells.map { cell -> InstantPageTableCell in
                     let alignment: TableHorizontalAlignment
-                    if columnIndex < t.columns.count {
-                        switch t.columns[columnIndex].alignment {
-                        case .left, .justified:
-                            alignment = .left
-                        case .center:
-                            alignment = .center
-                        case .right:
-                            alignment = .right
-                        }
-                    } else {
+                    switch cell.horizontalAlignment {
+                    case .left, .justified:
                         alignment = .left
+                    case .center:
+                        alignment = .center
+                    case .right:
+                        alignment = .right
                     }
-                    return InstantPageTableCell(text: richText(from: cell.runs), header: row.isHeader, alignment: alignment, verticalAlignment: .top, colspan: 1, rowspan: 1)
+                    let vAlignment: TableVerticalAlignment
+                    switch cell.verticalAlignment {
+                    case .top:
+                        vAlignment = .top
+                    case .middle:
+                        vAlignment = .middle
+                    case .bottom:
+                        vAlignment = .bottom
+                    }
+                    return InstantPageTableCell(text: richText(from: cell.runs), header: row.isHeader, alignment: alignment, verticalAlignment: vAlignment, colspan: 1, rowspan: 1)
                 }
                 return InstantPageTableRow(cells: cells)
             }
@@ -192,6 +197,27 @@ public func chatInputContent(fromInstantPage page: InstantPage) -> ChatInputCont
     return ChatInputContent(blocks: chatInputBlocks(fromInstantPageBlocks: page.blocks, media: page.media))
 }
 
+/// Recover a media block's natural size (aspect) from the resolved `Media`. The InstantPage image/video block
+/// carries no size field, so the dimensions live only on the `Media` itself — an image's largest representation
+/// (`.last`, the convention), or a video/image file's `.Video`/`.ImageSize` attribute (`TelegramMediaFile.dimensions`).
+/// This mirrors the size the editor derives at insertion (`RichTextAttachmentScreen`), so a
+/// `Document → InstantPage → Document` round-trip preserves the aspect instead of collapsing to the editor's 16:9
+/// fallback (`MediaBlockBox.imageDisplaySize`). Falls back to `.zero` when the media carries no dimensions.
+private func chatInputNaturalSize(fromMedia media: Media) -> ChatInputSize {
+    let dimensions: PixelDimensions?
+    if let image = media as? TelegramMediaImage {
+        dimensions = image.representations.last?.dimensions
+    } else if let file = media as? TelegramMediaFile {
+        dimensions = file.dimensions
+    } else {
+        dimensions = nil
+    }
+    guard let dimensions else {
+        return ChatInputSize(width: 0.0, height: 0.0)
+    }
+    return ChatInputSize(width: Double(dimensions.width), height: Double(dimensions.height))
+}
+
 func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [MediaId: Media] = [:]) -> [ChatInputBlock] {
     var result: [ChatInputBlock] = []
     for block in blocks {
@@ -242,18 +268,19 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             ])))
         case let .image(id, caption, _, _):
             // Resolve the concrete `Media` from the page's `media` dict; a missing entry (the forward always stores it,
-            // so this is defensive against a malformed page) drops the block. `naturalSize`/`displayWidth`/`alignment`
-            // are NOT representable in the InstantPage image block, so the reverse restores fixed DEFAULTS — natural
-            // size `.zero`, `displayWidth: nil`, `alignment: .center` (the editor's `ChatInputMedia` default). The
-            // round-trip is therefore identity only for media built with those defaults (a documented canonicalization,
-            // matching the customEmoji/collapsed-quote/list-level pattern; pinned by the media tests).
+            // so this is defensive against a malformed page) drops the block. The InstantPage image block carries no
+            // size, so `naturalSize` is recovered from the `Media` itself (`chatInputNaturalSize(fromMedia:)`) — the
+            // dimensions the editor also derives at insertion, so the aspect survives the round-trip. `displayWidth`
+            // (a user resize) and `alignment` are genuinely not representable, so they canonicalize to `nil` / `.center`
+            // (the editor's `ChatInputMedia` default; a documented limitation, pinned by the media tests).
             if let media = media[id] {
-                result.append(.media(ChatInputMedia(media: media, kind: .image, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+                result.append(.media(ChatInputMedia(media: media, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: media), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .video(id, caption, _, _):
-            // Same default restoration as `.image` (see above) for the non-representable size/width/alignment fields.
+            // Same as `.image` (see above): `naturalSize` recovered from the file's `.Video`/`.ImageSize` dimensions,
+            // `displayWidth`/`alignment` canonicalized to the defaults.
             if let media = media[id] {
-                result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+                result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: media), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .audio(id, caption):
             // Resolve the concrete `TelegramMediaFile` from the page `media` dict (the forward always stores it).
@@ -270,28 +297,32 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             let map = TelegramMediaMap(latitude: latitude, longitude: longitude, heading: nil, accuracyRadius: nil, venue: nil)
             result.append(.media(ChatInputMedia(media: map, kind: .location, naturalSize: ChatInputSize(width: 0.0, height: 0.0), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
         case let .table(_, rows, _, _):
-            // Rebuild the `ChatInputTable`. Columns are inferred from the first row's cell count, each column's
-            // alignment taken from that cell's alignment (the forward stamps every cell in a column with the column's
-            // alignment); column `width` is NOT representable in InstantPage cells → restored as the DEFAULT `0.0`. The
-            // table `title`, per-cell `verticalAlignment`/`colspan`/`rowspan`, and cell `background` are likewise not in
-            // the editor model → dropped/fixed (title unused; background `nil`). Identity therefore holds for a table
-            // whose columns use width `0.0` and whose cells use `background: nil` (the values the reverse yields).
+            // Rebuild the `ChatInputTable`. Columns are inferred from the first row's cell count; column
+            // `width` is NOT representable in InstantPage cells → restored as the DEFAULT `0.0`. The table
+            // `title`, per-cell `colspan`/`rowspan`, and cell `background` are likewise not in the editor
+            // model → dropped/fixed (title unused; background `nil`). Per-cell H+V alignment DOES round-trip
+            // (restored onto each `ChatInputTableCell` below). Identity therefore holds for a table whose
+            // columns use width `0.0` and whose cells use `background: nil` (the values the reverse yields).
             var columns: [ChatInputColumnSpec] = []
             if let firstRow = rows.first {
-                columns = firstRow.cells.map { cell in
+                columns = firstRow.cells.map { _ in ChatInputColumnSpec(width: 0.0) }
+            }
+            let outRows = rows.map { row -> ChatInputTableRow in
+                let isHeader = row.cells.first?.header ?? false
+                let cells = row.cells.map { cell -> ChatInputTableCell in
                     let alignment: ChatInputTextAlignment
                     switch cell.alignment {
                     case .left: alignment = .left
                     case .center: alignment = .center
                     case .right: alignment = .right
                     }
-                    return ChatInputColumnSpec(width: 0.0, alignment: alignment)
-                }
-            }
-            let outRows = rows.map { row -> ChatInputTableRow in
-                let isHeader = row.cells.first?.header ?? false
-                let cells = row.cells.map { cell in
-                    ChatInputTableCell(runs: chatInputRuns(fromRichText: cell.text ?? .empty), background: nil)
+                    let vAlignment: ChatInputTableVerticalAlignment
+                    switch cell.verticalAlignment {
+                    case .top: vAlignment = .top
+                    case .middle: vAlignment = .middle
+                    case .bottom: vAlignment = .bottom
+                    }
+                    return ChatInputTableCell(runs: chatInputRuns(fromRichText: cell.text ?? .empty), background: nil, horizontalAlignment: alignment, verticalAlignment: vAlignment)
                 }
                 return ChatInputTableRow(height: nil, isHeader: isHeader, cells: cells)
             }

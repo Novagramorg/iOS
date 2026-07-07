@@ -2,38 +2,28 @@ import XCTest
 @testable import RichTextEditorCore
 
 final class TableBlockEditingTests: XCTestCase {
-    // MARK: ColumnSpec.alignment
+    // MARK: ColumnSpec
 
-    func test_columnSpec_defaultsToLeftAlignment() {
-        let c = ColumnSpec(width: 100)
-        XCTAssertEqual(c.alignment, .left)
-    }
-
-    func test_columnSpec_storesExplicitAlignment() {
-        let c = ColumnSpec(width: 100, alignment: .center)
-        XCTAssertEqual(c.alignment, .center)
-    }
-
-    func test_columnSpec_decodesLegacyJSONWithoutAlignment() throws {
-        // A document written before the `alignment` field existed.
-        let json = #"{"width":140}"#.data(using: .utf8)!
-        let c = try JSONDecoder().decode(ColumnSpec.self, from: json)
-        XCTAssertEqual(c.width, 140)
-        XCTAssertEqual(c.alignment, .left)
-    }
-
-    func test_columnSpec_roundTripsAlignment() throws {
-        let c = ColumnSpec(width: 80, alignment: .right)
+    func test_columnSpec_roundTripsWidth() throws {
+        let c = ColumnSpec(width: 80)
         let data = try JSONEncoder().encode(c)
         let back = try JSONDecoder().decode(ColumnSpec.self, from: data)
         XCTAssertEqual(back, c)
+    }
+
+    func test_columnSpec_decodesLegacyJSONIgnoringAlignmentKey() throws {
+        // A document written before `alignment` was retired (now per-cell) still loads; the
+        // legacy key is simply ignored by the synthesized decode.
+        let json = #"{"width":140,"alignment":"center"}"#.data(using: .utf8)!
+        let c = try JSONDecoder().decode(ColumnSpec.self, from: json)
+        XCTAssertEqual(c.width, 140)
     }
 }
 
 extension TableBlockEditingTests {
     private func table2x2() -> TableBlock {
         TableBlock(id: BlockID("t"),
-                   columns: [ColumnSpec(width: 100), ColumnSpec(width: 120, alignment: .center)],
+                   columns: [ColumnSpec(width: 100), ColumnSpec(width: 120)],
                    rows: [
                        Row(id: BlockID("r0"), isHeader: true,
                            cells: [Cell(id: BlockID("a")), Cell(id: BlockID("b"))]),
@@ -78,9 +68,8 @@ extension TableBlockEditingTests {
     }
 
     func test_insertingColumn_addsColumnAndACellPerRow() {
-        let t = table2x2().insertingColumn(at: 1, width: 90, alignment: .right)
+        let t = table2x2().insertingColumn(at: 1, width: 90)
         XCTAssertEqual(t.columnCount, 3)
-        XCTAssertEqual(t.columns[1].alignment, .right)
         XCTAssertEqual(t.columns[1].width, 90)
         for row in t.rows {
             XCTAssertEqual(row.cells.count, 3, "every row gains a cell")
@@ -92,14 +81,8 @@ extension TableBlockEditingTests {
     func test_removingColumn_dropsColumnAndACellPerRow() {
         let t = table2x2().removingColumn(at: 0)
         XCTAssertEqual(t.columnCount, 1)
-        XCTAssertEqual(t.columns[0].alignment, .center, "the surviving column keeps its alignment")
+        XCTAssertEqual(t.columns[0].width, 120, "the surviving column keeps its width")
         for row in t.rows { XCTAssertEqual(row.cells.count, 1) }
-    }
-
-    func test_settingColumnAlignment_setsOneColumn() {
-        let t = table2x2().settingColumnAlignment(.right, at: 0)
-        XCTAssertEqual(t.columns[0].alignment, .right)
-        XCTAssertEqual(t.columns[1].alignment, .center, "other columns unchanged")
     }
 
     private func table4row() -> TableBlock {
@@ -156,13 +139,12 @@ extension TableBlockEditingTests {
 
     func test_removingColumns_coveringAllColumns_keepsLowestIndexed() {
         let t3 = TableBlock(id: BlockID("t"),
-                            columns: [ColumnSpec(width: 100, alignment: .center), ColumnSpec(width: 100), ColumnSpec(width: 100)],
+                            columns: [ColumnSpec(width: 100), ColumnSpec(width: 100), ColumnSpec(width: 100)],
                             rows: [Row(id: BlockID("r0"), isHeader: true,
                                        cells: [Cell(id: BlockID("a")), Cell(id: BlockID("b")), Cell(id: BlockID("c"))])])
         let t = t3.removingColumns(in: 0...2)   // would empty the table
         XCTAssertEqual(t.columnCount, 1)
-        XCTAssertEqual(t.columns[0].alignment, .center, "the lowest-indexed covered column (col 0) is kept")
-        XCTAssertEqual(t.rows[0].cells[0].id, BlockID("a"))
+        XCTAssertEqual(t.rows[0].cells[0].id, BlockID("a"), "the lowest-indexed covered column (col 0) is kept")
     }
 
     func test_removingRows_fullyOutOfBoundsRange_isNoOp() {

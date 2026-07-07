@@ -305,7 +305,7 @@ final class ChatInputContentConversionTests: XCTestCase {
     func test_attributedString_filtersStructuralBlocksForLegacyComposer() {
         let image = TelegramMediaImage(imageId: MediaId(namespace: 1, id: 1001), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
         let media = ChatInputMedia(media: image, kind: .image, naturalSize: ChatInputSize(width: 0, height: 0), displayWidth: nil, alignment: .center, caption: [ChatInputRun(text: "CAPTION")])
-        let table = ChatInputTable(columns: [ChatInputColumnSpec(width: 0, alignment: .left)], rows: [ChatInputTableRow(height: nil, isHeader: false, cells: [ChatInputTableCell(runs: [ChatInputRun(text: "CELL")], background: nil)])])
+        let table = ChatInputTable(columns: [ChatInputColumnSpec(width: 0)], rows: [ChatInputTableRow(height: nil, isHeader: false, cells: [ChatInputTableCell(runs: [ChatInputRun(text: "CELL")], background: nil)])])
         let content = ChatInputContent(blocks: [
             .paragraph(ChatInputParagraph(style: .heading1, runs: [ChatInputRun(text: "Title")])),
             .paragraph(ChatInputParagraph(style: .body, list: ChatInputListMembership(marker: .bullet, level: 0), runs: [ChatInputRun(text: "item")])),

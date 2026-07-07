@@ -292,6 +292,9 @@ final class DocumentCanvasView: UIView {
     /// and only for a non-collapsed selection. nil ⇒ the editor's default menu. (iOS 13–15 keeps its built-in
     /// items — see DocumentCanvasView+EditMenu; UIMenuItem cannot carry a closure.)
     var hostContextMenuItemsProvider: ((_ defaultElements: [UIMenuElement]) -> [UIMenuElement])?
+    /// Host hook for the table row/column structural menu. Fired from the `.menu` handle-tap case with a
+    /// framework-agnostic description; the host presents its own ContextController. nil ⇒ no menu shown.
+    var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)?
     /// Whether the edit menu is currently presented (tracked via UIEditMenuInteractionDelegate), so a tap
     /// on the caret/selection can TOGGLE the menu instead of re-presenting it (the close-then-reopen flicker).
     var editMenuVisible = false
@@ -970,7 +973,13 @@ final class DocumentCanvasView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        layoutContent()
+        // Skip a zero-width UIKit layout pass before the canvas is framed: laying out at width 0 builds the
+        // media/overlay views at a 0×0 rect (and binds their fetch), redone the instant the real frame lands.
+        // The parent (`RichTextEditorView.performLayout`) sets a non-zero canvas frame before calling
+        // `layoutContent()` directly, so the real (framed) layout path is unaffected.
+        if bounds.width > 0 {
+            layoutContent()
+        }
     }
 
     /// Lays out the document content + overlays against `bounds`. The parent
@@ -1033,6 +1042,15 @@ final class DocumentCanvasView: UIView {
     /// Stateless content height the document would have at canvas `width` — the measure analogue of
     /// `intrinsicContentSize.height` (same `contentMargins` + content-width derivation). Never mutates
     /// the live layout (no box `setWidth`, no frame/overlay/caret change).
+    ///
+    /// FRAMING DEPENDENCY (future enhancement): this reads each box's `topInset`/`bottomInset`
+    /// (`BlockStack.measuredHeight` → `BlockBox.measuredHeight`), which are set only by a LAYOUT pass
+    /// (`BlockStack.layout` via `facingInset`, run from `layoutContent`). So an editor that has NOT been
+    /// framed/laid-out yet measures too tall — each box keeps its default `BlockBox.defaultVerticalInset`
+    /// (8pt) rather than the host's configured inset (the composer's 0). Callers therefore measure a FRAMED
+    /// editor (the live composer field is on-screen; the `measuredContentHeight` static probe sets a non-zero
+    /// `probe.frame` before seeding). The robust fix (deferred) is to make the measure framing-independent —
+    /// compute the facing insets here (mirroring `layout`) instead of reading the stored, layout-set values.
     func measuredContentHeight(forWidth width: CGFloat, contentMargins explicitMargins: UIEdgeInsets? = nil) -> CGFloat {
         // The measure must be PURE: a host sizing its field by this value (the chat composer) may call it
         // BEFORE the matching `update(...)` has pushed the real `contentMargins` onto the live canvas (a draft

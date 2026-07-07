@@ -11,8 +11,12 @@ final class EmojiTableHostingTests: XCTestCase {
             let v = UIView(frame: CGRect(origin: .zero, size: size)); v.accessibilityIdentifier = id; return v
         }
         // One 1×2 table (row 0 header). Cell (0,0) gets the caret.
+        // Cells default to CENTER alignment (Task 2, per-cell alignment); this test asserts the emoji's
+        // frame is content-local (small x, left of the table origin), which only holds for a left-aligned
+        // cell — force `.left` here so the coordinate-system assertion below stays meaningful.
         let cell = { (id: String) in
-            Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "p")))]) }
+            Cell(id: BlockID(id), blocks: [.paragraph(ParagraphBlock(id: BlockID(id + "p")))],
+                 horizontalAlignment: .left) }
         let table = TableBlock(id: BlockID("t1"),
                                columns: [ColumnSpec(width: 1), ColumnSpec(width: 1)],
                                rows: [Row(id: BlockID("r1"), cells: [cell("c1"), cell("c2")])])

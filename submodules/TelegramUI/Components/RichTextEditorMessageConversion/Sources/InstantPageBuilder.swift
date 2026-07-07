@@ -152,28 +152,33 @@ private func buildListBlocks(from paragraphs: ArraySlice<ParagraphBlock>) -> [In
     return result
 }
 
-/// A table block → `.table`, mapping per-column alignment and the header row.
+/// A table block → `.table`, mapping each cell's own per-cell H+V alignment and the header row.
 private func tableBlock(_ table: TableBlock) -> InstantPageBlock {
     let rows = table.rows.map { row -> InstantPageTableRow in
-        let cells = row.cells.enumerated().map { columnIndex, cell -> InstantPageTableCell in
+        let cells = row.cells.map { cell -> InstantPageTableCell in
             let alignment: TableHorizontalAlignment
-            if columnIndex < table.columns.count {
-                switch table.columns[columnIndex].alignment {
-                case .left, .justified, .natural:
-                    alignment = .left
-                case .center:
-                    alignment = .center
-                case .right:
-                    alignment = .right
-                }
-            } else {
+            switch cell.horizontalAlignment {
+            case .left, .justified, .natural:
                 alignment = .left
+            case .center:
+                alignment = .center
+            case .right:
+                alignment = .right
+            }
+            let vAlignment: TableVerticalAlignment
+            switch cell.verticalAlignment {
+            case .top:
+                vAlignment = .top
+            case .middle:
+                vAlignment = .middle
+            case .bottom:
+                vAlignment = .bottom
             }
             return InstantPageTableCell(
                 text: cellRichText(cell),
                 header: row.isHeader,
                 alignment: alignment,
-                verticalAlignment: .top,
+                verticalAlignment: vAlignment,
                 colspan: 1,
                 rowspan: 1
             )

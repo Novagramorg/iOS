@@ -59,17 +59,6 @@ extension DocumentCanvasView {
         }
     }
 
-    /// Present the edit menu anchored at an explicit point (used for the table handle menu).
-    func presentEditMenu(sourcePoint: CGPoint) {
-        guard isFirstResponder else { return }
-        if #available(iOS 16.0, *) {
-            guard let interaction = editMenuInteraction else { return }
-            interaction.presentEditMenu(with: UIEditMenuConfiguration(identifier: nil, sourcePoint: sourcePoint))
-        } else {
-            presentLegacyEditMenu(targetRect: CGRect(origin: sourcePoint, size: .zero))
-        }
-    }
-
     func dismissEditMenu() {
         dismissEditMenuCountForTesting += 1
         if #available(iOS 16.0, *) {
