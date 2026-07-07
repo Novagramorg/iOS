@@ -270,7 +270,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public let attachmentButton: HighlightTrackingButton
     public let attachmentButtonBackground: GlassBackgroundView
-    public let attachmentButtonIcon: GlassBackgroundView.ContentImageView
+    private let attachmentButtonIcon: UIImageView
     private var commentsButtonIcon: RasterizedCompositionMonochromeLayer?
     private var commentsButtonCenterIcon: UIImageView?
     private var commentsButtonContentsLayer: RasterizedCompositionImageLayer?
@@ -756,8 +756,9 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         self.attachmentButtonBackground = GlassBackgroundView(frame: CGRect())
         self.attachmentButtonBackground.contentView.addSubview(self.attachmentButton)
         
-        self.attachmentButtonIcon = GlassBackgroundView.ContentImageView()
+        self.attachmentButtonIcon = UIImageView()
         self.attachmentButtonIcon.isUserInteractionEnabled = false
+        self.attachmentButtonIcon.contentMode = .center
         self.attachmentButtonBackground.contentView.addSubview(self.attachmentButtonIcon)
         
         self.attachmentButtonDisabledNode = HighlightableButtonNode()
@@ -3434,11 +3435,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         transition.updateFrame(layer: self.attachmentButton.layer, frame: CGRect(origin: CGPoint(x: 0.0, y: attachmentButtonFrame.height - 40.0), size: CGSize(width: 40.0, height: 40.0)))
         transition.updateFrame(node: self.attachmentButtonDisabledNode, frame: CGRect(origin: CGPoint(x: attachmentButtonFrame.minX, y: attachmentButtonFrame.maxY - 40.0), size: CGSize(width: 40.0, height: 40.0)))
 
-        if let image = self.attachmentButtonIcon.image {
-            let iconCenter = CGPoint(x: 20.0, y: attachmentButtonFrame.height - 20.0)
-            let transition = ComponentTransition(transition)
-            transition.setPosition(view: self.attachmentButtonIcon, position: iconCenter)
-            transition.setBounds(view: self.attachmentButtonIcon, bounds: CGRect(origin: CGPoint(), size: image.size))
+        if let _ = self.attachmentButtonIcon.image {
+            transition.updateFrame(view: self.attachmentButtonIcon, frame: CGRect(origin: CGPoint(x: 0.0, y: attachmentButtonFrame.height - 40.0), size: CGSize(width: 40, height: 40)))
         }
 
         // AI button in the TOP 40x40 slot of the capsule (fades in with the 3-line rule).
@@ -3447,7 +3445,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             if let current = self.attachmentAIButton {
                 aiButton = current
             } else {
-                aiButton = (HighlightTrackingButton(), GlassBackgroundView.ContentImageView())
+                aiButton = (HighlightTrackingButton(), UIImageView())
                 self.attachmentAIButton = aiButton
                 aiButton.button.highligthedChanged = { [weak self] highlighted in
                     guard let self, let aiButton = self.attachmentAIButton else {
@@ -3466,16 +3464,19 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self.attachmentButtonBackground.contentView.addSubview(aiButton.icon)
                 self.attachmentButtonBackground.contentView.addSubview(aiButton.button)
             }
-            aiButton.icon.tintColor = interfaceState.theme.chat.inputPanel.inputControlColor
+            aiButton.icon.tintColor = interfaceState.theme.chat.inputPanel.panelControlColor
             let aiSlot = CGRect(origin: CGPoint(), size: CGSize(width: 40.0, height: 40.0))
             transition.updateFrame(view: aiButton.button, frame: aiSlot)
             if let image = aiButton.icon.image {
-                transition.updateFrame(view: aiButton.icon, frame: image.size.centered(in: aiSlot))
+                let transition = ComponentTransition(transition)
+                transition.setPosition(view: aiButton.icon, position: image.size.centered(in: aiSlot).center)
+                aiButton.icon.bounds = CGRect(origin: CGPoint(), size: image.size)
             }
             // Collapsed (pillHeight == 40): the AI slot coincides with the + slot, so it must NOT intercept + taps.
             aiButton.button.isUserInteractionEnabled = isAIButtonVisible
             ComponentTransition(transition).setAlpha(view: aiButton.button, alpha: isAIButtonVisible ? 1.0 : 0.0)
             ComponentTransition(transition).setAlpha(view: aiButton.icon, alpha: isAIButtonVisible ? 1.0 : 0.0)
+            ComponentTransition(transition).setScale(view: aiButton.icon, scale: isAIButtonVisible ? 1.0 : 0.001)
         } else if let aiButton = self.attachmentAIButton {
             self.attachmentAIButton = nil
             aiButton.button.removeFromSuperview()
@@ -3831,8 +3832,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             secondaryText: theme.chat.inputPanel.secondaryTextColor,
             placeholder: theme.chat.inputPanel.inputPlaceholderColor,
             accent: theme.list.itemAccentColor,
-            tableBorder: theme.list.itemAccentColor.withMultipliedAlpha(0.25),
-            tableHeaderBackground: theme.list.itemAccentColor.withMultipliedAlpha(0.1),
+            tableBorder: theme.chat.inputPanel.primaryTextColor.withMultipliedAlpha(0.1),
+            tableHeaderBackground: theme.chat.inputPanel.primaryTextColor.withMultipliedAlpha(0.05),
             listCheckFillColor: theme.list.itemCheckColors.fillColor,
             listCheckForegroundColor: theme.list.itemCheckColors.foregroundColor,
             listCheckBorderColor: theme.list.itemCheckColors.strokeColor,
