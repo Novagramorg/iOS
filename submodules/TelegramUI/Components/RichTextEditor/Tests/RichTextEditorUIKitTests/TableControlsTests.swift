@@ -194,6 +194,21 @@ final class TableControlsTests: XCTestCase {
         XCTAssertEqual(v.tableSelection?.kind, .rows(1...1))
     }
 
+    func test_tapSelectedColumnHandle_firesStructuralMenuRequest() {
+        let v = canvasWithTable()
+        let t = table(v)
+        v.anchor = t.cellTextStart(row: 1, column: 2)!; v.head = v.anchor
+        v.selectTableColumn(2)                                   // 1st: select column 2
+        var received: TableStructuralMenuRequest?
+        v.onRequestTableStructuralMenu = { received = $0 }
+        let colHandle = v.tableHandles().first { $0.kind == .columns(2...2) }!.rect
+        v.performSingleTap(at: CGPoint(x: colHandle.midX, y: colHandle.midY))   // 2nd: tap selected handle → menu
+        XCTAssertNotNil(received)
+        XCTAssertTrue(received?.view === v)
+        XCTAssertEqual(received?.sourceRect, colHandle)
+        XCTAssertTrue((received?.actions.map { $0.kind } ?? []).contains(.deleteColumn))
+    }
+
     // MARK: - Draw helpers (Task 5)
 
     func test_selectionOutlineRect_wrapsColumn() {

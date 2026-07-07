@@ -244,7 +244,7 @@ extension DocumentCanvasView {
             toggleChecklistItem(box: checklist)
             return
         }
-        if let hit = tableHandle(at: point), let action = tableHandleTap(at: point) {
+        if let action = tableHandleTap(at: point) {
             switch action {
             case .select(let kind):                        // 1st tap → select the row/column (no menu yet)
                 dismissEditMenu()
@@ -253,12 +253,10 @@ extension DocumentCanvasView {
                 case .columns(let c): selectTableColumns(c)
                 }
             case .menu:
-                // Toggle like the text menu: tapping the already-selected handle while its menu is open
-                // dismisses it instead of re-presenting (the close-then-reopen flicker).
-                let justDismissed = Date().timeIntervalSinceReferenceDate - lastMenuDismissTime < Self.menuToggleSuppressWindow
-                switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed, wasFirstResponder: wasFirstResponder) {
-                case .present: presentEditMenu(sourcePoint: hit.center)
-                case .dismiss: dismissEditMenu()
+                // 2nd tap on the already-selected handle → ask the host to present the structural menu.
+                // Presentation (and any toggle-to-dismiss) is the host's concern now — see the design spec.
+                if let request = tableStructuralMenuRequest() {
+                    onRequestTableStructuralMenu?(request)
                 }
             }
             return

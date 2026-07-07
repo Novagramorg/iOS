@@ -279,19 +279,13 @@ extension DocumentCanvasView {
         }
     }
 
-    /// The standard structural-action handler: run a command, then clear the selection.
-    private func structuralAction(_ run: @escaping (DocumentCanvasView) -> Void) -> UIActionHandler {
-        { [weak self] _ in guard let self else { return }; run(self); self.clearTableSelection() }
-    }
-
-    /// The closure form of `structuralAction`: run a structural command, then clear the selection.
+    /// The standard structural-action handler: run a structural command, then clear the selection.
     private func structuralPerform(_ run: @escaping (DocumentCanvasView) -> Void) -> () -> Void {
         { [weak self] in guard let self else { return }; run(self); self.clearTableSelection() }
     }
 
-    /// The structural row/column menu, described for the host to present its own menu (replaces the
-    /// `UIMenu`-building `structuralMenu()`). nil when there is no structural selection. `view`/`sourceRect`
-    /// anchor to the active handle, in canvas coordinates. Same state adaptation as `structuralMenu()`.
+    /// The structural row/column menu, described for the host to present its own menu. nil when there is
+    /// no structural selection. `view`/`sourceRect` anchor to the active handle, in canvas coordinates.
     func tableStructuralMenuRequest() -> TableStructuralMenuRequest? {
         guard let sel = tableSelection, let a = activeTable(), a.box.id == sel.table else { return nil }
         let sourceRect = tableHandles().first { $0.kind == sel.kind }?.rect ?? .zero
@@ -324,48 +318,6 @@ extension DocumentCanvasView {
                 actions.append(.init(kind: .deleteRow, perform: structuralPerform { $0.deleteTableRow() }))
             }
             return TableStructuralMenuRequest(view: self, sourceRect: sourceRect, actions: actions, alignment: nil)
-        }
-    }
-
-    /// The Add/Delete/Align menu for the current `tableSelection`, adapted to the table state
-    /// (header row → no Delete/Add-Above; single-column → no Delete Column). Each action runs the
-    /// existing Phase 3c command then clears the selection. nil if there is no structural selection.
-    func structuralMenu() -> UIMenu? {
-        guard let sel = tableSelection, let a = activeTable(), a.box.id == sel.table else { return nil }
-        func sym(_ n: String) -> UIImage? { UIImage(systemName: n) }
-        switch sel.kind {
-        case .columns(let range):
-            let multi = range.count > 1
-            var items: [UIMenuElement] = [
-                UIAction(title: "Add Column Left", image: sym("arrow.left.to.line"), handler: structuralAction { $0.insertTableColumnLeft() }),
-                UIAction(title: "Add Column Right", image: sym("arrow.right.to.line"), handler: structuralAction { $0.insertTableColumnRight() }),
-            ]
-            // Hide Delete when the range covers every column (deleting all would empty the table).
-            let coversAll = range.lowerBound == 0 && range.upperBound == a.box.columnCount - 1
-            if !coversAll {
-                items.append(UIAction(title: multi ? "Delete Columns" : "Delete Column", image: sym("trash"),
-                                      attributes: .destructive, handler: structuralAction { $0.deleteTableColumn() }))
-            }
-            items.append(UIMenu(title: "Align", options: .displayInline, children: [
-                UIAction(title: "Left", image: sym("text.alignleft"), handler: structuralAction { $0.setTableColumnAlignment(.left) }),
-                UIAction(title: "Center", image: sym("text.aligncenter"), handler: structuralAction { $0.setTableColumnAlignment(.center) }),
-                UIAction(title: "Right", image: sym("text.alignright"), handler: structuralAction { $0.setTableColumnAlignment(.right) }),
-            ]))
-            return UIMenu(children: items)
-        case .rows(let range):
-            let multi = range.count > 1
-            let includesHeader = range.contains { a.box.isHeaderRow($0) }
-            let hasBodyRow = range.contains { a.box.cells.indices.contains($0) && !a.box.isHeaderRow($0) }
-            var items: [UIMenuElement] = []
-            if !includesHeader {                       // can't insert above the header
-                items.append(UIAction(title: "Add Row Above", image: sym("arrow.up.to.line"), handler: structuralAction { $0.insertTableRowAbove() }))
-            }
-            items.append(UIAction(title: "Add Row Below", image: sym("arrow.down.to.line"), handler: structuralAction { $0.insertTableRowBelow() }))
-            if hasBodyRow {                             // at least one deletable (non-header) row
-                items.append(UIAction(title: multi ? "Delete Rows" : "Delete Row", image: sym("trash"),
-                                      attributes: .destructive, handler: structuralAction { $0.deleteTableRow() }))
-            }
-            return UIMenu(children: items)
         }
     }
 

@@ -17,7 +17,6 @@ extension DocumentCanvasView {
     func editMenuInteraction(_ interaction: UIEditMenuInteraction,
                              menuFor configuration: UIEditMenuConfiguration,
                              suggestedActions: [UIMenuElement]) -> UIMenu? {
-        if tableSelection != nil { return structuralMenu() }   // table row/column actions — system suggestedActions (Cut/Copy/Paste) are irrelevant to a structural pick
         if imageSelection != nil { return imageSelectionMenu() }   // image atom: Delete only (Cut/Copy → Phase 5d)
         let defaults = suggestedActions + customEditMenuElements()
         if selFrom < selTo, let provider = hostContextMenuItemsProvider {
