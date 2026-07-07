@@ -540,12 +540,13 @@ extension DocumentCanvasView: UIKeyInput {
         // prevTextPosition(before: selTo)`, which excludes a genuine multi-char selection) — and remove the
         // empty paragraph, parking the caret at the atom's text end (matching the collapsed-caret path for
         // an empty paragraph after a non-text atom further below). `selTo` must be a genuine TOP-LEVEL position:
-        // a position INSIDE a block quote has no degenerate-container-safe `resolveBox`, so `resolveBox(selTo)`
-        // mis-resolves it to the FOLLOWING top-level block — and a mid-text Backspace inside a quote (delivered
-        // as the 1-char range [local0, local1]) satisfies `selFrom >= prevTextPosition(before: selTo)`, so
-        // without the `!isInsideBlockQuote(selTo)` guard this would REMOVE the (empty) block after the quote
-        // instead of deleting the char (the "mid-quote delete misroutes into the following block" device bug).
-        if selFrom != selTo, !isInsideBlockQuote(selTo), let posTo = resolveBox(at: selTo),
+        // a position INSIDE a block quote OR a table cell has no degenerate-container-safe `resolveBox`, so
+        // `resolveBox(selTo)` mis-resolves it to the FOLLOWING top-level block — and a mid-text Backspace inside
+        // the container (delivered as the 1-char range [local0, local1]) satisfies `selFrom >=
+        // prevTextPosition(before: selTo)`, so without the `!isInsideBlockQuote(selTo)` / `!isInsideTable(selTo)`
+        // guards this would REMOVE the (empty) block after the container instead of deleting the char (the
+        // "mid-quote / mid-cell delete misroutes into the following block" device bug).
+        if selFrom != selTo, !isInsideBlockQuote(selTo), !isInsideTable(selTo), let posTo = resolveBox(at: selTo),
            posTo.local == 0, posTo.box.textLength == 0, posTo.index > 0,
            isNonParagraphAtom(boxes[posTo.index - 1]),
            selFrom >= prevTextPosition(before: selTo) {
