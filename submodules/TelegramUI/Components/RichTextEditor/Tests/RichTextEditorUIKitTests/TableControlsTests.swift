@@ -209,6 +209,20 @@ final class TableControlsTests: XCTestCase {
         XCTAssertTrue((received?.actions.map { $0.kind } ?? []).contains(.deleteColumn))
     }
 
+    // A table resize-KNOB drag that extends a row/column STRUCTURAL selection must, on release, ask the host
+    // to present the structural menu — NOT the system edit menu (`editMenuInteraction(_:menuFor:)` no longer
+    // has a `tableSelection` branch, so falling through to `presentEditMenu()` shows the wrong menu).
+    func test_knobDragEnd_firesStructuralMenuRequest_notSystemMenu() {
+        let v = canvasWithTable(); let t = table(v)
+        v.anchor = t.cellTextStart(row: 1, column: 1)!; v.head = v.anchor
+        v.selectTableColumn(1)                                   // active structural selection (as after a knob extend)
+        var received: TableStructuralMenuRequest?
+        v.onRequestTableStructuralMenu = { received = $0 }
+        v.presentMenuAfterSelectionDrag(tableKnob: true)        // the drag-end decision, knob case
+        XCTAssertNotNil(received)
+        XCTAssertTrue((received?.actions.map { $0.kind } ?? []).contains(.addColumnLeft))
+    }
+
     // MARK: - Draw helpers (Task 5)
 
     func test_selectionOutlineRect_wrapsColumn() {

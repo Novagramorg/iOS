@@ -461,11 +461,24 @@ extension DocumentCanvasView {
         case .ended, .cancelled, .failed:
             stopDragAutoScroll()
             endCoalescedSelectionDrag()   // sync the OS to the final selection before presenting the menu
-            if draggingTableKnob != nil || draggingEndpoint != nil { presentEditMenu() }
+            if draggingTableKnob != nil || draggingEndpoint != nil {
+                presentMenuAfterSelectionDrag(tableKnob: draggingTableKnob != nil)
+            }
             draggingTableKnob = nil
             draggingEndpoint = nil
         default:
             break
+        }
+    }
+
+    /// The drag-end menu decision (extracted for testability). A table resize-KNOB drag extended a row/column
+    /// STRUCTURAL selection → ask the host to present the structural menu (its `menuFor:` delegate no longer
+    /// handles the structural case). A text selection-HANDLE drag presents the normal edit menu.
+    func presentMenuAfterSelectionDrag(tableKnob: Bool) {
+        if tableKnob {
+            if let request = tableStructuralMenuRequest() { onRequestTableStructuralMenu?(request) }
+        } else {
+            presentEditMenu()
         }
     }
 }
