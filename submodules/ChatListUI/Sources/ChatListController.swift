@@ -6178,6 +6178,9 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         guard SecretVaultManager.shared.isEnabled else {
             return
         }
+        // Default Face ID / Touch ID ON for the vault when the device supports it, so opening
+        // hidden chats prompts biometrics automatically (PIN stays the fallback). Runs once.
+        ChatPincodeManager.shared.migrateVaultBiometricDefaultIfNeeded()
         let metadata = ChatPincodeManager.shared.getVaultMetadata()
         let pincodeController = ChatPincodeViewController(
             mode: .verify(

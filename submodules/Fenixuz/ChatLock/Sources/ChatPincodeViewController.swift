@@ -752,21 +752,15 @@ public final class ChatPincodeViewController: ViewController {
 
         case .confirmCredential:
             if code == firstCode {
-                // Codes match — move to the biometric offer if biometrics are available.
-                let biometricType = ChatLockBiometricHelper.availableType()
-                if let bioType = biometricType {
-                    setupPhase = .offerBiometric
-                    presentBiometricOffer(type: bioType) { [weak self] wantsBiometric in
-                        guard let self = self else { return }
-                        self.dismissSelf {
-                            onSuccess(self.firstCode, self.chosenType, wantsBiometric)
-                        }
-                    }
-                } else {
-                    // No biometrics on this device — finish immediately.
-                    dismissSelf {
-                        onSuccess(self.firstCode, self.chosenType, false)
-                    }
+                // Codes match — finish setup immediately. Enable biometrics by default when the
+                // device supports them: Face ID is the default the user wants, PIN stays the
+                // fallback, and Settings lets them turn it off. The previous in-place
+                // UIAlertController "offer" could NOT present over this fullScreen pincode flow
+                // (Display.ViewController.present routes to the already-busy rootViewController),
+                // so it silently failed and hung the confirm step on real devices — removed.
+                let hasBiometric = ChatLockBiometricHelper.availableType() != nil
+                dismissSelf {
+                    onSuccess(self.firstCode, self.chosenType, hasBiometric)
                 }
             } else {
                 // Mismatch — reset to first entry.
@@ -799,7 +793,13 @@ public final class ChatPincodeViewController: ViewController {
             title: FenixuzChatLockStrings.biometricSkip,
             style: .cancel
         ) { _ in completion(false) })
-        present(alert, animated: true)
+        // `self` is a Display.ViewController whose present() routes to the window's
+        // rootViewController — which is ALREADY presenting this pincode flow, so the alert
+        // silently fails to appear and the confirm step hangs. This surfaces only on real
+        // devices (the offer is reached only when biometrics exist; the simulator skips it).
+        // Present on the enclosing UIKit navigation controller — the topmost presented
+        // controller — instead, mirroring dismissSelf's reason for using navigationController.
+        (self.navigationController ?? self).present(alert, animated: true)
     }
 
     // MARK: - Dot sync

@@ -248,6 +248,24 @@ public final class ChatPincodeManager {
         self.writeMetadata(meta, account: self.vaultAccount)
     }
 
+    /// One-time default: turn vault biometric unlock ON for an already-configured vault when
+    /// the device supports Face ID / Touch ID, so opening hidden chats uses biometrics out of
+    /// the box (PIN stays the fallback). Guarded by a flag so a later manual OFF sticks.
+    public func migrateVaultBiometricDefaultIfNeeded() {
+        let defaults = UserDefaults(suiteName: "pro_messager")
+        let flagKey = "fenix_vault_biometric_default_on_v1"
+        guard defaults?.bool(forKey: flagKey) != true else {
+            return
+        }
+        defaults?.set(true, forKey: flagKey)
+        guard self.isVaultEnabled(), ChatLockBiometricHelper.availableType() != nil else {
+            return
+        }
+        if !self.getVaultMetadata().biometricEnabled {
+            self.setVaultBiometricEnabled(true)
+        }
+    }
+
     /// Remove the vault credential (turns the Secret Vault feature off). Leaves the
     /// vaulted-peer set untouched — the caller decides whether to also clear it.
     public func removeVault() {

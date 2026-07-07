@@ -1809,40 +1809,47 @@ public func fenixSettingsController(context: AccountContext) -> ViewController {
         let actionSheet = ActionSheetController(presentationData: presentationData)
         var selectedSound = stateValue.with { $0.reminderSound }
 
-        // Rebuilt on every tap so the checkmark follows the selection without
-        // dismissing the sheet — tapping a row previews the tone and persists it.
-        func makeGroups() -> [ActionSheetItemGroup] {
-            var soundItems: [ActionSheetItem] = []
-            for soundKey in FenixuzUnreadReminderSettings.soundOptions {
-                let key = soundKey
-                soundItems.append(ActionSheetCheckboxItem(
-                    title: l10n.settings_reminder_soundName(key),
-                    label: "",
-                    value: selectedSound == key,
-                    action: { [weak actionSheet] _ in
-                        selectedSound = key
-                        FenixReminderSoundPreview.shared.play(key: key)
-                        UserDefaults(suiteName: "pro_messager")?.set(key, forKey: "unread_reminder_sound")
-                        updateState { state in
-                            var state = state
-                            state.reminderSound = key
-                            return state
-                        }
-                        actionSheet?.setItemGroups(makeGroups())
+        // One selectable sound row. Tapping it previews the tone, persists the choice,
+        // and moves the checkmark IN PLACE via updateItem — it must NOT rebuild the whole
+        // sheet. Rebuilding (setItemGroups) from inside a row's own tap tore down the very
+        // node being tapped mid-touch, which blacked out the sheet and froze it.
+        func makeSoundItem(_ key: String) -> ActionSheetCheckboxItem {
+            return ActionSheetCheckboxItem(
+                title: l10n.settings_reminder_soundName(key),
+                label: "",
+                value: selectedSound == key,
+                action: { [weak actionSheet] _ in
+                    let previous = selectedSound
+                    selectedSound = key
+                    FenixReminderSoundPreview.shared.play(key: key)
+                    UserDefaults(suiteName: "pro_messager")?.set(key, forKey: "unread_reminder_sound")
+                    updateState { state in
+                        var state = state
+                        state.reminderSound = key
+                        return state
                     }
-                ))
-            }
-            return [
-                ActionSheetItemGroup(items: soundItems),
-                ActionSheetItemGroup(items: [
-                    ActionSheetButtonItem(title: presentationData.strings.Common_Done, color: .accent, font: .bold, action: { [weak actionSheet] in
-                        actionSheet?.dismissAnimated()
-                    })
-                ])
-            ]
+                    // Only the two affected rows change: uncheck the old, check the new.
+                    // updateItem reuses each existing node (no teardown → safe mid-tap).
+                    let options = FenixuzUnreadReminderSettings.soundOptions
+                    if previous != key, let prevIndex = options.firstIndex(of: previous) {
+                        actionSheet?.updateItem(groupIndex: 0, itemIndex: prevIndex) { _ in makeSoundItem(previous) }
+                    }
+                    if let newIndex = options.firstIndex(of: key) {
+                        actionSheet?.updateItem(groupIndex: 0, itemIndex: newIndex) { _ in makeSoundItem(key) }
+                    }
+                }
+            )
         }
 
-        actionSheet.setItemGroups(makeGroups())
+        let soundItems: [ActionSheetItem] = FenixuzUnreadReminderSettings.soundOptions.map { makeSoundItem($0) }
+        actionSheet.setItemGroups([
+            ActionSheetItemGroup(items: soundItems),
+            ActionSheetItemGroup(items: [
+                ActionSheetButtonItem(title: presentationData.strings.Common_Done, color: .accent, font: .bold, action: { [weak actionSheet] in
+                    actionSheet?.dismissAnimated()
+                })
+            ])
+        ])
         presentControllerImpl?(actionSheet)
     }, addRecommendedFolders: {
         // Feature #19: add recommended folders; show a brief confirmation alert on success.

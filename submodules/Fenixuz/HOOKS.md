@@ -2239,3 +2239,56 @@ On upstream merge conflict: keep the upstream translation/factcheck code, re-ins
 - `submodules/Fenixuz/EditedHistory/Sources/EditedHistoryStrings.swift` — NEW, module-local en/uz/ru strings ("File"/"Fayl"/"Файл", "Media"/"Media"/"Медиа").
 - `submodules/Fenixuz/EditedHistory/BUILD` — +1 dep `//submodules/PhotoResources:PhotoResources`.
 
+
+
+## 📌 2026-07-07 — ItemListDisclosureItem: configurable iconPeer avatar size
+
+### `submodules/ItemListUI/Sources/Items/ItemListDisclosureItem.swift` — UPSTREAM hook
+
+Added a backward-compatible `iconPeerSize: CGFloat = 40.0` init parameter (plus its stored
+property and assignment) so a caller can enlarge the `iconPeer` avatar. The layout consumes
+it in two spots:
+
+- min row height: `max(height, (item.iconPeer != nil ? item.iconPeerSize : 40.0) + verticalInset * 2.0)`
+- avatar frame: `let avatarSize: CGFloat = item.iconPeerSize`
+
+The `40.0` default keeps every existing call site byte-identical (rows without an avatar, and
+avatar rows that do not pass the new arg, are unchanged). Only Novagram Bots passes a custom
+value. On upstream merge: re-apply the param + the two layout reads; nothing else references it.
+
+### Fenixuz caller (not upstream) — `submodules/Fenixuz/ProMessager/Sources/FenixBotsController.swift`
+
+Passes `iconPeerSize: 56.0` on the bot-row `ItemListDisclosureItem` so bot avatars render at
+chat-list size instead of the default 40pt.
+
+### Related (same feature) — reminder sound now resolves from the framework bundle + Library/Sounds
+
+`submodules/Fenixuz/UnreadReminder/Sources/FenixuzUnreadReminderSettings.swift` gained
+`soundsBundle` (Bundle(for: BundleToken.self)) and `installBundledSoundsIfNeeded()` (copies the
+bundled .caf into <App>/Library/Sounds). Bazel packs a swift_library's `data` into its FRAMEWORK,
+not the app root, so `Bundle.main.url` returned nil (silent preview) and `UNNotificationSound(named:)`
+could not resolve the tone. `FenixReminderSoundPreview` now reads from `soundsBundle`; the manager
+calls `installBundledSoundsIfNeeded()` before scheduling. All three are Fenixuz-module files (no
+upstream hook).
+
+
+## 📌 2026-07-07 — Secret Vault: Face ID default-ON + more reminder tones
+
+### `submodules/ChatListUI/Sources/ChatListController.swift` — UPSTREAM hook (fenixOpenSecretVault)
+
+`fenixOpenSecretVault` now calls `ChatPincodeManager.shared.migrateVaultBiometricDefaultIfNeeded()`
+before reading vault metadata. Face ID / Touch ID was fully wired to vault unlock already
+(verify screen `viewDidAppear` → `attemptBiometricIfNeeded`), but gated behind a default-OFF
+"Unlock with Face ID" toggle, so users never saw it. The migration flips the vault biometric
+flag ON once (flag `fenix_vault_biometric_default_on_v1`) when the device supports biometrics,
+so opening hidden chats prompts Face ID automatically. PIN stays the always-present fallback;
+a later manual OFF sticks (the migration runs only once).
+
+### `submodules/Fenixuz/ChatLock/Sources/ChatPincodeManager.swift` (module-owned)
+Added `migrateVaultBiometricDefaultIfNeeded()`.
+
+### Reminder tones (module-owned) — `submodules/Fenixuz/UnreadReminder/Sources/FenixuzUnreadReminderSettings.swift` + `Sounds/`
+soundOptions expanded 5 → 12 tones (added marimba, crystal, droplet, ping, pulse, harp, signal
+as bundled .caf; names in `FenixuzL10n.settings_reminder_soundName`). Apple's own Settings tones
+cannot be used by a 3rd-party app for notifications — only bundled files / .default — so these are
+original synthesized tones (like Telegram bundles its own).

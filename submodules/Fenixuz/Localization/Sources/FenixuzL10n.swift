@@ -358,6 +358,20 @@ public struct FenixuzL10n {
             return pick(en: "Note", uz: "Nota", ru: "Нота")
         case "tritone":
             return pick(en: "Tri-tone", uz: "Uch ohang", ru: "Три-тон")
+        case "marimba":
+            return pick(en: "Marimba", uz: "Marimba", ru: "Маримба")
+        case "crystal":
+            return pick(en: "Crystal", uz: "Kristall", ru: "Кристалл")
+        case "droplet":
+            return pick(en: "Droplet", uz: "Tomchi", ru: "Капля")
+        case "ping":
+            return pick(en: "Ping", uz: "Ping", ru: "Пинг")
+        case "pulse":
+            return pick(en: "Pulse", uz: "Puls", ru: "Пульс")
+        case "harp":
+            return pick(en: "Harp", uz: "Arfa", ru: "Арфа")
+        case "signal":
+            return pick(en: "Signal", uz: "Signal", ru: "Сигнал")
         default:
             return pick(en: "Default notification sound", uz: "Bildirishnoma ovozi", ru: "Звук уведомления по умолчанию")
         }

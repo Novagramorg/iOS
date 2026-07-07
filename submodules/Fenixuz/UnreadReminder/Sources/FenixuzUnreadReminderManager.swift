@@ -194,11 +194,14 @@ public final class FenixuzUnreadReminderManager {
         case "default":
             return .default
         default:
-            // A named tone must be a file bundled at the app root. If the key has no
-            // bundled file (unknown/legacy value) fall back to the system default.
+            // A named tone must live in the app's main bundle root or Library/Sounds —
+            // UNNotificationSound never looks inside a framework, which is where Bazel
+            // actually packs our .caf. Copy them into Library/Sounds first so the name
+            // resolves. If the key has no bundled file, fall back to the system default.
             guard let fileName = FenixuzUnreadReminderSettings.fileName(for: key) else {
                 return .default
             }
+            FenixuzUnreadReminderSettings.installBundledSoundsIfNeeded()
             return UNNotificationSound(named: UNNotificationSoundName(rawValue: fileName))
         }
     }

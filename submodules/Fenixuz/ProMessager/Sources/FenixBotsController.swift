@@ -131,6 +131,7 @@ private enum FenixBotsEntry: ItemListNodeEntry {
                 icon: peer == nil ? fenixBotIcon(systemName: bot.icon, hexColor: bot.color) : nil,
                 context: args.context,
                 iconPeer: peer,
+                iconPeerSize: 56.0,
                 title: bot.name,
                 label: bot.help.localized(langCode: langCode),
                 labelStyle: .multilineDetailText,
@@ -164,10 +165,11 @@ private func fenixBotsEntries(
 
 // MARK: - Avatar resolution
 
-/// Resolves every unique bot @username to its EnginePeer once, keeping only the
-/// peers that actually have a profile photo (peer.smallProfileImage != nil).
-/// Bots with no set avatar, or usernames that fail to resolve, are simply absent
-/// from the returned map so their rows keep the brand-icon fallback (fenixBotIcon).
+/// Resolves every unique bot @username to its EnginePeer once. Any peer that resolves
+/// is kept — the row's avatarNode fetches the actual photo from the peer itself, so we
+/// must NOT pre-filter on smallProfileImage (a freshly resolved peer has none cached
+/// yet, which previously hid every real avatar). Usernames that fail to resolve are
+/// simply absent from the map, so their rows keep the brand-icon fallback (fenixBotIcon).
 /// Reuses the resolvePeerByName pattern from openBot(_:) below.
 private func resolveBotAvatarPeers(
     context: AccountContext,
@@ -198,7 +200,11 @@ private func resolveBotAvatarPeers(
     |> map { pairs -> [String: EnginePeer] in
         var result: [String: EnginePeer] = [:]
         for (username, peer) in pairs {
-            if let peer, peer.smallProfileImage != nil {
+            // Keep any resolved peer. A freshly resolved peer often has no cached
+            // smallProfileImage yet even when the bot HAS a profile photo, so the old
+            // `smallProfileImage != nil` guard hid every real avatar. The row's
+            // avatarNode.setPeer(peer:) fetches the photo from the peer itself.
+            if let peer {
                 result[username] = peer
             }
         }

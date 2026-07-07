@@ -20,9 +20,9 @@ final class FenixReminderSoundPreview {
         }
         let name = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
-        // The .caf files are flattened to the app bundle root via the UnreadReminder
-        // BUILD `data` glob, so Bundle.main is where they resolve.
-        guard let url = Bundle.main.url(forResource: name, withExtension: ext) else {
+        // Bazel packs the .caf into the module's FRAMEWORK, not the app's main bundle,
+        // so resolve them from there (Bundle.main.url returns nil → previously silent).
+        guard let url = FenixuzUnreadReminderSettings.soundsBundle.url(forResource: name, withExtension: ext) else {
             return
         }
 
