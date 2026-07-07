@@ -55,7 +55,7 @@ func localizedLanguageName(strings: PresentationStrings, language: String, kind:
 final class TextProcessingTranslateContentComponent: Component {
     enum Mode: Equatable {
         case translate(ignoredLanguages: [String])
-        case stylize(isComposeWithAI: Bool, appliedPrompt: String?)
+        case stylize(isComposeWithAI: Bool)
         case fix
         case preview(from: ComposedRichMessage?, to: ComposedRichMessage?, authorPeer: EnginePeer?, userCount: Int, isRequesting: Bool)
     }
@@ -110,6 +110,7 @@ final class TextProcessingTranslateContentComponent: Component {
     let inputText: ComposedRichMessage
     let externalState: ExternalState
     let mode: Mode
+    let appliedPrompt: String?
     let copyAction: (() -> Void)?
     let displayLanguageSelectionMenu: (UIView, String, TelegramComposeAIMessageMode.StyleId, Bool,  @escaping (String, TelegramComposeAIMessageMode.StyleReference) -> Void) -> Void
     let createStyle: () -> Void
@@ -127,6 +128,7 @@ final class TextProcessingTranslateContentComponent: Component {
         externalState: ExternalState,
         inputText: ComposedRichMessage,
         mode: Mode,
+        appliedPrompt: String?,
         copyAction: (() -> Void)?,
         displayLanguageSelectionMenu: @escaping (UIView, String, TelegramComposeAIMessageMode.StyleId, Bool, @escaping (String, TelegramComposeAIMessageMode.StyleReference) -> Void) -> Void,
         createStyle: @escaping () -> Void,
@@ -143,6 +145,7 @@ final class TextProcessingTranslateContentComponent: Component {
         self.externalState = externalState
         self.inputText = inputText
         self.mode = mode
+        self.appliedPrompt = appliedPrompt
         self.copyAction = copyAction
         self.displayLanguageSelectionMenu = displayLanguageSelectionMenu
         self.createStyle = createStyle
@@ -173,6 +176,9 @@ final class TextProcessingTranslateContentComponent: Component {
             return false
         }
         if lhs.mode != rhs.mode {
+            return false
+        }
+        if lhs.appliedPrompt != rhs.appliedPrompt {
             return false
         }
         return true
@@ -235,9 +241,19 @@ final class TextProcessingTranslateContentComponent: Component {
                 case .translate:
                     mappedMode = .translate(toLanguage: result.language, emojify: component.externalState.emojify, style: component.externalState.style)
                 case .stylize:
-                    if case let .stylize(isComposeWithAI, appliedPrompt) = component.mode, isComposeWithAI {
-                        if let appliedPrompt, !appliedPrompt.isEmpty {
+                    if case let .stylize(isComposeWithAI) = component.mode, isComposeWithAI {
+                        if let appliedPrompt = component.appliedPrompt, !appliedPrompt.isEmpty {
                             mappedMode = .generate(prompt: appliedPrompt)
+                            component.externalState.isProcessing = true
+                            if !self.isUpdating {
+                                self.state?.updated(transition: .spring(duration: 0.4))
+                            }
+                        } else {
+                            mappedMode = nil
+                        }
+                    } else if case .prompt = component.externalState.style {
+                        if let appliedPrompt = component.appliedPrompt, !appliedPrompt.isEmpty {
+                            mappedMode = .stylize(emojify: component.externalState.emojify, style: .prompt(appliedPrompt))
                             component.externalState.isProcessing = true
                             if !self.isUpdating {
                                 self.state?.updated(transition: .spring(duration: 0.4))
@@ -373,7 +389,7 @@ final class TextProcessingTranslateContentComponent: Component {
                     
                     component.externalState.result = (toLanguage, nil, [])
                     self.beginTranslationIfNecessary(reset: false, force: false)
-                case let .stylize(isComposeWithAI, _):
+                case let .stylize(isComposeWithAI):
                     if isComposeWithAI {
                         component.externalState.result = ("", nil, [])
                     } else {
@@ -386,17 +402,27 @@ final class TextProcessingTranslateContentComponent: Component {
                     component.externalState.result = ("", component.inputText, [])
                 }
             }
-            if case let .stylize(isComposeWithAI, appliedPrompt) = component.mode, isComposeWithAI, let appliedPrompt, !appliedPrompt.isEmpty {
+            if case let .stylize(isComposeWithAI) = component.mode, let appliedPrompt = component.appliedPrompt, !appliedPrompt.isEmpty {
                 var beginGenerating = false
-                if let previousComponent, case let .stylize(previousIsComposeWithAI, previousAppliedPrompt) = previousComponent.mode, previousIsComposeWithAI {
-                    if previousAppliedPrompt != appliedPrompt {
+                
+                var isCompose = false
+                if isComposeWithAI {
+                    isCompose = true
+                } else if case .prompt = component.externalState.style {
+                    isCompose = true
+                }
+                
+                if isCompose {
+                    if let previousComponent {
+                        if previousComponent.appliedPrompt != appliedPrompt {
+                            beginGenerating = true
+                        }
+                    } else {
                         beginGenerating = true
                     }
-                } else {
-                    beginGenerating = true
-                }
-                if beginGenerating {
-                    self.beginTranslationIfNecessary(reset: false, force: false)
+                    if beginGenerating {
+                        self.beginTranslationIfNecessary(reset: false, force: false)
+                    }
                 }
             }
             
@@ -423,7 +449,7 @@ final class TextProcessingTranslateContentComponent: Component {
                 }
             case .stylize, .fix:
                 fromFormat = component.strings.TextProcessing_OriginalBadge
-                if case let .stylize(isComposeWithAI, _) = component.mode {
+                if case let .stylize(isComposeWithAI) = component.mode {
                     if isComposeWithAI {
                         toFormat = component.strings.TextProcessing_ResultBadge
                     } else {
@@ -459,9 +485,11 @@ final class TextProcessingTranslateContentComponent: Component {
                 }
                 fromTextMeasurementString = from
                 toTextMeasurementString = to
+            } else if case let .stylize(isComposeWithAI) = component.mode, !isComposeWithAI, component.appliedPrompt == nil {
+                toText = component.externalState.result?.text ?? component.inputText
             }
             
-            if case let .stylize(isComposeWithAI, _) = component.mode, !isComposeWithAI {
+            if case let .stylize(isComposeWithAI) = component.mode, !isComposeWithAI {
                 if case .style = component.externalState.style, let style = component.styles.first(where: { $0.id == component.externalState.style }), let authorPeer = style.authorPeer {
                     let footerText: String
                     if let addressName = authorPeer.addressName {
@@ -571,7 +599,7 @@ final class TextProcessingTranslateContentComponent: Component {
                 )))
             }
             
-            if case let .stylize(isComposeWithAI, _) = component.mode {
+            if case let .stylize(isComposeWithAI) = component.mode {
                 let styleSelectionSize = self.styleSelection.update(
                     transition: transition,
                     component: AnyComponent(TextProcessingStyleSelectionComponent(
@@ -687,7 +715,7 @@ final class TextProcessingTranslateContentComponent: Component {
             var displayEmojify = false
             if isTranslate {
                 displayEmojify = true
-            } else if case let .stylize(isComposeWithAI, _) = component.mode, !isComposeWithAI {
+            } else if case let .stylize(isComposeWithAI) = component.mode, !isComposeWithAI {
                 displayEmojify = true
             }
             
@@ -751,13 +779,23 @@ final class TextProcessingTranslateContentComponent: Component {
             )
             
             var displayTargetText = true
-            if case let .stylize(isComposeWithAI, appliedPrompt) = component.mode {
-                if !(!isComposeWithAI || appliedPrompt != nil) {
+            if case let .stylize(isComposeWithAI) = component.mode {
+                if !(!isComposeWithAI || component.appliedPrompt != nil) {
                     displayTargetText = false
                 }
             }
             
-            if case let .stylize(isComposeWithAI, _) = component.mode, isComposeWithAI {
+            var displayComposePrompt = false
+            if case let .stylize(isComposeWithAI) = component.mode {
+                if isComposeWithAI {
+                    displayComposePrompt = true
+                } else {
+                    if case .prompt = component.externalState.style {
+                        displayComposePrompt = true
+                    }
+                }
+            }
+            if displayComposePrompt {
                 let promptField: ComponentView<Empty>
                 var promptFieldTransition = transition
                 if let current = self.promptField {
@@ -766,6 +804,23 @@ final class TextProcessingTranslateContentComponent: Component {
                     promptField = ComponentView()
                     self.promptField = promptField
                     promptFieldTransition = promptFieldTransition.withAnimation(.none)
+                }
+                
+                if case let .stylize(isComposeWithAI) = component.mode, !isComposeWithAI {
+                    contentHeight += 15.0
+                    let promptSeparatorLayer: SimpleLayer
+                    if let current = self.promptSeparatorLayer {
+                        promptSeparatorLayer = current
+                    } else {
+                        promptSeparatorLayer = SimpleLayer()
+                        self.promptSeparatorLayer = promptSeparatorLayer
+                        promptSeparatorLayer.opacity = 0.0
+                        self.layer.addSublayer(promptSeparatorLayer)
+                    }
+                    
+                    promptFieldTransition.setFrame(layer: promptSeparatorLayer, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight + 1.0), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel)))
+                    promptSeparatorLayer.backgroundColor = component.theme.list.itemBlocksSeparatorColor.cgColor
+                    transition.setAlpha(layer: promptSeparatorLayer, alpha: displayTargetText ? 1.0 : 0.0)
                 }
                 
                 //TODO:localize
@@ -830,6 +885,12 @@ final class TextProcessingTranslateContentComponent: Component {
                         })
                     }
                 }
+                if let promptSeparatorLayer = self.promptSeparatorLayer {
+                    self.promptSeparatorLayer = nil
+                    transition.setAlpha(layer: promptSeparatorLayer, alpha: 0.0, completion: { [weak promptSeparatorLayer] _ in
+                        promptSeparatorLayer?.removeFromSuperlayer()
+                    })
+                }
             }
             
             transition.setFrame(layer: self.separatorLayer, frame: CGRect(origin: CGPoint(x: sideInset, y: contentHeight + floorToScreenPixels((blockSpacing - UIScreenPixel) * 0.5) - 1.0), size: CGSize(width: availableSize.width - sideInset * 2.0, height: UIScreenPixel)))
@@ -843,7 +904,7 @@ final class TextProcessingTranslateContentComponent: Component {
             }
             
             var targetTextAlpha: CGFloat = 1.0
-            if case let .stylize(isComposeWithAI, _) = component.mode, isComposeWithAI, component.externalState.isProcessing {
+            if displayComposePrompt && component.externalState.isProcessing {
                 targetTextAlpha = 0.5
             }
             

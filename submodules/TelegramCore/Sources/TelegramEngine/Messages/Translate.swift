@@ -763,17 +763,21 @@ public enum TelegramComposeAIMessageMode {
     
     public enum StyleId: Hashable {
         case neutral
+        case prompt
         case style(CloudStyle.Id)
     }
     
     public enum StyleReference: Hashable {
         case neutral
+        case prompt(String)
         case style(CloudStyle.Reference)
         
         public var id: StyleId {
             switch self {
             case .neutral:
                 return .neutral
+            case .prompt:
+                return .prompt
             case let .style(style):
                 return .style(style.id)
             }
@@ -788,10 +792,6 @@ public enum TelegramComposeAIMessageMode {
 
 extension TelegramComposeAIMessageMode.CloudStyle {
     convenience init(apiTone: Api.AiComposeTone) {
-        /*
-         aiComposeTone#12ea1465 flags:# creator:flags.0?true id:long access_hash:long slug:string title:string emoji_id:flags.1?long prompt:string installs_count:flags.2?int author_id:flags.3?long = AiComposeTone;
-         aiComposeToneDefault#9bad6414 tone:string emoji_id:long title:string = AiComposeTone;
-         */
         switch apiTone {
         case let .aiComposeTone(aiComposeTone):
             self.init(content: .custom(Custom(
@@ -876,6 +876,9 @@ func _internal_composeAIMessage(account: Account, text: ComposedRichMessage, mod
         
         if case let .style(reference) = style {
             changeTone = reference.apiInputStyle
+            flags |= (1 << 2)
+        } else if case let .prompt(prompt) = style {
+            changeTone = .inputAiComposeToneSingleUse(Api.InputAiComposeTone.Cons_inputAiComposeToneSingleUse(customPrompt: prompt))
             flags |= (1 << 2)
         }
     case .proofread:

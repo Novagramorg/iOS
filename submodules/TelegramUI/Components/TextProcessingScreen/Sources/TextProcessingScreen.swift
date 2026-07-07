@@ -35,6 +35,7 @@ final class TextProcessingContentComponent: Component {
         fileprivate(set) var isProcessing: Bool = false
         fileprivate(set) var nonPremiumFloodTriggered: Bool = false
         fileprivate(set) var result: ComposedRichMessage?
+        fileprivate(set) var isPromptMode: Bool = false
         fileprivate(set) var promptText: String = ""
         
         fileprivate(set) var refreshResult: (() -> Void)?
@@ -206,14 +207,21 @@ final class TextProcessingContentComponent: Component {
             case .translate:
                 component.externalState.isProcessing = self.translateState.isProcessing
                 component.externalState.result = self.translateState.result?.text
+                component.externalState.isPromptMode = false
                 component.externalState.promptText = ""
             case .stylize:
                 component.externalState.isProcessing = self.stylizeState.isProcessing
                 component.externalState.result = self.stylizeState.result?.text
+                if case .prompt = self.stylizeState.style {
+                    component.externalState.isPromptMode = true
+                } else {
+                    component.externalState.isPromptMode = false
+                }
                 component.externalState.promptText = self.stylizeState.promptText
             case .fix:
                 component.externalState.isProcessing = self.fixState.isProcessing
                 component.externalState.result = self.fixState.result?.text
+                component.externalState.isPromptMode = false
                 component.externalState.promptText = ""
             }
             
@@ -825,6 +833,7 @@ final class TextProcessingContentComponent: Component {
                     externalState: self.translateState,
                     inputText: component.inputText,
                     mode: .translate(ignoredLanguages: component.ignoredTranslationLanguages),
+                    appliedPrompt: nil,
                     copyAction: component.copyCurrentResult,
                     displayLanguageSelectionMenu: component.displayLanguageSelectionMenu,
                     createStyle: {
@@ -863,13 +872,15 @@ final class TextProcessingContentComponent: Component {
                 }
                 
                 let mappedMode: TextProcessingTranslateContentComponent.Mode
+                var mappedAppliedPrompt: String?
                 if isPreview {
                     mappedMode = .preview(from: fromText, to: toText, authorPeer: authorPeer, userCount: userCount, isRequesting: isRequestingPreview)
                 } else {
+                    mappedAppliedPrompt = component.appliedPromptText
                     if case .generate = component.mode {
-                        mappedMode = .stylize(isComposeWithAI: true, appliedPrompt: component.appliedPromptText)
+                        mappedMode = .stylize(isComposeWithAI: true)
                     } else {
-                        mappedMode = .stylize(isComposeWithAI: false, appliedPrompt: nil)
+                        mappedMode = .stylize(isComposeWithAI: false)
                     }
                 }
                 
@@ -882,6 +893,7 @@ final class TextProcessingContentComponent: Component {
                     externalState: self.stylizeState,
                     inputText: inputText,
                     mode: mappedMode,
+                    appliedPrompt: mappedAppliedPrompt,
                     copyAction: component.copyCurrentResult,
                     displayLanguageSelectionMenu: component.displayLanguageSelectionMenu,
                     createStyle: { [weak self] in
@@ -1003,6 +1015,7 @@ final class TextProcessingContentComponent: Component {
                     externalState: self.fixState,
                     inputText: component.inputText,
                     mode: .fix,
+                    appliedPrompt: nil,
                     copyAction: component.copyCurrentResult,
                     displayLanguageSelectionMenu: component.displayLanguageSelectionMenu,
                     createStyle: {
@@ -1098,6 +1111,7 @@ final class TextProcessingContentComponent: Component {
             }
             let contentFrame = CGRect(origin: CGPoint(x: sideInset, y: contentHeight), size: contentSize)
             transition.setFrame(view: self.currentContentContainer, frame: contentFrame)
+            self.currentContentContainer.layer.cornerRadius = 30.0
             
             let _ = self.currentContentBackground.update(
                 transition: transition,
@@ -1533,12 +1547,12 @@ private final class TextProcessingSheetComponent: Component {
                 }
             }
 
-            let performMainAction: () -> Void
+            var performMainAction: () -> Void = {}
             var performSecondaryAction: ((ComposedRichMessage) -> Bool)?
             var secondaryActionIcon: ActionButtonsComponent.SecondaryActionIcon = .send
             var hasLongPressActions = false
-            let isMainActionEnabled: Bool
-            let actionButtonTitle: String
+            var isMainActionEnabled = false
+            var actionButtonTitle = ""
             var actionButtonShowsIncreaseLimit = false
             
             if self.contentExternalState.nonPremiumFloodTriggered {
@@ -1562,23 +1576,28 @@ private final class TextProcessingSheetComponent: Component {
                     self.environment?.controller()?.push(controller)
                 }
             } else {
+                var isPrompt = false
                 switch component.mode {
                 case let .edit(_, completion, send, sendContextActions):
-                    actionButtonTitle = environmentValue.strings.TextProcessing_ActionApply
-                    performSecondaryAction = { data in
-                        send?(data)
-                        return true
-                    }
-                    isMainActionEnabled = !self.contentExternalState.isProcessing
-                    hasLongPressActions = sendContextActions != nil
-                    performMainAction = { [weak self] in
-                        guard let self else {
-                            return
+                    if self.contentExternalState.isPromptMode {
+                        isPrompt = true
+                    } else {
+                        actionButtonTitle = environmentValue.strings.TextProcessing_ActionApply
+                        performSecondaryAction = { data in
+                            send?(data)
+                            return true
                         }
-                        if let result = self.contentExternalState.result {
-                            completion(result)
+                        isMainActionEnabled = !self.contentExternalState.isProcessing
+                        hasLongPressActions = sendContextActions != nil
+                        performMainAction = { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            if let result = self.contentExternalState.result {
+                                completion(result)
+                            }
+                            dismiss(true)
                         }
-                        dismiss(true)
                     }
                 case let .translate(_, applyResult):
                     if let applyResult {
@@ -1629,14 +1648,27 @@ private final class TextProcessingSheetComponent: Component {
                         }
                     }
                 case .generate:
+                    isPrompt = true
+                }
+                
+                if isPrompt {
                     //TODO:localize
                     if let _ = self.contentExternalState.result {
-                        actionButtonTitle = "Add to Page"
-                        isMainActionEnabled = true
-                        secondaryActionIcon = .refresh
+                        if case .generate = component.mode {
+                            actionButtonTitle = "Add to Page"
+                        } else {
+                            actionButtonTitle = "Apply"
+                            secondaryActionIcon = .refresh
+                        }
+                        isMainActionEnabled = !self.contentExternalState.isProcessing
                     } else {
                         actionButtonTitle = "Generate"
                         isMainActionEnabled = !self.contentExternalState.isProcessing && !self.contentExternalState.promptText.isEmpty
+                        
+                        if case .generate = component.mode {
+                        } else {
+                            secondaryActionIcon = .refresh
+                        }
                     }
                     performMainAction = { [weak self] in
                         guard let self, let component = self.component else {
@@ -2607,6 +2639,7 @@ private final class ActionButtonsComponent: Component {
                             spacing: 6.0
                         ))
                     ),
+                    restrictContentAnimations: true,
                     isEnabled: component.action != nil,
                     displaysProgress: false,
                     action: { [weak self] in
@@ -2639,11 +2672,12 @@ private final class ActionButtonsComponent: Component {
                     content: AnyComponentWithIdentity(
                         id: AnyHashable(0),
                         component: AnyComponent(TransformContents(content: AnyComponent(BundleIconComponent(
-                            name: component.secondaryActionIcon == .refresh ? "Instant View/Settings/Reload" : "TextProcessing/SendIcon",
+                            name: component.secondaryActionIcon == .refresh ? "TextProcessing/RefreshButton" : "TextProcessing/SendIcon",
                             tintColor: component.theme.list.itemCheckColors.foregroundColor,
-                            scaleFactor: component.secondaryActionIcon == .refresh ? 1.5 : 1.0
+                            scaleFactor: 1.0
                         )), translation: CGPoint(x: component.secondaryActionIcon == .refresh ? 0.0 : -2.0, y: 0.0)))
                     ),
+                    restrictContentAnimations: true,
                     contentInsets: UIEdgeInsets(),
                     isEnabled: component.sendAction != nil,
                     displaysProgress: false,
