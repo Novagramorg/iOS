@@ -11,6 +11,12 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         return .paragraph(ChatInputParagraph(style: .body, runs: runs))
     }
 
+    // Matches the inline representation construction already used in `test_media_recoversNaturalSizeFromMedia`.
+    private func imageRep(_ width: Int32, _ height: Int32) -> TelegramMediaImageRepresentation {
+        return TelegramMediaImageRepresentation(dimensions: PixelDimensions(width: width, height: height),
+                                                resource: EmptyMediaResource(), progressiveSizes: [], immediateThumbnailData: nil)
+    }
+
     // 1. Plain + each inline attribute separately, plus several combined into one run.
     func test_plainAndInlineAttributes() {
         var bold = ChatInputInlineAttributes(); bold.bold = true
@@ -339,6 +345,31 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         guard case .media(let mv)? = videoBack.blocks.first else { return XCTFail("expected .media(video)") }
         XCTAssertEqual(mv.naturalSize, ChatInputSize(width: 1920, height: 1080),
                        "video natural size recovered from the .Video attribute")
+    }
+
+    // 23. A multi-item (>=2) media container round-trips through a single InstantPage .collage block (Task 9);
+    //     a single-item container stays byte-identical to the plain .image/.video block (no .collage wrapper).
+    func test_roundTrip_twoImageContainer_viaCollage() {
+        let img1 = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [imageRep(100, 100)], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let img2 = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 2), representations: [imageRep(60, 90)], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(items: [
+            ChatInputMediaItem(media: img1, kind: .image, naturalSize: ChatInputSize(width: 100, height: 100)),
+            ChatInputMediaItem(media: img2, kind: .video, naturalSize: ChatInputSize(width: 60, height: 90)),
+        ], displayWidth: nil, alignment: .center, caption: []))])
+        // Forward produces a single .collage block.
+        let page = instantPage(from: content)
+        guard case .collage = page.blocks.first else { return XCTFail("expected .collage") }
+        // Reverse restores the container (naturalSize recovered from the resolved media).
+        XCTAssertEqual(chatInputContent(fromInstantPage: page), content)
+    }
+
+    func test_singleImageContainer_stillEmitsPlainImageBlock() {
+        let img = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [imageRep(100, 100)], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(media: img, kind: .image, naturalSize: ChatInputSize(width: 100, height: 100)))])
+        let page = instantPage(from: content)
+        // count==1 stays byte-identical: a plain .image block, not .collage.
+        guard case .image = page.blocks.first else { return XCTFail("expected .image (not collage)") }
+        XCTAssertEqual(chatInputContent(fromInstantPage: page), content)
     }
 
     // Bonus: a mixed document combining several block kinds.

@@ -177,7 +177,7 @@ final class BlockViewTests: XCTestCase {
     /// A minimal hosted media view (the medium is now a host-supplied overlay view, not a CPU-drawn bitmap).
     private final class StubMediaView: UIView, RichTextMediaItemView {
         func update(size: CGSize) {}
-        var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
+        var onControlTapped: ((RichTextMediaControlKind, Int?, UIView, CGRect) -> Void)?
     }
 
     func test_fullBleedMediaView_coversTheBleed() {
@@ -185,7 +185,7 @@ final class BlockViewTests: XCTestCase {
         // block's backing store), so the bleed is covered by THAT view, not the block backing view. The
         // block backing view is now caption-only (blockViewFrame == frame).
         let v = imageCanvas()
-        v.mediaViewProvider = { _, _ in StubMediaView() }
+        v.mediaViewProvider = { _, _, _ in StubMediaView() }
         v.setNeedsLayout(); v.layoutIfNeeded()
         let imgBox = v.boxes[1] as! MediaBlockBox
         let r = imgBox.mediaRect()

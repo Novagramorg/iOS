@@ -39,8 +39,11 @@ private func regeneratingIDs(_ blocks: [Block]) -> [Block] {
             }))
         case .media(let m):
             // Regenerate the block id only; `mediaID` is the host's content key (may legitimately repeat across
-            // blocks), and the caption is inline `[TextRun]` with no nested BlockID.
-            return .media(MediaBlock(id: .generate(), mediaID: m.mediaID, kind: m.kind, naturalSize: m.naturalSize,
+            // blocks), and the caption is inline `[TextRun]` with no nested BlockID. Use the container init and
+            // pass `items` through wholesale — a multi-media container's items carry no BlockID of their own, so
+            // regeneration is a pure passthrough — else this drops every item past the first (mirrors the Task-7
+            // fix in DocumentCanvasView+Editing.swift, which hit the same legacy-single-item-init trap).
+            return .media(MediaBlock(id: .generate(), items: m.items,
                                      displayWidth: m.displayWidth, alignment: m.alignment, caption: m.caption))
         }
     }

@@ -234,7 +234,10 @@ final class RichTextAttachmentScreenComponent: Component {
 
         // MARK: Phase 5b — image picker + link prompt
 
-        private func presentImagePicker() {
+        /// Picks one medium via the host attachment menu, registers its raw `Media` in `attachedMedia` (so the
+        /// media-view provider can resolve it), and hands back the editor-facing `(mediaID, naturalSize, kind,
+        /// caption)`. Callers decide what to do with it (insert a new block, or append to an existing one).
+        private func pickMedia(completion: @escaping (_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind, _ caption: [TextRun]) -> Void) {
             guard let component = self.component else {
                 return
             }
@@ -273,14 +276,31 @@ final class RichTextAttachmentScreenComponent: Component {
                     let mediaID = "map:\(map.latitude):\(map.longitude)"
                     self.attachedMedia[mediaID] = map
                     let caption: [TextRun] = map.venue?.title.isEmpty == false ? [TextRun(text: map.venue!.title)] : []
-                    self.editor.insertMedia(mediaID: mediaID, naturalSize: CGSize(width: 600.0, height: 300.0), kind: .location, caption: caption)
+                    completion(mediaID, CGSize(width: 600.0, height: 300.0), .location, caption)
                     return
                 }
                 guard let mediaId = media.id else { return }
                 let mediaID = "\(mediaId.namespace):\(mediaId.id)"
                 self.attachedMedia[mediaID] = media
-                self.editor.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind)
+                completion(mediaID, naturalSize, kind, [])
             })
+        }
+
+        private func presentImagePicker() {
+            self.pickMedia { [weak self] mediaID, naturalSize, kind, caption in
+                self?.editor.insertMedia(mediaID: mediaID, naturalSize: naturalSize, kind: kind, caption: caption)
+            }
+        }
+
+        /// Image/video only — audio and location/map blocks are single-item and can't grow into a mosaic.
+        private func isGroupableImageOrVideo(_ media: Media) -> Bool {
+            if media is TelegramMediaImage {
+                return true
+            }
+            if let file = media as? TelegramMediaFile {
+                return file.isVideo
+            }
+            return false
         }
 
         private func presentLinkPrompt() {
@@ -437,20 +457,35 @@ final class RichTextAttachmentScreenComponent: Component {
                     let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
                     switch request.control {
                     case .more:
-                        let items: [ContextMenuItem] = [
-                            .action(ContextMenuActionItem(
-                                text: "Delete",
-                                textColor: .destructive,
-                                icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) },
-                                action: { _, f in f(.default); request.delete() }
-                            ))
-                        ]
+                        var items: [ContextMenuItem] = []
+                        if let tapped = self.attachedMedia[request.mediaID],
+                           self.isGroupableImageOrVideo(tapped), let addMore = request.addMore {
+                            items.append(.action(ContextMenuActionItem(
+                                text: "Add",
+                                icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: theme.contextMenu.primaryColor) },
+                                action: { [weak self] _, f in
+                                    f(.default)
+                                    self?.pickMedia { mediaID, naturalSize, kind, _ in
+                                        guard kind == .image || kind == .video else { return }   // mosaic is photo/video only
+                                        addMore(mediaID, naturalSize, kind)
+                                    }
+                                }
+                            )))
+                        }
+                        items.append(.action(ContextMenuActionItem(
+                            text: "Delete",
+                            textColor: .destructive,
+                            icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) },
+                            action: { _, f in f(.default); request.delete() }
+                        )))
                         presentMediaControlMenu(anchorView: anchor, items: items,
                                                 presentationData: presentationData) { [weak self] controller in
                             self?.environment?.controller()?.presentInGlobalOverlay(controller)
                         }
                     case .add:
                         break   // the "+" button is not built yet
+                    case .delete:
+                        request.delete()
                     }
                 }
                 editor.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
@@ -506,9 +541,8 @@ final class RichTextAttachmentScreenComponent: Component {
                     })
                 }
 
-                editor.registerMediaViewProvider { [weak self] mediaID, _ in
-                    guard let self, let component = self.component,
-                          let media = self.attachedMedia[mediaID] else { return nil }
+                editor.registerMediaViewProvider { [weak self] items, _, existing in
+                    guard let self, let component = self.component else { return nil }
                     // Theme an audio row to the editor's accent/text scheme (same `list.item*` sources as
                     // `mapEditorTheme` / the table); ignored for image/map media.
                     let theme = component.context.sharedContext.currentPresentationData.with { $0 }.theme
@@ -518,7 +552,18 @@ final class RichTextAttachmentScreenComponent: Component {
                         title: theme.list.itemPrimaryTextColor,
                         description: theme.list.itemSecondaryTextColor
                     )
-                    return MediaItemNodeView(context: component.context, media: EngineMedia(media), audioColorOverride: audioColors)
+                    let resolved: [(media: EngineMedia, naturalSize: CGSize)] = items.compactMap { item in
+                        guard let media = self.attachedMedia[item.mediaID] else { return nil }
+                        return (EngineMedia(media), item.naturalSize)
+                    }
+                    guard !resolved.isEmpty else { return nil }
+                    // In-place update: reuse the existing container (surviving photo/video cells keep their bound
+                    // fetch, no re-flash) across add-more / delete-one; else build a fresh one.
+                    if let view = existing as? MediaItemNodeView {
+                        view.updateResolvedItems(resolved)
+                        return view
+                    }
+                    return MediaItemNodeView(context: component.context, items: resolved, audioColorOverride: audioColors)
                 }
 
                 // Host the checklist checkbox with a `CheckNode` themed from the standard app checkbox palette

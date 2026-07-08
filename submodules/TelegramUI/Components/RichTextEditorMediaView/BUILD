@@ -18,6 +18,7 @@ swift_library(
         "//submodules/Display:Display",
         "//submodules/PhotoResources:PhotoResources",
         "//submodules/MediaResources:MediaResources",
+        "//submodules/MosaicLayout:MosaicLayout",
         "//submodules/RadialStatusNode:RadialStatusNode",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
         "//submodules/TelegramUI/Components/LottieComponent",

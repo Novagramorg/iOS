@@ -79,9 +79,13 @@ final class DocumentCanvasView: UIView {
     let emojiOverlay = UIView()
     /// Hide an emoji view when its canvas frame is more than this far outside the visible viewport.
     var emojiCullMargin: CGFloat = 50
-    /// Returns a FRESH media view for a `mediaID` sized to the medium's natural size, or nil. The canvas
-    /// owns/positions/resizes/removes it. Mirrors `emojiViewProvider` but for block-level media.
-    var mediaViewProvider: (_ mediaID: String, _ naturalSize: CGSize) -> RichTextMediaItemView? = { _, _ in nil }
+    /// Returns a media view for a container's items (in order), or nil. The canvas owns/positions/
+    /// resizes/removes it. Mirrors `emojiViewProvider` but for block-level media; carries the whole item
+    /// list (not just the primary item) so a multi-media container's host view can render every item.
+    /// `existing` is the currently-hosted view for this block on an items-change (nil otherwise); the host
+    /// may update it IN PLACE and return the SAME instance (surviving cells reused, fetch preserved) or
+    /// return a fresh instance (recreate fallback). Returns nil = "not ready" (keep any existing view).
+    var mediaViewProvider: (_ items: [MediaProviderItem], _ blockID: BlockID, _ existing: RichTextMediaItemView?) -> RichTextMediaItemView? = { _, _, _ in nil }
     /// Hosted media views, keyed by the OWNING block's `BlockID` (the occurrence) so edits/undo reuse —
     /// not recreate — them, and two blocks sharing one `mediaID` get two independent views.
     var mediaItemViews: [BlockID: HostedMediaItem] = [:]
@@ -1562,6 +1566,12 @@ final class HostedEmoji {
 final class HostedMediaItem {
     let view: RichTextMediaItemView
     var canvasFrame: CGRect
-    init(view: RichTextMediaItemView, canvasFrame: CGRect) { self.view = view; self.canvasFrame = canvasFrame }
+    // Signature of the item set the hosted `view` was built for (mediaID + kind + natural size, in order).
+    // `syncMediaItemViews` recreates the view via the provider when a block's live items no longer match this
+    // — the seam is one-shot, so a reused view can't be re-fed a changed item list in place.
+    var itemsSignature: String
+    init(view: RichTextMediaItemView, canvasFrame: CGRect, itemsSignature: String) {
+        self.view = view; self.canvasFrame = canvasFrame; self.itemsSignature = itemsSignature
+    }
 }
 #endif

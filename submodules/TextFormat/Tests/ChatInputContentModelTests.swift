@@ -450,4 +450,74 @@ final class ChatInputContentModelTests: XCTestCase {
         XCTAssertFalse(ChatInputContent(blocks: [p(""), p("")]).isEmpty)
         XCTAssertTrue(ChatInputContent(blocks: [p(""), p("")]).isEmptyWhitespaceTrimmed)
     }
+
+    // MARK: - ChatInputMedia container (items array)
+
+    func test_chatInputMedia_container_codableViaAdaptedPostbox() throws {
+        let img = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let file = TelegramMediaFile(fileId: MediaId(namespace: 0, id: 2), partialReference: nil, resource: EmptyMediaResource(), previewRepresentations: [], videoThumbnails: [], immediateThumbnailData: nil, mimeType: "video/mp4", size: nil, attributes: [], alternativeRepresentations: [])
+        let media = ChatInputMedia(items: [
+            ChatInputMediaItem(media: img, kind: .image, naturalSize: ChatInputSize(width: 100, height: 50)),
+            ChatInputMediaItem(media: file, kind: .video, naturalSize: ChatInputSize(width: 60, height: 90)),
+        ], displayWidth: nil, alignment: .center, caption: [])
+        let data = try AdaptedPostboxEncoder().encode(media)
+        let decoded = try AdaptedPostboxDecoder().decode(ChatInputMedia.self, from: data)
+        XCTAssertEqual(decoded, media)
+    }
+
+    func test_chatInputMedia_convenienceInit_isOneItem() {
+        let img = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 1), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let media = ChatInputMedia(media: img, kind: .image, naturalSize: ChatInputSize(width: 1, height: 1))
+        XCTAssertEqual(media.items.count, 1)
+        XCTAssertTrue(media.media.isEqual(to: img))   // accessor -> first item
+    }
+
+    /// Emits the pre-container `ChatInputMedia` wire shape (top-level `media`/`mediaType`/`kind`/`naturalSize`/
+    /// `alignment`/`caption`, deliberately NO `items` key) so the test can exercise `ChatInputMedia.init(from:)`'s
+    /// `else` branch (see ChatInputContentModel.swift), which is unreachable from `ChatInputMedia.encode(to:)`
+    /// itself (that always emits `items`).
+    private struct LegacyChatInputMediaPayload: Encodable {
+        let media: TelegramMediaImage
+        let mediaType: Int32
+        let kind: ChatInputMediaKind
+        let naturalSize: ChatInputSize
+        let alignment: ChatInputMediaAlignment
+        let caption: [ChatInputRun]
+
+        private enum CodingKeys: String, CodingKey {
+            case media, mediaType, kind, naturalSize, alignment, caption
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(PostboxEncoder().encodeObjectToRawData(self.media), forKey: .media)
+            try container.encode(self.mediaType, forKey: .mediaType)
+            try container.encode(self.kind, forKey: .kind)
+            try container.encode(self.naturalSize, forKey: .naturalSize)
+            try container.encode(self.alignment, forKey: .alignment)
+            try container.encode(self.caption, forKey: .caption)
+        }
+    }
+
+    /// Back-compat: a legacy (pre-container) single-media payload — no `items` key — decodes into a
+    /// one-element `items` array (the `else` branch of `ChatInputMedia.init(from:)`).
+    func test_chatInputMedia_legacySingleMediaPayload_decodesIntoOneItem() throws {
+        let img = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 99), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let size = ChatInputSize(width: 42, height: 24)
+        let legacy = LegacyChatInputMediaPayload(
+            media: img,
+            mediaType: 0, // MediaType.image, per ChatInputMedia's private MediaType discriminator
+            kind: .image,
+            naturalSize: size,
+            alignment: .center,
+            caption: []
+        )
+        let data = try AdaptedPostboxEncoder().encode(legacy)
+        let decoded = try AdaptedPostboxDecoder().decode(ChatInputMedia.self, from: data)
+
+        XCTAssertEqual(decoded.items.count, 1)
+        XCTAssertTrue(decoded.items[0].media.isEqual(to: img))
+        XCTAssertEqual(decoded.items[0].kind, .image)
+        XCTAssertEqual(decoded.naturalSize, size)
+    }
 }

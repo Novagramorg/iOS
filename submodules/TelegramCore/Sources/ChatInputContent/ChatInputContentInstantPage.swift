@@ -76,16 +76,39 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                                       caption: authorCaptionRichText(bq.author), collapsed: bq.collapsed))
         case let .media(m):
             let caption = InstantPageCaption(text: richText(from: m.caption), credit: .empty)
-            switch m.kind {
+            if m.items.count >= 2 {
+                // Multi-item photo/video container → one .collage block; each inner .image/.video references
+                // a MediaId stored in the page media dict. Inner captions are empty (the container caption is
+                // on the collage). Items with a nil id or a non-image/video kind are skipped defensively.
+                var innerBlocks: [InstantPageBlock] = []
+                for item in m.items {
+                    guard let mediaId = item.media.id else { continue }
+                    media[mediaId] = item.media
+                    switch item.kind {
+                    case .image:
+                        innerBlocks.append(.image(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), url: nil, webpageId: nil))
+                    case .video:
+                        innerBlocks.append(.video(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), autoplay: false, loop: false))
+                    default:
+                        // audio / location are never grouped into a collage (single-item only); skip defensively.
+                        continue
+                    }
+                }
+                result.append(.collage(items: innerBlocks, caption: caption))
+                break
+            }
+            // Single item: byte-identical to the pre-container output.
+            let item = m.items[0]
+            switch item.kind {
             case .image, .video, .audio:
-                // Stash the `Media` in the page's `media` dict, keyed by its own `MediaId`; the block carries only
-                // the id. image/video/audio are always a concrete TelegramMediaImage/TelegramMediaFile with an id;
-                // a nil-id medium is dropped (it could not be resolved back from the dict anyway).
-                guard let mediaId = m.media.id else {
+                // Stash the Media in the page's `media` dict, keyed by its own MediaId; the block carries only the id.
+                // image/video/audio are always a concrete TelegramMediaImage/TelegramMediaFile with an id; a nil-id
+                // medium is dropped (it could not be resolved back from the dict anyway).
+                guard let mediaId = item.media.id else {
                     break
                 }
-                media[mediaId] = m.media
-                switch m.kind {
+                media[mediaId] = item.media
+                switch item.kind {
                 case .image:
                     result.append(.image(id: mediaId, caption: caption, url: nil, webpageId: nil))
                 case .audio:
@@ -99,10 +122,10 @@ func instantPageBlocks(from content: ChatInputContent, collectingMediaInto media
                 // A location is a `TelegramMediaMap` (id-less): the InstantPage `.map` block carries its coordinates
                 // inline, so nothing goes in the page `media` dict. zoom/dimensions are render hints (15 / 600x300
                 // fallback). venue is not representable here — the caption already carries the venue title.
-                if let map = m.media as? TelegramMediaMap {
+                if let map = item.media as? TelegramMediaMap {
                     let dimensions: PixelDimensions
-                    if m.naturalSize.width > 0, m.naturalSize.height > 0 {
-                        dimensions = PixelDimensions(width: Int32(m.naturalSize.width), height: Int32(m.naturalSize.height))
+                    if item.naturalSize.width > 0, item.naturalSize.height > 0 {
+                        dimensions = PixelDimensions(width: Int32(item.naturalSize.width), height: Int32(item.naturalSize.height))
                     } else {
                         dimensions = PixelDimensions(width: 600, height: 300)
                     }
@@ -281,6 +304,29 @@ func chatInputBlocks(fromInstantPageBlocks blocks: [InstantPageBlock], media: [M
             // `displayWidth`/`alignment` canonicalized to the defaults.
             if let media = media[id] {
                 result.append(.media(ChatInputMedia(media: media, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: media), displayWidth: nil, alignment: .center, caption: chatInputRuns(fromRichText: caption.text))))
+            }
+        case let .collage(innerBlocks, caption):
+            // Rebuild a multi-item container. Each inner .image/.video resolves its Media from the page dict;
+            // naturalSize is recovered from the resolved Media (as for single .image/.video). displayWidth /
+            // alignment canonicalize to nil / .center (not representable — same as the single case).
+            var items: [ChatInputMediaItem] = []
+            for inner in innerBlocks {
+                switch inner {
+                case let .image(id, _, _, _):
+                    if let m = media[id] {
+                        items.append(ChatInputMediaItem(media: m, kind: .image, naturalSize: chatInputNaturalSize(fromMedia: m)))
+                    }
+                case let .video(id, _, _, _):
+                    if let m = media[id] {
+                        items.append(ChatInputMediaItem(media: m, kind: .video, naturalSize: chatInputNaturalSize(fromMedia: m)))
+                    }
+                default:
+                    break   // collage only ever carries image/video from the forward
+                }
+            }
+            if !items.isEmpty {
+                result.append(.media(ChatInputMedia(items: items, displayWidth: nil, alignment: .center,
+                                                    caption: chatInputRuns(fromRichText: caption.text))))
             }
         case let .audio(id, caption):
             // Resolve the concrete `TelegramMediaFile` from the page `media` dict (the forward always stores it).

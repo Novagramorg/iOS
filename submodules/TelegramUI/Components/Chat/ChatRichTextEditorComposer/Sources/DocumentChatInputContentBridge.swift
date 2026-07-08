@@ -57,14 +57,17 @@ public func chatInputContent(
                 runs: chatInputRuns(fromRuns: pq.runs, resolveEmoji: resolveEmoji),
                 author: chatInputRuns(fromRuns: pq.author, resolveEmoji: resolveEmoji))))
         case let .media(media):
-            // An unresolved medium has no `ChatInputMedia` representation (`media:` is non-optional) — drop it.
-            guard let resolved = resolveMedia(media.mediaID) else {
-                continue
+            // Resolve each item's Media; drop unresolvable items. A container with no resolvable items is dropped.
+            let resolvedItems: [ChatInputMediaItem] = media.items.compactMap { item in
+                guard let resolved = resolveMedia(item.mediaID) else { return nil }
+                return ChatInputMediaItem(
+                    media: resolved,
+                    kind: chatInputMediaKind(fromKind: item.kind),
+                    naturalSize: ChatInputSize(width: item.naturalSize.width, height: item.naturalSize.height))
             }
+            guard !resolvedItems.isEmpty else { continue }
             blocks.append(.media(ChatInputMedia(
-                media: resolved,
-                kind: chatInputMediaKind(fromKind: media.kind),
-                naturalSize: ChatInputSize(width: media.naturalSize.width, height: media.naturalSize.height),
+                items: resolvedItems,
                 displayWidth: media.displayWidth,
                 alignment: chatInputMediaAlignment(fromAlignment: media.alignment),
                 caption: chatInputRuns(fromRuns: media.caption, resolveEmoji: resolveEmoji)
@@ -327,9 +330,12 @@ private func documentBlocks(
     case let .media(media):
         return [.media(MediaBlock(
             id: BlockID.generate(),
-            mediaID: registerMedia(media.media),
-            kind: mediaKind(fromChatInputKind: media.kind),
-            naturalSize: Size2D(width: media.naturalSize.width, height: media.naturalSize.height),
+            items: media.items.map { item in
+                MediaItem(
+                    mediaID: registerMedia(item.media),
+                    kind: mediaKind(fromChatInputKind: item.kind),
+                    naturalSize: Size2D(width: item.naturalSize.width, height: item.naturalSize.height))
+            },
             displayWidth: media.displayWidth,
             alignment: mediaAlignment(fromChatInputAlignment: media.alignment),
             caption: runs(fromChatInputRuns: media.caption, registerEmoji: registerEmoji)

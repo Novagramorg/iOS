@@ -112,7 +112,16 @@ Specs: [`2026-06-02-instantpage-v2-audio-design.md`](docs/superpowers/specs/2026
 
 ## InstantPage V2 collage & slideshow blocks
 
-`InstantPageBlock.collage` and `.slideshow` (grouped photos/videos with a caption — only ever produced by **real web Instant View articles**; nothing on the markdown/AI path emits them) render in V2 by porting V1. Collage flattens into the existing media-item machinery; slideshow is a dedicated interactive carousel.
+`InstantPageBlock.collage` and `.slideshow` (grouped photos/videos with a caption) render in V2 by porting V1. Collage flattens into the existing media-item machinery; slideshow is a dedicated interactive carousel.
+
+**`.collage` is no longer web-IV-only (added 2026-07-08).** The RichText editor's multi-media containers
+(a `MediaBlock`/`ChatInputMedia` holding `items.count >= 2` photos/videos with one shared caption — see
+`docs/richtext-composer.md` §4 "Inline media") now also emit `.collage` on send/edit/draft, from both the
+composer (`ChatInputContentInstantPage`) and the article editor (`RichTextEditorMessageConversion`'s
+`InstantPageBuilder`) converters — the first editor/rich-message path to produce a `.collage` block
+(needed zero codec work; it was already first-class through Postbox/FlatBuffers/upload). A container of
+exactly 1 item still sends the plain `.image`/`.video` block, byte-identical to before. `.slideshow`
+remains produced only by real web Instant View articles.
 
 ### Where things live
 

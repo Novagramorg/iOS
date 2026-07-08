@@ -100,7 +100,7 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// native backend forwards it to the editor's media-view provider, resolving its private `mediaByID` →
     /// this factory; the legacy `UITextView` backend stores it but never uses it (no media). `naturalSize` is
     /// the medium's natural size, for aspect-correct display. Mirrors `emojiViewProvider`'s host-owned seam.
-    var mediaItemViewFactory: ((_ media: EngineMedia, _ naturalSize: CGSize) -> (UIView & RichTextMediaItemView)?)? { get set }
+    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? { get set }
 
     /// Recompute and lay out the spoiler dust and custom-emoji overlays from the current
     /// attributed text, hosting both inside the composed text view's scrolling content.
@@ -518,7 +518,7 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     // Stored-but-unused: the legacy `UITextView` backend has no media blocks to render, so it satisfies the
     // protocol but never reads this. The native (`RichTextEditorChatInputNode`) backend wires it to the editor.
-    var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)?
+    var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
 
     // Stored-but-unused: the legacy backend reports "typing…" activity via the panel's
     // `chatInputTextNode(shouldChangeTextIn:)` delegate, so it never fires this. Only the native

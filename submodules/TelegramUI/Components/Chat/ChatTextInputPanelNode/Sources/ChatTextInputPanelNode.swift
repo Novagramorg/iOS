@@ -669,7 +669,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?
 
-    public var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)? {
+    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? {
         didSet { self.richTextInputNode?.mediaItemViewFactory = self.mediaItemViewFactory }
     }
 
@@ -1169,6 +1169,8 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 }
             case .add:
                 break   // the "+" button is not built yet
+            case .delete:
+                context.delete()
             }
         }
         // Report "typing…" chat activity on a genuine text edit. The legacy backend gets this from

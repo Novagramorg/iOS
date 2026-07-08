@@ -1,5 +1,19 @@
 #if canImport(UIKit)
 import UIKit
+import RichTextEditorCore
+
+/// The per-item descriptor the editor hands the media-view provider for each medium in a container.
+@available(iOS 13.0, *)
+public struct MediaProviderItem {
+    public let mediaID: String
+    public let kind: MediaKind
+    public let naturalSize: CGSize
+    public init(mediaID: String, kind: MediaKind, naturalSize: CGSize) {
+        self.mediaID = mediaID
+        self.kind = kind
+        self.naturalSize = naturalSize
+    }
+}
 
 /// A host-supplied view that renders one attached medium (image/video). The editor creates it once
 /// per media occurrence (via the registered provider), owns/positions/culls it, and calls
@@ -12,8 +26,9 @@ public protocol RichTextMediaItemView: UIView {
     func update(size: CGSize)
 
     /// Set by the editor when it binds this view: fired when one of the view's interactive controls (the
-    /// more button; the "+" button later) is tapped, with the control kind, the tapped control's view, and
-    /// its rect in that view. Views with no controls (audio/location) leave it unused.
-    var onControlTapped: ((RichTextMediaControlKind, _ anchorView: UIView, _ sourceRect: CGRect) -> Void)? { get set }
+    /// more button; the "+" button later) is tapped, with the control kind, the tapped item's index within
+    /// the container (`nil` = the whole block, e.g. the more menu), the tapped control's view, and its rect
+    /// in that view. Views with no controls (audio/location) leave it unused.
+    var onControlTapped: ((RichTextMediaControlKind, _ itemIndex: Int?, _ anchorView: UIView, _ sourceRect: CGRect) -> Void)? { get set }
 }
 #endif

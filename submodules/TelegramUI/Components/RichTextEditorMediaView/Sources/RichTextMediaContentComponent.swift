@@ -22,14 +22,19 @@ import GlassBackgroundComponent
 public final class RichTextMediaContentComponent: Component {
     public let context: AccountContext
     public let media: EngineMedia
+    /// Whether the glass "more" button is shown. Constant per usage (composer vs. article editor); not
+    /// part of `==` for the same reason `onControlTapped` isn't — identity equality must hold across
+    /// resizes so the fetch binds once.
+    public let showsMoreButton: Bool
 
     /// Set by `MediaItemNodeView`; fired when an interactive control is tapped. Not part of `==` (identity
     /// equality must hold across resizes so the fetch binds once).
     var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
 
-    public init(context: AccountContext, media: EngineMedia) {
+    public init(context: AccountContext, media: EngineMedia, showsMoreButton: Bool = true) {
         self.context = context
         self.media = media
+        self.showsMoreButton = showsMoreButton
     }
 
     public static func ==(lhs: RichTextMediaContentComponent, rhs: RichTextMediaContentComponent) -> Bool {
@@ -195,7 +200,9 @@ public final class RichTextMediaContentComponent: Component {
                 }
                 transition.setFrame(view: moreButtonIconView, frame: buttonIconSize.centered(in: CGRect(origin: CGPoint(), size: buttonSize)))
             }
-            
+
+            self.moreButtonBackgroundContainer.isHidden = !component.showsMoreButton
+
             return availableSize
         }
     }

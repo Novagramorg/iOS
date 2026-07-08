@@ -724,37 +724,91 @@ public struct ChatInputColor: Equatable, Codable {
     }
 }
 
-/// An attached medium (image or video) with an inline caption. Mirrors the editor `MediaBlock` — but carries a
-/// concrete `Media` (resolved from the editor's opaque `mediaID` at conversion time) rather than a content key.
-public struct ChatInputMedia: Equatable {
+/// One medium (image or video) inside a `ChatInputMedia` container. Carries a concrete `Media` (resolved from
+/// the editor's opaque `mediaID` at conversion time). Mirrors the editor `MediaItem`.
+public struct ChatInputMediaItem: Equatable {
     public var media: Media
     public var kind: ChatInputMediaKind
     public var naturalSize: ChatInputSize
-    /// Display width in points; nil = natural width.
-    public var displayWidth: Double?
-    public var alignment: ChatInputMediaAlignment
-    public var caption: [ChatInputRun]
-    public init(
-        media: Media,
-        kind: ChatInputMediaKind,
-        naturalSize: ChatInputSize,
-        displayWidth: Double? = nil,
-        alignment: ChatInputMediaAlignment = .center,
-        caption: [ChatInputRun] = []
-    ) {
+    public init(media: Media, kind: ChatInputMediaKind, naturalSize: ChatInputSize) {
         self.media = media
         self.kind = kind
         self.naturalSize = naturalSize
+    }
+    public static func == (lhs: ChatInputMediaItem, rhs: ChatInputMediaItem) -> Bool {
+        return lhs.media.isEqual(to: rhs.media) && lhs.kind == rhs.kind && lhs.naturalSize == rhs.naturalSize
+    }
+}
+
+extension ChatInputMediaItem: Codable {
+    private enum CodingKeys: String, CodingKey { case media, mediaType, kind, naturalSize }
+    // Concrete-`Media`-type discriminator (see ChatInputMedia notes — the same scheme, per item).
+    private enum MediaType: Int32 { case image = 0; case file = 1; case map = 2 }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let raw = try container.decode(AdaptedPostboxDecoder.RawObjectData.self, forKey: .media)
+        let mediaDecoder = PostboxDecoder(buffer: MemoryBuffer(data: raw.data))
+        let mediaTypeValue = try container.decode(Int32.self, forKey: .mediaType)
+        guard let mediaType = MediaType(rawValue: mediaTypeValue) else {
+            throw DecodingError.dataCorruptedError(forKey: .mediaType, in: container, debugDescription: "Unsupported media type \(mediaTypeValue)")
+        }
+        switch mediaType {
+        case .image: self.media = TelegramMediaImage(decoder: mediaDecoder)
+        case .file: self.media = TelegramMediaFile(decoder: mediaDecoder)
+        case .map: self.media = TelegramMediaMap(decoder: mediaDecoder)
+        }
+        self.kind = try container.decode(ChatInputMediaKind.self, forKey: .kind)
+        self.naturalSize = try container.decode(ChatInputSize.self, forKey: .naturalSize)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        let mediaType: MediaType
+        if self.media is TelegramMediaImage { mediaType = .image }
+        else if self.media is TelegramMediaMap { mediaType = .map }
+        else if self.media is TelegramMediaFile { mediaType = .file }
+        else { mediaType = .file }
+        try container.encode(mediaType.rawValue, forKey: .mediaType)
+        try container.encode(PostboxEncoder().encodeObjectToRawData(self.media), forKey: .media)
+        try container.encode(self.kind, forKey: .kind)
+        try container.encode(self.naturalSize, forKey: .naturalSize)
+    }
+}
+
+/// An attached media container (one or more images/videos) with a single inline caption. Mirrors the editor
+/// `MediaBlock` — items carry concrete `Media` (resolved from the editor's opaque `mediaID` at conversion time).
+public struct ChatInputMedia: Equatable {
+    public var items: [ChatInputMediaItem]
+    /// Display width in points; nil = natural width. Honored only when `items.count == 1`.
+    public var displayWidth: Double?
+    /// Honored only when `items.count == 1`.
+    public var alignment: ChatInputMediaAlignment
+    public var caption: [ChatInputRun]
+
+    public init(items: [ChatInputMediaItem], displayWidth: Double? = nil,
+                alignment: ChatInputMediaAlignment = .center, caption: [ChatInputRun] = []) {
+        self.items = items
         self.displayWidth = displayWidth
         self.alignment = alignment
         self.caption = caption
     }
 
+    /// Convenience single-media initializer — reproduces the pre-container API.
+    public init(media: Media, kind: ChatInputMediaKind, naturalSize: ChatInputSize,
+                displayWidth: Double? = nil, alignment: ChatInputMediaAlignment = .center,
+                caption: [ChatInputRun] = []) {
+        self.init(items: [ChatInputMediaItem(media: media, kind: kind, naturalSize: naturalSize)],
+                  displayWidth: displayWidth, alignment: alignment, caption: caption)
+    }
+
+    // Single-media convenience accessors (FIRST item).
+    public var media: Media { items[0].media }
+    public var kind: ChatInputMediaKind { items[0].kind }
+    public var naturalSize: ChatInputSize { items[0].naturalSize }
+
     public static func == (lhs: ChatInputMedia, rhs: ChatInputMedia) -> Bool {
-        // `Media` is a Postbox protocol (no `Equatable`); compare by its semantic `isEqual(to:)`.
-        return lhs.media.isEqual(to: rhs.media)
-            && lhs.kind == rhs.kind
-            && lhs.naturalSize == rhs.naturalSize
+        return lhs.items == rhs.items
             && lhs.displayWidth == rhs.displayWidth
             && lhs.alignment == rhs.alignment
             && lhs.caption == rhs.caption
@@ -763,72 +817,42 @@ public struct ChatInputMedia: Equatable {
 
 extension ChatInputMedia: Codable {
     private enum CodingKeys: String, CodingKey {
-        case media
-        case mediaType
-        case kind
-        case naturalSize
-        case displayWidth
-        case alignment
-        case caption
+        case items, displayWidth, alignment, caption
+        // Legacy (pre-container) single-media keys:
+        case media, mediaType, kind, naturalSize
     }
-
-    // Concrete-`Media`-type discriminator. We reconstruct via the concrete `init(decoder:)` (NOT the global
-    // registered-type store / `decodeRootObjectWithHash`): that store is populated by `declareEncodable` at app
-    // startup, which does NOT run in unit tests (and is fragile to depend on for a persisted format). The composer's
-    // inline media is an image (`TelegramMediaImage`), a video/file (`TelegramMediaFile`), or a location
-    // (`TelegramMediaMap`).
-    private enum MediaType: Int32 {
-        case image = 0
-        case file = 1
-        case map = 2
-    }
+    private enum MediaType: Int32 { case image = 0; case file = 1; case map = 2 }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // `Media` is a Postbox-coded polymorphic protocol, not Swift-Codable: persisted as the object's raw Postbox
-        // blob + an explicit concrete-type discriminator, then reconstructed via the concrete `init(decoder:)` (the
-        // `RecentMediaItem` precedent, extended for image/file polymorphism).
-        let raw = try container.decode(AdaptedPostboxDecoder.RawObjectData.self, forKey: .media)
-        let mediaDecoder = PostboxDecoder(buffer: MemoryBuffer(data: raw.data))
-        let mediaTypeValue = try container.decode(Int32.self, forKey: .mediaType)
-        guard let mediaType = MediaType(rawValue: mediaTypeValue) else {
-            throw DecodingError.dataCorruptedError(forKey: .mediaType, in: container, debugDescription: "Unsupported media type \(mediaTypeValue)")
-        }
-        switch mediaType {
-        case .image:
-            self.media = TelegramMediaImage(decoder: mediaDecoder)
-        case .file:
-            self.media = TelegramMediaFile(decoder: mediaDecoder)
-        case .map:
-            self.media = TelegramMediaMap(decoder: mediaDecoder)
-        }
-        self.kind = try container.decode(ChatInputMediaKind.self, forKey: .kind)
-        self.naturalSize = try container.decode(ChatInputSize.self, forKey: .naturalSize)
         self.displayWidth = try container.decodeIfPresent(Double.self, forKey: .displayWidth)
         self.alignment = try container.decode(ChatInputMediaAlignment.self, forKey: .alignment)
         self.caption = try container.decode([ChatInputRun].self, forKey: .caption)
+        if let items = try container.decodeIfPresent([ChatInputMediaItem].self, forKey: .items) {
+            self.items = items
+        } else {
+            // Legacy single-media payload → one item.
+            let raw = try container.decode(AdaptedPostboxDecoder.RawObjectData.self, forKey: .media)
+            let mediaDecoder = PostboxDecoder(buffer: MemoryBuffer(data: raw.data))
+            let mediaTypeValue = try container.decode(Int32.self, forKey: .mediaType)
+            guard let mediaType = MediaType(rawValue: mediaTypeValue) else {
+                throw DecodingError.dataCorruptedError(forKey: .mediaType, in: container, debugDescription: "Unsupported media type \(mediaTypeValue)")
+            }
+            let media: Media
+            switch mediaType {
+            case .image: media = TelegramMediaImage(decoder: mediaDecoder)
+            case .file: media = TelegramMediaFile(decoder: mediaDecoder)
+            case .map: media = TelegramMediaMap(decoder: mediaDecoder)
+            }
+            let kind = try container.decode(ChatInputMediaKind.self, forKey: .kind)
+            let naturalSize = try container.decode(ChatInputSize.self, forKey: .naturalSize)
+            self.items = [ChatInputMediaItem(media: media, kind: kind, naturalSize: naturalSize)]
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        // Encode the polymorphic `Media` as its raw Postbox object blob + an explicit concrete-type discriminator
-        // (decoded via the concrete `init(decoder:)`, NOT the registered-type store — see `init(from:)`).
-        let mediaType: MediaType
-        if self.media is TelegramMediaImage {
-            mediaType = .image
-        } else if self.media is TelegramMediaMap {
-            mediaType = .map
-        } else if self.media is TelegramMediaFile {
-            mediaType = .file
-        } else {
-            // Composer inline media is image / video|audio file / location map; any other concrete type
-            // falls back to file (decoded via the broad TelegramMediaFile(decoder:)).
-            mediaType = .file
-        }
-        try container.encode(mediaType.rawValue, forKey: .mediaType)
-        try container.encode(PostboxEncoder().encodeObjectToRawData(self.media), forKey: .media)
-        try container.encode(self.kind, forKey: .kind)
-        try container.encode(self.naturalSize, forKey: .naturalSize)
+        try container.encode(self.items, forKey: .items)
         try container.encodeIfPresent(self.displayWidth, forKey: .displayWidth)
         try container.encode(self.alignment, forKey: .alignment)
         try container.encode(self.caption, forKey: .caption)

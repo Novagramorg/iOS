@@ -57,7 +57,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// Factory the panel supplies (it owns `AccountContext`) to turn a `Media` + natural size into a hosted
     /// media view. The editor's media-view provider (registered in `didLoad`) resolves its opaque `mediaID` →
     /// `mediaByID` → this factory. Read lazily, so the panel may set it after `didLoad`. Mirrors `emojiViewProvider`.
-    public var mediaItemViewFactory: ((EngineMedia, CGSize) -> (UIView & RichTextMediaItemView)?)?
+    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
 
     /// Panel-set "user is typing" hook (wired to `ChatTextInputPanelNode.updateActivity`). Fired from `onChange`
     /// ONLY on a genuine text edit — see the gating in `didLoad`. The legacy backend reports this via the
@@ -254,9 +254,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // but never renders. Both `mediaItemViewFactory` and `mediaByID` are read LAZILY, so the panel may set
         // the factory after this registration. The returned `(UIView & RichTextMediaItemView)?` is assignable
         // to the provider's `RichTextMediaItemView?` return type.
-        self.editorView.registerMediaViewProvider { [weak self] mediaID, naturalSize in
-            guard let self, let media = self.mediaByID[mediaID], let factory = self.mediaItemViewFactory else { return nil }
-            return factory(EngineMedia(media), naturalSize)
+        self.editorView.registerMediaViewProvider { [weak self] items, _, existing in
+            guard let self, let factory = self.mediaItemViewFactory else { return nil }
+            let resolved: [(media: EngineMedia, naturalSize: CGSize)] = items.compactMap { item in
+                guard let media = self.mediaByID[item.mediaID] else { return nil }
+                return (EngineMedia(media), item.naturalSize)
+            }
+            guard !resolved.isEmpty else { return nil }
+            return factory(resolved, existing)
         }
 
         // Bridge the editor's account-free media-control request to the owner-facing context: resolve the

@@ -215,5 +215,18 @@ final class MediaBlockBoxTests: XCTestCase {
         XCTAssertEqual(box.textStart, box.nodeStart + 2)
         XCTAssertEqual(box.leafRegions().count, 1)
     }
+
+    func test_mediaBlockBox_twoItems_usesMosaicHeight() {
+        let mapper = AttributedStringMapper()   // match the file's existing test setup
+        let block = MediaBlock(id: BlockID("b1"), items: [
+            MediaItem(mediaID: "m1", kind: .image, naturalSize: Size2D(width: 100, height: 100)),
+            MediaItem(mediaID: "m2", kind: .image, naturalSize: Size2D(width: 100, height: 100)),
+        ], caption: [])
+        let box = MediaBlockBox(media: block, mapper: mapper, width: 300, horizontalBleed: 0)
+        // Two square items in a 300-wide mosaic pack side-by-side → area height < single-full-width (300),
+        // and strictly positive.
+        XCTAssertGreaterThan(box.imageAreaHeight, 0)
+        XCTAssertLessThan(box.imageAreaHeight, 300)
+    }
 }
 #endif

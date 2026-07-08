@@ -3,10 +3,12 @@ import UIKit
 import RichTextEditorCore
 
 /// Which interactive control on a media view was tapped. `.more` shows the owner's menu; `.add` is the
-/// forthcoming "+" button (its UI is not built yet, but the seam carries it so wiring it is additive).
+/// forthcoming "+" button (its UI is not built yet, but the seam carries it so wiring it is additive);
+/// `.delete` is a per-item delete control (e.g. a container item's own remove affordance).
 public enum RichTextMediaControlKind {
     case more
     case add
+    case delete
 }
 
 /// A framework-agnostic description the editor emits when a media control is tapped. The editor is
@@ -27,15 +29,18 @@ public final class MediaControlRequest {
     /// The opaque host media key for this occurrence. The host resolves the concrete media (e.g. its
     /// `EngineMedia`) from this. NOT unique — see `delete` for occurrence binding.
     public let mediaID: String
+    /// For a container: which item (0-based) the control targets; `nil` = the whole block (the more menu).
+    public let itemIndex: Int?
     /// Removes THIS occurrence (bound to its `BlockID` by the editor — unambiguous even when `mediaID`
     /// repeats). One undo step.
     public let delete: () -> Void
     /// Reserved: replace THIS occurrence's media with host-picked media. `nil` until implemented.
     public let replace: ((_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind) -> Void)?
-    /// Reserved: add another medium relative to this occurrence (the "+" button). `nil` until implemented.
+    /// Adds another medium relative to this occurrence (the "+" button).
     public let addMore: ((_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind) -> Void)?
 
     public init(view: UIView?, sourceRect: CGRect, control: RichTextMediaControlKind, mediaID: String,
+                itemIndex: Int? = nil,
                 delete: @escaping () -> Void,
                 replace: ((String, CGSize, MediaKind) -> Void)? = nil,
                 addMore: ((String, CGSize, MediaKind) -> Void)? = nil) {
@@ -43,6 +48,7 @@ public final class MediaControlRequest {
         self.sourceRect = sourceRect
         self.control = control
         self.mediaID = mediaID
+        self.itemIndex = itemIndex
         self.delete = delete
         self.replace = replace
         self.addMore = addMore

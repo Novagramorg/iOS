@@ -56,7 +56,7 @@ final class CanvasImageEditTests: XCTestCase {
         v.insertMedia(mediaID: "doc:1", naturalSize: CGSize(width: 1, height: 1), kind: .audio)
         // After: [audio, body paragraph]; caret in the trailing paragraph (NOT in the audio gap).
         XCTAssertEqual(v.boxes.count, 2)
-        guard let audioBox = v.boxes[0] as? MediaBlockBox, audioBox.kind == .audio else {
+        guard let audioBox = v.boxes[0] as? MediaBlockBox, audioBox.isAudio else {
             return XCTFail("block 0 should be audio")
         }
         XCTAssertTrue(v.boxes[1] is BlockBox, "block 1 should be a paragraph")
@@ -445,11 +445,11 @@ final class CanvasImageEditTests: XCTestCase {
         // seed: [paragraph "ab", audio, paragraph ""]; select-all + delete
         let v = docWithAudio()
         // Precondition: doc contains an audio block.
-        XCTAssertTrue(v.boxes.contains { ($0 as? MediaBlockBox)?.kind == .audio }, "precondition: audio block present")
+        XCTAssertTrue(v.boxes.contains { ($0 as? MediaBlockBox)?.isAudio == true }, "precondition: audio block present")
         v.selectAllText()
         v.deleteBackward()
         // Audio is gone; document is a single empty paragraph.
-        XCTAssertFalse(v.boxes.contains { ($0 as? MediaBlockBox)?.kind == .audio },
+        XCTAssertFalse(v.boxes.contains { ($0 as? MediaBlockBox)?.isAudio == true },
                        "Select All + backspace should remove the audio block")
         XCTAssertEqual(v.boxes.count, 1, "the document collapses to one block")
         XCTAssertTrue(v.boxes[0] is BlockBox, "the remaining block is a paragraph")

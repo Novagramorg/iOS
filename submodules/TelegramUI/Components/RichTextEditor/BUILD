@@ -49,6 +49,7 @@ swift_library(
     deps = [
         ":RichTextEditorCore",
         "//submodules/AppBundle",
+        "//submodules/MosaicLayout:MosaicLayout",
     ],
     visibility = [
         "//visibility:public",

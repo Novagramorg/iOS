@@ -39,8 +39,27 @@ func buildInstantPage(from blocks: [Block], media: [String: Media]) -> InstantPa
             pageBlocks.append(.pullQuote(text: richText(from: pq.runs), caption: authorCaption(pq.author, italic: true)))
             index += 1
         case let .media(mediaBlock):
-            if let resolved = media[mediaBlock.mediaID] {
-                let caption = InstantPageCaption(text: richText(from: mediaBlock.caption), credit: .empty)
+            let caption = InstantPageCaption(text: richText(from: mediaBlock.caption), credit: .empty)
+            if mediaBlock.items.count >= 2 {
+                // A multi-item media container → one `.collage` block wrapping an `.image`/`.video` per item.
+                // The container's own caption becomes the collage's caption; inner items carry no caption
+                // (mirrors `ChatInputContentInstantPage`, the composer's already-fixed forward converter).
+                var innerBlocks: [InstantPageBlock] = []
+                for item in mediaBlock.items {
+                    guard let resolved = media[item.mediaID], let mediaId = resolved.id else { continue }
+                    pageMedia[mediaId] = resolved // idempotent if the same mediaID appears in multiple blocks
+                    switch item.kind {
+                    case .image:
+                        innerBlocks.append(.image(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), url: nil, webpageId: nil))
+                    case .video:
+                        innerBlocks.append(.video(id: mediaId, caption: InstantPageCaption(text: .empty, credit: .empty), autoplay: false, loop: false))
+                    case .audio, .location:
+                        // Audio/location are documented as permanently single-item; never grouped into a collage.
+                        continue
+                    }
+                }
+                pageBlocks.append(.collage(items: innerBlocks, caption: caption))
+            } else if let resolved = media[mediaBlock.mediaID] {
                 switch mediaBlock.kind {
                 case .image, .video, .audio:
                     // Media.id is optional on the protocol; real TelegramMedia* image/video/audio always return non-nil.

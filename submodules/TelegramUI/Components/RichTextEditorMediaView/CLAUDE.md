@@ -15,7 +15,11 @@ block to one of these views via a host-registered provider, then positions/sizes
   audio branch was NOT taken, sets `layer.cornerRadius` + `masksToBounds` on the container (child fills
   bounds, so the rounded rect clips it). Photo/video/location round to 10pt at the two composer call
   sites; audio stays square (check is `audioView == nil`); `RichTextAttachmentScreen` (article editor)
-  leaves the default 0 and stays square.
+  leaves the default 0 and stays square. **Container-aware (added 2026-07-08):** a `convenience init(context:items:…)`
+  taking `[(media: EngineMedia, naturalSize: CGSize)]` composes a **mosaic** of N single-cell
+  `RichTextMediaContentComponent`s for a photo/video container (`items.count >= 2`); `items.count == 1`
+  delegates straight to the existing per-kind single-media `init` above, so a container of 1 renders
+  identically to before. See "Mosaic containers" below.
   - **audio** (`.file` && (`isMusic` || `isVoice`)) → `StandaloneInstantPageAudioView` (a playable,
     themeable row; `audioColorOverride` themes it to the editor accent/text scheme).
   - **location** (`.geo`) → `StandaloneInstantPageImageView` + an `InstantPageMapAttribute`
@@ -57,6 +61,27 @@ block to one of these views via a host-registered provider, then positions/sizes
 - Audio is **caption-less** in the editor model; location/audio rendering is byte-unchanged from the
   pre-component implementation (only the photo/video branch was rewritten).
 
+## Mosaic containers (photo/video, implemented 2026-07-08)
+
+A media block can hold multiple photos/videos (`items.count >= 2`, one shared caption — model + send/edit
+detail in `docs/richtext-composer.md` §4 and `docs/instantpage-richtext.md`). `MediaItemNodeView`'s
+`items:` initializer runs the **same `MosaicLayout` engine** grouped album messages use
+(`chatMessageBubbleMosaicLayout`, now a shared dual-build package) to place one `RichTextMediaContentComponent`
+cell per item at its mosaic frame — the single-cell component itself is unchanged (see its description
+above).
+
+- **Cell-level view reuse is load-bearing** (`MosaicCellLayout.swift`, `MosaicCellDiff`): on every
+  `update`, cells are diffed by `EngineMedia.Id` — not rebuilt — via a **multiset greedy match** (handles
+  the same media appearing twice in one container, order-independent). A surviving cell is re-`update(size:)`d
+  to its new mosaic frame with the **same `RichTextMediaContentComponent` identity**, so the component's
+  identity-only `==` (`context ===` + `media.id`, see the invariant above) keeps its fetch **bound once**;
+  only a newly-added `mediaID` creates a cell, only a removed one is torn down. Rebuilding cells on every
+  mutation would re-issue every surviving image's fetch (flicker + wasted work) — exactly what that
+  identity-only equality was designed to prevent.
+- **`onControlTapped` is 4-arg**: `(RichTextMediaControlKind, itemIndex: Int?, anchorView: UIView, sourceRect: CGRect)`.
+  A per-cell tap reports its own `itemIndex`; the container-level more button reports `nil` (whole-block,
+  matching the pre-container behavior).
+
 ## Future iterations (planned, not yet implemented)
 
 - **Higher-quality video poster.** Video currently shows the file's small embedded thumbnail (via
@@ -65,9 +90,10 @@ block to one of these views via a host-registered provider, then positions/sizes
 - **Interaction:** the hit-test plumbing is in place (taps reach the component's controls — see the
   interaction invariant above); still to wire are the actual actions — the "more" button menu
   (`moreButtonPressed` is an empty stub) and tap / long-press (open / preview / context menu).
-- **Mosaic / slideshow:** a separate composing component that lays out several
-  `RichTextMediaContentComponent`s (grouped media). The single-medium component is built composable —
-  no editor-seam coupling — specifically so this wrapper can reuse it directly.
+- **Mosaic — implemented, see "Mosaic containers" above.** The single-medium component was built
+  composable (no editor-seam coupling) specifically so the mosaic wrapper could reuse it directly, which
+  is exactly what landed. **Slideshow** (a swipeable carousel, distinct from the grid mosaic) is still
+  not implemented for editor-authored containers — grouping always renders as a mosaic today.
 
 ## History
 
@@ -75,3 +101,6 @@ The photo/video renderer was extracted from the shared `InstantPageImageNode` pa
 `RichTextMediaContentComponent` on 2026-06-29 (build-green + runtime-verified on iPhone 17). Location and
 audio were intentionally left on the `StandaloneInstantPage*` views. (Per the RichTextEditor convention,
 the per-phase design spec/plan are not retained in-tree — this file is the durable record.)
+
+Multi-media (mosaic) containers landed 2026-07-08 — full app build green. Design + plan are retained
+in-tree: `docs/superpowers/{specs/2026-07-08-richtext-multi-media-container-design.md,plans/2026-07-08-richtext-multi-media-container.md}`.

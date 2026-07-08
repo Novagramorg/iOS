@@ -14,27 +14,50 @@ extension DocumentCanvasView {
             guard let media = box as? MediaBlockBox else { continue }
             present.insert(media.id)
             let canvasRect = media.mediaRect()
+            // Signature of the block's current media set — mediaID + kind + (rounded) natural size, in order.
+            // A change (add / remove / reorder / natural-size change) invalidates the reused host view so the
+            // provider rebuilds it for the new items (the seam is one-shot: a reused view can't be re-fed a
+            // changed item list in place — that cross-mutation cell-reuse path is a deferred follow-up).
+            let signature = media.items.map {
+                "\($0.mediaID)#\($0.kind.rawValue)#\(Int($0.naturalSize.width.rounded()))x\(Int($0.naturalSize.height.rounded()))"
+            }.joined(separator: "|")
             let hosted: HostedMediaItem
-            if let h = mediaItemViews[media.id] {
+            if let h = mediaItemViews[media.id], h.itemsSignature == signature {
                 hosted = h
-            } else if let v = mediaViewProvider(media.mediaID, CGSize(width: media.naturalSize.width,
-                                                                      height: media.naturalSize.height)) {
-                // Interaction-enabled so its `hitTest` is consulted, but the media view only claims a
-                // touch that lands on one of its interactive controls (the more button); the poster area
-                // returns nil and the touch falls through to the editor. See MediaPassthroughOverlayView.
-                v.isUserInteractionEnabled = true
-                // Route a control (more button) tap up through the account-free request path. Captures the
-                // occurrence BlockID (media.id) so delete targets THIS block even if mediaID repeats.
-                let blockID = media.id
-                let mediaID = media.mediaID
-                v.onControlTapped = { [weak self] kind, anchorView, rect in
-                    self?.handleMediaControlTapped(blockID: blockID, mediaID: mediaID, kind: kind,
-                                                   anchorView: anchorView, sourceRect: rect)
-                }
-                hosted = HostedMediaItem(view: v, canvasFrame: canvasRect)
-                mediaItemViews[media.id] = hosted
             } else {
-                continue   // provider not ready — retried on the next layout pass
+                // Items changed (or first realization). Hand the existing view (if any) to the provider so
+                // it can update IN PLACE — reusing surviving photo/video cells (fetch preserved, no re-flash)
+                // — and return the SAME instance, or return a fresh one (recreate fallback), or nil = not ready.
+                let existingView = mediaItemViews[media.id]?.view
+                if let v = mediaViewProvider(media.items.map {
+                    MediaProviderItem(mediaID: $0.mediaID, kind: $0.kind,
+                                      naturalSize: CGSize(width: $0.naturalSize.width, height: $0.naturalSize.height))
+                }, media.id, existingView) {
+                    // Tear down a DIFFERENT prior instance (provider returned a fresh view, recreate fallback).
+                    if let old = mediaItemViews[media.id], old.view !== v {
+                        old.view.removeFromSuperview()
+                    }
+                    // Wire interaction + control routing. The wiring is refreshed every provider call so the
+                    // captured `mediaID` (block primary) stays current across item removals (e.g. deletion of the
+                    // first item shifts the primary to the old second item).
+                    //
+                    // Interaction-enabled so its `hitTest` is consulted, but the media view only claims a
+                    // touch that lands on one of its interactive controls (the more button); the poster area
+                    // returns nil and the touch falls through to the editor. See MediaPassthroughOverlayView.
+                    v.isUserInteractionEnabled = true
+                    // Route a control (more button) tap up through the account-free request path. Captures the
+                    // occurrence BlockID (media.id) so delete targets THIS block even if mediaID repeats.
+                    let blockID = media.id
+                    let mediaID = media.mediaID
+                    v.onControlTapped = { [weak self] kind, itemIndex, anchorView, rect in
+                        self?.handleMediaControlTapped(blockID: blockID, mediaID: mediaID, itemIndex: itemIndex,
+                                                       kind: kind, anchorView: anchorView, sourceRect: rect)
+                    }
+                    hosted = HostedMediaItem(view: v, canvasFrame: canvasRect, itemsSignature: signature)
+                    mediaItemViews[media.id] = hosted
+                } else {
+                    continue   // provider not ready — keep any existing view, retry next layout pass
+                }
             }
             hosted.canvasFrame = canvasRect
             if hosted.view.superview !== mediaOverlay { mediaOverlay.addSubview(hosted.view) }
@@ -65,24 +88,85 @@ extension DocumentCanvasView {
     /// Builds the account-free `MediaControlRequest` for a tapped media control and fires
     /// `onRequestMediaControl`. `blockID` is the occurrence (stable across box re-instantiation); `mediaID`
     /// is the opaque host key the owner resolves the concrete media from. `delete` is bound to `blockID`, so
-    /// it removes the exact occurrence even when `mediaID` is shared.
-    func handleMediaControlTapped(blockID: BlockID, mediaID: String, kind: RichTextMediaControlKind,
+    /// it removes the exact occurrence even when `mediaID` is shared. `itemIndex` (nil = the whole block)
+    /// routes `delete` to the per-item removal when the tap targeted one item of a container.
+    func handleMediaControlTapped(blockID: BlockID, mediaID: String, itemIndex: Int?, kind: RichTextMediaControlKind,
                                   anchorView: UIView, sourceRect: CGRect) {
         let request = MediaControlRequest(
             view: anchorView,
             sourceRect: sourceRect,
             control: kind,
             mediaID: mediaID,
-            delete: { [weak self] in self?.deleteMediaBlock(id: blockID) },
+            itemIndex: itemIndex,
+            delete: { [weak self] in
+                if let itemIndex { self?.deleteMediaItem(blockID: blockID, itemIndex: itemIndex) }
+                else { self?.deleteMediaBlock(id: blockID) }
+            },
             replace: nil,
-            addMore: nil
+            addMore: { [weak self] mediaID, naturalSize, kind in
+                self?.addMediaItem(blockID: blockID, mediaID: mediaID,
+                                   naturalSize: naturalSize, kind: kind)
+            }
         )
         onRequestMediaControl?(request)
+    }
+
+    /// Removes one item (by index) from a media container, leaving the rest. If only one item remains,
+    /// removes the WHOLE block instead — routes to `deleteMediaBlock` (`+Editing.swift`), which already
+    /// owns its own `editing { }` (one undo step) and turns the block into an empty paragraph via
+    /// `deleteImageBox`. Otherwise rebuilds the box with the item removed, in place, mirroring the
+    /// caption-split rebuild in `insertParagraphBreak` (`+Editing.swift` ~line 670): read the current
+    /// `MediaBlock` off the box, mutate `items`, build a fresh `MediaBlockBox` reusing the old box's
+    /// mapper/horizontalBleed/width, splice it into `boxes` in place, `recomputeSpans()` — all inside
+    /// `editing { }` for one undo step. The mosaic is a single atom, so removing an item never changes the
+    /// block's `nodeSize`/`textStart` and the caret (elsewhere in the document) is undisturbed by
+    /// construction — no explicit anchor/head bookkeeping needed. Top-level media blocks only (mirrors
+    /// `deleteMediaBlock`'s scope); no-op if `blockID` isn't found or `itemIndex` is out of range.
+    func deleteMediaItem(blockID: BlockID, itemIndex: Int) {
+        guard let index = boxes.firstIndex(where: { $0.id == blockID }), let mediaBox = boxes[index] as? MediaBlockBox,
+              case .media(let currentMedia) = mediaBox.currentBlock(), currentMedia.items.indices.contains(itemIndex) else { return }
+        if currentMedia.items.count <= 1 {
+            deleteMediaBlock(id: blockID)   // existing media-delete → empty paragraph; owns its own undo step
+            return
+        }
+        editing {
+            var newMedia = currentMedia
+            newMedia.items.remove(at: itemIndex)
+            let newBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
+                                       horizontalBleed: mediaBox.horizontalBleed)
+            var newBoxes = boxes
+            newBoxes.replaceSubrange(index...index, with: [newBox])
+            boxes = newBoxes
+            recomputeSpans()
+        }
+    }
+
+    /// Appends a medium to the container owning `blockID` (add-more). Grows a single-media block into a
+    /// mosaic. Same rebuild-in-place shape as `deleteMediaItem` above (mirrors `insertParagraphBreak`'s
+    /// media-caption-split rebuild): read the current `MediaBlock`, append the new `MediaItem`, rebuild the
+    /// box reusing the old mapper/horizontalBleed/width, splice into `boxes`, `recomputeSpans()`, inside
+    /// `editing { }` for one undo step. `nodeSize` is caption-length-derived only, so appending an item
+    /// never moves the caret. Top-level media blocks only; no-op if `blockID` isn't found.
+    func addMediaItem(blockID: BlockID, mediaID: String, naturalSize: CGSize, kind: MediaKind) {
+        guard let index = boxes.firstIndex(where: { $0.id == blockID }), let mediaBox = boxes[index] as? MediaBlockBox,
+              case .media(let currentMedia) = mediaBox.currentBlock() else { return }
+        editing {
+            var newMedia = currentMedia
+            newMedia.items.append(MediaItem(mediaID: mediaID, kind: kind,
+                                            naturalSize: Size2D(width: Double(naturalSize.width), height: Double(naturalSize.height))))
+            let newBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
+                                       horizontalBleed: mediaBox.horizontalBleed)
+            var newBoxes = boxes
+            newBoxes.replaceSubrange(index...index, with: [newBox])
+            boxes = newBoxes
+            recomputeSpans()
+        }
     }
 
     // MARK: Test accessors
     var hostedMediaCountForTesting: Int { mediaItemViews.count }
     func hostedMediaViewForTesting(_ id: BlockID) -> RichTextMediaItemView? { mediaItemViews[id]?.view }
+    func hostedMediaItemSignatureForTesting(_ id: BlockID) -> String? { mediaItemViews[id]?.itemsSignature }
 }
 
 /// The `mediaOverlay` container. A full-bounds, visually-transparent pass-through: its `hitTest` returns

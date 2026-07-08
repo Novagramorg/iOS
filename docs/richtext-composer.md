@@ -184,6 +184,20 @@ All inline / structural features round-trip losslessly through the native compos
   + drafts, carried by `ChatInputContent.media`. The concrete view is the shared
   `RichTextEditorMediaView.MediaItemNodeView` (also used by the article editor), resolved via the injected
   factory (§3).
+  **Multi-media containers (added 2026-07-08).** A media block now holds `items: [ChatInputMediaItem]`
+  (one **or more** photos/videos) with a single shared caption — the editor's `MediaBlock` gained the
+  matching `items: [MediaItem]`. The change is additive/back-compat: a convenience single-media
+  initializer + get-only accessors reproduce the old API, and both `MediaBlock`/`ChatInputMedia` Codable
+  decode a legacy flat single-media payload into `items: [one]`, so existing single-media messages/drafts/
+  tests are unchanged. Grouping is **photo/video only** — `.audio`/`.location` stay permanently
+  single-item. A container renders in-editor as a **mosaic** via the shared `MosaicLayout` engine (the
+  same one grouped album messages use), with per-cell view reuse keyed by media identity so surviving
+  cells aren't rebuilt/re-fetched on an add/remove. A container of `items.count >= 2` sends as an
+  InstantPage **`.collage`** rich message (see `instantpage-richtext.md`); `count == 1` still sends the
+  byte-identical `.image`/`.video` block. **Authoring is split:** per-cell delete-one is wired in both
+  hosts; "Add another photo/video" is wired in the **article editor**'s more-menu only — the composer's
+  in-place Add is a deferred follow-up (the composer already renders/edits multi-media from sent albums
+  and drafts). Design + plan: `docs/superpowers/{specs,plans}/2026-07-08-richtext-multi-media-container*`.
 - **Location maps:** a picked location is a `Block.media` with **`MediaKind.location`** whose `mediaID` resolves to
   a `TelegramMediaMap`. A map is an **id-less** `Media`, so the host mints a deterministic `"map:lat:long"` key
   (not the usual `namespace:id`). It renders inline as a map snapshot through the same `MediaItemNodeView` seam —

@@ -521,10 +521,12 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         canvas.insertDocument(document)
     }
 
-    /// Registers the closure that turns a media `mediaID` (+ the medium's natural size) into a FRESH
-    /// `RichTextMediaItemView`. Called once per occurrence; the editor owns/positions/resizes/culls it.
+    /// Registers the closure that turns a container's items (in order) into a `RichTextMediaItemView`. Called
+    /// on first realization and on every items-change; the editor owns/positions/resizes/culls it. `existing`
+    /// is the currently-hosted view on an items-change (nil on first realization) — the host may update it in
+    /// place and return the SAME instance (surviving cells reused) or return a fresh one.
     public func registerMediaViewProvider(
-        _ provider: @escaping (_ mediaID: String, _ naturalSize: CGSize) -> RichTextMediaItemView?
+        _ provider: @escaping ([MediaProviderItem], BlockID, RichTextMediaItemView?) -> RichTextMediaItemView?
     ) {
         canvas.mediaViewProvider = provider
     }

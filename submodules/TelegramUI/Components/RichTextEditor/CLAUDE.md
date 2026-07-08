@@ -540,6 +540,13 @@ sweep) extend this block below; the layout sweep also has a spec/plan pair in
   UIKit `needsLayout` flag. **Out of scope** (do NOT affect content height, kept as UIKit-internal mechanism):
   `setNeedsDisplay` (repaint), `syncSpoilers`' reveal re-layout, and the parent→child `view.setNeedsLayout()` /
   `tv.layoutIfNeeded()` on block/table backing views.
+- **`MediaBlock` is a multi-media container** (added 2026-07-08): `items: [MediaItem]` holds one or more
+  photos/videos with one shared caption (additive/back-compat — a convenience single-item initializer +
+  back-compat Codable decode keep every existing call site and persisted document unchanged). It stays
+  **one atom** in the position model regardless of item count (`DocumentTree` still emits one `.mediaAtom`
+  per block), so `nodeSize`/`textStart`/caret/select-all/covered-delete below are unaffected —
+  multiplicity lives only in `items` and the mosaic render (`RichTextEditorMediaView`'s `CLAUDE.md`;
+  send/edit round-trip in `docs/richtext-composer.md` §4 and `docs/instantpage-richtext.md`).
 - **Backspace targeting a media block replaces it with an empty body paragraph IN PLACE** (2026-06-27, supersedes
   the older per-case media-backspace rules). `replaceMediaWithEmptyParagraph(at:)` removes the media block and
   drops a fresh empty `.body` paragraph in its slot, caret there — NOT the old delete-and-merge-into-the-block-above

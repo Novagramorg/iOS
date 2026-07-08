@@ -221,7 +221,7 @@ extension DocumentCanvasView {
     /// all). A LONE quote whose entire content (incl. author) is selected is dropped separately by the
     /// exact-content-span branch in `applySelectionReplace` (Task 5), which uses the box's full `leafRegions()`.
     func coverableContentEnd(_ box: CanvasBlock) -> Int {
-        if let m = box as? MediaBlockBox, m.kind == .audio { return box.nodeStart + 1 }
+        if let m = box as? MediaBlockBox, m.isAudio { return box.nodeStart + 1 }
         return box.textStart + box.textLength
     }
 
@@ -668,13 +668,16 @@ extension DocumentCanvasView {
         // end produces an empty new paragraph; a caret at the start moves the whole caption down. Audio is
         // caption-less and excluded — its Enter fires the gap-caret branch in insertText before we reach here.
         if selFrom == selTo, let active = activeStack(at: head),
-           let mediaBox = active.box as? MediaBlockBox, mediaBox.kind != .audio {
+           let mediaBox = active.box as? MediaBlockBox, !mediaBox.isAudio {
             editing {
                 guard case .media(let mediaBlock) = mediaBox.currentBlock() else { return }
                 let tmpCaption = ParagraphBlock(id: BlockID.generate(), style: .caption, runs: mediaBlock.caption)
                 let parts = tmpCaption.split(at: active.local, newID: BlockID.generate())
-                let newMedia = MediaBlock(id: mediaBlock.id, mediaID: mediaBlock.mediaID, kind: mediaBlock.kind,
-                                          naturalSize: mediaBlock.naturalSize, displayWidth: mediaBlock.displayWidth,
+                // Rebuild via the CONTAINER initializer (`items:`), not the legacy single-media one — the
+                // legacy init wraps only `mediaBlock.mediaID`/`kind`/`naturalSize` (the FIRST item), which
+                // silently drops items[1...] for a multi-item (mosaic) container. See docs/superpowers/sdd
+                // task-7 notes.
+                let newMedia = MediaBlock(id: mediaBlock.id, items: mediaBlock.items, displayWidth: mediaBlock.displayWidth,
                                           alignment: mediaBlock.alignment, caption: parts.0.runs)
                 let newMediaBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
                                                 horizontalBleed: mediaBox.horizontalBleed)

@@ -12,7 +12,7 @@ final class MediaItemViewHostingTests: XCTestCase {
         init(mediaID: String) { self.mediaID = mediaID; super.init(frame: .zero) }
         required init?(coder: NSCoder) { fatalError() }
         func update(size: CGSize) { updatedSizes.append(size) }
-        var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
+        var onControlTapped: ((RichTextMediaControlKind, Int?, UIView, CGRect) -> Void)?
     }
 
     /// Honors the media-view interaction contract (what the real `MediaItemNodeView` does): its `hitTest`
@@ -27,7 +27,7 @@ final class MediaItemViewHostingTests: XCTestCase {
         }
         required init?(coder: NSCoder) { fatalError() }
         func update(size: CGSize) {}
-        var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
+        var onControlTapped: ((RichTextMediaControlKind, Int?, UIView, CGRect) -> Void)?
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             return control.frame.contains(point) ? control : nil
         }
@@ -41,7 +41,8 @@ final class MediaItemViewHostingTests: XCTestCase {
         let editor = RichTextEditorView()
         editor.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
         var requested: [String] = []
-        editor.registerMediaViewProvider { mediaID, _ in
+        editor.registerMediaViewProvider { items, _, _ in
+            let mediaID = items.first?.mediaID ?? ""
             requested.append(mediaID)
             return StubMediaView(mediaID: mediaID)
         }
@@ -67,7 +68,8 @@ final class MediaItemViewHostingTests: XCTestCase {
     func testZeroBoundsDocumentSetDefersMediaViewCreationUntilFramed() {
         let editor = RichTextEditorView()
         var requested: [String] = []
-        editor.registerMediaViewProvider { mediaID, _ in
+        editor.registerMediaViewProvider { items, _, _ in
+            let mediaID = items.first?.mediaID ?? ""
             requested.append(mediaID); return StubMediaView(mediaID: mediaID)
         }
         // Phase 1: set a media document while UNFRAMED (bounds == .zero).
@@ -95,7 +97,8 @@ final class MediaItemViewHostingTests: XCTestCase {
     func testZeroBoundsLayoutPassDoesNotCreateMediaViews() {
         let editor = RichTextEditorView()
         var requested: [String] = []
-        editor.registerMediaViewProvider { mediaID, _ in
+        editor.registerMediaViewProvider { items, _, _ in
+            let mediaID = items.first?.mediaID ?? ""
             requested.append(mediaID); return StubMediaView(mediaID: mediaID)
         }
         editor.document = emptyDoc([
@@ -120,7 +123,9 @@ final class MediaItemViewHostingTests: XCTestCase {
         let editor = RichTextEditorView()
         editor.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
         var count = 0
-        editor.registerMediaViewProvider { mediaID, _ in count += 1; return StubMediaView(mediaID: mediaID) }
+        editor.registerMediaViewProvider { items, _, _ in
+            count += 1; return StubMediaView(mediaID: items.first?.mediaID ?? "")
+        }
         editor.document = emptyDoc([.paragraph(ParagraphBlock(id: BlockID("p0"), runs: [TextRun(text: "x")]))])
         _ = editor.update(size: editor.frame.size, insets: .zero)
         editor.insertMedia(mediaID: "dup", naturalSize: CGSize(width: 100, height: 100), kind: .image)
@@ -141,7 +146,7 @@ final class MediaItemViewHostingTests: XCTestCase {
         let editor = RichTextEditorView()
         editor.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
         var stub: ControlStubMediaView?
-        editor.registerMediaViewProvider { _, _ in let v = ControlStubMediaView(); stub = v; return v }
+        editor.registerMediaViewProvider { _, _, _ in let v = ControlStubMediaView(); stub = v; return v }
         editor.document = emptyDoc([
             .media(MediaBlock(id: BlockID("m0"), mediaID: "m1", kind: .image,
                               naturalSize: Size2D(width: 200, height: 100)))
