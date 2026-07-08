@@ -34,6 +34,11 @@ public final class MediaControlRequest {
     /// Removes THIS occurrence (bound to its `BlockID` by the editor — unambiguous even when `mediaID`
     /// repeats). One undo step.
     public let delete: () -> Void
+    /// The tapped occurrence's CURRENT spoiler state (drives the menu's checkmark). Bound by the editor to
+    /// the exact occurrence (its `BlockID` + `itemIndex`).
+    public let isSpoiler: Bool
+    /// Toggles THIS occurrence's spoiler flag (bound by the editor to its `BlockID` + `itemIndex`). One undo step.
+    public let toggleSpoiler: () -> Void
     /// Reserved: replace THIS occurrence's media with host-picked media. `nil` until implemented.
     public let replace: ((_ mediaID: String, _ naturalSize: CGSize, _ kind: MediaKind) -> Void)?
     /// Adds another medium relative to this occurrence (the "+" button).
@@ -42,6 +47,8 @@ public final class MediaControlRequest {
     public init(view: UIView?, sourceRect: CGRect, control: RichTextMediaControlKind, mediaID: String,
                 itemIndex: Int? = nil,
                 delete: @escaping () -> Void,
+                isSpoiler: Bool,
+                toggleSpoiler: @escaping () -> Void,
                 replace: ((String, CGSize, MediaKind) -> Void)? = nil,
                 addMore: ((String, CGSize, MediaKind) -> Void)? = nil) {
         self.view = view
@@ -50,6 +57,8 @@ public final class MediaControlRequest {
         self.mediaID = mediaID
         self.itemIndex = itemIndex
         self.delete = delete
+        self.isSpoiler = isSpoiler
+        self.toggleSpoiler = toggleSpoiler
         self.replace = replace
         self.addMore = addMore
     }

@@ -267,13 +267,15 @@ public struct InstantPageV2MediaImageItem {
     public let media: InstantPageMedia
     public let webPage: TelegramMediaWebpage
     public let attributes: [InstantPageImageAttribute]   // always empty for image; kept for symmetry
+    public let spoiler: Bool
 
-    public init(frame: CGRect, cornerRadius: CGFloat, media: InstantPageMedia, webPage: TelegramMediaWebpage, attributes: [InstantPageImageAttribute]) {
+    public init(frame: CGRect, cornerRadius: CGFloat, media: InstantPageMedia, webPage: TelegramMediaWebpage, attributes: [InstantPageImageAttribute], spoiler: Bool = false) {
         self.frame = frame
         self.cornerRadius = cornerRadius
         self.media = media
         self.webPage = webPage
         self.attributes = attributes
+        self.spoiler = spoiler
     }
 }
 
@@ -295,13 +297,15 @@ public struct InstantPageV2MediaVideoItem {
     public let media: InstantPageMedia
     public let webPage: TelegramMediaWebpage
     public let attributes: [InstantPageImageAttribute]   // always empty
+    public let spoiler: Bool
 
-    public init(frame: CGRect, cornerRadius: CGFloat, media: InstantPageMedia, webPage: TelegramMediaWebpage, attributes: [InstantPageImageAttribute]) {
+    public init(frame: CGRect, cornerRadius: CGFloat, media: InstantPageMedia, webPage: TelegramMediaWebpage, attributes: [InstantPageImageAttribute], spoiler: Bool = false) {
         self.frame = frame
         self.cornerRadius = cornerRadius
         self.media = media
         self.webPage = webPage
         self.attributes = attributes
+        self.spoiler = spoiler
     }
 }
 
@@ -748,7 +752,7 @@ private func layoutBlock(
                                boundingWidth: boundingWidth, horizontalInset: horizontalInset,
                                context: &context)
 
-    case let .image(id, caption, url, webpageId):
+    case let .image(id, caption, url, webpageId, spoiler):
         if case let .image(image) = context.media[id], let largest = largestImageRepresentation(image.representations) {
             let naturalSize = CGSize(width: CGFloat(largest.dimensions.width), height: CGFloat(largest.dimensions.height))
             let mediaUrl: InstantPageUrlItem? = url.flatMap { InstantPageUrlItem(url: $0, webpageId: webpageId) }
@@ -769,7 +773,8 @@ private func layoutBlock(
                         cornerRadius: cornerRadius,
                         media: instantPageMedia,
                         webPage: webpage,
-                        attributes: []
+                        attributes: [],
+                        spoiler: spoiler
                     ))
                 },
                 naturalSize: naturalSize,
@@ -789,7 +794,7 @@ private func layoutBlock(
             return []
         }
 
-    case let .video(id, caption, _, _):
+    case let .video(id, caption, _, _, spoiler):
         if case let .file(file) = context.media[id], let dimensions = file.dimensions {
             let naturalSize = CGSize(width: CGFloat(dimensions.width), height: CGFloat(dimensions.height))
             let mediaIndex = context.mediaIndexCounter
@@ -809,7 +814,8 @@ private func layoutBlock(
                         cornerRadius: cornerRadius,
                         media: instantPageMedia,
                         webPage: webpage,
-                        attributes: []
+                        attributes: [],
+                        spoiler: spoiler
                     ))
                 },
                 naturalSize: naturalSize,
@@ -1893,13 +1899,13 @@ private func layoutCollage(
     var itemSizes: [CGSize] = []
     for block in innerBlocks {
         switch block {
-        case let .image(id, _, _, _):
+        case let .image(id, _, _, _, _):
             if case let .image(image) = context.media[id], let largest = largestImageRepresentation(image.representations) {
                 itemSizes.append(CGSize(width: CGFloat(largest.dimensions.width), height: CGFloat(largest.dimensions.height)))
             } else {
                 itemSizes.append(CGSize())
             }
-        case let .video(id, _, _, _):
+        case let .video(id, _, _, _, _):
             if case let .file(file) = context.media[id], let dimensions = file.dimensions {
                 itemSizes.append(CGSize(width: CGFloat(dimensions.width), height: CGFloat(dimensions.height)))
             } else {
@@ -1925,19 +1931,19 @@ private func layoutCollage(
             frame.size.width += instantPageV2MediaEdgeBleed
         }
         switch block {
-        case let .image(id, blockCaption, url, webpageId):
+        case let .image(id, blockCaption, url, webpageId, spoiler):
             guard case let .image(image) = context.media[id] else { continue }
             let mediaIndex = context.mediaIndexCounter
             context.mediaIndexCounter += 1
             let mediaUrl: InstantPageUrlItem? = url.flatMap { InstantPageUrlItem(url: $0, webpageId: webpageId) }
             let media = InstantPageMedia(index: mediaIndex, media: .image(image), url: mediaUrl, caption: blockCaption.text, credit: blockCaption.credit)
-            result.append(.mediaImage(InstantPageV2MediaImageItem(frame: frame, cornerRadius: 0.0, media: media, webPage: webpage, attributes: [])))
-        case let .video(id, blockCaption, _, _):
+            result.append(.mediaImage(InstantPageV2MediaImageItem(frame: frame, cornerRadius: 0.0, media: media, webPage: webpage, attributes: [], spoiler: spoiler)))
+        case let .video(id, blockCaption, _, _, spoiler):
             guard case let .file(file) = context.media[id] else { continue }
             let mediaIndex = context.mediaIndexCounter
             context.mediaIndexCounter += 1
             let media = InstantPageMedia(index: mediaIndex, media: .file(file), url: nil, caption: blockCaption.text, credit: blockCaption.credit)
-            result.append(.mediaVideo(InstantPageV2MediaVideoItem(frame: frame, cornerRadius: 0.0, media: media, webPage: webpage, attributes: [])))
+            result.append(.mediaVideo(InstantPageV2MediaVideoItem(frame: frame, cornerRadius: 0.0, media: media, webPage: webpage, attributes: [], spoiler: spoiler)))
         default:
             continue
         }
@@ -1975,7 +1981,7 @@ private func layoutSlideshow(
     var height: CGFloat = 0.0
     for block in innerBlocks {
         switch block {
-        case let .image(id, blockCaption, url, webpageId):
+        case let .image(id, blockCaption, url, webpageId, _):
             if case let .image(image) = context.media[id], let imageSize = largestImageRepresentation(image.representations)?.dimensions {
                 let mediaIndex = context.mediaIndexCounter
                 context.mediaIndexCounter += 1

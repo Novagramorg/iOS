@@ -141,6 +141,45 @@ remains produced only by real web Instant View articles.
 - **The slideshow registers under EVERY contained media index, and re-registers on an in-window rebuild.** Its stableId is positional (`.positional(.slideshow, position)`, not `.media(index)` like the static media views), so it can be reused for a *different* slideshow at the same block position; `rebuildPages()` re-runs `registerMedias()` (guarded by `window != nil`) so the new indices land in the registry. The gallery hooks iterate the live page nodes and match by `InstantPageMedia` identity, so registering one view under N indices is idempotent.
 - **The 4 static media views answer the gallery hooks with explicit per-class witnesses, NOT a shared protocol-extension override** — an extension-only implementation is statically dispatched and would silently bind to the nil default when invoked through the `InstantPageItemView`-typed registry wrapper.
 
+## InstantPage V2 media spoiler (revealable dust)
+
+A `pageBlockPhoto`/`pageBlockVideo` (and thus a collage cell) can carry a **spoiler** flag — the medium is
+hidden behind an animated "dust" cover until the recipient taps it, mirroring the regular
+`MediaSpoilerMessageAttribute` path in `ChatMessageInteractiveMediaNode`. This is how a rich message
+(`RichTextMessageAttribute` → InstantPage) carries a media spoiler; the composer-authoring side is in
+`docs/richtext-composer.md` §4.
+
+### Where things live
+
+| Concern | Location |
+|---|---|
+| model flag | `InstantPageBlock.image`/`.video` gain `spoiler: Bool` (`SyncCore_InstantPage.swift`); Postbox key `"sp"`, flatBuffers `Models/InstantPageBlock.fbs` `spoiler:bool (id:4)` |
+| wire | `ApiUtils/InstantPage.swift` reads/ORs `pageBlockPhoto` `flags.1` / `pageBlockVideo` `flags.2` — **no `TelegramApi` change** (the bit rides the existing `flags` Int32; constructor ids `1759c560`/`7c8fe7b6` unchanged) |
+| laid-out item | `InstantPageV2MediaImageItem`/`VideoItem` gain `spoiler: Bool` (`InstantPageV2Layout.swift`); single-media + collage item-constructing cases thread it |
+| render | `InstantPageV2MediaViews.swift` — `MediaSpoilerDustOverlay` hosts a `MediaDustNode` (import `InvisibleInkDustNode`) in both `InstantPageV2MediaImageView`/`VideoView` |
+
+### Non-obvious invariants
+
+- **The dust cover is NON-interactive; reveal is driven through the wrapped node's own tap.** The overlay
+  (`containerNode` + `dustNode`) is `isUserInteractionEnabled = false`, so taps fall through to the sibling
+  `InstantPageImageNode` below it. Each view's `openMedia` closure is **gated**: while `overlay.concealed`,
+  the first tap calls `overlay.reveal()` (which sets `concealed = false` synchronously and drives
+  `MediaDustNode.tap(at:)` → the wipe animation → the `revealed` callback removes the cover) and returns
+  **without** opening the gallery; once revealed, taps fall through to `handleOpenMediaTap` (gallery). This
+  mirrors `ExtendedMediaOverlayNode.reveal(animated:)` but with a non-interactive cover instead of an
+  interactive button.
+- **Reuse resets reveal state by media id.** A positionally-reused media view (`stableId = .media(index)`,
+  reconciled through `update(item:)` → `updateSpoiler`) keyed on `EngineMedia.Id`: a different id or
+  `spoiler == false` tears down the cover; the same spoiler medium keeps its (possibly already-revealed)
+  state — so scrolling can't bleed a stale reveal onto a different photo, and a re-layout of the same photo
+  doesn't re-hide it. **No `InstantPageRenderer.reuse(existingView:)` change** was needed — it already routes
+  through `update(item:)`.
+- **Collage cells inherit spoiler for free.** `layoutCollage` flattens inner `.image`/`.video` into ordinary
+  top-level `.mediaImage`/`.mediaVideo` items (see the collage section above), threading each inner block's
+  `spoiler` — so an album with one spoiler cell just works, with no collage-specific spoiler code.
+- **The long-press-Send options preview** renders through the same `InstantPageV2View`, so a spoiler'd media
+  shows the dust cover in the preview bubble automatically.
+
 ## InstantPage V2 text item height (true font line box)
 
 `layoutTextItem` (`InstantPageV2Layout.swift`) sizes a `.text` item to the **true font line height**, not the cap box. A single-line item measures exactly `fontAscent + fontDescentBelowBaseline` (`A + D`); the old behavior was the cap box `fontLineHeight = floor(fontAscent + fontDescent)` (`A − D`).

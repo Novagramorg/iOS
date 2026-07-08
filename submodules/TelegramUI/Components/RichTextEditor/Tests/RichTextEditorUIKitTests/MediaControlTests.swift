@@ -182,12 +182,12 @@ extension MediaControlTests {
         v.addMediaItem(blockID: BlockID("b1"), mediaID: "m2",
                        naturalSize: CGSize(width: 50, height: 50), kind: .video)
         XCTAssertEqual(provideCount, 2, "provider re-invoked after items grow from 1 to 2")
-        XCTAssertEqual(v.hostedMediaItemSignatureForTesting(BlockID("b1")), "m1#image#100x100|m2#video#50x50")
+        XCTAssertEqual(v.hostedMediaItemSignatureForTesting(BlockID("b1")), "m1#image#100x100#s0|m2#video#50x50#s0")
 
         // Delete-one shrinks 2 -> 1 item: the signature changes again, so the view is recreated once more.
         v.deleteMediaItem(blockID: BlockID("b1"), itemIndex: 1)
         XCTAssertEqual(provideCount, 3, "provider re-invoked after items shrink from 2 to 1")
-        XCTAssertEqual(v.hostedMediaItemSignatureForTesting(BlockID("b1")), "m1#image#100x100")
+        XCTAssertEqual(v.hostedMediaItemSignatureForTesting(BlockID("b1")), "m1#image#100x100#s0")
     }
 }
 #endif

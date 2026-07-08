@@ -1411,7 +1411,8 @@ private func markdownBlocks(from node: MarkdownIntentNode, context: MarkdownConv
                     id: image.mediaId,
                     caption: image.caption,
                     url: image.linkUrl,
-                    webpageId: nil
+                    webpageId: nil,
+                    spoiler: false
                 )
             ]
         }

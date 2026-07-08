@@ -10,6 +10,7 @@ import PhotoResources
 import RadialStatusNode
 import LottieComponent
 import GlassBackgroundComponent
+import InvisibleInkDustNode
 
 /// A composable ComponentFlow renderer for ONE rich-text still image or video poster. Owns its
 /// own `TransformImageNode` + media-fetch signal + aspect-fill layout, decoupled from
@@ -34,15 +35,25 @@ public final class RichTextMediaContentComponent: Component {
     /// each layout pass, so a cell reused across a single↔mosaic transition switches mode.
     var usesAspectFit: Bool
 
+    /// Telegram-style spoiler: the poster renders behind a heavily-blurred (`.blurBackground`) overlay +
+    /// an animated "dust" cover, both owned by this cell so a mosaic of items each spoilers independently.
+    /// Non-revealable authoring cover (the message-render side owns reveal). UNLIKE `usesAspectFit`, this
+    /// IS part of `==`: it can toggle WITHOUT a size change (the edit-menu / ••• Spoiler action), and the
+    /// host (`ComponentHostView`) skips `update` when the component compares equal at an unchanged size —
+    /// so omitting it here would make a spoiler toggle a visual no-op. It does not vary across resizes, so
+    /// including it does not defeat the fetch-binds-once optimization.
+    var isSpoiler: Bool
+
     /// Set by `MediaItemNodeView`; fired when an interactive control is tapped. Not part of `==` (identity
     /// equality must hold across resizes so the fetch binds once).
     var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
 
-    public init(context: AccountContext, media: EngineMedia, showsMoreButton: Bool = true, usesAspectFit: Bool = false) {
+    public init(context: AccountContext, media: EngineMedia, showsMoreButton: Bool = true, usesAspectFit: Bool = false, isSpoiler: Bool = false) {
         self.context = context
         self.media = media
         self.showsMoreButton = showsMoreButton
         self.usesAspectFit = usesAspectFit
+        self.isSpoiler = isSpoiler
     }
 
     public static func ==(lhs: RichTextMediaContentComponent, rhs: RichTextMediaContentComponent) -> Bool {
@@ -50,6 +61,9 @@ public final class RichTextMediaContentComponent: Component {
             return false
         }
         if lhs.media.id != rhs.media.id {
+            return false
+        }
+        if lhs.isSpoiler != rhs.isSpoiler {
             return false
         }
         return true
@@ -63,7 +77,19 @@ public final class RichTextMediaContentComponent: Component {
         private let imageNode = TransformImageNode()
         private var statusNode: RadialStatusNode?
         private let fetchDisposable = MetaDisposable()
-        
+        // Spoiler visuals, owned per-cell: a heavily-blurred (`.blurBackground`) overlay occluding the
+        // sharp poster, plus a `MediaDustNode` particle cover on top. A SEPARATE blur node is required —
+        // `TransformImageArguments.==` ignores `resizeMode`, so flipping the main node's resizeMode alone
+        // would early-out and never re-render. Both are non-revealable authoring covers (taps fall through
+        // to the editor). `currentMediaSignal` is the poster signal, reused for the blur (no extra fetch).
+        private var blurNode: TransformImageNode?
+        private var dustNode: MediaDustNode?
+        private var blurBoundMediaId: EngineMedia.Id?
+        // The BLURRED signal for the spoiler cover (`chatSecretPhoto`/`chatSecretMessageVideo`, which render
+        // `blurred: true` — the sharp foreground is suppressed, unlike `.blurBackground` on a sharp signal,
+        // which only fills the letterbox gaps and is covered by the sharp image). Same source as the poster.
+        private var currentBlurredSignal: Signal<(TransformImageArguments) -> DrawingContext?, NoError>?
+
         private let moreButtonBackgroundContainer: GlassBackgroundContainerView
         private let moreButton: HighlightTrackingButton
         private let moreButtonBackground: GlassBackgroundView
@@ -140,6 +166,7 @@ public final class RichTextMediaContentComponent: Component {
                 self.dimensions = largest.dimensions
                 let imageReference = ImageMediaReference.standalone(media: image)
                 self.imageNode.setSignal(chatMessagePhoto(postbox: context.account.postbox, userLocation: .other, photoReference: imageReference))
+                self.currentBlurredSignal = chatSecretPhoto(account: context.account, userLocation: .other, photoReference: imageReference, ignoreFullSize: true)
                 self.fetchDisposable.set(chatMessagePhotoInteractiveFetched(context: context, userLocation: .other, photoReference: imageReference, displayAtSize: nil, storeToDownloadsPeerId: nil).start())
             } else if case let .file(file) = component.media {
                 self.dimensions = file.dimensions
@@ -151,6 +178,7 @@ public final class RichTextMediaContentComponent: Component {
                     self.imageNode.setSignal(chatMessageVideo(postbox: context.account.postbox, userLocation: .other, videoReference: fileReference))
                     self.isVideo = true
                 }
+                self.currentBlurredSignal = chatSecretMessageVideo(account: context.account, userLocation: .other, videoReference: fileReference)
             }
             // else: unexpected media kind (.geo / audio reach here only by misuse) — leave the
             // node blank rather than crash.
@@ -172,6 +200,49 @@ public final class RichTextMediaContentComponent: Component {
                 apply()
             }
 
+            // Spoiler: a heavily-blurred `.blurBackground` overlay occluding the sharp poster, plus a
+            // `MediaDustNode` particle cover on top — both owned by this cell. Non-revealable authoring
+            // cover: the dust does not reveal on tap and is non-interactive, so taps fall through to the
+            // editor (caret / media-select). Ordered above the poster but BELOW the more/add controls
+            // (which were added to `self` in init, so they stay on top and remain tappable).
+            if component.isSpoiler, let dimensions = self.dimensions, let signal = self.currentBlurredSignal {
+                let blurNode: TransformImageNode
+                if let existing = self.blurNode {
+                    blurNode = existing
+                } else {
+                    blurNode = TransformImageNode()
+                    blurNode.contentAnimations = []
+                    self.blurNode = blurNode
+                    self.insertSubview(blurNode.view, aboveSubview: self.imageNode.view)
+                }
+                if self.blurBoundMediaId != component.media.id {
+                    self.blurBoundMediaId = component.media.id
+                    blurNode.setSignal(signal)
+                }
+                blurNode.view.isHidden = false
+                blurNode.frame = CGRect(origin: .zero, size: availableSize)
+                let blurImageSize = dimensions.cgSize.aspectFilled(availableSize)
+                let blurApply = blurNode.asyncLayout()(TransformImageArguments(corners: ImageCorners(), imageSize: blurImageSize, boundingSize: availableSize, intrinsicInsets: UIEdgeInsets(), resizeMode: .blurBackground, emptyColor: emptyColor))
+                blurApply()
+
+                let dustNode: MediaDustNode
+                if let existing = self.dustNode {
+                    dustNode = existing
+                } else {
+                    dustNode = MediaDustNode(enableAnimations: context.sharedContext.energyUsageSettings.fullTranslucency)
+                    dustNode.revealOnTap = false
+                    dustNode.isUserInteractionEnabled = false
+                    self.dustNode = dustNode
+                    self.insertSubview(dustNode.view, aboveSubview: blurNode.view)
+                }
+                dustNode.view.isHidden = false
+                dustNode.view.frame = CGRect(origin: .zero, size: availableSize)
+                dustNode.update(size: availableSize, color: .white, transition: .immediate)
+            } else {
+                self.blurNode?.view.isHidden = true
+                self.dustNode?.view.isHidden = true
+            }
+
             if self.isVideo {
                 let statusNode: RadialStatusNode
                 if let existing = self.statusNode {
@@ -184,6 +255,8 @@ public final class RichTextMediaContentComponent: Component {
                 }
                 let statusSize: CGFloat = max(18.0, min(50.0, floor(min(availableSize.width, availableSize.height) * 0.7)))
                 statusNode.frame = CGRect(x: floorToScreenPixels((availableSize.width - statusSize) / 2.0), y: floorToScreenPixels((availableSize.height - statusSize) / 2.0), width: statusSize, height: statusSize)
+                // A spoilered video hides its play button under the blur (mirrors the message side).
+                statusNode.view.isHidden = component.isSpoiler
             }
             
             let buttonSize = CGSize(width: 36.0, height: 36.0)

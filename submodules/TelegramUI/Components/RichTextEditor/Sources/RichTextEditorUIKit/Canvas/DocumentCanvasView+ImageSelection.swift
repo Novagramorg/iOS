@@ -46,34 +46,14 @@ extension DocumentCanvasView {
         refreshSelectionUI(); setNeedsDisplay()
     }
 
-    /// Two-step tap on an image (mirrors the table-handle two-step): first tap selects it; a tap on the
-    /// already-selected image toggles its edit menu (reusing the flicker guard).
+    /// Tapping a top-level media atom selects it (parks the caret at its gap + draws the tint). Media has
+    /// NO edit menu — Spoiler / Delete live in the host's per-media "•••" menu, and the selected atom is also
+    /// deletable via Backspace (see the object-replacement-range invariants). A repeat tap is a no-op.
     func handleImageTap(_ img: MediaBlockBox, wasMenuVisible: Bool, wasFirstResponder: Bool) {
         if imageSelection != img.id {
             dismissEditMenu()
             selectImage(img)
-        } else {
-            let justDismissed = Date().timeIntervalSinceReferenceDate - lastMenuDismissTime < Self.menuToggleSuppressWindow
-            switch menuToggleAction(menuVisible: wasMenuVisible, justDismissed: justDismissed, wasFirstResponder: wasFirstResponder) {
-            case .present: presentEditMenu()
-            case .dismiss: dismissEditMenu()
-            }
         }
-    }
-
-    /// The edit menu for the tap-selected image: Delete (whole block) only. Cut/Copy are deferred to the
-    /// rich-clipboard phase (the pasteboard is plaintext and an image has no plaintext form).
-    func imageSelectionMenu() -> UIMenu? {
-        guard imageSelection != nil else { return nil }
-        return UIMenu(children: [
-            UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) {
-                [weak self] _ in
-                guard let self, let id = self.imageSelection,
-                      let i = self.boxes.firstIndex(where: { $0.id == id }) else { return }
-                self.editing { self.deleteImageBox(at: i) }
-                self.clearImageSelection()
-            }
-        ])
     }
 }
 #endif

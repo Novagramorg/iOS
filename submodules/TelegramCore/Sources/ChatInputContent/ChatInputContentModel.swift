@@ -730,18 +730,22 @@ public struct ChatInputMediaItem: Equatable {
     public var media: Media
     public var kind: ChatInputMediaKind
     public var naturalSize: ChatInputSize
-    public init(media: Media, kind: ChatInputMediaKind, naturalSize: ChatInputSize) {
+    /// Telegram-style spoiler: the medium renders behind an animated "dust" overlay until tapped.
+    /// Optional Codable (absent key → `false`), so pre-spoiler drafts/messages decode unchanged.
+    public var isSpoiler: Bool
+    public init(media: Media, kind: ChatInputMediaKind, naturalSize: ChatInputSize, isSpoiler: Bool = false) {
         self.media = media
         self.kind = kind
         self.naturalSize = naturalSize
+        self.isSpoiler = isSpoiler
     }
     public static func == (lhs: ChatInputMediaItem, rhs: ChatInputMediaItem) -> Bool {
-        return lhs.media.isEqual(to: rhs.media) && lhs.kind == rhs.kind && lhs.naturalSize == rhs.naturalSize
+        return lhs.media.isEqual(to: rhs.media) && lhs.kind == rhs.kind && lhs.naturalSize == rhs.naturalSize && lhs.isSpoiler == rhs.isSpoiler
     }
 }
 
 extension ChatInputMediaItem: Codable {
-    private enum CodingKeys: String, CodingKey { case media, mediaType, kind, naturalSize }
+    private enum CodingKeys: String, CodingKey { case media, mediaType, kind, naturalSize, isSpoiler }
     // Concrete-`Media`-type discriminator (see ChatInputMedia notes — the same scheme, per item).
     private enum MediaType: Int32 { case image = 0; case file = 1; case map = 2 }
 
@@ -760,6 +764,7 @@ extension ChatInputMediaItem: Codable {
         }
         self.kind = try container.decode(ChatInputMediaKind.self, forKey: .kind)
         self.naturalSize = try container.decode(ChatInputSize.self, forKey: .naturalSize)
+        self.isSpoiler = try container.decodeIfPresent(Bool.self, forKey: .isSpoiler) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -773,6 +778,7 @@ extension ChatInputMediaItem: Codable {
         try container.encode(PostboxEncoder().encodeObjectToRawData(self.media), forKey: .media)
         try container.encode(self.kind, forKey: .kind)
         try container.encode(self.naturalSize, forKey: .naturalSize)
+        try container.encode(self.isSpoiler, forKey: .isSpoiler)
     }
 }
 

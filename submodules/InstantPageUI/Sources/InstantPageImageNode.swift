@@ -83,6 +83,13 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
     
     private var themeUpdated: Bool = false
     private var externalMediaDimensionsUpdated: Bool = false
+
+    // Spoiler support: a separate heavily-blurred (`.blurBackground`) overlay node that occludes the sharp
+    // `imageNode` while concealed. A distinct node is required — `TransformImageArguments.==` ignores
+    // `resizeMode`, so flipping the main node's resizeMode alone would early-out and never re-render; and a
+    // separate node also gives an instant reveal (remove it → the always-sharp `imageNode` shows). The
+    // enclosing V2 media view drives the dust cover + reveal timing. Default off (no effect on web IV).
+    private var contentBlurredSignal: Signal<(TransformImageArguments) -> DrawingContext?, NoError>?
     
     init(context: AccountContext, sourceLocation: InstantPageSourceLocation, theme: InstantPageTheme, webPage: TelegramMediaWebpage, media: InstantPageMedia, attributes: [InstantPageImageAttribute], interactive: Bool, roundCorners: Bool, fit: Bool, openMedia: @escaping (InstantPageMedia) -> Void, longPressMedia: @escaping (InstantPageMedia) -> Void, activatePinchPreview: ((PinchSourceContainerNode) -> Void)?, pinchPreviewFinished: ((InstantPageNode) -> Void)?, imageReferenceForMedia: ((TelegramMediaImage) -> ImageMediaReference)? = nil, fileReferenceForMedia: ((TelegramMediaFile) -> FileMediaReference)? = nil, getPreloadedResource: @escaping (String) -> Data?) {
         self.context = context
@@ -119,7 +126,8 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
             } else {
                 let imageReference = imageReferenceForMedia?(image) ?? ImageMediaReference.webPage(webPage: WebpageReference(webPage), media: image)
                 self.imageNode.setSignal(chatMessagePhoto(postbox: context.account.postbox, userLocation: sourceLocation.userLocation, photoReference: imageReference))
-                
+                self.contentBlurredSignal = chatSecretPhoto(account: context.account, userLocation: sourceLocation.userLocation, photoReference: imageReference, ignoreFullSize: true)
+
                 if !interactive || shouldDownloadMediaAutomatically(settings: context.sharedContext.currentAutomaticMediaDownloadSettings, peerType: sourceLocation.peerType, networkType: MediaAutoDownloadNetworkType(context.account.immediateNetworkType), authorPeerId: nil, contactsPeerIds: Set(), media: image) {
                     self.fetchedDisposable.set(chatMessagePhotoInteractiveFetched(context: context, userLocation: sourceLocation.userLocation, photoReference: imageReference, displayAtSize: nil, storeToDownloadsPeerId: nil).start())
                 }
@@ -158,6 +166,7 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
                 } else {
                     self.imageNode.setSignal(chatMessageVideo(postbox: context.account.postbox, userLocation: sourceLocation.userLocation, videoReference: fileReference))
                 }
+                self.contentBlurredSignal = chatSecretMessageVideo(account: context.account, userLocation: sourceLocation.userLocation, videoReference: fileReference)
                 if file.isVideo {
                     self.statusNode.transitionToState(.play(.white), animated: false, completion: {})
                     self.pinchContainerNode.contentNode.addSubnode(self.statusNode)
@@ -178,6 +187,7 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
         } else if case let .webpage(webPage) = media.media, case let .Loaded(content) = webPage.content, let image = content.image {
             let imageReference = imageReferenceForMedia?(image) ?? ImageMediaReference.webPage(webPage: WebpageReference(webPage), media: image)
             self.imageNode.setSignal(chatMessagePhoto(postbox: context.account.postbox, userLocation: sourceLocation.userLocation, photoReference: imageReference))
+            self.contentBlurredSignal = chatSecretPhoto(account: context.account, userLocation: sourceLocation.userLocation, photoReference: imageReference, ignoreFullSize: true)
             self.fetchedDisposable.set(chatMessagePhotoInteractiveFetched(context: context, userLocation: sourceLocation.userLocation, photoReference: imageReference, displayAtSize: nil, storeToDownloadsPeerId: nil).start())
             self.statusNode.transitionToState(.play(.white), animated: false, completion: {})
             self.pinchContainerNode.contentNode.addSubnode(self.statusNode)
@@ -213,9 +223,38 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
         }
     }
     
-    func updateIsVisible(_ isVisible: Bool) {    
+    func updateIsVisible(_ isVisible: Bool) {
     }
-    
+
+    /// Builds a heavily-blurred (`blurred: true` secret-media signal) `TransformImageNode` for a spoiler
+    /// cover. The caller (the V2 media view's `MediaSpoilerDustOverlay`) HOSTS it above this node so the
+    /// dust's reveal mask clears both blur + dust together, exposing the always-sharp `imageNode` — matching
+    /// `ExtendedMediaOverlayNode`. Layout is via `layoutSpoilerBlurredNode(_:size:)`. Nil for media with no
+    /// image signal (e.g. maps). The sharp `imageNode` itself is never blurred.
+    func makeSpoilerBlurredNode() -> TransformImageNode? {
+        guard let contentBlurredSignal = self.contentBlurredSignal else {
+            return nil
+        }
+        let node = TransformImageNode()
+        node.contentAnimations = []
+        node.setSignal(contentBlurredSignal)
+        return node
+    }
+
+    /// Lays out a node from `makeSpoilerBlurredNode()` to fill `size` (same aspect-fill + corner-radius math
+    /// as the sharp `imageNode`); `.blurBackground` + the `blurred: true` signal draw a full blur with no
+    /// sharp foreground. Idempotent (a `TransformImageNode` no-ops on unchanged args).
+    func layoutSpoilerBlurredNode(_ node: TransformImageNode, size: CGSize) {
+        node.frame = CGRect(origin: CGPoint(), size: size)
+        guard let dimensions = self.effectiveMediaDimensions() else {
+            return
+        }
+        let imageSize = dimensions.cgSize.aspectFilled(size)
+        let radius: CGFloat = self.roundCorners ? floor(min(imageSize.width, imageSize.height) / 2.0) : 0.0
+        let apply = node.asyncLayout()(TransformImageArguments(corners: ImageCorners(radius: radius), imageSize: imageSize, boundingSize: size, intrinsicInsets: UIEdgeInsets(), resizeMode: .blurBackground, emptyColor: .clear))
+        apply()
+    }
+
     func updateLayout(size: CGSize, transition: ContainedViewLayoutTransition) {
     }
     
@@ -364,7 +403,7 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
             self.currentSize = size
             self.themeUpdated = false
             self.externalMediaDimensionsUpdated = false
-            
+
             self.pinchContainerNode.frame = CGRect(origin: CGPoint(), size: size)
             self.pinchContainerNode.update(size: size, transition: .immediate)
             self.imageNode.frame = CGRect(origin: CGPoint(), size: size)
@@ -417,7 +456,7 @@ final class InstantPageImageNode: ASDisplayNode, InstantPageNode, InstantPageExt
             }
         }
     }
-    
+
     func transitionNode(media: InstantPageMedia) -> (ASDisplayNode, CGRect, () -> (UIView?, UIView?))? {
         if instantPageMediaMatchesNodeIdentity(media, self.media) {
             let imageNode = self.imageNode

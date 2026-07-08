@@ -19,7 +19,7 @@ extension DocumentCanvasView {
             // provider rebuilds it for the new items (the seam is one-shot: a reused view can't be re-fed a
             // changed item list in place — that cross-mutation cell-reuse path is a deferred follow-up).
             let signature = media.items.map {
-                "\($0.mediaID)#\($0.kind.rawValue)#\(Int($0.naturalSize.width.rounded()))x\(Int($0.naturalSize.height.rounded()))"
+                "\($0.mediaID)#\($0.kind.rawValue)#\(Int($0.naturalSize.width.rounded()))x\(Int($0.naturalSize.height.rounded()))#s\($0.isSpoiler ? 1 : 0)"
             }.joined(separator: "|")
             let hosted: HostedMediaItem
             if let h = mediaItemViews[media.id], h.itemsSignature == signature {
@@ -31,7 +31,8 @@ extension DocumentCanvasView {
                 let existingView = mediaItemViews[media.id]?.view
                 if let v = mediaViewProvider(media.items.map {
                     MediaProviderItem(mediaID: $0.mediaID, kind: $0.kind,
-                                      naturalSize: CGSize(width: $0.naturalSize.width, height: $0.naturalSize.height))
+                                      naturalSize: CGSize(width: $0.naturalSize.width, height: $0.naturalSize.height),
+                                      isSpoiler: $0.isSpoiler)
                 }, media.id, existingView) {
                     // Tear down a DIFFERENT prior instance (provider returned a fresh view, recreate fallback).
                     if let old = mediaItemViews[media.id], old.view !== v {
@@ -92,6 +93,12 @@ extension DocumentCanvasView {
     /// routes `delete` to the per-item removal when the tap targeted one item of a container.
     func handleMediaControlTapped(blockID: BlockID, mediaID: String, itemIndex: Int?, kind: RichTextMediaControlKind,
                                   anchorView: UIView, sourceRect: CGRect) {
+        // Current spoiler state for the tapped occurrence: the exact cell when `itemIndex` is in range, else
+        // the block's first item (the ••• more menu targets the block; a per-cell delete targets one item).
+        var isSpoiler = false
+        if let box = boxes.first(where: { $0.id == blockID }) as? MediaBlockBox, case .media(let m) = box.currentBlock() {
+            isSpoiler = itemIndex.flatMap { m.items.indices.contains($0) ? m.items[$0].isSpoiler : nil } ?? (m.items.first?.isSpoiler ?? false)
+        }
         let request = MediaControlRequest(
             view: anchorView,
             sourceRect: sourceRect,
@@ -102,6 +109,8 @@ extension DocumentCanvasView {
                 if let itemIndex { self?.deleteMediaItem(blockID: blockID, itemIndex: itemIndex) }
                 else { self?.deleteMediaBlock(id: blockID) }
             },
+            isSpoiler: isSpoiler,
+            toggleSpoiler: { [weak self] in self?.toggleMediaSpoiler(blockID: blockID, itemIndex: itemIndex) },
             replace: nil,
             addMore: { [weak self] mediaID, naturalSize, kind in
                 self?.addMediaItem(blockID: blockID, mediaID: mediaID,
@@ -162,6 +171,36 @@ extension DocumentCanvasView {
             recomputeSpans()
         }
     }
+
+    /// Toggles the Telegram-style spoiler flag on a media block as ONE undo step. `itemIndex` non-nil and in
+    /// range flips just that album cell; otherwise (single media, or `nil`) flips the WHOLE block, setting
+    /// every item's `isSpoiler` to the negation of the first item's current value (so a mixed album unifies to
+    /// a single toggled state). Same rebuild-in-place shape as `deleteMediaItem` / `addMediaItem` above (mirrors
+    /// `insertParagraphBreak`'s media-caption-split rebuild): read the current `MediaBlock`, mutate `items`,
+    /// rebuild the box reusing the old mapper/horizontalBleed/width, splice into `boxes`, `recomputeSpans()`,
+    /// inside `editing { }` for one undo step. Spoiler is not a position-model concern (`nodeSize`/`textStart`
+    /// are caption-derived only), so the caret is undisturbed. Top-level media blocks only; no-op if `blockID`
+    /// isn't found.
+    func toggleMediaSpoiler(blockID: BlockID, itemIndex: Int?) {
+        guard let index = boxes.firstIndex(where: { $0.id == blockID }), let mediaBox = boxes[index] as? MediaBlockBox,
+              case .media(let currentMedia) = mediaBox.currentBlock() else { return }
+        editing {
+            var newMedia = currentMedia
+            if let itemIndex, newMedia.items.indices.contains(itemIndex) {
+                newMedia.items[itemIndex].isSpoiler.toggle()
+            } else {
+                let newValue = !(newMedia.items.first?.isSpoiler ?? false)
+                for i in newMedia.items.indices { newMedia.items[i].isSpoiler = newValue }
+            }
+            let newBox = MediaBlockBox(media: newMedia, mapper: mediaBox.mapper, width: effectiveWidth,
+                                       horizontalBleed: mediaBox.horizontalBleed)
+            var newBoxes = boxes
+            newBoxes.replaceSubrange(index...index, with: [newBox])
+            boxes = newBoxes
+            recomputeSpans()
+        }
+    }
+
 
     // MARK: Test accessors
     var hostedMediaCountForTesting: Int { mediaItemViews.count }

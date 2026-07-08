@@ -684,7 +684,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     
     public var emojiViewProvider: ((ChatTextInputTextCustomEmojiAttribute) -> UIView)?
 
-    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? {
+    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? {
         didSet { self.richTextInputNode?.mediaItemViewFactory = self.mediaItemViewFactory }
     }
 
@@ -1232,6 +1232,12 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             switch context.control {
             case .more:
                 let items: [ContextMenuItem] = [
+                    .action(ContextMenuActionItem(
+                        text: context.isSpoiler ? presentationData.strings.Attachment_DisableSpoiler : presentationData.strings.Attachment_EnableSpoiler,
+                        icon: { _ in nil },
+                        iconAnimation: ContextMenuActionItem.IconAnimation(name: "anim_spoiler", loop: true),
+                        action: { _, f in f(.default); context.toggleSpoiler() }
+                    )),
                     .action(ContextMenuActionItem(
                         text: "Delete",
                         textColor: .destructive,

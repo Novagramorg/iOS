@@ -703,6 +703,12 @@ final class RichTextAttachmentScreenComponent: Component {
                     case .more:
                         var items: [ContextMenuItem] = []
                         items.append(.action(ContextMenuActionItem(
+                            text: request.isSpoiler ? presentationData.strings.Attachment_DisableSpoiler : presentationData.strings.Attachment_EnableSpoiler,
+                            icon: { _ in nil },
+                            iconAnimation: ContextMenuActionItem.IconAnimation(name: "anim_spoiler", loop: true),
+                            action: { _, f in f(.default); request.toggleSpoiler() }
+                        )))
+                        items.append(.action(ContextMenuActionItem(
                             text: "Delete",
                             textColor: .destructive,
                             icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) },
@@ -786,9 +792,9 @@ final class RichTextAttachmentScreenComponent: Component {
                         title: theme.list.itemPrimaryTextColor,
                         description: theme.list.itemSecondaryTextColor
                     )
-                    let resolved: [(media: EngineMedia, naturalSize: CGSize)] = items.compactMap { item in
+                    let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)] = items.compactMap { item in
                         guard let media = self.attachedMedia[item.mediaID] else { return nil }
-                        return (EngineMedia(media), item.naturalSize)
+                        return (EngineMedia(media), item.naturalSize, item.isSpoiler)
                     }
                     guard !resolved.isEmpty else { return nil }
                     // In-place update: reuse the existing container (surviving photo/video cells keep their bound

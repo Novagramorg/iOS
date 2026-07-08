@@ -626,4 +626,51 @@ final class ChatInputContentInstantPageTests: XCTestCase {
         guard case let .blockQuote(_, caption, _)? = page.blocks.first else { return XCTFail() }
         if case .empty = caption {} else { XCTFail("empty author should emit .empty caption") }
     }
+
+    // 23. The `spoiler` flag on `.image` survives a raw Postbox encode/decode via the `"sp"` key.
+    func test_instantPageBlock_image_spoiler_postboxRoundTrip() {
+        let block: InstantPageBlock = .image(id: MediaId(namespace: 1, id: 5),
+                                             caption: InstantPageCaption(text: .empty, credit: .empty),
+                                             url: nil, webpageId: nil, spoiler: true)
+        let encoder = PostboxEncoder(); encoder.encodeObject(block, forKey: "b")
+        let decoder = PostboxDecoder(buffer: MemoryBuffer(data: encoder.makeData()))
+        guard case let .image(_, _, _, _, spoiler)? = decoder.decodeObjectForKey("b", decoder: { InstantPageBlock(decoder: $0) }) as? InstantPageBlock else { return XCTFail("decode") }
+        XCTAssertTrue(spoiler)
+    }
+
+    // 24. A `.video` block with `spoiler: false` decodes back to false (absent → false default holds).
+    func test_instantPageBlock_video_spoiler_defaultsFalse() {
+        let block: InstantPageBlock = .video(id: MediaId(namespace: 1, id: 6),
+                                             caption: InstantPageCaption(text: .empty, credit: .empty),
+                                             autoplay: false, loop: false, spoiler: false)
+        let encoder = PostboxEncoder(); encoder.encodeObject(block, forKey: "b")
+        let decoder = PostboxDecoder(buffer: MemoryBuffer(data: encoder.makeData()))
+        guard case let .video(_, _, _, _, spoiler)? = decoder.decodeObjectForKey("b", decoder: { InstantPageBlock(decoder: $0) }) as? InstantPageBlock else { return XCTFail("decode") }
+        XCTAssertFalse(spoiler)
+    }
+
+    // 25. A single-item media block's `isSpoiler` survives ChatInputContent -> InstantPage -> ChatInputContent.
+    func test_chatInputContent_mediaSpoiler_roundTripsThroughInstantPage_single() {
+        let image = TelegramMediaImage(imageId: MediaId(namespace: 1, id: 11), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        var item = ChatInputMediaItem(media: image, kind: .image, naturalSize: ChatInputSize(width: 4, height: 3))
+        item.isSpoiler = true
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(items: [item]))])
+        let back = chatInputContent(fromInstantPage: instantPage(from: content))
+        guard case let .media(m)? = back.blocks.first, let first = m.items.first else { return XCTFail() }
+        XCTAssertTrue(first.isSpoiler)
+    }
+
+    // 26. A collage's per-item `isSpoiler` survives the round-trip independently per item.
+    func test_chatInputContent_mediaSpoiler_roundTripsThroughInstantPage_album() {
+        let a = TelegramMediaImage(imageId: MediaId(namespace: 1, id: 1), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let b = TelegramMediaImage(imageId: MediaId(namespace: 1, id: 2), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        var i0 = ChatInputMediaItem(media: a, kind: .image, naturalSize: ChatInputSize(width: 1, height: 1))
+        let i1 = ChatInputMediaItem(media: b, kind: .image, naturalSize: ChatInputSize(width: 1, height: 1))
+        i0.isSpoiler = true
+        let content = ChatInputContent(blocks: [.media(ChatInputMedia(items: [i0, i1]))])
+        let back = chatInputContent(fromInstantPage: instantPage(from: content))
+        guard case let .media(m)? = back.blocks.first, m.items.count == 2 else { return XCTFail() }
+        XCTAssertTrue(m.items[0].isSpoiler)
+        XCTAssertFalse(m.items[1].isSpoiler)
+    }
 }

@@ -57,7 +57,7 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// Factory the panel supplies (it owns `AccountContext`) to turn a `Media` + natural size into a hosted
     /// media view. The editor's media-view provider (registered in `didLoad`) resolves its opaque `mediaID` →
     /// `mediaByID` → this factory. Read lazily, so the panel may set it after `didLoad`. Mirrors `emojiViewProvider`.
-    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
+    public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
 
     public var formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)? {
         didSet {
@@ -274,9 +274,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         // to the provider's `RichTextMediaItemView?` return type.
         self.editorView.registerMediaViewProvider { [weak self] items, _, existing in
             guard let self, let factory = self.mediaItemViewFactory else { return nil }
-            let resolved: [(media: EngineMedia, naturalSize: CGSize)] = items.compactMap { item in
+            let resolved: [(media: EngineMedia, naturalSize: CGSize, isSpoiler: Bool)] = items.compactMap { item in
                 guard let media = self.mediaByID[item.mediaID] else { return nil }
-                return (EngineMedia(media), item.naturalSize)
+                return (EngineMedia(media), item.naturalSize, item.isSpoiler)
             }
             guard !resolved.isEmpty else { return nil }
             return factory(resolved, existing)
@@ -293,6 +293,8 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
                 sourceView: request.view,
                 sourceRect: request.sourceRect,
                 delete: request.delete,
+                isSpoiler: request.isSpoiler,
+                toggleSpoiler: request.toggleSpoiler,
                 replace: request.replace,
                 addMore: request.addMore
             ))

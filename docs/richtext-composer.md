@@ -198,6 +198,28 @@ All inline / structural features round-trip losslessly through the native compos
   hosts; "Add another photo/video" is wired in the **article editor**'s more-menu only — the composer's
   in-place Add is a deferred follow-up (the composer already renders/edits multi-media from sent albums
   and drafts). Design + plan: `docs/superpowers/{specs,plans}/2026-07-08-richtext-multi-media-container*`.
+  **Media spoilers (added 2026-07-08).** A photo/video can be marked a Telegram-style spoiler (dust-covered
+  until tapped), per **item**: `MediaItem.isSpoiler` (editor Core) ↔ `ChatInputMediaItem.isSpoiler`
+  (both additive, optional-Codable, absent ⇒ `false`, so all existing docs/drafts/messages decode
+  unchanged) ↔ a `spoiler: Bool` associated value on `InstantPageBlock.image`/`.video`. **Authoring:**
+  tap-select a single medium → the edit menu's **"Spoiler"** item (`imageSelectionMenu`, toggles via
+  `toggleSelectedMediaSpoiler`); for an album, each cell's **"•••"** menu carries a per-cell "Spoiler"
+  (threaded through `MediaControlRequest.isSpoiler`/`toggleSpoiler` → `MediaControlContext` → the panel's
+  ContextUI menu). Both route to `RichTextEditorView.toggleMediaSpoiler(itemIndex:)` →
+  `DocumentCanvasView.toggleMediaSpoiler(blockID:itemIndex:)` (one undo step, in-place `MediaBlockBox`
+  rebuild like `deleteMediaItem`). **In-editor render is a NON-revealable authoring cover** — `MediaItemNodeView`
+  hosts a `MediaDustNode` (via `InvisibleInkDustNode`) per spoiler cell, `revealOnTap = false`, non-interactive
+  (taps fall through to selection); the flag reaches it through `MediaProviderItem.isSpoiler` and is folded into
+  the `syncMediaItemViews` items-signature so a toggle re-provides the cell. **On the wire, no Api
+  regeneration:** the server schema already defines `pageBlockPhoto#1759c560 spoiler:flags.1` /
+  `pageBlockVideo#7c8fe7b6 spoiler:flags.2`, so the bit is read/OR'd purely in `ApiUtils/InstantPage.swift`
+  (like `autoplay`/`loop`). The flag round-trips through Postbox Codable (`"sp"` key), the flatBuffers
+  `InstantPageBlock` path (`Models/InstantPageBlock.fbs` + the hand-written encode/decode — so it survives every
+  InstantPage persistence path, not just Postbox), and BOTH send converters (`ChatInputContentInstantPage`
+  composer + `InstantPageBuilder` article). **Sent/received message render** (revealable dust with first-tap
+  reveal → then gallery) is in `instantpage-richtext.md`. Design + plan:
+  `docs/superpowers/{specs,plans}/2026-07-08-richtext-media-spoiler*`. **All sim tests run on the iPhone 17 Pro
+  K3 sim.**
 - **Location maps:** a picked location is a `Block.media` with **`MediaKind.location`** whose `mediaID` resolves to
   a `TelegramMediaMap`. A map is an **id-less** `Media`, so the host mints a deterministic `"map:lat:long"` key
   (not the usual `namespace:id`). It renders inline as a map snapshot through the same `MediaItemNodeView` seam —

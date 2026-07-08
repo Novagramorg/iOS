@@ -258,10 +258,10 @@ extension InstantPageBlock {
                 if (flags & (1 << 0)) != 0, let webpageId = webpageId, webpageId != 0 {
                     webpageMediaId = MediaId(namespace: Namespaces.Media.CloudWebpage, id: webpageId)
                 }
-                self = .image(id: MediaId(namespace: Namespaces.Media.CloudImage, id: photoId), caption: InstantPageCaption(apiCaption: caption), url: url, webpageId: webpageMediaId)
+                self = .image(id: MediaId(namespace: Namespaces.Media.CloudImage, id: photoId), caption: InstantPageCaption(apiCaption: caption), url: url, webpageId: webpageMediaId, spoiler: (flags & (1 << 1)) != 0)
             case let .pageBlockVideo(pageBlockVideoData):
                 let (flags, videoId, caption) = (pageBlockVideoData.flags, pageBlockVideoData.videoId, pageBlockVideoData.caption)
-                self = .video(id: MediaId(namespace: Namespaces.Media.CloudFile, id: videoId), caption: InstantPageCaption(apiCaption: caption), autoplay: (flags & (1 << 0)) != 0, loop: (flags & (1 << 1)) != 0)
+                self = .video(id: MediaId(namespace: Namespaces.Media.CloudFile, id: videoId), caption: InstantPageCaption(apiCaption: caption), autoplay: (flags & (1 << 0)) != 0, loop: (flags & (1 << 1)) != 0, spoiler: (flags & (1 << 2)) != 0)
             case let .pageBlockCover(pageBlockCoverData):
                 let cover = pageBlockCoverData.cover
                 self = .cover(InstantPageBlock(apiBlock: cover))
@@ -388,20 +388,26 @@ extension InstantPageBlock {
             return .pageBlockBlockquoteBlocks(Api.PageBlock.Cons_pageBlockBlockquoteBlocks(blocks: blocks.compactMap { $0.apiInputBlock(mediaIdRemap: mediaIdRemap) }, caption: caption.apiRichText()))
         case let .pullQuote(text, caption):
             return .pageBlockPullquote(Api.PageBlock.Cons_pageBlockPullquote(text: text.apiRichText(), caption: caption.apiRichText()))
-        case let .image(id, caption, url, webpageId):
+        case let .image(id, caption, url, webpageId, spoiler):
             var flags: Int32 = 0
             if url != nil && webpageId != nil {
                 flags |= 1 << 0
             }
+            if spoiler {
+                flags |= 1 << 1
+            }
             let photoId = mediaIdRemap[id] ?? id.id
             return .pageBlockPhoto(Api.PageBlock.Cons_pageBlockPhoto(flags: flags, photoId: photoId, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText())), url: url, webpageId: webpageId?.id))
-        case let .video(id, caption, autoplay, loop):
+        case let .video(id, caption, autoplay, loop, spoiler):
             var flags: Int32 = 0
             if autoplay {
                 flags |= 1 << 0
             }
             if loop {
                 flags |= 1 << 1
+            }
+            if spoiler {
+                flags |= 1 << 2
             }
             let videoId = mediaIdRemap[id] ?? id.id
             return .pageBlockVideo(Api.PageBlock.Cons_pageBlockVideo(flags: flags, videoId: videoId, caption: .pageCaption(Api.PageCaption.Cons_pageCaption(text: caption.text.apiRichText(), credit: caption.credit.apiRichText()))))
