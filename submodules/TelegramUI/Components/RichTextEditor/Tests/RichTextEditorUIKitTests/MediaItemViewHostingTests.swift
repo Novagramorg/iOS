@@ -14,6 +14,23 @@ final class MediaItemViewHostingTests: XCTestCase {
         func update(size: CGSize) { updatedSizes.append(size) }
     }
 
+    /// Honors the media-view interaction contract (what the real `MediaItemNodeView` does): its `hitTest`
+    /// returns the interactive control (`control`, standing in for the more button) ONLY when the touch
+    /// lands on it, and nil (pass-through) everywhere else on the poster.
+    final class ControlStubMediaView: UIView, RichTextMediaItemView {
+        let control = UIView()
+        init() {
+            super.init(frame: .zero)
+            control.frame = CGRect(x: 8, y: 8, width: 30, height: 30)
+            addSubview(control)
+        }
+        required init?(coder: NSCoder) { fatalError() }
+        func update(size: CGSize) {}
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            return control.frame.contains(point) ? control : nil
+        }
+    }
+
     private func emptyDoc(_ blocks: [Block]) -> Document {
         Document(blocks: blocks)
     }
@@ -110,6 +127,40 @@ final class MediaItemViewHostingTests: XCTestCase {
         editor.layoutIfNeeded()
         XCTAssertEqual(count, 2, "same mediaID in two blocks -> two independent views")
         XCTAssertEqual(editor.hostedMediaCountForTesting, 2)
+    }
+
+    // The `mediaOverlay` routes a touch to a media view's interactive control when the media view claims it
+    // (hitTest returns something), and passes through (nil) otherwise so the canvas's own tap handling runs.
+    // This is the editor-side half of "if the media view returns anything from hitTest, leave it be; if not,
+    // use the default tap logic" — the gesture gate (`gestureRecognizer(_:shouldReceive:)`) consults exactly
+    // this seam. The real interactive media view (`MediaItemNodeView` + `RichTextMediaContentComponent`) lives
+    // in a Bazel-only module; `ControlStubMediaView` stands in for its hitTest contract here.
+    func testMediaOverlayRoutesControlHitTestElsePassesThrough() {
+        let editor = RichTextEditorView()
+        editor.frame = CGRect(x: 0, y: 0, width: 320, height: 600)
+        var stub: ControlStubMediaView?
+        editor.registerMediaViewProvider { _, _ in let v = ControlStubMediaView(); stub = v; return v }
+        editor.document = emptyDoc([
+            .media(MediaBlock(id: BlockID("m0"), mediaID: "m1", kind: .image,
+                              naturalSize: Size2D(width: 200, height: 100)))
+        ])
+        _ = editor.update(size: editor.frame.size, insets: .zero)
+        editor.layoutIfNeeded()
+
+        guard let stub, stub.superview != nil else { return XCTFail("media view was not hosted") }
+        let canvas = editor.canvasForTesting
+
+        // A touch on the control resolves to the control (the editor must "leave it be").
+        let controlInStub = CGPoint(x: stub.control.frame.midX, y: stub.control.frame.midY)
+        let controlCanvasPoint = stub.convert(controlInStub, to: canvas)
+        XCTAssertTrue(canvas.mediaControlHitTest(atCanvasPoint: controlCanvasPoint) === stub.control,
+                      "a touch on the media control routes to the control")
+
+        // A touch on the poster (inside the media view, away from the control) passes through (nil).
+        let posterInStub = CGPoint(x: stub.bounds.midX, y: stub.bounds.maxY - 2)
+        let posterCanvasPoint = stub.convert(posterInStub, to: canvas)
+        XCTAssertNil(canvas.mediaControlHitTest(atCanvasPoint: posterCanvasPoint),
+                     "a touch on the poster area passes through so the editor's default tap logic runs")
     }
 }
 #endif

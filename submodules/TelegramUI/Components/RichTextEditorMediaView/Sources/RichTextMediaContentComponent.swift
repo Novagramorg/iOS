@@ -7,11 +7,15 @@ import TelegramCore
 import SwiftSignalKit
 import PhotoResources
 import RadialStatusNode
+import LottieComponent
+import GlassBackgroundComponent
 
 /// A composable ComponentFlow renderer for ONE rich-text still image or video poster. Owns its
 /// own `TransformImageNode` + media-fetch signal + aspect-fill layout, decoupled from
-/// `InstantPageImageNode`. Non-interactive today (auto-fetch, no tap); built as a plain
-/// `Component` so tap/long-press and a future mosaic/slideshow wrapper can compose it without
+/// `InstantPageImageNode`. Carries a glass "more" button; interaction is **control-scoped** — the
+/// `View.hitTest` returns a control ONLY when the touch lands on it (the poster passes through to the
+/// editor's own tap handling), which is how the button is tappable without stealing caret/media-select
+/// taps. Built as a plain `Component` so a future mosaic/slideshow wrapper can compose it without
 /// structural change. Location (`.geo`) and audio are handled by `MediaItemNodeView`, not here.
 @available(iOS 13.0, *)
 public final class RichTextMediaContentComponent: Component {
@@ -24,48 +28,87 @@ public final class RichTextMediaContentComponent: Component {
     }
 
     public static func ==(lhs: RichTextMediaContentComponent, rhs: RichTextMediaContentComponent) -> Bool {
-        // Identity, NOT a per-layout-changing value: resizes (the editor's per-pass update)
-        // must not rebind the signal. Only a media change rebinds.
-        if lhs.context !== rhs.context { return false }
-        if lhs.media.id != rhs.media.id { return false }
+        if lhs.context !== rhs.context {
+            return false
+        }
+        if lhs.media.id != rhs.media.id {
+            return false
+        }
         return true
+    }
+    
+    private final class ButtonView: UIView {
+        
     }
 
     public final class View: UIView {
         private let imageNode = TransformImageNode()
         private var statusNode: RadialStatusNode?
         private let fetchDisposable = MetaDisposable()
+        
+        private let moreButtonBackgroundContainer: GlassBackgroundContainerView
+        private let moreButton: HighlightTrackingButton
+        private let moreButtonBackground: GlassBackgroundView
+        private let moreButtonIcon = ComponentView<Empty>()
 
         private var boundMediaId: EngineMedia.Id?
         private var didBind = false
         private var dimensions: PixelDimensions?
         private var isVideo = false
         private var currentSize: CGSize?
+        
+        private var component: RichTextMediaContentComponent?
+        private weak var state: EmptyComponentState?
 
         override init(frame: CGRect) {
+            self.moreButton = HighlightTrackingButton()
+            self.moreButtonBackgroundContainer = GlassBackgroundContainerView()
+            self.moreButtonBackground = GlassBackgroundView()
+            
             super.init(frame: frame)
-            self.isUserInteractionEnabled = false
+            
             self.addSubview(self.imageNode.view)
-        }
-        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-        deinit { self.fetchDisposable.dispose() }
-
-        func update(component: RichTextMediaContentComponent, availableSize: CGSize, transition: ComponentTransition) -> CGSize {
-            if !self.didBind || self.boundMediaId != component.media.id {
-                self.bind(component: component)
-                self.didBind = true
-                self.boundMediaId = component.media.id
-                self.currentSize = nil   // force a re-layout against the new media's aspect
+            
+            self.moreButtonBackground.isUserInteractionEnabled = false
+            self.moreButton.addSubview(self.moreButtonBackground)
+            self.moreButtonBackgroundContainer.contentView.addSubview(self.moreButton)
+            self.addSubview(self.moreButtonBackgroundContainer)
+            
+            self.moreButton.addTarget(self, action: #selector(self.moreButtonPressed), for: .touchUpInside)
+            self.moreButton.highligthedChanged = { [weak self] highlighted in
+                guard let self else {
+                    return
+                }
+                let transition: ComponentTransition = highlighted ? .immediate : .easeInOut(duration: 0.25)
+                transition.setAlpha(view: self.moreButton, alpha: highlighted ? 0.6 : 1.0)
             }
-
-            if self.currentSize != availableSize {
-                self.currentSize = availableSize
-                self.layoutContent(availableSize: availableSize, component: component)
-            }
-            return availableSize
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        deinit {
+            self.fetchDisposable.dispose()
         }
 
-        private func bind(component: RichTextMediaContentComponent) {
+        /// Only the interactive chrome (the more button) claims a touch; the image/video poster area
+        /// returns nil so the touch passes through to the editor, which runs its own tap handling
+        /// (caret placement / media-select highlight). Routes through the button's
+        /// `GlassBackgroundContainerView`, whose own `hitTest` already returns the button when hit and
+        /// nil otherwise. Add any future interactive controls to this override.
+        public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            let inButton = self.moreButtonBackgroundContainer.convert(point, from: self)
+            return self.moreButtonBackgroundContainer.hitTest(inButton, with: event)
+        }
+
+        @objc private func moreButtonPressed() {
+        }
+        
+        func update(component: RichTextMediaContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+            self.state = state
+            
             let context = component.context
             self.fetchDisposable.set(nil)
             self.statusNode?.view.removeFromSuperview()
@@ -91,9 +134,7 @@ public final class RichTextMediaContentComponent: Component {
             }
             // else: unexpected media kind (.geo / audio reach here only by misuse) — leave the
             // node blank rather than crash.
-        }
-
-        private func layoutContent(availableSize: CGSize, component: RichTextMediaContentComponent) {
+            
             self.imageNode.frame = CGRect(origin: .zero, size: availableSize)
 
             let emptyColor = component.context.sharedContext.currentPresentationData.with { $0 }.theme.list.mediaPlaceholderColor
@@ -116,11 +157,39 @@ public final class RichTextMediaContentComponent: Component {
                 let statusSize: CGFloat = max(18.0, min(50.0, floor(min(availableSize.width, availableSize.height) * 0.7)))
                 statusNode.frame = CGRect(x: floorToScreenPixels((availableSize.width - statusSize) / 2.0), y: floorToScreenPixels((availableSize.height - statusSize) / 2.0), width: statusSize, height: statusSize)
             }
-        }
-
-        override public func layoutSubviews() {
-            super.layoutSubviews()
-            self.imageNode.frame = self.bounds
+            
+            let buttonSize = CGSize(width: 36.0, height: 36.0)
+            let buttonHorizontalInset: CGFloat = 8.0
+            let buttonVerticalInset: CGFloat = 8.0
+            
+            let moreButtonFrame = CGRect(origin: CGPoint(x: buttonHorizontalInset, y: buttonVerticalInset), size: buttonSize)
+            
+            transition.setFrame(view: self.moreButtonBackgroundContainer, frame: moreButtonFrame)
+            self.moreButtonBackgroundContainer.update(size: buttonSize, isDark: true, transition: transition)
+            
+            transition.setFrame(view: self.moreButtonBackground, frame: CGRect(origin: CGPoint(), size: moreButtonFrame.size))
+            self.moreButtonBackground.update(size: moreButtonFrame.size, cornerRadius: moreButtonFrame.height * 0.5, isDark: true, tintColor: .init(kind: .panel), transition: transition)
+            
+            transition.setFrame(view: self.moreButton, frame: CGRect(origin: CGPoint(), size: moreButtonFrame.size))
+            
+            let buttonIconSize = self.moreButtonIcon.update(
+                transition: transition,
+                component: AnyComponent(LottieComponent(
+                    content: LottieComponent.AppBundleContent(name: "anim_baremoredots"),
+                    color: .white,
+                    startingPosition: .begin
+                )),
+                environment: {},
+                containerSize: buttonSize
+            )
+            if let moreButtonIconView = self.moreButtonIcon.view {
+                if moreButtonIconView.superview == nil {
+                    self.moreButtonBackground.contentView.addSubview(moreButtonIconView)
+                }
+                transition.setFrame(view: moreButtonIconView, frame: buttonIconSize.centered(in: CGRect(origin: CGPoint(), size: buttonSize)))
+            }
+            
+            return availableSize
         }
     }
 
@@ -129,6 +198,6 @@ public final class RichTextMediaContentComponent: Component {
     }
 
     public func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
-        return view.update(component: self, availableSize: availableSize, transition: transition)
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }

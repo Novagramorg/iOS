@@ -220,6 +220,26 @@ public struct ChatInputContent: Equatable {
         }
     }
 
+    /// Like `isEmpty`, but a block whose text is only whitespace/newlines counts as empty. Unlike `isEmpty`
+    /// this is NOT short-circuited on block COUNT: several blank paragraphs are still "empty" here (their only
+    /// content is inter-block newlines), whereas `isEmpty` treats 2+ blocks as non-empty. A `.media`/`.table`/
+    /// `.blockQuote` block is still content (never whitespace-empty). Used by the composer's expand-button
+    /// affordance, which must stay hidden for a field that is tall only because of blank lines.
+    public var isEmptyWhitespaceTrimmed: Bool {
+        return self.blocks.allSatisfy { block in
+            switch block {
+            case let .paragraph(paragraph):
+                return paragraph.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case let .code(code):
+                return code.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case let .pullQuote(pq):
+                return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .media, .table, .blockQuote:
+                return false
+            }
+        }
+    }
+
     /// Options that tune which blocks `isEntityExpressible(options:)` accepts on the plain text + entities path.
     public struct EntityExpressibleOptions: OptionSet {
         public let rawValue: Int32

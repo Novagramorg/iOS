@@ -20,6 +20,8 @@ swift_library(
         "//submodules/MediaResources:MediaResources",
         "//submodules/RadialStatusNode:RadialStatusNode",
         "//submodules/SSignalKit/SwiftSignalKit:SwiftSignalKit",
+        "//submodules/TelegramUI/Components/LottieComponent",
+        "//submodules/TelegramUI/Components/GlassBackgroundComponent",
     ],
     visibility = [
         "//visibility:public",

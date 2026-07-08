@@ -58,7 +58,9 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
             self.layer.masksToBounds = true
         }
     }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     public func update(size: CGSize) {
         self.imageView?.frame = CGRect(origin: .zero, size: size)
@@ -76,5 +78,27 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
         self.imageView?.frame = self.bounds
         self.audioView?.frame = self.bounds
         self.contentHost?.frame = self.bounds
+    }
+
+    /// The editor treats media as non-interactive EXCEPT for the interactive controls the photo/video
+    /// renderer exposes (the more button). Only a hit that resolves to such a control claims the touch;
+    /// everything else — the poster area, and the audio/location branches entirely — returns nil so the
+    /// touch falls through to the editor's own tap handling. `RichTextMediaContentComponent.View` already
+    /// returns the button-or-nil, so a hit that merely bottoms out on the hosting container is treated as
+    /// "no control touched". Guarded by the standard visibility/point-inside checks so a culled (hidden)
+    /// media view never claims a touch.
+    override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !self.isHidden, self.isUserInteractionEnabled, self.alpha > 0.01,
+              self.point(inside: point, with: event) else {
+            return nil
+        }
+        guard let host = self.contentHost else {
+            return nil   // audio / location — non-interactive, as before
+        }
+        let inHost = host.convert(point, from: self)
+        guard let hit = host.hitTest(inHost, with: event), hit !== host else {
+            return nil   // poster area (no control under the touch)
+        }
+        return hit
     }
 }

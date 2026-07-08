@@ -527,7 +527,11 @@ public final class ChatInterfaceState: Codable, Equatable {
     public let postSuggestionState: PostSuggestionState?
     
     public var synchronizeableInputState: SynchronizeableChatInputState? {
-        if self.composeInputState.inputText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && self.replyMessageSubject == nil {
+        // Content-aware emptiness (NOT flat-text): a media/table block has empty `inputText.string` but IS
+        // content, so gating on `inputText.string...isEmpty` dropped a media-only draft — it never synced, and
+        // `parse` overrides the composer back to empty from the nil synchronizeable form on restore, losing it.
+        // `isEmptyWhitespaceTrimmed` keeps whitespace-only text treated as empty while preserving media/table drafts.
+        if self.composeInputState.content.isEmptyWhitespaceTrimmed && self.replyMessageSubject == nil {
             return nil
         } else {
             // Build the draft body through the structural model. The common case — content the entity set can

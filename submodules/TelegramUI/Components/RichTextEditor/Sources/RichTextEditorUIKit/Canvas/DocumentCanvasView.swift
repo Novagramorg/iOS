@@ -85,9 +85,12 @@ final class DocumentCanvasView: UIView {
     /// Hosted media views, keyed by the OWNING block's `BlockID` (the occurrence) so edits/undo reuse —
     /// not recreate — them, and two blocks sharing one `mediaID` get two independent views.
     var mediaItemViews: [BlockID: HostedMediaItem] = [:]
-    /// Non-interactive container for media views (canvas coords). Kept below the chrome overlay; above
-    /// block backing views so a full-bleed medium overlays its block.
-    let mediaOverlay = UIView()
+    /// Pass-through container for media views (canvas coords). Kept below the chrome overlay; above block
+    /// backing views so a full-bleed medium overlays its block. It is user-interaction-ENABLED but its
+    /// `hitTest` returns a subview only when the touch lands on an interactive media control (e.g. the
+    /// more button) — otherwise nil, so the touch falls through to the canvas's own tap handling. See
+    /// `MediaPassthroughOverlayView`.
+    let mediaOverlay = MediaPassthroughOverlayView()
     /// Hide a media view when its canvas frame is more than this far outside the visible viewport.
     var mediaCullMargin: CGFloat = 50
     /// Pooled dust views, keyed by spoiler-run identity so a hidden run keeps its animating emitter across
@@ -504,7 +507,7 @@ final class DocumentCanvasView: UIView {
         emojiOverlay.isUserInteractionEnabled = false
         emojiOverlay.backgroundColor = .clear
         addSubview(emojiOverlay)
-        mediaOverlay.isUserInteractionEnabled = false
+        mediaOverlay.isUserInteractionEnabled = true   // pass-through: only interactive media controls claim a touch (see MediaPassthroughOverlayView)
         mediaOverlay.backgroundColor = .clear
         addSubview(mediaOverlay)   // above block backing views, below the selection wash / chrome
         spoilerOverlay.isUserInteractionEnabled = false

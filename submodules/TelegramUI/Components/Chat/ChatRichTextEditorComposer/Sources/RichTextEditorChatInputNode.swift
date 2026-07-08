@@ -311,6 +311,31 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         }
         return self.editorView.document.blocks.compactMap(blockText).joined(separator: "\n")
     }
+
+    // Content-aware emptiness read STRAIGHT from the live document (like `text` — no ChatInputContent build,
+    // no emoji/media resolvers). A direct walk is REQUIRED: `chatInputContent(fromDocument:)` with absent
+    // resolvers DROPS an unresolvable media block, which would reintroduce the "media reads as empty" bug.
+    public var inputContentIsEmpty: Bool {
+        let blocks = self.editorView.document.blocks
+        guard blocks.count <= 1 else { return false }
+        guard let block = blocks.first else { return true }
+        switch block {
+        case let .paragraph(p): return p.text.isEmpty
+        case let .code(c): return c.text.isEmpty
+        case let .pullQuote(pq): return pq.text.isEmpty
+        case .media, .table, .blockQuote: return false
+        }
+    }
+    public var inputContentIsEmptyWhitespaceTrimmed: Bool {
+        return self.editorView.document.blocks.allSatisfy { block in
+            switch block {
+            case let .paragraph(p): return p.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case let .code(c): return c.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case let .pullQuote(pq): return pq.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .media, .table, .blockQuote: return false
+            }
+        }
+    }
     // MARK: ChatInputContent model — the STRUCTURAL draft currency (direct bridge)
 
     /// The node's content as the canonical `ChatInputContent` value model. This is the chat layer's draft/state

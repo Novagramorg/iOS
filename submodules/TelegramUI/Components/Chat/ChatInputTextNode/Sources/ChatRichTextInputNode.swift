@@ -105,6 +105,17 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// The editor's plain-text string (read-only convenience for length/counter checks).
     var text: String { get }
 
+    /// Whether the editor currently holds NO content. Content-aware (mirrors `ChatInputContent.isEmpty`) —
+    /// NOT flat-text-aware, so a lone media/table block reads as non-empty even though its flat text is empty.
+    /// The default implementation answers from `attributedText` length (correct for the legacy backend, which
+    /// has no non-text blocks); the native backend overrides it with a direct document walk.
+    var inputContentIsEmpty: Bool { get }
+
+    /// As `inputContentIsEmpty`, but a block whose text is only whitespace counts as empty (mirrors
+    /// `ChatInputContent.isEmptyWhitespaceTrimmed`). Drives the composer's expand-button affordance, which stays
+    /// hidden for a field that is tall only because of blank lines. Same backend split as `inputContentIsEmpty`.
+    var inputContentIsEmptyWhitespaceTrimmed: Bool { get }
+
     /// Apply host theme colors to the editor. No-op on the legacy `UITextView` backend (it themes via
     /// `inputTheme`/`refreshTextInputAttributes`); the RichTextEditor backend maps these into its
     /// `RichTextEditorTheme`.
@@ -346,6 +357,12 @@ public protocol ChatRichTextInputNode: AnyObject {
 }
 
 public extension ChatRichTextInputNode {
+    var inputContentIsEmpty: Bool {
+        return (self.attributedText?.length ?? 0) == 0
+    }
+    var inputContentIsEmptyWhitespaceTrimmed: Bool {
+        return (self.attributedText?.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ?? true
+    }
     func currentInputContent() -> (content: ChatInputContent, selection: ChatInputSelection) {
         let attr = self.attributedText ?? NSAttributedString()
         let content = chatInputContent(from: attr)

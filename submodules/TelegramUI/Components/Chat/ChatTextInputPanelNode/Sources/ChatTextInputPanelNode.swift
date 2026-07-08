@@ -1685,10 +1685,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             }
         }
         
-        var inputHasText = false
-        if let attributedText = self.richTextInputNode?.attributedText, attributedText.length != 0 {
-            inputHasText = true
-        }
+        let inputHasText = !(self.richTextInputNode?.inputContentIsEmpty ?? true)
         
         var hasMenuButton = false
         var menuButtonExpanded = false
@@ -3747,11 +3744,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             // text row. It appears whenever the field is tall enough (multi-line) to have room above the send
             // button, on all panel widths.
             let isTallPanel = actualTextFieldFrame.height >= 70.0
-            var inputText = ""
-            if let attributedText = self.richTextInputNode?.attributedText {
-                inputText = attributedText.string.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            let inputHasText = !inputText.isEmpty
+            let inputHasText = !(self.richTextInputNode?.inputContentIsEmptyWhitespaceTrimmed ?? true)
 
             let cornerAlpha: CGFloat = (isTallPanel && inputHasText) ? 1.0 : 0.0
             self.heightDependentExpandButtonAlpha = isTallPanel ? 1.0 : 0.0
@@ -4432,10 +4425,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
     }
     
     private func updateTextNodeText(animated: Bool) {
-        var inputHasText = false
-        if let attributedText = self.richTextInputNode?.attributedText, attributedText.length != 0 {
-            inputHasText = true
-        }
+        let inputHasText = !(self.richTextInputNode?.inputContentIsEmpty ?? true)
         
         var isScheduledMessages = false
         if case .scheduledMessages = self.presentationInterfaceState?.subject {
@@ -4454,11 +4444,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         
         if let expandButton = self.expandButton {
             let transition: ContainedViewLayoutTransition = .immediate
-            var inputText = ""
-            if let attributedText = self.richTextInputNode?.attributedText {
-                inputText = attributedText.string.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            let inputHasText = !inputText.isEmpty
+            let inputHasText = !(self.richTextInputNode?.inputContentIsEmptyWhitespaceTrimmed ?? true)
 
             let cornerAlpha: CGFloat = inputHasText ? self.heightDependentExpandButtonAlpha : 0.0
             ComponentTransition(transition).setAlpha(view: expandButton.button, alpha: cornerAlpha)

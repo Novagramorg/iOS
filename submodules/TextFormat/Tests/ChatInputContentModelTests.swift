@@ -420,4 +420,34 @@ final class ChatInputContentModelTests: XCTestCase {
         )
         XCTAssertEqual(page.plainText, "a\nb\nc")
     }
+
+    func test_isEmptyWhitespaceTrimmed_contentAwareAndWhitespaceTrimmed() {
+        func p(_ s: String) -> ChatInputBlock { .paragraph(ChatInputParagraph(style: .body, runs: s.isEmpty ? [] : [ChatInputRun(text: s)])) }
+        let image = TelegramMediaImage(imageId: MediaId(namespace: 0, id: 7), representations: [], immediateThumbnailData: nil, reference: nil, partialReference: nil, flags: [])
+        let media = ChatInputMedia(media: image, kind: .image, naturalSize: ChatInputSize(width: 1.0, height: 1.0))
+        let table = ChatInputTable(columns: [ChatInputColumnSpec(width: 10.0)], rows: [])
+
+        // Whitespace-only text is EMPTY here — including several blank paragraphs (unlike raw isEmpty).
+        XCTAssertTrue(ChatInputContent().isEmptyWhitespaceTrimmed)                                     // no blocks
+        XCTAssertTrue(ChatInputContent(blocks: [p("   ")]).isEmptyWhitespaceTrimmed)                   // spaces only
+        XCTAssertTrue(ChatInputContent(blocks: [p("\n\t ")]).isEmptyWhitespaceTrimmed)                 // mixed whitespace
+        XCTAssertTrue(ChatInputContent(blocks: [p(""), p(""), p("")]).isEmptyWhitespaceTrimmed)        // several blank paragraphs
+        XCTAssertTrue(ChatInputContent(blocks: [.code(ChatInputCode(runs: []))]).isEmptyWhitespaceTrimmed) // empty code
+        XCTAssertTrue(ChatInputContent(blocks: [.pullQuote(ChatInputPullQuote(runs: [ChatInputRun(text: "  ")]))]).isEmptyWhitespaceTrimmed) // whitespace pull quote
+
+        // Non-whitespace text is NOT empty.
+        XCTAssertFalse(ChatInputContent(blocks: [p("a")]).isEmptyWhitespaceTrimmed)
+        XCTAssertFalse(ChatInputContent(blocks: [p("  x  ")]).isEmptyWhitespaceTrimmed)
+        XCTAssertFalse(ChatInputContent(blocks: [p("  "), p("x")]).isEmptyWhitespaceTrimmed)
+
+        // Structural blocks are ALWAYS content — the media / empty-table fix.
+        XCTAssertFalse(ChatInputContent(blocks: [.media(media)]).isEmptyWhitespaceTrimmed)
+        XCTAssertFalse(ChatInputContent(blocks: [.table(table)]).isEmptyWhitespaceTrimmed)             // empty table
+        XCTAssertFalse(ChatInputContent(blocks: [p("  "), .table(table)]).isEmptyWhitespaceTrimmed)    // whitespace + table
+        XCTAssertFalse(ChatInputContent(blocks: [.blockQuote(ChatInputBlockQuote(content: ChatInputContent(blocks: [p("")]), collapsed: true))]).isEmptyWhitespaceTrimmed)
+
+        // Contrast with raw isEmpty: several blank paragraphs are NON-empty raw, but whitespace-empty here.
+        XCTAssertFalse(ChatInputContent(blocks: [p(""), p("")]).isEmpty)
+        XCTAssertTrue(ChatInputContent(blocks: [p(""), p("")]).isEmptyWhitespaceTrimmed)
+    }
 }

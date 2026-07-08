@@ -11,6 +11,11 @@ extension DocumentCanvasView {
             // wait out the `N`s multi-tap window, which was the reported tap-to-caret latency.
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
             tap.numberOfTapsRequired = 1
+            // Delegate = self so `gestureRecognizer(_:shouldReceive:)` is consulted: a touch that lands on
+            // an interactive media control (the more button) is NOT received by the tap recognizer, so the
+            // control gets a clean touch sequence (the recognizer can't cancel it) and the editor's default
+            // media-select tap does not also fire.
+            tap.delegate = self
             // The loupe/caret-drag delay adapts to the touch's PROXIMITY to the caret: near-instant when it lands
             // within `loupeNearCursorRadius` of the cursor (grab-the-cursor), longer otherwise. `minimumPressDuration`
             // is chosen per-touch in the recognizer's `touchesBegan` from `loupeDelayNearCursor` / `loupeDelayFarFromCursor`.
@@ -495,7 +500,25 @@ extension DocumentCanvasView: UIGestureRecognizerDelegate {
         return isSelectionDragTouch(g.location(in: self))
     }
 
+    /// If a touch lands on an interactive media control, NONE of the canvas's own recognizers receive it —
+    /// the control (e.g. the more button) handles it exclusively. This is what makes a media control tappable:
+    /// otherwise the tap recognizer would `cancelsTouchesInView` the control's touch AND run the editor's
+    /// default media-select. A touch anywhere else (poster area included) is received normally, so the default
+    /// tap handling runs. Matches: "if the media view returns anything from hitTest, leave it be; if not, use
+    /// the default tap logic." Gates every canvas recognizer with delegate == self (tap / loupe / handle pan).
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        return mediaControlHitTest(atCanvasPoint: touch.location(in: self)) == nil
+    }
+
     // MARK: - Gesture predicates
+
+    /// The interactive media control (if any) under `point` (canvas coords), by routing the point through the
+    /// `mediaOverlay` pass-through `hitTest`. Non-nil ⇒ a control (e.g. the more button) owns the touch and the
+    /// canvas's recognizers must yield (see `gestureRecognizer(_:shouldReceive:)`); nil ⇒ default tap handling.
+    /// Exposed as a named seam so the routing is unit-testable without synthesizing a `UITouch`.
+    func mediaControlHitTest(atCanvasPoint point: CGPoint) -> UIView? {
+        return mediaOverlay.hitTest(convert(point, to: mediaOverlay), with: nil)
+    }
 
     /// Whether the loupe / move-cursor long-press should be allowed to begin at `point`. It yields to an
     /// active selection handle (an "active item") so the handle can be grabbed — everywhere else (including a

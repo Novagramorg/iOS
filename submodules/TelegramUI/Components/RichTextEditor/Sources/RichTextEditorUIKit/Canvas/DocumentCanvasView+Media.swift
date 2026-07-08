@@ -19,7 +19,10 @@ extension DocumentCanvasView {
                 hosted = h
             } else if let v = mediaViewProvider(media.mediaID, CGSize(width: media.naturalSize.width,
                                                                       height: media.naturalSize.height)) {
-                v.isUserInteractionEnabled = false
+                // Interaction-enabled so its `hitTest` is consulted, but the media view only claims a
+                // touch that lands on one of its interactive controls (the more button); the poster area
+                // returns nil and the touch falls through to the editor. See MediaPassthroughOverlayView.
+                v.isUserInteractionEnabled = true
                 hosted = HostedMediaItem(view: v, canvasFrame: canvasRect)
                 mediaItemViews[media.id] = hosted
             } else {
@@ -54,5 +57,19 @@ extension DocumentCanvasView {
     // MARK: Test accessors
     var hostedMediaCountForTesting: Int { mediaItemViews.count }
     func hostedMediaViewForTesting(_ id: BlockID) -> RichTextMediaItemView? { mediaItemViews[id]?.view }
+}
+
+/// The `mediaOverlay` container. A full-bounds, visually-transparent pass-through: its `hitTest` returns
+/// a hosted media view's subview ONLY when that media view claims the touch (i.e. the touch lands on an
+/// interactive control such as the more button, per `MediaItemNodeView.hitTest`). Otherwise it returns
+/// nil — NOT itself — so the canvas's own tap/caret/selection handling runs for taps on the media poster
+/// and everywhere else. It must stay user-interaction-enabled or its `hitTest` (and the media views'
+/// below it) would be skipped entirely.
+@available(iOS 13.0, *)
+final class MediaPassthroughOverlayView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let result = super.hitTest(point, with: event)
+        return result === self ? nil : result
+    }
 }
 #endif
