@@ -259,6 +259,22 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             return factory(EngineMedia(media), naturalSize)
         }
 
+        // Bridge the editor's account-free media-control request to the owner-facing context: resolve the
+        // concrete media from the opaque mediaID (may repeat across blocks — the request's `delete` is
+        // already bound to the exact occurrence) and hand the panel a MediaControlContext.
+        self.editorView.onRequestMediaControl = { [weak self] request in
+            guard let self, let media = self.mediaByID[request.mediaID] else { return }
+            self.onRequestMediaControl?(MediaControlContext(
+                media: EngineMedia(media),
+                control: request.control,
+                sourceView: request.view,
+                sourceRect: request.sourceRect,
+                delete: request.delete,
+                replace: request.replace,
+                addMore: request.addMore
+            ))
+        }
+
         // Checklist checkbox rendering. The editor hosts each checklist item's checkbox via this provider,
         // asking for the current `checked` state. Build a `CheckNode`-backed view themed from the checkbox
         // colors threaded across the `ChatRichTextThemeColors` seam (the node holds no `PresentationTheme`).
@@ -570,6 +586,9 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         get { self.editorView.onRequestTableStructuralMenu }
         set { self.editorView.onRequestTableStructuralMenu = newValue }
     }
+
+    /// Set by the panel; invoked (with a resolved `EngineMedia`) when the editor reports a media control tap.
+    public var onRequestMediaControl: ((MediaControlContext) -> Void)?
 
     public var canPasteMedia: (() -> Bool)? { didSet { self.editorView.canPasteMedia = canPasteMedia } }
     public var onPasteMedia: (() -> Bool)? { didSet { self.editorView.onPasteMedia = onPasteMedia } }

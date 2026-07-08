@@ -58,6 +58,34 @@ public enum ChatRichTextFormatAction {
     case bold, italic, monospace, strikethrough, underline, spoiler, quote, pullQuote, code, date
 }
 
+/// The owner-facing media-control descriptor: the resolved `EngineMedia` ("what we're dealing with") plus
+/// occurrence-bound operations ("how to act on it") and the anchor. Built by the native rich-text node from
+/// the editor's account-free `MediaControlRequest` (resolving `EngineMedia` from its media store) and handed
+/// to the panel, which builds its own owner-specific menu. `replace`/`addMore` are reserved (nil until built).
+@available(iOS 13.0, *)
+public struct MediaControlContext {
+    public let media: EngineMedia
+    public let control: RichTextMediaControlKind
+    public let sourceView: UIView?
+    public let sourceRect: CGRect
+    public let delete: () -> Void
+    public let replace: ((String, CGSize, MediaKind) -> Void)?
+    public let addMore: ((String, CGSize, MediaKind) -> Void)?
+
+    public init(media: EngineMedia, control: RichTextMediaControlKind, sourceView: UIView?, sourceRect: CGRect,
+                delete: @escaping () -> Void,
+                replace: ((String, CGSize, MediaKind) -> Void)?,
+                addMore: ((String, CGSize, MediaKind) -> Void)?) {
+        self.media = media
+        self.control = control
+        self.sourceView = sourceView
+        self.sourceRect = sourceRect
+        self.delete = delete
+        self.replace = replace
+        self.addMore = addMore
+    }
+}
+
 /// Protocol seam for the chat composer's text editor. Implemented today by
 /// `ChatRichTextInputNodeImpl` (which composes the existing `ChatInputTextNode`);
 /// intended to be implemented directly by the TextKit-2 RichTextEditor later.
@@ -286,6 +314,10 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// Fired when the native editor wants its table row/column structural menu presented; the PANEL presents it
     /// as a ContextController. No-op on the legacy backend (it has no tables).
     var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)? { get set }
+
+    /// Fired when a media control (the more button; the "+" later) is tapped; the PANEL presents an
+    /// owner-specific menu. No-op on the legacy backend (its editor has no inline media).
+    var onRequestMediaControl: ((MediaControlContext) -> Void)? { get set }
 
     /// Pasting media (image/gif/video/sticker) is a host concern. The PANEL sets these so the native editor
     /// can delegate a media paste back to the chat send flow. `canPasteMedia` gates whether the editor offers
@@ -955,6 +987,9 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
 
     // The legacy backend has no tables; this hook is never fired.
     var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)?
+
+    // The legacy backend has no inline media; this hook is never fired.
+    var onRequestMediaControl: ((MediaControlContext) -> Void)?
 
     // The legacy path routes media via `chatInputTextNodeShouldPaste`; these hooks are never read.
     public var canPasteMedia: (() -> Bool)?

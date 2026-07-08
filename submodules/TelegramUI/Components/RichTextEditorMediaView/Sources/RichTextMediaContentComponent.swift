@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import ComponentFlow
 import Display
+import RichTextEditorUIKit
 import AccountContext
 import TelegramCore
 import SwiftSignalKit
@@ -21,6 +22,10 @@ import GlassBackgroundComponent
 public final class RichTextMediaContentComponent: Component {
     public let context: AccountContext
     public let media: EngineMedia
+
+    /// Set by `MediaItemNodeView`; fired when an interactive control is tapped. Not part of `==` (identity
+    /// equality must hold across resizes so the fetch binds once).
+    var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
 
     public init(context: AccountContext, media: EngineMedia) {
         self.context = context
@@ -103,6 +108,8 @@ public final class RichTextMediaContentComponent: Component {
         }
 
         @objc private func moreButtonPressed() {
+            self.component?.onControlTapped?(.more, self.moreButtonBackgroundContainer,
+                                             self.moreButtonBackgroundContainer.bounds)
         }
         
         func update(component: RichTextMediaContentComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {

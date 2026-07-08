@@ -163,6 +163,14 @@ public final class RichTextEditorView: UIView, UIScrollViewDelegate {
         set { canvas.onRequestTableStructuralMenu = newValue }
     }
 
+    /// Fired when a media control (the "more" button; the "+" later) is tapped, with an account-free
+    /// `MediaControlRequest` — the opaque mediaID + occurrence-bound operation closures. The host resolves
+    /// the concrete media and presents its own menu. Mirrors `onRequestTableStructuralMenu`. Unset ⇒ no menu.
+    public var onRequestMediaControl: ((MediaControlRequest) -> Void)? {
+        get { canvas.onRequestMediaControl }
+        set { canvas.onRequestMediaControl = newValue }
+    }
+
     /// A read-only snapshot of the editor at the current selection — drives a host toolbar's per-action
     /// availability + selected state. Pure: never mutates or fires `onChange`.
     public struct EditorState: Equatable {

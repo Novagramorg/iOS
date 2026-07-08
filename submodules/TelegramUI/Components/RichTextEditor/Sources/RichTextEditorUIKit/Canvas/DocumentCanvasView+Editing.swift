@@ -178,6 +178,15 @@ extension DocumentCanvasView {
         anchor = caret; head = caret
     }
 
+    /// Removes the media block identified by its occurrence `BlockID` — NOT by `mediaID`, which may be shared
+    /// by several blocks. Routes through the same path as the image edit-menu "Delete" (`deleteImageBox`):
+    /// remove the block, merge the caret up, never leave a zero-block document. No-op when no block has `id`.
+    /// Owns its own `editing { }` (one undo step).
+    func deleteMediaBlock(id: BlockID) {
+        guard let index = boxes.firstIndex(where: { $0.id == id }) else { return }
+        editing { self.deleteImageBox(at: index) }
+    }
+
     /// Replaces the media block at `index` with a fresh EMPTY body paragraph, placing the caret in it.
     /// Backspace on a (tap-selected, object-replacement-selected, or caption-start) media block turns the
     /// media into an empty paragraph IN PLACE — distinct from `deleteImageBox`, which removes the block and

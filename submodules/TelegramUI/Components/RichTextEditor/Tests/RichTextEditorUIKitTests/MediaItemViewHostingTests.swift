@@ -12,6 +12,7 @@ final class MediaItemViewHostingTests: XCTestCase {
         init(mediaID: String) { self.mediaID = mediaID; super.init(frame: .zero) }
         required init?(coder: NSCoder) { fatalError() }
         func update(size: CGSize) { updatedSizes.append(size) }
+        var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
     }
 
     /// Honors the media-view interaction contract (what the real `MediaItemNodeView` does): its `hitTest`
@@ -26,6 +27,7 @@ final class MediaItemViewHostingTests: XCTestCase {
         }
         required init?(coder: NSCoder) { fatalError() }
         func update(size: CGSize) {}
+        var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
             return control.frame.contains(point) ? control : nil
         }

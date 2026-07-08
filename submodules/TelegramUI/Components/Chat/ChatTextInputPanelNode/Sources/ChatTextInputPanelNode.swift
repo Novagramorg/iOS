@@ -1149,6 +1149,28 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
                 self?.interfaceInteraction?.presentGlobalOverlayController(controller, nil)
             }
         }
+        richTextInputNode.onRequestMediaControl = { [weak self] context in
+            guard let self, let anchor = context.sourceView else { return }
+            let presentationData = self.context?.sharedContext.currentPresentationData.with { $0 }
+            guard let presentationData else { return }
+            switch context.control {
+            case .more:
+                let items: [ContextMenuItem] = [
+                    .action(ContextMenuActionItem(
+                        text: "Delete",
+                        textColor: .destructive,
+                        icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) },
+                        action: { _, f in f(.default); context.delete() }
+                    ))
+                ]
+                presentMediaControlMenu(anchorView: anchor, items: items,
+                                        presentationData: presentationData) { [weak self] controller in
+                    self?.interfaceInteraction?.presentGlobalOverlayController(controller, nil)
+                }
+            case .add:
+                break   // the "+" button is not built yet
+            }
+        }
         // Report "typing…" chat activity on a genuine text edit. The legacy backend gets this from
         // `chatInputTextNode(shouldChangeTextIn:)`; the native editor never calls that delegate, so it fires
         // this hook instead (and gates out caret moves / programmatic content sets — see the node).

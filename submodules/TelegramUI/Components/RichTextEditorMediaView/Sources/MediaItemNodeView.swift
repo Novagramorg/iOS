@@ -62,6 +62,12 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// Editor-set control-tap hook. Only the photo/video branch has interactive controls; audio/location
+    /// have no `contentComponent`, so this is a no-op for them.
+    public var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)? {
+        didSet { self.contentComponent?.onControlTapped = onControlTapped }
+    }
+
     public func update(size: CGSize) {
         self.imageView?.frame = CGRect(origin: .zero, size: size)
         self.imageView?.update(size: size)

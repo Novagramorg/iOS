@@ -177,6 +177,7 @@ final class BlockViewTests: XCTestCase {
     /// A minimal hosted media view (the medium is now a host-supplied overlay view, not a CPU-drawn bitmap).
     private final class StubMediaView: UIView, RichTextMediaItemView {
         func update(size: CGSize) {}
+        var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
     }
 
     func test_fullBleedMediaView_coversTheBleed() {

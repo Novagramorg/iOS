@@ -298,6 +298,10 @@ final class DocumentCanvasView: UIView {
     /// Host hook for the table row/column structural menu. Fired from the `.menu` handle-tap case with a
     /// framework-agnostic description; the host presents its own ContextController. nil ⇒ no menu shown.
     var onRequestTableStructuralMenu: ((TableStructuralMenuRequest) -> Void)?
+    /// Host hook for a media control (the "more" button; the "+" later). Fired from a bound media view with
+    /// an account-free `MediaControlRequest` (opaque `mediaID` + occurrence-bound operation closures); the
+    /// host resolves the concrete media and presents its own menu. nil ⇒ no menu shown.
+    var onRequestMediaControl: ((MediaControlRequest) -> Void)?
     /// Whether the edit menu is currently presented (tracked via UIEditMenuInteractionDelegate), so a tap
     /// on the caret/selection can TOGGLE the menu instead of re-presenting it (the close-then-reopen flicker).
     var editMenuVisible = false

@@ -10,5 +10,10 @@ import UIKit
 @available(iOS 13.0, *)
 public protocol RichTextMediaItemView: UIView {
     func update(size: CGSize)
+
+    /// Set by the editor when it binds this view: fired when one of the view's interactive controls (the
+    /// more button; the "+" button later) is tapped, with the control kind, the tapped control's view, and
+    /// its rect in that view. Views with no controls (audio/location) leave it unused.
+    var onControlTapped: ((RichTextMediaControlKind, _ anchorView: UIView, _ sourceRect: CGRect) -> Void)? { get set }
 }
 #endif

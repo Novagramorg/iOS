@@ -23,6 +23,14 @@ extension DocumentCanvasView {
                 // touch that lands on one of its interactive controls (the more button); the poster area
                 // returns nil and the touch falls through to the editor. See MediaPassthroughOverlayView.
                 v.isUserInteractionEnabled = true
+                // Route a control (more button) tap up through the account-free request path. Captures the
+                // occurrence BlockID (media.id) so delete targets THIS block even if mediaID repeats.
+                let blockID = media.id
+                let mediaID = media.mediaID
+                v.onControlTapped = { [weak self] kind, anchorView, rect in
+                    self?.handleMediaControlTapped(blockID: blockID, mediaID: mediaID, kind: kind,
+                                                   anchorView: anchorView, sourceRect: rect)
+                }
                 hosted = HostedMediaItem(view: v, canvasFrame: canvasRect)
                 mediaItemViews[media.id] = hosted
             } else {
@@ -52,6 +60,24 @@ extension DocumentCanvasView {
         for (_, h) in mediaItemViews {
             h.view.isHidden = !expanded.intersects(h.canvasFrame)
         }
+    }
+
+    /// Builds the account-free `MediaControlRequest` for a tapped media control and fires
+    /// `onRequestMediaControl`. `blockID` is the occurrence (stable across box re-instantiation); `mediaID`
+    /// is the opaque host key the owner resolves the concrete media from. `delete` is bound to `blockID`, so
+    /// it removes the exact occurrence even when `mediaID` is shared.
+    func handleMediaControlTapped(blockID: BlockID, mediaID: String, kind: RichTextMediaControlKind,
+                                  anchorView: UIView, sourceRect: CGRect) {
+        let request = MediaControlRequest(
+            view: anchorView,
+            sourceRect: sourceRect,
+            control: kind,
+            mediaID: mediaID,
+            delete: { [weak self] in self?.deleteMediaBlock(id: blockID) },
+            replace: nil,
+            addMore: nil
+        )
+        onRequestMediaControl?(request)
     }
 
     // MARK: Test accessors

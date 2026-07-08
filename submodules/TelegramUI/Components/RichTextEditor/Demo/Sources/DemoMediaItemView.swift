@@ -23,6 +23,8 @@ final class DemoMediaItemView: UIView, RichTextMediaItemView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
+    var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
+
     func update(size: CGSize) { setNeedsLayout() }
 
     override func layoutSubviews() {

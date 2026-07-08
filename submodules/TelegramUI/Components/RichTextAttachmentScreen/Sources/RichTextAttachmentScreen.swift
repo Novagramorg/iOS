@@ -430,6 +430,29 @@ final class RichTextAttachmentScreenComponent: Component {
                         self?.environment?.controller()?.presentInGlobalOverlay(controller)
                     }
                 }
+                // Media control (more button) menu: the editor hands us an account-free request; we present
+                // our own menu anchored to the tapped control. `delete` is bound to the exact occurrence.
+                editor.onRequestMediaControl = { [weak self] request in
+                    guard let self, let component = self.component, let anchor = request.view else { return }
+                    let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+                    switch request.control {
+                    case .more:
+                        let items: [ContextMenuItem] = [
+                            .action(ContextMenuActionItem(
+                                text: "Delete",
+                                textColor: .destructive,
+                                icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.contextMenu.destructiveColor) },
+                                action: { _, f in f(.default); request.delete() }
+                            ))
+                        ]
+                        presentMediaControlMenu(anchorView: anchor, items: items,
+                                                presentationData: presentationData) { [weak self] controller in
+                            self?.environment?.controller()?.presentInGlobalOverlay(controller)
+                        }
+                    case .add:
+                        break   // the "+" button is not built yet
+                    }
+                }
                 editor.disablesInteractiveTransitionGestureRecognizer = true   // navigation back-swipe (triggered by a horizontal knob drag)
                 editor.disablesInteractiveModalDismiss = true
                 editor.disablesInteractiveKeyboardGestureRecognizer = true
