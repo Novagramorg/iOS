@@ -82,6 +82,18 @@ above).
   A per-cell tap reports its own `itemIndex`; the container-level more button reports `nil` (whole-block,
   matching the pre-container behavior).
 
+## Media aspect handling (added 2026-07-08)
+
+**Height capping**: editor media slot height is capped at `min(1000, canvasWidth)` where `canvasWidth` = media area width including horizontal bleed — "media is never taller than its own display width, up to 1000pt". Applied in `MediaBlockBox.imageDisplaySize` (single) and `MediaBlockBox.mosaicSize` (mosaic total); mirrored in `MediaItemNodeView.updateMosaic`, both packing `chatMessageBubbleMosaicLayout(maxSize: (W, min(1000,W)))`. **These two MUST stay in lockstep** (box reserves the slot, renderer fills it).
+
+**Single media aspect handling**: a lone photo/video now renders **aspect-fit + `resizeMode: .blurBackground`** (`RichTextMediaContentComponent.usesAspectFit`). Portrait/panorama shows whole, centered, with a blurred backdrop filling letterbox/pillarbox gap (chat's `PhotoResources.blurBackground` path), instead of cropped. Landscape filling its slot pays no blur (`boundingSize == imageSize`).
+
+**Mosaic cells remain crop-to-fill** (`aspectFilled`, `usesAspectFit == false`); total mosaic height is capped by scale-to-fit + horizontal centering when width-driven pack exceeds the cap (`MediaItemNodeView.updateMosaic`).
+
+**Non-identity state in `usesAspectFit`**: it is a `var` NOT in `RichTextMediaContentComponent.==` (equality stays `context ===` + `media.id` so the fetch binds once). `MediaItemNodeView` sets it **every layout pass** (single → true, mosaic cell → false), so a cell reused across a 1↔2 transition switches mode.
+
+Spec/plan retained in-tree: `docs/superpowers/{specs/2026-07-08-richtext-media-fit-blur-height-cap-design.md,plans/2026-07-08-richtext-media-fit-blur-height-cap.md}`.
+
 ## Future iterations (planned, not yet implemented)
 
 - **Higher-quality video poster.** Video currently shows the file's small embedded thumbnail (via
@@ -104,3 +116,7 @@ the per-phase design spec/plan are not retained in-tree — this file is the dur
 
 Multi-media (mosaic) containers landed 2026-07-08 — full app build green. Design + plan are retained
 in-tree: `docs/superpowers/{specs/2026-07-08-richtext-multi-media-container-design.md,plans/2026-07-08-richtext-multi-media-container.md}`.
+
+Media aspect handling landed 2026-07-08 (full app build green) — single media now aspect-fit + blur,
+mosaic cells crop-to-fill, height capped at `min(1000, canvasWidth)`, box + renderer in lockstep.
+Spec/plan in-tree: `docs/superpowers/{specs/2026-07-08-richtext-media-fit-blur-height-cap-design.md,plans/2026-07-08-richtext-media-fit-blur-height-cap.md}`.

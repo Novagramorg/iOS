@@ -228,5 +228,33 @@ final class MediaBlockBoxTests: XCTestCase {
         XCTAssertGreaterThan(box.imageAreaHeight, 0)
         XCTAssertLessThan(box.imageAreaHeight, 300)
     }
+
+    func test_singleMedia_portrait_heightCappedToWidth() {
+        let mapper = AttributedStringMapper()   // match the file's existing test setup
+        // A tall portrait: 100 wide x 400 tall. At width 300, uncapped height would be 1200.
+        let block = MediaBlock(id: BlockID("b1"), mediaID: "m1", kind: .image,
+                               naturalSize: Size2D(width: 100, height: 400))
+        let box = MediaBlockBox(media: block, mapper: mapper, width: 300, horizontalBleed: 0)
+        // cap = min(1000, canvasWidth=300) = 300 → the slot is at most a 300x300 square.
+        XCTAssertEqual(box.imageAreaHeight, 300, accuracy: 0.5)
+    }
+
+    func test_singleMedia_landscape_uncapped() {
+        let mapper = AttributedStringMapper()
+        // Landscape 400x100 at width 300 → height 75, under the 300 cap.
+        let block = MediaBlock(id: BlockID("b1"), mediaID: "m1", kind: .image,
+                               naturalSize: Size2D(width: 400, height: 100))
+        let box = MediaBlockBox(media: block, mapper: mapper, width: 300, horizontalBleed: 0)
+        XCTAssertEqual(box.imageAreaHeight, 75, accuracy: 0.5)
+    }
+
+    func test_mosaic_totalHeightCappedToWidth() {
+        let mapper = AttributedStringMapper()
+        // Several tall items → the packed mosaic exceeds a square; total height must be <= cap.
+        let items = (0..<5).map { MediaItem(mediaID: "m\($0)", kind: .image, naturalSize: Size2D(width: 100, height: 300)) }
+        let box = MediaBlockBox(media: MediaBlock(id: BlockID("b1"), items: items), mapper: mapper, width: 300, horizontalBleed: 0)
+        XCTAssertLessThanOrEqual(box.imageAreaHeight, 300.0 + 0.5)   // cap = min(1000, 300)
+        XCTAssertGreaterThan(box.imageAreaHeight, 0)
+    }
 }
 #endif

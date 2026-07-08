@@ -105,9 +105,18 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
         if self.mosaicItems.count <= 1 {
             frames = [CGRect(origin: .zero, size: size)]
         } else {
-            let (mframes, _) = chatMessageBubbleMosaicLayout(
-                maxSize: size, itemSizes: self.mosaicItems.map { $0.naturalSize })
-            frames = mframes.map { $0.0 }
+            // Same cap the box reserves (MediaBlockBox.mosaicSize): pack within width × min(1000,width),
+            // then scale-to-fit + center when the width-driven pack still exceeds the cap.
+            let cap = min(1000.0, size.width)
+            let (rawFrames, naturalSize) = chatMessageBubbleMosaicLayout(
+                maxSize: CGSize(width: size.width, height: cap),
+                itemSizes: self.mosaicItems.map { $0.naturalSize })
+            let scale: CGFloat = naturalSize.height > cap ? cap / naturalSize.height : 1.0
+            let xOffset = floor((size.width - naturalSize.width * scale) / 2.0)
+            frames = rawFrames.map { frame, _ in
+                CGRect(x: xOffset + frame.minX * scale, y: frame.minY * scale,
+                       width: frame.width * scale, height: frame.height * scale)
+            }
         }
         // Diff by media identity so surviving cells are reused (fetch bound once), not rebuilt.
         let incomingIds: [EngineMedia.Id] = self.mosaicItems.compactMap { $0.media.id }
@@ -118,6 +127,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
             self.mosaicCells[key] = nil
         }
         let reportNilIndex = self.mosaicItems.count == 1   // single container → whole-block control (nil), as before
+        let usesAspectFit = self.mosaicItems.count == 1   // lone photo/video → fit + blur; mosaic cells → fill
         // `reuseIndex` walks `plan.reuse` in lockstep with `incomingIds` — both were built by iterating
         // `mosaicItems` in order and skipping id-less items identically, so the two stay aligned.
         var reuseIndex = 0
@@ -140,6 +150,7 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
                 host = newHost; component = newComponent
             }
             reuseIndex += 1
+            component.usesAspectFit = usesAspectFit   // set every pass — a cell reused across 1↔2 switches mode
             // Refresh every pass (reused AND fresh) so a reused cell forwards the CURRENT loop `index` (or nil
             // for a single container), not the stale index captured when it was first created.
             let reportedIndex: Int? = reportNilIndex ? nil : index

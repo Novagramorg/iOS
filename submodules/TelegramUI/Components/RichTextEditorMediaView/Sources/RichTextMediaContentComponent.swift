@@ -27,14 +27,22 @@ public final class RichTextMediaContentComponent: Component {
     /// resizes so the fetch binds once.
     public let showsMoreButton: Bool
 
+    /// When true, the poster is drawn aspect-FIT with a blurred aspect-filled backdrop (chat's
+    /// `.blurBackground`) — used for a lone photo/video so a portrait/panorama shows whole with a blurred
+    /// letterbox/pillarbox instead of being cropped. Mosaic cells leave it false (crop-to-fill). NOT part
+    /// of `==` (identity equality must hold across resizes so the fetch binds once); the host re-sets it
+    /// each layout pass, so a cell reused across a single↔mosaic transition switches mode.
+    var usesAspectFit: Bool
+
     /// Set by `MediaItemNodeView`; fired when an interactive control is tapped. Not part of `==` (identity
     /// equality must hold across resizes so the fetch binds once).
     var onControlTapped: ((RichTextMediaControlKind, UIView, CGRect) -> Void)?
 
-    public init(context: AccountContext, media: EngineMedia, showsMoreButton: Bool = true) {
+    public init(context: AccountContext, media: EngineMedia, showsMoreButton: Bool = true, usesAspectFit: Bool = false) {
         self.context = context
         self.media = media
         self.showsMoreButton = showsMoreButton
+        self.usesAspectFit = usesAspectFit
     }
 
     public static func ==(lhs: RichTextMediaContentComponent, rhs: RichTextMediaContentComponent) -> Bool {
@@ -151,8 +159,16 @@ public final class RichTextMediaContentComponent: Component {
 
             let emptyColor = component.context.sharedContext.currentPresentationData.with { $0 }.theme.list.mediaPlaceholderColor
             if let dimensions = self.dimensions {
-                let imageSize = dimensions.cgSize.aspectFilled(availableSize)
-                let apply = self.imageNode.asyncLayout()(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: availableSize, intrinsicInsets: UIEdgeInsets(), emptyColor: emptyColor))
+                let imageSize: CGSize
+                let resizeMode: TransformImageResizeMode
+                if component.usesAspectFit {
+                    imageSize = dimensions.cgSize.aspectFitted(availableSize)
+                    resizeMode = .blurBackground
+                } else {
+                    imageSize = dimensions.cgSize.aspectFilled(availableSize)
+                    resizeMode = .fill(.black)
+                }
+                let apply = self.imageNode.asyncLayout()(TransformImageArguments(corners: ImageCorners(), imageSize: imageSize, boundingSize: availableSize, intrinsicInsets: UIEdgeInsets(), resizeMode: resizeMode, emptyColor: emptyColor))
                 apply()
             }
 

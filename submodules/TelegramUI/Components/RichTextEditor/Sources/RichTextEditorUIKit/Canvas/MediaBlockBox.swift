@@ -95,20 +95,29 @@ final class MediaBlockBox: CanvasBlock {
         caption.setWidth(max(width, 1))
     }
 
-    /// Displayed image size: `displayWidth` clamped to `maxWidth` (or fills `maxWidth` when no
-    /// explicit `displayWidth`), aspect preserved from `primaryNaturalSize`.
+    /// Displayed image slot: `displayWidth` clamped to `maxWidth` (or fills `maxWidth`), height = the
+    /// aspect-preserving height CAPPED at `min(1000, maxWidth)` (media is never taller than its display
+    /// width). A capped portrait becomes a `width × cap` slot; the renderer aspect-fits + blur-fills it.
     func imageDisplaySize(maxWidth: CGFloat) -> CGSize {
         let naturalW = CGFloat(primaryNaturalSize.width), naturalH = CGFloat(primaryNaturalSize.height)
         let targetW = displayWidth.map { min(CGFloat($0), maxWidth) } ?? maxWidth
-        guard naturalW > 0, naturalH > 0 else { return CGSize(width: targetW, height: targetW * 0.5625) }
-        return CGSize(width: targetW, height: naturalH * (targetW / naturalW))
+        let cap = min(1000.0, maxWidth)
+        guard naturalW > 0, naturalH > 0 else { return CGSize(width: targetW, height: min(targetW * 0.5625, cap)) }
+        let aspectHeight = naturalH * (targetW / naturalW)
+        return CGSize(width: targetW, height: min(aspectHeight, cap))
     }
 
-    /// Mosaic-assembled size for a multi-item container at `maxWidth`. Uses the SAME engine the sent
-    /// `.collage` renders with (`MosaicLayout`), so the editor preview matches the message.
+    /// Mosaic-assembled size for a multi-item container at `maxWidth`, using the SAME engine + cap the
+    /// renderer applies. The engine is width-driven (a ≥5-item pack can exceed the cap), so scale-to-fit:
+    /// when the packed height exceeds `min(1000, maxWidth)`, the mosaic is reserved at full width × cap
+    /// (the renderer scales the cells down + centers them).
     private func mosaicSize(maxWidth: CGFloat) -> CGSize {
         let itemSizes = items.map { CGSize(width: $0.naturalSize.width, height: $0.naturalSize.height) }
-        let (_, size) = chatMessageBubbleMosaicLayout(maxSize: CGSize(width: maxWidth, height: maxWidth), itemSizes: itemSizes)
+        let cap = min(1000.0, maxWidth)
+        let (_, size) = chatMessageBubbleMosaicLayout(maxSize: CGSize(width: maxWidth, height: cap), itemSizes: itemSizes)
+        if size.height > cap {
+            return CGSize(width: maxWidth, height: cap)
+        }
         return size
     }
 
