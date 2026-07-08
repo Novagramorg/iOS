@@ -102,6 +102,10 @@ public protocol ChatRichTextInputNode: AnyObject {
     /// the medium's natural size, for aspect-correct display. Mirrors `emojiViewProvider`'s host-owned seam.
     var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)? { get set }
 
+    /// Host-provided formula renderer. The native backend forwards it to `RichTextEditorView`; the legacy
+    /// backend stores it but never uses it, matching the media seam.
+    var formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)? { get set }
+
     /// Recompute and lay out the spoiler dust and custom-emoji overlays from the current
     /// attributed text, hosting both inside the composed text view's scrolling content.
     /// `textColor` / `fullTranslucency` are passed live on every call because the host's
@@ -519,6 +523,10 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
     // Stored-but-unused: the legacy `UITextView` backend has no media blocks to render, so it satisfies the
     // protocol but never reads this. The native (`RichTextEditorChatInputNode`) backend wires it to the editor.
     var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
+
+    // Stored-but-unused: the legacy backend has no formula atoms to render. The native backend wires this into
+    // `RichTextEditorView`.
+    var formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)?
 
     // Stored-but-unused: the legacy backend reports "typing…" activity via the panel's
     // `chatInputTextNode(shouldChangeTextIn:)` delegate, so it never fires this. Only the native

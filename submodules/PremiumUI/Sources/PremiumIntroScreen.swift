@@ -882,7 +882,7 @@ public enum PremiumPerk: CaseIterable {
         case .aiTools:
             return "Item List/Icons/AITools"
         case .richText:
-            return "ItemList/Icons/RichText"
+            return "Item List/Icons/RichText"
         case .businessLocation:
             return "Item List/Icons/Location"
         case .businessHours:

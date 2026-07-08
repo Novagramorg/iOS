@@ -59,6 +59,14 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
     /// `mediaByID` → this factory. Read lazily, so the panel may set it after `didLoad`. Mirrors `emojiViewProvider`.
     public var mediaItemViewFactory: ((_ items: [(media: EngineMedia, naturalSize: CGSize)], _ existing: (UIView & RichTextMediaItemView)?) -> (UIView & RichTextMediaItemView)?)?
 
+    public var formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)? {
+        didSet {
+            if self.isNodeLoaded {
+                self.updateFormulaRenderer()
+            }
+        }
+    }
+
     /// Panel-set "user is typing" hook (wired to `ChatTextInputPanelNode.updateActivity`). Fired from `onChange`
     /// ONLY on a genuine text edit — see the gating in `didLoad`. The legacy backend reports this via the
     /// `chatInputTextNode(shouldChangeTextIn:)` delegate, which this engine never calls; this is its replacement.
@@ -119,6 +127,12 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
             bodyParagraphSpacingBefore: 0,     // gap above each paragraph
             bodyParagraphSpacingAfter: 0       // inter-paragraph gap (Enter-separated lines)
         )
+    }
+
+    private func updateFormulaRenderer() {
+        self.editorView.registerFormulaRenderer { [weak self] context in
+            return self?.formulaRenderer?(context)
+        }
     }
 
     public override func didLoad() {
@@ -246,6 +260,10 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
                 ?? ChatTextInputTextCustomEmojiAttribute(interactivelySelectedFromPackId: nil, fileId: fileId, file: nil)
             return provider(attribute)
         }
+
+        // Formula rendering is owned by the chat host; math-rendering dependencies live above this module.
+        // Reinstalling when the provider arrives after `didLoad` reloads already-present formula atoms.
+        self.updateFormulaRenderer()
 
         // Media rendering. The editor hosts each `.media` block via this provider, asking by the opaque host
         // `mediaID` (the node's own key, recorded in `mediaByID` by `registerMediaValue`). Resolve it back to

@@ -6,7 +6,9 @@ import AccountContext
 import AttachmentUI
 import ViewControllerComponent
 import TelegramPresentationData
+import PresentationDataUtils
 import GlassBarButtonComponent
+import GlassBackgroundComponent
 import BundleIconComponent
 import MultilineTextComponent
 import EdgeEffect
@@ -21,6 +23,7 @@ import CheckNode
 import GlassControls
 import ChatRichTextEditorComposer
 import TextFormat
+import UndoUI
 
 /// `RichTextChecklistMarkerView` host wrapper backing a checklist item's checkbox with a `CheckNode`
 /// (an `ASDisplayNode`, so we host its `.view` — this is a `UIView`, not a node). The editor frames this
@@ -42,6 +45,171 @@ private final class HostChecklistCheckboxView: UIView, RichTextChecklistMarkerVi
     }
     func setChecked(_ checked: Bool, animated: Bool) {
         self.checkNode.setSelected(checked, animated: animated)
+    }
+}
+
+private final class RichTextSendButtonComponent: Component {
+    let theme: PresentationTheme
+    let isLocked: Bool
+    let action: () -> Void
+
+    init(theme: PresentationTheme, isLocked: Bool, action: @escaping () -> Void) {
+        self.theme = theme
+        self.isLocked = isLocked
+        self.action = action
+    }
+
+    static func ==(lhs: RichTextSendButtonComponent, rhs: RichTextSendButtonComponent) -> Bool {
+        if lhs.theme !== rhs.theme {
+            return false
+        }
+        if lhs.isLocked != rhs.isLocked {
+            return false
+        }
+        return true
+    }
+
+    final class View: UIView {
+        private let button = ComponentView<Empty>()
+        private let buttonMaskView = UIView()
+        private let buttonCutoutMaskView = UIImageView()
+        private let lockBackgroundView = GlassBackgroundView()
+        private let lockIconView = UIImageView()
+
+        private var component: RichTextSendButtonComponent?
+
+        override init(frame: CGRect) {
+            self.buttonMaskView.backgroundColor = .white
+            if let filter = CALayer.luminanceToAlpha() {
+                self.buttonMaskView.layer.filters = [filter]
+            }
+
+            self.lockBackgroundView.isUserInteractionEnabled = false
+            self.lockIconView.isUserInteractionEnabled = false
+
+            super.init(frame: frame)
+
+            self.clipsToBounds = false
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func update(component: RichTextSendButtonComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+            self.component = component
+
+            let buttonSize = self.button.update(
+                transition: transition,
+                component: AnyComponent(GlassControlGroupComponent(
+                    theme: component.theme,
+                    preferClearGlass: false,
+                    background: .activeTint(inset: false),
+                    items: [
+                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/SendIcon"), action: component.action)
+                    ],
+                    minWidth: 44.0
+                )),
+                environment: {},
+                containerSize: availableSize
+            )
+
+            if let buttonView = self.button.view {
+                if buttonView.superview == nil {
+                    self.addSubview(buttonView)
+                }
+                transition.setFrame(view: buttonView, frame: CGRect(origin: .zero, size: buttonSize))
+
+                if component.isLocked {
+                    var animateIn = false
+                    if buttonView.mask !== self.buttonMaskView {
+                        buttonView.mask = self.buttonMaskView
+
+                        if !transition.animation.isImmediate {
+                            animateIn = true
+                        }
+                    }
+                    let maskOverflow: CGFloat = 36.0
+                    self.buttonMaskView.frame = CGRect(origin: CGPoint(x: -maskOverflow, y: -maskOverflow), size: CGSize(width: buttonSize.width + maskOverflow * 2.0, height: buttonSize.height + maskOverflow * 2.0))
+
+                    let lockDiameter: CGFloat = 24.0
+                    let lockOffset: CGFloat = -7.0
+                    let cutoutInset: CGFloat = 2.0 - UIScreenPixel
+                    let cutoutDiameter = lockDiameter + cutoutInset * 2.0
+                    let lockFrame = CGRect(x: lockOffset, y: lockOffset, width: lockDiameter, height: lockDiameter)
+                    let cutoutFrame = lockFrame.insetBy(dx: -cutoutInset, dy: -cutoutInset)
+
+                    if self.buttonCutoutMaskView.image?.size.height != cutoutDiameter {
+                        self.buttonCutoutMaskView.image = generateStretchableFilledCircleImage(diameter: cutoutDiameter, color: .black)
+                    }
+                    if self.buttonCutoutMaskView.superview == nil {
+                        self.buttonMaskView.addSubview(self.buttonCutoutMaskView)
+                    }
+                    self.buttonCutoutMaskView.frame = cutoutFrame.offsetBy(dx: maskOverflow, dy: maskOverflow)
+
+                    if self.lockBackgroundView.superview == nil {
+                        self.addSubview(self.lockBackgroundView)
+                    }
+                    self.bringSubviewToFront(self.lockBackgroundView)
+                    self.lockBackgroundView.update(size: lockFrame.size, cornerRadius: lockDiameter * 0.5, isDark: component.theme.overallDarkAppearance, tintColor: .init(kind: .custom(style: .default, color: component.theme.list.itemCheckColors.fillColor)), isInteractive: false, transition: transition)
+                    transition.setFrame(view: self.lockBackgroundView, frame: lockFrame)
+                    transition.setAlpha(view: self.lockBackgroundView, alpha: 1.0)
+
+                    if self.lockIconView.image == nil {
+                        self.lockIconView.image = generateTintedImage(image: UIImage(bundleImageName: "Chat/Stickers/SmallLock"), color: .white)
+                    }
+                    if self.lockIconView.superview == nil {
+                        self.lockBackgroundView.contentView.addSubview(self.lockIconView)
+                    }
+                    if let image = self.lockIconView.image {
+                        let iconFrame = CGRect(
+                            origin: CGPoint(
+                                x: floorToScreenPixels((lockDiameter - image.size.width) * 0.5),
+                                y: floorToScreenPixels((lockDiameter - image.size.height) * 0.5)
+                            ),
+                            size: image.size
+                        )
+                        transition.setFrame(view: self.lockIconView, frame: iconFrame)
+                    }
+
+                    if animateIn {
+                        self.lockBackgroundView.layer.animateAlpha(from: 0.0, to: 1.0, duration: 0.2)
+                        self.lockBackgroundView.layer.animateScale(from: 0.01, to: 1.0, duration: 0.2)
+                        self.buttonCutoutMaskView.layer.animateScale(from: 0.001, to: 1.0, duration: 0.2)
+                    }
+                } else {
+                    if transition.animation.isImmediate {
+                        if buttonView.mask === self.buttonMaskView {
+                            buttonView.mask = nil
+                        }
+                        self.buttonCutoutMaskView.removeFromSuperview()
+                        self.lockBackgroundView.removeFromSuperview()
+                    } else {
+                        self.lockBackgroundView.layer.animateAlpha(from: 1.0, to: 0.0, duration: 0.2)
+                        self.lockBackgroundView.layer.animateScale(from: 1.0, to: 0.01, duration: 0.2, removeOnCompletion: false, completion: { _ in
+                            if buttonView.mask === self.buttonMaskView {
+                                buttonView.mask = nil
+                            }
+                            self.buttonCutoutMaskView.removeFromSuperview()
+                            self.lockBackgroundView.removeFromSuperview()
+                            self.lockBackgroundView.layer.removeAllAnimations()
+                            self.buttonCutoutMaskView.layer.removeAllAnimations()
+                        })
+                        self.buttonCutoutMaskView.layer.animateScale(from: 1.0, to: 0.001, duration: 0.2, removeOnCompletion: false)
+                    }
+                }
+            }
+
+            return buttonSize
+        }
+    }
+
+    func makeView() -> View {
+        return View(frame: .zero)
+    }
+
+    func update(view: View, availableSize: CGSize, state: EmptyComponentState, environment: Environment<Empty>, transition: ComponentTransition) -> CGSize {
+        return view.update(component: self, availableSize: availableSize, state: state, environment: environment, transition: transition)
     }
 }
 
@@ -73,10 +241,11 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         }
     }
 
-    private let sendMessage: (Document, [String: Media], [Int64: TelegramMediaFile]) -> Void
+    private let context: AccountContext
+    private let sendMessage: (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void
     private let syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)?
 
-    public init(
+    public convenience init(
         context: AccountContext,
         initialContents: Document? = nil,
         initialMedia: [String: Media] = [:],
@@ -86,6 +255,31 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
         presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
         presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
     ) {
+        self.init(
+            context: context,
+            initialContents: initialContents,
+            initialMedia: initialMedia,
+            initialEmojiFiles: initialEmojiFiles,
+            sendMessage: { document, media, emojiFiles, _ in
+                sendMessage(document, media, emojiFiles)
+            },
+            syncContent: syncContent,
+            presentAttachmentMenu: presentAttachmentMenu,
+            presentFormulaEditor: presentFormulaEditor
+        )
+    }
+
+    public init(
+        context: AccountContext,
+        initialContents: Document? = nil,
+        initialMedia: [String: Media] = [:],
+        initialEmojiFiles: [Int64: TelegramMediaFile] = [:],
+        sendMessage: @escaping (Document, [String: Media], [Int64: TelegramMediaFile], Bool) -> Void,
+        syncContent: ((Document, [String: Media], [Int64: TelegramMediaFile]) -> Void)? = nil,
+        presentAttachmentMenu: ((@escaping (RichTextAttachmentScreen.RichTextAttachment) -> Void) -> Void)?,
+        presentFormulaEditor: ((_ initialValue: String?, _ completion: @escaping (String) -> Void) -> Void)?
+    ) {
+        self.context = context
         self.sendMessage = sendMessage
         self.syncContent = syncContent
 
@@ -123,14 +317,46 @@ public class RichTextAttachmentScreen: ViewControllerComponentContainer, Attachm
     required public init(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
+    
     fileprivate func donePressed() {
-        if let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View {
-            self.sendMessage(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles)
+        guard let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+            return
         }
+        if !componentView.isSendRichFormattingLocked {
+            self.complete(withoutFormatting: false)
+            return
+        }
+
+        let controller = textAlertController(context: self.context, title: "Remove Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
+            TextAlertAction(type: .defaultAction, title: "Subscribe to Premium", action: { [weak self] in
+                guard let self else {
+                    return
+                }
+                let premiumController = self.context.sharedContext.makePremiumIntroController(context: self.context, source: .richText, forceDark: false, dismissed: nil)
+                if let parentController = self.parentController() {
+                    parentController.push(premiumController)
+                } else {
+                    self.push(premiumController)
+                }
+            }),
+            TextAlertAction(type: .genericAction, title: "Send Without Formatting", action: { [weak self] in
+                self?.complete(withoutFormatting: true)
+            }),
+            TextAlertAction(type: .genericAction, title: "Cancel", action: {
+            })
+        ], actionLayout: .vertical)
+        self.present(controller, in: .window(.root))
+    }
+
+    fileprivate func complete(withoutFormatting: Bool) {
+        guard let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
+            self.dismiss()
+            return
+        }
+        self.sendMessage(componentView.currentDocument, componentView.currentMedia, componentView.currentEmojiFiles, withoutFormatting)
         self.dismiss()
     }
-    
+
     fileprivate func close() {
         guard let syncContent = self.syncContent, let componentView = self.node.hostView.componentView as? RichTextAttachmentScreenComponent.View else {
             self.dismiss()
@@ -197,6 +423,14 @@ final class RichTextAttachmentScreenComponent: Component {
             return self.emojiKeyboard?.currentEmojiFiles ?? [:]
         }
 
+        var isSendRichFormattingLocked: Bool {
+            guard let component = self.component, !component.context.isPremium else {
+                return false
+            }
+            let content = chatInputContent(fromDocument: self.currentDocument, media: self.currentMedia, emojiFiles: self.currentEmojiFiles)
+            return !content.isEmpty && !content.isEntityExpressible(options: [.quotesRequireRichContent])
+        }
+
         private var component: RichTextAttachmentScreenComponent?
         private var environment: EnvironmentType?
         
@@ -208,6 +442,7 @@ final class RichTextAttachmentScreenComponent: Component {
         private var componentState: EmptyComponentState?
         private var isUpdating = false
         private var lastTabBarVisible: Bool?
+        private var didShowPremiumToast = false
         /// The `PresentationTheme` last mapped into the editor. `PresentationTheme` is a shared `final
         /// class`, so reference inequality is the cheap change-signal — guarding the editor `theme` setter
         /// (which does an unconditional reload+redraw) against firing on every keystroke (`onChange` →
@@ -364,6 +599,26 @@ final class RichTextAttachmentScreenComponent: Component {
                 quoteAuthorText: theme.list.itemAccentColor,
                 quoteAuthorPlaceholder: theme.list.itemPlaceholderTextColor.mixedWith(theme.list.itemAccentColor, alpha: 0.15).withMultipliedBrightnessBy(theme.overallDarkAppearance ? 1.1 : 0.9)
             )
+        }
+
+        func presentPremiumToast() {
+            guard let component = self.component, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
+                return
+            }
+            let presentationData = component.context.sharedContext.currentPresentationData.with { $0 }
+
+            let overlayController = UndoOverlayController(
+                presentationData: presentationData,
+                content: .premiumPaywall(title: nil, text: "Sending a message with this formatting will require [Telegram Premium]().", customUndoText: nil, timeout: nil, linkAction: nil),
+                elevatedLayout: true,
+                action: { action in
+                    if case .info = action {
+
+                    }
+                    return true
+                }
+            )
+            (controller.parentController() ?? controller).presentInGlobalOverlay(overlayController)
         }
 
         func update(component: RichTextAttachmentScreenComponent, availableSize: CGSize, state: EmptyComponentState, environment: Environment<EnvironmentType>, transition: ComponentTransition) -> CGSize {
@@ -581,6 +836,14 @@ final class RichTextAttachmentScreenComponent: Component {
             }
             self.component = component
 
+            let isSendRichFormattingLocked = self.isSendRichFormattingLocked
+            if !self.didShowPremiumToast && isSendRichFormattingLocked {
+                self.didShowPremiumToast = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.presentPremiumToast()
+                }
+            }
+
             if self.appliedTheme !== environment.theme {
                 self.appliedTheme = environment.theme
                 self.editor.theme = Self.mapEditorTheme(environment.theme)
@@ -741,6 +1004,8 @@ final class RichTextAttachmentScreenComponent: Component {
                         
                         items.append(.action(ContextMenuActionItem(text: "Heading", icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatHeading"), color: theme.contextMenu.primaryColor)
+                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                            return UIImage(bundleImageName: "Premium/ContextStar")
                         }, action: { [weak self] c, _ in
                             guard let self, let environment = self.environment else {
                                 c?.dismiss(completion: nil)
@@ -842,6 +1107,8 @@ final class RichTextAttachmentScreenComponent: Component {
                         
                         items.append(.action(ContextMenuActionItem(text: "Pullquote", icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatPullquote"), color: theme.contextMenu.primaryColor)
+                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                            return UIImage(bundleImageName: "Premium/ContextStar")
                         }, action: { [weak self] c, _ in
                             guard let self else {
                                 c?.dismiss(completion: nil)
@@ -861,6 +1128,8 @@ final class RichTextAttachmentScreenComponent: Component {
                         
                         items.append(.action(ContextMenuActionItem(text: "Code", icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatCode"), color: theme.contextMenu.primaryColor)
+                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                            return UIImage(bundleImageName: "Premium/ContextStar")
                         }, action: { [weak self] c, _ in
                             guard let self else {
                                 c?.dismiss(completion: nil)
@@ -880,6 +1149,8 @@ final class RichTextAttachmentScreenComponent: Component {
                         
                         items.append(.action(ContextMenuActionItem(text: "Formula", icon: { theme in
                             return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/FormatFormula"), color: theme.contextMenu.primaryColor)
+                        }, additionalLeftIcon: component.context.isPremium ? nil : { _ in
+                            return UIImage(bundleImageName: "Premium/ContextStar")
                         }, action: { [weak self] c, _ in
                             guard let self else {
                                 c?.dismiss(completion: nil)
@@ -981,7 +1252,8 @@ final class RichTextAttachmentScreenComponent: Component {
                         )
                         (controller.parentController() ?? controller).presentInGlobalOverlay(contextController)
                     },
-                    isSelected: false
+                    isSelected: false,
+                    showsPremiumBadge: !component.context.isPremium
                 ))
                 barActions.append(RichTextActionBarComponent.Action(
                     id: AnyHashable("table"), icon: "RichText/ToolTable",
@@ -1017,7 +1289,8 @@ final class RichTextAttachmentScreenComponent: Component {
                         }
                         self.presentActionMenu(from: sourceView, items: items)
                     },
-                    isSelected: false
+                    isSelected: false,
+                    showsPremiumBadge: !component.context.isPremium
                 ))
                 if component.presentAttachmentMenu != nil {
                     barActions.append(RichTextActionBarComponent.Action(
@@ -1143,19 +1416,16 @@ final class RichTextAttachmentScreenComponent: Component {
             
             let sendButtonSize = self.sendButton.update(
                 transition: transition,
-                component: AnyComponent(GlassControlGroupComponent(
+                component: AnyComponent(RichTextSendButtonComponent(
                     theme: environment.theme,
-                    preferClearGlass: false,
-                    background: .activeTint(inset: false),
-                    items: [
-                        GlassControlGroupComponent.Item(id: 0, content: .icon("Chat/Input/Text/SendIcon"), action: { [weak self] in
-                            guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
-                                return
-                            }
-                            controller.donePressed()
-                        })
-                    ], minWidth: 44.0)
-                ),
+                    isLocked: isSendRichFormattingLocked,
+                    action: { [weak self] in
+                        guard let self, let controller = self.environment?.controller() as? RichTextAttachmentScreen else {
+                            return
+                        }
+                        controller.donePressed()
+                    }
+                )),
                 environment: {},
                 containerSize: CGSize(width: 44.0, height: 44.0)
             )

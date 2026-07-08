@@ -10,7 +10,25 @@ import ChatMessageSelectionInputPanelNode
 import ChatControllerInteraction
 import ChatTextInputPanelNode
 import RichTextEditorMediaView
+import RichTextEditorUIKit
 import InstantPageUI
+
+func chatInputFormulaRenderResult(context: RichTextFormulaRenderContext) -> RichTextFormulaRenderResult? {
+    guard let attachment = instantPageMathAttachment(
+        latex: context.latex,
+        fontSize: context.fontSize,
+        textColor: context.textColor,
+        mode: .inline
+    ) else {
+        return nil
+    }
+    return RichTextFormulaRenderResult(
+        image: attachment.rendered.image,
+        size: attachment.rendered.size,
+        ascent: attachment.rendered.ascent,
+        descent: attachment.rendered.descent
+    )
+}
 
 func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState: ChatPresentationInterfaceState, context: AccountContext, currentPanel: ChatInputPanelNode?, currentSecondaryPanel: ChatInputPanelNode?, textInputPanelNode: ChatTextInputPanelNode?, chatControllerInteraction: ChatControllerInteraction?, interfaceInteraction: ChatPanelInterfaceInteraction?) -> (primary: ChatInputPanelNode?, secondary: ChatInputPanelNode?) {
     if let renderedPeer = chatPresentationInterfaceState.renderedPeer, renderedPeer.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
@@ -484,6 +502,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
                     )
                     return MediaItemNodeView(context: context, items: items, audioColorOverride: audioColors, cornerRadius: 4.0, showsControls: false)
                 }
+                panel.formulaRenderer = chatInputFormulaRenderResult
                 if let data = context.currentAppConfiguration.with({ $0 }).data, let value = data["ios_disable_ai_chat"] as? Double, value == 1.0 {
                 } else if let peerId = chatPresentationInterfaceState.chatLocation.peerId, peerId.namespace != Namespaces.Peer.SecretChat {
                     panel.isAIEnabled = true

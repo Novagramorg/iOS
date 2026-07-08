@@ -535,6 +535,7 @@ swift_library(
         "//submodules/TelegramUI/Components/RichTextAttachmentScreen",
         "//submodules/TelegramUI/Components/RichTextEditorMessageConversion",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorCore",
+        "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",
         "//submodules/TelegramUI/Components/RichTextEditorMediaView",
         "//submodules/TelegramUI/Components/Chat/ChatRichTextEditorComposer",
     ] + select({

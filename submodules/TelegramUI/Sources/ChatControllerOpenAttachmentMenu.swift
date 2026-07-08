@@ -37,6 +37,7 @@ import Photos
 import AttachmentFileController
 import RichTextAttachmentScreen
 import RichTextEditorMessageConversion
+import ChatRichTextEditorComposer
 
 extension ChatControllerImpl {
     enum AttachMenuSubject {
@@ -837,23 +838,51 @@ extension ChatControllerImpl {
                 case .richText:
                     let controller = RichTextAttachmentScreen(
                         context: context,
-                        sendMessage: { [weak self] document, media, _ in
+                        sendMessage: { [weak self] document, media, emojiFiles, sendWithoutFormatting in
                             guard let strongSelf = self else {
                                 return
                             }
                             let text: String
                             let attributes: [EngineMessage.Attribute]
-                            // Send a quote-bearing document as a rich message (InstantPage) too, even though a
-                            // blockquote is entity-expressible — the rich preview renders the quote faithfully.
-                            switch composeRichMessage(from: document, media: media, forSendPreview: true) {
-                            case let .rich(instantPage):
-                                text = ""
-                                attributes = [RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil)]
-                            case let .plain(plainText, entities):
-                                text = plainText
+                            if sendWithoutFormatting {
+                                let peerSpecificEmojiPack = (strongSelf.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
+                                let content = chatInputContent(fromDocument: document, media: media, emojiFiles: emojiFiles)
+                                let inputText = trimChatInputText(entityPreservingFallbackAttributedString(from: content, preserveCustomEmoji: { _, file in
+                                    if strongSelf.context.isPremium {
+                                        return true
+                                    }
+                                    guard let file else {
+                                        return false
+                                    }
+                                    if !file.isPremiumEmoji {
+                                        return true
+                                    }
+                                    for attribute in file.attributes {
+                                        if case let .CustomEmoji(_, _, _, packReference) = attribute, case let .id(id, _) = packReference {
+                                            return id == peerSpecificEmojiPack?.id.id
+                                        }
+                                    }
+                                    return false
+                                }))
+                                if inputText.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    return
+                                }
+                                let entities = generateTextEntities(inputText.string, enabledTypes: .all, currentEntities: generateChatInputTextEntities(inputText))
+                                text = inputText.string
                                 attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
-                            case .empty:
-                                return
+                            } else {
+                                // Send a quote-bearing document as a rich message (InstantPage) too, even though a
+                                // blockquote is entity-expressible — the rich preview renders the quote faithfully.
+                                switch composeRichMessage(from: document, media: media, forSendPreview: true) {
+                                case let .rich(instantPage):
+                                    text = ""
+                                    attributes = [RichTextMessageAttribute(instantPage: instantPage, fullInstantPage: nil)]
+                                case let .plain(plainText, entities):
+                                    text = plainText
+                                    attributes = entities.isEmpty ? [] : [TextEntitiesMessageAttribute(entities: entities)]
+                                case .empty:
+                                    return
+                                }
                             }
                             let replyMessageSubject = strongSelf.presentationInterfaceState.interfaceState.replyMessageSubject
                             let message: EnqueueMessage = .message(text: text, attributes: attributes, inlineStickers: [:], mediaReference: nil, threadId: strongSelf.chatLocation.threadId, replyToMessageId: replyMessageSubject?.subjectModel, replyToStoryId: nil, localGroupingKey: nil, correlationId: nil, bubbleUpEmojiOrStickersets: [])

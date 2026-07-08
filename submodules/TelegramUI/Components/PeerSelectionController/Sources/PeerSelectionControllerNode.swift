@@ -27,6 +27,7 @@ import SegmentControlComponent
 import ComponentFlow
 import ComponentDisplayAdapters
 import EdgeEffect
+import UndoUI
 
 final class PeerSelectionControllerNode: ASDisplayNode {
     private let context: AccountContext
@@ -508,21 +509,25 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                     }
                 }
 
-                let canHideNames = hasNotOwnMessages && hasOther && !hasRichMessages
-
+                let canHideNames = hasNotOwnMessages && hasOther
+                var hideNamesEnabled = true
+                if hasRichMessages && !context.isPremium {
+                    hideNamesEnabled = false
+                }
+                
                 let hideNames = forwardOptions.hideNames
                 let hideCaptions = forwardOptions.hideCaptions
 
                 if !"".isEmpty { // check if seecret chat
                 } else {
                     if canHideNames {
-                        items.append(.action(ContextMenuActionItem(text: uniquePeerIds.count == 1 ? presentationData.strings.Conversation_ForwardOptions_ShowSendersName : presentationData.strings.Conversation_ForwardOptions_ShowSendersNames, icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: uniquePeerIds.count == 1 ? presentationData.strings.Conversation_ForwardOptions_ShowSendersName : presentationData.strings.Conversation_ForwardOptions_ShowSendersNames, textColor: hideNamesEnabled ? .primary : .disabled, icon: { theme in
                             if hideNames {
                                 return UIImage()
                             } else {
                                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                             }
-                        }, action: { [weak self] _, f in
+                        }, action: !hideNamesEnabled ? nil : { [weak self] _, f in
                             self?.interfaceInteraction?.updateForwardOptionsState({ current in
                                 var updated = current
                                 updated.hideNames = false
@@ -532,13 +537,13 @@ final class PeerSelectionControllerNode: ASDisplayNode {
                             })
                         })))
 
-                        items.append(.action(ContextMenuActionItem(text: uniquePeerIds.count == 1 ? presentationData.strings.Conversation_ForwardOptions_HideSendersName : presentationData.strings.Conversation_ForwardOptions_HideSendersNames, icon: { theme in
+                        items.append(.action(ContextMenuActionItem(text: uniquePeerIds.count == 1 ? presentationData.strings.Conversation_ForwardOptions_HideSendersName : presentationData.strings.Conversation_ForwardOptions_HideSendersNames, textColor: hideNamesEnabled ? .primary : .disabled, icon: { theme in
                             if hideNames {
                                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Check"), color: theme.contextMenu.primaryColor)
                             } else {
                                 return UIImage()
                             }
-                        }, action: { _, f in
+                        }, action: !hideNamesEnabled ? nil : { _, f in
                             self?.interfaceInteraction?.updateForwardOptionsState({ current in
                                 var updated = current
                                 updated.hideNames = true

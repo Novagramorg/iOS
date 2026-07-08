@@ -71,6 +71,7 @@ import UndoUI
 import BrowserUI
 import RichTextAttachmentScreen
 import RichTextEditorCore
+import RichTextEditorUIKit
 import RichTextEditorMediaView
 import InstantPageUI
 import ChatRichTextEditorComposer
@@ -941,6 +942,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             )
             return MediaItemNodeView(context: context, items: items, audioColorOverride: audioColors, cornerRadius: 4.0, showsControls: false)
         }
+        self.textInputPanelNode?.formulaRenderer = chatInputFormulaRenderResult
         if let data = self.context.currentAppConfiguration.with({ $0 }).data, let value = data["ios_disable_ai_chat"] as? Double, value == 1.0 {
         } else if let peerId = self.chatPresentationInterfaceState.chatLocation.peerId, peerId.namespace != Namespaces.Peer.SecretChat {
             self.textInputPanelNode?.isAIEnabled = true
@@ -4611,7 +4613,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             initialContents: seedDocument,
             initialMedia: seedMedia,
             initialEmojiFiles: seedEmojiFiles,
-            sendMessage: { [weak self] document, media, emojiFiles in
+            sendMessage: { [weak self] document, media, emojiFiles, sendWithoutFormatting in
                 guard let self else {
                     return
                 }
@@ -4624,7 +4626,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
                     guard let self else {
                         return
                     }
-                    self.sendCurrentMessage()
+                    self.sendCurrentMessage(sendWithoutFormatting: sendWithoutFormatting)
                 })
             },
             syncContent: { [weak self] document, media, emojiFiles in
@@ -4831,7 +4833,7 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
         }
     }
 
-    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, completion: @escaping () -> Void = {}) {
+    func sendCurrentMessage(silentPosting: Bool? = nil, scheduleTime: Int32? = nil, repeatPeriod: Int32? = nil, postpone: Bool = false, messageEffect: ChatSendMessageEffect? = nil, sendWithoutFormatting: Bool = false, completion: @escaping () -> Void = {}) {
         guard let textInputPanelNode = self.inputPanelNode as? ChatTextInputPanelNode else {
             return
         }
@@ -4865,22 +4867,68 @@ class ChatControllerNode: ASDisplayNode, ASScrollViewDelegate {
             var messages: [EnqueueMessage] = []
             
             let effectiveInputText: NSAttributedString
+            let composeContent = effectivePresentationInterfaceState.interfaceState.composeInputState.content
+            let isNewMessage = effectivePresentationInterfaceState.interfaceState.editMessage == nil
+            let requiresPremiumRichContent = isNewMessage
+                && !self.context.isPremium
+                && !composeContent.isEmpty
+                && !composeContent.isEntityExpressible(options: [.quotesRequireRichContent])
+            let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
+
+            if requiresPremiumRichContent && !sendWithoutFormatting {
+                if let controller = self.controller {
+                    controller.present(textAlertController(context: self.context, title: "Remove Formatting?", text: "This message includes rich formatting, which requires Telegram Premium.", actions: [
+                        TextAlertAction(type: .defaultAction, title: "Subscribe to Premium", action: { [weak self] in
+                            guard let self else {
+                                return
+                            }
+                            let premiumController = self.context.sharedContext.makePremiumIntroController(context: self.context, source: .richText, forceDark: false, dismissed: nil)
+                            self.controller?.push(premiumController)
+                        }),
+                        TextAlertAction(type: .genericAction, title: "Send Without Formatting", action: { [weak self] in
+                            self?.sendCurrentMessage(silentPosting: silentPosting, scheduleTime: scheduleTime, repeatPeriod: repeatPeriod, postpone: postpone, messageEffect: messageEffect, sendWithoutFormatting: true, completion: completion)
+                        }),
+                        TextAlertAction(type: .genericAction, title: "Cancel", action: {
+                        })
+                    ], actionLayout: .vertical), in: .window(.root))
+                }
+                return
+            }
             
-            if effectivePresentationInterfaceState.interfaceState.editMessage != nil && effectivePresentationInterfaceState.interfaceState.postSuggestionState != nil {
+            if sendWithoutFormatting {
+                effectiveInputText = entityPreservingFallbackAttributedString(from: composeContent, preserveCustomEmoji: { [weak self] _, file in
+                    guard let self else {
+                        return false
+                    }
+                    if self.context.isPremium {
+                        return true
+                    }
+                    guard let file else {
+                        return false
+                    }
+                    if !file.isPremiumEmoji {
+                        return true
+                    }
+                    for attribute in file.attributes {
+                        if case let .CustomEmoji(_, _, _, packReference) = attribute, case let .id(id, _) = packReference {
+                            return id == peerSpecificEmojiPack?.id.id
+                        }
+                    }
+                    return false
+                })
+            } else if effectivePresentationInterfaceState.interfaceState.editMessage != nil && effectivePresentationInterfaceState.interfaceState.postSuggestionState != nil {
                 effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.effectiveInputState.inputText)
             } else {
                 effectiveInputText = expandedInputStateAttributedString(effectivePresentationInterfaceState.interfaceState.composeInputState.inputText)
             }
 
-            let composeContent = effectivePresentationInterfaceState.interfaceState.composeInputState.content
             // Rich-message routing: new messages only (editMessage == nil), structural content the entity
             // set can't express (heading/list/table/media), and non-empty. Entity-expressible content
             // (text/quote/code/collapsed-quote/mention/date/custom-emoji-in-body) keeps the text+entities path.
-            let sendAsRichMessage = effectivePresentationInterfaceState.interfaceState.editMessage == nil
+            let sendAsRichMessage = !sendWithoutFormatting
+                && effectivePresentationInterfaceState.interfaceState.editMessage == nil
                 && !composeContent.isEntityExpressible()
                 && !composeContent.isEmpty
-
-            let peerSpecificEmojiPack = (self.controller?.contentData?.state.peerView?.cachedData as? CachedChannelData)?.emojiPack
             
             var inlineStickers: [MediaId: Media] = [:]
             var firstLockedPremiumEmoji: TelegramMediaFile?

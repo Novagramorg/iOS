@@ -673,6 +673,10 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         didSet { self.richTextInputNode?.mediaItemViewFactory = self.mediaItemViewFactory }
     }
 
+    public var formulaRenderer: ((RichTextFormulaRenderContext) -> RichTextFormulaRenderResult?)? {
+        didSet { self.richTextInputNode?.formulaRenderer = self.formulaRenderer }
+    }
+
     private let presentationContext: ChatPresentationContext?
     
     private var tooltipController: TooltipScreen?
@@ -1189,6 +1193,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
             return self?.emojiViewProvider?(emoji)
         }
         richTextInputNode.mediaItemViewFactory = self.mediaItemViewFactory
+        richTextInputNode.formulaRenderer = self.formulaRenderer
 
         if let textInputBackgroundTapRecognizer = self.textInputBackgroundTapRecognizer {
             self.textInputBackgroundTapRecognizer = nil
@@ -3967,7 +3972,7 @@ public class ChatTextInputPanelNode: ChatInputPanelNode, ASEditableTextNodeDeleg
         var hasTracking = false
         var hasTrackingView = false
         if richTextInputNode.selectedRange.length == 0, richTextInputNode.selectedRange.location > 0, let attributedText = richTextInputNode.attributedText {
-            let selectedSubstring = attributedText.attributedSubstring(from: NSRange(location: 0, length: richTextInputNode.selectedRange.location))
+            let selectedSubstring = attributedText.attributedSubstring(from: NSRange(location: 0, length: min(attributedText.length, richTextInputNode.selectedRange.location)))
             if let lastCharacter = selectedSubstring.string.last, String(lastCharacter).isSingleEmoji {
                 let queryLength = (String(lastCharacter) as NSString).length
                 if selectedSubstring.attribute(ChatTextInputAttributes.customEmoji, at: selectedSubstring.length - queryLength, effectiveRange: nil) == nil {

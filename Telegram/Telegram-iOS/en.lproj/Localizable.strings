@@ -16429,5 +16429,5 @@ Error: %8$@";
 
 "AvatarEditor.SetCommunityPhoto" = "Set as Community Photo";
 
-"Premium.RichText" = "Rich Formatting";
-"Premium.RichTextInfo" = "Add headers, tables, lists, and inline media to messages.";
+"Premium.RichText" = "Formatting Tools";
+"Premium.RichTextInfo" = "Add headers, tables, lists, AI and inline media to messages.";
