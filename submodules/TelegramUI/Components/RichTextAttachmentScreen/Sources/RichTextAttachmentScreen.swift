@@ -292,17 +292,6 @@ final class RichTextAttachmentScreenComponent: Component {
             }
         }
 
-        /// Image/video only — audio and location/map blocks are single-item and can't grow into a mosaic.
-        private func isGroupableImageOrVideo(_ media: Media) -> Bool {
-            if media is TelegramMediaImage {
-                return true
-            }
-            if let file = media as? TelegramMediaFile {
-                return file.isVideo
-            }
-            return false
-        }
-
         private func presentLinkPrompt() {
             guard let component = self.component else {
                 return
@@ -458,20 +447,6 @@ final class RichTextAttachmentScreenComponent: Component {
                     switch request.control {
                     case .more:
                         var items: [ContextMenuItem] = []
-                        if let tapped = self.attachedMedia[request.mediaID],
-                           self.isGroupableImageOrVideo(tapped), let addMore = request.addMore {
-                            items.append(.action(ContextMenuActionItem(
-                                text: "Add",
-                                icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: theme.contextMenu.primaryColor) },
-                                action: { [weak self] _, f in
-                                    f(.default)
-                                    self?.pickMedia { mediaID, naturalSize, kind, _ in
-                                        guard kind == .image || kind == .video else { return }   // mosaic is photo/video only
-                                        addMore(mediaID, naturalSize, kind)
-                                    }
-                                }
-                            )))
-                        }
                         items.append(.action(ContextMenuActionItem(
                             text: "Delete",
                             textColor: .destructive,
@@ -483,7 +458,11 @@ final class RichTextAttachmentScreenComponent: Component {
                             self?.environment?.controller()?.presentInGlobalOverlay(controller)
                         }
                     case .add:
-                        break   // the "+" button is not built yet
+                        guard let addMore = request.addMore else { break }
+                        self.pickMedia { mediaID, naturalSize, kind, _ in
+                            guard kind == .image || kind == .video else { return }   // mosaic is photo/video only
+                            addMore(mediaID, naturalSize, kind)
+                        }
                     case .delete:
                         request.delete()
                     }

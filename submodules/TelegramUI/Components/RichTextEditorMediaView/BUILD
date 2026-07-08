@@ -11,6 +11,7 @@ swift_library(
     ],
     deps = [
         "//submodules/AccountContext",
+        "//submodules/AppBundle:AppBundle",
         "//submodules/TelegramCore",
         "//submodules/InstantPageUI",
         "//submodules/TelegramUI/Components/RichTextEditor:RichTextEditorUIKit",

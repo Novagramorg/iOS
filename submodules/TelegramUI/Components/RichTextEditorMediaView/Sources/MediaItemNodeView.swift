@@ -1,11 +1,14 @@
 import Foundation
 import UIKit
 import ComponentFlow
+import Display
+import AppBundle
 import AccountContext
 import TelegramCore
 import InstantPageUI
 import RichTextEditorUIKit
 import MosaicLayout
+import GlassBackgroundComponent
 
 /// Adapts the rich-text editor's `RichTextMediaItemView` seam to concrete media renderers, by kind:
 /// audio (music/voice `.file`) → `StandaloneInstantPageAudioView` (a playable row); location (`.geo`)
@@ -31,6 +34,18 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
     private var mosaicOccurrenceCounter: [EngineMedia.Id: Int] = [:]
     private let mosaicContext: AccountContext?   // set for photo/video; nil for audio/location
     private let showsControls: Bool   // forwarded to each photo/video cell's glass "more" button
+
+    // A dedicated "+" add button (article editor, photo/video containers only). Glass chrome mirroring the
+    // per-cell ⋯ button (`RichTextMediaContentComponent.View`'s `moreButton`/`moreButtonBackgroundContainer`/
+    // `moreButtonBackground`); top-right corner. Fires `.add` (container-level, itemIndex nil).
+    private var addButtonContainer: GlassBackgroundContainerView?
+    private var addButton: HighlightTrackingButton?
+    private var addButtonBackground: GlassBackgroundView?
+    private var addButtonIconView: UIImageView?
+
+    /// True when this view should show the add button: article editor (`showsControls`) + a photo/video
+    /// container (`mosaicContext != nil` — never audio/location).
+    private var showsAddButton: Bool { self.showsControls && self.mosaicContext != nil }
 
     public init(context: AccountContext,
                 items: [(media: EngineMedia, naturalSize: CGSize)],
@@ -89,6 +104,62 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
         if self.mosaicContext != nil {
             self.updateMosaic(size: size)
         }
+        self.layoutAddButton(size: size)
+    }
+
+    /// Builds the add button's glass chrome on first use (article-editor photo/video containers only).
+    /// Mirrors `RichTextMediaContentComponent.View`'s more-button setup exactly: background inside the
+    /// button, button inside the container's `contentView`, container added last (above everything else).
+    private func ensureAddButton() {
+        guard self.addButtonContainer == nil else { return }
+        let container = GlassBackgroundContainerView()
+        let background = GlassBackgroundView()
+        let button = HighlightTrackingButton()
+        background.isUserInteractionEnabled = false
+        button.addSubview(background)
+        container.contentView.addSubview(button)
+        self.addSubview(container)
+        let iconView = UIImageView(image: generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Add"), color: .white))
+        iconView.contentMode = .center
+        button.addSubview(iconView)
+        button.addTarget(self, action: #selector(self.addButtonPressed), for: .touchUpInside)
+        button.highligthedChanged = { [weak button] highlighted in
+            guard let button else { return }
+            let transition: ComponentTransition = highlighted ? .immediate : .easeInOut(duration: 0.25)
+            transition.setAlpha(view: button, alpha: highlighted ? 0.6 : 1.0)
+        }
+        self.addButtonContainer = container
+        self.addButton = button
+        self.addButtonBackground = background
+        self.addButtonIconView = iconView
+    }
+
+    @objc private func addButtonPressed() {
+        guard let container = self.addButtonContainer else { return }
+        self.onControlTapped?(.add, nil, container, container.bounds)
+    }
+
+    /// Positions the add button top-right and shows/hides it (`showsAddButton`). Brought above the mosaic
+    /// cells every pass since cell hosts are inserted after it may have been created.
+    private func layoutAddButton(size: CGSize) {
+        guard self.showsAddButton else {
+            self.addButtonContainer?.isHidden = true
+            return
+        }
+        self.ensureAddButton()
+        guard let container = self.addButtonContainer, let button = self.addButton,
+              let background = self.addButtonBackground, let iconView = self.addButtonIconView else { return }
+        container.isHidden = false
+        let buttonSize = CGSize(width: 36.0, height: 36.0)
+        let inset: CGFloat = 8.0
+        let frame = CGRect(x: size.width - inset - buttonSize.width, y: inset, width: buttonSize.width, height: buttonSize.height)   // top-right
+        container.frame = frame
+        container.update(size: buttonSize, isDark: true, transition: .immediate)
+        background.frame = CGRect(origin: .zero, size: buttonSize)
+        background.update(size: buttonSize, cornerRadius: buttonSize.height * 0.5, isDark: true, tintColor: .init(kind: .panel), transition: .immediate)
+        button.frame = CGRect(origin: .zero, size: buttonSize)
+        iconView.frame = CGRect(origin: .zero, size: buttonSize)
+        self.bringSubviewToFront(container)   // above the mosaic cells
     }
 
     /// Lays out photo/video cells, reusing an existing cell wherever `MosaicCellDiff` finds a matching pooled
@@ -170,17 +241,26 @@ public final class MediaItemNodeView: UIView, RichTextMediaItemView {
         if self.mosaicContext != nil {
             self.updateMosaic(size: self.bounds.size)
         }
+        self.layoutAddButton(size: self.bounds.size)
     }
 
     /// The editor treats media as non-interactive EXCEPT for the interactive controls the photo/video
-    /// renderer exposes (the more button). Only a hit that resolves to such a control claims the touch;
-    /// everything else — the poster area, and the audio/location branches entirely — returns nil so the
-    /// touch falls through to the editor's own tap handling. Guarded by the standard visibility/point-inside
-    /// checks so a culled (hidden) media view never claims a touch.
+    /// renderer exposes (the per-cell more button, and — article editor only — this container's own add
+    /// button). Only a hit that resolves to such a control claims the touch; everything else — the poster
+    /// area, and the audio/location branches entirely — returns nil so the touch falls through to the
+    /// editor's own tap handling. Guarded by the standard visibility/point-inside checks so a culled
+    /// (hidden) media view never claims a touch. The add button is checked FIRST since it visually sits
+    /// above the mosaic cells in the top-right corner.
     override public func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !self.isHidden, self.isUserInteractionEnabled, self.alpha > 0.01,
               self.point(inside: point, with: event) else {
             return nil
+        }
+        if self.showsAddButton, let container = self.addButtonContainer, !container.isHidden {
+            let inContainer = container.convert(point, from: self)
+            if let hit = container.hitTest(inContainer, with: event) {
+                return hit
+            }
         }
         if self.mosaicContext != nil {
             for (_, cell) in self.mosaicCells {

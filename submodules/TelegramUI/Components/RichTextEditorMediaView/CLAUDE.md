@@ -94,6 +94,14 @@ above).
 
 Spec/plan retained in-tree: `docs/superpowers/{specs/2026-07-08-richtext-media-fit-blur-height-cap-design.md,plans/2026-07-08-richtext-media-fit-blur-height-cap.md}`.
 
+## Dedicated add button (photo/video containers, added 2026-07-08)
+
+`MediaItemNodeView` hosts a dedicated glass **"+"** add button in the **top-right** corner (36×36, 8pt inset), styled like the per-cell ⋯ button (`GlassBackgroundContainerView` + `GlassBackgroundView` + a `Chat/Context Menu/Add` icon; needs `import AppBundle` + the `//submodules/AppBundle` BUILD dep for `UIImage(bundleImageName:)`). Shown ONLY when `showsControls && mosaicContext != nil` (article editor + photo/video containers — never the composer, which passes `showsControls: false`, nor audio/location). Tapping fires `onControlTapped(.add, itemIndex: nil, …)` through the existing seam → `MediaControlRequest(control: .add)`; `RichTextAttachmentScreen`'s `.add` case opens the picker + `request.addMore(...)`. The per-cell ⋯ menu is now **Delete-only** (Add moved to the dedicated button).
+
+`hitTest` returns the add button first (guarded on `!isHidden`) so it's tappable while the poster passes through to the editor. The interaction seam (hit-test pass-through, component-level return-or-nil, recognizer yielding) is documented in the Load-bearing invariants section above.
+
+Spec/plan in-tree: `docs/superpowers/{specs/2026-07-08-richtext-media-add-button-design.md,plans/2026-07-08-richtext-media-add-button.md}`.
+
 ## Future iterations (planned, not yet implemented)
 
 - **Higher-quality video poster.** Video currently shows the file's small embedded thumbnail (via
@@ -120,3 +128,5 @@ in-tree: `docs/superpowers/{specs/2026-07-08-richtext-multi-media-container-desi
 Media aspect handling landed 2026-07-08 (full app build green) — single media now aspect-fit + blur,
 mosaic cells crop-to-fill, height capped at `min(1000, canvasWidth)`, box + renderer in lockstep.
 Spec/plan in-tree: `docs/superpowers/{specs/2026-07-08-richtext-media-fit-blur-height-cap-design.md,plans/2026-07-08-richtext-media-fit-blur-height-cap.md}`.
+
+Dedicated media add button landed 2026-07-08 (top-right corner Glass-styled +, article editor mosaic containers only; per-cell menu Delete-only; full app build green). Spec/plan in-tree: `docs/superpowers/{specs/2026-07-08-richtext-media-add-button-design.md,plans/2026-07-08-richtext-media-add-button.md}`.
