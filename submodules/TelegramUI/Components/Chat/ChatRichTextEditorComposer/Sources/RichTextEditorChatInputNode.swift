@@ -633,6 +633,10 @@ public final class RichTextEditorChatInputNode: ASDisplayNode, ChatRichTextInput
         }
     }
 
+    public func performRichPaste() {
+        self.editorView.pasteFromPasteboard()
+    }
+
     public func currentRichTextLinkURL() -> String? { self.editorView.currentLink() }
     public func selectedRichText() -> String { self.editorView.selectedText() }
     public func applyRichTextLink(_ url: String?) {

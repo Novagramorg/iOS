@@ -329,6 +329,11 @@ public protocol ChatRichTextInputNode: AnyObject {
     var canPasteMedia: (() -> Bool)? { get set }
     var onPasteMedia: (() -> Bool)? { get set }
 
+    /// Paste the richest representation currently on the system pasteboard at the caret using the editor's own
+    /// reader + fragment splice (private fragment UTI → RTF → plain). Native backend only; the legacy backend is
+    /// a no-op (the host routes its paste through the `NSAttributedString` path instead).
+    func performRichPaste()
+
     /// Fired on a genuine user TEXT edit (typing/delete/paste/IME) so the host can report the "typing…" chat
     /// activity. Set by the PANEL, wired to its `updateActivity`. It must NOT fire on a caret/selection move or
     /// on a programmatic content set (draft restore / send-clear / state echo) — otherwise the chat partner
@@ -1004,6 +1009,7 @@ final class ChatRichTextInputNodeImpl: ASDisplayNode, ChatRichTextInputNode {
     public var onPasteMedia: (() -> Bool)?
 
     func performFormatAction(_ action: ChatRichTextFormatAction) {}
+    func performRichPaste() {}
     func currentRichTextLinkURL() -> String? { return nil }
     func selectedRichText() -> String { return "" }
     func applyRichTextLink(_ url: String?) {}
