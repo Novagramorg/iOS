@@ -16514,6 +16514,7 @@ Error: %8$@";
 "Community.Add.VisibilityHiddenInfo" = "Only invited members and community admins will see this chat.";
 "Community.Add.ActionAddToCommunity" = "Add to Community";
 
+"Community.Chat.JoinToView" = "You need to join this group to view its messages.";
 "Community.PrivateChat.Info" = "This group is invite-only.\nOnly its members can view it.";
 "Community.PrivateChat.MessageOwner" = "Message Group Owner";
 

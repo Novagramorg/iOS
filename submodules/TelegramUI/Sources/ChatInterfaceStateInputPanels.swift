@@ -34,7 +34,7 @@ func inputPanelForChatPresentationIntefaceState(_ chatPresentationInterfaceState
     if let renderedPeer = chatPresentationInterfaceState.renderedPeer, renderedPeer.peer?.restrictionText(platform: "ios", contentSettings: context.currentContentSettings.with { $0 }) != nil {
         return (nil, nil)
     }
-    if chatPresentationInterfaceState.isNotAccessible {
+    if chatPresentationInterfaceState.isNotAccessible && !canJoinInaccessibleCommunityChat(chatPresentationInterfaceState) {
         return (nil, nil)
     }
 
